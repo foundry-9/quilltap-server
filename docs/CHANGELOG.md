@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### Feature: Brahma Console shows run_sql queries and results inline
+
+When the Brahma Console runs a `run_sql` query, the transcript now surfaces it as a tool card with two collapsible panels: a **Query** panel showing the SQL as a syntax-highlighted, copyable code block (rendered through the shared `MessageContent`/Prism path), and a **Result** panel showing the returned rows as a scrollable table (column headers, NULLs dimmed, a row count, and a "truncated" note when the row cap was hit). Failed/rejected queries show the error text instead. Only `run_sql` tool calls are surfaced; the console's other tools (search, doc_*, web) remain silent intermediate turns as before.
+
+The cards render both in the settled transcript — parsed from the persisted TOOL message (`parseBrahmaSqlToolMessage`, a React-free helper in `components/brahma-console/brahma-sql-tool-call.ts`) — and live during streaming: the orchestrator already emits `toolsDetected`/`toolResult` SSE events, which `useBrahmaConsoleStreaming` now accumulates into `streamingToolCalls` (matched by detection-batch base + index across agent turns) so each query and its rows appear as they land. The generic "Consulting the stacks…" indicator is suppressed while a `run_sql` card is on screen, since the card carries its own running/row-count state. No schema, migration, API, or export change — purely a display layer over data the console already persisted.
+
 #### Feature: Brahma Console shows model reasoning ("thinking") live
 
 The Brahma Console now displays a reasoning model's chain-of-thought in a collapsible "Thinking" panel, the same way the Salon does. The orchestrator forwards the provider's cumulative reasoning over the SSE stream (`encodeReasoningChunk`) as it arrives and persists it as `reasoningContent` on the assistant message, so the panel appears live (auto-expanded while streaming, collapsed once done) and survives a reload. Reasoning is accumulated across the agent loop's turns into one continuous chain. It is display-only: never fed back to a model, never stored as a memory. Non-reasoning models show no panel.

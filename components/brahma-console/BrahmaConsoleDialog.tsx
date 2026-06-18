@@ -92,6 +92,7 @@ export function BrahmaConsoleDialog() {
     isStreaming,
     streamingContent,
     streamingReasoning,
+    streamingToolCalls,
     isExecutingTools,
     error: streamError,
     sendMessage,
@@ -281,6 +282,7 @@ export function BrahmaConsoleDialog() {
               messages={messages}
               streamingContent={streamingContent}
               streamingReasoning={streamingReasoning}
+              streamingToolCalls={streamingToolCalls}
               isStreaming={isStreaming}
               isExecutingTools={isExecutingTools}
             />

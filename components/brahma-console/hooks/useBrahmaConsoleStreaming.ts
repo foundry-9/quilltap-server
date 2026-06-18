@@ -11,6 +11,23 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 
+/**
+ * A tool call observed live on the stream this turn. Built up from the
+ * `toolsDetected` event (name + arguments) and completed by the matching
+ * `toolResult` event (success + result). Accumulates across the whole agent run
+ * (not reset per turn) so the operator watches each query land; cleared when the
+ * turn settles and the persisted transcript reloads.
+ */
+export interface StreamingToolCall {
+  name: string
+  arguments: Record<string, unknown>
+  /** Result payload once it arrives (the run_sql envelope object, or null). */
+  result?: unknown
+  success?: boolean
+  /** True until the matching toolResult event fills this in. */
+  pending: boolean
+}
+
 interface StreamingState {
   isStreaming: boolean
   isExecutingTools: boolean
@@ -19,6 +36,8 @@ interface StreamingState {
    *  server sends the full chain on each chunk, so this is replaced, not
    *  appended. */
   streamingReasoning: string
+  /** Tool calls observed live this turn (chiefly run_sql), in emission order. */
+  streamingToolCalls: StreamingToolCall[]
   error: string | null
 }
 
@@ -33,9 +52,16 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     isExecutingTools: false,
     streamingContent: '',
     streamingReasoning: '',
+    streamingToolCalls: [],
     error: null,
   })
   const abortRef = useRef<AbortController | null>(null)
+  // Live tool-call accumulator + the base offset of the current detection batch,
+  // so a `toolResult` event (indexed within its batch) maps back to the right
+  // entry even across multiple agent turns. Refs avoid stale-closure races as
+  // events arrive faster than React can flush state.
+  const toolCallsRef = useRef<StreamingToolCall[]>([])
+  const batchBaseRef = useRef(0)
 
   const onMessageCompleteRef = useRef(onMessageComplete)
   useEffect(() => { onMessageCompleteRef.current = onMessageComplete }, [onMessageComplete])
@@ -48,11 +74,15 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
     const abortController = new AbortController()
     abortRef.current = abortController
 
+    toolCallsRef.current = []
+    batchBaseRef.current = 0
+
     setState({
       isStreaming: true,
       isExecutingTools: false,
       streamingContent: '',
       streamingReasoning: '',
+      streamingToolCalls: [],
       error: null,
     })
 
@@ -109,6 +139,35 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
               setState(prev => ({ ...prev, streamingReasoning: event.reasoning }))
             }
 
+            // Tool batch detected — record each call (pending) so the operator
+            // sees the query before its rows land. Remember this batch's base
+            // offset so the indexed toolResult events that follow map back here.
+            if (typeof event.toolsDetected === 'number') {
+              const names: string[] = Array.isArray(event.toolNames) ? event.toolNames : []
+              const argsArr: Record<string, unknown>[] = Array.isArray(event.toolArguments) ? event.toolArguments : []
+              batchBaseRef.current = toolCallsRef.current.length
+              for (let i = 0; i < event.toolsDetected; i++) {
+                const a = argsArr[i]
+                toolCallsRef.current.push({
+                  name: names[i] ?? 'unknown',
+                  arguments: (a && typeof a === 'object') ? a : {},
+                  pending: true,
+                })
+              }
+              setState(prev => ({ ...prev, streamingToolCalls: [...toolCallsRef.current] }))
+            }
+
+            // Tool result — complete the matching pending entry by batch + index.
+            if (event.toolResult && typeof event.toolResult === 'object') {
+              const tr = event.toolResult as { index?: number; success?: boolean; result?: unknown }
+              const gi = batchBaseRef.current + (typeof tr.index === 'number' ? tr.index : 0)
+              const entry = toolCallsRef.current[gi]
+              if (entry) {
+                toolCallsRef.current[gi] = { ...entry, result: tr.result, success: tr.success, pending: false }
+                setState(prev => ({ ...prev, streamingToolCalls: [...toolCallsRef.current] }))
+              }
+            }
+
             // Tool execution status — clear stale streamed text, show "working"
             if (event.status) {
               currentContent = ''
@@ -119,11 +178,14 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
               }))
             }
 
-            // Done — persisted message ready; reload the transcript
+            // Done — persisted message ready; reload the transcript. The reloaded
+            // transcript carries the settled tool cards, so the live ones clear.
             if (event.done) {
               const messageId = event.messageId
               currentContent = ''
-              setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '' }))
+              toolCallsRef.current = []
+              batchBaseRef.current = 0
+              setState(prev => ({ ...prev, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
               if (messageId) {
                 onMessageCompleteRef.current?.(messageId)
               }
@@ -131,7 +193,7 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
 
             // Error
             if (event.error) {
-              setState(prev => ({ ...prev, error: event.error, isStreaming: false, streamingReasoning: '' }))
+              setState(prev => ({ ...prev, error: event.error, isStreaming: false, streamingReasoning: '', streamingToolCalls: [] }))
               return
             }
           } catch {
@@ -141,12 +203,13 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
       }
 
       // Stream closed
-      setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '' }))
+      setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
     } catch (error) {
       if ((error as Error).name === 'AbortError') return
       setState(prev => ({
         ...prev,
         isStreaming: false,
+        streamingToolCalls: [],
         error: error instanceof Error ? error.message : 'Failed to send message',
       }))
     }
@@ -154,7 +217,9 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort()
-    setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '' }))
+    toolCallsRef.current = []
+    batchBaseRef.current = 0
+    setState(prev => ({ ...prev, isStreaming: false, streamingContent: '', streamingReasoning: '', streamingToolCalls: [] }))
   }, [])
 
   return {

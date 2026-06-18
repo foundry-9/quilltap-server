@@ -53,6 +53,10 @@ Three points of etiquette govern the arrangement:
 - **The three ledgers are kept in separate rooms.** There is the **main** ledger (characters, chats, messages, memories, profiles, projects), the **engine log** (every model call, its tokens, its cost, its duration), and the **document index** (the document stores, and the full text of every character, project, and group vault). A single question reaches into one room at a time; for a question that spans rooms, the Console carries the answer from one to the next.
 - **Inspection is not remembrance.** That the Console may now *read* the memory ledger — to summarise it, to count it, to chart how importance is distributed — is a different thing entirely from *recalling* a memory. Reading the table changes nothing and is filed nowhere; the Console still forms no memories of its own, and its search still cannot draw upon them as a source.
 
+### Seeing the Console's working
+
+You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, two tidy panels slip into the transcript at that very spot. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed to the row cap. Both panels appear the instant the query lands and may be folded shut with a tap, so the conversation stays unhurried while the evidence remains within easy reach.
+
 ## What the Console deliberately forgets
 
 The Console is, by design, an amnesiac of impeccable discretion:

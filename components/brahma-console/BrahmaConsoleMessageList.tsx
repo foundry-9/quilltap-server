@@ -13,6 +13,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import MessageContent from '@/components/chat/MessageContent'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
+import { BrahmaToolCall, parseBrahmaSqlToolMessage, type BrahmaSqlToolCallData } from './BrahmaToolCall'
+import type { StreamingToolCall } from './hooks/useBrahmaConsoleStreaming'
 
 interface BrahmaMessage {
   id: string
@@ -31,8 +33,28 @@ interface BrahmaConsoleMessageListProps {
   streamingContent?: string
   /** Live cumulative reasoning ("thinking") for the in-flight turn. */
   streamingReasoning?: string
+  /** Tool calls observed live this turn (run_sql cards rendered as they land). */
+  streamingToolCalls?: StreamingToolCall[]
   isStreaming?: boolean
   isExecutingTools?: boolean
+}
+
+/** Normalize a live-streamed tool call into the shape BrahmaToolCall renders. */
+function streamingToolCallToData(tc: StreamingToolCall): BrahmaSqlToolCallData {
+  const args = tc.arguments ?? {}
+  const sql = typeof args.sql === 'string' ? args.sql : null
+  const database = typeof args.database === 'string' ? args.database : 'main'
+  const envelope = (tc.result && typeof tc.result === 'object')
+    ? (tc.result as BrahmaSqlToolCallData['envelope'])
+    : null
+  return {
+    success: tc.success ?? false,
+    sql,
+    database,
+    envelope,
+    errorText: tc.pending ? null : (tc.success ? null : 'The query failed.'),
+    pending: tc.pending,
+  }
 }
 
 function ConsoleAvatar() {
@@ -83,6 +105,7 @@ export function BrahmaConsoleMessageList({
   messages,
   streamingContent,
   streamingReasoning,
+  streamingToolCalls,
   isStreaming,
   isExecutingTools,
 }: BrahmaConsoleMessageListProps) {
@@ -90,28 +113,54 @@ export function BrahmaConsoleMessageList({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent, streamingReasoning])
+  }, [messages.length, streamingContent, streamingReasoning, streamingToolCalls])
 
-  // Visible messages: user + assistant with non-empty content (hide
-  // intermediate tool-using agent turns).
-  const visibleMessages = messages.filter(m => {
-    if (m.role === 'USER' || m.role === 'user') return true
-    if (m.role === 'ASSISTANT' || m.role === 'assistant') {
-      return m.content && m.content.trim().length > 0
+  // Render items, in transcript order: user + assistant bubbles (assistant only
+  // when it carries prose, hiding empty intermediate agent turns) plus a card
+  // for each run_sql TOOL message. Other tools stay silent, as before.
+  type RenderItem =
+    | { kind: 'bubble'; msg: BrahmaMessage; isUser: boolean }
+    | { kind: 'tool'; id: string; data: BrahmaSqlToolCallData }
+
+  const renderItems: RenderItem[] = []
+  for (const m of messages) {
+    const role = m.role.toUpperCase()
+    if (role === 'USER') {
+      renderItems.push({ kind: 'bubble', msg: m, isUser: true })
+    } else if (role === 'ASSISTANT') {
+      if (m.content && m.content.trim().length > 0) {
+        renderItems.push({ kind: 'bubble', msg: m, isUser: false })
+      }
+    } else if (role === 'TOOL') {
+      const sqlData = parseBrahmaSqlToolMessage(m.content)
+      if (sqlData) renderItems.push({ kind: 'tool', id: m.id, data: sqlData })
     }
-    return false
-  })
+  }
+
+  // Live run_sql cards for the in-flight turn. When present, they supersede the
+  // generic "Consulting the stacks…" indicator (each card shows its own state).
+  const liveSqlCalls = (streamingToolCalls ?? []).filter(tc => tc.name === 'run_sql')
 
   return (
     <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1">
-      {visibleMessages.length === 0 && !isStreaming && (
+      {renderItems.length === 0 && !isStreaming && (
         <div className="text-center qt-text-secondary text-sm py-8">
           A direct line to the engine of your choosing. Pose a question to begin.
         </div>
       )}
 
-      {visibleMessages.map(msg => {
-        const isUser = msg.role === 'USER' || msg.role === 'user'
+      {renderItems.map(item => {
+        if (item.kind === 'tool') {
+          return (
+            <div key={item.id} className="flex flex-row pl-1">
+              <div className="min-w-0 w-full" style={{ maxWidth: '92%' }}>
+                <BrahmaToolCall data={item.data} />
+              </div>
+            </div>
+          )
+        }
+
+        const { msg, isUser } = item
 
         return (
           <div
@@ -155,18 +204,23 @@ export function BrahmaConsoleMessageList({
           <svg className="qt-help-tail qt-help-tail-assistant" viewBox="0 0 10 16" fill="currentColor">
             <path d="M10 0 L0 8 L10 16 Z" />
           </svg>
-          <div className="flex flex-col gap-0.5 min-w-0 items-start" style={{ maxWidth: '80%' }}>
+          <div className="flex flex-col gap-2 min-w-0 items-start" style={{ maxWidth: '80%' }}>
             {streamingReasoning?.trim() && (
               <ThinkingBlock content={streamingReasoning} streaming />
             )}
+            {liveSqlCalls.map((tc, i) => (
+              <div key={i} className="w-full">
+                <BrahmaToolCall data={streamingToolCallToData(tc)} />
+              </div>
+            ))}
             {streamingContent && (
               <div className="qt-help-msg-assistant" style={{ maxWidth: '100%' }}>
                 <MessageContent content={streamingContent} />
               </div>
             )}
-            {isExecutingTools ? (
+            {isExecutingTools && liveSqlCalls.length === 0 ? (
               <div className="qt-help-msg-assistant italic">Consulting the stacks…</div>
-            ) : (!streamingContent && !streamingReasoning?.trim()) ? (
+            ) : (!streamingContent && !streamingReasoning?.trim() && liveSqlCalls.length === 0) ? (
               <div className="qt-help-msg-assistant italic">Thinking…</div>
             ) : null}
           </div>
