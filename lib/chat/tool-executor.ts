@@ -121,6 +121,9 @@ import {
   type SearchScriptoriumToolContext,
 } from '@/lib/tools/handlers/search-scriptorium-handler';
 import {
+  executeRunSqlTool,
+} from '@/lib/tools/handlers/run-sql-handler';
+import {
   executeUpsertAnnotationTool,
   formatUpsertAnnotationResults,
   type UpsertAnnotationToolContext,
@@ -247,6 +250,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   'upsert_annotation',
   'delete_annotation',
   'search',
+  // Brahma Console — read-only SQL access (operator surface only)
+  'run_sql',
   // Wardrobe tools
   'wardrobe_list',
   'wardrobe_read',
@@ -966,6 +971,30 @@ export async function executeToolCallWithContext(
           totalFound: result.totalFound,
           query: result.query,
         } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle run_sql (Brahma Console — read-only SQL access). Gated on the
+    // operator surface: the tool is only ever OFFERED to the console, and even
+    // if a tool name leaked into history, a character surface can never EXECUTE
+    // it. Both gates are independent (see brahma-sql-access spec §8).
+    if (toolCall.name === 'run_sql') {
+      if (!context.operatorSurface) {
+        return {
+          toolName: 'run_sql',
+          success: false,
+          result: null,
+          error: 'run_sql is only available in the Brahma Console.',
+        };
+      }
+
+      const result = await executeRunSqlTool(toolCall.arguments, { userId });
+
+      return {
+        toolName: 'run_sql',
+        success: result.success,
+        result: result.success ? result : null,
         error: result.success ? undefined : result.error,
       };
     }

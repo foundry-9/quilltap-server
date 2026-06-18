@@ -186,6 +186,7 @@ async function processBrahmaResponse(
     false,  // askCarinaEnabled
     false,  // includeWorkspaceTools — stripped for the console
     true,   // excludeMemorySearch — no memory source
+    true,   // sqlAccess — the console gets read-only run_sql
   )
 
   // Determine tool mode (native vs pseudo-tool). As with help-chat, anything
@@ -232,8 +233,13 @@ async function processBrahmaResponse(
     ? `${toolInstructions}\n\n${agentInstructions}`
     : agentInstructions
 
-  // Build the neutral, character-less system prompt
-  const systemPrompt = buildBrahmaSystemPrompt({ profile: connectionProfile, toolInstructions })
+  // Build the neutral, character-less system prompt. The console always enables
+  // the read-only run_sql tool, so the SQL-access section is always appended.
+  const systemPrompt = buildBrahmaSystemPrompt({
+    profile: connectionProfile,
+    toolInstructions,
+    includeSqlAccess: true,
+  })
 
   // Load conversation history (full transcript, no compression)
   const messages = await repos.chats.getMessages(chatId)

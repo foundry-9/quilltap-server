@@ -14,12 +14,15 @@
  */
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
+import { BRAHMA_SQL_PROMPT } from './brahma-sql-prompt'
 
 export interface BrahmaSystemPromptOptions {
   /** The connection profile (model) the console is currently talking to. */
   profile: ConnectionProfile
   /** Optional extra tool instructions (native vs. text-block) appended below. */
   toolInstructions?: string
+  /** When true, append the SQL-access section (the run_sql tool is enabled). */
+  includeSqlAccess?: boolean
 }
 
 /**
@@ -27,7 +30,7 @@ export interface BrahmaSystemPromptOptions {
  * user-editable in v1.
  */
 export function buildBrahmaSystemPrompt(options: BrahmaSystemPromptOptions): string {
-  const { toolInstructions } = options
+  const { toolInstructions, includeSqlAccess } = options
 
   const parts: string[] = []
 
@@ -38,6 +41,14 @@ You can search and read the operator's document stores and knowledge folders, an
 
 When you use a tool, you actually call it — you do not merely describe calling it. Every tool action produces a real tool call, not prose.`
   )
+
+  // Read-only SQL inspection (run_sql). Appended after the base brief and before
+  // the mechanical tool-call instructions. The base brief above keeps its "no
+  // memories / nothing remembered" guarantee; this section adds the read-only
+  // inspection nuance so the two don't read as contradictory.
+  if (includeSqlAccess) {
+    parts.push(BRAHMA_SQL_PROMPT)
+  }
 
   if (toolInstructions) {
     parts.push(toolInstructions)

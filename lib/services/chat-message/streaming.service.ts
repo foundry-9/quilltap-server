@@ -168,7 +168,12 @@ export async function buildTools(
    * When true, the `search` tool is built from its Brahma variant whose schema
    * omits the `memories` source (Brahma Console has no memory access).
    */
-  excludeMemorySearch?: boolean
+  excludeMemorySearch?: boolean,
+  /**
+   * When true, include the read-only `run_sql` tool (Brahma Console only).
+   * Execution is additionally gated on `operatorSurface` in the tool executor.
+   */
+  sqlAccess?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -240,6 +245,7 @@ export async function buildTools(
     askCarina: askCarinaEnabled,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
+    sqlAccess: !!sqlAccess,
     toolConfigs,
   })
 

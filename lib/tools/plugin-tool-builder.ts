@@ -43,6 +43,7 @@ import {
   searchScriptoriumToolDefinition,
   searchScriptoriumBrahmaToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
+import { runSqlToolDefinition } from '@/lib/tools/run-sql-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
@@ -263,6 +264,14 @@ export interface BuildToolsOptions {
    * tool, which can search memories).
    */
   excludeMemorySearch?: boolean;
+
+  /**
+   * When true, include the `run_sql` tool — read-only SQL access to the three
+   * Quilltap databases. Offered on the **Brahma Console** surface only;
+   * execution is additionally gated on `operatorSurface` in the tool executor.
+   * Defaults to `false`.
+   */
+  sqlAccess?: boolean;
 }
 
 /**
@@ -319,6 +328,7 @@ export async function buildToolsForProvider(
       documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
       askCarina: options.askCarina,
+      sqlAccess: options.sqlAccess,
     },
   });
 
@@ -405,6 +415,13 @@ export async function buildToolsForProvider(
       ? searchScriptoriumBrahmaToolDefinition
       : searchScriptoriumToolDefinition) as UniversalTool
   );
+
+  // Read-only SQL access — Brahma Console only. Execution is additionally gated
+  // on `operatorSurface` in the tool executor, so a leaked tool name can never
+  // run from a character surface.
+  if (options.sqlAccess) {
+    universalTools.push(runSqlToolDefinition as UniversalTool);
+  }
 
   if (includeWorkspaceTools) {
     // Terminal tools (always enabled for Prospero - read-only terminal inspection)

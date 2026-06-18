@@ -1289,6 +1289,40 @@ exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters runSql: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "database": {
+      "default": "main",
+      "description": "Which Quilltap database to query. "main" (quilltap.db): characters, chats, chat_messages, memories, connection_profiles, projects, groups, settings. "llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, token usage, cost, duration). "mount-index" (quilltap-mount-index.db): document stores and ALL character/project/group vault content. Databases are physically separate — you cannot JOIN across them in one query.",
+      "enum": [
+        "main",
+        "llm-logs",
+        "mount-index",
+      ],
+      "type": "string",
+    },
+    "max_rows": {
+      "default": 200,
+      "description": "Maximum rows to return (hard-capped at 1000). Use aggregates for large sets rather than dumping rows.",
+      "maximum": 1000,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "sql": {
+      "description": "A single read-only SQL query (SELECT or WITH … SELECT). One statement only. Read-only PRAGMAs like PRAGMA table_info(<table>) are allowed for schema inspection. Writes (INSERT/UPDATE/DELETE/CREATE/DROP/ALTER/REINDEX/VACUUM, mutating PRAGMAs) are rejected — this tool cannot change data.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "sql",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters searchScriptorium: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

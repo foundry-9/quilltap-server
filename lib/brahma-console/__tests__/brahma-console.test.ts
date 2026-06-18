@@ -108,3 +108,24 @@ describe('buildToolsForProvider — Brahma surface flags', () => {
     expect(JSON.stringify(search.function.parameters)).toContain('"memories"')
   })
 })
+
+describe('buildToolsForProvider — run_sql (Brahma SQL access)', () => {
+  it('includes run_sql when sqlAccess is true (the Brahma Console surface)', async () => {
+    const tools = await buildToolsForProvider('OPENAI', {
+      agentMode: true,
+      documentEditing: true,
+      includeWorkspaceTools: false,
+      excludeMemorySearch: true,
+      sqlAccess: true,
+      includePluginTools: false,
+    })
+    expect(tools.map(toolName)).toContain('run_sql')
+  })
+
+  it('omits run_sql when sqlAccess is not set (character surfaces)', async () => {
+    const tools = await buildToolsForProvider('OPENAI', {
+      includePluginTools: false,
+    })
+    expect(tools.map(toolName)).not.toContain('run_sql')
+  })
+})

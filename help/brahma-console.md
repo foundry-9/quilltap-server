@@ -32,14 +32,25 @@ The Console is a capable, concise, neutral assistant. Beyond plain conversation,
 
 - **Search** — It can search across your past conversations and every one of your document stores, including the knowledge folders within them.
 - **Documents** — It has full reach into your document stores: it can read files, list and grep their contents, and **write** to them as well.
+- **The ledgers themselves** — It can put **read-only questions** straight to the databases that keep your establishment running. See *Consulting the ledgers*, below.
 - **The wider world** — When the chosen connection profile permits it, the Console can search the web; and when the `curl` plugin is installed and enabled, it can fetch URLs directly.
+
+## Consulting the ledgers
+
+Behind every character, every conversation, every memory and document and tallied expense, there are three great ledgers — Quilltap's databases — and the Console may now read them directly. Ask it a question in the plain language of your world — *"how lopsided is this character's sense of importance?"*, *"which engine has cost me the most this fortnight?"*, *"how many conversations mention the airship?"* — and it will quietly translate your question into a query, consult the appropriate ledger, and answer you in your own terms. You need never see a line of SQL unless you ask to.
+
+Three points of etiquette govern the arrangement:
+
+- **It reads only; it never writes.** The Console may pore over the ledgers to its heart's content, but the pen is locked away. Any attempt to alter, add, or erase is refused before it can run — querying is perfectly safe, and you may invite it to explore freely.
+- **The three ledgers are kept in separate rooms.** There is the **main** ledger (characters, chats, messages, memories, profiles, projects), the **engine log** (every model call, its tokens, its cost, its duration), and the **document index** (the document stores, and the full text of every character, project, and group vault). A single question reaches into one room at a time; for a question that spans rooms, the Console carries the answer from one to the next.
+- **Inspection is not remembrance.** That the Console may now *read* the memory ledger — to summarise it, to count it, to chart how importance is distributed — is a different thing entirely from *recalling* a memory. Reading the table changes nothing and is filed nowhere; the Console still forms no memories of its own, and its search still cannot draw upon them as a source.
 
 ## What the Console deliberately forgets
 
 The Console is, by design, an amnesiac of impeccable discretion:
 
 - **It keeps no memories.** Nothing said in the Console is ever filed away into your characters' commonplace books. When a conversation ends, only the visible transcript remains.
-- **It reads no memories, either.** The memory stores are simply not among the things it can search. This is intentional, not an oversight.
+- **It recalls no memories, either.** The memory stores are simply not among the things its **search** can draw upon — that remains intentional, not an oversight. (Its read-only SQL window may *inspect* the memory ledger for tallies and summaries, as *Consulting the ledgers* describes; reading is not recalling, and it remembers nothing of what it reads.)
 - **It is not page-aware.** Unlike the Help Chat, the Console neither knows nor tracks which screen you are viewing. It will not volunteer help about your current page, because it has no notion of where you are.
 - **It has no character.** No identity, no personality, no avatar, no roleplay. It speaks in its own plain voice.
 

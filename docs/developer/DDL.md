@@ -133,6 +133,10 @@ npx quilltap db --lock-clean
 npx quilltap db --lock-override
 ```
 
+### Querying via the Brahma `run_sql` tool
+
+The **Brahma Console** can also query these databases from inside a running instance, via the read-only `run_sql` tool. It picks one of the three databases per call (`main` / `llm-logs` / `mount-index`), runs a single read-only statement against the server's already-open, decrypted handle, and returns rows as JSON. It is read-only (writes and schema changes are rejected at the tool layer), so it never needs `--write` and never claims the instance lock. The same schema in this document is the contract it queries against; no schema change is involved. See [brahma-sql-access](features/complete/brahma-sql-access.md) for the tool contract, guard layers, and the SQL prompt the model is given.
+
 ---
 
 ## Main Database Schema (`quilltap.db`)

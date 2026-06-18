@@ -50,6 +50,7 @@ import { projectInfoToolDefinition } from '../project-info-tool'
 import { readConversationToolDefinition } from '../read-conversation-tool'
 import { requestFullContextToolDefinition } from '../request-full-context-tool'
 import { rngToolDefinition } from '../rng-tool'
+import { runSqlToolDefinition } from '../run-sql-tool'
 import { searchScriptoriumToolDefinition, searchScriptoriumBrahmaToolDefinition } from '../search-scriptorium-tool'
 import { selfInventoryToolDefinition } from '../self-inventory-tool'
 import { stateToolDefinition } from '../state-tool'
@@ -107,6 +108,7 @@ const ALL_TOOLS = {
   readConversation: readConversationToolDefinition,
   requestFullContext: requestFullContextToolDefinition,
   rng: rngToolDefinition,
+  runSql: runSqlToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
   selfInventory: selfInventoryToolDefinition,

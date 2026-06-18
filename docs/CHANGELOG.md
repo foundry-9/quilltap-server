@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Feature: Brahma Console read-only SQL access (`run_sql`)
+
+The Brahma Console gains a single new read-only SQL tool, `run_sql`, plus a system-prompt section teaching the model how and when to use it. The model can query any of the three Quilltap databases — main (`quilltap.db`), llm-logs (`quilltap-llm-logs.db`), and mount-index (`quilltap-mount-index.db`) — and read rows back as JSON, so it can answer questions about characters, memories, documents, conversations, model usage, and costs by translating them into queries.
+
+Read-only is enforced at the tool layer by three independent guards: a single-statement + write-keyword pre-scan, the authoritative `better-sqlite3` `stmt.readonly` check (fail closed), and a `max_rows` cap (default 200, hard cap 1000). Writes and schema changes (INSERT/UPDATE/DELETE/CREATE/DROP/ALTER/VACUUM, mutating PRAGMAs, multi-statement SQL, and CTEs wrapping a write) are rejected before they run. BLOB columns (embeddings, blob data) come back as a `<blob: N bytes>` placeholder, never inlined. Errors are returned as data so the model can self-correct.
+
+The tool is offered only when the Brahma builder flag `sqlAccess` is true (Brahma Console only) and executed only when `operatorSurface` is true — two independent gates, so no character surface (Salon, Help Chat, autonomous rooms) can reach it. It reuses the server's already-open, decrypted database handles; it opens no new connection and never re-keys. The console's existing guarantees are unchanged: it still forms no persistent memories and its `search` tool still cannot use the `memories` source. `run_sql` can *read* the `memories` table for analytics (e.g. importance distribution), which is read-only inspection, not recall — it writes nothing and is not remembered. No schema change, migration, or export/backup change.
+
 #### Fix: database-backed document writes now chunk (and become searchable) immediately
 
 A text document written into a database-backed store (`writeDatabaseDocument`) recorded the content and link row but never chunked it. The on-write event only enqueued embedding for *existing* chunks, so a freshly written or overwritten document had no chunks to embed and stayed out of semantic search until a manual store rescan ran. This affected every managed-field and bridge write: character vault fields (identity/description/manifesto/personality), project description/instructions/state, image aesthetics, and the conversation summaries the Commonplace Book's relevant-conversation recall depends on.

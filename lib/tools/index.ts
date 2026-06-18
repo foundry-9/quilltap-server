@@ -393,6 +393,20 @@ export {
   type SearchScriptoriumToolContext,
 } from './handlers/search-scriptorium-handler';
 
+// Brahma Console read-only SQL access
+export {
+  runSqlToolDefinition,
+  validateRunSqlInput,
+  type RunSqlInput,
+  type RunSqlOutput,
+} from './run-sql-tool';
+
+export {
+  executeRunSqlTool,
+  type RunSqlToolContext,
+  type RunSqlResult,
+} from './handlers/run-sql-handler';
+
 // Tool Support (for checking model capabilities and tool mode)
 export {
   checkModelSupportsTools,
