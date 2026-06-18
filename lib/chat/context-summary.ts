@@ -18,6 +18,7 @@ import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
 import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
+import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
 
 /**
  * Rolling-window summarization cadence.
@@ -483,6 +484,23 @@ export async function generateContextSummary(
       })
     } catch (e) {
       logger.error('[Context Summary] Failed to mirror summary into character vaults:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
+    // Relevance drifts as the conversation advances, so re-run ONLY the
+    // relevant-past-conversations search against the fresh summary and post a
+    // refreshed Commonplace Book whisper to each present character. Ordering is
+    // deliberate: the vault summary above is written first, so this search reads
+    // the fresh corpus rather than racing it. Best-effort — never fails a fold.
+    try {
+      await refreshRelevantConversationsOnFold({
+        chatId,
+        summary: newSummary,
+        userId,
+        embeddingProfileId: undefined,
+        maxContext: connectionProfile.maxContext ?? null,
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Failed to refresh relevant conversations:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {

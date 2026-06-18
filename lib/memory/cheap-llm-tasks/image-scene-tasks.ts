@@ -143,6 +143,25 @@ Discussion about space exploration:
 Respond with ONLY the scene description - no explanations, no quotes, no formatting.`
 
 /**
+ * Concise clothing summaries in the scene state are capped so a verbose cheap
+ * LLM can't bloat the `Current State` whisper. The prompts ask for ≤200 chars;
+ * this is the defensive cap applied in code after the model returns.
+ */
+export const SCENE_CLOTHING_MAX_CHARS = 200
+
+/**
+ * Defensively enforce the {@link SCENE_CLOTHING_MAX_CHARS} cap on a clothing
+ * summary the LLM returned. Trims whitespace, then truncates at the cap with a
+ * trailing ellipsis so the total never exceeds the limit. Non-strings collapse
+ * to an empty string.
+ */
+export function capClothingSummary(value: unknown): string {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (text.length <= SCENE_CLOTHING_MAX_CHARS) return text
+  return text.slice(0, SCENE_CLOTHING_MAX_CHARS - 1).trimEnd() + '…'
+}
+
+/**
  * Scene state tracking prompt for first turn
  * Analyzes conversation and character data to produce a structured scene state
  */
@@ -171,7 +190,7 @@ CRITICAL RULES — read carefully:
 - location: concise (1-2 sentences). Derive from scenario and conversation context.
 - action: what the character is doing RIGHT NOW at the end of the conversation.
 - appearance: complete snapshot of current state. Use baseline if the conversation provides no appearance info.
-- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If the character has undressed or is naked, say so explicitly (e.g. "nude", "naked", "undressed"). Only use the baseline clothing if the conversation has not described any clothing changes. If neither the conversation nor the baseline provides clothing info, use "unknown".
+- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If the character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). Only lean on the baseline clothing when the conversation has not described any clothing change. Use "unknown" only when neither the conversation nor the baseline gives any clothing information.
 - Be concise and accurate. Output ONLY the JSON object.`
 
 /**
@@ -202,7 +221,7 @@ CRITICAL RULES — read carefully:
 - If nothing changed for a field, carry it forward from the previous state.
 - Update location if the scene has moved.
 - Update action to reflect what each character is doing NOW at the end of the new messages.
-- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If a character has undressed or is naked, say so explicitly. If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
+- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If a character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
 - Character baselines are provided for reference — use them to fill in null or missing fields from the previous state, but the new messages always take priority.
 - Be concise and accurate. Output ONLY the JSON object.`
 
@@ -686,6 +705,18 @@ Update the scene state based on these new messages:`,
           location: parsed.location,
           characterCount: parsed.characters?.length,
         })
+      }
+
+      // Defensively cap each character's clothing summary to the ≤200-char
+      // budget the prompt requests, so a verbose model can't bloat the whisper.
+      if (Array.isArray(parsed.characters)) {
+        for (const ch of parsed.characters) {
+          if (ch && typeof ch === 'object' && 'clothing' in ch) {
+            ;(ch as { clothing?: unknown }).clothing = capClothingSummary(
+              (ch as { clothing?: unknown }).clothing,
+            )
+          }
+        }
       }
 
       return parsed

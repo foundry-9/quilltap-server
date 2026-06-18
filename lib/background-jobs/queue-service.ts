@@ -727,6 +727,51 @@ export async function enqueueMemoryRegenerateAll(
   return { jobId, isNew: true };
 }
 
+/** Payload for the conversation-summary regeneration fan-out job (no params). */
+export type RegenerateConversationSummariesPayload = Record<string, never>;
+
+/**
+ * Enqueue the conversation-summary regeneration job.
+ *
+ * Re-mirrors every summarized chat's context summary into its participant
+ * character vaults (a backfill for the files the Commonplace Book's
+ * relevant-conversations retrieval depends on, and a repair after format
+ * changes). The HTTP handler returns immediately; the enumeration + per-chat
+ * vault writes happen inside the background job.
+ *
+ * Dedupes on userId (only one regeneration per user at a time). Capped at
+ * maxAttempts: 1 — the work is idempotent, but a retry would re-walk every chat.
+ */
+export async function enqueueRegenerateConversationSummaries(
+  userId: string,
+  options?: EnqueueJobOptions,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(
+      (j) => j.type === 'REGENERATE_CONVERSATION_SUMMARIES',
+    );
+    if (existing) {
+      return { jobId: existing.id, isNew: false };
+    }
+  } catch (error) {
+    logger.warn('[RegenerateConversationSummaries] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'REGENERATE_CONVERSATION_SUMMARIES',
+    {},
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+  return { jobId, isNew: true };
+}
+
 /**
  * Enqueue a context summary job
  */

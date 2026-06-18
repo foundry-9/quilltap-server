@@ -449,7 +449,7 @@ export function normalizeWhisperRoles<
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -480,9 +480,15 @@ export async function buildMessageContext(
   // inlined into the new user message body — past whispers piling up across
   // turns would just bloat the context window with stale recall. This filter
   // applies regardless of system transparency.
-  const cmpbStrippedCount = existingMessages.filter(m => m.systemSender === 'commonplaceBook').length
+  //
+  // EXCEPTION: the `relevant-conversations` kind (posted on each summary fold)
+  // is NOT recomputed per turn and intentionally persists across turns, so it
+  // is kept here and reaches the LLM like any other persistent Staff whisper.
+  const isStrippableCmpb = (m: { systemSender?: string | null; systemKind?: string | null }) =>
+    m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations'
+  const cmpbStrippedCount = existingMessages.filter(isStrippableCmpb).length
   const messagesWithoutCmpb = cmpbStrippedCount > 0
-    ? existingMessages.filter(m => m.systemSender !== 'commonplaceBook')
+    ? existingMessages.filter(m => !isStrippableCmpb(m))
     : existingMessages
   if (cmpbStrippedCount > 0) {
   }

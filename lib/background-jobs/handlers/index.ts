@@ -27,6 +27,7 @@ import { handleAutonomousRoomTurn } from './autonomous-room-turn';
 import { handleAutonomousRoomScheduleTick } from './autonomous-room-schedule-tick';
 import { handleCarinaMemoryExtraction } from './carina-memory-extraction';
 import { handleCharacterHeadShouldersBackfill } from './character-headshoulders-backfill';
+import { handleRegenerateConversationSummaries } from './regenerate-conversation-summaries';
 
 /**
  * Job handler function type
@@ -59,6 +60,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   AUTONOMOUS_ROOM_SCHEDULE_TICK: handleAutonomousRoomScheduleTick,
   CARINA_MEMORY_EXTRACTION: handleCarinaMemoryExtraction,
   CHARACTER_HEADSHOULDERS_BACKFILL: handleCharacterHeadShouldersBackfill,
+  REGENERATE_CONVERSATION_SUMMARIES: handleRegenerateConversationSummaries,
 };
 
 /**
@@ -95,3 +97,4 @@ export { handleAutonomousRoomTurn };
 export { handleAutonomousRoomScheduleTick };
 export { handleCarinaMemoryExtraction };
 export { handleCharacterHeadShouldersBackfill };
+export { handleRegenerateConversationSummaries };

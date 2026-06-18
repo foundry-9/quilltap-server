@@ -149,6 +149,32 @@ export async function writeDatabaseDocument(
     fileSizeBytes: Buffer.byteLength(content, 'utf-8'),
   });
 
+  // Chunk the just-written content so it is immediately searchable. The write
+  // above only records the document + link row (chunkCount 0); without this the
+  // embedding scheduler triggered by emitDocumentWritten below would find no
+  // chunks, and the document would stay unsearchable until a manual rescan.
+  // reindexSingleFile reads the content back from doc_mount_documents and
+  // (re)builds the link's chunks, so an overwrite re-chunks too.
+  //
+  // Parent-only: inside the forked job child this write is buffered (read-your-
+  // writes does not hold), so the content reindexSingleFile would read isn't
+  // committed yet. In-child writers (doc_write_file in autonomous turns) leave
+  // chunking to the next database rescan, as before. Bridge writers
+  // (conversation summaries, avatars) already run this on the parent via
+  // host-RPC, so their documents chunk here.
+  if (process.env.QUILLTAP_JOB_CHILD !== '1') {
+    try {
+      const { reindexSingleFile } = await import('@/lib/doc-edit/reindex-file');
+      await reindexSingleFile(mountPointId, rel, '');
+    } catch (chunkErr) {
+      logger.warn('Failed to chunk database document after write', {
+        mountPointId,
+        relativePath: rel,
+        error: chunkErr instanceof Error ? chunkErr.message : String(chunkErr),
+      });
+    }
+  }
+
   emitDocumentWritten({ mountPointId, relativePath: rel });
 
   const mtime = new Date(now).getTime();

@@ -19,7 +19,9 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 
 const logger = createServiceLogger('SceneStateTrackingHandler');
 
@@ -174,8 +176,12 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
   );
   const presentCharacters = validCharacters.filter(c => c && presentParticipantCharacterIds.has(c.id));
 
-  // Build character baselines with equipped wardrobe items
+  // Build character baselines with equipped wardrobe items. Also capture each
+  // character's raw equipped slots so we can hash them for the concise-clothing
+  // cache below (the wardrobe only changes on an explicit edit, so a matching
+  // hash lets us reuse the cached summary instead of re-summarizing).
   const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
+  const equippedSlotsByCharacterId = new Map<string, EquippedSlots | null>();
   const characterBaselines = await Promise.all(presentCharacters.map(async (char) => {
     let clothingDescription = '';
 
@@ -183,6 +189,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     // arrays-per-slot; composites are expanded to leaves before describing.
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
+      equippedSlotsByCharacterId.set(char!.id, equippedSlots ?? null);
       if (equippedSlots) {
         const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots, {
           projectMountPointIds,
@@ -294,14 +301,47 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     updatedAtMessageCount: chat.messageCount ?? 0,
   };
 
-  // 10b. Override LLM-derived clothing with authoritative wardrobe equipped state
-  // The LLM derives clothing from narrative, but the wardrobe system is the source of truth
-  const sceneCharacters = (sceneState as any).characters as Array<{ characterId: string; clothing?: string }> | undefined;
+  // 10b. Reconcile the concise clothing summary against the equipped wardrobe.
+  // The cheap LLM now OWNS a concise, salience-based clothing line (already
+  // capped at ~200 chars in updateSceneState). We cache that line keyed by the
+  // equipped-outfit hash: while a character's wardrobe is physically unchanged
+  // we reuse the cached summary (the outfit only changes on an explicit
+  // wardrobe edit), and only re-take the LLM's freshly summarized line when the
+  // hash moves. Characters with no equipped wardrobe keep the narrative-driven
+  // line every turn (no hash to cache against).
+  const prevClothingByCharacterId = new Map<string, { clothing: string | null; clothingHash: string | null }>();
+  const prevCharacters = (previousSceneState as { characters?: unknown } | null)?.characters;
+  if (Array.isArray(prevCharacters)) {
+    for (const pc of prevCharacters) {
+      if (pc && typeof pc === 'object' && typeof (pc as { characterId?: unknown }).characterId === 'string') {
+        const rec = pc as { characterId: string; clothing?: unknown; clothingHash?: unknown };
+        prevClothingByCharacterId.set(rec.characterId, {
+          clothing: typeof rec.clothing === 'string' ? rec.clothing : null,
+          clothingHash: typeof rec.clothingHash === 'string' ? rec.clothingHash : null,
+        });
+      }
+    }
+  }
+
+  const sceneCharacters = (sceneState as { characters?: unknown }).characters as
+    | Array<{ characterId: string; clothing?: string | null; clothingHash?: string | null }>
+    | undefined;
   if (sceneCharacters) {
     for (const sceneChar of sceneCharacters) {
-      const baseline = characterBaselines.find(b => b.characterId === sceneChar.characterId);
-      if (baseline && baseline.clothingDescription) {
-        sceneChar.clothing = baseline.clothingDescription;
+      const slots = equippedSlotsByCharacterId.get(sceneChar.characterId) ?? null;
+      if (hasEquippedItems(slots)) {
+        const currentHash = hashEquippedSlots(slots);
+        const prev = prevClothingByCharacterId.get(sceneChar.characterId);
+        if (prev && prev.clothingHash === currentHash && prev.clothing) {
+          // Wardrobe unchanged since the cached summary was derived — reuse it
+          // verbatim so the line stays stable and we don't re-summarize.
+          sceneChar.clothing = prev.clothing;
+        }
+        // else: keep the LLM's freshly summarized (and capped) clothing line.
+        sceneChar.clothingHash = currentHash;
+      } else {
+        // No equipped wardrobe — clothing is narrative-driven; do not cache.
+        sceneChar.clothingHash = null;
       }
     }
   }

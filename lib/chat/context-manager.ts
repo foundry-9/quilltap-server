@@ -51,6 +51,7 @@ import {
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
+import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import {
   resolveTieredMountPool,
@@ -143,10 +144,15 @@ export {
   selectRecentMessages,
 }
 
-// Per-character cap on inter-character memories. Top 10 by SQL ordering
-// (importance DESC, lastReinforcedAt/createdAt DESC); the formatter then
-// re-ranks the slice by effective weight inside each character's block.
-const INTER_CHAR_PER_CHARACTER_LIMIT = 10
+// Per-character cap on the importance/recency half of inter-character memories.
+// Top N by SQL ordering (importance DESC, lastReinforcedAt/createdAt DESC); the
+// formatter then merges this with the relevance half and re-ranks inside each
+// character's block. Halved from 10 so the freed budget goes to the relevance
+// half below.
+const INTER_CHAR_PER_CHARACTER_LIMIT = 5
+// Per-character cap on the relevance half: memories the responding character
+// holds about a present character that score highly for the current moment.
+const INTER_CHAR_RELEVANCE_PER_CHARACTER_LIMIT = 5
 
 /**
  * Message format expected by the context manager
@@ -906,6 +912,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       options.onStatusChange('generating_recap', `Recalling ${character.name}'s memories...`)
     }
 
+    // Query for the recap's relevant-conversations list: the present moment, as
+    // best we can sketch it at chat-start / character-join. Falls back through
+    // the freshest signal available.
+    const recapRelevanceQuery =
+      newUserMessage ||
+      (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '') ||
+      chat.scenarioText ||
+      chat.contextSummary ||
+      ''
+
     try {
       const recapResult = await generateMemoryRecap(
         character.id,
@@ -914,7 +930,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         userId,
         chat.id,
         options.uncensoredFallbackOptions,
-        budgetInfo?.maxContext
+        budgetInfo?.maxContext,
+        recapRelevanceQuery,
+        embeddingProfileId,
       )
 
       if (recapResult.content) {
@@ -1149,11 +1167,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       sceneTime = calculateCurrentTimestamp(options.timestampConfig, options.timezone).formatted
     }
 
-    // Scene-state tracking only re-runs at turn boundaries, so its cached
-    // clothing field can lag mid-turn wardrobe edits and `wardrobe_*` tool
-    // calls. The wardrobe slots are the source of truth — read them live so
-    // the responding character's prompt always reflects what each present
-    // character is actually wearing right now.
+    // The scene-state tracker owns a concise, salience-based clothing summary
+    // (cached in `c.clothing`, keyed by the equipped-outfit hash in
+    // `c.clothingHash`). It only re-runs at turn boundaries, so the cached
+    // summary can lag a mid-turn wardrobe edit or `wardrobe_*` tool call.
+    // Detect that by hashing the live equipped slots and comparing against the
+    // hash the cached summary was derived from: only when they differ do we
+    // override — and then with a CONCISE title-only description, never the
+    // verbose per-item prose. When the wardrobe is unchanged (or the character
+    // has none equipped), the cached concise summary stands.
     const liveClothingByCharacterId = new Map<string, string>()
     if (parsedScene && parsedScene.characters.length > 0) {
       const repos = getRepositories()
@@ -1161,16 +1183,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         if (!c.characterId) return
         try {
           const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, c.characterId)
-          if (!equippedSlots) return
+          if (!hasEquippedItems(equippedSlots)) return
+          const liveHash = hashEquippedSlots(equippedSlots)
+          // Wardrobe unchanged since the cached summary was derived — keep it.
+          if (liveHash === (c.clothingHash ?? null)) return
           const { projectMountPointIds } = await getTurnMountPool()
-          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots, {
+          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots!, {
             projectMountPointIds,
           })
           const description = describeOutfit({
-            top: decorateOutfitItems(resolved.leafItemsBySlot.top),
-            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
-            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
-            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
+            top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
+            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
+            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
+            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
           })
           if (description) liveClothingByCharacterId.set(c.characterId, description)
         } catch (error) {
@@ -1231,19 +1256,51 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       )
 
       if (otherCharacterIds.length > 0 && interCharacterBudget > 0) {
+        // Importance/recency half — direct DB query, top-N per other character.
         const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
           character.id,
           otherCharacterIds,
           INTER_CHAR_PER_CHARACTER_LIMIT,
         )
-        interCharacterLoadedCount = interCharacterMemories.length
 
-        if (interCharacterMemories.length > 0) {
+        // Relevance half — semantic search per other character filtered by
+        // aboutCharacterId, ranking by relevance to the current moment. Skipped
+        // when there is no search query (e.g. continue-mode first turn). Runs
+        // concurrently across the present characters.
+        let interCharacterRelevance: SemanticSearchResult[] = []
+        if (memorySearchQuery) {
+          const relevanceLists = await Promise.all(
+            otherCharacterIds.map(async (otherId) => {
+              try {
+                return await searchMemoriesSemantic(character.id!, memorySearchQuery, {
+                  userId,
+                  embeddingProfileId,
+                  limit: INTER_CHAR_RELEVANCE_PER_CHARACTER_LIMIT,
+                  minImportance: minMemoryImportance,
+                  aboutCharacterId: otherId,
+                })
+              } catch (relevanceError) {
+                logger.warn('[ContextManager] Inter-character relevance search failed', {
+                  characterId: character.id,
+                  aboutCharacterId: otherId,
+                  error: relevanceError instanceof Error ? relevanceError.message : String(relevanceError),
+                })
+                return [] as SemanticSearchResult[]
+              }
+            }),
+          )
+          interCharacterRelevance = relevanceLists.flat()
+        }
+
+        interCharacterLoadedCount = interCharacterMemories.length + interCharacterRelevance.length
+
+        if (interCharacterMemories.length > 0 || interCharacterRelevance.length > 0) {
           const formatted = formatInterCharacterMemoriesForContext(
             interCharacterMemories,
             otherCharacterNames,
             interCharacterBudget,
-            provider
+            provider,
+            interCharacterRelevance,
           )
 
           interCharacterMemoryContent = formatted.content
@@ -1745,7 +1802,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         const refreshed = await getRepositories().chats.getMessages(chat.id)
         const stale = refreshed
           .filter((m): m is MessageEvent => m.type === 'message')
-          .filter(m => m.systemSender === 'commonplaceBook' && m.id !== posted.id)
+          // Sweep prior consolidated whispers, but NOT the fold-posted
+          // `relevant-conversations` whisper — it persists across turns and is
+          // swept on its own cadence by the fold refresh.
+          .filter(m =>
+            m.systemSender === 'commonplaceBook' &&
+            m.systemKind !== 'relevant-conversations' &&
+            m.id !== posted.id,
+          )
           .filter(m => {
             const ids = m.targetParticipantIds
             if (targetParticipantId === null) {

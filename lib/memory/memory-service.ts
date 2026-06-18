@@ -636,6 +636,13 @@ export async function searchMemoriesSemantic(
      * historical behavior. The `search` tool and tests leave this off.
      */
     recallContext?: RecallContext
+    /**
+     * Restrict results to memories the searching character holds *about* this
+     * other character (`memory.aboutCharacterId === aboutCharacterId`). Used by
+     * the per-turn inter-character recall to fill the "relevant about them" half
+     * alongside the importance/recency half. Absent → no inter-character filter.
+     */
+    aboutCharacterId?: string
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -769,6 +776,9 @@ export async function searchMemoriesSemantic(
       }
       if (options.source) {
         results = results.filter(r => r.memory.source === options.source)
+      }
+      if (options.aboutCharacterId) {
+        results = results.filter(r => r.memory.aboutCharacterId === options.aboutCharacterId)
       }
 
       // Blended ranking key: cosine (40%) + effective weight (60%). The blend
@@ -961,6 +971,7 @@ async function searchMemoriesText(
     limit?: number
     minImportance?: number
     source?: 'AUTO' | 'MANUAL'
+    aboutCharacterId?: string
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -1009,6 +1020,9 @@ async function searchMemoriesText(
   }
   if (options.source) {
     memories = memories.filter(m => m.source === options.source)
+  }
+  if (options.aboutCharacterId) {
+    memories = memories.filter(m => m.aboutCharacterId === options.aboutCharacterId)
   }
 
   // Score based on text matching

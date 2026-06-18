@@ -316,16 +316,31 @@ export function formatMemoriesForContext(
 }
 
 /**
- * Format inter-character memories for injection into context
- * These are memories that the responding character has about other characters in the chat
+ * Format inter-character memories for injection into context.
+ *
+ * These are memories the responding character holds about other characters in
+ * the chat, drawn from two sources and merged per other-character:
+ *
+ * - **Importance/recency half** — `importanceMemories`, from the direct DB query
+ *   (`findByCharacterAboutCharacters`), which has no per-turn relevance score.
+ * - **Relevance half** — `relevanceResults`, from a semantic search filtered by
+ *   `aboutCharacterId`, which carries a per-turn cosine relevance score.
+ *
+ * Within each character the two halves are deduped by memory id (a memory pulled
+ * by both stays once, kept in the relevance half so it renders with its score)
+ * and interleaved relevance-first, so the block stays roughly half "most
+ * important about them" + half "most relevant to right now about them" until one
+ * source for that character is exhausted. The combined output is then trimmed to
+ * `maxTokens`.
  */
 export function formatInterCharacterMemoriesForContext(
-  memories: Memory[],
+  importanceMemories: Memory[],
   characterNames: Map<string, string>, // aboutCharacterId -> character name
   maxTokens: number,
-  provider: Provider
+  provider: Provider,
+  relevanceResults: SemanticSearchResult[] = []
 ): FormattedInterCharacterMemoriesResult {
-  if (memories.length === 0) {
+  if (importanceMemories.length === 0 && relevanceResults.length === 0) {
     return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
   }
 
@@ -334,32 +349,69 @@ export function formatInterCharacterMemoriesForContext(
   let memoriesUsed = 0
   const debugMemories: DebugInterCharacterMemoryInfo[] = []
 
-  // Group memories by character
-  const memoriesByCharacter = new Map<string, Memory[]>()
-  for (const memory of memories) {
-    if (memory.aboutCharacterId) {
-      const existing = memoriesByCharacter.get(memory.aboutCharacterId) || []
-      existing.push(memory)
-      memoriesByCharacter.set(memory.aboutCharacterId, existing)
-    }
+  // Group both sources by the about-character.
+  const relevanceByCharacter = new Map<string, SemanticSearchResult[]>()
+  for (const result of relevanceResults) {
+    const aboutId = result.memory.aboutCharacterId
+    if (!aboutId) continue
+    const existing = relevanceByCharacter.get(aboutId) || []
+    existing.push(result)
+    relevanceByCharacter.set(aboutId, existing)
+  }
+  const importanceByCharacter = new Map<string, Memory[]>()
+  for (const memory of importanceMemories) {
+    if (!memory.aboutCharacterId) continue
+    const existing = importanceByCharacter.get(memory.aboutCharacterId) || []
+    existing.push(memory)
+    importanceByCharacter.set(memory.aboutCharacterId, existing)
   }
 
-  // Sort memories within each character by effective weight
-  for (const [characterId, charMemories] of memoriesByCharacter) {
+  // Iterate relevance-keyed characters first, then any importance-only ones.
+  const characterIds = new Set<string>([
+    ...relevanceByCharacter.keys(),
+    ...importanceByCharacter.keys(),
+  ])
+
+  const now = new Date()
+  for (const characterId of characterIds) {
     const characterName = characterNames.get(characterId) || 'Unknown'
-    const sortedMemories = [...charMemories]
-      .map(m => ({ memory: m, weight: calculateEffectiveWeight(m).effectiveWeight }))
+
+    // Relevance half — sorted by cosine score, carries its relevance.
+    const relevanceEntries = (relevanceByCharacter.get(characterId) ?? [])
+      .map(r => ({
+        memory: r.memory,
+        weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+        relevance: r.score as number | null,
+      }))
+      .sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
+
+    // Importance half — sorted by effective weight, excluding ids already in the
+    // relevance half (dedup leans toward keeping the relevance copy).
+    const relevanceIds = new Set(relevanceEntries.map(e => e.memory.id))
+    const importanceEntries = (importanceByCharacter.get(characterId) ?? [])
+      .filter(m => !relevanceIds.has(m.id))
+      .map(m => ({
+        memory: m,
+        weight: calculateEffectiveWeight(m).effectiveWeight,
+        relevance: null as number | null,
+      }))
       .sort((a, b) => b.weight - a.weight)
 
-    const now = new Date()
-    for (const { memory, weight } of sortedMemories) {
+    // Interleave relevance-first so the per-character block stays ~half/half.
+    const ordered: Array<{ memory: Memory; weight: number; relevance: number | null }> = []
+    let ri = 0
+    let ii = 0
+    while (ri < relevanceEntries.length || ii < importanceEntries.length) {
+      if (ri < relevanceEntries.length) ordered.push(relevanceEntries[ri++])
+      if (ii < importanceEntries.length) ordered.push(importanceEntries[ii++])
+    }
+
+    for (const { memory, weight, relevance } of ordered) {
       const age = formatRelativeAge(memory, now)
       const body = memory.content?.trim() || memory.summary
-      // Inter-character memories come from a direct DB query (not semantic
-      // search), so there is no per-turn relevance score — only importance,
-      // effective weight, and keywords.
       const meta = formatMemoryMetadataTag({
         importance: memory.importance,
+        relevance,
         weight,
         keywords: memory.keywords,
       })

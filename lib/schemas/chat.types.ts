@@ -48,6 +48,18 @@ export const SceneStateCharacterSchema = z.object({
   action: z.string(),
   appearance: z.string().nullable(),
   clothing: z.string().nullable(),
+  /**
+   * Short hash of the equipped-outfit slots the concise `clothing` summary was
+   * derived from. The scene-state tracker reuses the cached summary instead of
+   * re-summarizing while this hash is unchanged (the outfit only changes on a
+   * wardrobe edit), and the context manager compares it against the live
+   * wardrobe to decide whether a mid-turn change warrants a fresh override.
+   * Null when the character has no equipped wardrobe (clothing is
+   * narrative-driven and re-derived every turn). Optional for backward
+   * compatibility with scene states written before this field existed — a
+   * missing hash simply forces a re-summarize on the next tracking run.
+   */
+  clothingHash: z.string().nullable().optional(),
 });
 
 export type SceneStateCharacter = z.infer<typeof SceneStateCharacterSchema>;
