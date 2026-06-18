@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Docs: correct the autonomous-room daily-token-budget default
+
+The daily token budget for autonomous rooms ships off — `dailyTokenBudget` defaults to `null` (no cap until the user sets one). The help doc and the `AutonomousRoomSettingsSchema` JSDoc both described it as a "pilot: 1,000,000" default, which was never an enforced value. Updated `help/autonomous-rooms.md` and the schema comment in `lib/schemas/settings.types.ts` to state the real behavior. No code or schema change.
+
 #### Improvement: Brahma Console surfaces real SQL errors and pushes schema inspection
 
 Failed `run_sql` calls now show the actual database error (e.g. "no such column: …") in the Result panel instead of a generic "The query failed." Previously the error text was only visible after the transcript reloaded, because the streamed `toolResult` SSE event carried the (often null) result but not the error string; `processToolCalls` now includes the human-readable error on failure, and the console's live tool cards render it. The settled transcript already showed the real error; live and settled now match.

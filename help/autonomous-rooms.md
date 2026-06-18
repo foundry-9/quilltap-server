@@ -127,7 +127,7 @@ This dual safeguard (a prompt-level instruction *and* a structural provenance fl
 ## Settings reference
 
 - `/settings?tab=chat&section=autonomous-rooms` — user-level defaults:
-  - **Daily token budget** (pilot: 1,000,000)
+  - **Daily token budget** (left empty by default — no daily allowance is imposed until the householder sets one)
   - **Default freshness window** (default 12h)
   - **Default visibility** (Owner only / Household / Open)
   - **Destructive-tool policy** (Always refuse / Opt in per room)
