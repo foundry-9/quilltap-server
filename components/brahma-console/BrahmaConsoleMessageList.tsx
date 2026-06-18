@@ -52,7 +52,11 @@ function streamingToolCallToData(tc: StreamingToolCall): BrahmaSqlToolCallData {
     sql,
     database,
     envelope,
-    errorText: tc.pending ? null : (tc.success ? null : 'The query failed.'),
+    errorText: tc.pending
+      ? null
+      : tc.success
+        ? null
+        : (typeof tc.error === 'string' && tc.error.trim() ? tc.error : 'The query failed.'),
     pending: tc.pending,
   }
 }

@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### Improvement: Brahma Console surfaces real SQL errors and pushes schema inspection
+
+Failed `run_sql` calls now show the actual database error (e.g. "no such column: …") in the Result panel instead of a generic "The query failed." Previously the error text was only visible after the transcript reloaded, because the streamed `toolResult` SSE event carried the (often null) result but not the error string; `processToolCalls` now includes the human-readable error on failure, and the console's live tool cards render it. The settled transcript already showed the real error; live and settled now match.
+
+The `run_sql` system prompt was also strengthened to cut down on guessed-column failures: a new "Confirm the schema before you guess" section tells the model to list tables (`sqlite_master`) and confirm columns (`PRAGMA table_info(<table>)`) for any unfamiliar table before querying it, and to inspect the schema — not retry variations — after a `no such column`/`no such table` error. No schema, migration, or export change.
+
 #### Fix: Brahma Console crash opening older chats
 
 Opening an older Brahma Console conversation could crash with "Cannot read properties of undefined (reading 'toUpperCase')". The new transcript-render loop called `m.role.toUpperCase()` directly, but `getMessages` can return non-message events (and older chats predate some fields) whose `role` is undefined. The loop now coerces a missing `role`/`content` defensively so such events are simply skipped, as the prior filter did.

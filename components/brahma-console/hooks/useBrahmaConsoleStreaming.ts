@@ -24,6 +24,8 @@ export interface StreamingToolCall {
   /** Result payload once it arrives (the run_sql envelope object, or null). */
   result?: unknown
   success?: boolean
+  /** Human-readable error text on failure (result is often null then). */
+  error?: string
   /** True until the matching toolResult event fills this in. */
   pending: boolean
 }
@@ -159,11 +161,17 @@ export function useBrahmaConsoleStreaming({ chatId, onMessageComplete }: UseBrah
 
             // Tool result — complete the matching pending entry by batch + index.
             if (event.toolResult && typeof event.toolResult === 'object') {
-              const tr = event.toolResult as { index?: number; success?: boolean; result?: unknown }
+              const tr = event.toolResult as { index?: number; success?: boolean; result?: unknown; error?: string }
               const gi = batchBaseRef.current + (typeof tr.index === 'number' ? tr.index : 0)
               const entry = toolCallsRef.current[gi]
               if (entry) {
-                toolCallsRef.current[gi] = { ...entry, result: tr.result, success: tr.success, pending: false }
+                toolCallsRef.current[gi] = {
+                  ...entry,
+                  result: tr.result,
+                  success: tr.success,
+                  error: typeof tr.error === 'string' ? tr.error : undefined,
+                  pending: false,
+                }
                 setState(prev => ({ ...prev, streamingToolCalls: [...toolCallsRef.current] }))
               }
             }

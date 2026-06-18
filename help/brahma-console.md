@@ -57,6 +57,8 @@ Three points of etiquette govern the arrangement:
 
 You need never read a line of SQL — but should curiosity strike, the working is laid bare. Each time the Console consults a ledger, two tidy panels slip into the transcript at that very spot. The first, marked **Query**, holds the exact query it composed, set in a syntax-highlighted hand and copyable with a press. The second, marked **Result**, lays the ledger's answer out as a proper table — columns ruled, rows tallied, and a quiet note when the haul was trimmed to the row cap. Both panels appear the instant the query lands and may be folded shut with a tap, so the conversation stays unhurried while the evidence remains within easy reach.
 
+Should a query go awry — a misremembered column, a table that isn't there — the **Result** panel reports the ledger's own complaint in plain words rather than a polite shrug, so you (and the engine) can see exactly what went wrong. The Console takes such a rebuff as a cue to inspect the ledger's true shape and try again, rather than guess a second time.
+
 ## What the Console deliberately forgets
 
 The Console is, by design, an amnesiac of impeccable discretion:
