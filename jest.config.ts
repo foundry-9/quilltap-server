@@ -59,11 +59,19 @@ const config: Config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
+    // Claude Code agent worktrees are full repo checkouts; their duplicated
+    // test files must not be picked up (and their packages/plugins would
+    // collide in the Haste map — see modulePathIgnorePatterns below).
+    '/\\.claude/',
     '/__tests__/integration/',
     '/__tests__/unit/lib/fixtures/',
   ],
   modulePathIgnorePatterns: [
     '/.next/',
+    // Exclude Claude Code agent worktrees so their copies of packages/* and
+    // plugins/* don't register as duplicate Haste modules ("looked up in the
+    // Haste module map ... several different files") and break unrelated suites.
+    '/\\.claude/',
   ],
   coverageThreshold: {
     global: {
