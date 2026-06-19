@@ -56,6 +56,7 @@ import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
+import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 
@@ -288,6 +289,123 @@ async function askerOpensCarinaLine(
 }
 
 /**
+ * Whether the asker may reach the Brahma Console pseudocharacter.
+ *
+ * Brahma runs at full operator privilege (read-only SQL, all-store document
+ * access), so reachability is deliberately narrower than the ordinary Carina
+ * line: the human operator (`operatorInitiated`), the operator's user-controlled
+ * persona, and characters explicitly granted `systemTransparency` only. A plain
+ * roleplay character cannot reach Brahma even by writing `@Brahma:` — it gets the
+ * same "no answerer by that name" outcome as if Brahma did not exist, so the
+ * Console stays invisible to characters not in the know.
+ *
+ * `systemTransparency` is a DB column (not a vault field), read via the
+ * overlay-free `findByIdRaw` so a broken asker vault can't sink the check.
+ * Returns false (Brahma unreachable) on any resolution failure.
+ */
+async function brahmaIsReachable(
+  repos: ReturnType<typeof getRepositories>,
+  chatId: string,
+  askerParticipantId: string | null,
+  operatorInitiated: boolean,
+): Promise<boolean> {
+  if (operatorInitiated) return true;
+  if (!askerParticipantId) return false;
+  try {
+    const chat = await repos.chats.findById(chatId);
+    const participant = (chat?.participants ?? []).find((p) => p.id === askerParticipantId);
+    if (!participant?.characterId) return false;
+    if (participant.controlledBy === 'user') return true;
+    const asker = await repos.characters.findByIdRaw(participant.characterId);
+    return asker?.systemTransparency === true;
+  } catch (error) {
+    logger.warn('[Carina] Failed to resolve asker transparency for Brahma; treating as unreachable', {
+      context: 'carina',
+      chatId,
+      askerParticipantId,
+      error: getErrorMessage(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Answer a query as the Brahma Console pseudocharacter: run the isolated one-shot
+ * console engine and post the result as an ordinary `systemSender: 'carina'`
+ * message tagged with the reserved Brahma `answererId`. Brahma is memory-free, so
+ * — unlike the normal answerer path — NO memory recall is injected and NO
+ * `CARINA_MEMORY_EXTRACTION` job is enqueued. Failures are returned (never thrown)
+ * for the caller to route through Prospero.
+ */
+async function answerAsBrahma(opts: RunCarinaQueryOptions): Promise<CarinaResult> {
+  const { userId, chatId, question, whisper, askerParticipantId } = opts;
+  const repos = getRepositories();
+  try {
+    // Dynamic import keeps the Brahma console's import graph off Carina's static
+    // module load (mirrors the ask_carina handler's dynamic import of this file).
+    const { runBrahmaQuery } = await import('@/lib/services/brahma-console/one-shot.service');
+    const result = await runBrahmaQuery({ repos, userId, chatId, question });
+
+    if (!result.ok) {
+      if (result.detail === 'no-profile') {
+        return { ok: false, error: { kind: 'no-profile', characterName: 'Brahma' } };
+      }
+      return { ok: false, error: { kind: 'llm-failed', detail: result.detail, characterName: 'Brahma' } };
+    }
+
+    const posted = await postCarinaResponse({
+      chatId,
+      answer: result.answer,
+      answererId: BRAHMA_CARINA_ANSWERER_ID,
+      question,
+      participantId: null,
+      whisper,
+      askerParticipantId,
+    });
+    if (!posted) {
+      return { ok: false, error: { kind: 'llm-failed', detail: 'failed to persist answer', characterName: 'Brahma' } };
+    }
+
+    // Surface live over the caller's SSE stream, exactly as the normal path. A
+    // failed emit must never undo a posted answer.
+    if (opts.onPosted) {
+      try {
+        opts.onPosted(posted);
+      } catch (emitError) {
+        logger.warn('[Carina] Live Brahma answer emit failed; answer stands', {
+          context: 'carina',
+          chatId,
+          error: getErrorMessage(emitError),
+        });
+      }
+    }
+
+    logger.info('[Carina] Brahma Console answered', {
+      context: 'carina',
+      chatId,
+      whisper,
+      answerLength: result.answer.length,
+    });
+
+    return {
+      ok: true,
+      answer: result.answer,
+      messageId: posted.id,
+      message: posted,
+      answererId: BRAHMA_CARINA_ANSWERER_ID,
+      answererName: 'Brahma',
+    };
+  } catch (error) {
+    logger.error(
+      '[Carina] Brahma query failed',
+      { context: 'carina', chatId, error: getErrorMessage(error) },
+      error as Error,
+    );
+    return { ok: false, error: { kind: 'llm-failed', detail: getErrorMessage(error), characterName: 'Brahma' } };
+  }
+}
+
+/**
  * Resolve the answerer's connection profile via Carina's own chain (NOT the
  * participant-scoped `resolveConnectionProfile`):
  *   1. the answerer's default profile,
@@ -337,6 +455,28 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     if (askerOpens) {
       answerer = nameMatches[0];
     }
+  }
+
+  // The Brahma Console pseudocharacter. Only when NO real character carries the
+  // name "Brahma" (a real character always wins, so user data is never shadowed)
+  // do we treat the name as the Console. Reachability is gated to the operator,
+  // user-controlled personas, and `systemTransparency` characters — an
+  // unauthorized asker falls through to the same not-found outcome below, so
+  // Brahma never reveals itself.
+  if (nameMatches.length === 0 && isBrahmaName(characterName)) {
+    const reachable = await brahmaIsReachable(
+      repos,
+      chatId,
+      askerParticipantId,
+      opts.operatorInitiated === true,
+    );
+    if (reachable) {
+      return answerAsBrahma(opts);
+    }
+    logger.info('[Carina] Brahma requested by an unauthorized asker; treating as not-found', {
+      context: 'carina',
+      chatId,
+    });
   }
 
   if (!answerer) {

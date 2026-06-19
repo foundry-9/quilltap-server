@@ -16,6 +16,7 @@ import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -1086,6 +1087,11 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     // then a legible placeholder.
     if (message.systemSender === 'carina') {
       const answererId = message.carinaMeta?.answererId
+      // The Brahma Console pseudocharacter has no character record; render its
+      // reference card with the dedicated Brahma name + avatar.
+      if (answererId === BRAHMA_CARINA_ANSWERER_ID) {
+        return { name: 'Brahma', title: null, avatarUrl: '/images/avatars/brahma-avatar.webp', defaultImage: null }
+      }
       if (answererId) {
         const participant = chat?.participants.find(p => p.character?.id === answererId)
         if (participant?.character) {

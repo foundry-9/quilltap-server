@@ -288,6 +288,24 @@ Add to the Feature Names section:
 Add to the `systemSender` enum documentation:
 - `carina` — Carina query responses (quick-reference answers from a designated answerer character); fires when the answerer is not a chat participant or for system-level Carina messages
 
+## The Brahma Console as a pseudocharacter answerer
+
+The Brahma Console (a character-less, memory-free, SQL-capable direct line to a plain LLM — see [brahma-console.md](../brahma-console.md)) is reachable from inside a Salon by the name **"Brahma"**, through every Carina entry point (`@Brahma:` / `@Brahma?` markup and the `ask_carina` tool). It is a **pseudocharacter**: no `characters` row, no participant, no memories, never in any character list.
+
+- **Sentinel + name helper** — `lib/services/carina/brahma-answerer.ts`. `BRAHMA_CARINA_ANSWERER_ID` is a fixed reserved RFC-4122 v4 UUID (valid for `z.uuid()`, never collides with a real `character.id`); `isBrahmaName(name)` matches "brahma" case-insensitively. A Brahma answer is posted as an ordinary `systemSender: 'carina'` message whose `carinaMeta.answererId` is the sentinel — so it inherits Carina's memory suppression (`turn-transcript.ts` skips any `systemSender` message) and the reference-card UI with **no new `systemSender` value and no schema/column change**.
+
+- **One-shot engine** — `lib/services/brahma-console/one-shot.service.ts` → `runBrahmaQuery({ repos, userId, chatId, question })`. Mirrors `processBrahmaResponse` (the streaming console orchestrator) but: builds **only** a `[system, user(question)]` slate — never the Salon transcript (preserving Carina isolation); persists nothing, emits no SSE, tracks no tokens; runs the agent loop (submit_final_response, tool-call threading, the shared `normalizeToolCallSignature` stuck-loop guard) silently into a sink controller; resolves the profile via `resolveBrahmaConnectionProfile(repos, userId, null)`; and executes tools with `operatorSurface: true` (full SQL / all-store access). Returns `{ ok, answer } | { ok: false, detail }`. `processBrahmaResponse` was deliberately **not** refactored into a shared core.
+
+- **Branch + auth gate** — `runCarinaQuery` (`carina.service.ts`). After normal answerer resolution and only when `nameMatches.length === 0 && isBrahmaName(characterName)` (**a real character named "Brahma" always wins**), `brahmaIsReachable(...)` authorizes the asker: `operatorInitiated` OR a `controlledBy === 'user'` participant OR an asker character with `systemTransparency === true` (read via overlay-free `findByIdRaw`). Unauthorized → the same `not-found` error as a missing character, so the Console stays invisible (no info leak). Authorized → `answerAsBrahma` runs the engine, posts via `postCarinaResponse({ answererId: BRAHMA_CARINA_ANSWERER_ID, participantId: null, ... })`, fires `onPosted`, and **skips memory recall and the `CARINA_MEMORY_EXTRACTION` enqueue entirely**. `no-profile` from the engine maps to the no-profile Carina error; anything else to `llm-failed`.
+
+- **Tool offering** — `orchestrator.service.ts` sets `askCarinaEnabled = anyCanBeCarina || characterIsTransparent`, so a `systemTransparency` character is offered `ask_carina` even with no other answerer present (`buildTools` is per-acting-character, so this is correct in multi-char chats).
+
+- **Rendering / lookups** — the Salon avatar resolver (`app/salon/[id]/page.tsx`) special-cases the sentinel → `{ name: 'Brahma', avatarUrl: '/images/avatars/brahma-avatar.webp' }` before the participant/off-scene lookup; the chat `get` handler (`app/api/v1/chats/[id]/handlers/get.ts`) excludes the sentinel from off-scene character resolution to avoid a guaranteed-miss DB lookup per Brahma message.
+
+- **Continuity:** none. `loadPriorCarinaExchanges` never matches the sentinel; each Brahma query is standalone (matching the stateless Console).
+
+- **Autonomous-room consequence:** an autonomous character is not user-controlled, so it can only reach Brahma with `systemTransparency` — itself an operator grant. Brahma's own tool slate is built fresh with `operatorSurface: true` and is **not** subject to the room's destructive-tool filter; the transparency grant is the operator-facing control.
+
 ## Settings UI
 
 No dedicated settings page. The `canBeCarina` toggle appears on the character edit page alongside other control flags (`systemTransparency`, `canDressThemselves`, `canCreateOutfits`, etc.).

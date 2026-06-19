@@ -21,6 +21,7 @@ import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
+import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
 import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
@@ -441,9 +442,15 @@ export async function handleGet(
       }
       // Carina (inline LLM queries): a reference answer renders with the
       // answerer character's own avatar. When the answerer isn't a participant,
-      // collect them here so the Salon can resolve their avatar/name.
+      // collect them here so the Salon can resolve their avatar/name. The Brahma
+      // Console pseudocharacter (reserved sentinel id) has no character record —
+      // skip it so we don't fire a guaranteed-miss lookup per Brahma message.
       const carinaAnswererId = m?.carinaMeta?.answererId;
-      if (typeof carinaAnswererId === 'string' && !participantCharacterIds.has(carinaAnswererId)) {
+      if (
+        typeof carinaAnswererId === 'string' &&
+        carinaAnswererId !== BRAHMA_CARINA_ANSWERER_ID &&
+        !participantCharacterIds.has(carinaAnswererId)
+      ) {
         offSceneCharacterIds.add(carinaAnswererId);
       }
     }

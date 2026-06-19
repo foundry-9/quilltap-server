@@ -93,6 +93,25 @@ So the rule, stated plainly: if the one asking is an answerer, they may reach ev
 
 **You, the proprietor, are the exception that needs no flag.** When you type `@Name` markup yourself, the line always opens — to any character in the house, answerer or not, whether or not your persona has ever been enrolled at the desk. The establishment answers to its owner. The either-side rule above governs the *characters* consulting one another; the human at the keyboard simply rings whatever bell they like.
 
+## Consulting the Brahma Console
+
+There is one answerer at the reference desk who keeps no character file at all, and yet may be rung by name: **Brahma**. The Brahma Console — Quilltap's plain, persona-free line to a large language model, with leave to inspect your records and read your document stores — answers to `@Brahma:` and `@Brahma?` exactly as any reference character would, and may likewise be reached by an LLM character through the `ask_carina` tool. Put a question to Brahma and the reply lands in your chat as a tidy reference card, whispered or public as you please.
+
+```
+@Brahma: How many chats reference the character "Aria"?
+@Brahma? "List every document store linked to this project."
+```
+
+Brahma is a creature apart, and a few particulars follow from that:
+
+- **It keeps no memories.** Nothing asked of Brahma is filed away, and nothing it has answered before colours a later reply. Each consultation stands entirely alone — Brahma does not even recall the rest of the present conversation, only the single question you put to it.
+- **It appears on no roster.** Brahma is not a character; you will not find it in Aurora, in a participant list, or anywhere a character might ordinarily be enrolled. It exists only at the moment it is consulted.
+- **It answers with the Console's full powers** — the same read-only inspection of your records and access to your document stores that the standalone Console enjoys.
+
+Because those powers are considerable, **not everyone may ring Brahma's bell.** The line opens for you, the proprietor, whenever you type the markup yourself; for your own user-controlled persona; and for any character granted **system transparency** (the same covenant that lets a character see behind the establishment's staff curtain). A character without that standing who writes `@Brahma:` — or reaches for the tool — receives the very same "no answerer by that name" reply as if Brahma had never existed. The Console stays invisible to those not in the know.
+
+Finally, a point of precedence: should you happen to keep a real character of your own named "Brahma," **your character wins.** The Console only answers to the name when no character of yours bears it, so your own creations are never shadowed.
+
 ## Errors
 
 When something goes awry — the named character is not found, the line cannot be opened from either side (neither asker nor answerer holds the flag), or the answerer has no LLM connection that can be resolved — Prospero steps in to deliver the news. Public queries receive a public error message; whispered queries receive a whispered one. Carina herself has no voice for these announcements; she dispatches the matter to Prospero with the quiet efficiency of someone who knows better than to make a scene.

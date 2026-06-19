@@ -775,14 +775,17 @@ async function processMessage(
   // whole tool-build step in that case.
   const isEffectiveCourier = streamingState.effectiveProfile.transport === 'courier'
 
-  // Carina (inline LLM queries): offer the ask_carina tool only when at least
-  // one answerer (a character with canBeCarina) exists. Uses the overlay-free
-  // raw read — canBeCarina is a DB column, not a vault field — to keep this
-  // per-turn check cheap.
+  // Carina (inline LLM queries): offer the ask_carina tool when at least one
+  // answerer (a character with canBeCarina) exists, OR when the acting character
+  // is `systemTransparency` — such a character can reach the Brahma Console
+  // pseudocharacter as a Carina answerer, so it must be offered the tool even
+  // with no other answerer present. Uses the overlay-free raw read — canBeCarina
+  // is a DB column, not a vault field — to keep this per-turn check cheap.
   let askCarinaEnabled = false
   try {
     const rawCharacters = await repos.characters.findAllRaw()
-    askCarinaEnabled = rawCharacters.some(c => c.canBeCarina === true)
+    const anyCanBeCarina = rawCharacters.some(c => c.canBeCarina === true)
+    askCarinaEnabled = anyCanBeCarina || characterIsTransparent
   } catch (carinaProbeError) {
     logger.warn('Failed to probe for Carina answerers; ask_carina tool withheld', {
       chatId,

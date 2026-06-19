@@ -346,3 +346,7 @@ All previously-open items are now decided (see the decision table in §1):
 4. **Past-chats UX parity** — **Match Help.** The launcher opens to a past-chats list with a "New conversation" affordance.
 
 > Nothing here blocks implementation. One soft item for the implementer's judgment remains in §5.3: whether to gate the stripped-down tool set via a new `surface`/flag in `plugin-tool-builder.ts` (preferred) versus another mechanism — but the preferred approach is specified.
+
+## 10. Follow-on: reachable as a Carina answerer from a Salon
+
+The Console is also reachable by name ("Brahma") as a Carina answerer from inside a Salon — via `@Brahma:` / `@Brahma?` markup and the `ask_carina` tool — gated to the operator, user-controlled personas, and `systemTransparency` characters. It runs through an isolated one-shot engine (`lib/services/brahma-console/one-shot.service.ts`) that reuses this orchestrator's helpers without persistence, history, or streaming. Full design: [features/complete/carina.md → "The Brahma Console as a pseudocharacter answerer"](./complete/carina.md).

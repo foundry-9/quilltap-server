@@ -29,6 +29,26 @@ describe('parseCarinaQuery', () => {
       const result = parseCarinaQuery('@Diana? what time is it')
       expect(result?.whisper).toBe(true)
     })
+
+    // The Brahma Console pseudocharacter is reached by name, like any answerer —
+    // the parser treats it as an ordinary name (authorization lives downstream).
+    it('parses @Brahma: as an ordinary answerer name', () => {
+      const result = parseCarinaQuery('@Brahma: what tables exist')
+      expect(result).toEqual({
+        characterName: 'Brahma',
+        whisper: false,
+        question: 'what tables exist',
+      })
+    })
+
+    it('parses @Brahma? as a whispered query', () => {
+      const result = parseCarinaQuery('@Brahma? how many chats reference Aria')
+      expect(result).toEqual({
+        characterName: 'Brahma',
+        whisper: true,
+        question: 'how many chats reference Aria',
+      })
+    })
   })
 
   describe('character names with spaces', () => {

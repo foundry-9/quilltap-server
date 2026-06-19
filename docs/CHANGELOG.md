@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Feature: Reach the Brahma Console from a Salon via Carina (`@Brahma`)
+
+The Brahma Console is now reachable as a Carina answerer named "Brahma" from inside a Salon — through `@Brahma:` / `@Brahma?` markup and the `ask_carina` tool — so a console/SQL answer can be dropped straight into the scene, public or whispered.
+
+- **Pseudocharacter, not a character.** Brahma has no `characters` row, no participant, and forms no memories; it never appears in any character list. A Brahma answer is posted as an ordinary `systemSender: 'carina'` message whose `carinaMeta.answererId` is a reserved sentinel UUID (`lib/services/carina/brahma-answerer.ts`), so it reuses Carina's memory suppression and reference-card rendering with no new `systemSender` value and no schema/migration/export change.
+- **Isolated one-shot engine** (`lib/services/brahma-console/one-shot.service.ts`): runs the Brahma agent loop (SQL inspection, document stores, search-without-memories) against a `[system, question]`-only slate — never the Salon transcript — persisting nothing and emitting no SSE, then returns the answer text. The streaming console orchestrator (`processBrahmaResponse`) is unchanged.
+- **Authorization.** Brahma is reachable only by the operator (markup they type), a user-controlled persona, or a character with `systemTransparency`. An unauthorized asker gets the same "no answerer by that name" result as if Brahma did not exist. A `systemTransparency` character is now offered the `ask_carina` tool even when no other answerer exists.
+- **Precedence.** A real character named "Brahma" always wins; the Console only answers to the name when no character bears it.
+- No memory recall is injected and no `CARINA_MEMORY_EXTRACTION` job is enqueued for Brahma answers. Requires a Brahma avatar at `public/images/avatars/brahma-avatar.webp`. Help docs (Carina, Brahma Console) and tests updated.
+
 #### Fix: Help Chats and the Brahma Console are never moderated
 
 The Concierge now leaves Help Chats (`chatType: 'help'`) and Brahma Console chats (`chatType: 'brahma'`) alone entirely — no classification, flagging, rerouting, or in-chat announcements, regardless of the global dangerous-content setting. Previously the scheduled danger scan and the post-turn trigger swept these utility chats like any roleplay chat, so Brahma Console sessions could be marked dangerous and receive Concierge warnings.

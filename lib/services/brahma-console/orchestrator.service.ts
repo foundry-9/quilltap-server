@@ -74,7 +74,7 @@ const logger = createServiceLogger('BrahmaConsoleOrchestrator')
  * whitespace, case changes — does not read as a "different" call. Semantic
  * variation still differs (that is what the stale-result signal catches).
  */
-function normalizeToolCallSignature(
+export function normalizeToolCallSignature(
   toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
 ): string {
   const normalizeValue = (value: unknown): unknown =>

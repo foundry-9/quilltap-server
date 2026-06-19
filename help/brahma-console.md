@@ -59,6 +59,12 @@ You need never read a line of SQL — but should curiosity strike, the working i
 
 Should a query go awry — a misremembered column, a table that isn't there — the **Result** panel reports the ledger's own complaint in plain words rather than a polite shrug, so you (and the engine) can see exactly what went wrong. The Console takes such a rebuff as a cue to inspect the ledger's true shape and try again, rather than guess a second time.
 
+## Ringing the Console from the Salon floor
+
+The Console need not be summoned from the sidebar to be of use. From inside any Salon conversation it answers to the name **Brahma**, reached through the same reference-desk machinery as any [Carina](carina.md) answerer — type `@Brahma:` for a public reply or `@Brahma?` for a whispered one, or let a tool-using character consult it via `ask_carina`. The answer drops straight into the conversation as a tidy reference card.
+
+Consulted this way, the Console keeps all of its console powers — the read-only ledger inspection and document-store access described above — but loses every scrap of continuity: each Salon query is wholly standalone, with no memory of the surrounding scene or of any earlier Brahma consultation, and it forms no memories afterward. Because those powers are not to be handed about lightly, the Salon line opens only for you (the proprietor), for your own user-controlled persona, and for characters you have granted **system transparency**; to anyone else, Brahma simply does not answer. See [Carina](carina.md) for the full etiquette.
+
 ## What the Console deliberately forgets
 
 The Console is, by design, an amnesiac of impeccable discretion:
@@ -81,3 +87,4 @@ help_navigate(url: "/")
 - [Left Sidebar](sidebar.md) --- Where the Console mark lives
 - [Connection Profiles](connection-profiles.md) --- Establish the engines the Console can call upon
 - [The Scriptorium](scriptorium.md) --- The document stores the Console can read and write
+- [Carina](carina.md) --- Reaching the Console by name (`@Brahma`) from inside a Salon

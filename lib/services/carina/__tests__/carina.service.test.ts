@@ -57,6 +57,10 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueCarinaMemoryExtraction: jest.fn(),
 }));
 
+jest.mock('@/lib/services/brahma-console/one-shot.service', () => ({
+  runBrahmaQuery: jest.fn(),
+}));
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { buildIdentityStack } from '@/lib/chat/context/system-prompt-builder';
 import {
@@ -73,6 +77,8 @@ import { postCarinaResponse } from '../writer';
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
 import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
+import { runBrahmaQuery } from '@/lib/services/brahma-console/one-shot.service';
+import { BRAHMA_CARINA_ANSWERER_ID } from '../brahma-answerer';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -191,6 +197,7 @@ beforeEach(() => {
     debugMemories: [],
   } as never);
   jest.mocked(enqueueCarinaMemoryExtraction).mockResolvedValue('job-mem-1' as never);
+  jest.mocked(runBrahmaQuery).mockResolvedValue({ ok: true, answer: 'Brahma reply.' } as never);
   // postCarinaResponse returns the posted MessageEvent (the service reads
   // `.id` for messageId and splices the whole message into context upstream).
   jest.mocked(postCarinaResponse).mockResolvedValue({
@@ -1187,6 +1194,125 @@ describe('runCarinaQuery', () => {
       jest.mocked(enqueueCarinaMemoryExtraction).mockRejectedValue(new Error('queue down'));
       const result = await runCarinaQuery(BASE_OPTS);
       expect(result).toMatchObject({ ok: true, answer: 'Paris.', messageId: 'msg-123' });
+    });
+  });
+
+  // ── Brahma Console pseudocharacter ────────────────────────────────────────
+
+  describe('Brahma Console as a Carina answerer', () => {
+    /** Repos whose only character is "Aria" — so the name "Brahma" never matches
+     *  a real character and the pseudocharacter branch is eligible. The asker
+     *  participant `part-2` resolves to an LLM character whose transparency the
+     *  test controls via `findByIdRaw`. */
+    function makeBrahmaRepos(transparency: boolean | null) {
+      return makeMockRepos({
+        chats: {
+          findById: jest.fn().mockResolvedValue({
+            ...MOCK_CHAT,
+            participants: [{ id: 'part-2', type: 'CHARACTER', characterId: 'char-2', controlledBy: 'llm' }],
+          }),
+          getMessages: jest.fn().mockResolvedValue([]),
+          addMessage: jest.fn().mockResolvedValue(undefined),
+        },
+        characters: {
+          findByUserId: jest.fn().mockResolvedValue([MOCK_CHARACTER]),
+          findByIdRaw: jest.fn().mockResolvedValue({ id: 'char-2', systemTransparency: transparency }),
+        },
+      });
+    }
+
+    it('operator @Brahma: runs the one-shot engine, posts with the Brahma sentinel, and forms no memories', async () => {
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        operatorInitiated: true,
+      });
+
+      expect(runBrahmaQuery).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ ok: true, answer: 'Brahma reply.', answererName: 'Brahma' });
+
+      const writerCall = jest.mocked(postCarinaResponse).mock.calls[0][0];
+      expect(writerCall.answererId).toBe(BRAHMA_CARINA_ANSWERER_ID);
+      expect(writerCall.participantId).toBeNull();
+
+      // Brahma is memory-free: no recall, no extraction job, no identity stack.
+      expect(enqueueCarinaMemoryExtraction).not.toHaveBeenCalled();
+      expect(searchMemoriesSemantic).not.toHaveBeenCalled();
+      expect(buildIdentityStack).not.toHaveBeenCalled();
+    });
+
+    it('whispered @Brahma? targets the asker and carries the sentinel', async () => {
+      await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        whisper: true,
+        operatorInitiated: true,
+        askerParticipantId: 'p-user',
+      });
+      const writerCall = jest.mocked(postCarinaResponse).mock.calls[0][0];
+      expect(writerCall.whisper).toBe(true);
+      expect(writerCall.askerParticipantId).toBe('p-user');
+      expect(writerCall.answererId).toBe(BRAHMA_CARINA_ANSWERER_ID);
+    });
+
+    it('a transparent LLM character may reach Brahma via ask_carina', async () => {
+      jest.mocked(getRepositories).mockReturnValue(makeBrahmaRepos(true) as never);
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        askerParticipantId: 'part-2',
+      });
+
+      expect(runBrahmaQuery).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ ok: true, answererName: 'Brahma' });
+    });
+
+    it('an opaque LLM character cannot reach Brahma — not-found, Console stays invisible', async () => {
+      jest.mocked(getRepositories).mockReturnValue(makeBrahmaRepos(null) as never);
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        askerParticipantId: 'part-2',
+      });
+
+      expect(result).toMatchObject({ ok: false, error: { kind: 'not-found' } });
+      expect(runBrahmaQuery).not.toHaveBeenCalled();
+    });
+
+    it('a real character named "Brahma" wins over the Console pseudocharacter', async () => {
+      const realBrahma = { ...MOCK_CHARACTER, id: 'char-real-brahma', name: 'Brahma', canBeCarina: true };
+      jest.mocked(getRepositories).mockReturnValue(
+        makeMockRepos({
+          characters: {
+            findByUserId: jest.fn().mockResolvedValue([realBrahma]),
+            findByIdRaw: jest.fn().mockResolvedValue(null),
+          },
+        }) as never,
+      );
+
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        operatorInitiated: true,
+      });
+
+      expect(runBrahmaQuery).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ ok: true, answererId: 'char-real-brahma', answererName: 'Brahma' });
+      const writerCall = jest.mocked(postCarinaResponse).mock.calls[0][0];
+      expect(writerCall.answererId).toBe('char-real-brahma');
+    });
+
+    it('maps a no-profile failure from the Brahma engine to a no-profile Carina error', async () => {
+      jest.mocked(runBrahmaQuery).mockResolvedValue({ ok: false, detail: 'no-profile' } as never);
+      const result = await runCarinaQuery({
+        ...BASE_OPTS,
+        characterName: 'Brahma',
+        operatorInitiated: true,
+      });
+      expect(result).toMatchObject({ ok: false, error: { kind: 'no-profile', characterName: 'Brahma' } });
+      expect(postCarinaResponse).not.toHaveBeenCalled();
     });
   });
 });
