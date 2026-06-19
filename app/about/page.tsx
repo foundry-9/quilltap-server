@@ -4,13 +4,25 @@ import Link from 'next/link'
 import packageJson from '@/package.json'
 import { BrandName } from '@/components/ui/brand-name'
 import { Icon } from '@/components/ui/icon'
+import { useTheme } from '@/components/providers/theme-provider'
 
 export default function AboutPage() {
   const currentYear = new Date().getFullYear()
   const copyrightYears = currentYear > 2025 ? `2025-${currentYear}` : '2025'
 
+  // Hold the intro animation until the theme has finished applying, so it
+  // doesn't play against default styling and then visibly re-skin underneath.
+  const { isLoading: themeLoading } = useTheme()
+
   return (
-    <div className="qt-page-container">
+    <div
+      className="qt-page-container qt-about-intro"
+      data-theme-ready={themeLoading ? undefined : 'true'}
+      style={{
+        '--story-background-url': "url('/images/about.webp')",
+        '--story-background-position': 'right center',
+      } as React.CSSProperties}
+    >
       {/* Header */}
       <div className="mb-8">
         <h1 className="qt-heading-1">About <BrandName /></h1>

@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Feature: About page background image with a staged intro
+
+The About page now shows `public/images/about.webp` as a fixed background behind its content, the same across every theme (light and dark) at the standard dimmed story-background opacity. When the viewport forces the image to crop: vertical crops stay vertically centered, and horizontal crops anchor to the right edge so the crop comes off the left. The content layer holds until the active theme has finished loading, then plays a one-time intro — hidden for ~1s, fade in over ~0.5s, fade out over ~0.5s, fade back in over ~0.5s and stay — so it no longer animates against default styling and then visibly re-skins. Gating the intro on the theme being ready also removes the flash. Honors `prefers-reduced-motion` (content simply appears once the theme is ready, with no flashing). The shared `.qt-page-container` background layer gained a `--story-background-position` variable (default `top center`) so other story-background pages are unchanged. CSS and one client component only; no schema, migration, or export change.
+
 #### Chore: remove leftover development debug logging
 
 Removed seven happy-path debug log calls added while building the more recent 4.7 work (conversation-summary vault mirroring, vault conversation search, the Brahma Console one-shot/streaming paths, the relevant-conversations refresh whisper, and the `run_sql` tool). They only narrated successful normal operation — "wrote", "complete", "running", "answered", "executed", "posted" — and became log noise once the features worked. Kept all error/warn logging plus the debug logs that aid diagnosis: rejection/failure branches, "blocked"/"skipped"/"empty"/"unavailable" notes, and deletion/state-change events. Also dropped a now-unused timing variable in the `run_sql` handler. No behavior change; `tsc` and `eslint` stay green.
