@@ -41,7 +41,7 @@ SQLite columns are **camelCase**, mirroring the Zod/TypeScript types (`createdAt
 
 Read-only verbs: `list`, `show`, `files`, `ls`/`dir`, `tree` (ASCII folder hierarchy), `read`, `export`, `find` (substring on filename), `grep` (substring on extracted text), `status` (per-mount extraction + embedding rollup).
 
-Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
+Server-required verbs: `scan`, `reindex` (re-extract + re-chunk), `embed` (enqueue embedding jobs — `--wait` polls to completion), and the write verbs (`write`/`delete`/`mkdir`/`move`/`copy`/`link`/`rmdir`/`mvdir`). `reindex` and `embed` are explicit triggers for the two background pipelines; they refuse to run when the server is unreachable.
 
 ### Addressing documents with `qtap://` URIs
 
@@ -76,6 +76,18 @@ Tail or print an instance's log files without remembering where they live. Flags
 Read-only verbs: `status` (in-source count vs recorded-applied count vs not-yet-recorded, with retired-from-active counter), `pending` (just the not-yet-recorded list), `run --dry-run` (lists pending; refuses without `--dry-run` because the actual runner stays at startup where the loading screen lives). `--json` on all three.
 
 Note: "not yet recorded" includes migrations whose `shouldRun()` returns `false` on this instance — the CLI does not invoke the predicate, so it cannot distinguish "would skip" from "would run."
+
+## Maintenance sweeps (`npx quilltap maintenance`)
+
+Runs the same retention/cleanup sweeps as the server's daily housekeeping tick, on demand. `status` is a read-only dry run that prints what *would* be reaped; `run` performs the sweep and is **lock-gated** (refuses while a live instance holds the lock). It reaps finished background jobs (`COMPLETED` older than 7 days, `DEAD` older than 30 days), closed terminal sessions older than 30 days plus their transcripts, and orphaned mount-index file rows. `--json` on both verbs. (Stale-chat asset collapse needs server machinery and only runs on the daily tick, not here.)
+
+## Memory extraction dry-run (`npx quilltap memory-diff <chatId>`)
+
+Diagnostic tool: dumps a chat's existing memories and dry-runs re-extraction against it **without writing anything**, so you can compare what the extractor *would* produce now against what is stored. Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
+
+## Themes CLI (`npx quilltap themes`)
+
+Manage installed theme bundles from the shell. Verbs: `list`, `install <bundle.qtap-theme>`, `validate <bundle.qtap-theme>`, `uninstall <id>`, `export <id> [--output <path>]`, `create <name>` (scaffolds via `create-quilltap-theme`), `search <query>` (across registries), `update [id]` (check for / apply updates). Registry operators also get `themes registry <list|add|remove|refresh|keygen|sign>` for managing remote registries and Ed25519 signing (`--key`/`-k`, `--name`/`-n`, `--output`/`-o`). See `npx quilltap themes --help`.
 
 ## Instances and resolution
 

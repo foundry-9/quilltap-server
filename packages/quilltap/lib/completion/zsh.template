@@ -28,6 +28,7 @@ _quilltap() {
     'memory-diff:Dump existing memories and dry-run re-extraction'
     'logs:Tail or print an instance log file'
     'migrations:Inspect migration status'
+    'maintenance:Run retention/cleanup sweeps'
     'completion:Generate shell completion scripts'
   )
 
@@ -75,6 +76,9 @@ _quilltap_subcommand() {
       ;;
     migrations)
       _quilltap_migrations
+      ;;
+    maintenance)
+      _quilltap_maintenance
       ;;
     completion)
       _quilltap_completion
@@ -163,6 +167,9 @@ _quilltap_docs() {
     'mkdir:Create folder'
     'move:Move file'
     'copy:Copy file'
+    'link:Hard-link a file into another mount'
+    'rmdir:Remove a folder'
+    'mvdir:Rename or move a folder'
   )
 
   docs_opts=(
@@ -393,6 +400,27 @@ _quilltap_migrations() {
     _describe 'migrations subcommand' subverbs
   fi
   _arguments $mig_opts
+}
+
+_quilltap_maintenance() {
+  local -a subverbs maint_opts
+  subverbs=(
+    'status:Show dry-run retention counts'
+    'run:Run retention/cleanup sweeps (lock-gated)'
+  )
+
+  maint_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '--json[JSON output]'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'maintenance subcommand' subverbs
+  fi
+  _arguments $maint_opts
 }
 
 _quilltap_completion() {
