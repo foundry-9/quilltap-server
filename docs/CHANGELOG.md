@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Chore: Dependency updates
+
+Ran `npm update -S` across the root project, all packages, and all distributed plugins. Notable bumps: Next.js 16.2.7→16.2.9 (and `eslint-config-next`), `better-sqlite3-multiple-ciphers` 12.10.0→12.11.1, `openai` 6.42.0→6.44.0, `esbuild` 0.28.0→0.28.1, `storybook`/`@storybook/react` 10.4.2→10.4.6, `@playwright/test` 1.60.0→1.61.0, plus assorted `@types/*` and tooling patches. All five packages and all fourteen plugins had real dependency changes, so each had its version bumped; the plugins were rebuilt. No source changes.
+
 #### Feature: Per-document Scriptorium policy flags (`embed`, `character_read`, `character_write`)
 
 A mounted markdown document may now carry three frontmatter flags that control how Quilltap treats it. Each defaults to `true` and only takes effect when the frontmatter says `false`. Values may be quoted (`embed: "false"`) or bare (`embed: false`); coercion is case-insensitive and treats `false`/`no`/`0`/`off` as false.
