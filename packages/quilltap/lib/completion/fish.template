@@ -15,7 +15,7 @@ function __quilltap_no_subcommand
   end
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff logs migrations completion
+      case db docs themes instances memories memory-diff logs migrations maintenance completion
         return 1
     end
   end
@@ -27,7 +27,7 @@ function __quilltap_using_subcommand
   set -l cmd (commandline -opc)
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff logs migrations completion
+      case db docs themes instances memories memory-diff logs migrations maintenance completion
         test "$cmd[$i]" = "$target"
         return $status
     end
@@ -57,6 +57,7 @@ complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search a
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'logs' -d 'Tail or print log files'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'migrations' -d 'Inspect migration status'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'maintenance' -d 'Run retention/cleanup sweeps'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'completion' -d 'Generate shell completion'
 
 # Global options
@@ -140,6 +141,9 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'delete' -d 'De
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'mkdir' -d 'Create folder'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'move' -d 'Move file'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'copy' -d 'Copy file'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'link' -d 'Hard-link a file into another mount'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'rmdir' -d 'Remove a folder'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'mvdir' -d 'Rename or move a folder'
 
 # docs flags
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'mount' -d 'Mount name or id' -x
@@ -267,6 +271,10 @@ complete -c quilltap -n '__quilltap_using_subcommand migrations' -f -a 'status' 
 complete -c quilltap -n '__quilltap_using_subcommand migrations' -f -a 'pending' -d 'List pending migrations'
 complete -c quilltap -n '__quilltap_using_subcommand migrations' -f -a 'run' -d 'Run pending migrations'
 complete -c quilltap -n '__quilltap_using_subcommand migrations' -l 'dry-run' -d 'Dry run (required for run)'
+
+# ---------- maintenance verbs ----------
+complete -c quilltap -n '__quilltap_using_subcommand maintenance' -f -a 'status' -d 'Show dry-run retention counts'
+complete -c quilltap -n '__quilltap_using_subcommand maintenance' -f -a 'run' -d 'Run retention/cleanup sweeps (lock-gated)'
 
 # ---------- completion sub-args ----------
 complete -c quilltap -n '__quilltap_using_subcommand completion' -f -a 'bash' -d 'Bash completion'

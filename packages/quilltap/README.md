@@ -89,6 +89,20 @@ Quilltap stores its database, files, and logs in a platform-specific directory:
 
 Override with `--data-dir` or the `QUILLTAP_DATA_DIR` environment variable.
 
+## Named Instances
+
+Register a data directory once and point the CLI at it by name, instead of repeating `--data-dir`:
+
+```bash
+quilltap instances add Friday ~/iCloud/Quilltap/Friday   # Register (prompts for the passphrase if encrypted)
+quilltap instances list                                  # Registered instances (* marks the default)
+quilltap instances default Friday                        # Make it the fall-through for flag-free runs
+quilltap instances rename Friday Weekday                 # Rename, preserving the stored passphrase
+quilltap instances remove Friday                         # Unregister
+```
+
+Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The registry lives at `<app-support>/Quilltap/instances.json` (mode 0600; e.g. `~/Library/Application Support/Quilltap/instances.json` on macOS). **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` > the OS platform default. Pass the **instance root** (e.g. `~/iCloud/Quilltap/Friday`), not its `data/` subdirectory.
+
 ## Database Tool
 
 The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
@@ -216,6 +230,17 @@ quilltap memories status [--character <name|id>]                       # Per-hol
 
 Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
 
+## Memory Extraction Dry-Run
+
+`quilltap memory-diff <chatId>` is a diagnostic that dumps a chat's existing memories and dry-runs re-extraction against it **without writing anything** — useful for seeing how an extractor change would land on a real conversation.
+
+```bash
+quilltap memory-diff <chatId> --instance Friday          # Report to the current directory
+quilltap memory-diff <chatId> --out /tmp/diff --concurrency 8
+```
+
+Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
+
 ## Maintenance & Cleanup
 
 `quilltap maintenance` is the manual trigger for the retention sweeps that otherwise run on the server's daily maintenance tick. It reaps data with no bearing on characters, stories, or memories.
@@ -227,6 +252,31 @@ quilltap maintenance run --instance Friday    # Run the sweeps once (lock-gated;
 ```
 
 `maintenance run` is a DB writer: it claims `<dataDir>/quilltap.lock` and **refuses while a running Quilltap server holds it** — stop the server first. Because it can only run with the server down, it performs the sweeps expressible as direct SQL/filesystem work: reaping finished background jobs (COMPLETED after 7 days, DEAD after 30, keyed off `completedAt`), closed terminal sessions older than 30 days plus their transcript files, and orphaned mount-index files. The **stale-chat asset collapse** (superseded story-backgrounds and wardrobe avatars) needs the server's file-storage machinery and runs only on the server's daily tick — `status` reports a stale-chat count so you can see the backlog. Retention windows mirror `lib/background-jobs/maintenance/retention-constants.ts`.
+
+## Logs
+
+`quilltap logs` tails or prints an instance's log files without hunting down the logs directory. Prefer it over `tail -f` — it follows across log rotation and can merge streams.
+
+```bash
+quilltap logs                                 # Last 100 lines of combined.log
+quilltap logs --tail 0 --stream error         # Whole error log
+quilltap logs -f --grep "MEMORY_EXTRACTION"   # Follow, filtered by regex
+quilltap logs --stream combined,error         # Merge streams with [stream] prefixes
+```
+
+Flags: `--stream combined|error|stdout|stderr|startup` (comma-separated for multiple), `--tail N` (default 100; `0` = full file), `--follow` / `-f`, `--grep <pattern>` (JS regex). Resolves the logs directory via the same `--instance` / `--data-dir` plumbing as the rest of the CLI.
+
+## Migrations
+
+`quilltap migrations` inspects migration state read-only. The actual runner stays at server startup (where the loading screen reports progress), so the CLI deliberately won't apply anything.
+
+```bash
+quilltap migrations status        # Counts: in-source vs recorded-applied vs not-yet-recorded
+quilltap migrations pending       # Just the not-yet-recorded list
+quilltap migrations run --dry-run # List what would run (refuses without --dry-run)
+```
+
+`--json` works on all three. "Not yet recorded" includes migrations whose `shouldRun()` is `false` on this instance — the CLI doesn't evaluate the predicate, so it can't distinguish "would skip" from "would run."
 
 ## Theme Management
 

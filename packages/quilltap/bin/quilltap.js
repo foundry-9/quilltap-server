@@ -94,7 +94,11 @@ Subcommands:
   docs                          Inspect, read, and export document mounts
   memories                      Search, browse, and graph memories
   instances                     Register / inspect named Quilltap instances
+  logs                          Tail or print an instance log file
+  migrations                    Inspect migration status (status / pending / run)
+  maintenance                   Run retention / cleanup sweeps (status / run)
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
+  completion <shell>            Generate a shell completion script (bash / zsh / fish)
 
 Options:
   -p, --port <number>     Port to listen on (default: 3000)
