@@ -4,6 +4,14 @@
 
 ### 4.7-dev
 
+#### Fix: CLI and server self-heal a stale native-module ABI instead of erroring
+
+After a Node.js upgrade, the cached SQLCipher binding (`better-sqlite3-multiple-ciphers`) is compiled against the old Node ABI and throws `NODE_MODULE_VERSION` on first load. The launcher already rebuilt native modules before starting the server, but the `db`, `docs`, `memories`, `migrations`, `maintenance`, and `memory-diff` subcommands loaded the binding directly and never reached that heal — so they failed with the raw ABI error.
+
+- The ABI check now reads the compiled-for version straight from the `.node` binary (its `node_register_module_v<ABI>` symbol) and compares it to the running Node ABI — no `dlopen`, no reliance on matching an error-message string. Only a genuine mismatch (or a missing binary) triggers a rebuild.
+- A lightweight heal (`ensureDatabaseNativeModule`) now runs at the CLI subcommand dispatch point, before any command loads the database, so every DB-touching subcommand self-heals the same way the server launch already did. It prints a brief "Rebuilding native modules…" notice rather than throwing, then continues normally.
+- `sharp` and `node-pty` are N-API (ABI-stable) and can't hit this failure, so they're no longer treated as ABI-fragile; their checks remain only for the missing-binary / platform cases they actually have.
+
 #### Docs: moved four more completed feature specs into `features/complete/`
 
 Second pass over `docs/developer/features/` after more work shipped. Moved `brahma-console`, `commonplace-whisper-overhaul`, `qtap-uri`, and `backup-text-replacement-and-export-cleanup` into `features/complete/`, each verified against the CHANGELOG and code (migrations, named code paths, tests) rather than the doc header. The backup/export spec is the previously-ambiguous one: both halves are now done — `text_replacement_rules` round-trips through backup/restore with tests, and the dead legacy `.qtap` export builders were removed with a regression test guarding the import path (entry in `docs/CHANGELOG_V4.md`). Fixed one relative link broken by the move: `complete/carina.md` → `brahma-console.md` (same directory now). No code change.

@@ -21,6 +21,84 @@ function resolveModuleDir(moduleName) {
   }
 }
 
+// Locate the SQLCipher binding (better-sqlite3-multiple-ciphers, aliased as
+// better-sqlite3). Returns the absolute path to better_sqlite3.node, or null.
+function betterSqlite3BindingPath() {
+  const modDir = resolveModuleDir('better-sqlite3-multiple-ciphers')
+              || resolveModuleDir('better-sqlite3');
+  if (!modDir) return null;
+  return path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
+}
+
+// Read the Node ABI (NODE_MODULE_VERSION) a node-gyp/NAN addon was compiled
+// against, by scanning for its `node_register_module_v<ABI>` export — a few-KB
+// byte read, no dlopen, no rebuild. Returns the ABI as a string, or null when
+// the symbol is absent (e.g. an N-API build, which is ABI-stable) or unreadable.
+function readCompiledAbi(bindingPath) {
+  try {
+    const buf = require('fs').readFileSync(bindingPath);
+    const m = /node_register_module_v(\d+)/.exec(buf.toString('latin1'));
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// True when the SQLCipher binding is missing or was built for a different Node
+// ABI than the one we're running. Reads the compiled-for ABI straight from the
+// binary; only falls back to an actual load probe if the symbol can't be read.
+function betterSqlite3NeedsRebuild() {
+  const bindingPath = betterSqlite3BindingPath();
+  if (!bindingPath) return true; // unresolvable → needs (re)build
+  if (!require('fs').existsSync(bindingPath)) return true;
+  const compiledAbi = readCompiledAbi(bindingPath);
+  if (compiledAbi) return compiledAbi !== process.versions.modules;
+  // Symbol unreadable — fall back to the authoritative dlopen probe.
+  try {
+    require(bindingPath);
+    return false;
+  } catch (err) {
+    return !!(err.message && err.message.includes('NODE_MODULE_VERSION'));
+  }
+}
+
+// Rebuild the named native modules against the current Node ABI. Prints a
+// friendly notice rather than throwing; returns true on success, false on
+// failure. Backfills node-pty's spawn-helper afterward.
+function rebuildModules(moduleNames) {
+  console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
+  try {
+    execSync(`npm rebuild ${moduleNames.join(' ')}`, {
+      cwd: PACKAGE_DIR,
+      stdio: 'inherit',
+    });
+    console.log('  Done.');
+    console.log('');
+    reconcileNodePtySpawnHelper();
+    return true;
+  } catch (err) {
+    console.error('');
+    console.error(`  Warning: Failed to rebuild native modules: ${err.message}`);
+    console.error('  Try running: npm rebuild --prefix ' + PACKAGE_DIR);
+    console.error('');
+    return false;
+  }
+}
+
+// Fast pre-flight for the ONE ABI-fragile native module every DB path needs:
+// better-sqlite3-multiple-ciphers (SQLCipher). sharp and node-pty are N-API and
+// ABI-stable, so they can't hit this failure. Detects an ABI mismatch from the
+// binary itself and rebuilds before anything tries to load it, so a Node upgrade
+// self-heals instead of throwing. Cheap no-op when already healthy. Never throws.
+function ensureDatabaseNativeModule() {
+  try {
+    if (!betterSqlite3NeedsRebuild()) return true;
+  } catch {
+    return true; // detection hiccup — let the real load be the source of truth
+  }
+  return rebuildModules(['better-sqlite3-multiple-ciphers']);
+}
+
 // node-pty needs a `spawn-helper` executable beside the pty.node it loads, or
 // pty.spawn() fails with `posix_spawnp failed`. An ABI rebuild lands a fresh
 // build/Release/pty.node (which node-pty's loader prefers over prebuilds/) but
@@ -74,19 +152,9 @@ function ensureNativeModules() {
   // Check better-sqlite3-multiple-ciphers (provides SQLCipher encryption support).
   // The main app depends on this via an npm alias as 'better-sqlite3', so we must
   // ensure the SQLCipher-capable version is available and link it as 'better-sqlite3'.
-  // We must load the native binding directly to detect NODE_MODULE_VERSION mismatches.
-  try {
-    const modDir = resolveModuleDir('better-sqlite3-multiple-ciphers')
-                || resolveModuleDir('better-sqlite3');
-    if (!modDir) throw Object.assign(new Error('not found'), { code: 'MODULE_NOT_FOUND' });
-    const bindingsPath = path.join(modDir, 'build', 'Release', 'better_sqlite3.node');
-    require(bindingsPath);
-  } catch (err) {
-    if (err.message && err.message.includes('NODE_MODULE_VERSION')) {
-      needsRebuild.push('better-sqlite3-multiple-ciphers');
-    } else if (err.code === 'MODULE_NOT_FOUND') {
-      needsRebuild.push('better-sqlite3-multiple-ciphers');
-    }
+  // This is the only ABI-fragile binding — detected straight from the binary.
+  if (betterSqlite3NeedsRebuild()) {
+    needsRebuild.push('better-sqlite3-multiple-ciphers');
   }
 
   // Check sharp: loads its native binding eagerly on require.
@@ -120,27 +188,18 @@ function ensureNativeModules() {
     return true;
   }
 
-  console.log(`  Rebuilding native modules for Node.js ${process.version}...`);
-
-  try {
-    execSync(`npm rebuild ${needsRebuild.join(' ')}`, {
-      cwd: PACKAGE_DIR,
-      stdio: 'inherit',
-    });
-    console.log('  Done.');
-    console.log('');
-    reconcileNodePtySpawnHelper();
-    return true;
-  } catch (err) {
-    console.error('');
-    console.error(`  Warning: Failed to rebuild native modules: ${err.message}`);
-    console.error('  Try running: npm rebuild --prefix ' + PACKAGE_DIR);
-    console.error('');
-    return false;
-  }
+  return rebuildModules(needsRebuild);
 }
 
-module.exports = { resolveModuleDir, ensureNativeModules, reconcileNodePtySpawnHelper, PACKAGE_DIR };
+module.exports = {
+  resolveModuleDir,
+  readCompiledAbi,
+  betterSqlite3NeedsRebuild,
+  ensureDatabaseNativeModule,
+  ensureNativeModules,
+  reconcileNodePtySpawnHelper,
+  PACKAGE_DIR,
+};
 
 // Allow this file to be invoked directly as a postinstall script:
 //   node lib/native-modules.js

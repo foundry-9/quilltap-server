@@ -13,7 +13,7 @@ const {
   loadDbKey,
 } = require('../lib/db-helpers');
 const { resolveInstance } = require('../lib/instances');
-const { resolveModuleDir, ensureNativeModules } = require('../lib/native-modules');
+const { resolveModuleDir, ensureNativeModules, ensureDatabaseNativeModule } = require('../lib/native-modules');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
 
@@ -1123,6 +1123,14 @@ const subIdx = locateSubcommand(cliArgs);
 const subName = subIdx >= 0 ? cliArgs[subIdx] : '';
 // Everything except the subcommand token itself (leading global flags kept).
 const subArgs = subIdx >= 0 ? [...cliArgs.slice(0, subIdx), ...cliArgs.slice(subIdx + 1)] : [];
+
+// Subcommands load the SQLCipher binding directly and never reach main()'s
+// native-module heal, so self-heal the database ABI here first. Cheap no-op when
+// healthy; rebuilds (with a friendly notice, not an error) only on a real
+// Node-ABI mismatch — e.g. after the user upgrades Node under a cached install.
+if (subName) {
+  ensureDatabaseNativeModule();
+}
 
 if (subName === 'db') {
   dbCommand(subArgs);
