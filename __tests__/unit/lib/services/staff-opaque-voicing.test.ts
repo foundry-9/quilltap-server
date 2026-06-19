@@ -504,9 +504,34 @@ describe('Concierge opaque builder', () => {
     expect(narrative).toContain('Sexual/NSFW content')
     expect(narrative).toContain('0.65')
     expect(narrative).toContain('cheap-LLM')
+    // Below threshold: the classifier flagged it directly, not the arithmetic.
+    expect(narrative).toContain('direct verdict')
+    expect(narrative).toContain('shy of the present threshold')
+    expect(narrative).not.toContain('registering 0.65 against')
 
     const opaque = buildDangerOpaqueContent(details)
     expect(opaque).toContain('cheap-LLM fallback')
+    expect(opaque).toContain('Flagged directly by')
+    expect(opaque).toContain('(not reached)')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('crossing the threshold keeps the arithmetic phrasing, not the direct-verdict phrasing', () => {
+    const details = {
+      score: 0.92,
+      threshold: 0.7,
+      categories: [{ category: 'violence', score: 0.92, label: '' }],
+      source: 'moderation' as const,
+      providerName: 'OPENAI',
+    }
+
+    const narrative = buildDangerContent(details)
+    expect(narrative).toContain('registering 0.92 against the present threshold of 0.70')
+    expect(narrative).not.toContain('direct verdict')
+
+    const opaque = buildDangerOpaqueContent(details)
+    expect(opaque).toContain('Overall score 0.92 against threshold 0.70')
+    expect(opaque).not.toContain('Flagged directly by')
     expectNoPersonaNames(opaque)
   })
 })

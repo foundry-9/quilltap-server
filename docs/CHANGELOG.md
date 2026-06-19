@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Improvement: Concierge danger notice distinguishes a provider flag from a threshold crossing
+
+A chat is marked dangerous when either the overall severity meets the threshold or the moderation/cheap-LLM assayer flags the content of its own accord (`isDangerous = flagged || score >= threshold`). OpenAI's moderation endpoint returns `flagged` against its own internal catalogue, independent of the configured threshold, so it commonly fires while every reported severity sits below the threshold. The in-chat notice previously read "registering 0.68 against the present threshold of 0.80" in that case, which implied a crossing that did not happen.
+
+The notice now branches on whether the score actually met the threshold:
+
+- **Threshold met** (`score >= threshold`): unchanged — "registering X against the present threshold of Y."
+- **Flagged below threshold**: the matter was marked "by the direct verdict of" the assayer; the (sub-threshold) severities are still reported for context, with a note that it was the assayer's judgement, not the arithmetic, that drew the line. The opaque/neutral variant reads "Flagged directly by &lt;provider&gt;, below the numeric threshold … (not reached)."
+
+Change is confined to the Concierge notice writer (`lib/services/concierge-notifications/writer.ts`); the writer infers the case from the existing `score`/`threshold` fields, so no classifier, settings, schema, migration, or export change. Help doc and tests updated.
+
 #### Fix: Brahma Console no longer repeats the same query and burns its turn cap
 
 The Console's agent loop could repeat a successful query over and over — getting the same result each time — until it exhausted its 25-turn cap and ended without answering. Root cause: the loop rebuilt the conversation for each turn without the model's tool-call context. Assistant turns that issued native tool calls were stored and replayed with empty content and no `tool_calls`, and tool results were replayed as `tool`-role messages bound to no call (and, on a later request, as raw stored JSON). With no record of what it had already done, a reasoning model re-derived the opening step every turn and re-ran the same query.

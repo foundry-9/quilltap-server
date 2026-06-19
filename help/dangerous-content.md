@@ -151,6 +151,8 @@ When a chat is first marked as dangerous, the Concierge — one of "the Staff" �
 
 The announcement now names *what drew his eye* — the contributing categories with their severity scores, the overall score, the threshold in force, and which assayer (moderation provider or cheap-LLM fallback, by provider name) rendered the verdict. This makes it transparent why the reroute happened and lets you tune the threshold or correct misclassifications with confidence.
 
+The wording also distinguishes *how* the verdict was reached. A chat is marked dangerous when **either** the overall severity meets your threshold **or** the assayer flags the content of its own accord — moderation providers such as OpenAI return a `flagged` decision against their own internal catalogue, independent of your numeric threshold, so this fires even when the reported severities sit well below it. When the threshold was actually met, the announcement reads "registering X against the present threshold of Y." When the assayer flagged it directly while the severities stayed below the bar, it instead says the matter was marked "by the direct verdict of" the assayer, reports the (sub-threshold) severities for context, and notes that it was the assayer's judgement — not the arithmetic — that drew his eye. So a notice can legitimately show a severity *below* your configured threshold.
+
 ### Optimizations for Permanently Dangerous Chats
 
 When a chat has been permanently classified as dangerous, Quilltap applies several optimizations to save tokens and avoid futile content refusals:
