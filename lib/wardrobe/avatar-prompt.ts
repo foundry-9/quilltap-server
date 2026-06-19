@@ -11,6 +11,7 @@ import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { genderNounFromPronouns } from '@/lib/characters/pronoun-gender';
 
 interface BuildPromptOptions {
   /**
@@ -107,7 +108,13 @@ export async function buildCharacterAvatarPrompt(
   const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
   let prompt = '';
   if (hasAppearance) {
-    const intro = `Solo portrait of a single person: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
+    // Anchor the figure's apparent sex from the character's pronouns. Without
+    // it, a gender-neutral physical description plus an outfit cue (e.g. a
+    // "men's" shirt) can make the generator render the wrong sex. `they`/
+    // neopronouns/unset → no anchor, leaving "person" so we never force a
+    // binary presentation onto a character who hasn't declared one.
+    const subjectNoun = genderNounFromPronouns(character.pronouns) ?? 'person';
+    const intro = `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
     const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
     // Strip any trailing terminal punctuation off the physical description so
     // we don't end up with "background.." once we re-append a period.

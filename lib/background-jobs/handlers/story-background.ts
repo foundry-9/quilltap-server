@@ -47,6 +47,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character } from '@/lib/schemas/types';
 
 // Detection helper lives in the shared dangerous-content service so the
@@ -57,14 +58,6 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function deriveGenderPrefix(char: Character): string {
-  if (!char.pronouns) return '';
-  const subj = char.pronouns.subject.toLowerCase();
-  if (subj === 'he') return 'A man. ';
-  if (subj === 'she') return 'A woman. ';
-  return '';
-}
-
 function buildBasicEnumeration(char: Character): string {
   const primary = char.physicalDescription;
   const desc =
@@ -73,7 +66,7 @@ function buildBasicEnumeration(char: Character): string {
     primary?.longPrompt ||
     primary?.fullDescription ||
     char.name;
-  return `${deriveGenderPrefix(char)}${desc}`.trim();
+  return `${genderPrefixFromPronouns(char.pronouns)}${desc}`.trim();
 }
 
 /**
@@ -452,13 +445,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
 
     // Derive a gender prefix from standard pronouns so image generators know the character's sex
-    let genderPrefix = '';
-    const pronouns = char!.pronouns;
-    if (pronouns) {
-      const subj = pronouns.subject.toLowerCase();
-      if (subj === 'he') genderPrefix = 'A man. ';
-      else if (subj === 'she') genderPrefix = 'A woman. ';
-    }
+    const genderPrefix = genderPrefixFromPronouns(char!.pronouns);
 
     if (resolved) {
       const descParts = [genderPrefix + resolved.physicalDescription];

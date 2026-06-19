@@ -14,7 +14,7 @@ Open any character and you are greeted, at the very top, by their calling card �
 
 The middle panel reads top to bottom:
 
-- **Name and title** — the character's name in full, with their title set just beneath it. A trio of small switches keeps to the upper right: the favourite star, a little console (lit when the character is enrolled as a Carina answerer, able to field quick **@-queries** without joining the conversation — see [Carina](carina.md)), and the user-control figure. The pronouns sit alongside the title (hover them for the full subject / object / possessive breakdown).
+- **Name and title** — the character's name in full, with their title set just beneath it. A trio of small switches keeps to the upper right: the favourite star, a little console (lit when the character is enrolled as a Carina answerer, able to field quick **@-queries** without joining the conversation — see [Carina](carina.md)), and the user-control figure. The pronouns sit alongside the title (hover them for the full subject / object / possessive breakdown). These pronouns also have a quiet word with the portraitist: a *she/her* lady is drawn as a woman and a *he/him* gentleman as a man, so a character caught in borrowed or masculine attire — a man's shirt, say — is still rendered as the lady she is, rather than left to the easel's guesswork. Anything other than the plain *he* or *she* (a *they*, a coinage of your own, or none at all) is left entirely to the artist's discretion.
 - **Aliases** — every other name the character answers to, arranged as a little row of badges.
 - **The ledger** — a single line of figures, taken at a glance, telling you how richly furnished this character has become:
   - **memories** — entries in their Commonplace Book

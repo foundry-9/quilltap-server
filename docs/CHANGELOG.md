@@ -4,6 +4,12 @@
 
 ### 4.7-dev
 
+#### Fix: Character avatars follow the character's pronouns
+
+The avatar prompt builder now anchors the figure's apparent sex from the character's standard pronouns: `she/her` renders "a single woman," `he/him` renders "a single man," and anything else (`they`, neopronouns, or unset) stays neutral as before. Previously the avatar prompt named only the character and described their face and outfit, with no gender signal, so a gender-neutral physical description plus an outfit cue (e.g. a "men's" shirt) could make the image generator render the wrong sex — a woman wearing a man's shirt came out looking like a man.
+
+The `he → male` / `she → female` derivation, which the story-background and manual-image-prompt builders already used, is now a single shared helper (`lib/characters/pronoun-gender.ts`) consumed by all three paths. No schema, migration, or export change.
+
 #### Feature: Reach the Brahma Console from a Salon via Carina (`@Brahma`)
 
 The Brahma Console is now reachable as a Carina answerer named "Brahma" from inside a Salon — through `@Brahma:` / `@Brahma?` markup and the `ask_carina` tool — so a console/SQL answer can be dropped straight into the scene, public or whispered.

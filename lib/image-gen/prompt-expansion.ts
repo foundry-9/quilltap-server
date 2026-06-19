@@ -8,6 +8,7 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { PhysicalDescription, ImageProvider } from '@/lib/schemas/types';
 import type { Pronouns } from '@/lib/schemas/character.types';
+import { genderFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { ResolvedCharacterAppearance } from '@/lib/image-gen/appearance-resolution';
 
 /**
@@ -333,12 +334,7 @@ export function buildExpansionContext(
 } {
   const placeholderData = resolvedPlaceholders.map(placeholder => {
     // Derive gender hint from standard pronouns
-    let gender: string | undefined;
-    if (placeholder.pronouns) {
-      const subj = placeholder.pronouns.subject.toLowerCase();
-      if (subj === 'he') gender = 'male';
-      else if (subj === 'she') gender = 'female';
-    }
+    const gender: string | undefined = genderFromPronouns(placeholder.pronouns) ?? undefined;
 
     // Check if we have a resolved appearance for this character
     const resolved = resolvedAppearances?.find(
