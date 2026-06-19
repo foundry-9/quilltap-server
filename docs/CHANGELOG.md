@@ -14,6 +14,10 @@ Previously, when a character used a `doc_*` tool to write, edit, move, rename, c
 - Large new-file contents and large diffs are capped in the announcement with a "[truncated …]" notice and a link to the full document, so a big change can't blow the model's context budget. The document itself is never truncated.
 - New `systemKind` values (`created-by-*`, `edited-by-*`, `moved-by-*`, `copied-by-*`, `blob-written-by-*`) are labeled in the Salon's collapsed system-message bar and rated high-importance. No schema, migration, or export change.
 
+#### Fix: Test suite self-heals a stale native-module ABI before running
+
+Added a Jest `globalSetup` (`jest.global-setup.js`) that runs once before the suite and rebuilds the real SQLCipher binding if it was compiled against a different Node ABI than the one running. The real-binding DB suites (db-backup, graph-integrity, memories-commands, and the migration/content-hash/run-sql-handler suites) load the actual `better-sqlite3` addon rather than the mock, so after a Node upgrade they all failed with `NODE_MODULE_VERSION` until someone rebuilt by hand. The setup heals whichever copy is present — the root `better-sqlite3` alias and/or the `packages/quilltap` `better-sqlite3-multiple-ciphers` install, each with its correct rebuild target — using the same binary-symbol ABI check as the CLI. It's a no-op when the ABI already matches.
+
 #### Fix: CLI and server self-heal a stale native-module ABI instead of erroring
 
 After a Node.js upgrade, the cached SQLCipher binding (`better-sqlite3-multiple-ciphers`) is compiled against the old Node ABI and throws `NODE_MODULE_VERSION` on first load. The launcher already rebuilt native modules before starting the server, but the `db`, `docs`, `memories`, `migrations`, `maintenance`, and `memory-diff` subcommands loaded the binding directly and never reached that heal — so they failed with the raw ABI error.
