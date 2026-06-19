@@ -227,15 +227,6 @@ export async function writeConversationSummaryToVaults(
       }
 
       await writeDatabaseDocument(target.mountPointId, relativePath, body);
-
-      logger.debug('Wrote conversation summary to character vault', {
-        context: 'file-storage.conversation-summary-vault-bridge',
-        chatId: input.chatId,
-        characterId,
-        mountPointId: target.mountPointId,
-        relativePath,
-        replaced: priorPaths.length,
-      });
     } catch (error) {
       logger.warn('Failed to write conversation summary to a character vault', {
         context: 'file-storage.conversation-summary-vault-bridge',

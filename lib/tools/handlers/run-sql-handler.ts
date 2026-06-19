@@ -238,8 +238,6 @@ export async function executeRunSqlTool(
   input: unknown,
   context: RunSqlToolContext
 ): Promise<RunSqlResult> {
-  const startedAt = Date.now();
-
   // Validate against the Zod source of truth (also normalizes types).
   const parsed = runSqlToolInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -323,16 +321,6 @@ export async function executeRunSqlTool(
   const sliced = rawRows.slice(0, maxRows);
   const rows = sliced.map(sanitizeRow);
   const columns = rows.length > 0 ? Object.keys(rows[0]) : safeColumnNames(stmt);
-
-  sqlLogger.debug('run_sql executed', {
-    userId: context.userId,
-    database,
-    sqlPreview: sql.slice(0, SQL_LOG_PREVIEW_CHARS),
-    readonly: stmt.readonly,
-    rowCount: rows.length,
-    truncated,
-    durationMs: Date.now() - startedAt,
-  });
 
   return {
     success: true,

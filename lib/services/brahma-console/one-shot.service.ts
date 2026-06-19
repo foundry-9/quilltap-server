@@ -109,12 +109,6 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     apiKey = apiKeyData.key_value
   }
 
-  logger.debug('Running one-shot Brahma query', {
-    chatId,
-    provider: connectionProfile.provider,
-    model: connectionProfile.modelName,
-  })
-
   // Tools — identical to the standalone console: agent mode, doc read/write, the
   // read-only run_sql tool, search-without-memories; NO ask_carina (recursion
   // guard), NO workspace tools.
@@ -360,6 +354,5 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     return { ok: false, detail: 'empty response' }
   }
 
-  logger.debug('Brahma one-shot query answered', { chatId, answerLength: finalAnswer.length })
   return { ok: true, answer: finalAnswer }
 }

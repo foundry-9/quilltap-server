@@ -353,9 +353,6 @@ async function processBrahmaResponse(
       // last-wins it and push the run-level cumulative to the client (which
       // replaces, not appends). DISPLAY ONLY — never re-fed to a model.
       if (chunk.reasoningContent && chunk.reasoningContent !== turnReasoning) {
-        if (!turnReasoning) {
-          logger.debug('Brahma Console streaming reasoning', { chatId, turn: agentTurnCount })
-        }
         turnReasoning = chunk.reasoningContent
         runReasoning = priorReasoning + turnReasoning
         safeEnqueue(controller, encodeReasoningChunk(encoder, runReasoning))

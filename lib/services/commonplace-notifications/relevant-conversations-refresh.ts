@@ -118,14 +118,6 @@ export async function refreshRelevantConversationsOnFold(
         // Sweep the character's prior relevant-conversations whisper(s) so only
         // the freshest one survives.
         await sweepPriorRelevantConversationWhispers(chatId, posted.id, targetParticipantId);
-
-        logger.debug('[RelevantConversationsRefresh] Posted refreshed whisper', {
-          context: 'commonplace-notifications.relevant-conversations-refresh',
-          chatId,
-          characterId: participant.characterId,
-          targetParticipantId,
-          matchCount: matches.length,
-        });
       } catch (perCharacterError) {
         logger.warn('[RelevantConversationsRefresh] Failed for a participant', {
           context: 'commonplace-notifications.relevant-conversations-refresh',

@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Chore: remove leftover development debug logging
+
+Removed seven happy-path debug log calls added while building the more recent 4.7 work (conversation-summary vault mirroring, vault conversation search, the Brahma Console one-shot/streaming paths, the relevant-conversations refresh whisper, and the `run_sql` tool). They only narrated successful normal operation — "wrote", "complete", "running", "answered", "executed", "posted" — and became log noise once the features worked. Kept all error/warn logging plus the debug logs that aid diagnosis: rejection/failure branches, "blocked"/"skipped"/"empty"/"unavailable" notes, and deletion/state-change events. Also dropped a now-unused timing variable in the `run_sql` handler. No behavior change; `tsc` and `eslint` stay green.
+
 #### Chore: Dependency updates
 
 Ran `npm update -S` across the root project, all packages, and all distributed plugins. Notable bumps: Next.js 16.2.7→16.2.9 (and `eslint-config-next`), `better-sqlite3-multiple-ciphers` 12.10.0→12.11.1, `openai` 6.42.0→6.44.0, `esbuild` 0.28.0→0.28.1, `storybook`/`@storybook/react` 10.4.2→10.4.6, `@playwright/test` 1.60.0→1.61.0, plus assorted `@types/*` and tooling patches. All five packages and all fourteen plugins had real dependency changes, so each had its version bumped; the plugins were rebuilt. No source changes.

@@ -151,15 +151,6 @@ export async function searchVaultConversationSummaries(
     }
   }
 
-  logger.debug('Vault conversation search complete', {
-    context: 'memory.conversation-summary-search',
-    characterId,
-    query: trimmedQuery.slice(0, 80),
-    chunkCount: chunks.length,
-    fileCount: bestByPath.size,
-    matchCount: matches.length,
-  })
-
   return matches
 }
 
