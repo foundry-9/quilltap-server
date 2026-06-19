@@ -13,6 +13,7 @@
  */
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
+import { isModerationExemptChatType } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -38,6 +39,14 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
       jobId: job.id,
       chatId: payload.chatId,
     });
+    return;
+  }
+
+  // Moderation-exempt chat types (Help Chat, Brahma Console) are never
+  // classified, flagged, or announced on. The scan and post-turn trigger
+  // already skip these; this is a backstop for any job enqueued before this
+  // rule existed, so no Concierge announcement is ever posted to them.
+  if (isModerationExemptChatType(chat.chatType)) {
     return;
   }
 

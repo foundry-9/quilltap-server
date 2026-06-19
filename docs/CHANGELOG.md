@@ -4,6 +4,17 @@
 
 ### 4.7-dev
 
+#### Fix: Help Chats and the Brahma Console are never moderated
+
+The Concierge now leaves Help Chats (`chatType: 'help'`) and Brahma Console chats (`chatType: 'brahma'`) alone entirely — no classification, flagging, rerouting, or in-chat announcements, regardless of the global dangerous-content setting. Previously the scheduled danger scan and the post-turn trigger swept these utility chats like any roleplay chat, so Brahma Console sessions could be marked dangerous and receive Concierge warnings.
+
+A single predicate `isModerationExemptChatType()` (in `lib/schemas/chat.types.ts`, kept separate from `isHelpLikeChatType` so moderation policy and titling policy can diverge) gates moderation at every entry point:
+- `resolveDangerousContentSettings()` returns OFF (source `chat-type-exempt`) for these types — covering the per-message path and the post-turn trigger, which both pass the chat.
+- The scheduled scan (`scheduled-danger-scan.ts`) never enqueues them.
+- The classification handler (`chat-danger-classification.ts`) bails as a backstop, so any job enqueued before this rule never posts an announcement.
+
+Moderation still applies to the Salon and autonomous rooms. No schema, migration, or export change. Existing Brahma/Help chats already marked dangerous keep their stale flag until cleared (the flag is inert on those surfaces). Help doc and tests updated.
+
 #### Improvement: Concierge danger notice distinguishes a provider flag from a threshold crossing
 
 A chat is marked dangerous when either the overall severity meets the threshold or the moderation/cheap-LLM assayer flags the content of its own accord (`isDangerous = flagged || score >= threshold`). OpenAI's moderation endpoint returns `flagged` against its own internal catalogue, independent of the configured threshold, so it commonly fires while every reported severity sits below the threshold. The in-chat notice previously read "registering 0.68 against the present threshold of 0.80" in that case, which implied a crossing that did not happen.

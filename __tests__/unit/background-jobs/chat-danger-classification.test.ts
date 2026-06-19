@@ -208,6 +208,19 @@ describe('handleChatDangerClassification', () => {
     expect(repositories.chats.update).not.toHaveBeenCalled();
   });
 
+  it.each(['help', 'brahma'])('never classifies or announces on %s chats (moderation-exempt backstop)', async (chatType) => {
+    repositories.chats.findById.mockResolvedValue({
+      ...baseChatMetadata,
+      chatType,
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
+    expect(repositories.chats.update).not.toHaveBeenCalled();
+    expect(mockCreateSystemEvent).not.toHaveBeenCalled();
+  });
+
   it('skips if chat already classified as dangerous (sticky)', async () => {
     repositories.chats.findById.mockResolvedValue({
       ...baseChatMetadata,

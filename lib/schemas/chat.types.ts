@@ -93,6 +93,21 @@ export function isHelpLikeChatType(chatType: string | null | undefined): boolean
   return chatType === 'help' || chatType === 'brahma';
 }
 
+/**
+ * Chat types that are exempt from dangerous-content moderation entirely: the
+ * Concierge never classifies, flags, reroutes, or announces on them. These are
+ * utility surfaces rather than roleplay — the Help Chat (`'help'`) and the
+ * Brahma Console (`'brahma'`). Moderation applies only to the Salon
+ * (`'salon'`) and autonomous rooms (`'autonomous'`).
+ *
+ * Deliberately separate from `isHelpLikeChatType`: that predicate governs
+ * titling/summary routing, and moderation policy must be free to diverge from
+ * it. The two covering the same set today is a coincidence, not a contract.
+ */
+export function isModerationExemptChatType(chatType: string | null | undefined): boolean {
+  return chatType === 'help' || chatType === 'brahma';
+}
+
 // ============================================================================
 // AUTONOMOUS-ROOM RUN STATE
 // ============================================================================

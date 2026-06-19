@@ -15,6 +15,10 @@ When enabled, the system classifies user messages before they are sent to the ma
 
 The system is designed to be fail-safe: classification errors never block your messages.
 
+### What is never moderated
+
+Moderation applies only to roleplay surfaces — the Salon and autonomous rooms. **Help Chats and the Brahma Console are exempt entirely:** the Concierge never classifies, flags, reroutes, or announces on them, regardless of your global settings. They are utility surfaces, not roleplay, so the gatekeeper has no standing there.
+
 ### Smart Classification
 
 Quilltap automatically selects the best available classification method:
