@@ -19,8 +19,10 @@ import {
   findUniqueMatch,
   findAllMatches,
   parseQtapUri,
+  generateUnifiedDiff,
   type DocEditScope,
 } from '@/lib/doc-edit';
+import { postLibrarianWriteAnnouncement } from '@/lib/services/librarian-notifications/writer';
 import {
   detectMimeFromExtension,
   isJsonFamily,
@@ -49,6 +51,7 @@ import {
   buildReadResolutionContext,
   buildWriteResolutionContext,
   buildDocStoreUriResolver,
+  resolveActorOrigin,
   resolveOfficialProjectMount,
   triggerReindexIfNeeded,
   uriForResolvedPath,
@@ -261,6 +264,17 @@ export async function handleWriteFile(
     contentToWrite = input.content;
   }
 
+  // Capture the pre-image before writing so the Librarian announcement can
+  // show a diff (existing file) or report the new contents (creation).
+  // Best-effort — an unreadable/absent pre-image means this is a creation.
+  let previousContent: string | null = null;
+  try {
+    const existing = await readFileWithMtime(resolved);
+    previousContent = existing.content;
+  } catch {
+    previousContent = null;
+  }
+
   const { mtime } = await writeFileWithMtimeCheck(
     resolved,
     contentToWrite,
@@ -269,10 +283,37 @@ export async function handleWriteFile(
 
   await triggerReindexIfNeeded(resolved);
 
+  const writtenUri = await uriForResolvedPath(resolved, context);
+
+  const announceScope = scope as 'project' | 'document_store' | 'general';
+  const displayTitle = path.basename(input.path);
+  const origin = await resolveActorOrigin(context);
+  if (previousContent === null) {
+    await postLibrarianWriteAnnouncement({
+      chatId: context.chatId,
+      displayTitle,
+      uri: writtenUri,
+      scope: announceScope,
+      mountPoint: input.mount_point,
+      origin,
+      change: { kind: 'created', body: contentToWrite },
+    });
+  } else {
+    await postLibrarianWriteAnnouncement({
+      chatId: context.chatId,
+      displayTitle,
+      uri: writtenUri,
+      scope: announceScope,
+      mountPoint: input.mount_point,
+      origin,
+      change: { kind: 'edited', diff: generateUnifiedDiff(previousContent, contentToWrite, displayTitle) },
+    });
+  }
+
   const result: DocWriteFileOutput = {
     success: true,
     path: input.path,
-    uri: await uriForResolvedPath(resolved, context),
+    uri: writtenUri,
     mtime,
   };
 
@@ -334,10 +375,22 @@ export async function handleStrReplace(
 
   const lineNumber = getLineNumber(content, matchResult.index);
 
+  const editedUri = await uriForResolvedPath(resolved, context);
+  const displayTitle = path.basename(input.path);
+  await postLibrarianWriteAnnouncement({
+    chatId: context.chatId,
+    displayTitle,
+    uri: editedUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+  });
+
   const result: DocStrReplaceOutput = {
     success: true,
     path: input.path,
-    uri: await uriForResolvedPath(resolved, context),
+    uri: editedUri,
     mtime,
     line_number: lineNumber,
   };
@@ -422,10 +475,22 @@ export async function handleInsertText(
 
   const lineNumber = getLineNumber(newContent, insertOffset);
 
+  const editedUri = await uriForResolvedPath(resolved, context);
+  const displayTitle = path.basename(input.path);
+  await postLibrarianWriteAnnouncement({
+    chatId: context.chatId,
+    displayTitle,
+    uri: editedUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+  });
+
   const result: DocInsertTextOutput = {
     success: true,
     path: input.path,
-    uri: await uriForResolvedPath(resolved, context),
+    uri: editedUri,
     mtime,
     line_number: lineNumber,
   };

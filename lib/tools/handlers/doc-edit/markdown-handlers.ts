@@ -7,6 +7,7 @@
  * @module tools/handlers/doc-edit/markdown-handlers
  */
 
+import path from 'path';
 import {
   resolveDocEditPath,
   readFileWithMtime,
@@ -17,8 +18,10 @@ import {
   findHeadingSection,
   readHeadingContent,
   replaceHeadingContent,
+  generateUnifiedDiff,
   type DocEditScope,
 } from '@/lib/doc-edit';
+import { postLibrarianWriteAnnouncement } from '@/lib/services/librarian-notifications/writer';
 
 import type { DocReadFrontmatterInput, DocReadFrontmatterOutput } from '../../doc-read-frontmatter-tool';
 import type { DocUpdateFrontmatterInput, DocUpdateFrontmatterOutput } from '../../doc-update-frontmatter-tool';
@@ -30,6 +33,7 @@ import {
   applyQtapUriToInput,
   buildReadResolutionContext,
   buildWriteResolutionContext,
+  resolveActorOrigin,
   triggerReindexIfNeeded,
   uriForResolvedPath,
 } from './shared';
@@ -117,10 +121,22 @@ export async function handleUpdateFrontmatter(
 
   await triggerReindexIfNeeded(resolved);
 
+  const editedUri = await uriForResolvedPath(resolved, context);
+  const displayTitle = path.basename(input.path);
+  await postLibrarianWriteAnnouncement({
+    chatId: context.chatId,
+    displayTitle,
+    uri: editedUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+  });
+
   const result: DocUpdateFrontmatterOutput = {
     success: true,
     path: input.path,
-    uri: await uriForResolvedPath(resolved, context),
+    uri: editedUri,
     mtime,
   };
 
@@ -223,10 +239,22 @@ export async function handleUpdateHeading(
 
     await triggerReindexIfNeeded(resolved);
 
+    const editedUri = await uriForResolvedPath(resolved, context);
+    const displayTitle = path.basename(input.path);
+    await postLibrarianWriteAnnouncement({
+      chatId: context.chatId,
+      displayTitle,
+      uri: editedUri,
+      scope: scope as 'project' | 'document_store' | 'general',
+      mountPoint: input.mount_point,
+      origin: await resolveActorOrigin(context),
+      change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+    });
+
     const result: DocUpdateHeadingOutput = {
       success: true,
       path: input.path,
-      uri: await uriForResolvedPath(resolved, context),
+      uri: editedUri,
       mtime,
     };
 

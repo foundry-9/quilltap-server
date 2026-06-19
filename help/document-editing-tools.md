@@ -93,12 +93,25 @@ Quilltap treats JSON and JSONL files as first-class document types alongside Mar
 
 ### File Management
 
-- **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist.
-- **`doc_copy_file`** — Copy a file from one document store to a different document store. Takes `source_mount_point`, `source_path`, `dest_mount_point`, and `dest_path`; source and destination must be different stores. If `dest_path` is an existing folder, the file is dropped into it with the source filename; otherwise `dest_path` is treated as the full destination path (with filename). Parent directories are created automatically. Will not overwrite an existing file at the destination. Text files only — binary assets should use the blob tools.
+- **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist. The Librarian announces the move in the chat, naming the old and new addresses.
+- **`doc_copy_file`** — Copy a file from one document store to a different document store. Takes `source_mount_point`, `source_path`, `dest_mount_point`, and `dest_path`; source and destination must be different stores. If `dest_path` is an existing folder, the file is dropped into it with the source filename; otherwise `dest_path` is treated as the full destination path (with filename). Parent directories are created automatically. Will not overwrite an existing file at the destination. Text files only — binary assets should use the blob tools. The Librarian announces the copy in the chat.
 - **`doc_delete_file`** — Permanently delete a file. This cannot be undone, so your characters should confirm intent before calling. On success, the Librarian announces the removal in the chat, attributing the act to the calling character.
 - **`doc_create_folder`** — Create a new folder, including any necessary parent folders. Idempotent — succeeds silently if the folder already exists. For database-backed stores, explicit folder rows are created; for filesystem stores, directories are created on disk. The Librarian announces the new shelf in the chat.
 - **`doc_delete_folder`** — Delete an empty folder. Non-empty folders are rejected for safety; no recursive deletion is permitted. For database-backed stores, the folder row is deleted; for filesystem stores, the directory is removed from disk. The Librarian announces the dismantled shelf in the chat.
-- **`doc_move_folder`** — Move or rename a folder (and all its descendants). Works on both filesystem and database-backed stores. For database-backed stores, the destination parent directory is created automatically if needed (like `mkdir -p`), and all descendant paths and embeddings are cascaded in a transactional batch. For filesystem stores, parent directories are created on demand. The destination must not already exist.
+- **`doc_move_folder`** — Move or rename a folder (and all its descendants). Works on both filesystem and database-backed stores. For database-backed stores, the destination parent directory is created automatically if needed (like `mkdir -p`), and all descendant paths and embeddings are cascaded in a transactional batch. For filesystem stores, parent directories are created on demand. The destination must not already exist. The Librarian announces the move in the chat.
+
+## How the Librarian announces changes
+
+Whenever a character (or the operator) uses a `doc_*` tool to *change* something — create, edit, move, rename, copy, or delete a file or folder, or file or remove a binary asset — the Librarian quietly posts a note in the chat recording what happened, just as it does when you tend to a document yourself in Document Mode. Every such note names the calling character and quotes the document by its clickable `qtap://` address, so the whole company knows where things now stand.
+
+The notes are tailored to the deed:
+
+- **Creating a file** — the note reports the new file's contents in full, that everyone may see what was set down.
+- **Editing a file** (`doc_write_file` over an existing file, `doc_str_replace`, `doc_insert_text`, `doc_update_frontmatter`, `doc_update_heading`) — the note carries a unified **diff** of precisely what changed. An edit that alters nothing passes in silence.
+- **Moving, renaming, or copying** — the note names both the old and new addresses.
+- **Filing a binary asset** (`doc_write_blob`) — the note records its name, type, and size; deleting one is announced like any other removal.
+
+A particularly voluminous new file or sprawling diff is trimmed in the note, with a courteous marker indicating how much was set aside and a link to consult the document in full — the document itself is never abbreviated, only its mention in the chat.
 
 ## Enabling and Disabling
 

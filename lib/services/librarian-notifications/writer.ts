@@ -15,6 +15,13 @@
  *   - 'deleted'              → file removed (user Delete button, or character `doc_delete_file` tool)
  *   - 'folder-created'       → character `doc_create_folder` tool
  *   - 'folder-deleted'       → character `doc_delete_folder` tool
+ *   - 'created-by-*'         → a `doc_write_file` that brought a new file into being (reports its contents)
+ *   - 'edited-by-*'          → an in-place content edit (`doc_write_file` overwrite, `doc_str_replace`,
+ *                              `doc_insert_text`, `doc_update_frontmatter`, `doc_update_heading`) — includes a diff
+ *   - 'moved-by-*'           → `doc_move_file` / `doc_move_folder` (move or rename)
+ *   - 'copied-by-*'          → `doc_copy_file` (cross-store copy)
+ *   - 'blob-written-by-*'    → `doc_write_blob` (a binary asset filed)
+ *   The `-by-*` suffix is `-by-user` or `-by-character`, per the acting origin.
  *
  * Errors never propagate — document operations must never fail because an
  * announcement couldn't be written.
@@ -444,6 +451,212 @@ export async function postLibrarianFolderDeletedAnnouncement(
   const content = buildFolderDeletedContent(params);
   const opaqueContent = buildFolderDeletedOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'folder-deleted-by-user' : 'folder-deleted-by-character';
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
+}
+
+// ---------------------------------------------------------------------------
+// Character-initiated content writes, moves, copies, and blob uploads.
+//
+// These mirror the Document-Mode (user) announcements for the change-effecting
+// `doc_*` tools that previously ran silently. Each carries the acting origin
+// (character or user/operator) and the canonical qtap:// URI the handler has
+// already computed. Edits embed a unified diff; creations report the new
+// contents; both are capped so a large change can't blow the LLM context
+// budget when the announcement rides into history.
+// ---------------------------------------------------------------------------
+
+/** Soft caps for an embedded diff / new-file body in an announcement. */
+const ANNOUNCEMENT_MAX_LINES = 150;
+const ANNOUNCEMENT_MAX_CHARS = 6000;
+
+/**
+ * Cap a diff or new-file body so a large change doesn't bloat the chat history
+ * (and thus the LLM context). When trimmed, append a notice naming roughly how
+ * much was elided and where to read the document in full.
+ */
+function truncateForAnnouncement(text: string, uri: string): string {
+  const lines = text.split('\n');
+  let kept = text;
+  let truncated = false;
+  if (lines.length > ANNOUNCEMENT_MAX_LINES) {
+    kept = lines.slice(0, ANNOUNCEMENT_MAX_LINES).join('\n');
+    truncated = true;
+  }
+  if (kept.length > ANNOUNCEMENT_MAX_CHARS) {
+    kept = kept.slice(0, ANNOUNCEMENT_MAX_CHARS);
+    truncated = true;
+  }
+  if (!truncated) return text;
+  const keptLineCount = kept.split('\n').length;
+  const remaining = Math.max(0, lines.length - keptLineCount);
+  const moreNote = remaining > 0
+    ? `${remaining} more line${remaining === 1 ? '' : 's'}`
+    : 'more content';
+  return `${kept}\n… [truncated — ${moreNote}; open the full document at ${uri}]`;
+}
+
+export interface LibrarianWriteAnnouncement {
+  chatId: string;
+  displayTitle: string;
+  /** Canonical qtap:// URI for the written document (precomputed by the handler). */
+  uri: string;
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint?: string | null;
+  origin: LibrarianActorOrigin;
+  change:
+    | { kind: 'created'; body: string }
+    | { kind: 'edited'; diff: string };
+}
+
+export function buildWriteContent(params: LibrarianWriteAnnouncement): string {
+  const { displayTitle, uri, scope, mountPoint, origin, change } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = actorLabel(origin);
+  if (change.kind === 'created') {
+    const body = change.body.trim();
+    if (!body) {
+      return `The Librarian has set down a fresh, empty page titled "${displayTitle}" in ${where} at ${who} (${uri}).`;
+    }
+    const fenced = '```\n' + truncateForAnnouncement(change.body, uri) + '\n```';
+    return `The Librarian has set down a new volume, "${displayTitle}", in ${where} at ${who} (${uri}). Its contents read:\n\n${fenced}`;
+  }
+  const fenced = '```diff\n' + truncateForAnnouncement(change.diff, uri) + '\n```';
+  return `The Librarian has filed fresh alterations to "${displayTitle}" in ${where} at ${who} (${uri}):\n\n${fenced}`;
+}
+
+export function buildWriteOpaqueContent(params: LibrarianWriteAnnouncement): string {
+  const { displayTitle, uri, scope, mountPoint, origin, change } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = actorLabel(origin);
+  if (change.kind === 'created') {
+    const body = change.body.trim();
+    if (!body) {
+      return `Document created (empty): "${displayTitle}" in ${where} at ${who} (${uri}).`;
+    }
+    const fenced = '```\n' + truncateForAnnouncement(change.body, uri) + '\n```';
+    return `Document created: "${displayTitle}" in ${where} at ${who} (${uri}). Contents:\n\n${fenced}`;
+  }
+  const fenced = '```diff\n' + truncateForAnnouncement(change.diff, uri) + '\n```';
+  return `Document edited: "${displayTitle}" in ${where} at ${who} (${uri}):\n\n${fenced}`;
+}
+
+export interface LibrarianMoveAnnouncement {
+  chatId: string;
+  oldDisplayTitle: string;
+  newDisplayTitle: string;
+  oldUri: string;
+  newUri: string;
+  scope: 'project' | 'document_store' | 'general';
+  mountPoint?: string | null;
+  origin: LibrarianActorOrigin;
+  isFolder: boolean;
+}
+
+export function buildMoveContent(params: LibrarianMoveAnnouncement): string {
+  const { oldDisplayTitle, newDisplayTitle, oldUri, newUri, scope, mountPoint, origin, isFolder } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const who = actorLabel(origin);
+  const thing = isFolder ? 'shelf' : 'volume';
+  return `The Librarian has relocated the ${thing} "${oldDisplayTitle}" within ${where} at ${who} — it now rests as "${newDisplayTitle}", and the card in the catalogue has been amended to suit. Subsequent references should use the new address (was ${oldUri}, now ${newUri}).`;
+}
+
+export function buildMoveOpaqueContent(params: LibrarianMoveAnnouncement): string {
+  const { oldDisplayTitle, newDisplayTitle, oldUri, newUri, scope, mountPoint, isFolder } = params;
+  const where = scopeLabel(scope, mountPoint);
+  const noun = isFolder ? 'Folder' : 'File';
+  return `${noun} moved in ${where}: "${oldDisplayTitle}" → "${newDisplayTitle}". Subsequent references should use the new address (was ${oldUri}, now ${newUri}).`;
+}
+
+export interface LibrarianCopyAnnouncement {
+  chatId: string;
+  sourceDisplayTitle: string;
+  destDisplayTitle: string;
+  sourceMountPoint: string;
+  destMountPoint: string;
+  sourceUri: string;
+  destUri: string;
+  origin: LibrarianActorOrigin;
+}
+
+export function buildCopyContent(params: LibrarianCopyAnnouncement): string {
+  const { sourceDisplayTitle, destDisplayTitle, sourceMountPoint, destMountPoint, sourceUri, destUri, origin } = params;
+  const who = actorLabel(origin);
+  return `The Librarian has transcribed a copy of "${sourceDisplayTitle}" from the document store "${sourceMountPoint}" into "${destMountPoint}" at ${who} — the original remains where it sat, and a faithful duplicate now answers to "${destDisplayTitle}" (from ${sourceUri} to ${destUri}).`;
+}
+
+export function buildCopyOpaqueContent(params: LibrarianCopyAnnouncement): string {
+  const { sourceDisplayTitle, destDisplayTitle, sourceMountPoint, destMountPoint, sourceUri, destUri } = params;
+  return `File copied: "${sourceDisplayTitle}" from "${sourceMountPoint}" to "${destMountPoint}" as "${destDisplayTitle}" (from ${sourceUri} to ${destUri}).`;
+}
+
+export interface LibrarianBlobWriteAnnouncement {
+  chatId: string;
+  displayTitle: string;
+  uri: string;
+  mountPoint?: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  description?: string;
+  origin: LibrarianActorOrigin;
+}
+
+export function buildBlobWriteContent(params: LibrarianBlobWriteAnnouncement): string {
+  const { displayTitle, uri, mountPoint, mimeType, sizeBytes, description, origin } = params;
+  const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
+  const who = actorLabel(origin);
+  const kindPhrase = isImageMime(mimeType) ? 'illustration' : 'asset';
+  const lead = `The Librarian has affixed the ${kindPhrase} "${displayTitle}" to ${where} at ${who} — ${mimeType}, ${sizeBytes} bytes (${uri}).`;
+  const trimmed = description?.trim();
+  return trimmed ? `${lead}\n\nThe catalogue describes it thus: ${trimmed}` : lead;
+}
+
+export function buildBlobWriteOpaqueContent(params: LibrarianBlobWriteAnnouncement): string {
+  const { displayTitle, uri, mountPoint, mimeType, sizeBytes, description } = params;
+  const where = mountPoint ? `the document store "${mountPoint}"` : 'the document store';
+  const kindWord = isImageMime(mimeType) ? 'Image' : 'Asset';
+  const lead = `${kindWord} added: "${displayTitle}" to ${where} — ${mimeType}, ${sizeBytes} bytes (${uri}).`;
+  const trimmed = description?.trim();
+  return trimmed ? `${lead}\n\nDescription: ${trimmed}` : lead;
+}
+
+export async function postLibrarianWriteAnnouncement(
+  params: LibrarianWriteAnnouncement,
+): Promise<MessageEvent | null> {
+  // An edit with an empty diff means nothing actually changed — stay silent.
+  if (params.change.kind === 'edited' && !params.change.diff.trim()) {
+    return null;
+  }
+  const content = buildWriteContent(params);
+  const opaqueContent = buildWriteOpaqueContent(params);
+  const verb = params.change.kind === 'created' ? 'created' : 'edited';
+  const kindLabel = params.origin.kind === 'by-user' ? `${verb}-by-user` : `${verb}-by-character`;
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
+}
+
+export async function postLibrarianMoveAnnouncement(
+  params: LibrarianMoveAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildMoveContent(params);
+  const opaqueContent = buildMoveOpaqueContent(params);
+  const kindLabel = params.origin.kind === 'by-user' ? 'moved-by-user' : 'moved-by-character';
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
+}
+
+export async function postLibrarianCopyAnnouncement(
+  params: LibrarianCopyAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildCopyContent(params);
+  const opaqueContent = buildCopyOpaqueContent(params);
+  const kindLabel = params.origin.kind === 'by-user' ? 'copied-by-user' : 'copied-by-character';
+  return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
+}
+
+export async function postLibrarianBlobWriteAnnouncement(
+  params: LibrarianBlobWriteAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildBlobWriteContent(params);
+  const opaqueContent = buildBlobWriteOpaqueContent(params);
+  const kindLabel = params.origin.kind === 'by-user' ? 'blob-written-by-user' : 'blob-written-by-character';
   return postLibrarianMessage(params.chatId, content, opaqueContent, kindLabel);
 }
 

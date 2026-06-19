@@ -30,8 +30,32 @@ export {
 } from '@/lib/doc-edit/uri-producers';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import type { LibrarianActorOrigin } from '@/lib/services/librarian-notifications/writer';
 
 export const logger = createServiceLogger('DocEdit:Handler');
+
+/**
+ * Resolve the LibrarianActorOrigin for a doc-tool call so a change
+ * announcement can name who effected it. Characters are preferred; if the
+ * context carries no characterId (operator / Document-Mode surfaces) or the
+ * lookup fails, falls back to user attribution. Shared by every doc-edit
+ * handler group that posts a Librarian announcement.
+ */
+export async function resolveActorOrigin(
+  context: DocEditToolContext
+): Promise<LibrarianActorOrigin> {
+  if (!context.characterId) return { kind: 'by-user' };
+  try {
+    const repos = getRepositories();
+    const character = await repos.characters.findById(context.characterId);
+    if (character?.name) {
+      return { kind: 'by-character', characterName: character.name };
+    }
+  } catch {
+    // Fall through to user attribution on lookup failure.
+  }
+  return { kind: 'by-user' };
+}
 
 /**
  * The familiar addressing fields a `qtap://` URI populates on a doc-tool call,

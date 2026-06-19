@@ -5,9 +5,14 @@
  * @module tools/handlers/doc-edit/blob-handlers
  */
 
+import path from 'path';
 import { getAccessibleMountPoints, resolveMountPointRef, parseQtapUri } from '@/lib/doc-edit';
 import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
 import { getRepositories } from '@/lib/repositories/factory';
+import {
+  postLibrarianBlobWriteAnnouncement,
+  postLibrarianDeleteAnnouncement,
+} from '@/lib/services/librarian-notifications/writer';
 import type { DocWriteBlobInput, DocWriteBlobOutput } from '../../doc-write-blob-tool';
 import type { DocReadBlobInput, DocReadBlobOutput } from '../../doc-read-blob-tool';
 import type { DocListBlobsInput, DocListBlobsOutput } from '../../doc-list-blobs-tool';
@@ -19,6 +24,7 @@ import {
   assertWriteDoesNotTargetPeerVault,
   docStoreUriFor,
   buildDocStoreUriResolver,
+  resolveActorOrigin,
 } from './shared';
 
 /**
@@ -128,11 +134,24 @@ export async function handleWriteBlob(
     sizeBytes: stored.sizeBytes,
   });
 
+  const storedUri = await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: stored.relativePath, characterId: context.characterId });
+
+  await postLibrarianBlobWriteAnnouncement({
+    chatId: context.chatId,
+    displayTitle: path.basename(stored.relativePath),
+    uri: storedUri,
+    mountPoint: mp.name,
+    mimeType: stored.storedMimeType,
+    sizeBytes: stored.sizeBytes,
+    description: input.description,
+    origin: await resolveActorOrigin(context),
+  });
+
   const result: DocWriteBlobOutput = {
     success: true,
     mount_point: mp.name,
     relative_path: stored.relativePath,
-    uri: await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: stored.relativePath, characterId: context.characterId }),
+    uri: storedUri,
     size_bytes: stored.sizeBytes,
     stored_mime_type: stored.storedMimeType,
     sha256: stored.sha256,
@@ -267,11 +286,20 @@ export async function handleDeleteBlob(
     return { success: false, error: `Blob not found: ${target.path}` };
   }
   logger.info('Deleted blob', { mountPointId: mp.id, relativePath: target.path });
+  const deletedUri = await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: target.path, characterId: context.characterId });
+  await postLibrarianDeleteAnnouncement({
+    chatId: context.chatId,
+    displayTitle: path.basename(target.path),
+    filePath: target.path,
+    scope: 'document_store',
+    mountPoint: mp.name,
+    origin: await resolveActorOrigin(context),
+  });
   const result: DocDeleteBlobOutput = {
     success: true,
     mount_point: mp.name,
     relative_path: target.path,
-    uri: await docStoreUriFor({ mountPointId: mp.id, mountPointName: mp.name, relativePath: target.path, characterId: context.characterId }),
+    uri: deletedUri,
   };
   return { success: true, result, formattedText: `Deleted blob [${mp.name}] ${target.path}` };
 }

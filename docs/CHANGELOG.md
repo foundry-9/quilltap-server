@@ -4,6 +4,16 @@
 
 ### 4.7-dev
 
+#### Feature: The Librarian announces every character-initiated document change
+
+Previously, when a character used a `doc_*` tool to write, edit, move, rename, copy, or create a file or folder, the change happened silently — only deletes, folder creates/deletes, and document opens posted a Librarian announcement. Now every change-effecting `doc_*` tool posts one, matching the Document-Mode experience you get when you edit a document yourself.
+
+- **Creating a file** (`doc_write_file` on a new path) reports the new file's full contents; **editing** a file (`doc_write_file` over an existing file, `doc_str_replace`, `doc_insert_text`, `doc_update_frontmatter`, `doc_update_heading`) reports a unified diff. An edit that changes nothing posts no announcement.
+- **Moving/renaming** (`doc_move_file`, `doc_move_folder`), **copying** (`doc_copy_file`), and **filing or deleting binary assets** (`doc_write_blob`, `doc_delete_blob`) each post an announcement naming the change.
+- Every announcement is attributed to the calling character (or the user/operator), carries the document's clickable `qtap://` link, and — like all Librarian notes — has a neutral, persona-free body for characters who don't see Staff voicing.
+- Large new-file contents and large diffs are capped in the announcement with a "[truncated …]" notice and a link to the full document, so a big change can't blow the model's context budget. The document itself is never truncated.
+- New `systemKind` values (`created-by-*`, `edited-by-*`, `moved-by-*`, `copied-by-*`, `blob-written-by-*`) are labeled in the Salon's collapsed system-message bar and rated high-importance. No schema, migration, or export change.
+
 #### Fix: CLI and server self-heal a stale native-module ABI instead of erroring
 
 After a Node.js upgrade, the cached SQLCipher binding (`better-sqlite3-multiple-ciphers`) is compiled against the old Node ABI and throws `NODE_MODULE_VERSION` on first load. The launcher already rebuilt native modules before starting the server, but the `db`, `docs`, `memories`, `migrations`, `maintenance`, and `memory-diff` subcommands loaded the binding directly and never reached that heal — so they failed with the raw ABI error.

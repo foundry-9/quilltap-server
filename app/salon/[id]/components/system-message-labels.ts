@@ -34,6 +34,16 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'folder-created-by-character': 'folder created by character',
   'folder-deleted-by-user': 'folder deleted by user',
   'folder-deleted-by-character': 'folder deleted by character',
+  'created-by-user': 'created by user',
+  'created-by-character': 'created by character',
+  'edited-by-user': 'edited by user',
+  'edited-by-character': 'edited by character',
+  'moved-by-user': 'moved by user',
+  'moved-by-character': 'moved by character',
+  'copied-by-user': 'copied by user',
+  'copied-by-character': 'copied by character',
+  'blob-written-by-user': 'asset added by user',
+  'blob-written-by-character': 'asset added by character',
   'silent-mode-enter': 'silent mode (entering)',
   'silent-mode-exit': 'silent mode (leaving)',
   'user-character': 'user character',
@@ -96,6 +106,11 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.startsWith('Prospero opens his ledger')) return 'project-context'
       return 'announcement'
     case 'librarian':
+      if (c.includes('relocated the')) return 'moved'
+      if (c.includes('transcribed a copy')) return 'copied'
+      if (c.includes('set down a new volume') || c.includes('set down a fresh, empty page')) return 'created'
+      if (c.includes('affixed the illustration') || c.includes('affixed the asset')) return 'blob-written'
+      if (c.includes('filed fresh alterations')) return 'edited'
       if (c.includes('rechristened')) return 'renamed'
       if (c.includes('filed the following alterations')) return 'saved'
       if (c.includes('removed "') || c.includes('struck from the catalogue')) return 'deleted'
@@ -161,6 +176,23 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     attached: 'high',
     summary: 'medium',
     opened: 'low',
+    // Character-initiated changes carry an explicit `<kind>-by-user|character`
+    // systemKind, so key both the bare (legacy-inferred) and suffixed forms.
+    created: 'high',
+    'created-by-user': 'high',
+    'created-by-character': 'high',
+    edited: 'high',
+    'edited-by-user': 'high',
+    'edited-by-character': 'high',
+    moved: 'high',
+    'moved-by-user': 'high',
+    'moved-by-character': 'high',
+    copied: 'high',
+    'copied-by-user': 'high',
+    'copied-by-character': 'high',
+    'blob-written': 'high',
+    'blob-written-by-user': 'high',
+    'blob-written-by-character': 'high',
     '*': 'medium',
   },
   // Who is in the room (and their status) matters; the clock does not.

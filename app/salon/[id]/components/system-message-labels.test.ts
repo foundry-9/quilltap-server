@@ -1,4 +1,4 @@
-import { getAnnouncementImportance } from './system-message-labels'
+import { getAnnouncementImportance, getSystemKindDisplayLabel } from './system-message-labels'
 import type { Message } from '../types'
 
 function ann(
@@ -16,6 +16,22 @@ describe('getAnnouncementImportance', () => {
     expect(getAnnouncementImportance(ann('librarian', 'folder-created'))).toBe('high')
     expect(getAnnouncementImportance(ann('librarian', 'opened'))).toBe('low')
     expect(getAnnouncementImportance(ann('librarian', 'summary'))).toBe('medium')
+  })
+
+  it('rates character-initiated doc changes high (explicit -by-* systemKinds)', () => {
+    expect(getAnnouncementImportance(ann('librarian', 'created-by-character'))).toBe('high')
+    expect(getAnnouncementImportance(ann('librarian', 'edited-by-character'))).toBe('high')
+    expect(getAnnouncementImportance(ann('librarian', 'moved-by-character'))).toBe('high')
+    expect(getAnnouncementImportance(ann('librarian', 'copied-by-character'))).toBe('high')
+    expect(getAnnouncementImportance(ann('librarian', 'blob-written-by-character'))).toBe('high')
+  })
+
+  it('labels the new doc-change kinds for the collapsed system bar', () => {
+    expect(getSystemKindDisplayLabel(ann('librarian', 'created-by-character'))).toBe('created by character')
+    expect(getSystemKindDisplayLabel(ann('librarian', 'edited-by-character'))).toBe('edited by character')
+    expect(getSystemKindDisplayLabel(ann('librarian', 'moved-by-character'))).toBe('moved by character')
+    expect(getSystemKindDisplayLabel(ann('librarian', 'copied-by-character'))).toBe('copied by character')
+    expect(getSystemKindDisplayLabel(ann('librarian', 'blob-written-by-character'))).toBe('asset added by character')
   })
 
   it('rates Host arrivals/status high and time calls low', () => {
@@ -56,6 +72,16 @@ describe('getAnnouncementImportance', () => {
     // Host arrival phrasing → add → high
     expect(
       getAnnouncementImportance(ann('host', undefined, 'The Host welcomes Beatrice to the table.')),
+    ).toBe('high')
+    // Librarian doc-change phrasings (legacy rows without systemKind) → high
+    expect(
+      getAnnouncementImportance(ann('librarian', undefined, 'The Librarian has set down a new volume, "Notes".')),
+    ).toBe('high')
+    expect(
+      getAnnouncementImportance(ann('librarian', undefined, 'The Librarian has filed fresh alterations to "Notes".')),
+    ).toBe('high')
+    expect(
+      getAnnouncementImportance(ann('librarian', undefined, 'The Librarian has relocated the volume "a.md".')),
     ).toBe('high')
   })
 

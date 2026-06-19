@@ -40,7 +40,8 @@ import {
   postLibrarianDeleteAnnouncement,
   postLibrarianFolderCreatedAnnouncement,
   postLibrarianFolderDeletedAnnouncement,
-  type LibrarianActorOrigin,
+  postLibrarianMoveAnnouncement,
+  postLibrarianCopyAnnouncement,
 } from '@/lib/services/librarian-notifications/writer';
 import {
   logger,
@@ -48,6 +49,7 @@ import {
   applyQtapUriToInput,
   buildReadResolutionContext,
   buildWriteResolutionContext,
+  resolveActorOrigin,
   triggerReindexIfNeeded,
   uriForResolvedPath,
 } from './shared';
@@ -171,9 +173,21 @@ export async function handleMoveFile(
       to: input.new_path,
       scope,
     });
+    const movedUri = await uriForResolvedPath(resolvedDest, context);
+    await postLibrarianMoveAnnouncement({
+      chatId: context.chatId,
+      oldDisplayTitle: path.basename(input.path),
+      newDisplayTitle: path.basename(input.new_path),
+      oldUri: await uriForResolvedPath(resolvedSource, context),
+      newUri: movedUri,
+      scope: scope as 'project' | 'document_store' | 'general',
+      mountPoint: input.mount_point,
+      origin: await resolveActorOrigin(context),
+      isFolder: false,
+    });
     return {
       success: true,
-      result: { success: true, old_path: input.path, new_path: input.new_path, uri: await uriForResolvedPath(resolvedDest, context) },
+      result: { success: true, old_path: input.path, new_path: input.new_path, uri: movedUri },
       formattedText: `Moved: ${input.path} → ${input.new_path}`,
     };
   }
@@ -222,11 +236,24 @@ export async function handleMoveFile(
       });
   }
 
+  const movedUri = await uriForResolvedPath(resolvedDest, context);
+  await postLibrarianMoveAnnouncement({
+    chatId: context.chatId,
+    oldDisplayTitle: path.basename(input.path),
+    newDisplayTitle: path.basename(input.new_path),
+    oldUri: await uriForResolvedPath(resolvedSource, context),
+    newUri: movedUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    isFolder: false,
+  });
+
   const result: DocMoveFileOutput = {
     success: true,
     old_path: input.path,
     new_path: input.new_path,
-    uri: await uriForResolvedPath(resolvedDest, context),
+    uri: movedUri,
   };
 
   return {
@@ -430,13 +457,25 @@ export async function handleCopyFile(
 
   await triggerReindexIfNeeded(resolvedDest);
 
+  const copiedUri = await uriForResolvedPath(resolvedDest, context);
+  await postLibrarianCopyAnnouncement({
+    chatId: context.chatId,
+    sourceDisplayTitle: sourceBasename,
+    destDisplayTitle: path.posix.basename(finalDestRel),
+    sourceMountPoint: resolvedSource.mountPointName ?? sourceMountPoint,
+    destMountPoint: resolvedDest.mountPointName ?? destMountPoint,
+    sourceUri: await uriForResolvedPath(resolvedSource, context),
+    destUri: copiedUri,
+    origin: await resolveActorOrigin(context),
+  });
+
   const result: DocCopyFileOutput = {
     success: true,
     source_mount_point: resolvedSource.mountPointName ?? sourceMountPoint,
     source_path: sourcePath,
     dest_mount_point: resolvedDest.mountPointName ?? destMountPoint,
     dest_path: finalDestRel,
-    uri: await uriForResolvedPath(resolvedDest, context),
+    uri: copiedUri,
     mtime,
   };
 
@@ -448,24 +487,6 @@ export async function handleCopyFile(
 }
 
 // --- doc_delete_file ---
-
-/**
- * Resolve the LibrarianActorOrigin for a tool call. Characters are preferred;
- * if the context has no characterId or the lookup fails, falls back to user
- * attribution — matches the pattern in handleOpenDocument.
- */
-async function resolveActorOrigin(context: DocEditToolContext): Promise<LibrarianActorOrigin> {
-  if (!context.characterId) return { kind: 'by-user' };
-  try {
-    const repos = getRepositories();
-    const character = await repos.characters.findById(context.characterId);
-    if (character?.name) {
-      return { kind: 'by-character', characterName: character.name };
-    }
-  } catch (error) {
-  }
-  return { kind: 'by-user' };
-}
 
 export async function handleDeleteFile(
   rawInput: DocDeleteFileInput,
@@ -737,9 +758,21 @@ export async function handleMoveFolder(
         to: input.new_path,
         scope,
       });
+      const movedFolderUri = await uriForResolvedPath(resolvedDest, context);
+      await postLibrarianMoveAnnouncement({
+        chatId: context.chatId,
+        oldDisplayTitle: path.basename(input.path),
+        newDisplayTitle: path.basename(input.new_path),
+        oldUri: await uriForResolvedPath(resolvedSource, context),
+        newUri: movedFolderUri,
+        scope: scope as 'project' | 'document_store' | 'general',
+        mountPoint: input.mount_point,
+        origin: await resolveActorOrigin(context),
+        isFolder: true,
+      });
       return {
         success: true,
-        result: { success: true, old_path: input.path, new_path: input.new_path, uri: await uriForResolvedPath(resolvedDest, context) },
+        result: { success: true, old_path: input.path, new_path: input.new_path, uri: movedFolderUri },
         formattedText: `Moved folder: ${input.path} → ${input.new_path}`,
       };
     } catch (error) {
@@ -786,11 +819,24 @@ export async function handleMoveFolder(
     scope,
   });
 
+  const movedFolderUri = await uriForResolvedPath(resolvedDest, context);
+  await postLibrarianMoveAnnouncement({
+    chatId: context.chatId,
+    oldDisplayTitle: path.basename(input.path),
+    newDisplayTitle: path.basename(input.new_path),
+    oldUri: await uriForResolvedPath(resolvedSource, context),
+    newUri: movedFolderUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    isFolder: true,
+  });
+
   const result: DocMoveFolderOutput = {
     success: true,
     old_path: input.path,
     new_path: input.new_path,
-    uri: await uriForResolvedPath(resolvedDest, context),
+    uri: movedFolderUri,
   };
 
   return {

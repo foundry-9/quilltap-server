@@ -72,6 +72,7 @@ jest.mock('@/lib/doc-edit', () => {
     findHeadingSection: jest.fn(),
     readHeadingContent: jest.fn(),
     replaceHeadingContent: jest.fn(),
+    generateUnifiedDiff: jest.fn().mockReturnValue('--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b'),
   };
 });
 
@@ -117,6 +118,13 @@ jest.mock('@/lib/mount-index/blob-transcode', () => ({
 
 jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianOpenAnnouncement: jest.fn(),
+  postLibrarianDeleteAnnouncement: jest.fn(),
+  postLibrarianFolderCreatedAnnouncement: jest.fn(),
+  postLibrarianFolderDeletedAnnouncement: jest.fn(),
+  postLibrarianWriteAnnouncement: jest.fn(),
+  postLibrarianMoveAnnouncement: jest.fn(),
+  postLibrarianCopyAnnouncement: jest.fn(),
+  postLibrarianBlobWriteAnnouncement: jest.fn(),
 }));
 
 jest.mock('fs/promises', () => ({
