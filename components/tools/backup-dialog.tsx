@@ -107,7 +107,7 @@ export function BackupDialog({ isOpen, onClose, onBackupComplete }: BackupDialog
                 <li>Memories and relationships</li>
                 <li>All uploaded files and images</li>
                 <li>Connection, image, and embedding profiles</li>
-                <li>Templates and projects</li>
+                <li>Templates, projects, and character groups</li>
                 <li>Plugin configurations and npm plugins</li>
               </ul>
             </div>

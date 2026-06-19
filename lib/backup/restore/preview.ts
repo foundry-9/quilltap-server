@@ -43,6 +43,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       },
       providerModels: data.providerModels.length,
       projects: data.projects.length,
+      groups: data.groups?.length || 0,
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
       chatSettings: data.chatSettings?.length || 0,
@@ -67,6 +68,8 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       docMountDocuments: data.docMountDocuments?.length || 0,
       docMountBlobs: data.docMountBlobs?.length || 0,
       projectDocMountLinks: data.projectDocMountLinks?.length || 0,
+      groupDocMountLinks: data.groupDocMountLinks?.length || 0,
+      groupCharacterMembers: data.groupCharacterMembers?.length || 0,
       textReplacementRules: data.textReplacementRules?.length || 0,
       warnings: [],
     };

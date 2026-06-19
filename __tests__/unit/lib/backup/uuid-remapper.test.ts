@@ -543,3 +543,75 @@ describe('remapBackupData() - project FK remapping', () => {
     expect(result.projects[0].defaultImageProfileId).toBeNull()
   })
 })
+
+describe('remapBackupData() - group FK remapping', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  const emptyBackup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+  })
+
+  it('remaps group membership so groupId/characterId follow the rows they reference', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      characters: [{ id: 'char-old' }] as unknown as BackupData['characters'],
+      groups: [{ id: 'group-old', name: 'The Conspirators' }] as unknown as BackupData['groups'],
+      groupCharacterMembers: [
+        { id: 'member-old', groupId: 'group-old', characterId: 'char-old' },
+      ] as unknown as BackupData['groupCharacterMembers'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newGroupId = remapper.getMapping()['group-old']
+    const newCharacterId = remapper.getMapping()['char-old']
+    expect(newGroupId).toBeDefined()
+    expect(newCharacterId).toBeDefined()
+    // The whole point of the fix: membership must point at the remapped group
+    // and character, not survive with stale ids that reference nothing.
+    expect(result.groups?.[0].id).toBe(newGroupId)
+    expect(result.characters[0].id).toBe(newCharacterId)
+    expect(result.groupCharacterMembers?.[0].groupId).toBe(newGroupId)
+    expect(result.groupCharacterMembers?.[0].characterId).toBe(newCharacterId)
+    expect(result.groupCharacterMembers?.[0].id).toBe(remapper.getMapping()['member-old'])
+  })
+
+  it('remaps a group↔store link so groupId/mountPointId stay consistent', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      groups: [{ id: 'group-old', name: 'The Conspirators' }] as unknown as BackupData['groups'],
+      docMountPoints: [{ id: 'mount-old' }] as unknown as BackupData['docMountPoints'],
+      groupDocMountLinks: [
+        { id: 'link-old', groupId: 'group-old', mountPointId: 'mount-old' },
+      ] as unknown as BackupData['groupDocMountLinks'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newGroupId = remapper.getMapping()['group-old']
+    const newMountId = remapper.getMapping()['mount-old']
+    expect(result.docMountPoints?.[0].id).toBe(newMountId)
+    expect(result.groupDocMountLinks?.[0].groupId).toBe(newGroupId)
+    expect(result.groupDocMountLinks?.[0].mountPointId).toBe(newMountId)
+    expect(result.groupDocMountLinks?.[0].groupId).not.toBe('group-old')
+  })
+})
