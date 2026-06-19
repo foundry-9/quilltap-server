@@ -105,7 +105,8 @@ export default function AboutPage() {
           The Concierge (alternative content provision and routing), Pascal the Croupier (gaming &amp; RNG),
           Calliope (themes), The Scriptorium (external document stores), The Librarian (Document Mode and file announcements),
           The Host (Salon participation announcements), Saquel Ytzama, the Keeper of Secrets (encryption and key management),
-          Ariel (terminals in the Salon), and The Foundry (architecture) &mdash; all extensible through a plugin system.
+          Ariel (terminals in the Salon), Carina (the ansible &mdash; inline queries to characters), Suparṇā (the Post Office, inter-character mail),
+          Brahma (the Console, a character-less generic-LLM surface), and The Foundry (architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
           <BrandName /> runs as a native desktop application on macOS and Windows, powered by a lightweight
@@ -184,6 +185,18 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Carina &ndash; The Ansible</strong> &ndash; inline queries to a designated character via <code>@Name:</code> / <code>@Name?</code> markup or the <code>ask_carina</code> tool, with the answer dropped straight into the scene &mdash; public or whispered</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Suparṇā &ndash; The Post Office</strong> &ndash; inter-character mail delivered to a character&apos;s vault <code>Mail/</code> folder, with anti-hijack safeguards in multi-character chats and a delivery announcement when new letters arrive</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Brahma &ndash; The Console</strong> &ndash; a character-less, memory-free generic-LLM surface for plain model chat and read-only SQL inspection, reachable from any Salon as the <code>@Brahma</code> answerer</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
             <span><strong>The Foundry &ndash; Architecture</strong> &ndash; unified settings hub, plugin system for themes, providers, templates, tools, search, and storage</span>
           </li>
           <li className="flex items-start gap-2">
@@ -226,6 +239,12 @@ export default function AboutPage() {
           </div>
           <div>
             <span className="font-medium">Editor:</span> Lexical
+          </div>
+          <div>
+            <span className="font-medium">Data Fetching:</span> TanStack Query
+          </div>
+          <div>
+            <span className="font-medium">File Manager:</span> SVAR
           </div>
           <div>
             <span className="font-medium">Desktop:</span> Electron
@@ -340,11 +359,11 @@ export default function AboutPage() {
           <BrandName /> stands on the shoulders of these excellent open source projects, and is grateful for the view.
         </p>
         <div className="qt-text-primary space-y-2 text-sm">
-          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod, Ajv, SWR</p>
+          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod, Ajv, @tanstack/react-query</p>
           <p><span className="font-medium">Editor:</span> Lexical (and the @lexical family &mdash; rich-text, markdown, list, code, table, link, history, selection, clipboard, react)</p>
           <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google GenAI SDK, OpenRouter SDK, Model Context Protocol SDK</p>
           <p><span className="font-medium">Markdown &amp; Documents:</span> unified, remark-parse, remark-gfm, remark-rehype, rehype-stringify, rehype-highlight, react-markdown, react-syntax-highlighter, mammoth, pdf-parse, PDF.js, yaml, MessagePack</p>
-          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, sharp, Lucide Icons</p>
+          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, @svar-ui/react-filemanager, sharp, Lucide Icons</p>
           <p><span className="font-medium">Filesystem &amp; Archives:</span> chokidar, tar, yauzl, semver</p>
           <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Lima, Docker</p>
           <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>

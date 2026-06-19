@@ -297,7 +297,7 @@ Quilltap was built to be extended. The plugin system supports eight extension po
 
 Quilltap is a single Next.js 16 application (App Router) that serves both the UI and API routes. The tech stack:
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability
+- **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability, TanStack Query for server-state, Lexical for rich-text editing, and the SVAR file manager for the document browser
 - **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
 - **Build:** GitHub Actions CI/CD with automated releases — Docker multi-arch images and npm package built from a single tag push
 
@@ -356,7 +356,7 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 
 ## Tech Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · Docker · Zod · GitHub Actions
+Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · TanStack Query · Lexical · SVAR · Docker · Zod · GitHub Actions
 
 ---
 
@@ -387,7 +387,7 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **AI & LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK
 
-**UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
+**UI:** Tailwind CSS, TanStack Query, Lexical, SVAR File Manager, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
 
 **Infrastructure:** Docker
 

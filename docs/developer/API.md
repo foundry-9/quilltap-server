@@ -6,11 +6,19 @@ API reference for Quilltap v4.3 and later.
 >
 > - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert actions, and per-project linking
 > - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
-> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
 > - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, and the `wardrobe_*` family (`wardrobe_list`/`wardrobe_read`/`wardrobe_wear`/`wardrobe_take_off`/`wardrobe_create`/`wardrobe_update`/`wardrobe_archive`). The unified search tool is now named `search` (was `search_memories`).
 > - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
-> - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`. See `lib/schemas/chat.types.ts`.
+> - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`, `carina`, `suparna`. See `lib/schemas/chat.types.ts`.
 > - **`systemTransparency` on characters** — per-character covenant toggle.
+>
+> **Freshness note (v4.7-dev):** Additions since v4.3:
+>
+> - **Brahma Console** (`/api/v1/brahma-console`) — a character-less, memory-free generic-LLM surface with its own collection/item/messages endpoints (see [Brahma Console](#brahma-console)).
+> - **The Post Office** — inter-character mail. Two new chat actions: `POST /api/v1/chats/[id]?action=send-mail` (post a letter as a player-character) and `GET /api/v1/chats/[id]?action=mailbox&characterId=…` (list a player-character's mailbox). New LLM tools `send_mail` and `list_email`; deliveries are announced by the `suparna` Staff sender.
+> - **Carina** — inline LLM queries via `@Name:` / `@Name?` markup and the `ask_carina` tool; answers post as `systemSender: 'carina'` rendered with the answerer's own avatar. `@Brahma` reaches the Brahma Console as a Carina answerer.
+> - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
+> - **Scriptorium per-document policy flags** — mounted markdown may carry `embed` / `character_read` / `character_write` frontmatter flags (stored on `doc_mount_file_links`), governing characters only.
 
 ## Table of Contents
 
@@ -40,6 +48,7 @@ API reference for Quilltap v4.3 and later.
   - [Character Wardrobe](#character-wardrobe)
   - [Outfit Presets](#outfit-presets)
   - [Chats](#chats)
+  - [Brahma Console](#brahma-console)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
   - [Chat Files](#chat-files)
@@ -2264,6 +2273,60 @@ Edit the room's schedule, budget caps, visibility, destructive-tool authorizatio
 ```
 
 **Response**: `200 OK` with `{ updated: true, clampedDestructive: false }`. `clampedDestructive` is `true` when the user-level destructive-tool policy forced the per-room flag to `false`.
+
+---
+
+### The Post Office
+
+Inter-character mail. A player-character can post a letter to another character; delivered mail lands in the recipient's vault `Mail/` folder and is announced by the `suparna` Staff sender. Characters also reach this through the `send_mail` and `list_email` LLM tools.
+
+#### `POST /api/v1/chats/[id]?action=send-mail`
+
+Post a letter as a player-character. Anti-hijack safeguards apply in multi-character chats so a character can only send as itself.
+
+**Response**: `200 OK` with the delivered-letter result.
+
+#### `GET /api/v1/chats/[id]?action=mailbox&characterId=…`
+
+List the letters in a player-character's `Mail/` folder.
+
+**Response**: `200 OK` with the character's mailbox letters.
+
+---
+
+### Brahma Console
+
+A character-less, memory-free generic-LLM surface (`chatType: 'brahma'`). It forms no memories and is never moderated by the Concierge. Reachable from a Salon as the `@Brahma` Carina answerer; see `lib/services/brahma-console/`.
+
+#### `GET /api/v1/brahma-console`
+
+List the user's Brahma Console chats (most-recent first).
+
+#### `POST /api/v1/brahma-console`
+
+Create a new Brahma Console chat. Body: `{ connectionProfileId? }` (defaults to the user's default profile). Requires at least one connection profile to exist.
+
+**Response**: `201 Created` with the new chat.
+
+#### `GET /api/v1/brahma-console/[id]`
+
+Get chat details.
+
+#### `PATCH /api/v1/brahma-console/[id]`
+
+Rename the chat. With `?action=set-model`, switch the model and continue the same chat. (There is no `update-context` action — the console is not page-aware.)
+
+#### `DELETE /api/v1/brahma-console/[id]`
+
+Delete the chat.
+
+#### `POST /api/v1/brahma-console/[id]/messages`
+
+Send a message; returns an SSE stream. Body: `{ content }`.
+
+#### `GET /api/v1/brahma-console/[id]/messages`
+
+Load the chat's messages.
 
 ---
 
