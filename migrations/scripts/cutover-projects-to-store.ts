@@ -356,7 +356,16 @@ export const cutoverProjectsToStoreMigration: Migration = {
   description:
     'Move every project\'s content and settings fully into its official document store and drop the legacy DB columns (including userId).',
   introducedInVersion: '4.7.0',
-  dependsOn: ['add-project-official-mount-point-v1'],
+  // `add-doc-mount-file-policy-flags-v1` adds the allowEmbed / allowCharacterRead /
+  // allowCharacterWrite columns to doc_mount_file_links. This cutover writes link
+  // rows (via writeProjectStoreManagedFields → the doc-mount repos) that reference
+  // those columns, so the policy-flags migration MUST run first — otherwise the
+  // dependency-free topological order places this cutover before it and every link
+  // INSERT fails with "table doc_mount_file_links has no column named allowEmbed"
+  // on instances where both migrations are still pending. Depending on it also
+  // preserves the frontmatter-driven protection backfill (which an in-place ALTER
+  // here would skip).
+  dependsOn: ['add-project-official-mount-point-v1', 'add-doc-mount-file-policy-flags-v1'],
 
   async shouldRun(): Promise<boolean> {
     if (!isSQLiteBackend()) return false;
