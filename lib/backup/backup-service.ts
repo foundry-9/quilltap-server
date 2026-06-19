@@ -151,6 +151,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     roleplayTemplates,
     providerModels,
     projects,
+    groups,
     llmLogs,
     pluginConfigs,
     chatSettingsResult,
@@ -171,6 +172,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.providerModels.findAll(),
     // Get projects
     repos.projects.findAll(),
+    // Get groups (hydrated from each group's official document store, like projects)
+    repos.groups.findAll(),
     // Get LLM logs
     repos.llmLogs.findAll(10000), // High limit to get all user logs
     // Get plugin configurations
@@ -286,6 +289,12 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   const docMountFileLinks = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountFileLink>('doc_mount_file_links');
   const docMountDocuments = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').DocMountDocument>('doc_mount_documents');
   const projectDocMountLinks = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').ProjectDocMountLink>('project_doc_mount_links');
+  // Group join tables live alongside the project link table in the mount-index
+  // DB. group_doc_mount_links holds a group's *additional* linked stores (the
+  // official store is recorded on the group row as officialMountPointId);
+  // group_character_members is the group↔character membership.
+  const groupDocMountLinks = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').GroupDocMountLink>('group_doc_mount_links');
+  const groupCharacterMembers = dumpMountIndexTable<import('@/lib/schemas/mount-index.types').GroupCharacterMember>('group_character_members');
   // Chunk embeddings are BLOBs in SQLite; the raw rows come back with Buffer
   // values for the embedding column. Normalise into number[] so JSON can hold
   // them without base64 plumbing.
@@ -350,6 +359,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     roleplayTemplates,
     providerModels,
     projects,
+    groups,
     llmLogs,
     pluginConfigs,
     chatSettings,
@@ -372,6 +382,8 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     docMountDocuments,
     docMountBlobs,
     projectDocMountLinks,
+    groupDocMountLinks,
+    groupCharacterMembers,
     textReplacementRules,
   };
 }
@@ -424,7 +436,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
 
   return {
     version: '1.0',
-    backupFormat: 3,
+    backupFormat: 4,
     createdAt: new Date().toISOString(),
     userId,
     appVersion: APP_VERSION,
@@ -442,6 +454,7 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       roleplayTemplates: data.roleplayTemplates.length,
       providerModels: data.providerModels.length,
       projects: data.projects.length,
+      groups: data.groups?.length || 0,
       llmLogs: data.llmLogs.length,
       pluginConfigs: data.pluginConfigs?.length || 0,
       chatSettings: data.chatSettings?.length || 0,
@@ -466,6 +479,8 @@ function createManifest(userId: string, data: Omit<BackupData, 'manifest'>): Bac
       docMountDocuments: data.docMountDocuments?.length || 0,
       docMountBlobs: data.docMountBlobs?.length || 0,
       projectDocMountLinks: data.projectDocMountLinks?.length || 0,
+      groupDocMountLinks: data.groupDocMountLinks?.length || 0,
+      groupCharacterMembers: data.groupCharacterMembers?.length || 0,
       textReplacementRules: data.textReplacementRules?.length || 0,
     },
   };
@@ -587,6 +602,7 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'roleplay-templates.json'), data.roleplayTemplates);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'provider-models.json'), data.providerModels);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'projects.json'), data.projects);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'groups.json'), data.groups || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'llm-logs.json'), data.llmLogs);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'plugin-configs.json'), data.pluginConfigs || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-settings.json'), data.chatSettings || []);
@@ -613,6 +629,8 @@ export async function createBackup(userId: string): Promise<{
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-documents.json'), data.docMountDocuments || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'doc-mount-blobs.json'), data.docMountBlobs || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'project-doc-mount-links.json'), data.projectDocMountLinks || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'group-doc-mount-links.json'), data.groupDocMountLinks || []);
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'group-character-members.json'), data.groupCharacterMembers || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'text-replacement-rules.json'), data.textReplacementRules || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');

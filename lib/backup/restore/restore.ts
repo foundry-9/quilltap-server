@@ -303,6 +303,24 @@ export async function restore(
       }
     }
 
+    // 13a. Groups — parallel to projects: a slim row plus an official document
+    // store. `groups.create` (store-backed) discards any incoming
+    // officialMountPointId and provisions a fresh store, writing the hydrated
+    // description/instructions/state/properties back into it — exactly as
+    // projects restore above. Membership and additional-store links are restored
+    // later (22h-i / 22h-ii), once doc-mount points exist.
+    let groupsRestored = 0;
+    for (const group of data.groups || []) {
+      try {
+        const { createdAt, updatedAt, ...groupData } = group;
+        await repos.groups.create(groupData, { id: group.id });
+        groupsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore group "${group.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore group', { groupId: group.id, error });
+      }
+    }
+
     // 14. LLM Logs
     let llmLogsRestored = 0;
     if (isLLMLogsDegraded()) {
@@ -568,6 +586,34 @@ export async function restore(
       }
     }
 
+    // 22h-i. Group ↔ document-store links (a group's *additional* linked stores;
+    // the official store rides on the group row). Mirror of projectDocMountLinks.
+    let groupDocMountLinksRestored = 0;
+    for (const link of data.groupDocMountLinks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...linkData } = link;
+        await globalRepos.groupDocMountLinks.create(linkData, { id: link.id });
+        groupDocMountLinksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore group↔store link: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore group doc mount link', { linkId: link.id, error });
+      }
+    }
+
+    // 22h-ii. Group ↔ character membership. groupId/characterId both reference
+    // main-DB rows already restored above (groups at 13a, characters at 6).
+    let groupCharacterMembersRestored = 0;
+    for (const member of data.groupCharacterMembers || []) {
+      try {
+        const { id, createdAt, updatedAt, ...memberData } = member;
+        await globalRepos.groupCharacterMembers.create(memberData, { id: member.id });
+        groupCharacterMembersRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore group membership: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore group character member', { memberId: member.id, error });
+      }
+    }
+
     // 22i. Chat documents (Document Mode pane state per chat).
     let chatDocumentsRestored = 0;
     for (const cd of data.chatDocuments || []) {
@@ -809,6 +855,7 @@ export async function restore(
       },
       providerModels: providerModelsRestored,
       projects: projectsRestored,
+      groups: groupsRestored,
       llmLogs: llmLogsRestored,
       pluginConfigs: pluginConfigsRestored,
       chatSettings: chatSettingsRestored,
@@ -833,6 +880,8 @@ export async function restore(
       docMountDocuments: docMountDocumentsRestored,
       docMountBlobs: docMountBlobsRestored,
       projectDocMountLinks: projectDocMountLinksRestored,
+      groupDocMountLinks: groupDocMountLinksRestored,
+      groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
       warnings,
     };
