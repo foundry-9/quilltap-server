@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Docs: moved four more completed feature specs into `features/complete/`
+
+Second pass over `docs/developer/features/` after more work shipped. Moved `brahma-console`, `commonplace-whisper-overhaul`, `qtap-uri`, and `backup-text-replacement-and-export-cleanup` into `features/complete/`, each verified against the CHANGELOG and code (migrations, named code paths, tests) rather than the doc header. The backup/export spec is the previously-ambiguous one: both halves are now done — `text_replacement_rules` round-trips through backup/restore with tests, and the dead legacy `.qtap` export builders were removed with a regression test guarding the import path (entry in `docs/CHANGELOG_V4.md`). Fixed one relative link broken by the move: `complete/carina.md` → `brahma-console.md` (same directory now). No code change.
+
 #### Fix: Character avatars follow the character's pronouns
 
 The avatar prompt builder now anchors the figure's apparent sex from the character's standard pronouns: `she/her` renders "a single woman," `he/him` renders "a single man," and anything else (`they`, neopronouns, or unset) stays neutral as before. Previously the avatar prompt named only the character and described their face and outfit, with no gender signal, so a gender-neutral physical description plus an outfit cue (e.g. a "men's" shirt) could make the image generator render the wrong sex — a woman wearing a man's shirt came out looking like a man.

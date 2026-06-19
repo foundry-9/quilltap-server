@@ -290,7 +290,7 @@ Add to the `systemSender` enum documentation:
 
 ## The Brahma Console as a pseudocharacter answerer
 
-The Brahma Console (a character-less, memory-free, SQL-capable direct line to a plain LLM — see [brahma-console.md](../brahma-console.md)) is reachable from inside a Salon by the name **"Brahma"**, through every Carina entry point (`@Brahma:` / `@Brahma?` markup and the `ask_carina` tool). It is a **pseudocharacter**: no `characters` row, no participant, no memories, never in any character list.
+The Brahma Console (a character-less, memory-free, SQL-capable direct line to a plain LLM — see [brahma-console.md](brahma-console.md)) is reachable from inside a Salon by the name **"Brahma"**, through every Carina entry point (`@Brahma:` / `@Brahma?` markup and the `ask_carina` tool). It is a **pseudocharacter**: no `characters` row, no participant, no memories, never in any character list.
 
 - **Sentinel + name helper** — `lib/services/carina/brahma-answerer.ts`. `BRAHMA_CARINA_ANSWERER_ID` is a fixed reserved RFC-4122 v4 UUID (valid for `z.uuid()`, never collides with a real `character.id`); `isBrahmaName(name)` matches "brahma" case-insensitively. A Brahma answer is posted as an ordinary `systemSender: 'carina'` message whose `carinaMeta.answererId` is the sentinel — so it inherits Carina's memory suppression (`turn-transcript.ts` skips any `systemSender` message) and the reference-card UI with **no new `systemSender` value and no schema/column change**.
 
