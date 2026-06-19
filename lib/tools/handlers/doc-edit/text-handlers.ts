@@ -22,7 +22,7 @@ import {
   generateUnifiedDiff,
   type DocEditScope,
 } from '@/lib/doc-edit';
-import { postLibrarianWriteAnnouncement } from '@/lib/services/librarian-notifications/writer';
+import { postLibrarianWriteAnnouncement, contentHiddenFromCharacters } from '@/lib/services/librarian-notifications/writer';
 import {
   detectMimeFromExtension,
   isJsonFamily,
@@ -55,6 +55,9 @@ import {
   resolveOfficialProjectMount,
   triggerReindexIfNeeded,
   uriForResolvedPath,
+  assertCharacterMayRead,
+  assertCharacterMayWrite,
+  getCharacterBlockedReadPaths,
 } from './shared';
 
 /**
@@ -81,6 +84,8 @@ export async function handleReadFile(
   const scope = (input.scope || 'document_store') as DocEditScope;
   const readContext = await buildReadResolutionContext(input, context);
   const resolved = await resolveDocEditPath(scope, input.path, readContext);
+  // character_read:false → not-found for characters (operator unaffected).
+  await assertCharacterMayRead(resolved, context);
   const uri = await uriForResolvedPath(resolved, context);
 
   // For database-backed stores, a non-text file (pdf/docx/arbitrary binary)
@@ -225,6 +230,8 @@ export async function handleWriteFile(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  // character_write:false (or character_read:false) → blocked for characters.
+  await assertCharacterMayWrite(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -288,6 +295,9 @@ export async function handleWriteFile(
   const announceScope = scope as 'project' | 'document_store' | 'general';
   const displayTitle = path.basename(input.path);
   const origin = await resolveActorOrigin(context);
+  // Derived from the content just written — a character_read:false document
+  // (including a brand-new one) must not be announced to characters.
+  const hiddenFromCharacters = contentHiddenFromCharacters(contentToWrite);
   if (previousContent === null) {
     await postLibrarianWriteAnnouncement({
       chatId: context.chatId,
@@ -297,6 +307,7 @@ export async function handleWriteFile(
       mountPoint: input.mount_point,
       origin,
       change: { kind: 'created', body: contentToWrite },
+      hiddenFromCharacters,
     });
   } else {
     await postLibrarianWriteAnnouncement({
@@ -307,6 +318,7 @@ export async function handleWriteFile(
       mountPoint: input.mount_point,
       origin,
       change: { kind: 'edited', diff: generateUnifiedDiff(previousContent, contentToWrite, displayTitle) },
+      hiddenFromCharacters,
     });
   }
 
@@ -336,6 +348,7 @@ export async function handleStrReplace(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  await assertCharacterMayWrite(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -385,6 +398,7 @@ export async function handleStrReplace(
     mountPoint: input.mount_point,
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+    hiddenFromCharacters: contentHiddenFromCharacters(newContent),
   });
 
   const result: DocStrReplaceOutput = {
@@ -414,6 +428,7 @@ export async function handleInsertText(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  await assertCharacterMayWrite(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -485,6 +500,7 @@ export async function handleInsertText(
     mountPoint: input.mount_point,
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+    hiddenFromCharacters: contentHiddenFromCharacters(newContent),
   });
 
   const result: DocInsertTextOutput = {
@@ -603,13 +619,15 @@ export async function handleGrep(
     }
   };
 
-  // Walk a directory and search files
+  // Walk a directory and search files. `isBlocked` drops files hidden from
+  // characters by character_read:false (keyed by mount-relative path).
   const walkAndSearch = async (
     baseDir: string,
     displayPrefix: string,
     mountPointName?: string,
     folder?: string,
-    makeUri?: (relPath: string) => string
+    makeUri?: (relPath: string) => string,
+    isBlocked?: (relativePath: string) => boolean
   ): Promise<void> => {
     const startDir = folder ? path.join(baseDir, folder) : baseDir;
 
@@ -630,6 +648,7 @@ export async function handleGrep(
             await walkRecursive(fullPath);
           } else if (entry.isFile()) {
             if (input.path && !relativePath.startsWith(input.path)) continue;
+            if (isBlocked && isBlocked(relativePath)) continue;
             const displayPath = displayPrefix ? `${displayPrefix}/${relativePath}` : relativePath;
             await searchFile(fullPath, displayPath, mountPointName, makeUri);
           }
@@ -710,6 +729,11 @@ export async function handleGrep(
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;
       }
+      // Hide character_read:false documents from characters (operator unaffected).
+      const blockedPaths = await getCharacterBlockedReadPaths(mp.id, context);
+      const isBlocked = blockedPaths.size > 0
+        ? (rel: string) => blockedPaths.has(rel.toLowerCase())
+        : undefined;
       const makeUri = (relPath: string) => uriResolver.uriForMount(mp.name, mp.id, relPath);
       if (mp.mountType === 'database') {
         const repos = getRepositories();
@@ -717,11 +741,12 @@ export async function handleGrep(
         for (const doc of documents) {
           if (matches.length >= maxResults) break;
           if (input.path && !doc.relativePath.startsWith(input.path)) continue;
+          if (isBlocked && isBlocked(doc.relativePath)) continue;
           searchContent(doc.content, doc.relativePath, mp.name, makeUri);
         }
         continue;
       }
-      await walkAndSearch(mp.basePath, '', mp.name, undefined, makeUri);
+      await walkAndSearch(mp.basePath, '', mp.name, undefined, makeUri, isBlocked);
     }
   }
 
@@ -819,13 +844,15 @@ export async function handleListFiles(
     return filename === pattern;
   };
 
-  // Walk directory and collect file info
+  // Walk directory and collect file info. `isBlocked` drops files hidden from
+  // characters by character_read:false (keyed by mount-relative path).
   const collectFiles = async (
     baseDir: string,
     scope: DocFileInfo['scope'],
     mountPointName?: string,
     folder?: string,
-    makeUri?: (relPath: string) => string
+    makeUri?: (relPath: string) => string,
+    isBlocked?: (relativePath: string) => boolean
   ): Promise<void> => {
     const startDir = folder ? path.join(baseDir, folder) : baseDir;
 
@@ -851,6 +878,7 @@ export async function handleListFiles(
             if (recursive) await walkRecursive(fullPath);
           } else if (entry.isFile()) {
             if (input.pattern && !matchesGlob(entry.name, input.pattern)) continue;
+            if (isBlocked && isBlocked(relativePath)) continue;
 
             try {
               const stat = await fs.stat(fullPath);
@@ -901,12 +929,18 @@ export async function handleListFiles(
         continue;
       }
       const mpScope = groupMountIds.has(mp.id) ? 'group' : 'document_store';
+      // Hide character_read:false documents from characters (operator unaffected).
+      const blockedPaths = await getCharacterBlockedReadPaths(mp.id, context);
+      const isBlocked = blockedPaths.size > 0
+        ? (rel: string) => blockedPaths.has(rel.toLowerCase())
+        : undefined;
       const makeUri = (relPath: string) => uriResolver.uriForMount(mp.name, mp.id, relPath);
       if (mp.mountType === 'database') {
         // Bytes live in doc_mount_documents; list from the mirror doc_mount_files rows.
         const dbEntries = await listDatabaseFiles(mp.id, input.folder ? { folder: input.folder } : {});
         for (const entry of dbEntries) {
           if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
+          if (entry.kind !== 'folder' && isBlocked && isBlocked(entry.relativePath)) continue;
           files.push({
             path: entry.relativePath,
             mount_point: mp.name,
@@ -919,7 +953,7 @@ export async function handleListFiles(
         }
         continue;
       }
-      await collectFiles(mp.basePath, mpScope, mp.name, input.folder, makeUri);
+      await collectFiles(mp.basePath, mpScope, mp.name, input.folder, makeUri, isBlocked);
     }
   }
 
@@ -939,6 +973,10 @@ export async function handleListFiles(
       // when scope was explicitly 'project' so the caller sees results.
       if (input.scope === 'project') {
         const makeProjectUri = (relPath: string) => uriResolver.uriForScope('project', relPath);
+        const blockedProjectPaths = await getCharacterBlockedReadPaths(officialMount.id, context);
+        const isProjectBlocked = blockedProjectPaths.size > 0
+          ? (rel: string) => blockedProjectPaths.has(rel.toLowerCase())
+          : undefined;
         if (officialMount.mountType === 'database') {
           const dbEntries = await listDatabaseFiles(
             officialMount.id,
@@ -946,6 +984,7 @@ export async function handleListFiles(
           );
           for (const entry of dbEntries) {
             if (input.pattern && !matchesGlob(entry.fileName, input.pattern)) continue;
+            if (entry.kind !== 'folder' && isProjectBlocked && isProjectBlocked(entry.relativePath)) continue;
             files.push({
               path: entry.relativePath,
               mount_point: officialMount.name,
@@ -957,7 +996,7 @@ export async function handleListFiles(
             });
           }
         } else if (officialMount.basePath) {
-          await collectFiles(officialMount.basePath, 'project', officialMount.name, input.folder, makeProjectUri);
+          await collectFiles(officialMount.basePath, 'project', officialMount.name, input.folder, makeProjectUri, isProjectBlocked);
         }
       }
     } else {

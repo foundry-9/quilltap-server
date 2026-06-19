@@ -17,6 +17,12 @@ jest.mock('@/lib/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
+// The writer transitively imports the markdown frontmatter parser (via the
+// character_read suppression helpers), which builds a service logger at load.
+jest.mock('@/lib/logging/create-logger', () => ({
+  createServiceLogger: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
+}));
+
 jest.mock('@/lib/repositories/factory', () => {
   const addMessage = jest.fn();
   const findById = jest.fn();
@@ -29,6 +35,8 @@ import {
   postLibrarianMoveAnnouncement,
   postLibrarianCopyAnnouncement,
   postLibrarianBlobWriteAnnouncement,
+  postLibrarianDeleteAnnouncement,
+  contentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { getRepositories } from '@/lib/repositories/factory';
 
@@ -178,5 +186,74 @@ describe('Librarian doc-change announcements', () => {
     expect(msg.systemKind).toBe('blob-written-by-character');
     expect(msg.content).toContain('image/webp');
     expect(msg.content).toContain('qtap://self/photos/sketch.webp');
+  });
+
+  // -------------------------------------------------------------------------
+  // character_read:false suppression — a hidden document must never be the
+  // subject of an announcement (it would leak existence/contents to characters).
+  // -------------------------------------------------------------------------
+  describe('hiddenFromCharacters suppression', () => {
+    it('contentHiddenFromCharacters detects character_read:false (cascade-aware)', () => {
+      expect(contentHiddenFromCharacters('---\ncharacter_read: false\n---\nbody')).toBe(true);
+      expect(contentHiddenFromCharacters('---\ncharacter_read: "false"\n---\nbody')).toBe(true);
+      expect(contentHiddenFromCharacters('---\nembed: false\n---\nbody')).toBe(false); // readable
+      expect(contentHiddenFromCharacters('# no frontmatter')).toBe(false);
+    });
+
+    it('write announcement is suppressed when hiddenFromCharacters is true', async () => {
+      const posted = await postLibrarianWriteAnnouncement({
+        chatId: 'c-1',
+        displayTitle: 'Secret.md',
+        uri: 'qtap://self/Secret.md',
+        scope: 'document_store',
+        mountPoint: 'self',
+        origin: byUser,
+        change: { kind: 'created', body: '---\ncharacter_read: false\n---\nhidden' },
+        hiddenFromCharacters: true,
+      });
+      expect(posted).toBeNull();
+      expect(addMessage).not.toHaveBeenCalled();
+    });
+
+    it('delete / move announcements are suppressed when hiddenFromCharacters is true', async () => {
+      const del = await postLibrarianDeleteAnnouncement({
+        chatId: 'c-1',
+        displayTitle: 'Secret.md',
+        filePath: 'Secret.md',
+        scope: 'document_store',
+        mountPoint: 'self',
+        origin: byUser,
+        hiddenFromCharacters: true,
+      });
+      const mv = await postLibrarianMoveAnnouncement({
+        chatId: 'c-1',
+        oldDisplayTitle: 'Secret.md',
+        newDisplayTitle: 'Secret2.md',
+        oldUri: 'qtap://self/Secret.md',
+        newUri: 'qtap://self/Secret2.md',
+        scope: 'document_store',
+        mountPoint: 'self',
+        origin: byUser,
+        isFolder: false,
+        hiddenFromCharacters: true,
+      });
+      expect(del).toBeNull();
+      expect(mv).toBeNull();
+      expect(addMessage).not.toHaveBeenCalled();
+    });
+
+    it('still announces when hiddenFromCharacters is false (a readable doc)', async () => {
+      await postLibrarianWriteAnnouncement({
+        chatId: 'c-1',
+        displayTitle: 'Open.md',
+        uri: 'qtap://self/Open.md',
+        scope: 'document_store',
+        mountPoint: 'self',
+        origin: byUser,
+        change: { kind: 'created', body: 'visible' },
+        hiddenFromCharacters: false,
+      });
+      expect(addMessage).toHaveBeenCalledTimes(1);
+    });
   });
 });

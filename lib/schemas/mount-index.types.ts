@@ -131,6 +131,16 @@ export const DocMountFileLinkSchema = z.object({
     .default('none'),
   extractionError: z.string().nullable().optional(),
   chunkCount: z.number().int().default(0),
+  // Per-document policy, derived from markdown frontmatter at index time
+  // (positive sense: `1`/true == permissive == the frontmatter default).
+  //   allowEmbed          — embed for semantic retrieval (frontmatter `embed`)
+  //   allowCharacterRead  — visible/readable to LLM characters (`character_read`)
+  //   allowCharacterWrite — mutable by LLM characters (`character_write`)
+  // Non-markdown links keep the permissive defaults — they carry no frontmatter.
+  // The human operator (operatorOverride) is never restricted by these flags.
+  allowEmbed: z.boolean().default(true),
+  allowCharacterRead: z.boolean().default(true),
+  allowCharacterWrite: z.boolean().default(true),
   lastModified: TimestampSchema,     // Per-link mtime (link can be touched independently)
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

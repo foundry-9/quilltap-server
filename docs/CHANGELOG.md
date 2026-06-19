@@ -4,6 +4,19 @@
 
 ### 4.7-dev
 
+#### Feature: Per-document Scriptorium policy flags (`embed`, `character_read`, `character_write`)
+
+A mounted markdown document may now carry three frontmatter flags that control how Quilltap treats it. Each defaults to `true` and only takes effect when the frontmatter says `false`. Values may be quoted (`embed: "false"`) or bare (`embed: false`); coercion is case-insensitive and treats `false`/`no`/`0`/`off` as false.
+
+- `embed: false` keeps the document out of the embedding pipeline and erases any embedding it already has (chunk text is kept; only the vectors are cleared).
+- `character_read: false` hides the document from every LLM character: the `doc_read_*` tools report it as not-found, `doc_list_files`/`doc_grep` omit it, and it never surfaces in RAG retrieval. The "not found" message is identical to a genuinely missing file so a character can't probe for protected filenames.
+- `character_write: false` blocks every character-initiated mutation: write, str-replace, insert, frontmatter/heading update, move, rename, delete, and copy-as-source. A folder delete/move that would touch a protected document fails for characters, naming the document.
+- `character_read` is the master gate: when it is false the other two are forced false as well (a document characters can't read can be neither embedded/retrieved nor written), regardless of what `embed`/`character_write` say. When `character_read` is true, the other two stand on their own.
+- The Librarian does not announce changes to a `character_read:false` document. The operator can still open, edit, rename, and delete one in Document Mode, but those actions post no chat announcement, so the hidden document's existence and contents stay out of the characters' view.
+- The human operator (Document Mode, Brahma Console) is never restricted by these flags — they govern characters only.
+
+The flags are stored on the `doc_mount_file_links` row (`allowEmbed` / `allowCharacterRead` / `allowCharacterWrite`, added by a migration that also backfills them from existing markdown frontmatter and de-embeds `embed:false` documents on upgrade) and re-derived on every reindex, so editing the frontmatter — by the operator or directly on disk — is the control surface.
+
 #### Feature: The Librarian announces every character-initiated document change
 
 Previously, when a character used a `doc_*` tool to write, edit, move, rename, copy, or create a file or folder, the change happened silently — only deletes, folder creates/deletes, and document opens posted a Librarian announcement. Now every change-effecting `doc_*` tool posts one, matching the Document-Mode experience you get when you edit a document yourself.

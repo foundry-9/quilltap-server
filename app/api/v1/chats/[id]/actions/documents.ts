@@ -35,6 +35,8 @@ import {
   postLibrarianRenameAnnouncement,
   postLibrarianSaveAnnouncement,
   postLibrarianDeleteAnnouncement,
+  contentHiddenFromCharacters,
+  documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
@@ -681,6 +683,8 @@ export async function handleOpenDocument(
       mountPoint: data.mountPoint,
       isNew: !data.filePath,
       origin: { kind: 'opened-by-user' },
+      // A character_read:false document must not be announced to characters.
+      hiddenFromCharacters: contentHiddenFromCharacters(content),
     });
 
     return successResponse({
@@ -886,7 +890,13 @@ export async function handleWriteDocument(
     }
 
     const librarianMessage = data.diffContent
-      ? await postLibrarianSaveAnnouncement({ chatId, diffContent: data.diffContent })
+      ? await postLibrarianSaveAnnouncement({
+          chatId,
+          diffContent: data.diffContent,
+          // Derive from the content just written — its frontmatter is the
+          // authority, and a brand-new hidden file isn't indexed yet.
+          hiddenFromCharacters: contentHiddenFromCharacters(data.content),
+        })
       : null;
 
     return successResponse({
@@ -1000,6 +1010,13 @@ export async function handleRenameDocument(
     return badRequest(`Could not resolve path: ${message}`);
   }
 
+  // Capture the read-policy BEFORE the rename moves the link off the old path,
+  // so a character_read:false document isn't announced to characters.
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolvedOld.mountPointId,
+    resolvedOld.relativePath,
+  );
+
   try {
     if (resolvedOld.mountType === 'database' && resolvedOld.mountPointId) {
       await moveDatabaseDocument(
@@ -1059,6 +1076,7 @@ export async function handleRenameDocument(
     newFilePath,
     scope: doc.scope as 'project' | 'document_store' | 'general',
     mountPoint: doc.mountPoint,
+    hiddenFromCharacters,
   });
 
   const result = updated ?? doc;
@@ -1112,6 +1130,13 @@ export async function handleDeleteDocument(
     return badRequest(`Could not resolve path: ${message}`);
   }
 
+  // Capture the read-policy BEFORE the delete removes the link row, so a
+  // character_read:false document isn't announced to characters.
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolved.mountPointId,
+    resolved.relativePath,
+  );
+
   try {
     if (resolved.mountType === 'database' && resolved.mountPointId) {
       const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
@@ -1153,6 +1178,7 @@ export async function handleDeleteDocument(
     scope: doc.scope as 'project' | 'document_store' | 'general',
     mountPoint: doc.mountPoint,
     origin: { kind: 'by-user' },
+    hiddenFromCharacters,
   });
 
   return successResponse({

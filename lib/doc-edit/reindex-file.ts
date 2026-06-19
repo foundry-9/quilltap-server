@@ -18,6 +18,7 @@ import { computeSha256 } from '@/lib/file-storage/scanner';
 import { getRepositories } from '@/lib/repositories/factory';
 import { convertToPlainText } from '@/lib/mount-index/converters';
 import { chunkDocument } from '@/lib/mount-index/chunker';
+import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 
 const logger = createServiceLogger('DocEdit:ReindexFile');
 
@@ -116,6 +117,22 @@ export async function reindexSingleFile(
     // Chunk the text
     const chunks = chunkDocument(plainText);
 
+    // Per-document policy lives in the markdown frontmatter. For database
+    // stores `plainText` IS the raw markdown (doc.content still carries the
+    // frontmatter block); for filesystem stores `plainText` has already been
+    // frontmatter-stripped by convertToPlainText, so re-read the raw bytes.
+    let policy = DEFAULT_DOCUMENT_POLICY;
+    if (fileType === 'markdown') {
+      try {
+        const rawForPolicy = isDatabaseBacked
+          ? plainText
+          : await fs.readFile(absolutePath, 'utf-8');
+        policy = policyFromContent(rawForPolicy);
+      } catch {
+        policy = DEFAULT_DOCUMENT_POLICY;
+      }
+    }
+
     // Find existing link record
     const existingLink = await repos.docMountFileLinks.findByMountPointAndPath(
       mountPointId,
@@ -154,6 +171,15 @@ export async function reindexSingleFile(
         chunkCount: chunks.length,
         lastModified: lastModifiedIso,
       });
+      // Only markdown carries policy frontmatter; non-markdown links keep their
+      // permissive defaults, so don't disturb them here.
+      if (fileType === 'markdown') {
+        await repos.docMountFileLinks.updatePolicyFlags(existingLink.id, {
+          allowEmbed: policy.embed,
+          allowCharacterRead: policy.characterRead,
+          allowCharacterWrite: policy.characterWrite,
+        });
+      }
       linkId = existingLink.id;
     } else {
       if (existingLink) {
@@ -171,6 +197,9 @@ export async function reindexSingleFile(
         conversionStatus: 'converted',
         plainTextLength: plainText.length,
         chunkCount: chunks.length,
+        allowEmbed: policy.embed,
+        allowCharacterRead: policy.characterRead,
+        allowCharacterWrite: policy.characterWrite,
       });
       linkId = link.id;
     }

@@ -71,6 +71,14 @@ export interface DocumentSearchOptions {
    * so personal-vault hits outrank shared-pool hits at equal cosine.
    */
   literalBoostFraction?: number
+  /**
+   * Include documents flagged `character_read:false` in the results. This is
+   * the human operator's escape hatch: Document-Mode search must still find
+   * every document, whereas the default character-facing retrieval path drops
+   * any chunk whose link is hidden from characters. Defaults to `false`
+   * (character-safe) — only the operator's surfaces opt in.
+   */
+  includeBlocked?: boolean
 }
 
 /**
@@ -130,29 +138,47 @@ export async function searchDocumentChunks(
   // chunk universe *before* scoring, not as a post-filter on a top-K pool.
   // (A post-filter starves results when the prefix matches a small fraction
   // of files, e.g. a single Knowledge/ file in a vault of 50 wardrobe items.)
+  //
+  // The `character_read:false` policy is enforced here too: any chunk whose
+  // link is hidden from characters is dropped before scoring (unless the
+  // operator opted in via includeBlocked). `embed:false` usually erases the
+  // vectors already, so this is the suspenders to that belt — it covers the
+  // window between a flag flip and the next scheduler run. Both constraints
+  // are gathered in a single pass over the target mounts' link rows.
+  const includeBlocked = options.includeBlocked === true
   const pathPrefix = options.pathPrefix
   const lowerPrefix = pathPrefix ? pathPrefix.toLowerCase() : null
 
-  let chunksInScope = allChunks
-  if (lowerPrefix) {
-    // After the content/link split chunks key by linkId — collect link ids
-    // whose relativePath matches the prefix.
-    const allowedLinkIds = new Set<string>()
+  let allowedLinkIds: Set<string> | null = null
+  let blockedLinkIds: Set<string> | null = null
+  if (lowerPrefix || !includeBlocked) {
+    allowedLinkIds = lowerPrefix ? new Set<string>() : null
+    blockedLinkIds = includeBlocked ? null : new Set<string>()
     for (const mpId of mountPointIds) {
       const links = await repos.docMountFileLinks.findByMountPointId(mpId)
       for (const link of links) {
-        if (link.relativePath.toLowerCase().startsWith(lowerPrefix)) {
+        if (allowedLinkIds && link.relativePath.toLowerCase().startsWith(lowerPrefix!)) {
           allowedLinkIds.add(link.id)
+        }
+        if (blockedLinkIds && link.allowCharacterRead === false) {
+          blockedLinkIds.add(link.id)
         }
       }
     }
+  }
+
+  let chunksInScope = allChunks
+  if (allowedLinkIds) {
     if (allowedLinkIds.size === 0) {
       return []
     }
-    chunksInScope = allChunks.filter(c => allowedLinkIds.has(c.linkId))
-    if (chunksInScope.length === 0) {
-      return []
-    }
+    chunksInScope = chunksInScope.filter(c => allowedLinkIds!.has(c.linkId))
+  }
+  if (blockedLinkIds && blockedLinkIds.size > 0) {
+    chunksInScope = chunksInScope.filter(c => !blockedLinkIds!.has(c.linkId))
+  }
+  if (chunksInScope.length === 0) {
+    return []
   }
 
   // Compute cosine similarity (dot product — vectors are unit-length) for

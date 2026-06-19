@@ -240,6 +240,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'rp-delimiter-kinds-v1': 'Sorting your formatting marks into their proper kinds',
   'add-console-connection-profile-field-v1': "Wiring the Brahma Console's dial to its chosen engine…",
   'add-connection-profile-unique-name-index-v1': 'Ensuring each connection profile answers to but a single name…',
+  'add-doc-mount-file-policy-flags-v1': 'Noting which manuscripts wish to remain unread, unwritten, or unindexed…',
   'migrate-extraction-knobs-to-instance-settings-v1': 'Moving extraction knobs into instance settings',
 
   // Misc / fixes

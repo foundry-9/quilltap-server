@@ -32,7 +32,51 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { formatScopedUri, formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
+import { policyFromContent } from '@/lib/doc-edit/document-policy';
 import type { MessageEvent } from '@/lib/schemas/types';
+
+// ---------------------------------------------------------------------------
+// Suppression for character_read:false documents.
+//
+// A document hidden from characters (`character_read: false`) must never be the
+// subject of a Librarian announcement — the announcements are chat messages
+// characters see, so even a "saved"/"renamed"/"deleted" note would leak the
+// hidden document's existence (and, for writes, its contents) to them. Only the
+// operator can touch such a document in the first place (characters are blocked
+// by the doc_ gates), so this is the matching gate on the announcement side.
+//
+// Two helpers because the source of truth differs by timing:
+//   - writes derive it from the content just written (the link's persisted
+//     policy may lag behind the async reindex, and a brand-new hidden file has
+//     no link row yet);
+//   - moves / copies / deletes / opens / renames derive it from the already-
+//     indexed link row (capture it BEFORE a destructive op, while the link
+//     still exists).
+// ---------------------------------------------------------------------------
+
+/** True when a document's own frontmatter hides it from characters. Pure. */
+export function contentHiddenFromCharacters(content: string): boolean {
+  return !policyFromContent(content).characterRead;
+}
+
+/**
+ * True when the indexed document at (mountPointId, relativePath) is
+ * `character_read:false`. Returns false for non-mount scopes, missing links,
+ * or any lookup error — an announcement is never blocked by a transient fault.
+ */
+export async function documentHiddenFromCharacters(
+  mountPointId: string | null | undefined,
+  relativePath: string | null | undefined,
+): Promise<boolean> {
+  if (!mountPointId || !relativePath) return false;
+  try {
+    const repos = getRepositories();
+    const link = await repos.docMountFileLinks.findByMountPointAndPath(mountPointId, relativePath);
+    return link?.allowCharacterRead === false;
+  } catch {
+    return false;
+  }
+}
 
 export type LibrarianOpenKind =
   | { kind: 'opened-by-user' }
@@ -54,6 +98,8 @@ export interface LibrarianOpenAnnouncement {
   mountPoint?: string | null;
   isNew: boolean;
   origin: LibrarianOpenKind;
+  /** When true, suppress the announcement (the document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 export interface LibrarianDeleteAnnouncement {
@@ -63,6 +109,8 @@ export interface LibrarianDeleteAnnouncement {
   scope: 'project' | 'document_store' | 'general';
   mountPoint?: string | null;
   origin: LibrarianActorOrigin;
+  /** When true, suppress the announcement (the document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 export interface LibrarianFolderCreatedAnnouncement {
@@ -85,6 +133,8 @@ export interface LibrarianSaveAnnouncement {
   chatId: string;
   /** Pre-formatted diff content (from formatAutosaveNotification) — caller owns the diff */
   diffContent: string;
+  /** When true, suppress the announcement (the document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 export interface LibrarianRenameAnnouncement {
@@ -95,6 +145,8 @@ export interface LibrarianRenameAnnouncement {
   newFilePath: string;
   scope: 'project' | 'document_store' | 'general';
   mountPoint?: string | null;
+  /** When true, suppress the announcement (the document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 /**
@@ -292,6 +344,7 @@ async function postLibrarianMessage(
 export async function postLibrarianOpenAnnouncement(
   params: LibrarianOpenAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   const content = buildOpenContent(params);
   const opaqueContent = buildOpenOpaqueContent(params);
   const kindLabel = params.origin.kind;
@@ -301,6 +354,7 @@ export async function postLibrarianOpenAnnouncement(
 export async function postLibrarianSaveAnnouncement(
   params: LibrarianSaveAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   if (!params.diffContent || !params.diffContent.trim()) {
     return null;
   }
@@ -312,6 +366,7 @@ export async function postLibrarianSaveAnnouncement(
 export async function postLibrarianRenameAnnouncement(
   params: LibrarianRenameAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   const content = buildRenameContent(params);
   const opaqueContent = buildRenameOpaqueContent(params);
   return postLibrarianMessage(params.chatId, content, opaqueContent, 'renamed');
@@ -368,6 +423,7 @@ export function buildFolderDeletedOpaqueContent(params: LibrarianFolderDeletedAn
 export async function postLibrarianDeleteAnnouncement(
   params: LibrarianDeleteAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   const content = buildDeleteContent(params);
   const opaqueContent = buildDeleteOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'deleted-by-user' : 'deleted-by-character';
@@ -506,6 +562,8 @@ export interface LibrarianWriteAnnouncement {
   change:
     | { kind: 'created'; body: string }
     | { kind: 'edited'; diff: string };
+  /** When true, suppress the announcement (the document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 export function buildWriteContent(params: LibrarianWriteAnnouncement): string {
@@ -550,6 +608,8 @@ export interface LibrarianMoveAnnouncement {
   mountPoint?: string | null;
   origin: LibrarianActorOrigin;
   isFolder: boolean;
+  /** When true, suppress the announcement (the document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 export function buildMoveContent(params: LibrarianMoveAnnouncement): string {
@@ -576,6 +636,8 @@ export interface LibrarianCopyAnnouncement {
   sourceUri: string;
   destUri: string;
   origin: LibrarianActorOrigin;
+  /** When true, suppress the announcement (the source document is character_read:false). */
+  hiddenFromCharacters?: boolean;
 }
 
 export function buildCopyContent(params: LibrarianCopyAnnouncement): string {
@@ -622,6 +684,7 @@ export function buildBlobWriteOpaqueContent(params: LibrarianBlobWriteAnnounceme
 export async function postLibrarianWriteAnnouncement(
   params: LibrarianWriteAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   // An edit with an empty diff means nothing actually changed — stay silent.
   if (params.change.kind === 'edited' && !params.change.diff.trim()) {
     return null;
@@ -636,6 +699,7 @@ export async function postLibrarianWriteAnnouncement(
 export async function postLibrarianMoveAnnouncement(
   params: LibrarianMoveAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   const content = buildMoveContent(params);
   const opaqueContent = buildMoveOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'moved-by-user' : 'moved-by-character';
@@ -645,6 +709,7 @@ export async function postLibrarianMoveAnnouncement(
 export async function postLibrarianCopyAnnouncement(
   params: LibrarianCopyAnnouncement,
 ): Promise<MessageEvent | null> {
+  if (params.hiddenFromCharacters) return null;
   const content = buildCopyContent(params);
   const opaqueContent = buildCopyOpaqueContent(params);
   const kindLabel = params.origin.kind === 'by-user' ? 'copied-by-user' : 'copied-by-character';

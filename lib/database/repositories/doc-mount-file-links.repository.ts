@@ -32,6 +32,7 @@ import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
 // uses. Avoids dragging the type into every link* method signature.
@@ -106,6 +107,24 @@ function ensureLinkFolderId(
 export type FileType = DocMountFile['fileType'];
 export type FileSource = DocMountFile['source'];
 
+/**
+ * Coerce a SQLite `allow*` policy column (stored 0/1, occasionally absent on a
+ * pre-migration row) into a boolean. Absent/unknown → permissive (true), which
+ * matches both the SQL default and the frontmatter default.
+ */
+function coerceAllow(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'boolean') return value;
+  return value !== 0;
+}
+
+/** The three per-document policy flags, in their positive-sense column form. */
+export interface LinkPolicyFlags {
+  allowEmbed: boolean;
+  allowCharacterRead: boolean;
+  allowCharacterWrite: boolean;
+}
+
 interface LinkBlobInput {
   mountPointId: string;
   relativePath: string;
@@ -146,6 +165,10 @@ interface LinkDocumentInput {
   contentSha256: string;
   plainTextLength: number;
   fileSizeBytes: number;
+  /** Per-document policy parsed from markdown frontmatter. Defaults permissive. */
+  allowEmbed?: boolean;
+  allowCharacterRead?: boolean;
+  allowCharacterWrite?: boolean;
 }
 
 interface LinkFilesystemFileInput {
@@ -163,6 +186,10 @@ interface LinkFilesystemFileInput {
   conversionError?: string | null;
   plainTextLength?: number | null;
   chunkCount?: number;
+  /** Per-document policy parsed from markdown frontmatter. Defaults permissive. */
+  allowEmbed?: boolean;
+  allowCharacterRead?: boolean;
+  allowCharacterWrite?: boolean;
 }
 
 // Raw SQLite row shape for the joined SELECT (link.* + file content fields).
@@ -271,6 +298,34 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    */
   async delete(id: string): Promise<boolean> {
     return this._delete(id);
+  }
+
+  /**
+   * Overwrite the three per-document policy columns for a link. Source of
+   * truth is the document's markdown frontmatter, re-derived at index time;
+   * callers (reindex / scanner) pass the freshly-parsed {@link LinkPolicyFlags}.
+   * Stored as 0/1; the rest of the code sees booleans (see {@link coerceAllow}).
+   */
+  async updatePolicyFlags(linkId: string, policy: LinkPolicyFlags): Promise<void> {
+    await this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return;
+        db.prepare(
+          `UPDATE doc_mount_file_links
+             SET allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?, updatedAt = ?
+           WHERE id = ?`
+        ).run(
+          policy.allowEmbed ? 1 : 0,
+          policy.allowCharacterRead ? 1 : 0,
+          policy.allowCharacterWrite ? 1 : 0,
+          new Date().toISOString(),
+          linkId
+        );
+      },
+      'Error updating document policy flags',
+      { linkId }
+    );
   }
 
   // ============================================================================
@@ -745,6 +800,18 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
       ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
 
+      // Per-document policy. For markdown, derive it from the frontmatter in
+      // `content` unless the caller passed explicit flags; other native text
+      // (txt/json) carries no policy frontmatter → permissive. This keeps every
+      // database write self-correcting, including in-child autonomous writes
+      // that never reach the reindex pass.
+      const parsedPolicy = input.fileType === 'markdown'
+        ? policyFromContent(input.content)
+        : DEFAULT_DOCUMENT_POLICY;
+      const allowEmbed = (input.allowEmbed ?? parsedPolicy.embed) ? 1 : 0;
+      const allowCharacterRead = (input.allowCharacterRead ?? parsedPolicy.characterRead) ? 1 : 0;
+      const allowCharacterWrite = (input.allowCharacterWrite ?? parsedPolicy.characterWrite) ? 1 : 0;
+
       let linkId: string;
       if (existingLink) {
         linkId = existingLink.id;
@@ -753,11 +820,13 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              fileId = ?, fileName = ?, folderId = ?,
              plainTextLength = ?,
              conversionStatus = 'converted', conversionError = NULL,
+             allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
           fileRow.id, input.fileName, folderId,
           input.plainTextLength,
+          allowEmbed, allowCharacterRead, allowCharacterWrite,
           now, now, linkId
         );
       } else {
@@ -766,15 +835,19 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           `INSERT INTO doc_mount_file_links (
              id, fileId, mountPointId, relativePath, fileName, folderId,
              conversionStatus, plainTextLength,
+             allowEmbed, allowCharacterRead, allowCharacterWrite,
              chunkCount, lastModified, createdAt, updatedAt
            ) VALUES (
              ?, ?, ?, ?, ?, ?,
              'converted', ?,
+             ?, ?, ?,
              0, ?, ?, ?
            )`
         ).run(
           linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
-          input.plainTextLength, now, now, now
+          input.plainTextLength,
+          allowEmbed, allowCharacterRead, allowCharacterWrite,
+          now, now, now
         );
       }
 
@@ -851,6 +924,11 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       const conversionStatus = input.conversionStatus ?? 'pending';
       const plainTextLength = input.plainTextLength ?? null;
       const chunkCount = input.chunkCount ?? 0;
+      // Per-document policy (markdown frontmatter). Default permissive; the
+      // scanner/reindex passes parsed flags for markdown, nothing for others.
+      const allowEmbed = input.allowEmbed === false ? 0 : 1;
+      const allowCharacterRead = input.allowCharacterRead === false ? 0 : 1;
+      const allowCharacterWrite = input.allowCharacterWrite === false ? 0 : 1;
 
       if (existingLink) {
         linkId = existingLink.id;
@@ -859,12 +937,14 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              fileId = ?, fileName = ?, folderId = ?,
              conversionStatus = ?, conversionError = ?,
              plainTextLength = ?, chunkCount = ?,
+             allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
           fileRow.id, input.fileName, folderId,
           conversionStatus, input.conversionError ?? null,
           plainTextLength, chunkCount,
+          allowEmbed, allowCharacterRead, allowCharacterWrite,
           input.lastModified, now, linkId
         );
       } else {
@@ -873,15 +953,18 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           `INSERT INTO doc_mount_file_links (
              id, fileId, mountPointId, relativePath, fileName, folderId,
              conversionStatus, conversionError, plainTextLength,
+             allowEmbed, allowCharacterRead, allowCharacterWrite,
              chunkCount, lastModified, createdAt, updatedAt
            ) VALUES (
              ?, ?, ?, ?, ?, ?,
+             ?, ?, ?,
              ?, ?, ?,
              ?, ?, ?, ?
            )`
         ).run(
           linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
           conversionStatus, input.conversionError ?? null, plainTextLength,
+          allowEmbed, allowCharacterRead, allowCharacterWrite,
           chunkCount, input.lastModified, now, now
         );
       }
@@ -945,7 +1028,8 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         l.description, l.descriptionUpdatedAt,
         l.conversionStatus, l.conversionError, l.plainTextLength,
         l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
-        l.chunkCount, l.lastModified, l.createdAt, l.updatedAt,
+        l.chunkCount, l.allowEmbed, l.allowCharacterRead, l.allowCharacterWrite,
+        l.lastModified, l.createdAt, l.updatedAt,
         f.sha256, f.fileSizeBytes, f.fileType, f.source
       FROM doc_mount_file_links l
       JOIN doc_mount_files f ON f.id = l.fileId
@@ -972,6 +1056,11 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       extractionStatus: row.extractionStatus,
       extractionError: row.extractionError ?? null,
       chunkCount: row.chunkCount ?? 0,
+      // SQLite stores these as 0/1; coerce to booleans (mirrors `enabled`).
+      // Absent (pre-migration drift before the align guard runs) → permissive.
+      allowEmbed: coerceAllow(row.allowEmbed),
+      allowCharacterRead: coerceAllow(row.allowCharacterRead),
+      allowCharacterWrite: coerceAllow(row.allowCharacterWrite),
       lastModified: row.lastModified,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

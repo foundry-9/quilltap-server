@@ -20,6 +20,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { convertToPlainText } from './converters';
 import { chunkDocument } from './chunker';
 import { DocMountPoint } from '@/lib/schemas/mount-index.types';
+import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 
 const logger = createServiceLogger('MountIndex:Scanner');
 
@@ -183,6 +184,18 @@ export async function processMountFile(
 
   const chunks = chunkDocument(plainText);
 
+  // Per-document policy lives in the markdown frontmatter, which
+  // convertToPlainText has already stripped — parse it from the raw bytes.
+  // Non-markdown files keep the permissive defaults.
+  let policy = DEFAULT_DOCUMENT_POLICY;
+  if (fileType === 'markdown') {
+    try {
+      policy = policyFromContent(await fs.readFile(absolutePath, 'utf-8'));
+    } catch {
+      policy = DEFAULT_DOCUMENT_POLICY;
+    }
+  }
+
   if (existing) {
     await repos.docMountChunks.deleteByLinkId(existing.id);
   }
@@ -201,6 +214,9 @@ export async function processMountFile(
     conversionStatus: 'converted',
     plainTextLength: plainText.length,
     chunkCount: chunks.length,
+    allowEmbed: policy.embed,
+    allowCharacterRead: policy.characterRead,
+    allowCharacterWrite: policy.characterWrite,
   });
 
   const outcome: 'new' | 'modified' = existing ? 'modified' : 'new';

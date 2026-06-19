@@ -97,6 +97,7 @@ jest.mock('@/lib/database/repositories', () => ({
     chats: { findById: jest.fn().mockResolvedValue(null) },
     characters: { findById: jest.fn().mockResolvedValue(null) },
     docMountPoints: { findById: jest.fn().mockResolvedValue(null), refreshStats: jest.fn() },
+    docMountFileLinks: { findByMountPointAndPath: jest.fn().mockResolvedValue(null), findByMountPointId: jest.fn().mockResolvedValue([]) },
     projectDocMountLinks: { findByProjectId: jest.fn().mockResolvedValue([]) },
   }),
 }));
@@ -119,6 +120,8 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianMoveAnnouncement: jest.fn(),
   postLibrarianCopyAnnouncement: jest.fn(),
   postLibrarianBlobWriteAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }));
 
 jest.mock('fs/promises', () => ({
@@ -194,6 +197,10 @@ const context = {
 describe('doc_copy_file handler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // The doc-edit handlers (and the policy gates) read getRepositories from
+    // the factory; point it at the same mock object this suite configures.
+    const { getRepositories } = jest.requireMock('@/lib/database/repositories');
+    jest.requireMock('@/lib/repositories/factory').getRepositories.mockReturnValue(getRepositories());
     // Default: path looks text-y.
     mockIsTextFile.mockReturnValue(true);
     // Default: no filesystem stat succeeds (nothing exists) unless a test overrides.

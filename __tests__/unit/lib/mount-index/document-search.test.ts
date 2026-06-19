@@ -464,6 +464,110 @@ describe('searchDocumentChunks', () => {
     })
   })
 
+  // -------------------------------------------------------------------------
+  // character_read:false policy filter (allowCharacterRead === false)
+  //
+  // A blocked document must never surface in character-facing retrieval, even
+  // if its chunk still carries an embedding (the window between a flag flip and
+  // the next scheduler erase). The human operator opts back in via
+  // includeBlocked.
+  // -------------------------------------------------------------------------
+  describe('character_read policy filter', () => {
+    function makeReposWithLinks(
+      links: Array<{ id: string; relativePath: string; allowCharacterRead: boolean }>,
+    ) {
+      const repos = makeRepos()
+      ;(repos.docMountFileLinks as Record<string, unknown>).findByMountPointId = jest.fn(
+        async () => links.map(l => ({
+          id: l.id,
+          fileId: `file-${l.id}`,
+          mountPointId: 'mp-1',
+          fileName: `${l.id}.md`,
+          relativePath: l.relativePath,
+          allowCharacterRead: l.allowCharacterRead,
+        }))
+      )
+      ;(repos.docMountFileLinks as Record<string, unknown>).findByIdWithContent = jest.fn(
+        async (linkId: string) => {
+          const l = links.find(x => x.id === linkId)
+          if (!l) return null
+          return {
+            id: l.id,
+            fileId: `file-${l.id}`,
+            mountPointId: 'mp-1',
+            fileName: `${l.id}.md`,
+            relativePath: l.relativePath,
+          }
+        }
+      )
+      return repos
+    }
+
+    it('excludes a chunk whose link is character_read:false even with a live embedding', async () => {
+      const blocked = makeChunk({ id: 'secret', linkId: 'link-blocked', embedding: [1, 0, 0] })
+      const repos = makeReposWithLinks([
+        { id: 'link-blocked', relativePath: 'Roleplay/secret.md', allowCharacterRead: false },
+      ])
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest.fn().mockResolvedValue([blocked])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], { minScore: 0.1 })
+      expect(results).toEqual([])
+    })
+
+    it('includes the blocked chunk when includeBlocked is set (operator path)', async () => {
+      const blocked = makeChunk({ id: 'secret', linkId: 'link-blocked', embedding: [1, 0, 0] })
+      const repos = makeReposWithLinks([
+        { id: 'link-blocked', relativePath: 'Roleplay/secret.md', allowCharacterRead: false },
+      ])
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest.fn().mockResolvedValue([blocked])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], { minScore: 0.1, includeBlocked: true })
+      expect(results).toHaveLength(1)
+      expect(results[0].chunkId).toBe('secret')
+    })
+
+    it('drops only the blocked chunk in a mixed corpus', async () => {
+      const blocked = makeChunk({ id: 'secret', linkId: 'link-blocked', embedding: [1, 0, 0] })
+      const open = makeChunk({ id: 'public', linkId: 'link-open', embedding: [0.9, 0, 0] })
+      const repos = makeReposWithLinks([
+        { id: 'link-blocked', relativePath: 'Roleplay/secret.md', allowCharacterRead: false },
+        { id: 'link-open', relativePath: 'Notes/public.md', allowCharacterRead: true },
+      ])
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([blocked, open])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], { minScore: 0.1 })
+      expect(results.map(r => r.chunkId)).toEqual(['public'])
+    })
+
+    it('combines the prefix and the read-policy filters', async () => {
+      // Inside the prefix but blocked → must not appear; outside prefix open → excluded by prefix.
+      const blockedInPrefix = makeChunk({ id: 'kb', linkId: 'link-kb', embedding: [1, 0, 0] })
+      const openInPrefix = makeChunk({ id: 'ko', linkId: 'link-ko', embedding: [0.8, 0, 0] })
+      const openOutside = makeChunk({ id: 'oo', linkId: 'link-oo', embedding: [0.9, 0, 0] })
+      const repos = makeReposWithLinks([
+        { id: 'link-kb', relativePath: 'Knowledge/blocked.md', allowCharacterRead: false },
+        { id: 'link-ko', relativePath: 'Knowledge/open.md', allowCharacterRead: true },
+        { id: 'link-oo', relativePath: 'Other/open.md', allowCharacterRead: true },
+      ])
+      repos.docMountChunks.findAllWithEmbeddingsByMountPointIds = jest
+        .fn()
+        .mockResolvedValue([blockedInPrefix, openInPrefix, openOutside])
+
+      mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+      const results = await searchDocumentChunks([1, 0, 0], { pathPrefix: 'Knowledge/', minScore: 0.1 })
+      expect(results.map(r => r.chunkId)).toEqual(['ko'])
+    })
+  })
+
   it('includes headingContext (may be null) in each result', async () => {
     const chunkWithHeading = makeChunk({
       id: 'c-h',

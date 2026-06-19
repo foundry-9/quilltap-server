@@ -48,7 +48,7 @@ import {
   getSQLiteDatabase,
   sqliteTableExists,
 } from '../lib/database-utils';
-import { alignDocMountPointsSchema } from '../lib/mount-index-schema';
+import { alignDocMountPointsSchema, alignDocMountFileLinksSchema } from '../lib/mount-index-schema';
 import { getFilesDir, getMountIndexDatabasePath } from '../../lib/paths';
 import { convertBufferToPlainText } from '../../lib/mount-index/converters';
 import { PROJECT_OWN_STORE_NAME_PREFIX } from '../../lib/mount-index/project-store-naming';
@@ -207,6 +207,7 @@ function ensureMountIndexTables(db: DatabaseType): void {
   // IF NOT EXISTS is a no-op when the table already exists, so columns added
   // after the original schema (e.g. storeType) must be backfilled here.
   alignDocMountPointsSchema(db);
+  alignDocMountFileLinksSchema(db);
 }
 
 function sha256Buffer(buf: Buffer): string {

@@ -97,7 +97,8 @@ jest.mock('@/lib/repositories/factory', () => {
   const chats = { findById: jest.fn() };
   const docMountBlobs = { create: jest.fn(), deleteByMountPointAndPath: jest.fn() };
   const docMountPoints = { findById: jest.fn(), refreshStats: jest.fn().mockResolvedValue(undefined) };
-  return { getRepositories: () => ({ characters, chats, docMountBlobs, docMountPoints }) };
+  const docMountFileLinks = { findByMountPointAndPath: jest.fn().mockResolvedValue(null), findByMountPointId: jest.fn().mockResolvedValue([]) };
+  return { getRepositories: () => ({ characters, chats, docMountBlobs, docMountPoints, docMountFileLinks }) };
 });
 
 jest.mock('@/lib/services/librarian-notifications/writer', () => ({
@@ -109,6 +110,8 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianMoveAnnouncement: jest.fn(),
   postLibrarianCopyAnnouncement: jest.fn(),
   postLibrarianBlobWriteAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }));
 
 jest.mock('fs/promises', () => ({

@@ -44,6 +44,14 @@ export {
 } from './markdown-parser';
 
 export {
+  coercePolicyBool,
+  policyFromFrontmatterData,
+  policyFromContent,
+  DEFAULT_DOCUMENT_POLICY,
+  type DocumentPolicy,
+} from './document-policy';
+
+export {
   generateUnifiedDiff,
   formatAutosaveNotification,
 } from './unified-diff';

@@ -1470,6 +1470,9 @@ CREATE TABLE IF NOT EXISTS "doc_mount_file_links" (
   "extractionStatus" TEXT NOT NULL DEFAULT 'none',
   "extractionError" TEXT,
   "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "allowEmbed" INTEGER NOT NULL DEFAULT 1,
+  "allowCharacterRead" INTEGER NOT NULL DEFAULT 1,
+  "allowCharacterWrite" INTEGER NOT NULL DEFAULT 1,
   "lastModified" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
@@ -1485,6 +1488,8 @@ CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mountPointId"
 One row per visible location of a file (i.e. the hard link). Multiple link rows may point at the same `doc_mount_files` row, meaning the same bytes appear at multiple `(mountPointId, relativePath)` tuples. Per-consumer extraction state (conversion lifecycle, extracted text, chunk count) lives here so two consumers hard-linking the same content can re-extract or re-caption independently.
 
 The UNIQUE index on `(mountPointId, relativePath)` enforces "one file per location" — what used to be advisory in app code. Deleting a link via `DocMountFileLinksRepository.deleteWithGC` cascades to chunks (FK), and if it was the last link for its file the file row gets dropped (cascading to documents/blobs). `sweepOrphanedFiles()` is the defense-in-depth GC for writers that bypass the helper.
+
+The three `allow*` columns are the per-document policy, derived from a markdown document's YAML frontmatter at index time (positive sense: `1` == permissive == the frontmatter default of `true`). `allowEmbed` (frontmatter `embed`) gates inclusion in the embedding pipeline — `0` skips embedding and NULLs any existing chunk vectors. `allowCharacterRead` (`character_read`) gates whether LLM characters may read/list/grep/RAG the document — `0` makes it invisible to them (the human operator is unaffected). `allowCharacterWrite` (`character_write`) gates character-initiated mutation. `character_read` is the master gate: the coercion in `lib/doc-edit/document-policy.ts` forces `allowEmbed` and `allowCharacterWrite` to `0` whenever `allowCharacterRead` is `0`, so the stored columns are the *effective* policy (a row with `allowCharacterRead = 0, allowEmbed = 1` should never be written by the normal path). Non-markdown links keep the permissive defaults (no frontmatter to parse). The columns are re-derived on every reindex, so editing the frontmatter (operator or on-disk) is the control surface. See `lib/doc-edit/document-policy.ts` and the `add-doc-mount-file-policy-flags-v1` migration.
 
 ### doc_mount_chunks
 

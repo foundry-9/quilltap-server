@@ -212,6 +212,149 @@ export async function assertWriteDoesNotTargetPeerVault(
   }
 }
 
+// ============================================================================
+// Per-document policy gates (character_read / character_write)
+//
+// These enforce the three frontmatter policy flags persisted on the link row
+// (allowEmbed / allowCharacterRead / allowCharacterWrite). They govern
+// CHARACTERS only — the human operator (operatorOverride) is never restricted,
+// so every gate is a no-op when `context.operatorOverride === true`. The flags
+// are the single chokepoint: callers funnel reads/writes through these helpers
+// rather than scattering raw flag checks across handlers.
+//
+// Existence-leak rule: a `character_read:false` file must produce the SAME
+// not-found error as a genuinely missing file, so a character can't probe for
+// protected filenames. The write gate therefore checks readability first.
+// ============================================================================
+
+/**
+ * Throw a not-found-style PathResolutionError when the acting character may not
+ * read the resolved document (`character_read:false`). No-op for the operator,
+ * for non-mount scopes (project-legacy / general have no policy row), and for
+ * paths with no link row yet (a not-yet-indexed file).
+ */
+export async function assertCharacterMayRead(
+  resolved: ResolvedPath,
+  context: DocEditToolContext
+): Promise<void> {
+  if (context.operatorOverride === true) return;
+  if (!resolved.mountPointId) return;
+  const repos = getRepositories();
+  const link = await repos.docMountFileLinks.findByMountPointAndPath(
+    resolved.mountPointId,
+    resolved.relativePath
+  );
+  if (link && link.allowCharacterRead === false) {
+    logger.info('Blocked character read of character_read:false document', {
+      mountPointId: resolved.mountPointId,
+      relativePath: resolved.relativePath,
+      characterId: context.characterId,
+    });
+    // Mirror the "missing file" shape so existence isn't leaked.
+    throw new PathResolutionError(`File not found: ${resolved.relativePath}`, 'NOT_FOUND');
+  }
+}
+
+/**
+ * Throw when the acting character may not mutate the resolved document. Checks
+ * the read gate first: a `character_read:false` file is reported as not-found
+ * (don't leak existence); a readable-but-`character_write:false` file is
+ * reported as read-only. No-op for the operator and non-mount scopes. A path
+ * with no link row (a brand-new file being created) is allowed.
+ */
+export async function assertCharacterMayWrite(
+  resolved: ResolvedPath,
+  context: DocEditToolContext
+): Promise<void> {
+  if (context.operatorOverride === true) return;
+  if (!resolved.mountPointId) return;
+  const repos = getRepositories();
+  const link = await repos.docMountFileLinks.findByMountPointAndPath(
+    resolved.mountPointId,
+    resolved.relativePath
+  );
+  if (!link) return; // creating a new file — no policy row to honour yet
+  if (link.allowCharacterRead === false) {
+    logger.info('Blocked character write of character_read:false document (reported as not-found)', {
+      mountPointId: resolved.mountPointId,
+      relativePath: resolved.relativePath,
+      characterId: context.characterId,
+    });
+    throw new PathResolutionError(`File not found: ${resolved.relativePath}`, 'NOT_FOUND');
+  }
+  if (link.allowCharacterWrite === false) {
+    logger.info('Blocked character write of character_write:false document', {
+      mountPointId: resolved.mountPointId,
+      relativePath: resolved.relativePath,
+      characterId: context.characterId,
+    });
+    throw new PathResolutionError(
+      `This document is read-only to characters: ${resolved.relativePath}`,
+      'ACCESS_DENIED'
+    );
+  }
+}
+
+/**
+ * Build the set of relativePaths (lowercased) in a mount point that are hidden
+ * from characters by `character_read:false`. Empty for the operator (sees
+ * everything) or when no link is blocked. Used by doc_list_files / doc_grep,
+ * which enumerate files directly rather than resolving each one.
+ */
+export async function getCharacterBlockedReadPaths(
+  mountPointId: string,
+  context: DocEditToolContext
+): Promise<Set<string>> {
+  const blocked = new Set<string>();
+  if (context.operatorOverride === true) return blocked;
+  const repos = getRepositories();
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  for (const link of links) {
+    if (link.allowCharacterRead === false) {
+      blocked.add(link.relativePath.toLowerCase());
+    }
+  }
+  return blocked;
+}
+
+/**
+ * Guard a folder delete/move: if any document under `folderRelativePath` is
+ * `character_write:false` (or `character_read:false`, which is stricter still),
+ * fail the whole operation naming the protected document, so a character can't
+ * relocate or delete a protected file by operating on its parent folder. No-op
+ * for the operator and non-mount scopes.
+ */
+export async function assertFolderHasNoWriteProtectedDescendants(
+  resolved: ResolvedPath,
+  context: DocEditToolContext
+): Promise<void> {
+  if (context.operatorOverride === true) return;
+  if (!resolved.mountPointId) return;
+  const repos = getRepositories();
+  const links = await repos.docMountFileLinks.findByMountPointId(resolved.mountPointId);
+  // Normalise the folder path to a POSIX-style prefix with a trailing slash so
+  // "Notes" doesn't match "Notes-archive/x.md".
+  const folder = resolved.relativePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const prefix = folder === '' ? '' : `${folder.toLowerCase()}/`;
+  for (const link of links) {
+    const rel = link.relativePath.toLowerCase();
+    const inFolder = prefix === '' ? true : rel.startsWith(prefix);
+    if (!inFolder) continue;
+    if (link.allowCharacterWrite === false || link.allowCharacterRead === false) {
+      logger.info('Blocked folder operation over a protected document', {
+        mountPointId: resolved.mountPointId,
+        folder: resolved.relativePath,
+        protectedPath: link.relativePath,
+        characterId: context.characterId,
+      });
+      throw new PathResolutionError(
+        `This folder contains a protected document (${link.relativePath}) that characters may not move or delete. The operation was cancelled.`,
+        'ACCESS_DENIED'
+      );
+    }
+  }
+}
+
 /**
  * Build resolution context for a read operation. When the chat has
  * `allowCrossCharacterVaultReads` enabled, the vaults of other present

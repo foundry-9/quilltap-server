@@ -69,6 +69,8 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianMoveAnnouncement: jest.fn(),
   postLibrarianCopyAnnouncement: jest.fn(),
   postLibrarianBlobWriteAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }))
 
 jest.mock('@/lib/repositories/factory', () => ({
@@ -129,6 +131,11 @@ const mockRepos = {
   chatDocuments: {
     renameFilePathInStore: jest.fn().mockResolvedValue(1),
     renameFolderPathInStore: jest.fn().mockResolvedValue(2),
+  },
+  // Per-document policy gates look these up; no protected docs in these tests.
+  docMountFileLinks: {
+    findByMountPointAndPath: jest.fn().mockResolvedValue(null),
+    findByMountPointId: jest.fn().mockResolvedValue([]),
   },
 }
 

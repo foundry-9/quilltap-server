@@ -22,6 +22,7 @@ import type { DocFocusInput } from '../../doc-focus-tool';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   postLibrarianOpenAnnouncement,
+  documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { databaseDocumentExists } from '@/lib/mount-index/database-store';
 import {
@@ -30,6 +31,7 @@ import {
   applyQtapUriToInput,
   buildReadResolutionContext,
   uriForResolvedPath,
+  assertCharacterMayRead,
 } from './shared';
 
 /**
@@ -50,6 +52,10 @@ export async function handleOpenDocument(
   let isNew = false;
   let mtime: number | undefined;
   let docUri: string | undefined;
+  // A character_read:false document must not be announced to characters. The
+  // read gate already blocks characters from opening one; this covers the
+  // operator-override path that bypasses the gate.
+  let hiddenFromCharacters = false;
 
   if (filePath) {
     // Opening an existing file — resolve the path to verify it exists.
@@ -57,6 +63,9 @@ export async function handleOpenDocument(
     // cross-character read flag is enabled.
     try {
       const resolved = await resolveDocEditPath(scope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
+      // character_read:false → not-found for characters (operator unaffected).
+      await assertCharacterMayRead(resolved, context);
+      hiddenFromCharacters = await documentHiddenFromCharacters(resolved.mountPointId, resolved.relativePath);
       docUri = await uriForResolvedPath(resolved, context);
       if (resolved.mountType === 'database' && resolved.mountPointId) {
         const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
@@ -165,6 +174,7 @@ export async function handleOpenDocument(
     origin: characterName
       ? { kind: 'opened-by-character', characterName }
       : { kind: 'opened-by-user' },
+    hiddenFromCharacters,
   });
 
   return {

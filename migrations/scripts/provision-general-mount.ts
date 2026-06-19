@@ -27,7 +27,7 @@ import {
   getSQLiteDatabase,
   sqliteTableExists,
 } from '../lib/database-utils';
-import { alignDocMountPointsSchema } from '../lib/mount-index-schema';
+import { alignDocMountPointsSchema, alignDocMountFileLinksSchema } from '../lib/mount-index-schema';
 import { getMountIndexDatabasePath } from '../../lib/paths';
 
 const MIGRATION_ID = 'provision-general-mount-v1';
@@ -96,6 +96,7 @@ function ensureMountIndexTables(db: DatabaseType): void {
     db.exec(sql);
   }
   alignDocMountPointsSchema(db);
+  alignDocMountFileLinksSchema(db);
 }
 
 function nowIso(): string {

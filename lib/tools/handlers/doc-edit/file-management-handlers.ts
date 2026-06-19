@@ -42,6 +42,7 @@ import {
   postLibrarianFolderDeletedAnnouncement,
   postLibrarianMoveAnnouncement,
   postLibrarianCopyAnnouncement,
+  documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import {
   logger,
@@ -52,6 +53,9 @@ import {
   resolveActorOrigin,
   triggerReindexIfNeeded,
   uriForResolvedPath,
+  assertCharacterMayRead,
+  assertCharacterMayWrite,
+  assertFolderHasNoWriteProtectedDescendants,
 } from './shared';
 
 /**
@@ -151,6 +155,19 @@ export async function handleMoveFile(
   const resolvedSource = await resolveDocEditPath(scope, input.path, writeContext);
   const resolvedDest = await resolveDocEditPath(scope, input.new_path, writeContext);
 
+  // A move removes the source path — gate it by character_write. The
+  // destination is gated too in case it would overwrite a protected file
+  // (assertCharacterMayWrite is a no-op when the destination doesn't exist yet).
+  await assertCharacterMayWrite(resolvedSource, context);
+  await assertCharacterMayWrite(resolvedDest, context);
+
+  // Capture the source's read-policy before the move relocates its link, so a
+  // character_read:false document isn't announced to characters (operator path).
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolvedSource.mountPointId,
+    resolvedSource.relativePath,
+  );
+
   // Database-backed mount: route move through the database-store module.
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
     if (!await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
@@ -184,6 +201,7 @@ export async function handleMoveFile(
       mountPoint: input.mount_point,
       origin: await resolveActorOrigin(context),
       isFolder: false,
+      hiddenFromCharacters,
     });
     return {
       success: true,
@@ -247,6 +265,7 @@ export async function handleMoveFile(
     mountPoint: input.mount_point,
     origin: await resolveActorOrigin(context),
     isFolder: false,
+    hiddenFromCharacters,
   });
 
   const result: DocMoveFileOutput = {
@@ -362,6 +381,8 @@ export async function handleCopyFile(
   );
 
   const resolvedSource = await resolveDocEditPath('document_store', sourcePath, readContext);
+  // You can't copy what you can't read — gate the source by character_read.
+  await assertCharacterMayRead(resolvedSource, context);
 
   // Initial destination resolve is against the raw dest_path; we re-resolve
   // below once we know whether to append the source basename.
@@ -388,6 +409,8 @@ export async function handleCopyFile(
   // Re-resolve with the final relative path so downstream existence checks,
   // reindex, and write all see the true destination.
   const resolvedDest = await resolveDocEditPath('document_store', finalDestRel, writeContext);
+  // Gate the destination by character_write (no-op when it doesn't exist yet).
+  await assertCharacterMayWrite(resolvedDest, context);
 
   // Verify source exists and is a file (not a folder).
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
@@ -467,6 +490,12 @@ export async function handleCopyFile(
     sourceUri: await uriForResolvedPath(resolvedSource, context),
     destUri: copiedUri,
     origin: await resolveActorOrigin(context),
+    // Gate by the source's read-policy: a character_read:false source must not
+    // be named in an announcement to characters (operator path).
+    hiddenFromCharacters: await documentHiddenFromCharacters(
+      resolvedSource.mountPointId,
+      resolvedSource.relativePath,
+    ),
   });
 
   const result: DocCopyFileOutput = {
@@ -498,6 +527,14 @@ export async function handleDeleteFile(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  await assertCharacterMayWrite(resolved, context);
+
+  // Capture the read-policy before the delete removes the link row, so a
+  // character_read:false document isn't announced to characters (operator path).
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolved.mountPointId,
+    resolved.relativePath,
+  );
 
   // Database-backed mount: route delete through the database-store module.
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -517,6 +554,7 @@ export async function handleDeleteFile(
       scope: scope as 'project' | 'document_store' | 'general',
       mountPoint: input.mount_point,
       origin: await resolveActorOrigin(context),
+      hiddenFromCharacters,
     });
     return {
       success: true,
@@ -550,6 +588,7 @@ export async function handleDeleteFile(
     scope: scope as 'project' | 'document_store' | 'general',
     mountPoint: input.mount_point,
     origin: await resolveActorOrigin(context),
+    hiddenFromCharacters,
   });
 
   const result: DocDeleteFileOutput = {
@@ -642,6 +681,8 @@ export async function handleDeleteFolder(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  // A character may not delete a folder that holds a protected document.
+  await assertFolderHasNoWriteProtectedDescendants(resolved, context);
 
   // Database-backed mount: delete explicit folder rows
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -743,6 +784,10 @@ export async function handleMoveFolder(
   const writeContext = await buildWriteResolutionContext(input, context);
   const resolvedSource = await resolveDocEditPath(scope, input.path, writeContext);
   const resolvedDest = await resolveDocEditPath(scope, input.new_path, writeContext);
+
+  // Moving a folder relocates everything under it — a character may not move a
+  // folder that holds a protected document.
+  await assertFolderHasNoWriteProtectedDescendants(resolvedSource, context);
 
   // Database-backed mount: route move through the database-store module
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {

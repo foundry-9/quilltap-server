@@ -344,6 +344,8 @@ import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
 import { addConsoleConnectionProfileFieldMigration } from './add-console-connection-profile-field';
 // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
 import { addConnectionProfileUniqueNameIndexMigration } from './add-connection-profile-unique-name-index';
+// Scriptorium per-document policy: allowEmbed / allowCharacterRead / allowCharacterWrite columns + frontmatter backfill
+import { addDocMountFilePolicyFlagsMigration } from './add-doc-mount-file-policy-flags';
 
 /**
  * All available migrations.
@@ -684,6 +686,8 @@ export const migrations: Migration[] = [
   addConsoleConnectionProfileFieldMigration,
   // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
   addConnectionProfileUniqueNameIndexMigration,
+  // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
+  addDocMountFilePolicyFlagsMigration,
 ];
 
 export {
@@ -1005,5 +1009,7 @@ export {
   addConsoleConnectionProfileFieldMigration,
   // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
   addConnectionProfileUniqueNameIndexMigration,
+  // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
+  addDocMountFilePolicyFlagsMigration,
 };
 

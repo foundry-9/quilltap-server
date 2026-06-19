@@ -103,6 +103,7 @@ jest.mock('@/lib/database/repositories', () => ({
     chats: { findById: jest.fn().mockResolvedValue(null) },
     characters: { findById: jest.fn().mockResolvedValue(null) },
     docMountPoints: { findById: jest.fn().mockResolvedValue(null), refreshStats: jest.fn().mockResolvedValue(undefined) },
+    docMountFileLinks: { findByMountPointAndPath: jest.fn().mockResolvedValue(null), findByMountPointId: jest.fn().mockResolvedValue([]) },
     projectDocMountLinks: { findByProjectId: jest.fn().mockResolvedValue([]) },
   }),
 }));
@@ -125,6 +126,8 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianMoveAnnouncement: jest.fn(),
   postLibrarianCopyAnnouncement: jest.fn(),
   postLibrarianBlobWriteAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }));
 
 jest.mock('fs/promises', () => ({
@@ -168,6 +171,10 @@ async function flushMicrotasks() {
 describe('doc_write_file → triggerReindexIfNeeded', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // The doc-edit handlers (and the policy gates) read getRepositories from
+    // the factory; point it at the same mock object this suite configures.
+    const { getRepositories } = jest.requireMock('@/lib/database/repositories');
+    jest.requireMock('@/lib/repositories/factory').getRepositories.mockReturnValue(getRepositories());
   });
 
   it('reindexes and enqueues embeddings for scope:"project" writes into an official project mount', async () => {

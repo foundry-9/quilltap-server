@@ -21,7 +21,7 @@ import {
   generateUnifiedDiff,
   type DocEditScope,
 } from '@/lib/doc-edit';
-import { postLibrarianWriteAnnouncement } from '@/lib/services/librarian-notifications/writer';
+import { postLibrarianWriteAnnouncement, contentHiddenFromCharacters } from '@/lib/services/librarian-notifications/writer';
 
 import type { DocReadFrontmatterInput, DocReadFrontmatterOutput } from '../../doc-read-frontmatter-tool';
 import type { DocUpdateFrontmatterInput, DocUpdateFrontmatterOutput } from '../../doc-update-frontmatter-tool';
@@ -36,6 +36,8 @@ import {
   resolveActorOrigin,
   triggerReindexIfNeeded,
   uriForResolvedPath,
+  assertCharacterMayRead,
+  assertCharacterMayWrite,
 } from './shared';
 
 // --- doc_read_frontmatter ---
@@ -50,6 +52,7 @@ export async function handleReadFrontmatter(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
+  await assertCharacterMayRead(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -104,6 +107,7 @@ export async function handleUpdateFrontmatter(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  await assertCharacterMayWrite(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -131,6 +135,7 @@ export async function handleUpdateFrontmatter(
     mountPoint: input.mount_point,
     origin: await resolveActorOrigin(context),
     change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+    hiddenFromCharacters: contentHiddenFromCharacters(newContent),
   });
 
   const result: DocUpdateFrontmatterOutput = {
@@ -168,6 +173,7 @@ export async function handleReadHeading(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildReadResolutionContext(input, context));
+  await assertCharacterMayRead(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -219,6 +225,7 @@ export async function handleUpdateHeading(
   }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  await assertCharacterMayWrite(resolved, context);
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
@@ -249,6 +256,7 @@ export async function handleUpdateHeading(
       mountPoint: input.mount_point,
       origin: await resolveActorOrigin(context),
       change: { kind: 'edited', diff: generateUnifiedDiff(content, newContent, displayTitle) },
+      hiddenFromCharacters: contentHiddenFromCharacters(newContent),
     });
 
     const result: DocUpdateHeadingOutput = {

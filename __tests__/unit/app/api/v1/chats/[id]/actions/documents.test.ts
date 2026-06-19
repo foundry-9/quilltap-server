@@ -37,6 +37,9 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianOpenAnnouncement: jest.fn().mockResolvedValue(null),
   postLibrarianSaveAnnouncement: jest.fn().mockResolvedValue(null),
   postLibrarianRenameAnnouncement: jest.fn().mockResolvedValue(null),
+  postLibrarianDeleteAnnouncement: jest.fn().mockResolvedValue(null),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }))
 
 jest.mock('fs/promises', () => ({
