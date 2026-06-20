@@ -97,6 +97,7 @@ Subcommands:
   logs                          Tail or print an instance log file
   migrations                    Inspect migration status (status / pending / run)
   maintenance                   Run retention / cleanup sweeps (status / run)
+  file-verify                   Force-download cloud-evicted data files (iCloud, etc.)
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
   completion <shell>            Generate a shell completion script (bash / zsh / fish)
 
@@ -1107,7 +1108,7 @@ async function dbCommand(args) {
 // to the subcommand. Each subcommand parses these flags position-independently,
 // so they behave the same before or after the verb.
 const SUBCOMMANDS = new Set([
-  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations', 'maintenance',
+  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
 ]);
 // Global flags that consume the following token as their value.
 const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
@@ -1132,7 +1133,9 @@ const subArgs = subIdx >= 0 ? [...cliArgs.slice(0, subIdx), ...cliArgs.slice(sub
 // native-module heal, so self-heal the database ABI here first. Cheap no-op when
 // healthy; rebuilds (with a friendly notice, not an error) only on a real
 // Node-ABI mismatch — e.g. after the user upgrades Node under a cached install.
-if (subName) {
+// `file-verify` is excluded: it's a pure-fs recovery tool that never opens the
+// database, so it must work even when the native binding is broken.
+if (subName && subName !== 'file-verify') {
   ensureDatabaseNativeModule();
 }
 
@@ -1186,6 +1189,12 @@ if (subName === 'db') {
 } else if (subName === 'maintenance') {
   const { maintenanceCommand } = require('../lib/maintenance-commands');
   maintenanceCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (subName === 'file-verify') {
+  const { fileVerifyCommand } = require('../lib/file-verify-commands');
+  fileVerifyCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });

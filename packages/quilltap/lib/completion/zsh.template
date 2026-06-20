@@ -29,6 +29,7 @@ _quilltap() {
     'logs:Tail or print an instance log file'
     'migrations:Inspect migration status'
     'maintenance:Run retention/cleanup sweeps'
+    'file-verify:Force-download cloud-evicted data files'
     'completion:Generate shell completion scripts'
   )
 

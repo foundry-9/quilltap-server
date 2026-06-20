@@ -18,6 +18,30 @@ export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // ================================================================
+    // PHASE -1: Pre-materialize cloud-evicted data files
+    // ================================================================
+    // Instances stored in a cloud-synced folder (iCloud Drive, etc.) can have
+    // their database files evicted to dataless placeholders. Opening one before
+    // the provider rehydrates it yields "file is not a database" / partial reads
+    // that wedge startup. Force the top-level data/ files to download BEFORE
+    // anything — even the .dbkey below — reads them. Best-effort and bounded:
+    // it never throws and a stalled download trips a stall guard rather than
+    // hanging the boot. The logger isn't imported yet, so failures go to the
+    // console; the existing retry-next-restart path is the backstop.
+    if (process.env.SKIP_ENV_VALIDATION !== 'true' &&
+        process.env.NEXT_PHASE !== 'phase-production-build') {
+      try {
+        const { materializeDataDirFiles } = await import('./lib/startup/materialize-cloud-files');
+        await materializeDataDirFiles();
+      } catch (err) {
+        console.warn(
+          '[startup] cloud-file pre-materialization failed (continuing):',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
+    // ================================================================
     // PHASE -0.5a: Database Key Provisioning (before env validation)
     // ================================================================
     // Must run before logger/env imports since those now allow optional pepper.

@@ -15,7 +15,7 @@ _quilltap_complete() {
   local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
-  local top_cmds="db docs themes instances memories memory-diff logs migrations maintenance completion"
+  local top_cmds="db docs themes instances memories memory-diff logs migrations maintenance file-verify completion"
 
   # Get the subcommand (first non-option word after quilltap)
   local subcommand=""
