@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { SearchResults } from './search-results'
@@ -150,19 +151,7 @@ export function SearchBar() {
       {/* Desktop inline search - hidden on mobile */}
       <div ref={containerRef} className="relative hidden md:block">
         <div className="relative">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" />
           <input
             ref={inputRef}
             type="text"
@@ -219,22 +208,10 @@ export function SearchBar() {
           setDialogInitialQuery('')
           setIsDialogOpen(true)
         }}
-        className="md:hidden p-2 qt-text-secondary hover:text-foreground hover:bg-accent rounded-md transition-colors"
+        className="md:hidden p-2 qt-text-secondary qt-hover-accent rounded-md transition-colors"
         aria-label="Search"
       >
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
+        <Icon name="search" className="w-5 h-5" />
       </button>
 
       {/* Search dialog for mobile and "see all results" */}

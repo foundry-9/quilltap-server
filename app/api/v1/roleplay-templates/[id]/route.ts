@@ -13,6 +13,7 @@ import { successResponse, errorResponse, notFound, forbidden } from '@/lib/api/r
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { generateRenderingPatterns } from '@/lib/chat/annotations';
+import { TemplateDelimiterSchema } from '@/lib/schemas/template.types';
 
 // ============================================================================
 // Schemas
@@ -23,7 +24,7 @@ const updateRoleplayTemplateSchema = z.object({
   description: z.string().max(500).optional().nullable(),
   systemPrompt: z.string().min(1).optional(),
   tags: z.array(z.uuid()).optional(),
-  delimiters: z.array(z.any()).optional(),
+  delimiters: z.array(TemplateDelimiterSchema).optional(),
   renderingPatterns: z.array(z.any()).optional(),
   dialogueDetection: z.any().optional().nullable(),
   narrationDelimiters: z.union([

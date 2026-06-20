@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { TagEditor } from '@/components/tags/tag-editor'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { CharacterFormData, CharacterScenario } from '../types'
@@ -15,6 +16,7 @@ interface CharacterBasicInfoProps {
   onPronounsChange: (pronouns: { subject: string; object: string; possessive: string } | null) => void
   onScenariosChange: (scenarios: CharacterScenario[]) => void
   onSystemTransparencyChange: (enabled: boolean) => void
+  onCanBeCarinaChange: (value: boolean) => void
   onCoreWhisperEnabledChange: (value: boolean | null) => void
 }
 
@@ -79,6 +81,7 @@ export function CharacterBasicInfo({
   onPronounsChange,
   onScenariosChange,
   onSystemTransparencyChange,
+  onCanBeCarinaChange,
   onCoreWhisperEnabledChange,
 }: CharacterBasicInfoProps) {
   // Adapter so MarkdownLexicalEditor's (value: string) => void onChange feeds
@@ -132,6 +135,32 @@ export function CharacterBasicInfo({
               type="checkbox"
               checked={formData.systemTransparency}
               onChange={(e) => onSystemTransparencyChange(e.target.checked)}
+              className="h-5 w-5 qt-accent-primary"
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Carina (@-query) Switch */}
+      <div className="qt-card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <label
+              htmlFor="canBeCarina"
+              className="block qt-text-label"
+            >
+              Can answer @-queries (Carina)
+            </label>
+            <p className="text-xs qt-text-secondary mt-1">
+              When enabled, this character may be invoked with <code>@Name</code> in any chat to field a quick question by way of their personality and available tools &mdash; without so much as setting foot in the conversation proper.
+            </p>
+          </div>
+          <label className="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="canBeCarina"
+              type="checkbox"
+              checked={formData.canBeCarina ?? false}
+              onChange={(e) => onCanBeCarinaChange(e.target.checked)}
               className="h-5 w-5 qt-accent-primary"
             />
           </label>
@@ -447,9 +476,7 @@ export function CharacterBasicInfo({
                     className="qt-button-icon qt-button-ghost hover:qt-text-destructive"
                     title="Remove scenario"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Icon name="trash" className="w-4 h-4" />
                   </button>
                 </div>
                 <MarkdownLexicalEditor

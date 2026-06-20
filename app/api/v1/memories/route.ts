@@ -14,6 +14,7 @@
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
+ * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy, related-memory expansion)
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
  * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
@@ -22,6 +23,7 @@
  * - GET ?action=embeddings&characterId= - Get embedding status
  * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
+ * - GET ?action=recall-config - Read current recall relevance settings
  * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
  * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
  * - GET ?action=extraction-concurrency - Read current MEMORY_EXTRACTION concurrency cap
@@ -44,6 +46,8 @@ import {
   setMemoryExtractionConcurrency,
   getMemoryExtractionLimits,
   setMemoryExtractionLimits,
+  getMemoryRecallSettings,
+  setMemoryRecallSettings,
 } from '@/lib/instance-settings';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -115,6 +119,11 @@ const extractionLimitsConfigSchema = z.object({
   softFloor: z.number().min(0).max(1).optional(),
 });
 
+const recallConfigSchema = z.object({
+  scopePolicy: z.enum(['down-weight', 'exclude']).optional(),
+  expandRelated: z.boolean().optional(),
+});
+
 const backfillStartSchema = z.object({
   /** Restrict backfill to one character; omit to backfill all of user's characters. */
   characterId: z.uuid().optional(),
@@ -152,6 +161,10 @@ export const GET = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'extraction-limits-config') {
     return handleReadExtractionLimitsConfig(req, { user, repos });
+  }
+
+  if (action === 'recall-config') {
+    return handleReadRecallConfig(req, { user, repos });
   }
 
   if (action === 'backfill-embeddings') {
@@ -228,6 +241,10 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
 
   if (action === 'extraction-limits-config') {
     return handleWriteExtractionLimitsConfig(req, { user, repos });
+  }
+
+  if (action === 'recall-config') {
+    return handleWriteRecallConfig(req, { user, repos });
   }
 
   if (action === 'backfill-embeddings') {
@@ -782,6 +799,40 @@ async function handleWriteExtractionLimitsConfig(
   logger.info('[Memories API] Extraction rate limits updated (instance-wide)', {
     enabled: merged.enabled,
     maxPerHour: merged.maxPerHour,
+  });
+
+  return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleReadRecallConfig(
+  _req: NextRequest,
+  _ctx: { user: { id: string }; repos: any }
+) {
+  const memoryRecall = await getMemoryRecallSettings();
+  return NextResponse.json({ success: true, settings: memoryRecall });
+}
+
+async function handleWriteRecallConfig(
+  req: NextRequest,
+  _ctx: { user: { id: string }; repos: any }
+) {
+  const body = await req.json();
+  const parsed = recallConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  const currentSettings = await getMemoryRecallSettings();
+  const merged = {
+    scopePolicy: parsed.data.scopePolicy ?? currentSettings.scopePolicy,
+    expandRelated: parsed.data.expandRelated ?? currentSettings.expandRelated,
+  };
+
+  await setMemoryRecallSettings(merged);
+
+  logger.info('[Memories API] Recall settings updated (instance-wide)', {
+    scopePolicy: merged.scopePolicy,
+    expandRelated: merged.expandRelated,
   });
 
   return NextResponse.json({ success: true, settings: merged });

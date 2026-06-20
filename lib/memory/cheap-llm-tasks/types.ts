@@ -19,6 +19,16 @@ export interface MemoryCandidate {
   keywords?: string[]
   /** Importance score from 0.0 to 1.0 */
   importance?: number
+  /**
+   * Targeting axes emitted by the extractor model. Transient only — the parser
+   * validates them against closed vocabularies, defaults invalid/missing
+   * values, and materializes them into `keywords` (bare word for temporal and
+   * context, `scope: <value>` for scope). They are never persisted as
+   * top-level memory fields.
+   */
+  temporal?: string
+  scope?: string
+  context?: string
 }
 
 /**
@@ -104,6 +114,12 @@ export interface ImagePromptExpansionContext {
    * Name of the selected style (for context in the prompt crafting)
    */
   styleName?: string
+  /** General/scene aesthetic (from `lantern-aesthetics.md`), resolved project-over-global. */
+  sceneAesthetic?: string | null
+  /** People/outfit aesthetic (from `aurora-aesthetics.md`), resolved project-over-global. */
+  characterAesthetic?: string | null
+  /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
+  depictionGuidelines?: Array<{ characterName: string; content: string }> | null
 }
 
 /**
@@ -155,6 +171,12 @@ export interface StoryBackgroundPromptContext {
   }>
   /** Target image provider for length constraints */
   provider: string
+  /** General/scene aesthetic (from `lantern-aesthetics.md`), resolved project-over-global. */
+  sceneAesthetic?: string | null
+  /** People/outfit aesthetic (from `aurora-aesthetics.md`), resolved project-over-global. */
+  characterAesthetic?: string | null
+  /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
+  depictionGuidelines?: Array<{ characterName: string; content: string }> | null
 }
 
 /**
@@ -200,5 +222,7 @@ export interface CharacterAppearanceInput {
     slot: string        // 'top', 'bottom', 'footwear', 'accessories'
     title: string
     description?: string | null
+    /** Plain-text image cue; preferred over `title` in image prompts. */
+    imagePrompt?: string | null
   }>
 }

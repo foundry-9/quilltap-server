@@ -191,6 +191,229 @@ export function replaceWithTemplate(
   return content.replace(regex, template)
 }
 
+/**
+ * Replaces every `{{char}}` (or `{{user}}`) template literal with a concrete
+ * name — the inverse of {@link replaceWithTemplate}. Case-insensitive so it
+ * catches the same `{{Char}}`/`{{USER}}` casings the template runtime accepts.
+ * Uses a function replacer so a name containing `$` is inserted literally
+ * (String.prototype.replace treats `$&`, `$1`, `$$` specially in a string
+ * replacement, but not in a function one).
+ */
+export function replaceTemplateWithName(
+  content: string,
+  which: 'char' | 'user',
+  name: string
+): string {
+  if (!content) return content
+  const regex = which === 'char' ? /\{\{char\}\}/gi : /\{\{user\}\}/gi
+  return content.replace(regex, () => name)
+}
+
+/**
+ * Counts `{{char}}` and `{{user}}` template literals across a set of strings.
+ * Drives visibility of the reverse ("restore name") buttons.
+ */
+export function countTemplateLiterals(
+  values: Array<string | null | undefined>
+): { charCount: number; userCount: number } {
+  let charCount = 0
+  let userCount = 0
+  for (const value of values) {
+    if (!value) continue
+    charCount += value.match(/\{\{char\}\}/gi)?.length ?? 0
+    userCount += value.match(/\{\{user\}\}/gi)?.length ?? 0
+  }
+  return { charCount, userCount }
+}
+
+/**
+ * The minimal character shape the template collector/transform need. Both the
+ * Aurora view `Character` and the schema `Character` are structurally
+ * compatible; arrays/objects carry extra fields at runtime that the transform
+ * preserves via spread even though they are not declared here.
+ */
+export interface TemplatableCharacter {
+  name: string
+  identity?: string | null
+  manifesto?: string | null
+  description?: string | null
+  personality?: string | null
+  firstMessage?: string | null
+  exampleDialogues?: string | null
+  scenarios?: ReadonlyArray<{ id: string; content: string }> | null
+  systemPrompts?: ReadonlyArray<{ id: string; content: string }> | null
+  physicalDescription?: {
+    id?: string
+    name?: string | null
+    fullDescription?: string | null
+    shortPrompt?: string | null
+    mediumPrompt?: string | null
+    longPrompt?: string | null
+    completePrompt?: string | null
+  } | null
+}
+
+type TemplatableScalarField =
+  | 'identity'
+  | 'manifesto'
+  | 'description'
+  | 'personality'
+  | 'firstMessage'
+  | 'exampleDialogues'
+
+type PhysicalSubField =
+  | 'fullDescription'
+  | 'shortPrompt'
+  | 'mediumPrompt'
+  | 'longPrompt'
+  | 'completePrompt'
+
+/** One templatable text slice on a character, tagged for write-back routing. */
+export type TemplateFieldDescriptor =
+  | { key: string; kind: 'scalar'; field: TemplatableScalarField; value: string | null | undefined }
+  | { key: string; kind: 'scenario'; id: string; value: string }
+  | { key: string; kind: 'systemPrompt'; id: string; value: string }
+  | { key: string; kind: 'physical'; id: string; sub: PhysicalSubField; value: string | null | undefined }
+
+const SCALAR_FIELDS: TemplatableScalarField[] = [
+  'identity',
+  'manifesto',
+  'description',
+  'personality',
+  'firstMessage',
+  'exampleDialogues',
+]
+
+const PHYSICAL_SUBS: PhysicalSubField[] = [
+  'fullDescription',
+  'shortPrompt',
+  'mediumPrompt',
+  'longPrompt',
+  'completePrompt',
+]
+
+/**
+ * The single source of truth for which character fields participate in
+ * `{{char}}`/`{{user}}` templating. Counting and the transform both walk this
+ * list, so they can never drift out of sync (the bug this replaced). Scalar
+ * descriptor keys are the bare field names so the per-field count badges in the
+ * details view keep working. `title` and the physical-description `name` are
+ * intentionally excluded.
+ */
+export function collectTemplateFields(
+  character: TemplatableCharacter
+): TemplateFieldDescriptor[] {
+  const descriptors: TemplateFieldDescriptor[] = []
+
+  for (const field of SCALAR_FIELDS) {
+    descriptors.push({ key: field, kind: 'scalar', field, value: character[field] })
+  }
+
+  for (const scenario of character.scenarios ?? []) {
+    descriptors.push({
+      key: `scenario:${scenario.id}`,
+      kind: 'scenario',
+      id: scenario.id,
+      value: scenario.content,
+    })
+  }
+
+  for (const prompt of character.systemPrompts ?? []) {
+    descriptors.push({
+      key: `systemPrompt:${prompt.id}`,
+      kind: 'systemPrompt',
+      id: prompt.id,
+      value: prompt.content,
+    })
+  }
+
+  const pd = character.physicalDescription
+  if (pd) {
+    const pdId = pd.id ?? 'physical'
+    for (const sub of PHYSICAL_SUBS) {
+      descriptors.push({
+        key: `physicalDescription:${pdId}:${sub}`,
+        kind: 'physical',
+        id: pdId,
+        sub,
+        value: pd[sub],
+      })
+    }
+  }
+
+  return descriptors
+}
+
+/**
+ * Applies a text transform (forward: name → template; reverse: template → name)
+ * across every field {@link collectTemplateFields} yields, routing the results
+ * to the two persistence paths:
+ *   - `mainUpdates` — fields the character PUT body accepts (scalars, the full
+ *     scenarios array, the single physicalDescription object).
+ *   - `changedSystemPrompts` — system prompts, which the PUT schema strips and
+ *     must persist through their dedicated per-prompt endpoint.
+ * Only changed fields are emitted. The physicalDescription `name` is required by
+ * the PUT schema, so it falls back to `'Appearance'` (matching the optimizer)
+ * and is never itself transformed.
+ */
+export function applyTemplateTransform(
+  character: TemplatableCharacter,
+  transform: (text: string) => string
+): {
+  mainUpdates: Record<string, unknown>
+  changedSystemPrompts: Array<{ id: string; content: string }>
+} {
+  const mainUpdates: Record<string, unknown> = {}
+  const changedSystemPrompts: Array<{ id: string; content: string }> = []
+  const scenarioChanges = new Map<string, string>()
+  const physicalChanges = new Map<PhysicalSubField, string>()
+
+  for (const descriptor of collectTemplateFields(character)) {
+    if (!descriptor.value) continue
+    const next = transform(descriptor.value)
+    if (next === descriptor.value) continue
+
+    switch (descriptor.kind) {
+      case 'scalar':
+        mainUpdates[descriptor.field] = next
+        break
+      case 'systemPrompt':
+        changedSystemPrompts.push({ id: descriptor.id, content: next })
+        break
+      case 'scenario':
+        scenarioChanges.set(descriptor.id, next)
+        break
+      case 'physical':
+        physicalChanges.set(descriptor.sub, next)
+        break
+    }
+  }
+
+  if (scenarioChanges.size > 0 && character.scenarios) {
+    // PUT replaces the scenarios array wholesale, so send every scenario,
+    // swapping content only on the ones that changed (spread preserves
+    // title/createdAt/updatedAt at runtime).
+    mainUpdates.scenarios = character.scenarios.map((scenario) =>
+      scenarioChanges.has(scenario.id)
+        ? { ...scenario, content: scenarioChanges.get(scenario.id)! }
+        : scenario
+    )
+  }
+
+  if (physicalChanges.size > 0 && character.physicalDescription) {
+    const pd = character.physicalDescription
+    const nextPhysical: Record<string, unknown> = { ...pd }
+    for (const [sub, content] of physicalChanges) {
+      nextPhysical[sub] = content
+    }
+    nextPhysical.name =
+      typeof pd.name === 'string' && pd.name.trim() ? pd.name : 'Appearance'
+    mainUpdates.physicalDescription = nextPhysical
+  }
+
+  return { mainUpdates, changedSystemPrompts }
+}
+
 interface TemplateDisplayProps {
   content: string
   characterName: string

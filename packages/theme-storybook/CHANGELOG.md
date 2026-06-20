@@ -2,6 +2,28 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.44] - 2026-06-14
+
+### Added
+- Roleplay-template style classes: the four high-contrast chips `qt-roleplay-1..4` (with `--qt-roleplay-1..4-bg/fg` tokens themes override), the semantic chips `qt-roleplay-danger/warning/success/info/muted/code`, and the add-on flourish classes (`qt-rp-bold`, `qt-rp-italic`, `qt-rp-reverse`, `qt-rp-underline`, `qt-rp-underline-double`, `qt-rp-border`, `qt-rp-border-dashed`, `qt-rp-font-{sans,serif,mono,display,script}`). Mirrors the app-side definitions.
+- `Chat` story: a "Roleplay-Template Styles" section previewing the four chips, the semantic set, and a row of add-on combinations so theme authors can see them across themes.
+
+## [1.0.43] - 2026-06-11
+
+### Added
+- `.qt-hover-accent` utility class: a hoverable accent surface for list rows, menu items, and option cards. On hover it paints the accent background and forces the accent foreground onto the row **and every descendant** (via `:hover :where(*)`), so composite rows stay legible even when a theme maps `accent` to a bold colour and the children carry their own colour. Mirrors the app-side definition.
+- `Surfaces` story: documents the accent-surface contract for theme authors — filled accent surfaces paired with `qt-text-on-accent`, hover rows via `qt-hover-accent`, and quiet selected/panel surfaces (`qt-bg-primary/10` / `qt-bg-muted`) that deliberately avoid the bold accent. Exported from `@quilltap/theme-storybook/stories`.
+
+## [1.0.41] - 2026-06-10
+
+### Changed
+- `Icons` story: the catalogue now lists the new `tag` icon (80 names), and the `brand` note reflects the app-side rule change — an `.svg` brand override is tinted like any other icon; ship `.webp` to keep its own colors.
+
+## [1.0.40] - 2026-06-09
+
+### Added
+- `Icons` story: a reference for theme authors listing every override-able Quilltap icon name (grouped by category) plus the override recipe — the `theme.json` `icons` map and the `.svg` (theme-tinted) vs `.webp` (full-color) modes. Exported from `@quilltap/theme-storybook/stories`.
+
 ## [1.0.38] - 2026-06-04
 
 ### Added

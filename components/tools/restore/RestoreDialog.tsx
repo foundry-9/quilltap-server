@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon } from '@/components/ui/icon'
 import { useRestoreData } from './hooks/useRestoreData'
 import { RestoreItemSelector } from './RestoreItemSelector'
 import { RestoreProgress } from './RestoreProgress'
@@ -99,7 +100,7 @@ export function RestoreDialog({
         <label
           className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
             state.restoreMode === 'import'
-              ? 'qt-border-primary bg-accent'
+              ? 'qt-border-primary qt-bg-primary/10'
               : 'qt-border-default bg-background'
           }`}
         >
@@ -179,19 +180,7 @@ export function RestoreDialog({
                 className="qt-text-secondary hover:text-foreground disabled:opacity-50"
                 aria-label="Close dialog"
               >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <Icon name="close" className="w-6 h-6" />
               </button>
             </div>
           </div>

@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import { randomUUID } from 'crypto';
+import { applyCharacterFieldUpdates } from '../../apply-character-field-updates';
 import type {
   OptimizerPhase,
   SuggestionDecision,
@@ -308,7 +308,9 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
       setError(null);
 
       try {
-        // Fetch current character to get array fields
+        // Fetch current character so array/object fields can be merged rather
+        // than clobbered (the PUT body replaces scenarios / physicalDescription
+        // wholesale, so we must send the full, merged value).
         const fetchResponse = await fetch(`/api/v1/characters/${characterId}`);
         if (!fetchResponse.ok) {
           throw new Error('Could not retrieve the character dossier for amendment.');
@@ -320,117 +322,114 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
             unknown
           >;
 
-        // Build update payload
-        const updatePayload: Record<string, unknown> = {};
-
-        // Separate simple fields from array sub-item fields
+        // Fields that map 1:1 onto the PUT body.
         const simpleFields = [
           'identity',
           'description',
           'manifesto',
           'personality',
           'exampleDialogues',
-          'talkativeness',
         ];
-        const arrayFieldUpdates: Record<
-          string,
-          Array<{ subId: string | undefined; finalValue: string; title?: string }>
-        > = {};
+        // Valid physicalDescription sub-field keys (carried on suggestion.subId).
+        const PHYSICAL_KEYS = [
+          'fullDescription',
+          'headAndShouldersPrompt',
+          'shortPrompt',
+          'mediumPrompt',
+          'longPrompt',
+          'completePrompt',
+        ];
+
+        // PUT-body payload (simple fields, talkativeness, scenarios, physicalDescription).
+        const updatePayload: Record<string, unknown> = {};
+        // System prompts persist through their own dedicated endpoints — the
+        // PUT body strips `systemPrompts`, so collect them separately.
+        const scenarioUpdates: Array<{ subId: string; finalValue: string }> = [];
+        const physicalUpdates: Array<{ key: string; finalValue: string }> = [];
+        const promptUpdates: Array<{ subId: string; finalValue: string }> = [];
+        const promptCreates: Array<{ name: string; finalValue: string }> = [];
 
         for (const { suggestion, finalValue } of accepted) {
-          if (simpleFields.includes(suggestion.field)) {
-            updatePayload[suggestion.field] = finalValue;
-          } else if (suggestion.field === 'scenarios') {
-            if (!arrayFieldUpdates['scenarios']) {
-              arrayFieldUpdates['scenarios'] = [];
+          const field = suggestion.field;
+          if (simpleFields.includes(field)) {
+            updatePayload[field] = finalValue;
+          } else if (field === 'talkativeness') {
+            const n = parseFloat(finalValue);
+            if (!Number.isNaN(n)) {
+              updatePayload.talkativeness = Math.min(1, Math.max(0.1, n));
             }
-            arrayFieldUpdates['scenarios'].push({
-              subId: suggestion.subId,
-              finalValue,
-              title: suggestion.title,
-            });
-          } else if (suggestion.subId) {
-            if (!arrayFieldUpdates[suggestion.field]) {
-              arrayFieldUpdates[suggestion.field] = [];
+          } else if (field === 'scenarios') {
+            // New scenarios are no longer proposed; only refinements (with a subId) apply.
+            if (suggestion.subId) {
+              scenarioUpdates.push({ subId: suggestion.subId, finalValue });
             }
-            arrayFieldUpdates[suggestion.field].push({
-              subId: suggestion.subId,
-              finalValue,
-            });
+          } else if (field === 'physicalDescription') {
+            const key = suggestion.subId;
+            if (key && PHYSICAL_KEYS.includes(key)) {
+              physicalUpdates.push({ key, finalValue });
+            }
+          } else if (field === 'systemPrompt') {
+            if (suggestion.subId) {
+              promptUpdates.push({ subId: suggestion.subId, finalValue });
+            } else {
+              const name =
+                suggestion.name?.trim() || suggestion.title?.trim() || 'Refined Prompt';
+              promptCreates.push({ name, finalValue });
+            }
           }
         }
 
-        // Handle scenarios array: update existing or add new
-        if (arrayFieldUpdates['scenarios'] && arrayFieldUpdates['scenarios'].length > 0) {
+        // Merge scenario refinements into the full scenarios array (PUT replaces it wholesale).
+        if (scenarioUpdates.length > 0) {
           const existingScenarios =
             (character['scenarios'] as Array<Record<string, unknown>> | undefined) ?? [];
           const now = new Date().toISOString();
-          let updatedScenarios = [...existingScenarios];
-
-          for (const { subId, finalValue, title } of arrayFieldUpdates['scenarios']) {
-            if (subId) {
-              // Update existing scenario
-              updatedScenarios = updatedScenarios.map((s) => {
-                if (s.id === subId) {
-                  return { ...s, content: finalValue, updatedAt: now };
-                }
-                return s;
-              });
-            } else {
-              // Add new scenario
-              updatedScenarios.push({
-                id: randomUUID(),
-                title: title ?? 'New Scenario',
-                content: finalValue,
-                createdAt: now,
-                updatedAt: now,
-              });
-            }
-          }
-          updatePayload['scenarios'] = updatedScenarios;
-        }
-
-        // Handle array field updates by merging with existing character data
-        // Map singular suggestion field names to plural character property names
-        const arrayFieldMapping: Record<string, string> = {
-          systemPrompt: 'systemPrompts',
-          physicalDescription: 'physicalDescriptions',
-          clothingRecord: 'clothingRecords',
-        };
-        for (const [singularName, pluralName] of Object.entries(arrayFieldMapping)) {
-          const updates = arrayFieldUpdates[singularName];
-          const fieldName = pluralName;
-          if (!updates || updates.length === 0) continue;
-
-          const existingArray =
-            (character[fieldName] as Array<Record<string, unknown>> | undefined) ?? [];
-          // Determine which property to update based on field type
-          const contentField = singularName === 'clothingRecord' ? 'description'
-            : singularName === 'physicalDescription' ? 'fullDescription'
-            : 'content'; // systemPrompt
-          const updatedArray = existingArray.map((item) => {
-            const matchingUpdate = updates.find((u) => u.subId === item.id);
-            if (matchingUpdate) {
-              return { ...item, [contentField]: matchingUpdate.finalValue };
-            }
-            return item;
+          updatePayload.scenarios = existingScenarios.map((s) => {
+            const update = scenarioUpdates.find((u) => u.subId === s.id);
+            return update ? { ...s, content: update.finalValue, updatedAt: now } : s;
           });
-          updatePayload[fieldName] = updatedArray;
         }
 
-        // Commit the update
-        const putResponse = await fetch(`/api/v1/characters/${characterId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatePayload),
+        // Merge physical-description sub-field refinements into the single
+        // physicalDescription object (PUT replaces the whole object).
+        if (physicalUpdates.length > 0) {
+          const existingPhysical =
+            (character['physicalDescription'] as Record<string, unknown> | null | undefined) ??
+            null;
+          const merged: Record<string, unknown> = existingPhysical
+            ? { ...existingPhysical }
+            : { name: 'Appearance' };
+          for (const { key, finalValue } of physicalUpdates) {
+            merged[key] = finalValue;
+          }
+          if (typeof merged.name !== 'string' || merged.name.trim() === '') {
+            merged.name = 'Appearance';
+          }
+          updatePayload.physicalDescription = merged;
+        }
+
+        // Fan the updates out across the main PUT and the dedicated system-prompt
+        // endpoints (system prompts are stripped by the PUT schema). Keep the
+        // optimizer's voiced fallback strings for partial failures.
+        const { errors } = await applyCharacterFieldUpdates(characterId, {
+          mainUpdates: updatePayload,
+          promptUpdates: promptUpdates.map(({ subId, finalValue }) => ({
+            id: subId,
+            content: finalValue,
+          })),
+          promptCreates: promptCreates.map(({ name, finalValue }) => ({
+            name,
+            content: finalValue,
+          })),
+          messages: {
+            promptUpdateFailed: 'A system prompt refinement could not be saved.',
+            promptCreateFailed: (name) => `The new system prompt "${name}" could not be saved.`,
+            mainPutFailed: 'The amendments could not be inscribed into the character record.',
+          },
         });
 
-        if (!putResponse.ok) {
-          const errorData = await putResponse.json();
-          throw new Error(
-            (errorData.error as string | undefined) ??
-              'The amendments could not be inscribed into the character record.'
-          );
+        if (errors.length > 0) {
+          throw new Error(errors.join(' '));
         }
       } catch (err) {
         const errorMessage =

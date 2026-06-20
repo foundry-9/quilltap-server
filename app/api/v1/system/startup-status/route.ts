@@ -29,6 +29,7 @@ export async function GET() {
       {
         phase: stats.phase,
         isReady: stats.isReady,
+        backgroundSettled: stats.backgroundSettled,
         isLockedMode: stats.isLockedMode,
         startedAt: stats.startTime,
         readyAt: stats.readyTime,

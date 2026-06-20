@@ -32,7 +32,7 @@ The provider cache identifier (`prompt_cache_key` for OpenAI/Grok, `user_id` for
 
 The single Quilltap-side cache identifier (`LLMParams.cacheKey`) is built in [`lib/llm/cache-key.ts`](../../../lib/llm/cache-key.ts) by `buildCharacterCacheKey(characterId)` → `quilltap:char:<characterId>:v<n>`. The version constant `PROMPT_CACHE_STRUCTURE_VERSION` (currently 2) is bumped whenever the cacheable prompt structure changes intentionally (tool-schema shape, system-prompt builder layout, persona-block format, memory-pool format). Bumping forces a clean cold-cache rollover at every provider on first use after deploy.
 
-Plugins apply the identifier differently per their provider's mechanics — OpenAI/Grok use it as a sticky routing hint, DeepSeek as a KV-cache isolation namespace, OpenAI-compatible plugins forward it as `user`, Anthropic ignores it (content-hashed `cache_control` is orthogonal). See [docs/developer/features/per-character-prompt-caching.md](per-character-prompt-caching.md) for the full design.
+Plugins apply the identifier differently per their provider's mechanics — OpenAI/Grok use it as a sticky routing hint, DeepSeek as a KV-cache isolation namespace, OpenAI-compatible plugins forward it as `user`, Anthropic ignores it (content-hashed `cache_control` is orthogonal). See [docs/developer/features/complete/per-character-prompt-caching.md](complete/per-character-prompt-caching.md) for the full design.
 
 ### Per-plugin cache-field reference
 

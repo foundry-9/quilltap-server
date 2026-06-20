@@ -23,6 +23,7 @@ import {
   type DocEditScope,
 } from '@/lib/doc-edit';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   moveDatabaseDocument,
   deleteDatabaseDocument,
@@ -34,6 +35,8 @@ import {
   postLibrarianRenameAnnouncement,
   postLibrarianSaveAnnouncement,
   postLibrarianDeleteAnnouncement,
+  contentHiddenFromCharacters,
+  documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
@@ -339,6 +342,14 @@ export interface AccessibleStoreOption {
   storeType: 'documents' | 'character';
   /** Present for `kind: 'character'`. */
   characterId?: string;
+  /**
+   * True when this store is reachable via a group membership (a group's
+   * official store or one of its linked stores) of some character participant.
+   * The picker buckets these into a dedicated "Group Files" accordion rather
+   * than the generic Database-/Filesystem-backed accordions, mirroring the
+   * tiered mount pool's group tier and the Library picker's Group Files section.
+   */
+  isGroupStore?: boolean;
 }
 
 /**
@@ -358,10 +369,12 @@ export interface ProjectLibraryTarget {
 /**
  * Document stores reachable from this chat, for the Open-Document picker's
  * right-column accordions. Mirrors `collectAccessibleMountPointIds`: every
- * participant's character vault, each document store linked to the chat's
+ * participant's character vault, the official + linked stores of every group a
+ * character participant belongs to, each document store linked to the chat's
  * project, plus the instance-wide "Quilltap General" mount (always accessible).
  * The client buckets the result by storeType/mountType into Character Vaults /
- * Database-backed / Filesystem-backed.
+ * Group Files / Database-backed / Filesystem-backed. Group stores carry
+ * `isGroupStore: true` so they bucket into Group Files regardless of backing.
  *
  * Only the project's *official* mount is held back — that one is the dedicated
  * left-column "Project library" button (returned separately as `projectLibrary`
@@ -407,6 +420,18 @@ export async function handleAccessibleStores(
       }
     }
 
+    // Group stores reachable from this chat: the union of every group's
+    // official + linked stores across all (non-removed) character participants.
+    // Surfaced as their own "Group Files" bucket in both default and
+    // look-everywhere modes. Resolved once and reused to tag/collect below.
+    const groupMountIds = new Set<string>();
+    for (const participant of chat.participants) {
+      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
+      if (participant.status === 'removed') continue;
+      const ids = await resolveGroupMountPointIdsForCharacter(participant.characterId);
+      for (const id of ids) groupMountIds.add(id);
+    }
+
     const stores: AccessibleStoreOption[] = [];
 
     if (opts.all) {
@@ -435,6 +460,7 @@ export async function handleAccessibleStores(
           mountType: mp.mountType,
           storeType: mp.storeType,
           ...(owner ? { characterId: owner.id } : {}),
+          ...(groupMountIds.has(mp.id) ? { isGroupStore: true } : {}),
         });
       }
     } else {
@@ -460,7 +486,26 @@ export async function handleAccessibleStores(
         seen.add(mp.id);
       }
 
-      // 2. Document stores linked to the chat's project.
+      // 2. Group stores — official + linked stores of every group a character
+      //    participant belongs to. Resolved above; collected before project
+      //    links so group precedence holds (character > group > project).
+      for (const id of groupMountIds) {
+        if (seen.has(id)) continue;
+        const mp = await repos.docMountPoints.findById(id);
+        if (!mp || !mp.enabled) continue;
+        stores.push({
+          mountPointId: mp.id,
+          name: mp.name,
+          label: mp.name,
+          kind: 'document-store',
+          mountType: mp.mountType,
+          storeType: mp.storeType,
+          isGroupStore: true,
+        });
+        seen.add(mp.id);
+      }
+
+      // 3. Document stores linked to the chat's project.
       if (chat.projectId) {
         const links = await repos.projectDocMountLinks.findByProjectId(chat.projectId);
         for (const link of links) {
@@ -479,7 +524,7 @@ export async function handleAccessibleStores(
         }
       }
 
-      // 3. Quilltap General — always accessible to every chat, so it always
+      // 4. Quilltap General — always accessible to every chat, so it always
       // appears (under Database-backed, normally). Mirrors path-resolver.
       const generalId = await getGeneralMountPointId();
       if (generalId && !seen.has(generalId)) {
@@ -504,8 +549,9 @@ export async function handleAccessibleStores(
       total: stores.length,
       hasProjectLibrary: projectLibrary !== null,
       characterVaults: stores.filter(s => s.storeType === 'character').length,
-      databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database').length,
-      filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database').length,
+      groupStores: stores.filter(s => s.isGroupStore).length,
+      databaseStores: stores.filter(s => s.storeType === 'documents' && s.mountType === 'database' && !s.isGroupStore).length,
+      filesystemStores: stores.filter(s => s.storeType === 'documents' && s.mountType !== 'database' && !s.isGroupStore).length,
     });
 
     return successResponse({ stores, projectLibrary });
@@ -637,6 +683,8 @@ export async function handleOpenDocument(
       mountPoint: data.mountPoint,
       isNew: !data.filePath,
       origin: { kind: 'opened-by-user' },
+      // A character_read:false document must not be announced to characters.
+      hiddenFromCharacters: contentHiddenFromCharacters(content),
     });
 
     return successResponse({
@@ -749,6 +797,58 @@ export async function handleReadDocument(
 }
 
 /**
+ * Existence probe for a Document-Mode target — used to gate clickable
+ * `qtap://` links in the Salon. Resolves `{ filePath, scope, mountPoint }`
+ * through the same access-controlled path the read/open actions use and
+ * returns `{ exists }` WITHOUT returning the file's bytes. Any resolution
+ * failure (invalid path, inaccessible store, not found) yields
+ * `{ exists: false }` so an unreachable URI simply stays plain text. The
+ * reserved `self` authority resolves only when the chat has exactly one
+ * character participant (its vault); otherwise it is treated as non-existent.
+ */
+export async function handleResolveDocument(
+  req: NextRequest,
+  chatId: string,
+  context: AuthenticatedContext
+): Promise<NextResponse> {
+  const body = await req.json();
+  const data = readDocumentSchema.parse(body);
+
+  const chatContext = await getChatContext(chatId, context);
+  if (!chatContext) {
+    return badRequest('Chat not found');
+  }
+
+  try {
+    const isSelf =
+      data.scope === 'document_store' && (data.mountPoint ?? '').toLowerCase() === 'self';
+    const selfCharacterId =
+      isSelf && chatContext.characterIds.length === 1 ? chatContext.characterIds[0] : undefined;
+
+    const resolved = await resolveDocEditPath(data.scope as DocEditScope, data.filePath, {
+      projectId: chatContext.projectId,
+      characterIds: chatContext.characterIds,
+      characterId: selfCharacterId,
+      mountPoint: data.mountPoint,
+      // Operator surface (the human's Salon), matching read/open-document.
+      operatorOverride: true,
+    });
+
+    const exists = await resolvedPathExists(resolved);
+    return successResponse({ exists });
+  } catch (error) {
+    logger.debug('resolve-document: path not resolvable; treating as non-existent', {
+      chatId,
+      filePath: data.filePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint,
+      error: getErrorMessage(error),
+    });
+    return successResponse({ exists: false });
+  }
+}
+
+/**
  * Write file content from the document editor
  */
 export async function handleWriteDocument(
@@ -790,7 +890,13 @@ export async function handleWriteDocument(
     }
 
     const librarianMessage = data.diffContent
-      ? await postLibrarianSaveAnnouncement({ chatId, diffContent: data.diffContent })
+      ? await postLibrarianSaveAnnouncement({
+          chatId,
+          diffContent: data.diffContent,
+          // Derive from the content just written — its frontmatter is the
+          // authority, and a brand-new hidden file isn't indexed yet.
+          hiddenFromCharacters: contentHiddenFromCharacters(data.content),
+        })
       : null;
 
     return successResponse({
@@ -904,6 +1010,13 @@ export async function handleRenameDocument(
     return badRequest(`Could not resolve path: ${message}`);
   }
 
+  // Capture the read-policy BEFORE the rename moves the link off the old path,
+  // so a character_read:false document isn't announced to characters.
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolvedOld.mountPointId,
+    resolvedOld.relativePath,
+  );
+
   try {
     if (resolvedOld.mountType === 'database' && resolvedOld.mountPointId) {
       await moveDatabaseDocument(
@@ -963,6 +1076,7 @@ export async function handleRenameDocument(
     newFilePath,
     scope: doc.scope as 'project' | 'document_store' | 'general',
     mountPoint: doc.mountPoint,
+    hiddenFromCharacters,
   });
 
   const result = updated ?? doc;
@@ -1016,6 +1130,13 @@ export async function handleDeleteDocument(
     return badRequest(`Could not resolve path: ${message}`);
   }
 
+  // Capture the read-policy BEFORE the delete removes the link row, so a
+  // character_read:false document isn't announced to characters.
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolved.mountPointId,
+    resolved.relativePath,
+  );
+
   try {
     if (resolved.mountType === 'database' && resolved.mountPointId) {
       const deleted = await deleteDatabaseDocument(resolved.mountPointId, resolved.relativePath);
@@ -1057,6 +1178,7 @@ export async function handleDeleteDocument(
     scope: doc.scope as 'project' | 'document_store' | 'general',
     mountPoint: doc.mountPoint,
     origin: { kind: 'by-user' },
+    hiddenFromCharacters,
   });
 
   return successResponse({

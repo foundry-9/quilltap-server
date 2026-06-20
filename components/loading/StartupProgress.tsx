@@ -7,13 +7,15 @@
  * server is currently working on — pretty phase, current label, recent
  * events, and any sub-progress tiers (e.g. "3/4 projects, 224/459 files").
  *
- * When the server transitions to `complete` / `ready`, this component
- * fires a global SWR revalidation so the rest of the app refreshes any
- * data it cached during the startup window, and stops polling.
+ * This screen stays up — driven by `useStartupPhase` in the app layout — until
+ * the post-startup background backfills (vault backfill + mount scan) settle,
+ * not merely until the server reports `complete`. The server reaches `complete`
+ * and starts serving before those finish, and server-rendered pages read empty
+ * data in that window. The gate owner (app-layout) releases and refreshes stale
+ * data; this component is purely presentational.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useSWRConfig } from 'swr';
 
 type ProgressTier = { current: number; total: number; unit: string };
 
@@ -30,6 +32,7 @@ interface StartupEvent {
 interface StartupStatus {
   phase: string;
   isReady: boolean;
+  backgroundSettled: boolean;
   isLockedMode: boolean;
   startedAt: number;
   readyAt: number | null;
@@ -42,18 +45,41 @@ interface StartupStatus {
 
 const POLL_INTERVAL_MS = 1000;
 
+export interface StartupGateState {
+  /** The server's current coarse startup phase, or null before the first poll. */
+  phase: string | null;
+  /**
+   * Whether the post-startup background backfills (vault backfill + mount
+   * scan) have settled. The gate holds the progress screen until this is true,
+   * because the server reaches `complete` and starts serving *before* those
+   * finish — and server-rendered pages read empty data in that window.
+   */
+  settled: boolean;
+  /**
+   * True if we ever observed an unsettled, non-failed poll — i.e. the gate
+   * actually had to hold. The layout uses this to decide whether a post-settle
+   * reload is needed (the page underneath was server-rendered with mid-settle
+   * empty data). Steady-state boots never set this, so they never reload.
+   */
+  everSettling: boolean;
+}
+
 /**
- * Hook: returns the server's current startup phase, or null while we haven't
- * polled yet. Polling stops once a terminal phase (`complete` or `failed`) is
- * observed.
+ * Hook: returns the server's startup gate state. Polling continues through the
+ * `complete` phase and stops only once the background backfills have settled
+ * (or the server has `failed`).
  *
  * Used by the app layout to decide whether to show the StartupProgress screen
  * or the real app — independently of whatever session.status says, since the
  * session endpoint can return 200 well before the server's subsystem work
  * (reconcile, vault backfill, mount-index rescan) actually finishes.
  */
-export function useStartupPhase(): string | null {
-  const [phase, setPhase] = useState<string | null>(null);
+export function useStartupPhase(): StartupGateState {
+  const [state, setState] = useState<StartupGateState>({
+    phase: null,
+    settled: false,
+    everSettling: false,
+  });
 
   useEffect(() => {
     let stopped = false;
@@ -66,8 +92,16 @@ export function useStartupPhase(): string | null {
         });
         if (response.ok) {
           const data: StartupStatus = await response.json();
-          setPhase(data.phase);
-          if (data.phase === 'complete' || data.phase === 'failed') {
+          const settled = data.backgroundSettled === true;
+          const settling = !settled && data.phase !== 'failed';
+          setState((prev) => ({
+            phase: data.phase,
+            settled,
+            everSettling: prev.everSettling || settling,
+          }));
+          // Stop polling once the app is displayable: either the background
+          // backfills have settled, or startup failed (errors surface in-app).
+          if (settled || data.phase === 'failed') {
             return;
           }
         }
@@ -84,7 +118,7 @@ export function useStartupPhase(): string | null {
     };
   }, []);
 
-  return phase;
+  return state;
 }
 
 const PHASE_HEADLINE: Record<string, string> = {
@@ -116,11 +150,9 @@ function formatRelativeAge(ts: number): string {
 }
 
 export function StartupProgress() {
-  const { mutate } = useSWRConfig();
   const [status, setStatus] = useState<StartupStatus | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const stoppedRef = useRef(false);
-  const revalidatedRef = useRef(false);
 
   useEffect(() => {
     stoppedRef.current = false;
@@ -137,19 +169,14 @@ export function StartupProgress() {
           const data: StartupStatus = await response.json();
           setStatus(data);
           setFetchError(null);
-
-          // Once the server reports ready, revalidate all SWR caches one time
-          // so any data fetched during the startup window (and likely empty
-          // or errored) gets refreshed.
-          if ((data.phase === 'complete' || data.isReady) && !revalidatedRef.current) {
-            revalidatedRef.current = true;
-            mutate(() => true, undefined, { revalidate: true });
-          }
         }
       } catch (err) {
         setFetchError(err instanceof Error ? err.message : String(err));
       }
 
+      // Keep polling for display while the screen is up. The gate owner
+      // (app-layout) decides when to release and refreshes stale data; this
+      // component is purely presentational.
       if (stoppedRef.current) return;
       setTimeout(poll, POLL_INTERVAL_MS);
     }
@@ -158,17 +185,24 @@ export function StartupProgress() {
     return () => {
       stoppedRef.current = true;
     };
-  }, [mutate]);
+  }, []);
 
   const phase = status?.phase ?? 'pending';
   const isErrored = phase === 'failed';
-  const headline = isErrored ? phaseHeadline('failed') : phaseHeadline(phase);
+  // The server reaches `complete` before the background backfills settle; show
+  // a distinct headline in that window rather than "At your service".
+  const settling = phase === 'complete' && status?.backgroundSettled === false;
+  const headline = isErrored
+    ? phaseHeadline('failed')
+    : settling
+      ? 'Settling everything into place'
+      : phaseHeadline(phase);
   const currentLabel = status?.currentLabel ?? null;
   const subProgress = status?.currentSubProgress;
   const events = status?.recentEvents ?? [];
 
   return (
-    <div className="flex h-screen items-center justify-center p-6">
+    <div className="qt-pretheme-bg flex h-screen items-center justify-center p-6">
       <div className="qt-card flex w-full max-w-xl flex-col gap-4 p-8">
         <div className="flex flex-col gap-1">
           <div className="qt-text-tertiary text-xs uppercase tracking-wide">

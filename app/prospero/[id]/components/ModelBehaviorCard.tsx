@@ -7,29 +7,29 @@
  */
 
 import { useState, useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { Project } from '../types'
 import { ProjectToolSettingsModal } from '@/components/tools/tool-settings'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { Icon } from '@/components/ui/icon'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import type { RoleplayTemplate } from '@/lib/schemas/template.types'
 
 interface ModelBehaviorCardProps {
   project: Project
   onAgentModeChange: (enabled: boolean | null) => void
+  onDefaultRoleplayTemplateChange: (templateId: string | null) => void
   expanded: boolean
   onToggle: () => void
   onProjectUpdate?: () => void
 }
 
-function BrainIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-    </svg>
-  )
-}
 
 export function ModelBehaviorCard({
   project,
   onAgentModeChange,
+  onDefaultRoleplayTemplateChange,
   expanded,
   onToggle,
   onProjectUpdate,
@@ -37,6 +37,11 @@ export function ModelBehaviorCard({
   const [showToolSettingsModal, setShowToolSettingsModal] = useState(false)
   const [localDisabledTools, setLocalDisabledTools] = useState<string[]>(project.defaultDisabledTools || [])
   const [localDisabledToolGroups, setLocalDisabledToolGroups] = useState<string[]>(project.defaultDisabledToolGroups || [])
+
+  const { data: roleplayTemplates = [] } = useQuery({
+    queryKey: queryKeys.roleplayTemplates.all,
+    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
+  })
 
   const toolSummary = useMemo(() => {
     const toolCount = localDisabledTools.length
@@ -68,11 +73,11 @@ export function ModelBehaviorCard({
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <BrainIcon className="w-5 h-5 qt-text-primary" />
+          <Icon name="cpu" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Model Behavior</h3>
             <p className="qt-text-small qt-text-secondary">
-              Agent mode &amp; tool defaults
+              Agent mode, roleplay template &amp; tool defaults
             </p>
           </div>
         </div>
@@ -99,6 +104,24 @@ export function ModelBehaviorCard({
               <option value="inherit">Inherit from global/character</option>
               <option value="enabled">Enabled by default</option>
               <option value="disabled">Disabled by default</option>
+            </select>
+          </div>
+
+          {/* Default Roleplay Template */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface">
+            <h4 className="qt-label text-foreground mb-1">Default Roleplay Template</h4>
+            <p className="qt-text-xs qt-text-secondary mb-2">
+              The roleplay template applied to new chats started in this project. Leave on inherit to use your global default.
+            </p>
+            <select
+              value={project.defaultRoleplayTemplateId || ''}
+              onChange={(e) => onDefaultRoleplayTemplateChange(e.target.value || null)}
+              className="qt-input w-full max-w-xs"
+            >
+              <option value="">Inherit from global default</option>
+              {roleplayTemplates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
             </select>
           </div>
 

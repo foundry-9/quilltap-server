@@ -10,6 +10,11 @@ import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
+import {
+  COMPLETED_JOB_RETENTION_DAYS,
+  DEAD_JOB_RETENTION_DAYS,
+  retentionCutoff,
+} from './maintenance/retention-constants';
 
 /**
  * Options for creating a job
@@ -63,6 +68,28 @@ export interface MemoryExtractionPayload {
    * is unique per turn already.
    */
   extractionAnchorMessageId?: string | null;
+  connectionProfileId: string;
+}
+
+/**
+ * Payload for a Carina memory-extraction job.
+ *
+ * Unlike the per-turn extractor, a Carina exchange is a single isolated Q&A:
+ * the answerer (who may not even be a chat participant) is asked a question and
+ * posts a `systemSender: 'carina'` reference answer. That message is excluded
+ * from the normal per-turn transcript (every systemSender message is), so its
+ * memories are formed through this dedicated path instead. The handler keys on
+ * the posted carina message — its `content` is the answer, its
+ * `carinaMeta.question` the prompt — and runs a one-slice SELF extraction for
+ * the answerer.
+ */
+export interface CarinaMemoryExtractionPayload {
+  chatId: string;
+  /** The posted Carina reference-answer message (systemSender 'carina'). */
+  carinaMessageId: string;
+  /** The answerer character whose SELF memories this exchange forms. */
+  answererId: string;
+  /** Connection profile to source the cheap-LLM extractor from. */
   connectionProfileId: string;
 }
 
@@ -483,6 +510,48 @@ export async function enqueueMemoryExtraction(
 }
 
 /**
+ * Enqueue a Carina memory-extraction job for a single posted reference answer.
+ *
+ * Dedupe: keyed on the posted carina message id. Each Carina answer is a
+ * distinct message, so this only guards against an accidental double-enqueue
+ * for the same message (e.g. a retry of `runCarinaQuery`). Works from both the
+ * main process (markup path) and the forked child (the `ask_carina` tool during
+ * an autonomous-room turn) — the child buffers the create back to the parent,
+ * exactly as the per-turn extractor already does.
+ */
+export async function enqueueCarinaMemoryExtraction(
+  userId: string,
+  payload: CarinaMemoryExtractionPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  if (options?.skipDedupCheck) {
+    return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+  }
+
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'CARINA_MEMORY_EXTRACTION') return false;
+      const existingPayload = j.payload as unknown as CarinaMemoryExtractionPayload;
+      return existingPayload.carinaMessageId === payload.carinaMessageId;
+    });
+    if (existing) {
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[CarinaMemoryExtraction] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
+  return enqueueJob(userId, 'CARINA_MEMORY_EXTRACTION', payload as unknown as Record<string, unknown>, options);
+}
+
+/**
  * Enqueue a memory-housekeeping job for a character (or all characters of a user).
  *
  * Dedupes: if there's already a PENDING or PROCESSING MEMORY_HOUSEKEEPING job
@@ -526,6 +595,54 @@ export async function enqueueMemoryHousekeeping(
     payload as unknown as Record<string, unknown>,
     { ...options, maxAttempts: options?.maxAttempts ?? 1 },
   );
+}
+
+/**
+ * Payload for CHARACTER_HEADSHOULDERS_BACKFILL — generate a head-and-shoulders
+ * portrait prompt for one character that lacks one.
+ */
+export interface CharacterHeadShouldersBackfillPayload {
+  characterId: string;
+}
+
+/**
+ * Enqueue a head-and-shoulders backfill job for a character.
+ *
+ * Dedupes against in-flight (PENDING/PROCESSING) jobs for the same
+ * (userId, characterId). Background priority (-1). Generation is idempotent,
+ * so retries are harmless — callers may raise `maxAttempts` so a cold job
+ * child (provider not yet ready) retries instead of giving up.
+ */
+export async function enqueueCharacterHeadShouldersBackfill(
+  userId: string,
+  payload: CharacterHeadShouldersBackfillPayload,
+  options?: EnqueueJobOptions,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j =>
+      j.type === 'CHARACTER_HEADSHOULDERS_BACKFILL'
+      && (j.payload as Record<string, unknown>).characterId === payload.characterId);
+    if (existing) {
+      return { jobId: existing.id, isNew: false };
+    }
+  } catch (error) {
+    logger.warn('[HeadShouldersBackfill] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through and enqueue anyway.
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'CHARACTER_HEADSHOULDERS_BACKFILL',
+    payload as unknown as Record<string, unknown>,
+    { ...options, priority: options?.priority ?? -1 },
+  );
+  return { jobId, isNew: true };
 }
 
 /**
@@ -605,6 +722,51 @@ export async function enqueueMemoryRegenerateAll(
     userId,
     'MEMORY_REGENERATE_ALL',
     payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+  return { jobId, isNew: true };
+}
+
+/** Payload for the conversation-summary regeneration fan-out job (no params). */
+export type RegenerateConversationSummariesPayload = Record<string, never>;
+
+/**
+ * Enqueue the conversation-summary regeneration job.
+ *
+ * Re-mirrors every summarized chat's context summary into its participant
+ * character vaults (a backfill for the files the Commonplace Book's
+ * relevant-conversations retrieval depends on, and a repair after format
+ * changes). The HTTP handler returns immediately; the enumeration + per-chat
+ * vault writes happen inside the background job.
+ *
+ * Dedupes on userId (only one regeneration per user at a time). Capped at
+ * maxAttempts: 1 — the work is idempotent, but a retry would re-walk every chat.
+ */
+export async function enqueueRegenerateConversationSummaries(
+  userId: string,
+  options?: EnqueueJobOptions,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(
+      (j) => j.type === 'REGENERATE_CONVERSATION_SUMMARIES',
+    );
+    if (existing) {
+      return { jobId: existing.id, isNew: false };
+    }
+  } catch (error) {
+    logger.warn('[RegenerateConversationSummaries] Failed to check for existing jobs during enqueue', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const jobId = await enqueueJob(
+    userId,
+    'REGENERATE_CONVERSATION_SUMMARIES',
+    {},
     { ...options, maxAttempts: options?.maxAttempts ?? 1 },
   );
   return { jobId, isNew: true };
@@ -1093,9 +1255,25 @@ export async function enqueueWardrobeOutfitAnnouncement(
 
 /**
  * Cleanup old completed jobs
+ *
+ * @deprecated Single-window reaper. Use {@link cleanupFinishedJobs}, which
+ * applies separate retention windows to COMPLETED vs DEAD jobs.
  */
 export async function cleanupOldJobs(daysOld: number = 7): Promise<number> {
   const repos = getRepositories();
   const olderThan = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
   return repos.backgroundJobs.cleanupOldJobs(olderThan);
+}
+
+/**
+ * Reap finished background jobs using the per-status retention windows from
+ * `lib/background-jobs/maintenance/retention-constants.ts`: COMPLETED jobs
+ * after the short window, DEAD jobs after the longer one. PENDING/PROCESSING/
+ * FAILED/PAUSED are left untouched. Called by the daily maintenance tick.
+ */
+export async function cleanupFinishedJobs(): Promise<{ completed: number; dead: number }> {
+  const repos = getRepositories();
+  const completedOlderThan = retentionCutoff(COMPLETED_JOB_RETENTION_DAYS);
+  const deadOlderThan = retentionCutoff(DEAD_JOB_RETENTION_DAYS);
+  return repos.backgroundJobs.cleanupOldJobsByStatus(completedOlderThan, deadOlderThan);
 }

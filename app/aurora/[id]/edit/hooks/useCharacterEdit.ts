@@ -28,6 +28,7 @@ const INITIAL_FORM_DATA: CharacterFormData = {
   defaultConnectionProfileId: '',
   systemTransparency: false,
   coreWhisperEnabled: null,
+  canBeCarina: false,
 }
 
 /**
@@ -88,6 +89,7 @@ export function useCharacterEdit(id: string) {
             char.coreWhisperEnabled === true || char.coreWhisperEnabled === false
               ? char.coreWhisperEnabled
               : null,
+          canBeCarina: char.canBeCarina === true,
         }
 
         return {
@@ -184,6 +186,17 @@ export function useCharacterEdit(id: string) {
     setState((prev) => ({
       ...prev,
       formData: { ...prev.formData, systemTransparency: enabled },
+    }))
+  }
+
+  /**
+   * Handle canBeCarina toggle. Local state only; persists with the regular
+   * form save so the user can change their mind before committing.
+   */
+  const handleCanBeCarinaChange = (enabled: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      formData: { ...prev.formData, canBeCarina: enabled },
     }))
   }
 
@@ -371,6 +384,7 @@ export function useCharacterEdit(id: string) {
     handlePronounsChange,
     handleScenariosChange,
     handleSystemTransparencyChange,
+    handleCanBeCarinaChange,
     handleCoreWhisperEnabledChange,
     handleSubmit,
     handleCancel,

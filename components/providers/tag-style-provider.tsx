@@ -1,7 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import useSWR from 'swr';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
 import { useSession } from '@/components/providers/session-provider';
 import type { TagStyleMap, TagVisualStyle } from '@/lib/schemas/types';
 import { DEFAULT_TAG_STYLE, mergeWithDefaultTagStyle } from '@/lib/tags/styles';
@@ -20,9 +22,11 @@ export function TagStyleProvider({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
   const [styles, setStyles] = useState<TagStyleMap>({});
 
-  const { data: tagsData, isLoading } = useSWR<{ tags: Array<{ id: string; visualStyle?: TagVisualStyle }> }>(
-    status === 'authenticated' ? '/api/v1/tags' : null
-  );
+  const { data: tagsData, isLoading } = useQuery({
+    queryKey: queryKeys.tags.list(),
+    queryFn: ({ signal }) => apiFetch<{ tags: Array<{ id: string; visualStyle?: TagVisualStyle }> }>('/api/v1/tags', { signal }),
+    enabled: status === 'authenticated',
+  });
 
   useEffect(() => {
     if (tagsData?.tags) {

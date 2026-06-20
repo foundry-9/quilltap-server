@@ -36,6 +36,7 @@ import type {
   RoleplayTemplate,
   ProviderModel,
   Project,
+  Group,
   LLMLog,
   PluginConfig,
   CharacterPluginData,
@@ -55,6 +56,8 @@ import type {
   DocMountDocument,
   DocMountBlobMetadata,
   ProjectDocMountLink,
+  GroupDocMountLink,
+  GroupCharacterMember,
 } from '@/lib/schemas/mount-index.types';
 import {
   readJsonFile,
@@ -191,6 +194,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const providerModels = await readJsonArrayFileOptional<ProviderModel>(rootPath, 'data/provider-models.json', []);
     // Projects are optional for backwards compatibility with older backups
     const projects = await readJsonArrayFileOptional<Project>(rootPath, 'data/projects.json', []);
+    // Groups (format-4) are optional so older backups still load.
+    const groups = await readJsonArrayFileOptional<Group>(rootPath, 'data/groups.json', []);
     // LLM logs are optional for backwards compatibility with older backups
     const llmLogs = await readJsonArrayFileOptional<LLMLog>(rootPath, 'data/llm-logs.json', []);
     // Plugin configs are optional for backwards compatibility with older backups
@@ -255,6 +260,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const docMountDocuments = await readJsonArrayFileOptional<DocMountDocument>(rootPath, 'data/doc-mount-documents.json', []);
     const docMountBlobs = await readJsonArrayFileOptional<DocMountBlobMetadata>(rootPath, 'data/doc-mount-blobs.json', []);
     const projectDocMountLinks = await readJsonArrayFileOptional<ProjectDocMountLink>(rootPath, 'data/project-doc-mount-links.json', []);
+    const groupDocMountLinks = await readJsonArrayFileOptional<GroupDocMountLink>(rootPath, 'data/group-doc-mount-links.json', []);
+    const groupCharacterMembers = await readJsonArrayFileOptional<GroupCharacterMember>(rootPath, 'data/group-character-members.json', []);
     const textReplacementRules = await readJsonArrayFileOptional<TextReplacementRule>(rootPath, 'data/text-replacement-rules.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
@@ -277,6 +284,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       roleplayTemplates,
       providerModels,
       projects,
+      groups,
       llmLogs,
       pluginConfigs,
       chatSettings,
@@ -299,6 +307,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       docMountDocuments,
       docMountBlobs,
       projectDocMountLinks,
+      groupDocMountLinks,
+      groupCharacterMembers,
       textReplacementRules,
     };
 

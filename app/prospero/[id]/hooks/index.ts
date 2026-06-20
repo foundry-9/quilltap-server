@@ -11,3 +11,9 @@ export { useProjectCardState } from './useProjectCardState'
 export { useProjectDocumentStores } from './useProjectDocumentStores'
 export { useProjectScenarios } from './useProjectScenarios'
 export type { ProjectScenario, UseProjectScenariosReturn } from './useProjectScenarios'
+export { useProjectWardrobe } from './useProjectWardrobe'
+export type {
+  CreateProjectWardrobeInput,
+  UpdateProjectWardrobeInput,
+  UseProjectWardrobeReturn,
+} from './useProjectWardrobe'

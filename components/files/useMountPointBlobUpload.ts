@@ -2,15 +2,18 @@
 
 /**
  * Hook for uploading files directly into a database-backed Scriptorium mount
- * point. POSTs each selected file to /api/v1/mount-points/{id}/blobs with
- * the `file` + `path` fields the endpoint expects. The current folder is
- * prepended to the relative path so uploads land where the browser is
- * currently viewing.
+ * point. PUTs each selected file to the canonical per-file item route
+ * /api/v1/mount-points/{id}/files/{relativePath} (multipart `file`). The
+ * current folder is prepended to the relative path so uploads land where the
+ * browser is currently viewing. The pipeline transcodes images, routes native
+ * text to the document store, and rewrites the stored path (e.g. .png→.webp),
+ * so we read the actual written path back from the response.
  */
 
 import { useRef, useState, useCallback } from 'react'
 import { safeJsonParse } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { buildMountFileItemUrl } from './mountBlobUrl'
 
 interface UseMountPointBlobUploadOptions {
   mountPointId: string
@@ -20,11 +23,8 @@ interface UseMountPointBlobUploadOptions {
 }
 
 interface UploadResponse {
-  blob?: { id: string; relativePath: string }
-  // Native-text uploads (.md/.txt/.json/.jsonl) on database-backed mounts
-  // route through the document layer instead of the blob mirror — the
-  // endpoint returns this shape in that case.
-  document?: { id: string | null; relativePath: string }
+  // The canonical item route returns the stored file's metadata directly.
+  relativePath?: string
   error?: string
 }
 
@@ -61,19 +61,18 @@ export function useMountPointBlobUpload({
       try {
         const formData = new FormData()
         formData.append('file', file)
-        formData.append('path', buildRelativePath(folderPath, file.name))
 
-        const res = await fetch(`/api/v1/mount-points/${mountPointId}/blobs`, {
-          method: 'POST',
+        const relativePath = buildRelativePath(folderPath, file.name)
+        const res = await fetch(buildMountFileItemUrl(mountPointId, relativePath), {
+          method: 'PUT',
           body: formData,
         })
 
         const data = await safeJsonParse<UploadResponse>(res)
-        const written = data.blob ?? data.document
-        if (!res.ok || !written) {
+        if (!res.ok || !data.relativePath) {
           throw new Error(data.error || 'Failed to upload file')
         }
-        uploaded.push(written.relativePath)
+        uploaded.push(data.relativePath)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[useMountPointBlobUpload] Upload failed', {

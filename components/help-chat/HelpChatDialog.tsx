@@ -8,8 +8,11 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HelpChatComposer } from './HelpChatComposer'
@@ -149,9 +152,11 @@ export function HelpChatDialog() {
     onMessageComplete: handleMessageComplete,
   })
 
-  const { data: pastChatsData, mutate: mutatePastChats } = useSWR<{ chats: PastChat[] }>(
-    isOpen && !currentChatId && activeTab === 'ask' ? '/api/v1/help-chats' : null
-  )
+  const { data: pastChatsData, refetch: mutatePastChats } = useQuery({
+    queryKey: queryKeys.helpChat.pastChats,
+    queryFn: ({ signal }) => apiFetch<{ chats: PastChat[] }>('/api/v1/help-chats', { signal }),
+    enabled: isOpen && !currentChatId && activeTab === 'ask',
+  })
 
   useEffect(() => {
     if (pastChatsData?.chats) {
@@ -269,12 +274,10 @@ export function HelpChatDialog() {
           <button
             type="button"
             onClick={handleNewChat}
-            className="p-1 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
+            className="p-1 rounded qt-hover-accent qt-text-secondary transition-colors"
             title="New help chat"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <Icon name="plus" className="w-4 h-4" />
           </button>
         ) : undefined
       }
@@ -389,9 +392,7 @@ export function HelpChatDialog() {
                               className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:qt-bg-destructive/20 qt-text-secondary hover:qt-text-destructive transition-all"
                               title="Delete"
                             >
-                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M18 6L6 18M6 6l12 12" />
-                              </svg>
+                              <Icon name="close" className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         ))}

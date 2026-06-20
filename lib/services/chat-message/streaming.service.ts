@@ -14,7 +14,7 @@ import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
-import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
+import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
@@ -150,12 +150,30 @@ export async function buildTools(
   isMultiCharacter?: boolean,
   /** Whether help tools are enabled for this character (enables help_search and help_settings) */
   helpToolsEnabled?: boolean,
-  /** Whether this character can dress themselves (enables list_wardrobe, wardrobe_set_outfit, and wardrobe_change_item) */
+  /** Whether this character can dress themselves (enables wardrobe_list, wardrobe_read, wardrobe_wear, and wardrobe_take_off) */
   canDressThemselves?: boolean,
-  /** Whether this character can create new outfits (enables create_wardrobe_item) */
+  /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
   canCreateOutfits?: boolean,
   /** Whether document editing tools are enabled (project has linked document stores or files) */
-  documentEditingEnabled?: boolean
+  documentEditingEnabled?: boolean,
+  /** Whether the ask_carina tool is enabled for this character */
+  askCarinaEnabled?: boolean,
+  /**
+   * Whether to include the always-on "workspace" tool set (mail, annotations,
+   * terminal, conversation reading, self-inventory, RNG/state). Defaults to
+   * true. The Brahma Console passes false to strip them.
+   */
+  includeWorkspaceTools?: boolean,
+  /**
+   * When true, the `search` tool is built from its Brahma variant whose schema
+   * omits the `memories` source (Brahma Console has no memory access).
+   */
+  excludeMemorySearch?: boolean,
+  /**
+   * When true, include the read-only `run_sql` tool (Brahma Console only).
+   * Execution is additionally gated on `operatorSurface` in the tool executor.
+   */
+  sqlAccess?: boolean
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -216,11 +234,18 @@ export async function buildTools(
     helpSettings: !!helpToolsEnabled,
     helpNavigate: !!helpToolsEnabled,
     wardrobeList: canDressThemselves !== false,
-    wardrobeUpdateOutfit: canDressThemselves !== false,
-    wardrobeChangeItem: canDressThemselves !== false,
-    wardrobeCreateItem: canCreateOutfits !== false,
+    wardrobeRead: canDressThemselves !== false,
+    wardrobeWear: canDressThemselves !== false,
+    wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeCreate: canCreateOutfits !== false,
+    wardrobeUpdate: canCreateOutfits !== false,
+    wardrobeArchive: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
     documentEditing: !!documentEditingEnabled,
+    askCarina: askCarinaEnabled,
+    includeWorkspaceTools: includeWorkspaceTools !== false,
+    excludeMemorySearch: !!excludeMemorySearch,
+    sqlAccess: !!sqlAccess,
     toolConfigs,
   })
 
@@ -666,6 +691,26 @@ export function encodeChainCompleteEvent(
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)
+}
+
+/**
+ * Encode a Carina reference-answer event.
+ *
+ * Emitted the instant a Carina answer is persisted (the user's `@Name:`/`@Name?`
+ * markup, a character's `@Name:` markup, or the `ask_carina` tool) so the Salon
+ * can surface the answer bubble immediately rather than waiting for the post-turn
+ * `fetchChat()` refresh. Carries the full posted message so the client can insert
+ * it — and render it with the answerer's own avatar — without an extra round-trip.
+ *
+ * The client inserts optimistically and dedupes by `id`; the end-of-turn
+ * `fetchChat()` replaces the array with the authoritative, pre-rendered copy
+ * (same `id`), so there is no duplicate.
+ */
+export function encodeCarinaAnswerEvent(
+  encoder: TextEncoder,
+  message: MessageEvent
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ carinaAnswer: message })}\n\n`)
 }
 
 /**

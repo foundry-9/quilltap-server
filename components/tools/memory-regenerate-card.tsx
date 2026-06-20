@@ -19,18 +19,12 @@ export function MemoryRegenerateCard() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<RegenerateStatus | null>(null)
-  const [concurrency, setConcurrency] = useState<number>(1)
-  const [concurrencyDraft, setConcurrencyDraft] = useState<string>('1')
-  const [savingConcurrency, setSavingConcurrency] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const [statusRes, concurrencyRes] = await Promise.all([
-          fetch('/api/v1/memories?action=regenerate-all'),
-          fetch('/api/v1/memories?action=extraction-concurrency'),
-        ])
+        const statusRes = await fetch('/api/v1/memories?action=regenerate-all')
         if (!cancelled && statusRes.ok) {
           const data = await statusRes.json()
           setStatus({
@@ -39,12 +33,6 @@ export function MemoryRegenerateCard() {
             inFlightExtractions: data.inFlightExtractions ?? 0,
             inFlight: data.inFlight ?? 0,
           })
-        }
-        if (!cancelled && concurrencyRes.ok) {
-          const data = await concurrencyRes.json()
-          const value = Math.max(1, Math.min(32, Number(data.concurrency) || 1))
-          setConcurrency(value)
-          setConcurrencyDraft(String(value))
         }
       } catch {
         // Initial load failures aren't fatal — UI still works without status.
@@ -118,77 +106,12 @@ export function MemoryRegenerateCard() {
     }
   }
 
-  const saveConcurrency = async (value: number) => {
-    setSavingConcurrency(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/v1/memories?action=extraction-concurrency', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concurrency: value }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to save concurrency')
-      }
-      setConcurrency(value)
-      setConcurrencyDraft(String(value))
-      showSuccessToast(`Memory extraction concurrency set to ${value}`)
-    } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to save concurrency')
-      setError(msg)
-      showErrorToast(msg)
-      setConcurrencyDraft(String(concurrency))
-    } finally {
-      setSavingConcurrency(false)
-    }
-  }
-
-  const handleConcurrencyBlur = () => {
-    const parsed = Math.floor(Number(concurrencyDraft))
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 32) {
-      setError('Concurrency must be a whole number between 1 and 32')
-      setConcurrencyDraft(String(concurrency))
-      return
-    }
-    if (parsed === concurrency) return
-    void saveConcurrency(parsed)
-  }
-
   return (
     <div className="space-y-4">
       <p className="qt-text-small qt-text-muted">
         Wipes every memory linked to a conversation and re-runs the current extraction pipeline against the chat
         history. Manual memories that aren&rsquo;t tied to a chat are left alone. Memories whose chat has already
         been deleted are removed too. The work runs in the background; close this tab and come back whenever.
-      </p>
-
-      <div className="flex items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="qt-text-small qt-text-muted" htmlFor="memoryExtractionConcurrency">
-            Memory extraction concurrency
-          </label>
-          <div className="flex items-center gap-2">
-            <input
-              id="memoryExtractionConcurrency"
-              type="number"
-              min={1}
-              max={32}
-              step={1}
-              value={concurrencyDraft}
-              disabled={savingConcurrency}
-              onChange={(e) => setConcurrencyDraft(e.target.value)}
-              onBlur={handleConcurrencyBlur}
-              className="qt-input w-20"
-            />
-            <span className="qt-text-small qt-text-muted">jobs in parallel (1–32)</span>
-          </div>
-        </div>
-      </div>
-      <p className="qt-text-small qt-text-muted">
-        Higher values finish a sweep faster but spawn more simultaneous LLM calls. Cloud providers (OpenAI,
-        Anthropic, Z.AI) typically tolerate 8–16 happily; local Ollama prefers 2–4. The 32 ceiling matches the
-        upper bound of the <code>memory-diff</code> CLI&rsquo;s <code>--concurrency</code> flag.
       </p>
 
       {status && status.inFlight > 0 && (

@@ -144,6 +144,39 @@ export const AutoHousekeepingSettingsSchema = z.object({
 export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
 
 // ============================================================================
+// MEMORY RECALL SETTINGS (Commonplace Book — recall/read path)
+// ============================================================================
+
+/**
+ * Recall-time relevance controls for the Commonplace Book. These shape which
+ * stored memories surface in a chat by reading the targeting tags the extractor
+ * already writes into each memory's `keywords` (see lib/memory/recall-tags.ts).
+ *
+ * Stored instance-wide in `instance_settings['memoryRecall']` (single-user
+ * model — same class as `memoryExtractionLimits`), NOT on the column-per-field
+ * `chat_settings` table, so adding it needs no migration. Accessors:
+ * `getMemoryRecallSettings` / `setMemoryRecallSettings` in `lib/instance-settings`.
+ */
+export const MemoryRecallSettingsSchema = z.object({
+  /**
+   * What to do with a `scope: narrow` memory whose project differs from the
+   * current chat's project (the cross-project-leakage case). `down-weight`
+   * (default) applies a strong multiplicative penalty but never fully hides the
+   * memory; `exclude` filters it out of recall entirely.
+   */
+  scopePolicy: z.enum(['down-weight', 'exclude']).default('down-weight'),
+  /**
+   * When true, recall pulls each top hit's strongly-linked related memories in
+   * as extra candidates (one hop, capped) and re-ranks the union — catching the
+   * memory relevant by association that didn't clear the embedding threshold
+   * directly. Costs one extra batched lookup per turn; off by default.
+   */
+  expandRelated: z.boolean().default(false),
+});
+
+export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
+
+// ============================================================================
 // MEMORY EXTRACTION RATE LIMITS (Commonplace Book)
 // ============================================================================
 
@@ -180,9 +213,10 @@ export type AutonomousRoomDestructiveToolPolicy = z.infer<typeof AutonomousRoomD
 /**
  * User-level defaults that govern every autonomous room owned by the user.
  *  - dailyTokenBudget: daily cap on cumulative tokens spent by autonomous-room
- *    turns for this user, evaluated at instance-local midnight (pilot: 1,000,000).
- *    null = no daily cap. Cache-read (prompt-cache hit) tokens are excluded by
- *    the provider plugins, so cached input does not count toward this cap.
+ *    turns for this user, evaluated at instance-local midnight. Defaults to null
+ *    (no daily cap until the user sets one). Cache-read (prompt-cache hit) tokens
+ *    are excluded by the provider plugins, so cached input does not count toward
+ *    this cap.
  *  - defaultFreshnessWindowMs: per-room override falls back to this. 12h default.
  *  - visibilityDefault: applied at room creation; per-room override on chats.runVisibility.
  *  - destructiveToolPolicy: 'always_refuse' is a ceiling — overrides any permissive

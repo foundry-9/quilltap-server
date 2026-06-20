@@ -1,7 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import useSWR from 'swr'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 
 interface AutonomousRoom {
@@ -33,12 +35,6 @@ interface AutonomousRoom {
   runVisibility: string | null
   createdAt: string
   updatedAt: string
-}
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Failed to load')
-  return res.json()
 }
 
 function badgeClass(state: AutonomousRoom['runState']): string {
@@ -73,47 +69,55 @@ function summarizeBudget(room: AutonomousRoom): string {
 }
 
 export function AutonomousRoomsCard() {
-  const { data, isLoading, error, mutate } = useSWR<{ rooms: AutonomousRoom[] }>(
-    '/api/v1/system/autonomous-rooms',
-    fetcher,
-    { refreshInterval: 5_000 },
-  )
+  const queryClient = useQueryClient()
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.system.autonomousRooms,
+    queryFn: ({ signal }) => apiFetch<{ rooms: AutonomousRoom[] }>('/api/v1/system/autonomous-rooms', { signal }),
+    refetchInterval: 5_000,
+  })
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
   const [editRoom, setEditRoom] = useState<{ id: string; title: string } | null>(null)
 
+  // The server flips the run state synchronously, so reflect it optimistically
+  // the instant the button is clicked rather than waiting for the POST +
+  // revalidation round-trip (which can lag while a turn is running). onMutate
+  // applies the optimistic patch, onError rolls back, onSettled revalidates —
+  // the TanStack equivalent of SWR's mutate(post, { optimisticData, rollbackOnError }).
+  const actionMutation = useMutation({
+    mutationFn: async ({ chatId, verb }: { chatId: string; verb: 'start' | 'pause' | 'stop' | 'resume' }) => {
+      const res = await fetch(`/api/v1/chats/${chatId}/autonomous-room?action=${verb}`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `Failed to ${verb}`)
+      }
+    },
+    onMutate: async ({ chatId, verb }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.system.autonomousRooms })
+      const previous = queryClient.getQueryData<{ rooms: AutonomousRoom[] }>(queryKeys.system.autonomousRooms)
+      const optimisticState: AutonomousRoom['runState'] =
+        verb === 'pause' ? 'paused' : verb === 'stop' ? 'stopped' : 'running'
+      queryClient.setQueryData<{ rooms: AutonomousRoom[] }>(queryKeys.system.autonomousRooms, (cur) => ({
+        rooms: (cur?.rooms ?? []).map((r) => (r.id === chatId ? { ...r, runState: optimisticState } : r)),
+      }))
+      return { previous }
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(queryKeys.system.autonomousRooms, context.previous)
+      }
+      console.error('Autonomous-room action failed', err)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.system.autonomousRooms })
+    },
+  })
+
   const action = async (chatId: string, verb: 'start' | 'pause' | 'stop' | 'resume') => {
-    // The server flips the run state synchronously, so reflect it
-    // optimistically the instant the button is clicked rather than waiting for
-    // the POST + revalidation round-trip (which can lag while a turn is running).
-    const optimisticState: AutonomousRoom['runState'] =
-      verb === 'pause' ? 'paused' : verb === 'stop' ? 'stopped' : 'running'
-    const applyOptimistic = (cur?: { rooms: AutonomousRoom[] }) => ({
-      rooms: (cur?.rooms ?? []).map((r) =>
-        r.id === chatId ? { ...r, runState: optimisticState } : r,
-      ),
-    })
     setBusyChatId(chatId)
     try {
-      const post = (async (): Promise<{ rooms: AutonomousRoom[] } | undefined> => {
-        const res = await fetch(`/api/v1/chats/${chatId}/autonomous-room?action=${verb}`, {
-          method: 'POST',
-        })
-        if (!res.ok) {
-          const body = await res.json().catch(() => null)
-          throw new Error(body?.error || `Failed to ${verb}`)
-        }
-        // Resolve to undefined so SWR falls through to the revalidation fetch
-        // (populateCache: false, revalidate: true) for the authoritative state.
-        return undefined
-      })()
-      await mutate(post, {
-        optimisticData: applyOptimistic,
-        rollbackOnError: true,
-        populateCache: false,
-        revalidate: true,
-      })
-    } catch (err) {
-      console.error('Autonomous-room action failed', err)
+      await actionMutation.mutateAsync({ chatId, verb })
+    } catch {
+      // Already logged in the mutation's onError handler.
     } finally {
       setBusyChatId(null)
     }
@@ -222,7 +226,7 @@ export function AutonomousRoomsCard() {
         currentTitle={editRoom.title}
         onSaved={() => {
           setEditRoom(null)
-          mutate()
+          refetch()
         }}
       />
     )}

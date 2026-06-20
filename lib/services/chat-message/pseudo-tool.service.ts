@@ -89,9 +89,12 @@ export interface TextBlockEnabledToolOptions extends EnabledToolOptions {
   helpNavigate: boolean
   createNote: boolean
   wardrobeList: boolean
-  wardrobeUpdateOutfit: boolean
-  wardrobeChangeItem: boolean
-  wardrobeCreateItem: boolean
+  wardrobeRead: boolean
+  wardrobeWear: boolean
+  wardrobeTakeOff: boolean
+  wardrobeCreate: boolean
+  wardrobeUpdate: boolean
+  wardrobeArchive: boolean
 }
 
 /**
@@ -119,9 +122,12 @@ export function determineTextBlockToolOptions(
     helpNavigate: !!helpToolsEnabled,
     createNote: true,
     wardrobeList: canDressThemselves !== false,
-    wardrobeUpdateOutfit: canDressThemselves !== false,
-    wardrobeChangeItem: canDressThemselves !== false,
-    wardrobeCreateItem: canCreateOutfits !== false,
+    wardrobeRead: canDressThemselves !== false,
+    wardrobeWear: canDressThemselves !== false,
+    wardrobeTakeOff: canDressThemselves !== false,
+    wardrobeCreate: canCreateOutfits !== false,
+    wardrobeUpdate: canCreateOutfits !== false,
+    wardrobeArchive: canCreateOutfits !== false,
   }
 }
 
@@ -144,9 +150,12 @@ export function buildTextBlockSystemInstructions(
     helpNavigate: enabledOptions.helpNavigate,
     createNote: enabledOptions.createNote,
     wardrobeList: enabledOptions.wardrobeList,
-    wardrobeUpdateOutfit: enabledOptions.wardrobeUpdateOutfit,
-    wardrobeChangeItem: enabledOptions.wardrobeChangeItem,
-    wardrobeCreateItem: enabledOptions.wardrobeCreateItem,
+    wardrobeRead: enabledOptions.wardrobeRead,
+    wardrobeWear: enabledOptions.wardrobeWear,
+    wardrobeTakeOff: enabledOptions.wardrobeTakeOff,
+    wardrobeCreate: enabledOptions.wardrobeCreate,
+    wardrobeUpdate: enabledOptions.wardrobeUpdate,
+    wardrobeArchive: enabledOptions.wardrobeArchive,
   }
   return buildTextBlockInstructions(options)
 }
@@ -229,9 +238,12 @@ export function buildSimpleJsonSystemInstructions(
     helpNavigate: enabledOptions.helpNavigate,
     createNote: enabledOptions.createNote,
     wardrobeList: enabledOptions.wardrobeList,
-    wardrobeUpdateOutfit: enabledOptions.wardrobeUpdateOutfit,
-    wardrobeChangeItem: enabledOptions.wardrobeChangeItem,
-    wardrobeCreateItem: enabledOptions.wardrobeCreateItem,
+    wardrobeRead: enabledOptions.wardrobeRead,
+    wardrobeWear: enabledOptions.wardrobeWear,
+    wardrobeTakeOff: enabledOptions.wardrobeTakeOff,
+    wardrobeCreate: enabledOptions.wardrobeCreate,
+    wardrobeUpdate: enabledOptions.wardrobeUpdate,
+    wardrobeArchive: enabledOptions.wardrobeArchive,
   }
   return buildSimpleJsonToolInstructions(options)
 }

@@ -68,6 +68,8 @@ export interface AppearanceResolutionInput {
     slot: string
     title: string
     description?: string | null
+    /** Plain-text image cue; preferred over `title` in image prompts. */
+    imagePrompt?: string | null
   }>
 }
 
@@ -104,10 +106,12 @@ function canSkipResolution(
  * field, which is written for human eyes and otherwise bloats the prompt.
  */
 function wardrobeItemsToSlotValues(
-  items: Array<{ slot: string; title: string; description?: string | null }>
+  items: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }>
 ): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
   const valuesFor = (slot: string): string[] =>
-    items.filter(i => i.slot === slot).map(i => i.title)
+    items
+      .filter(i => i.slot === slot)
+      .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title))
   return {
     top: valuesFor('top'),
     bottom: valuesFor('bottom'),

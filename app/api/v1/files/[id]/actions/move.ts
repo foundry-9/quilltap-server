@@ -31,8 +31,10 @@ export async function handleMoveFile(
   }
 
   if (projectId !== undefined && projectId !== null) {
-    const project = await ctx.repos.projects.findById(projectId);
-    if (!project || project.userId !== ctx.user.id) {
+    // Existence gate only — moving a file just sets its projectId and never reads
+    // the project's store, so use the raw row (which can't throw on a degraded store).
+    const project = await ctx.repos.projects.findByIdRaw(projectId);
+    if (!project) {
       return notFound('Project');
     }
   }

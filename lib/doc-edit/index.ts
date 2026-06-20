@@ -21,6 +21,9 @@ export {
   writeFileWithMtimeCheck,
   getAccessibleMountPoints,
   isTextFile,
+  resolveSelfVaultMountPointId,
+  resolveMountPointRef,
+  SELF_VAULT_TOKEN,
   PathResolutionError,
   type DocEditScope,
   type PathResolutionContext,
@@ -41,9 +44,31 @@ export {
 } from './markdown-parser';
 
 export {
+  coercePolicyBool,
+  policyFromFrontmatterData,
+  policyFromContent,
+  DEFAULT_DOCUMENT_POLICY,
+  type DocumentPolicy,
+} from './document-policy';
+
+export {
   generateUnifiedDiff,
   formatAutosaveNotification,
 } from './unified-diff';
+
+export {
+  QTAP_URI_SCHEME,
+  isQtapUri,
+  parseQtapUri,
+  formatQtapUri,
+  qtapUriToResolverInput,
+  formatDocStoreUri,
+  formatScopedUri,
+  formatSelfUri,
+  QtapUriError,
+  type QtapUriParts,
+  type QtapUriErrorCode,
+} from './qtap-uri';
 
 export {
   reindexSingleFile,

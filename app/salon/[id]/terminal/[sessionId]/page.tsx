@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { use, useCallback } from 'react';
 import { Terminal } from '@/components/terminal/Terminal';
 import { useTerminalSession } from '@/hooks/useTerminalSession';
+import { Icon } from '@/components/ui/icon';
 import { showErrorToast } from '@/lib/toast';
 
 interface TerminalPopoutPageProps {
@@ -45,14 +46,7 @@ export default function TerminalPopoutPage({ params }: TerminalPopoutPageProps) 
             className="qt-icon-button"
             title="Back to chat"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <Icon name="chevron-left" className="w-5 h-5" />
           </button>
           <a
             href={`/salon/${chatId}`}

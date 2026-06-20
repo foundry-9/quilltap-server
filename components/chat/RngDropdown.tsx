@@ -9,6 +9,7 @@
 
 import { useState, useRef } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { Icon } from '@/components/ui/icon'
 
 interface RngOption {
   label: string
@@ -191,27 +192,12 @@ export function RngDropdown({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         ) : (
-          // Dice icon - a die showing 5 pips
-          <svg className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="8" cy="8" r="1" fill="currentColor" />
-            <circle cx="16" cy="8" r="1" fill="currentColor" />
-            <circle cx="12" cy="12" r="1" fill="currentColor" />
-            <circle cx="8" cy="16" r="1" fill="currentColor" />
-            <circle cx="16" cy="16" r="1" fill="currentColor" />
-          </svg>
+          <Icon name="dice" className={variant === 'gutter' ? 'w-5 h-5' : 'w-4 h-4'} />
         )}
         {variant === 'palette' && (
           <>
             <span>RNG</span>
-            <svg
-              className={`w-3 h-3 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <Icon name="chevron-down" className={`w-3 h-3 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </>
         )}
       </button>
@@ -247,9 +233,7 @@ export function RngDropdown({
                     title="Increase dice count"
                     aria-label={`Increase ${dice.label} count`}
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
+                    <Icon name="chevron-down" className="w-3 h-3 rotate-180" />
                   </button>
                   <button
                     type="button"
@@ -259,9 +243,7 @@ export function RngDropdown({
                     title="Decrease dice count"
                     aria-label={`Decrease ${dice.label} count`}
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <Icon name="chevron-down" className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -293,14 +275,7 @@ export function RngDropdown({
               role="menuitem"
             >
               <span>Custom Roll</span>
-              <svg
-                className={`w-3 h-3 transition-transform ${isCustomOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              <Icon name="chevron-down" className={`w-3 h-3 transition-transform ${isCustomOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Custom roll form */}

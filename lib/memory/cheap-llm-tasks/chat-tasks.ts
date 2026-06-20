@@ -4,6 +4,7 @@
 
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
 import type { ChatMessage, CheapLLMTaskResult } from './types'
 
@@ -409,13 +410,7 @@ export async function considerHelpChatTitleUpdate(
     userId,
     (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
       try {
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
 
         let suggestedTitle = parsed.suggestedTitle
@@ -565,14 +560,7 @@ export async function considerTitleUpdate(
     userId,
     (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
       try {
-        // Clean the response - remove markdown code blocks if present
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
 
         let suggestedTitle = parsed.suggestedTitle

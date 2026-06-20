@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { useTheme, type ThemeSummary } from '@/components/providers/theme-provider'
 import { DEFAULT_THEME_TOKENS, DEFAULT_TYPOGRAPHY } from '@/lib/themes/default-tokens'
 import type { ColorMode } from '@/lib/themes/types'
@@ -131,19 +132,13 @@ function ColorModeOption({ mode, label, icon, isActive, onSelect }: ColorModeOpt
       onClick={onSelect}
       className={`
         w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-md
-        ${isActive ? 'bg-accent' : 'hover:qt-bg-muted'}
+        ${isActive ? 'qt-bg-primary/10' : 'hover:qt-bg-muted'}
       `}
     >
       <span className="w-4 h-4 flex-shrink-0 qt-text-secondary">{icon}</span>
       <span className="text-sm qt-text-primary flex-1">{label}</span>
       {isActive && (
-        <svg className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-          <path
-            fillRule="evenodd"
-            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <Icon name="check" className="w-4 h-4 text-primary flex-shrink-0" />
       )}
     </button>
   )
@@ -153,29 +148,17 @@ const COLOR_MODE_OPTIONS: { mode: ColorMode; label: string; icon: React.ReactNod
   {
     mode: 'light',
     label: 'Light',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-      </svg>
-    ),
+    icon: <Icon name="sun" className="w-4 h-4" />,
   },
   {
     mode: 'dark',
     label: 'Dark',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-      </svg>
-    ),
+    icon: <Icon name="moon" className="w-4 h-4" />,
   },
   {
     mode: 'system',
     label: 'System',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-      </svg>
-    ),
+    icon: <Icon name="monitor" className="w-4 h-4" />,
   },
 ]
 
@@ -203,7 +186,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode, headingFont
       onClick={onSelect}
       className={`
         w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-md
-        ${isActive ? 'bg-accent' : 'hover:qt-bg-muted'}
+        ${isActive ? 'qt-bg-primary/10' : 'hover:qt-bg-muted'}
       `}
       style={{
         // Apply theme colors as inline styles for preview
@@ -239,13 +222,7 @@ function ThemeOption({ theme, isActive, onSelect, resolvedColorMode, headingFont
 
       {/* Active indicator */}
       {isActive && (
-        <svg className="w-4 h-4 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-          <path
-            fillRule="evenodd"
-            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-            clipRule="evenodd"
-          />
-        </svg>
+        <Icon name="check" className="w-4 h-4 text-primary flex-shrink-0" />
       )}
     </button>
   )

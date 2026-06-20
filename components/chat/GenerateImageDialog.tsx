@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { Icon } from '@/components/ui/icon'
 
 interface EntityOption {
   id: string
@@ -45,9 +48,11 @@ export default function GenerateImageDialog({
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const { data: charactersData } = useSWR<{ characters: Array<{ id: string; name: string }> }>(
-    isOpen ? '/api/v1/characters' : null
-  )
+  const { data: charactersData } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: Array<{ id: string; name: string }> }>('/api/v1/characters', { signal }),
+    enabled: isOpen,
+  })
 
   const allEntities: EntityOption[] = charactersData?.characters
     ? charactersData.characters
@@ -177,9 +182,7 @@ export default function GenerateImageDialog({
             className="qt-button qt-button-ghost p-2"
             disabled={isGenerating}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-6 h-6" />
           </button>
         </div>
 
@@ -227,9 +230,7 @@ export default function GenerateImageDialog({
                   disabled={isGenerating}
                 >
                   <span>Other Characters...</span>
-                  <svg className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <Icon name="chevron-down" className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isDropdownOpen && (
@@ -248,7 +249,7 @@ export default function GenerateImageDialog({
                         <button
                           key={entity.id}
                           onClick={() => handleEntitySelect(entity)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
+                          className="w-full px-3 py-2 text-left text-sm qt-hover-accent flex items-center gap-2"
                         >
                           <span className={`px-1.5 py-0.5 text-xs rounded ${
                             entity.type === 'character'
@@ -322,9 +323,7 @@ export default function GenerateImageDialog({
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <Icon name="image" className="w-4 h-4" />
                 Generate Image
               </>
             )}

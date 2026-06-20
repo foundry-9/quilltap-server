@@ -6,6 +6,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { getAvatarSrc } from '@/components/ui/Avatar'
+import { Icon } from '@/components/ui/icon'
 
 interface ToolMessageProps {
   readonly message: {
@@ -70,7 +71,13 @@ interface ToolResult {
 }
 
 /** Wardrobe tool names that should show an action notice */
-const WARDROBE_ACTION_TOOLS = new Set(['update_outfit_item', 'create_wardrobe_item'])
+const WARDROBE_ACTION_TOOLS = new Set([
+  'wardrobe_wear',
+  'wardrobe_take_off',
+  'wardrobe_create',
+  'wardrobe_update',
+  'wardrobe_archive',
+])
 
 /**
  * Build a human-readable wardrobe action summary from tool result data.
@@ -86,28 +93,19 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
 
   const lines: string[] = []
 
-  if (toolData.toolName === 'update_outfit_item') {
-    const action = result.action as string
-    const item = result.item as { item_id?: string; title?: string } | null
-    const slot = result.slot as string
+  if (toolData.toolName === 'wardrobe_wear' || toolData.toolName === 'wardrobe_take_off') {
+    const operations = (result.operations as Array<{ effect_summary?: string; error?: string }> | undefined) ?? []
     const coverageSummary = result.coverage_summary as string | undefined
 
-    if (action === 'equipped' && slot === 'preset') {
-      lines.push('Applied an outfit preset.')
-    } else if (action === 'equipped' && item?.title) {
-      lines.push(`Equipped "${item.title}" in the ${slot} slot.`)
-    } else if (action === 'removed') {
-      lines.push(`Removed item from the ${slot} slot.`)
+    for (const op of operations) {
+      if (op.effect_summary) lines.push(op.effect_summary)
     }
-
-    if (coverageSummary) {
-      lines.push(coverageSummary)
-    }
+    if (coverageSummary) lines.push(coverageSummary)
 
     return lines.length > 0 ? { label: 'Wardrobe', lines } : null
   }
 
-  if (toolData.toolName === 'create_wardrobe_item') {
+  if (toolData.toolName === 'wardrobe_create') {
     const title = result.title as string | undefined
     const equipped = result.equipped as boolean | undefined
     const recipientName = result.recipient_name as string | undefined
@@ -125,6 +123,18 @@ function buildWardrobeActionSummary(toolData: ToolResult): { label: string; line
       }
     }
 
+    return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'wardrobe_update') {
+    const title = result.title as string | undefined
+    if (title) lines.push(`Updated "${title}".`)
+    return lines.length > 0 ? { label: 'Wardrobe', lines } : null
+  }
+
+  if (toolData.toolName === 'wardrobe_archive') {
+    const title = result.title as string | undefined
+    if (title) lines.push(`Archived "${title}" (a human can restore it).`)
     return lines.length > 0 ? { label: 'Wardrobe', lines } : null
   }
 
@@ -272,18 +282,38 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
       icon: '🧭',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    list_wardrobe: {
+    wardrobe_list: {
       displayName: 'Wardrobe',
       icon: '👗',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    update_outfit_item: {
-      displayName: 'Outfit Change',
+    wardrobe_read: {
+      displayName: 'Wardrobe Item',
       icon: '👗',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
-    create_wardrobe_item: {
+    wardrobe_wear: {
+      displayName: 'Put On',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_take_off: {
+      displayName: 'Take Off',
+      icon: '👗',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_create: {
       displayName: 'New Wardrobe Item',
+      icon: '🧵',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_update: {
+      displayName: 'Edit Wardrobe Item',
+      icon: '🧵',
+      bgColor: 'qt-bg-muted border qt-border-default',
+    },
+    wardrobe_archive: {
+      displayName: 'Archive Wardrobe Item',
       icon: '🧵',
       bgColor: 'qt-bg-muted border qt-border-default',
     },
@@ -455,9 +485,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                   title="Copy request"
                   type="button"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
+                  <Icon name="copy" className="w-4 h-4" />
                 </button>
               </div>
               {showRequest && (
@@ -500,9 +528,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                     title="Copy response"
                     type="button"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
+                    <Icon name="copy" className="w-4 h-4" />
                   </button>
                 )}
               </div>
@@ -515,14 +541,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                         <div key={attachment.id} className="relative group/thumb overflow-hidden rounded border qt-border-default hover:qt-border-primary/50 transition-colors">
                           {missingImages.has(attachment.id) ? (
                             <div className="w-20 h-20 flex items-center justify-center qt-bg-muted">
-                              <svg className="w-8 h-8 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={1.5}
-                                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                                />
-                              </svg>
+                              <Icon name="image" className="w-8 h-8 qt-text-secondary" />
                             </div>
                           ) : (
                             <div className="relative">
@@ -543,9 +562,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                                   />
                                 </div>
                                 <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
-                                  <svg className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                                  </svg>
+                                  <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
                                 </div>
                               </button>
                               <button
@@ -554,9 +571,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                                 title="Copy image"
                                 type="button"
                               >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
+                                <Icon name="copy" className="w-3 h-3" />
                               </button>
                             </div>
                           )}
@@ -631,9 +646,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                           />
                         </div>
                         <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
-                          <svg className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                          </svg>
+                          <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
                         </div>
                       </button>
                     )}

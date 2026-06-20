@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useCallback, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { Icon } from '@/components/ui/icon'
 
 export interface SlideOverPanelProps {
   isOpen: boolean
@@ -129,9 +130,7 @@ export function SlideOverPanel({
               className="qt-text-secondary hover:text-foreground transition-colors p-1"
               aria-label="Close panel"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-5 h-5" />
             </button>
           </div>
         </div>

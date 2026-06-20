@@ -123,6 +123,49 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
 }
 
 /**
+ * Standard placeholder shown in place of a character's surface `identity` when
+ * none is recorded — so another character is never handed a bare name with no
+ * context. Mirrors the off-scene roster's instinct to always say *something*.
+ */
+export const NO_PUBLIC_IDENTITY_FALLBACK =
+  '(no public identity on record — known to others only by the name above)'
+
+/**
+ * Build a compact, SURFACE-LEVEL identity card for `character`: the public view
+ * one character would have of another who has just addressed them — name, title,
+ * pronouns, aliases, and the `identity` field (the project's "what strangers
+ * know" vantage point), falling back to `description` (the acquaintance view) and
+ * then {@link NO_PUBLIC_IDENTITY_FALLBACK} when neither is set.
+ *
+ * Deliberately omits `personality` and `manifesto` — the character's PRIVATE
+ * vantage points — so surfacing the card to a third party never leaks what others
+ * are not meant to see. `{{char}}` resolves to this character; `{{user}}` to
+ * `userName` (their own name when they are the user-controlled persona, else the
+ * generic "User").
+ */
+export function buildPublicIdentityCard(character: Character, userName?: string | null): string {
+  const templateContext: TemplateContext = { char: character.name, user: userName || 'User' }
+  const render = (value: string) => processTemplate(value, templateContext).trim()
+
+  const lines: string[] = [`**${character.name}**`]
+  if (character.title) {
+    const title = render(character.title)
+    if (title) lines.push(`Title: ${title}`)
+  }
+  if (character.pronouns) {
+    lines.push(
+      `Pronouns: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}`,
+    )
+  }
+  if (character.aliases && character.aliases.length > 0) {
+    lines.push(`Also known as: ${character.aliases.join(', ')}`)
+  }
+  const body = render(character.identity?.trim() || character.description?.trim() || '')
+  lines.push(body || NO_PUBLIC_IDENTITY_FALLBACK)
+  return lines.join('\n')
+}
+
+/**
  * Build the system prompt for a character.
  *
  * After the Phase A–G refactor, the per-turn system prompt only carries the
@@ -292,7 +335,7 @@ export function buildIdentityReinforcement(
   // already knows who is in the scene from Host roster announcements and
   // per-message name attribution; the reminder only needs to emphasise
   // staying in {{char}}'s voice.
-  const template = `## Identity Reminder\nYou are {{char}}. Respond only as {{char}}. Do not write dialogue, actions, or thoughts for any other character. Your response must contain only {{char}}'s own speech, actions, and inner thoughts, following the response format described above.\nDo not prefix or label your response with your name (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
+  const template = `## Identity Reminder\nYou are {{char}}, and you control ONLY {{char}}. Respond as {{char}} and no one else. Write only {{char}}'s own speech, actions, and inner thoughts for this single turn, then stop and let the others act.\nNEVER write dialogue, actions, thoughts, or narration on behalf of any other character or the user. NEVER continue the scene from another character's point of view, and NEVER label a block of text with another character's name — do not emit speaker tags like "[Another Name]" or "Another Name:" for anyone but yourself. Writing another participant's turn is a serious error; let each of them speak for themselves.\nDo not prefix or label your response with your own name either (e.g., do not start with "[{{char}}]" or "{{char}}:"). Simply respond in character directly.`
 
   return processTemplate(template, {
     char: characterName,

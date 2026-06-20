@@ -17,10 +17,34 @@ import type { EmbeddingGeneratePayload } from '../queue-service';
 type EmbeddingEntityType = 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
 
 /**
- * Guard against oversize content. Returns true if the entity was skipped (and
- * the caller should bail without throwing — we don't want the queue to retry
- * something that will always be too big for the model). Returns false if the
- * caller should proceed with embedding.
+ * Whether an embedding failure is deterministic — i.e. retrying the exact same
+ * input will fail again. Such jobs should be marked failed and dropped, not
+ * retried to DEAD. (Tens of thousands of DEAD EMBEDDING_GENERATE rows had
+ * accumulated from exactly this: the same over-context / NaN / dimension-
+ * mismatch inputs retried three times each, forever.) Transient errors
+ * ("fetch failed", timeouts, connection resets) deliberately do NOT match, so
+ * they still retry.
+ */
+function isPermanentEmbeddingError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('nan') ||
+    m.includes('non-finite') ||
+    m.includes('exceeds the context length') ||
+    m.includes('maximum context length') ||
+    m.includes('cannot embed empty input') ||
+    m.includes('dimension mismatch')
+  );
+}
+
+/**
+ * Guard against content that can never be embedded successfully — either
+ * empty/whitespace-only (which makes some models, notably Ollama's
+ * qwen3-embedding, emit NaN vectors and 500) or oversize. Returns true if the
+ * entity was skipped (and the caller should bail without throwing — we don't
+ * want the queue to retry something deterministically unembeddable, which is
+ * how tens of thousands of DEAD jobs accumulate). Returns false if the caller
+ * should proceed with embedding.
  */
 async function skipIfOversize(
   text: string,
@@ -30,6 +54,26 @@ async function skipIfOversize(
   repos: ReturnType<typeof getRepositories>,
   extraLog: Record<string, unknown> = {}
 ): Promise<boolean> {
+  // Empty/whitespace-only input is deterministically unembeddable and is a
+  // known trigger for NaN embeddings on some providers. Skip without retry.
+  if (text.trim().length === 0) {
+    const reason = 'Empty input — nothing to embed';
+    logger.warn('[EmbeddingGenerate] Skipping empty entity', {
+      context: 'handleEmbeddingGenerate',
+      jobId: job.id,
+      entityType,
+      entityId: payload.entityId,
+      ...extraLog,
+    });
+    await repos.embeddingStatus.markAsFailed(
+      entityType,
+      payload.entityId,
+      payload.profileId,
+      reason
+    );
+    return true;
+  }
+
   if (text.length <= EMBEDDING_MAX_CHARS) return false;
 
   const reason = `Oversize: ${text.length} chars exceeds ${EMBEDDING_MAX_CHARS}-char cap`;
@@ -162,6 +206,16 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
       errorMessage
     );
 
+    if (isPermanentEmbeddingError(errorMessage)) {
+      logger.warn('[EmbeddingGenerate] Permanent embedding error — marked failed, skipping retry', {
+        context: 'handleEmbeddingGenerate',
+        jobId: job.id,
+        memoryId: payload.entityId,
+        error: errorMessage,
+      });
+      return;
+    }
+
     logger.error('[EmbeddingGenerate] Failed to generate embedding', {
       context: 'handleEmbeddingGenerate',
       jobId: job.id,
@@ -234,6 +288,17 @@ async function handleConversationChunkEmbedding(
       payload.profileId,
       errorMessage
     );
+
+    if (isPermanentEmbeddingError(errorMessage)) {
+      logger.warn('[EmbeddingGenerate] Permanent embedding error — marked failed, skipping retry', {
+        context: 'handleEmbeddingGenerate',
+        jobId: job.id,
+        chunkId: payload.entityId,
+        chatId: payload.chatId,
+        error: errorMessage,
+      });
+      return;
+    }
 
     logger.error('[EmbeddingGenerate] Failed to generate conversation chunk embedding', {
       context: 'handleEmbeddingGenerate',
@@ -312,6 +377,16 @@ async function handleHelpDocEmbedding(
       payload.profileId,
       errorMessage
     );
+
+    if (isPermanentEmbeddingError(errorMessage)) {
+      logger.warn('[EmbeddingGenerate] Permanent embedding error — marked failed, skipping retry', {
+        context: 'handleEmbeddingGenerate',
+        jobId: job.id,
+        docId: payload.entityId,
+        error: errorMessage,
+      });
+      return;
+    }
 
     logger.error('[EmbeddingGenerate] Failed to generate help doc embedding', {
       context: 'handleEmbeddingGenerate',
@@ -392,6 +467,16 @@ async function handleMountChunkEmbedding(
       payload.profileId,
       errorMessage
     );
+
+    if (isPermanentEmbeddingError(errorMessage)) {
+      logger.warn('[EmbeddingGenerate] Permanent embedding error — marked failed, skipping retry', {
+        context: 'handleEmbeddingGenerate',
+        jobId: job.id,
+        chunkId: payload.entityId,
+        error: errorMessage,
+      });
+      return;
+    }
 
     logger.error('[EmbeddingGenerate] Failed to generate mount chunk embedding', {
       context: 'handleEmbeddingGenerate',

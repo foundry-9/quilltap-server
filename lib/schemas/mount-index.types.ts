@@ -131,6 +131,16 @@ export const DocMountFileLinkSchema = z.object({
     .default('none'),
   extractionError: z.string().nullable().optional(),
   chunkCount: z.number().int().default(0),
+  // Per-document policy, derived from markdown frontmatter at index time
+  // (positive sense: `1`/true == permissive == the frontmatter default).
+  //   allowEmbed          — embed for semantic retrieval (frontmatter `embed`)
+  //   allowCharacterRead  — visible/readable to LLM characters (`character_read`)
+  //   allowCharacterWrite — mutable by LLM characters (`character_write`)
+  // Non-markdown links keep the permissive defaults — they carry no frontmatter.
+  // The human operator (operatorOverride) is never restricted by these flags.
+  allowEmbed: z.boolean().default(true),
+  allowCharacterRead: z.boolean().default(true),
+  allowCharacterWrite: z.boolean().default(true),
   lastModified: TimestampSchema,     // Per-link mtime (link can be touched independently)
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
@@ -187,6 +197,44 @@ export const ProjectDocMountLinkSchema = z.object({
 });
 
 export type ProjectDocMountLink = z.infer<typeof ProjectDocMountLinkSchema>;
+
+// ============================================================================
+// GROUP ↔ DOCUMENT MOUNT LINK
+//
+// A group's *additional linked* stores (the official store is recorded on the
+// group row as `officialMountPointId`, not here). Direct analogue of
+// ProjectDocMountLinkSchema. `groupId` is a cross-db ref to groups.id in the
+// MAIN db, exactly as project_doc_mount_links refers to projects.id.
+// ============================================================================
+
+export const GroupDocMountLinkSchema = z.object({
+  id: UUIDSchema,
+  groupId: UUIDSchema,
+  mountPointId: UUIDSchema,
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type GroupDocMountLink = z.infer<typeof GroupDocMountLinkSchema>;
+
+// ============================================================================
+// GROUP ↔ CHARACTER MEMBERSHIP
+//
+// Characters ↔ groups is many-to-many; this join table keeps the character row
+// untouched and the relation symmetric. `findByCharacterId` is the hot path for
+// tier resolution, so `characterId` is indexed. Both `groupId` and
+// `characterId` are cross-db refs to the MAIN db (groups.id / characters.id).
+// ============================================================================
+
+export const GroupCharacterMemberSchema = z.object({
+  id: UUIDSchema,
+  groupId: UUIDSchema,
+  characterId: UUIDSchema,
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+});
+
+export type GroupCharacterMember = z.infer<typeof GroupCharacterMemberSchema>;
 
 // ============================================================================
 // DOCUMENT MOUNT DOCUMENT (database-backed store content)

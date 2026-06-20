@@ -144,13 +144,19 @@ export async function processToolCalls(
       metadata: toolResult.metadata,
     })
 
-    // Build tool result payload
+    // Build tool result payload. On failure, carry the human-readable error
+    // text (same string persisted as the tool message's content) so live UIs
+    // can show a useful message instead of a generic "failed" — the result
+    // field itself is often null on error.
     const toolResultPayload: Record<string, unknown> = {
       index: toolIndex,
       name: toolResult.toolName,
       success: toolResult.success,
       result: toolResult.result,
     };
+    if (!toolResult.success) {
+      toolResultPayload.error = resultText;
+    }
 
     controller.enqueue(
       encoder.encode(

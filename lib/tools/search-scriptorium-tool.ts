@@ -27,10 +27,10 @@ export const searchScriptoriumToolInputSchema = z.object({
     )
     .optional(),
   scope: z
-    .enum(['all', 'project', 'character'])
+    .enum(['all', 'project', 'character', 'group'])
     .default('all')
     .describe(
-      "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. `scope` has no effect on `memories` or `conversations`."
+      "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, the stores of every group you belong to, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. \"group\" narrows to just the document stores of the groups you are a member of (returns nothing if you belong to no groups). `scope` has no effect on `memories` or `conversations`."
     )
     .optional(),
   limit: z
@@ -81,10 +81,12 @@ export interface SearchScriptoriumResult {
     mountPointName?: string
     fileName?: string
     filePath?: string
+    /** Canonical qtap:// URI for the matched document/knowledge file. */
+    uri?: string
     chunkIndex?: number
     headingContext?: string
     // Knowledge-specific
-    knowledgeTier?: 'character' | 'project' | 'global'
+    knowledgeTier?: 'character' | 'group' | 'project' | 'global'
   }
 }
 
@@ -119,4 +121,66 @@ export function validateSearchScriptoriumInput(
   input: unknown
 ): input is SearchScriptoriumToolInput {
   return searchScriptoriumToolInputSchema.safeParse(input).success
+}
+
+// ============================================================================
+// Brahma Console variant — memory source removed
+// ============================================================================
+
+/**
+ * Zod schema for the search tool as exposed to the **Brahma Console** — the
+ * character-less, memory-free operator surface. The `memories` source is
+ * removed entirely: the console has no character and no access to anyone's
+ * commonplace-book memories. Everything else (conversations, documents,
+ * knowledge) is searched operator-wide across every document store the user
+ * can see. Keeping a distinct Zod schema (rather than post-filtering) preserves
+ * the schema-as-single-source-of-truth rule for the tool chokepoint.
+ */
+export const searchScriptoriumBrahmaToolInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe(
+      'What to search for across the operator\'s conversations, documents, and knowledge base. Be specific about the topic, event, or detail you want to find.'
+    ),
+  sources: z
+    .array(z.enum(['conversations', 'documents', 'knowledge']))
+    .describe(
+      'Which layers to search. Defaults to all available sources if not specified. "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store; "knowledge" searches only files under a `Knowledge/` folder inside those stores. NOTE: this console has NO access to memories — the commonplace-book memory source is deliberately unavailable here.'
+    )
+    .optional(),
+  scope: z
+    .enum(['all', 'project', 'character', 'group'])
+    .default('all')
+    .describe(
+      'Which document stores the `documents` and `knowledge` sources reach into. The Brahma Console searches every enabled document store regardless of scope, so this parameter has no practical effect here.'
+    )
+    .optional(),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .default(10)
+    .describe('Maximum number of results to return across all sources. Default is 10.')
+    .optional(),
+})
+
+export type SearchScriptoriumBrahmaToolInput = z.infer<typeof searchScriptoriumBrahmaToolInputSchema>
+
+/**
+ * Brahma Console search tool definition. Same tool name (`search`) and handler
+ * as the standard scriptorium search, but its parameter schema omits the
+ * `memories` source so the model never sees it. The handler enforces the same
+ * exclusion defensively (operator surface → memory search is forced off).
+ */
+export const searchScriptoriumBrahmaToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'search',
+    description:
+      "Search across the operator's past conversation history and every document store you can reach (every file in every store, plus the `Knowledge/` folders within them via the `knowledge` source). Use this to find information from past chats, locate specific discussions by topic, search through reference documents, or look up what's been written down. NOTE: you do NOT have access to the operator's memories — the commonplace-book memory layer is intentionally not searchable from the Brahma Console.",
+    parameters: zodToOpenAISchema(searchScriptoriumBrahmaToolInputSchema),
+  },
 }

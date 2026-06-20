@@ -1,5 +1,7 @@
 'use client'
 
+import { Icon } from '@/components/ui/icon'
+
 interface GalleryControlsProps {
   totalCount: number
   onUploadClick: () => void
@@ -39,9 +41,7 @@ export function GalleryControls({
           }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:qt-bg-primary/90 rounded-md transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
+          <Icon name="upload" className="w-4 h-4" />
           Upload
         </button>
 
@@ -66,9 +66,7 @@ export function GalleryControls({
           className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
           title="Smaller thumbnails"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-          </svg>
+          <Icon name="zoom-out" className="w-5 h-5" />
         </button>
         <span className="qt-text-label-xs w-12 text-center">
           {thumbnailSize}px
@@ -81,9 +79,7 @@ export function GalleryControls({
           className="p-1 qt-text-secondary hover:text-foreground disabled:opacity-50"
           title="Larger thumbnails"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-          </svg>
+          <Icon name="zoom-in" className="w-5 h-5" />
         </button>
       </div>
     </div>

@@ -35,10 +35,13 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search';
 import {
   LITERAL_BOOST_CHARACTER,
+  LITERAL_BOOST_GROUP,
   LITERAL_BOOST_PROJECT,
   LITERAL_BOOST_GLOBAL,
 } from '@/lib/embedding/literal-boost';
+import { dedupeTierTriple } from '@/lib/mount-index/tiered-mount-pool';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
+import { formatSelfUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
 import { estimateTokens } from '@/lib/tokens/token-counter';
 import { getRepositories } from '@/lib/repositories/factory';
 import { createServiceLogger } from '@/lib/logging/create-logger';
@@ -50,7 +53,7 @@ const DEFAULT_INLINE_TOKEN_THRESHOLD = 500;
 const DEFAULT_MIN_SCORE = 0.3;
 const POINTER_TEASER_MAX_CHARS = 120;
 
-export type KnowledgeTier = 'character' | 'project' | 'global';
+export type KnowledgeTier = 'character' | 'group' | 'project' | 'global';
 
 export interface KnowledgeRetrievalParams {
   characterId: string;
@@ -62,6 +65,12 @@ export interface KnowledgeRetrievalParams {
    * folder under it gets the tightest literal-boost (character tier).
    */
   characterMountPointId?: string | null;
+  /**
+   * Mount points of the stores belonging to the groups the RESPONDING character
+   * is a member of (official + linked). The Knowledge/ folder under each gets
+   * the group-tier literal-boost — tighter than project, looser than character.
+   */
+  groupMountPointIds?: string[];
   /**
    * Mount points linked to the active chat's project. The Knowledge/
    * folder under each gets the project-tier literal-boost.
@@ -130,20 +139,22 @@ export async function retrieveKnowledgeForTurn(
 
   // Build the tier plan, dropping duplicates between tiers so the same
   // mount can't enter the pool twice if a user has somehow linked their
-  // character vault into a project, etc.
-  const characterMountPointId = params.characterMountPointId ?? null;
-  const projectMountPointIdSet = new Set(params.projectMountPointIds ?? []);
-  if (characterMountPointId) projectMountPointIdSet.delete(characterMountPointId);
-  let globalMountPointId = params.globalMountPointId ?? null;
-  if (globalMountPointId && globalMountPointId === characterMountPointId) {
-    globalMountPointId = null;
-  }
-  if (globalMountPointId) projectMountPointIdSet.delete(globalMountPointId);
-  const projectMountPointIds = Array.from(projectMountPointIdSet);
+  // character vault into a project, etc. Dedup is delegated to the shared
+  // `dedupeTierTriple` so the priority (character > group > project > global)
+  // stays identical to the scriptorium search / wardrobe / path resolver.
+  const { characterMountPointId, groupMountPointIds, projectMountPointIds, globalMountPointId } = dedupeTierTriple({
+    characterMountPointId: params.characterMountPointId ?? null,
+    groupMountPointIds: params.groupMountPointIds ?? [],
+    projectMountPointIds: params.projectMountPointIds ?? [],
+    globalMountPointId: params.globalMountPointId ?? null,
+  });
 
   const tiers: Array<{ tier: KnowledgeTier; mountPointIds: string[]; boost: number }> = [];
   if (characterMountPointId) {
     tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER });
+  }
+  if ((groupMountPointIds ?? []).length > 0) {
+    tiers.push({ tier: 'group', mountPointIds: groupMountPointIds ?? [], boost: LITERAL_BOOST_GROUP });
   }
   if (projectMountPointIds.length > 0) {
     tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT });
@@ -347,13 +358,29 @@ export async function retrieveKnowledgeForTurn(
 
 function tierLabel(tier: KnowledgeTier): string {
   if (tier === 'character') return 'character';
+  if (tier === 'group') return 'group';
   if (tier === 'project') return 'project';
   return 'general';
 }
 
+/**
+ * Canonical qtap:// URI for a knowledge candidate. The `character` tier IS the
+ * acting character's own vault, so it gets the stable `qtap://self/…` form;
+ * every other tier addresses its store by name (model-only context).
+ */
+function knowledgeUri(c: Candidate): string {
+  if (c.tier === 'character') return formatSelfUri(c.filePath);
+  return formatDocStoreUri({
+    mountPointName: c.mountPointName,
+    mountPointId: c.mountPointId,
+    path: c.filePath,
+  });
+}
+
 function renderInlineEntry(c: Candidate): string {
+  const uri = knowledgeUri(c);
   const lines: string[] = [];
-  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${c.mountPointName}/${c.filePath}`);
+  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${uri}`);
   if (c.fmTags) {
     lines.push(`Tags: ${c.fmTags}`);
   }
@@ -361,14 +388,15 @@ function renderInlineEntry(c: Candidate): string {
   lines.push((c.body ?? '').trimEnd());
   lines.push('');
   lines.push(
-    `If you need to re-read with offset/limit: doc_read_file(scope="document_store", mount_point="${c.mountPointName}", path="${c.filePath}")`,
+    `If you need to re-read with offset/limit: doc_read_file(uri="${uri}")`,
   );
   return lines.join('\n');
 }
 
 function renderPointerEntry(c: Candidate): string {
+  const uri = knowledgeUri(c);
   const lines: string[] = [];
-  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${c.mountPointName}/${c.filePath}`);
+  lines.push(`### Knowledge (${tierLabel(c.tier)}) — ${uri}`);
   if (c.pointerTeaser) {
     lines.push(`Why: ${c.pointerTeaser}`);
   }
@@ -376,7 +404,7 @@ function renderPointerEntry(c: Candidate): string {
     lines.push(`Tags: ${c.fmTags}`);
   }
   lines.push(
-    `Read with: doc_read_file(scope="document_store", mount_point="${c.mountPointName}", path="${c.filePath}")`,
+    `Read with: doc_read_file(uri="${uri}")`,
   );
   return lines.join('\n');
 }

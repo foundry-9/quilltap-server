@@ -17,6 +17,7 @@ import type {
   ExportedChat,
   ExportedRoleplayTemplate,
   ExportedProject,
+  ExportedGroup,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
@@ -39,6 +40,7 @@ export interface AnyExportData {
   embeddingProfiles?: SanitizedEmbeddingProfile[];
   roleplayTemplates?: ExportedRoleplayTemplate[];
   projects?: ExportedProject[];
+  groups?: ExportedGroup[];
   memories?: Memory[];
   // Document store export payload (Scriptorium)
   mountPoints?: ExportedDocumentStore[];
@@ -77,6 +79,7 @@ export interface ImportPreview {
     embeddingProfiles?: ImportPreviewEntity[];
     tags?: ImportPreviewEntity[];
     projects?: ImportPreviewEntity[];
+    groups?: ImportPreviewEntity[];
     memories?: { count: number };
   };
   conflictCounts: Record<string, number>;
@@ -92,6 +95,13 @@ export interface ImportResult {
   imported: QuilltapExportCounts;
   skipped: QuilltapExportCounts;
   warnings: string[];
+  /**
+   * Destination character IDs touched by the import (the values of the
+   * character id-map). For the `duplicate` conflict strategy these are the
+   * newly created characters; consumers such as the Salon "Summon from Lore"
+   * flow read this to find the character that was just brought into being.
+   */
+  importedCharacterIds: string[];
 }
 
 export interface IdMappingState {
@@ -103,6 +113,7 @@ export interface IdMappingState {
   embeddingProfiles: Map<string, string>;
   roleplayTemplates: Map<string, string>;
   projects: Map<string, string>;
+  groups: Map<string, string>;
   mountPoints: Map<string, string>;
 }
 

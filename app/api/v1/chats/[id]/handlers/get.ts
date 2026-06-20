@@ -20,7 +20,9 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleAccessibleStores } from '../actions';
+import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
+import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -50,13 +52,32 @@ export async function handleGet(
       const allEvents = await repos.chats.getMessages(chatId);
       const messages = allEvents.filter((event) => event.type === 'message');
 
-      const characterParticipant = chat.participants.find((p) => p.type === 'CHARACTER' && p.characterId);
-      if (!characterParticipant?.characterId) {
+      const characterParticipants = chat.participants.filter(
+        (p) => p.type === 'CHARACTER' && p.characterId
+      );
+      const primaryParticipant = characterParticipants[0];
+      if (!primaryParticipant?.characterId) {
         return notFound('No character in chat');
       }
 
-      const character = await repos.characters.findById(characterParticipant.characterId);
-      if (!character) {
+      // Load every character participant so each message can be attributed to
+      // its real author. The map is keyed by participant id (what messages
+      // carry in `participantId`); broken-vault characters are dropped by
+      // findByIds and simply fall back to the primary name in the export.
+      const characters = await repos.characters.findByIds(
+        characterParticipants
+          .map((p) => p.characterId)
+          .filter((id): id is string => typeof id === 'string')
+      );
+      const charactersById = new Map(characters.map((c) => [c.id, c]));
+      const participantNames = new Map<string, string>();
+      for (const p of characterParticipants) {
+        const name = p.characterId ? charactersById.get(p.characterId)?.name : undefined;
+        if (name) participantNames.set(p.id, name);
+      }
+
+      const primaryCharacter = charactersById.get(primaryParticipant.characterId);
+      if (!primaryCharacter) {
         return notFound('Character');
       }
 
@@ -73,6 +94,7 @@ export async function handleGet(
         swipeIndex: msg.swipeIndex || null,
         tokenCount: msg.tokenCount || null,
         rawResponse: msg.rawResponse || null,
+        participantId: msg.participantId || null,
       }));
 
       const chatForExport = {
@@ -81,9 +103,15 @@ export async function handleGet(
         updatedAt: new Date(chat.updatedAt),
       };
 
-      const jsonlContent = exportSTChatAsJSONL(chatForExport, formattedMessages, character.name, userName);
+      const jsonlContent = exportSTChatAsJSONL(
+        chatForExport,
+        formattedMessages,
+        primaryCharacter.name,
+        userName,
+        participantNames
+      );
       const chatCreatedTime = new Date(chat.createdAt).getTime();
-      const filename = `${character.name}_chat_${chatCreatedTime}.jsonl`;
+      const filename = `${primaryCharacter.name}_chat_${chatCreatedTime}.jsonl`;
 
       return new NextResponse(jsonlContent, {
         headers: {
@@ -120,6 +148,17 @@ export async function handleGet(
   // Handle photo-albums action - resolve candidate save targets for an image
   if (action === 'photo-albums') {
     return handleGetPhotoAlbums(chatId, ctx);
+  }
+
+  // Handle group-stores action - document stores of groups the user persona belongs to
+  if (action === 'group-stores') {
+    return handleGetGroupStores(chatId, ctx);
+  }
+
+  // Handle mailbox action - letters in a player-character's Mail/ folder, for the
+  // Compose Mail modal's "In reply to" dropdown.
+  if (action === 'mailbox') {
+    return handleGetMailbox(req, chatId, ctx);
   }
 
   // Handle accessible-stores action - document stores for the Open-Document
@@ -202,6 +241,13 @@ export async function handleGet(
     // (DB row says "live" but ptyManager doesn't have it) and post the close
     // announcements before we read the message history below.
     await reconcileTerminalSessionsForChat(chatId);
+
+    // The Post Office: announce any letters addressed to the operator's own
+    // character(s) before we read the history below. A user-controlled
+    // participant never takes an LLM turn, so the per-turn mail check never
+    // covers it; without this, mail to the operator's character would sit
+    // unannounced in an idle room. Idempotent and warn-only inside.
+    await surfaceOperatorMailForChat(chatId, chatMetadata.participants);
 
     const enrichedParticipants = await Promise.all(
       chatMetadata.participants.map((p) => enrichParticipantDetail(p, repos, chatId))
@@ -367,6 +413,7 @@ export async function handleGet(
             systemSender: event.systemSender || null,
             systemKind: event.systemKind || null,
             customAnnouncer: event.customAnnouncer || null,
+            carinaMeta: event.carinaMeta || null,
             pendingExternalPrompt: event.pendingExternalPrompt || null,
             pendingExternalPromptFull: event.pendingExternalPromptFull || null,
             pendingExternalAttachments: event.pendingExternalAttachments || null,
@@ -392,6 +439,19 @@ export async function handleGet(
       const id = m?.customAnnouncer?.characterId;
       if (typeof id === 'string' && !participantCharacterIds.has(id)) {
         offSceneCharacterIds.add(id);
+      }
+      // Carina (inline LLM queries): a reference answer renders with the
+      // answerer character's own avatar. When the answerer isn't a participant,
+      // collect them here so the Salon can resolve their avatar/name. The Brahma
+      // Console pseudocharacter (reserved sentinel id) has no character record —
+      // skip it so we don't fire a guaranteed-miss lookup per Brahma message.
+      const carinaAnswererId = m?.carinaMeta?.answererId;
+      if (
+        typeof carinaAnswererId === 'string' &&
+        carinaAnswererId !== BRAHMA_CARINA_ANSWERER_ID &&
+        !participantCharacterIds.has(carinaAnswererId)
+      ) {
+        offSceneCharacterIds.add(carinaAnswererId);
       }
     }
     const offSceneCharacters: Array<{ id: string; name: string; title: string | null; avatarUrl: string | null }> = [];

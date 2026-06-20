@@ -42,7 +42,9 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
 
   let projects;
   try {
-    projects = await repos.projects.findAll();
+    // Raw reads: the store overlay would throw/drop storeless projects, and
+    // this hook only needs the row fields (id, name, officialMountPointId).
+    projects = await repos.projects.findAllRaw();
   } catch (error) {
     logger.error('ensure-project-scenarios: failed to list projects', {
       error: error instanceof Error ? error.message : String(error),

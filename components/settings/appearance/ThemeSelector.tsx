@@ -5,7 +5,7 @@
  *
  * Displays available themes as selectable cards with previews.
  * Includes default theme, plugin-provided themes, and bundle themes.
- * Supports expandable rich previews with only one expanded at a time.
+ * The Preview button on a card opens a single full-page ThemePreviewModal.
  * Supports installing .qtap-theme bundles via file upload and uninstalling bundle themes.
  *
  * @module components/settings/appearance/ThemeSelector
@@ -15,6 +15,8 @@ import { useState, useCallback, useRef } from 'react'
 import type { ThemeSummary } from '@/components/providers/theme-provider'
 import { BrandName } from '@/components/ui/brand-name'
 import { ThemeCard } from './components/ThemeCard'
+import { ThemePreviewModal } from './components/ThemePreviewModal'
+import { Icon } from '@/components/ui/icon'
 
 interface ThemeSelectorProps {
   activeThemeId: string | null
@@ -34,21 +36,15 @@ export function ThemeSelector({
   onThemeSelect,
   onRefreshThemes,
 }: ThemeSelectorProps) {
-  // Track which theme has its preview expanded (null = none, 'default' = default theme)
-  const [expandedThemeId, setExpandedThemeId] = useState<string | null>(null)
+  // Track which theme has its preview modal open (null = closed, 'default' = default theme)
+  const [previewThemeId, setPreviewThemeId] = useState<string | null>(null)
   const [installStatus, setInstallStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [isInstalling, setIsInstalling] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Handle toggle expand - only one can be expanded at a time
-  const handleToggleExpand = useCallback((themeId: string | null) => {
-    setExpandedThemeId((current) => {
-      const key = themeId ?? 'default'
-      if (current === key) {
-        return null
-      }
-      return key
-    })
+  // Open the full-page preview modal for a theme (null = the default theme)
+  const handleOpenPreview = useCallback((themeId: string | null) => {
+    setPreviewThemeId(themeId ?? 'default')
   }, [])
 
   // Handle .qtap-theme file upload
@@ -166,6 +162,14 @@ export function ThemeSelector({
     }
   }, [])
 
+  // Resolve the theme being previewed in the modal (null = default theme).
+  const previewTheme =
+    previewThemeId && previewThemeId !== 'default'
+      ? availableThemes.find((t) => t.id === previewThemeId) ?? null
+      : null
+  const previewIsActive =
+    previewThemeId === 'default' ? activeThemeId === null : activeThemeId === previewThemeId
+
   return (
     <section className="border-t qt-border-default pt-8">
       <div className="flex items-center justify-between mb-2">
@@ -183,9 +187,7 @@ export function ThemeSelector({
             </>
           ) : (
             <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Icon name="plus" className="w-4 h-4" />
               Install Theme
             </>
           )}
@@ -222,9 +224,7 @@ export function ThemeSelector({
               onClick={() => setInstallStatus(null)}
               className="ml-2 text-current opacity-60 hover:opacity-100"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -237,8 +237,7 @@ export function ThemeSelector({
           isActive={activeThemeId === null}
           onSelect={() => onThemeSelect(null)}
           disabled={isLoading}
-          isExpanded={expandedThemeId === 'default'}
-          onToggleExpand={() => handleToggleExpand(null)}
+          onToggleExpand={() => handleOpenPreview(null)}
           onExport={() => handleExport('default')}
         />
 
@@ -250,8 +249,7 @@ export function ThemeSelector({
             isActive={activeThemeId === theme.id}
             onSelect={() => onThemeSelect(theme.id)}
             disabled={isLoading}
-            isExpanded={expandedThemeId === theme.id}
-            onToggleExpand={() => handleToggleExpand(theme.id)}
+            onToggleExpand={() => handleOpenPreview(theme.id)}
             onUninstall={theme.source === 'bundle' ? () => handleUninstall(theme.id) : undefined}
             onExport={() => handleExport(theme.id)}
           />
@@ -260,21 +258,9 @@ export function ThemeSelector({
 
       {/* Hint about theme plugins */}
       {availableThemes.length === 0 && (
-        <div className="mt-4 p-4 bg-accent rounded-lg border qt-border-default">
+        <div className="mt-4 p-4 qt-bg-muted rounded-lg border qt-border-default">
           <div className="flex items-start gap-3">
-            <svg
-              className="w-5 h-5 qt-text-secondary flex-shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <Icon name="info" className="w-5 h-5 qt-text-secondary flex-shrink-0 mt-0.5" />
             <div>
               <p className="qt-text-small">
                 Additional themes can be added by installing theme plugins from the{' '}
@@ -285,6 +271,21 @@ export function ThemeSelector({
           </div>
         </div>
       )}
+
+      {/* Single full-page preview modal, driven by previewThemeId.
+          Keyed by theme so its local state (color mode) resets on each open. */}
+      <ThemePreviewModal
+        key={previewThemeId ?? 'closed'}
+        theme={previewTheme}
+        isActive={previewIsActive}
+        isOpen={previewThemeId !== null}
+        onClose={() => setPreviewThemeId(null)}
+        onApply={() => onThemeSelect(previewThemeId === 'default' ? null : previewThemeId)}
+        onUninstall={
+          previewTheme?.source === 'bundle' ? () => handleUninstall(previewTheme.id) : undefined
+        }
+        onExport={() => handleExport(previewThemeId === 'default' ? 'default' : previewThemeId ?? '')}
+      />
     </section>
   )
 }

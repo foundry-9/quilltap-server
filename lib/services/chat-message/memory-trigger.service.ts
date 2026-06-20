@@ -161,8 +161,9 @@ export async function triggerChatDangerClassification(
       return
     }
 
-    // Resolve danger settings — bail if mode is OFF (also collapses to OFF
-    // when the chat itself is Off-duty)
+    // Resolve danger settings — bail if mode is OFF. Passing `chat` collapses
+    // to OFF when the chat is Off-duty OR is a moderation-exempt type (Help
+    // Chat, Brahma Console), so those surfaces are never enqueued.
     const chatSettings = await repos.chatSettings.findByUserId(options.userId)
     const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat)
     if (dangerSettings.mode === 'OFF') {

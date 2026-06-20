@@ -20,15 +20,20 @@ import {
   COMMAND_PRIORITY_NORMAL,
   $getSelection,
   $isRangeSelection,
+  $isElementNode,
   $createTextNode,
   $createParagraphNode,
   createCommand,
   type LexicalCommand,
+  type TextNode,
 } from 'lexical'
 import { $setBlocksType } from '@lexical/selection'
 import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from '@lexical/rich-text'
 import { $insertList } from '@lexical/list'
 import { $createCodeNode, $isCodeNode } from '@lexical/code'
+import type { TemplateDelimiter } from '@/lib/schemas/template.types'
+import { delimiterToPrefixSuffix } from '@/lib/chat/annotations'
+import { toggleWrap, toggleLinePrefix, insertTagPrefix } from '@/lib/chat/text-transforms'
 
 /**
  * Command to set the current block to a heading.
@@ -56,11 +61,18 @@ export const INSERT_BLOCKQUOTE_COMMAND: LexicalCommand<void> =
   createCommand('INSERT_BLOCKQUOTE_COMMAND')
 
 /**
- * Command to wrap the current selection with delimiter text.
- * Payload is { prefix, suffix } strings to insert around selection.
+ * Command to apply a roleplay delimiter to the current selection. Payload is the
+ * full {@link TemplateDelimiter}; the handler dispatches by `kind`:
+ *  - `wrap` → toggle `open`…`close` around the selection (insert + cursor when empty).
+ *  - `linePrefix` → toggle a line-start marker on the current block.
+ *  - `tagPrefix` → insert `open`+`close` at the block start, cursor between.
+ *
+ * Delimiters are inserted as literal text (not Lexical formatting) so they
+ * survive the markdown roundtrip as plain markers — the same string transforms
+ * back the source-textarea path, so the two stay consistent.
  */
-export const INSERT_DELIMITER_COMMAND: LexicalCommand<{ prefix: string; suffix: string }> =
-  createCommand('INSERT_DELIMITER_COMMAND')
+export const APPLY_DELIMITER_COMMAND: LexicalCommand<TemplateDelimiter> =
+  createCommand('APPLY_DELIMITER_COMMAND')
 
 /**
  * Command to toggle a code block. If the cursor is in a code block,
@@ -117,43 +129,60 @@ export function FormattingCommandPlugin() {
     )
 
     const unregisterDelimiter = editor.registerCommand(
-      INSERT_DELIMITER_COMMAND,
-      ({ prefix, suffix }: { prefix: string; suffix: string }) => {
+      APPLY_DELIMITER_COMMAND,
+      (delimiter: TemplateDelimiter) => {
         const selection = $getSelection()
         if (!$isRangeSelection(selection)) return false
 
-        const selectedText = selection.getTextContent()
-        if (selectedText) {
-          // Check if the selection is already wrapped in these delimiters
-          if (selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
-            // Unwrap: remove the delimiters
-            const inner = selectedText.slice(prefix.length, selectedText.length - suffix.length)
-            selection.insertRawText(inner)
-          } else {
-            // Wrap selection with delimiters
-            selection.insertRawText(`${prefix}${selectedText}${suffix}`)
-          }
-        } else {
-          // No selection: insert delimiters with cursor between them
-          const placeholderText = `${prefix}${suffix}`
-          selection.insertRawText(placeholderText)
-          // Move cursor to between the delimiters
-          const nodes = selection.getNodes()
-          if (nodes.length > 0) {
-            const lastNode = nodes[nodes.length - 1]
-            if (lastNode.getType() === 'text') {
-              const textContent = lastNode.getTextContent()
-              const cursorPos = textContent.length - suffix.length
-              const key = lastNode.getKey()
-              selection.setTextNodeRange(
-                lastNode as import('lexical').TextNode,
-                cursorPos,
-                lastNode as import('lexical').TextNode,
-                cursorPos,
-              )
+        if (delimiter.kind === 'wrap') {
+          // Wrap toggles around the SELECTION (preserving the rest of the block's
+          // nodes/formatting). The string + cursor are computed by the shared
+          // transform over a mini flat model of just the selected text.
+          const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
+          const selectedText = selection.getTextContent()
+          const { value: newText, cursor } = toggleWrap(
+            { value: selectedText, start: 0, end: selectedText.length },
+            prefix,
+            suffix,
+          )
+          selection.insertRawText(newText)
+
+          // Only the insert-into-empty-selection case needs the cursor pulled
+          // back from the end (to sit between the delimiters). For wrap/unwrap,
+          // `cursor` is at the end of the inserted run, so insertRawText's
+          // default placement is already correct.
+          const fromEnd = newText.length - cursor
+          if (fromEnd > 0) {
+            const updated = $getSelection()
+            if ($isRangeSelection(updated)) {
+              const nodes = updated.getNodes()
+              const lastNode = nodes[nodes.length - 1]
+              if (lastNode && lastNode.getType() === 'text') {
+                const pos = (lastNode as TextNode).getTextContentSize() - fromEnd
+                updated.setTextNodeRange(lastNode as TextNode, pos, lastNode as TextNode, pos)
+              }
             }
           }
+          return true
         }
+
+        // linePrefix / tagPrefix style the WHOLE line, so they operate on the
+        // current block's text. We replace the block's inline content with the
+        // transformed plain text (preserving the block type), then place the
+        // cursor. Skip code blocks.
+        const anchorNode = selection.anchor.getNode()
+        const block = anchorNode.getTopLevelElement()
+        if (!block || !$isElementNode(block) || $isCodeNode(block)) return false
+
+        const blockText = block.getTextContent()
+        const result = delimiter.kind === 'linePrefix'
+          ? toggleLinePrefix({ value: blockText, start: 0, end: blockText.length }, delimiter.marker)
+          : insertTagPrefix({ value: blockText, start: 0, end: 0 }, delimiter.open, delimiter.close)
+
+        block.getChildren().forEach((child) => child.remove())
+        const textNode = $createTextNode(result.value)
+        block.append(textNode)
+        textNode.select(result.cursor, result.cursor)
         return true
       },
       COMMAND_PRIORITY_NORMAL,

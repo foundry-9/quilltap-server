@@ -73,6 +73,12 @@ const EMBEDDING_DEBOUNCE_MS = 2000;
 // database-store.ts when documents are written/deleted/moved. Bridge those
 // events into the same embedding-enqueue debounce semantics the filesystem
 // watcher uses, so downstream behaviour stays uniform.
+//
+// Chunking itself is NOT done here: `writeDatabaseDocument` re-chunks inline on
+// write (and store-file / doc-edit chunk on their own paths), so by the time the
+// debounce fires the chunks already exist and only need embedding. Doing the
+// chunk here as well would delete and rebuild chunks those writers just created,
+// needlessly discarding their embeddings.
 
 interface DatabaseStoreDebouncer {
   timer: NodeJS.Timeout | null;

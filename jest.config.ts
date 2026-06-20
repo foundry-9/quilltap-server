@@ -19,6 +19,11 @@ const config: Config = {
   // `@jest-environment node` docblock so their native Buffers never cross a
   // jsdom realm boundary — the other half of that fix.
   workerIdleMemoryLimit: '512MB',
+  // Runs once before the whole suite: rebuilds the real SQLCipher binding if it
+  // was compiled against a different Node ABI than the one running, so the
+  // real-binding DB suites self-heal after a Node upgrade instead of failing
+  // with NODE_MODULE_VERSION. Cheap no-op when the ABI already matches.
+  globalSetup: '<rootDir>/jest.global-setup.js',
   // Add more setup options before each test is run
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
@@ -54,11 +59,19 @@ const config: Config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
+    // Claude Code agent worktrees are full repo checkouts; their duplicated
+    // test files must not be picked up (and their packages/plugins would
+    // collide in the Haste map — see modulePathIgnorePatterns below).
+    '/\\.claude/',
     '/__tests__/integration/',
     '/__tests__/unit/lib/fixtures/',
   ],
   modulePathIgnorePatterns: [
     '/.next/',
+    // Exclude Claude Code agent worktrees so their copies of packages/* and
+    // plugins/* don't register as duplicate Haste modules ("looked up in the
+    // Haste module map ... several different files") and break unrelated suites.
+    '/\\.claude/',
   ],
   coverageThreshold: {
     global: {

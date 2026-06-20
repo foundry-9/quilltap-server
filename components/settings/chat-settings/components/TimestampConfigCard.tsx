@@ -120,7 +120,7 @@ export function TimestampConfigCard({
           {TIMESTAMP_MODES.map((mode) => (
             <label
               key={mode.value}
-              className={`flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors ${
+              className={`flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors ${
                 disabled ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
@@ -263,7 +263,7 @@ export function TimestampConfigCard({
                   }
                 }}
                 disabled={isDisabled}
-                className="px-3 py-2 text-xs border qt-border-default rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
+                className="px-3 py-2 text-xs border qt-border-default rounded qt-hover-accent transition-colors qt-text-secondary whitespace-nowrap"
                 title="Set to your browser's detected timezone"
               >
                 Detect
@@ -276,7 +276,7 @@ export function TimestampConfigCard({
                     onChange({ ...currentConfig, timezone: null })
                   }}
                   disabled={isDisabled}
-                  className="px-3 py-2 text-xs border qt-border-default rounded hover:bg-accent transition-colors qt-text-secondary whitespace-nowrap"
+                  className="px-3 py-2 text-xs border qt-border-default rounded qt-hover-accent transition-colors qt-text-secondary whitespace-nowrap"
                   title="Clear timezone override (use server default)"
                 >
                   Clear
@@ -306,7 +306,7 @@ export function TimestampConfigCard({
             <label className="block qt-text-label mb-2">
               Injection Method
             </label>
-            <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={currentConfig.autoPrepend}
@@ -332,7 +332,7 @@ export function TimestampConfigCard({
             <label className="block qt-text-label mb-2">
               Fictional Time
             </label>
-            <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
+            <label className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
               <input
                 type="checkbox"
                 checked={currentConfig.useFictionalTime}
@@ -380,7 +380,7 @@ export function TimestampConfigCard({
 
       {/* Info Section */}
       {compact && (
-        <div className="mt-4 p-2 bg-accent rounded text-xs qt-text-secondary">
+        <div className="mt-4 p-2 qt-bg-muted rounded text-xs qt-text-secondary">
           {currentConfig.mode === 'NONE'
             ? 'Timestamp injection is disabled'
             : `Timestamps will be injected ${

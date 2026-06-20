@@ -19,6 +19,19 @@ Project files are:
 
 Unlike general files (which are available everywhere), project files are scoped to their project, helping focus the AI on relevant materials.
 
+## The Project's Own Papers
+
+Every project now keeps four of its own documents at the very top of its store, penned and maintained by Quilltap itself:
+
+- **`description.md`** — the project's description
+- **`instructions.md`** — the standing instructions handed to the AI in this project's chats
+- **`state.json`** — saved game and session state (inventory, counters, and the like)
+- **`properties.json`** — the project's settings (character roster, default tools, background preferences, and so on)
+
+You may open and edit **`description.md`** and **`instructions.md`** right there in the Scriptorium, exactly as you would any other document — whatever you save becomes the project's description and instructions. The two `.json` papers hold structured data and are best adjusted through the project's ordinary settings, though they remain on view for the curious.
+
+These four are looked after for you: a project always has them, and changing a project's description or instructions in the usual settings simply rewrites the matching file. (Behind the scenes, the project's row in the ledger keeps only its name and a pointer to this store — everything else lives in these papers.)
+
 ## Supported File Types
 
 ### Text Files

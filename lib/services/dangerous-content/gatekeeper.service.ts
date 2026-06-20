@@ -19,6 +19,7 @@ import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 
 import { getErrorMessage } from '@/lib/error-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
+import { stripCodeFences } from '@/lib/services/ai-import.service'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createHash } from 'node:crypto'
 import { moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry'
@@ -444,14 +445,7 @@ export function parseClassificationResponse(
   threshold: number
 ): DangerClassificationResult {
   try {
-    // Clean the response
-    let cleanContent = responseContent.trim()
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-    } else if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-    }
-
+    const cleanContent = stripCodeFences(responseContent)
     const parsed = JSON.parse(cleanContent)
 
     const overallScore = typeof parsed.score === 'number' ? parsed.score : 0

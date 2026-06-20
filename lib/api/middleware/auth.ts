@@ -13,6 +13,9 @@ import { startupState } from '@/lib/startup/startup-state';
 import { logger } from '@/lib/logger';
 import { validationError, serverError } from '@/lib/api/responses';
 import type { User } from '@/lib/schemas/types';
+import { ProjectStoreUnavailableError } from '@/lib/projects/project-store/schema';
+import { GroupStoreUnavailableError } from '@/lib/groups/group-store/schema';
+import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
 
 const contextLogger = logger.child({ module: 'api-context-middleware' });
 
@@ -165,6 +168,41 @@ async function handleRouteError(
     }
     const method = request.method;
     const url = new URL(request.url).pathname;
+    // A project/group/character whose backing document store (or character vault)
+    // is missing is a broken invariant: the store-only read overlay throws rather
+    // than silently returning a hollow entity. Map each to a deliberate, contextful
+    // 503 instead of an opaque 500 so callers and logs can tell store degradation
+    // apart from a generic crash.
+    if (error instanceof ProjectStoreUnavailableError) {
+      contextLogger.error(`[${method} ${url}] Project document store unavailable`, {
+        projectId: error.projectId,
+        officialMountPointId: error.officialMountPointId,
+      });
+      return NextResponse.json(
+        { error: 'Project document store unavailable', projectId: error.projectId },
+        { status: 503 },
+      );
+    }
+    if (error instanceof GroupStoreUnavailableError) {
+      contextLogger.error(`[${method} ${url}] Group document store unavailable`, {
+        groupId: error.groupId,
+        officialMountPointId: error.officialMountPointId,
+      });
+      return NextResponse.json(
+        { error: 'Group document store unavailable', groupId: error.groupId },
+        { status: 503 },
+      );
+    }
+    if (error instanceof CharacterVaultUnavailableError) {
+      contextLogger.error(`[${method} ${url}] Character vault unavailable`, {
+        characterId: error.characterId,
+        characterDocumentMountPointId: error.characterDocumentMountPointId,
+      });
+      return NextResponse.json(
+        { error: 'Character vault unavailable', characterId: error.characterId },
+        { status: 503 },
+      );
+    }
     contextLogger.error(`[${method} ${url}] Unhandled route error`, {}, error instanceof Error ? error : undefined);
     return serverError('Internal server error');
   }
@@ -229,7 +267,10 @@ export const withAuth = withContext;
 export const withAuthParams = withContextParams;
 export const createAuthenticatedHandler = createContextHandler;
 export const createAuthenticatedParamsHandler = createContextParamsHandler;
-export const checkOwnership = <T extends { userId?: string }>(
+// Existence check, retained for call-site compatibility. Per-user ownership is
+// not enforced here (and global resources like projects no longer carry a
+// `userId` at all), so the constraint is widened to any object.
+export const checkOwnership = <T extends object>(
   resource: T | null | undefined,
   _userId: string
 ): resource is T => exists(resource);

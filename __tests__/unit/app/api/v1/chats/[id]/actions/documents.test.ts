@@ -29,6 +29,7 @@ class MockDatabaseStoreError extends Error {
 
 jest.mock('@/lib/mount-index/database-store', () => ({
   moveDatabaseDocument: jest.fn(),
+  readDatabaseDocument: jest.fn(),
   DatabaseStoreError: MockDatabaseStoreError,
 }))
 
@@ -36,6 +37,9 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianOpenAnnouncement: jest.fn().mockResolvedValue(null),
   postLibrarianSaveAnnouncement: jest.fn().mockResolvedValue(null),
   postLibrarianRenameAnnouncement: jest.fn().mockResolvedValue(null),
+  postLibrarianDeleteAnnouncement: jest.fn().mockResolvedValue(null),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }))
 
 jest.mock('fs/promises', () => ({
@@ -52,11 +56,14 @@ const {
   writeFileWithMtimeCheck,
 } = require('@/lib/doc-edit')
 
+const fsp = require('fs/promises')
+
 const {
   handleRecentDocuments,
   handleActiveDocument,
   handleOpenDocument,
   handleWriteDocument,
+  handleResolveDocument,
 } = require('@/app/api/v1/chats/[id]/actions/documents')
 
 describe('chats [id] document actions', () => {
@@ -335,5 +342,78 @@ describe('chats [id] document actions', () => {
 
     expect(response.status).toBe(409)
     expect(body.error).toMatch(/reload/i)
+  })
+
+  // --- resolve-document (existence gate for clickable qtap:// links) ---
+
+  function resolveReq(body: Record<string, unknown>) {
+    return { json: jest.fn().mockResolvedValue(body) } as any
+  }
+
+  it('resolve-document returns { exists: true } for a real file WITHOUT reading bytes', async () => {
+    const chatId = 'chat-1'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'p1', participants: [] })
+    resolveDocEditPath.mockResolvedValueOnce({
+      mountType: 'filesystem',
+      absolutePath: '/tmp/store/today.md',
+      scope: 'document_store',
+      relativePath: 'today.md',
+      mountPointId: 'm1',
+      mountPointName: 'Notes',
+    })
+    fsp.access.mockResolvedValueOnce(undefined)
+
+    const response = await handleResolveDocument(
+      resolveReq({ filePath: 'today.md', scope: 'document_store', mountPoint: 'Notes' }),
+      chatId,
+      ctx
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.exists).toBe(true)
+    // The probe must never return the document's bytes.
+    expect(readFileWithMtime).not.toHaveBeenCalled()
+  })
+
+  it('resolve-document returns { exists: false } for a missing file', async () => {
+    const chatId = 'chat-1'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'p1', participants: [] })
+    resolveDocEditPath.mockResolvedValueOnce({
+      mountType: 'filesystem',
+      absolutePath: '/tmp/store/missing.md',
+      scope: 'document_store',
+      relativePath: 'missing.md',
+      mountPointId: 'm1',
+      mountPointName: 'Notes',
+    })
+    fsp.access.mockRejectedValueOnce(Object.assign(new Error('nope'), { code: 'ENOENT' }))
+
+    const response = await handleResolveDocument(
+      resolveReq({ filePath: 'missing.md', scope: 'document_store', mountPoint: 'Notes' }),
+      chatId,
+      ctx
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.exists).toBe(false)
+  })
+
+  it('resolve-document returns { exists: false } for an inaccessible / unresolvable store', async () => {
+    const chatId = 'chat-1'
+    ctx.repos.chats.findById.mockResolvedValueOnce({ id: chatId, projectId: 'p1', participants: [] })
+    resolveDocEditPath.mockRejectedValueOnce(new MockDatabaseStoreError('access denied', 'ACCESS_DENIED'))
+
+    const response = await handleResolveDocument(
+      resolveReq({ filePath: 'secret.md', scope: 'document_store', mountPoint: 'Forbidden' }),
+      chatId,
+      ctx
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.exists).toBe(false)
+    expect(readFileWithMtime).not.toHaveBeenCalled()
   })
 })

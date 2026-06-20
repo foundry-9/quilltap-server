@@ -231,7 +231,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         {memories.length > 0 && (
           <button
             onClick={() => setShowHousekeeping(true)}
-            className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg hover:bg-accent"
+            className="px-3 py-1.5 qt-bg-muted text-foreground text-sm rounded-lg qt-hover-accent"
             title="Clean up old and low-importance memories"
           >
             Cleanup
@@ -261,7 +261,7 @@ export function MemoryList({ characterId, refreshKey }: MemoryListProps) {
         </select>
         <button
           onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg hover:bg-accent"
+          className="px-3 py-2 text-sm border border-input bg-background text-foreground rounded-lg qt-hover-accent"
           title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
         >
           {sortOrder === 'asc' ? '↑' : '↓'}

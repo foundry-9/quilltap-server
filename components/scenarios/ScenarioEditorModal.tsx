@@ -14,7 +14,7 @@
  * @module components/scenarios/ScenarioEditorModal
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import BaseModal from '@/components/ui/BaseModal'
 import FormActions from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
@@ -52,30 +52,29 @@ export function ScenarioEditorModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    /* eslint-disable react-hooks/set-state-in-effect -- syncs local form state to parent-driven scenario prop on modal open */
-    if (scenario) {
-      setFilename(scenario.filename)
-      setName(scenario.name)
-      setDescription(scenario.description ?? '')
-      setIsDefault(scenario.isDefault)
-      setBody(scenario.body)
-    } else {
-      setFilename('')
-      setName('')
-      setDescription('')
-      setIsDefault(false)
-      setBody('')
-    }
-    setError(null)
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [isOpen, scenario])
+  const remountKey = scenario ? `edit:${scenario.path}` : 'new'
 
-  const remountKey = useMemo(
-    () => (scenario ? `edit:${scenario.path}` : 'new'),
-    [scenario],
-  )
+  // Seed the form from `scenario` SYNCHRONOUSLY during render (React's "adjust
+  // state when a prop changes" pattern) rather than in an effect. The body must
+  // already hold the new scenario's text in the same commit that flips
+  // `remountKey`, because MarkdownLexicalEditor only reads its value at mount and
+  // remounts on remountKey change. An effect lands a tick too late: the editor
+  // would remount on the new key while `body` still held the previous scenario,
+  // showing the wrong body until — and forever after — the lagging setBody.
+  const [seededKey, setSeededKey] = useState<string | null>(null)
+  if (!isOpen) {
+    // Forget the seed while closed so the next open always re-reads fresh
+    // (even when re-opening the very same scenario).
+    if (seededKey !== null) setSeededKey(null)
+  } else if (seededKey !== remountKey) {
+    setFilename(scenario?.filename ?? '')
+    setName(scenario?.name ?? '')
+    setDescription(scenario?.description ?? '')
+    setIsDefault(scenario?.isDefault ?? false)
+    setBody(scenario?.body ?? '')
+    setError(null)
+    setSeededKey(remountKey)
+  }
 
   async function handleSave() {
     if (saving) return

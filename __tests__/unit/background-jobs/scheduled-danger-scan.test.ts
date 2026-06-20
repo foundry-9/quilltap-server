@@ -178,6 +178,18 @@ describe('runScheduledDangerScan', () => {
     expect(result.chatsEnqueued).toBe(0);
   });
 
+  it.each(['help', 'brahma'])('never enqueues %s chats, even with a context summary', async (chatType) => {
+    repositories.chats.findByUserId.mockResolvedValue([
+      buildChat({ id: `chat-${chatType}`, chatType, contextSummary: 'A conversation about cats.' }),
+    ]);
+
+    const result = await runScheduledDangerScan();
+
+    expect(mockEnqueueDangerClassification).not.toHaveBeenCalled();
+    expect(mockEnqueueContextSummary).not.toHaveBeenCalled();
+    expect(result.chatsEnqueued).toBe(0);
+  });
+
   it('skips chats without available connection profile', async () => {
     repositories.chats.findByUserId.mockResolvedValue([
       buildChat({

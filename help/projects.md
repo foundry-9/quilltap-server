@@ -356,6 +356,8 @@ Characters with help tools enabled can navigate directly to this page:
 - [Project Chats](project-chats.md) — Managing conversations within projects
 - [Project Files](project-files.md) — File management and organization
 - [Project Characters](project-characters.md) — Character roster and access control
+- [Project Scenarios](project-scenarios.md) — Reusable opening scenes for the project's chats
+- [Project Wardrobe](project-wardrobe.md) — Shared garments every character in the project can wear
 - [Project Settings](project-settings.md) — Configuration and customization
 - [Chats Overview](chats.md) — General chat functionality
 - [Files Management](files.md) — Global file management

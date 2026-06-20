@@ -2,6 +2,7 @@ import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import {
   ColorPalette,
+  Icons,
   Typography,
   Spacing,
   Buttons,
@@ -21,6 +22,12 @@ export default meta;
 export const Colors: StoryObj = {
   name: 'Color Palette',
   render: () => <ColorPalette />,
+};
+
+// Icons
+export const IconReference: StoryObj = {
+  name: 'Icons',
+  render: () => <Icons />,
 };
 
 // Typography

@@ -25,10 +25,17 @@
 @import "./_variables.css";
 
 /* Component categories */
+/* _icons.css is imported FIRST so the .qt-icon base size (width/height: 1em) is
+   the weakest sizing in @layer components — any later qt-* class that sizes an
+   icon via @apply w-5 h-5 (e.g. .qt-collapsible-card-chevron) wins the
+   same-layer tie, and Tailwind utilities (@layer utilities) always win. So
+   <Icon> sizing is driven by the call site's classes, never frozen at 1em. */
+@import "./_icons.css";        /* <Icon> defaults (generated — see icon-registry.ts) */
 @import "./_interactive.css";  /* Buttons, inputs, links */
 @import "./_surfaces.css";     /* Cards, panels, dialogs, popovers */
 @import "./_layout.css";       /* Navbar, sidebar, page containers */
 @import "./_chat.css";         /* Chat messages, composer, participants */
+@import "./_roleplay.css";     /* Roleplay-template chips + add-on flourishes */
 @import "./_content.css";      /* Badges, avatars, code blocks */
 @import "./_typography.css";   /* Semantic typography classes */
 @import "./_utilities.css";    /* Background, border, text color utilities */

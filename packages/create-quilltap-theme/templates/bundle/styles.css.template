@@ -321,6 +321,19 @@
   /* --qt-rp-button-ooc-bg: hsl(152 60% 28%); */
   /* --qt-rp-button-ooc-fg: hsl(152 60% 80%); */
 
+  /* Roleplay-template palette (qt-roleplay-1..4): four distinct high-contrast
+     chips a delimiter can opt into. Override these four fg/bg pairs to dress them
+     in your theme's hues. The semantic chips (qt-roleplay-danger/warning/success/
+     info/muted/code) follow your --color-* tokens, so they need no overrides. */
+  /* --qt-roleplay-1-bg: hsl(217 91% 53%); */
+  /* --qt-roleplay-1-fg: hsl(0 0% 100%); */
+  /* --qt-roleplay-2-bg: hsl(270 65% 55%); */
+  /* --qt-roleplay-2-fg: hsl(0 0% 100%); */
+  /* --qt-roleplay-3-bg: hsl(38 92% 50%); */
+  /* --qt-roleplay-3-fg: hsl(30 45% 12%); */
+  /* --qt-roleplay-4-bg: hsl(168 78% 36%); */
+  /* --qt-roleplay-4-fg: hsl(0 0% 100%); */
+
   /* ======================================================================
      BADGE VARIABLES
      ====================================================================== */

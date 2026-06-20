@@ -287,6 +287,17 @@
   --qt-rp-button-ooc-bg: hsl(152 60% 28%);
   --qt-rp-button-ooc-fg: hsl(152 60% 80%);
 
+  /* Roleplay-template palette (qt-roleplay-1..4): four distinct high-contrast
+     chips a delimiter can opt into. Themes override these four pairs to taste. */
+  --qt-roleplay-1-bg: hsl(217 91% 53%);
+  --qt-roleplay-1-fg: hsl(0 0% 100%);
+  --qt-roleplay-2-bg: hsl(270 65% 55%);
+  --qt-roleplay-2-fg: hsl(0 0% 100%);
+  --qt-roleplay-3-bg: hsl(38 92% 50%);
+  --qt-roleplay-3-fg: hsl(30 45% 12%);
+  --qt-roleplay-4-bg: hsl(168 78% 36%);
+  --qt-roleplay-4-fg: hsl(0 0% 100%);
+
   /* Queue badge variables */
   --qt-queue-badge-radius: var(--radius-sm);
   --qt-queue-badge-padding-x: 0.375rem;
@@ -1546,6 +1557,26 @@
   color: var(--color-accent-foreground);
 }
 
+/* Hoverable accent surface — list rows, menu items, and option cards that
+   should highlight on hover. On hover it paints the accent background AND
+   forces the accent foreground onto the row and every descendant, so the whole
+   row stays legible even on themes where --color-accent is a bold colour (e.g.
+   Madman's Box amber). Without the descendant flip, children carrying their own
+   colour (qt-text-secondary, qt-text-primary, …) would wash out — or, when their
+   colour matches the accent, vanish entirely. The descendant selector is wrapped
+   in :where() so it adds no specificity to the resting state (children own their
+   colour as usual); the :hover rules still win via the hover pseudo-class. */
+.qt-hover-accent {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.qt-hover-accent:hover {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+.qt-hover-accent:hover :where(*) {
+  color: var(--color-accent-foreground);
+}
+
 /* ==========================================================================
    STATUS COLOR UTILITIES (with opacity variants)
    ========================================================================== */
@@ -2526,3 +2557,44 @@
   background-color: var(--qt-terminal-closed-badge-bg);
   color: var(--qt-terminal-closed-badge-fg);
 }
+
+/* ==========================================================================
+   ROLEPLAY-TEMPLATE STYLES
+   The chips + add-on flourishes a roleplay-template delimiter can opt into. In
+   the app these are scoped under .qt-chat-message-content to override prose; the
+   stylebook has no prose layer, so they are declared plainly here for preview.
+   ========================================================================== */
+.qt-roleplay-1, .qt-roleplay-2, .qt-roleplay-3, .qt-roleplay-4,
+.qt-roleplay-danger, .qt-roleplay-warning, .qt-roleplay-success,
+.qt-roleplay-info, .qt-roleplay-muted, .qt-roleplay-code {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.1875rem;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.qt-roleplay-1 { --qt-rp-fg: var(--qt-roleplay-1-fg); --qt-rp-bg: var(--qt-roleplay-1-bg); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-2 { --qt-rp-fg: var(--qt-roleplay-2-fg); --qt-rp-bg: var(--qt-roleplay-2-bg); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-3 { --qt-rp-fg: var(--qt-roleplay-3-fg); --qt-rp-bg: var(--qt-roleplay-3-bg); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-4 { --qt-rp-fg: var(--qt-roleplay-4-fg); --qt-rp-bg: var(--qt-roleplay-4-bg); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+
+.qt-roleplay-danger { --qt-rp-fg: var(--color-destructive-foreground); --qt-rp-bg: var(--color-destructive); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-warning { --qt-rp-fg: var(--color-warning-foreground); --qt-rp-bg: var(--color-warning); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-success { --qt-rp-fg: var(--color-success-foreground); --qt-rp-bg: var(--color-success); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-info { --qt-rp-fg: var(--color-info-foreground); --qt-rp-bg: var(--color-info); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-muted { --qt-rp-fg: var(--color-muted-foreground); --qt-rp-bg: var(--color-muted); color: var(--qt-rp-fg); background: var(--qt-rp-bg); }
+.qt-roleplay-code { --qt-rp-fg: var(--color-foreground); --qt-rp-bg: var(--color-muted); color: var(--qt-rp-fg); background: var(--qt-rp-bg); font-family: var(--font-mono); }
+
+/* Add-on flourishes (composed on top of any base style). */
+.qt-rp-bold { font-weight: 700; }
+.qt-rp-italic { font-style: italic; }
+.qt-rp-underline { text-decoration: underline; }
+.qt-rp-underline-double { text-decoration: underline; text-decoration-style: double; }
+.qt-rp-border { border: 1px solid currentColor; padding: 0.0625rem 0.25rem; border-radius: 0.1875rem; }
+.qt-rp-border-dashed { border: 1px dashed currentColor; padding: 0.0625rem 0.25rem; border-radius: 0.1875rem; }
+.qt-rp-reverse { color: var(--qt-rp-bg, var(--color-background)); background-color: var(--qt-rp-fg, var(--color-foreground)); }
+.qt-rp-font-sans { font-family: var(--theme-font-sans, ui-sans-serif, system-ui, sans-serif); }
+.qt-rp-font-serif { font-family: var(--theme-font-serif, ui-serif, Georgia, "Times New Roman", serif); }
+.qt-rp-font-mono { font-family: var(--theme-font-mono, ui-monospace, "SFMono-Regular", Menlo, monospace); }
+.qt-rp-font-display { font-family: var(--qt-rp-font-display, var(--theme-font-serif, Georgia, "Times New Roman", serif)); }
+.qt-rp-font-script { font-family: var(--qt-rp-font-script, "Segoe Script", "Brush Script MT", cursive); }

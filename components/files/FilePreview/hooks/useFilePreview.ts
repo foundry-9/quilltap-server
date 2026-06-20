@@ -8,7 +8,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
 import { FileInfo } from '../../types'
 import { buildMountBlobUrl } from '../../mountBlobUrl'
 import { PreviewType, getPreviewType } from '../types'
@@ -69,16 +70,18 @@ export function useFilePreview({
   const hasPrevious = currentIndex > 0
   const hasNext = currentIndex < files.length - 1
 
-  // Load text content for text files via SWR (gated by previewType)
+  // Load text content for text files via TanStack Query (gated by previewType).
+  // Reads raw text (not JSON), so it uses a bespoke queryFn rather than apiFetch.
   const shouldFetchText = previewType === 'text' && file.size <= MAX_TEXT_SIZE
-  const { data: textData, isLoading: isLoadingText, error: swrTextError } = useSWR<string>(
-    shouldFetchText ? fileUrl : null,
-    shouldFetchText ? async (url: string) => {
-      const response = await fetch(url)
+  const { data: textData, isLoading: isLoadingText, error: swrTextError } = useQuery({
+    queryKey: queryKeys.files.content(fileUrl),
+    queryFn: async ({ signal }) => {
+      const response = await fetch(fileUrl, { signal })
       if (!response.ok) throw new Error('Failed to load file content')
       return response.text()
-    } : null
-  )
+    },
+    enabled: shouldFetchText,
+  })
 
   const textContent = textData ?? null
 

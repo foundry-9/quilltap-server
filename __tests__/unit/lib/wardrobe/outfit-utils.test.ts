@@ -9,7 +9,7 @@ import {
   addToSlot,
   removeFromSlot,
 } from '@/lib/wardrobe/outfit-displacement'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -92,6 +92,46 @@ describe('wardrobe outfit utilities', () => {
         '- **accessories:** no accessories',
         '',
       ].join('\n'))
+    })
+  })
+
+  describe('decorateOutfitItems', () => {
+    it('uses the title in the prose (non-titleOnly) path, decorating with description', () => {
+      expect(
+        decorateOutfitItems(
+          [{ title: 'Charcoal Sweater', description: 'hand-knit', imagePrompt: 'IGNORED' }],
+        )
+      ).toEqual(['Charcoal Sweater (hand-knit)'])
+    })
+
+    it('prefers imagePrompt over title in the titleOnly (image) path', () => {
+      expect(
+        decorateOutfitItems(
+          [{ title: 'Captain Rank Chest', imagePrompt: 'intricate burnished-gold rank glyph' }],
+          { titleOnly: true },
+        )
+      ).toEqual(['intricate burnished-gold rank glyph'])
+    })
+
+    it('falls back to title when imagePrompt is absent or blank (image path)', () => {
+      expect(
+        decorateOutfitItems(
+          [
+            { title: 'Plain Tunic' },
+            { title: 'Blank Cue', imagePrompt: '   ' },
+            { title: 'Null Cue', imagePrompt: null },
+          ],
+          { titleOnly: true },
+        )
+      ).toEqual(['Plain Tunic', 'Blank Cue', 'Null Cue'])
+    })
+
+    it('ignores imagePrompt entirely in the prose path even when set', () => {
+      expect(
+        decorateOutfitItems(
+          [{ title: 'Plain Tunic', imagePrompt: 'should not appear' }],
+        )
+      ).toEqual(['Plain Tunic'])
     })
   })
 

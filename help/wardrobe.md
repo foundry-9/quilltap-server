@@ -31,16 +31,16 @@ A character may have many items in each slot, and equip multiple of them at once
 
 ## Creating Wardrobe Items
 
-To furnish a character's wardrobe:
+To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-hanger icon on the left sidebar, reachable from any page that bears the sidebar (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
 
-1. Navigate to **Aurora** (the Characters page)
-2. Open a character and look for the **Wardrobe** section
-3. Click to add a new wardrobe item
-4. Choose the **slot** (top, bottom, footwear, or accessories)
-5. Give the item a **name** (e.g., "Burgundy velvet smoking jacket")
-6. Provide a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
+1. Pick the character from the dropdown at the top of the dialog (if one isn't already selected)
+2. Click **+ New Item**
+3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-three-tiers) for what each tier means.
+4. Choose the **slot(s)** the garment covers (top, bottom, footwear, or accessories)
+5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
+6. Optionally supply a **Portrait Cue** --- a short, literal phrase whispered to the portraitist and the Lantern when a likeness is drawn (see [Portrait Cues](#portrait-cues-dressing-for-the-camera) below)
 
-You may also edit or remove items at any time. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
+You may edit or remove your personal items at any time via each row's `⋮` menu. The wardrobe is yours to curate, though your characters may have opinions about it (see below).
 
 ## The Wardrobe Control Dialog
 
@@ -66,8 +66,8 @@ For those moments when visual inspiration strikes --- a photograph discovered in
 
 To use this feature:
 
-1. Navigate to a character's **Appearance** tab
-2. In the **Personal Wardrobe** section header, click the **image icon** button (beside "Add Item")
+1. Open the **Wardrobe** dialog (the clothes-hanger icon on the left sidebar) and select the character
+2. Click **Import from image** (it sits beside **+ New Item** at the foot of the wardrobe list)
 3. Drop an image file into the upload zone, or click to browse (JPEG, PNG, WebP, or GIF, up to 10 MB)
 4. Optionally provide **guidance notes** --- free-text hints to steer the analysis (e.g., "this is a medieval fantasy setting," "focus on the woman on the left," "ignore the background characters")
 5. Click **Analyze Image**
@@ -82,11 +82,29 @@ Click **Import Selected** to add the approved items to the character's personal 
 
 **Requirements:** This feature requires at least one vision-capable provider to be configured (Anthropic Claude, OpenAI GPT-4o, Google Gemini, or xAI Grok). If you have configured an **Image Description Profile** in your Chat settings, that profile will be used; otherwise Quilltap will select any available vision-capable provider from your connection profiles.
 
+### Where Wardrobe Items Come From (Three Tiers)
+
+A character does not draw her wearable garments from a single drawer. Quilltap consults three tiers, nearest to farthest:
+
+1. **The character's own vault** — her personal armoire, hers alone.
+2. **The project's wardrobe** — shared attire belonging to whichever project the chat lives in (a household livery, a regimental coat), wearable by every character in that project's chats. See [Project Wardrobe](project-wardrobe.md).
+3. **Quilltap General** — the household-wide collection of shared items (archetypes, below), available to every character in every chat regardless of project.
+
+When the same garment appears in more than one tier, the nearer tier prevails: a character's personal item outranks a project item, which in turn outranks a household archetype. A project's garments are on offer only while a chat belongs to that project; outside it, they simply aren't shown.
+
 ### Shared Items (Archetypes)
 
 Some garments transcend the boundaries of any single wardrobe. A Roman legionary's tunic, a proper Edwardian morning suit, or a pair of sensible Wellington boots --- these are the sort of items that any character might reasonably don, regardless of their personal collection.
 
-**Shared items** (also known as archetypes) are wardrobe items not bound to any particular character. Any character may equip them directly, without the tedium of maintaining duplicate entries. To create a shared item, check the "Shared item" checkbox when adding a new garment. Shared items appear in a separate "Shared Wardrobe" section beneath each character's personal collection.
+**Shared items** (also known as archetypes) are wardrobe items not bound to any particular character — the household-wide tier, kept in Quilltap General. Any character may equip them directly, without the tedium of maintaining duplicate entries.
+
+When you add a new garment from the Wardrobe dialog, an **"Add to"** selector at the top of the editor lets you choose its destination:
+
+- **This character** — a personal item in the character's own vault (the default).
+- **Shared — everywhere** — a household archetype in Quilltap General, wearable by every character in every chat.
+- **Shared — this project** — a [Project Wardrobe](project-wardrobe.md) item (offered only when you're in a chat that belongs to a project), wearable by every character in that project's chats.
+
+Shared items appear in the dialog's list tagged "· shared" and are wear-only there; manage household archetypes from any character's wardrobe and project items from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives.)
 
 ### Composite Items (Bundled Outfits)
 
@@ -114,14 +132,19 @@ Items that have fallen out of favour need not be destroyed entirely. **Archiving
 
 ## Characters and Their Wardrobe Tools
 
-During a chat, characters with the appropriate permissions can interact with the wardrobe using four tools:
+During a chat, characters with the appropriate permissions may attend to their toilette by means of seven tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
 
-- **list_wardrobe** --- Browse all available items in the character's wardrobe (composites are flagged as such, with their components listed)
-- **wardrobe_change_item** --- Adjust a single garment. Modes: `wear` (put it on across every slot it covers, honoring the item's replace setting — ordinarily layering it on), `replace` (clear those slots first, then put it on — a forced swap), `add_to_slot` (layer an item into one named slot), `remove_from_slot` (take off one specific item), `clear_slot` (empty a slot entirely). Each result tells the character exactly what happened — layered or replaced. Refuses composite outfits — those have their own tool
-- **wardrobe_set_outfit** --- Wear or remove a composite outfit (a wardrobe item that bundles multiple pieces, like a "Rain Outfit" containing coat, jeans, and boots). Modes: `wear` (put the bundle on, honoring its replace setting — additive bundles layer on), `replace` (clear the slots it covers first, then put it on), and `remove` (take the bundle off). Refuses single garments — use `wardrobe_change_item` for those
-- **create_wardrobe_item** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit out of existing items by supplying `component_item_ids` or `component_titles` (a composite). You may also **gift one to another character** in the chat
+Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in the **project** stores and the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
 
-For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[CHANGE_ITEM]]`, `[[SET_OUTFIT]]`, and `[[CREATE_WARDROBE_ITEM]]`.
+- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of the project and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it.
+- **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, and the slots it presently occupies. Where `wardrobe_list` offers a glance, this offers a proper appraisal.
+- **wardrobe_wear** --- Put garments on. Hand it an ordered list of changes and it applies them in sequence — force-swap the coat, *then* layer a muffler over it, all in a single gesture. Per item: `wear` (don it across every slot it covers, honoring its replace setting — ordinarily a gentle layering), `replace` (clear those slots first, a decisive swap), or `add_to_slot` (tuck it into one named slot).
+- **wardrobe_take_off** --- Remove garments, or empty a slot entirely. Likewise an ordered list. Per item: `remove` (take a worn piece off across every slot it covers, leaving any other layers undisturbed — narrow it to a single slot if you wish) or `clear_slot` (sweep one slot bare).
+- **wardrobe_create** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit from existing items via `component_item_ids` or `component_titles` (a composite). One may furnish a **Portrait Cue** (`image_prompt`) to steer the artist's hand, and one may **gift the item to another character** in the chat.
+- **wardrobe_update** --- Amend an item one already owns — its name, its description, its Portrait Cue, its appropriateness, its coverage, and so forth. Only the particulars you supply are changed; the rest stands. Shared garments, being communal property, are politely declined.
+- **wardrobe_archive** --- Retire an item one owns to the back of the closet: hidden from listings and no longer wearable, yet not destroyed — a human may restore it from the Aurora page at leisure. (No character may *permanently* discard a garment; that remains a human prerogative.) Shared garments are, again, declined.
+
+For models that do not support tool use natively, characters may invoke these capabilities using text-block syntax: `[[WARDROBE]]`, `[[READ_WARDROBE]]`, `[[WEAR]]`, `[[TAKE_OFF]]`, `[[CREATE_WARDROBE_ITEM]]`, `[[UPDATE_WARDROBE_ITEM]]`, and `[[ARCHIVE_WARDROBE_ITEM]]`.
 
 ### Gifting Wardrobe Items
 
@@ -135,8 +158,8 @@ For models using text-block syntax, gifting uses the `recipient` attribute: `[[C
 
 Two flags on each character govern what they are permitted to do with their own clothing:
 
-- **canDressThemselves** --- When enabled (the default), the character may use `list_wardrobe` and `update_outfit_item` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
-- **canCreateOutfits** --- When enabled (also the default), the character may use `create_wardrobe_item` to fabricate new garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
+- **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, and `wardrobe_take_off` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
+- **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
 
 Both flags can be found in the character's settings on the Aurora page.
 
@@ -155,9 +178,26 @@ This ensures that every conversation starts with the appropriate sartorial conte
 
 ## How the Wardrobe Affects Image Generation
 
-When Quilltap generates images of a character --- whether through the Lantern background system or direct image generation --- it consults the currently equipped wardrobe items rather than any legacy clothing description. Each equipped item's description is fed to the image provider, so what the character is *actually wearing* in the conversation is what appears in the picture.
+When Quilltap generates images of a character --- whether through the Lantern background system or direct image generation --- it consults the currently equipped wardrobe items rather than any legacy clothing description, so what the character is *actually wearing* in the conversation is what appears in the picture.
+
+What the picture-maker is *told*, however, is each equipped item's **title** (or its Portrait Cue, if you have set one --- see below). The lavish prose **description** is reserved for human eyes and for the AI's own references; it is deliberately *not* handed to the image provider, lest a paragraph of purple costume-writing be parroted, word for word, onto the canvas.
 
 If no wardrobe items are equipped, the system falls back gracefully to the character's legacy clothing description, so nothing breaks for characters who have not yet been fitted with a proper wardrobe.
+
+### Portrait Cues (Dressing for the Camera)
+
+Some garments are named perfectly well for a wardrobe drawer yet say nothing useful to a painter. "Captain's Epaulet" tells the portraitist precisely nothing about what to *draw*; a title like "Garden Party Hat #3" is worse still. And a few items carry a meaning no name can convey at all --- a rank glyph, a heraldic device, an insignia whose particular geometry matters.
+
+For these, each wardrobe item offers an optional **Portrait Cue**: a short, literal, plain-text phrase handed to the avatar generator and the Lantern *in place of* the title whenever a likeness is drawn. Set one, and the picture-maker hears your words instead of the bare name; leave it blank, and the title speaks as before.
+
+A few principles for a cue that actually lands:
+
+- **Be literal and visual, not lavish.** "Intricate dense burnished-gold circular insignia on the shoulder" --- not a paragraph of lore. The flowery Description is for humans; the Cue is for the easel.
+- **Keep it terse.** Cues are stitched together into a single comma-separated list of what the character has on, so a runaway sentence crowds out the rest of the outfit.
+- **Let complexity carry meaning.** Image-makers cannot reliably reproduce a *specific* arbitrary glyph from a description, but they handle relative *busyness* well. "Intricate, many-ringed gold glyph" for a senior rank versus "small, simple gold glyph" for a junior one reads, at a glance, exactly as you intend --- even if the precise number of rings is left to the painter's hand.
+- **Placement is a suggestion, not a command.** Phrases like "on the left shoulder" nudge but do not bind; picture-makers are famously cavalier about where they put things.
+
+A Portrait Cue changes only what the *image* pipeline is told. The title still appears in lists and tools, the description still informs the AI's prose, and a character referring to the garment in conversation is none the wiser. Should you need a glyph rendered with true fidelity --- exact rings, exact spokes --- a Cue will get you the *impression*; for the genuine article, compose the portrait without the insignia and lay the real artwork over the shoulder afterward.
 
 ## Aurora's Wardrobe Announcements
 

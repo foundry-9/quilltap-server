@@ -48,6 +48,18 @@ export const SceneStateCharacterSchema = z.object({
   action: z.string(),
   appearance: z.string().nullable(),
   clothing: z.string().nullable(),
+  /**
+   * Short hash of the equipped-outfit slots the concise `clothing` summary was
+   * derived from. The scene-state tracker reuses the cached summary instead of
+   * re-summarizing while this hash is unchanged (the outfit only changes on a
+   * wardrobe edit), and the context manager compares it against the live
+   * wardrobe to decide whether a mid-turn change warrants a fresh override.
+   * Null when the character has no equipped wardrobe (clothing is
+   * narrative-driven and re-derived every turn). Optional for backward
+   * compatibility with scene states written before this field existed — a
+   * missing hash simply forces a re-summarize on the next tracking run.
+   */
+  clothingHash: z.string().nullable().optional(),
 });
 
 export type SceneStateCharacter = z.infer<typeof SceneStateCharacterSchema>;
@@ -65,8 +77,36 @@ export type SceneState = z.infer<typeof SceneStateSchema>;
 // CHAT TYPE
 // ============================================================================
 
-export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous']);
+export const ChatTypeEnum = z.enum(['salon', 'help', 'autonomous', 'brahma']);
 export type ChatType = z.infer<typeof ChatTypeEnum>;
+
+/**
+ * Chat types that are "help-like" for titling and summarization: they get
+ * lightweight auto-retitling at the earliest interchange, skip story-background
+ * generation, and never run the autonomous-room machinery. The Brahma Console
+ * (`'brahma'`) joins the Help Chat (`'help'`) here — both are floating,
+ * stripped-down chat surfaces, distinct from the Salon and from autonomous
+ * rooms. (Memory extraction is governed separately: 'help' opts in, 'brahma'
+ * never does. This predicate is ONLY about titling/summary routing.)
+ */
+export function isHelpLikeChatType(chatType: string | null | undefined): boolean {
+  return chatType === 'help' || chatType === 'brahma';
+}
+
+/**
+ * Chat types that are exempt from dangerous-content moderation entirely: the
+ * Concierge never classifies, flags, reroutes, or announces on them. These are
+ * utility surfaces rather than roleplay — the Help Chat (`'help'`) and the
+ * Brahma Console (`'brahma'`). Moderation applies only to the Salon
+ * (`'salon'`) and autonomous rooms (`'autonomous'`).
+ *
+ * Deliberately separate from `isHelpLikeChatType`: that predicate governs
+ * titling/summary routing, and moderation policy must be free to diverge from
+ * it. The two covering the same set today is a coincidence, not a contract.
+ */
+export function isModerationExemptChatType(chatType: string | null | undefined): boolean {
+  return chatType === 'help' || chatType === 'brahma';
+}
 
 // ============================================================================
 // AUTONOMOUS-ROOM RUN STATE
@@ -157,8 +197,8 @@ export const MessageEventSchema = z.object({
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage: z.boolean().nullable().optional(),
-  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close). */
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel']).nullable().optional(),
+  /** Identifies a personified feature ("the Staff") that authored this message in lieu of a participant. 'lantern' = Lantern image announcements; 'aurora' = character-avatar refreshes; 'librarian' = Document Mode open/save announcements; 'concierge' = dangerous-content classification announcements; 'prospero' = agent / connection-profile change announcements; 'host' = Salon participation announcements; 'commonplaceBook' = memory recall whispers (recap, relevant memories, inter-character memories); 'ariel' = terminal session announcements (PTY open/close); 'carina' = inline-query reference answers (Carina); 'suparna' = Suparṇā's Post Office mail-delivery announcements (new letters arrived in the character's vault Mail/ folder). Note: a 'carina' message renders with the ANSWERER character's own avatar (resolved via `carinaMeta.answererId`), not a dedicated Staff avatar — the tag exists for memory suppression and the compact reference-card UI hook. */
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna']).nullable().optional(),
   /**
    * Neutral, persona-free rewrite of `content` for Staff-authored messages
    * (systemSender != null). When the chat has any non-user-character
@@ -242,6 +282,21 @@ export const MessageEventSchema = z.object({
     kind: z.enum(['character', 'custom']),
     characterId: UUIDSchema.nullable().optional(),
     displayName: z.string().nullable().optional(),
+  }).nullable().optional(),
+  /**
+   * Carina (inline LLM queries) provenance, set on `systemSender = 'carina'`
+   * messages. `answererId` is the workspace character id of the answerer — it
+   * drives (1) avatar resolution (the Salon renders the Carina reply with the
+   * answerer's own avatar, looking them up among participants or the chat's
+   * off-scene character cards), and (2) "prior Carina exchanges" continuity (the
+   * service replays earlier `answererId`-matched exchanges as Q/A pairs so
+   * follow-up questions have context, WITHOUT pulling in the full chat history).
+   * `question` is the verbatim text that was asked, stored so those Q/A pairs
+   * can be reconstructed. NULL on every non-Carina message.
+   */
+  carinaMeta: z.object({
+    answererId: UUIDSchema,
+    question: z.string(),
   }).nullable().optional(),
   /**
    * The Courier: when non-null, this message is a placeholder for a manual /
@@ -645,10 +700,19 @@ export const ChatMetadataSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats */
   chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
+  /**
+   * For Brahma Console chats (`chatType === 'brahma'`): the connection profile
+   * (model) the console is currently talking to. A Brahma chat has exactly one
+   * model at a time; switching the model PATCHes this column and the same chat
+   * continues with the new engine from that point forward. Seeded from the
+   * user's default connection profile at creation. NULL on every other chat
+   * type.
+   */
+  consoleConnectionProfileId: UUIDSchema.nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static
@@ -951,10 +1015,19 @@ export const ChatMetadataBaseSchema = z.object({
   /** Whether to auto-generate character avatars when outfits change (null = disabled) */
   avatarGenerationEnabled: z.boolean().nullable().optional(),
 
-  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms */
+  /** Chat type discriminator: 'salon' for regular chats, 'help' for help assistant chats, 'autonomous' for character-to-character private rooms, 'brahma' for Brahma Console (character-less generic-LLM) chats */
   chatType: ChatTypeEnum.default('salon'),
   /** For help chats: the current page URL being viewed (for context resolution) */
   helpPageUrl: z.string().nullable().optional(),
+  /**
+   * For Brahma Console chats (`chatType === 'brahma'`): the connection profile
+   * (model) the console is currently talking to. A Brahma chat has exactly one
+   * model at a time; switching the model PATCHes this column and the same chat
+   * continues with the new engine from that point forward. Seeded from the
+   * user's default connection profile at creation. NULL on every other chat
+   * type.
+   */
+  consoleConnectionProfileId: UUIDSchema.nullable().optional(),
 
   /**
    * Phase H: precompiled per-participant identity stack — the character-static

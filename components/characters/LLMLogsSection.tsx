@@ -1,7 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import useSWR from 'swr'
+import { Icon } from '@/components/ui/icon'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import type { LLMLog } from '@/lib/schemas/types'
 import LLMLogViewerModal from '@/components/chat/LLMLogViewerModal'
 import { formatDateTime } from '@/lib/format-time'
@@ -15,9 +18,11 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
   const [selectedLog, setSelectedLog] = useState<LLMLog | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const { data, isLoading } = useSWR<{ logs: LLMLog[] }>(
-    isExpanded ? `/api/v1/llm-logs?characterId=${characterId}&limit=10` : null
-  )
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.llmLogs.byCharacter(characterId, 10),
+    queryFn: ({ signal }) => apiFetch<{ logs: LLMLog[] }>(`/api/v1/llm-logs?characterId=${characterId}&limit=10`, { signal }),
+    enabled: isExpanded,
+  })
   const logs = data?.logs ?? []
 
   const handleViewLog = (log: LLMLog) => {
@@ -35,27 +40,13 @@ export default function LLMLogsSection({ characterId }: LLMLogsSectionProps) {
         className="w-full px-4 py-3 flex items-center justify-between qt-bg-muted/30 hover:qt-bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-            />
-          </svg>
+          <Icon name="cpu" className="w-5 h-5" />
           <span className="font-medium">LLM Logs</span>
           {logs.length > 0 && (
             <span className="text-xs px-2 py-0.5 rounded-full qt-bg-primary/10 text-primary">{logs.length}</span>
           )}
         </div>
-        <svg
-          className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <Icon name="chevron-down" className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
       </button>
 
       {isExpanded && (

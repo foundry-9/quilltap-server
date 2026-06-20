@@ -7,7 +7,7 @@
  */
 
 import { formatBytes } from '@/lib/utils/format-bytes'
-import { PencilIcon, RefreshIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 import type { DocumentStore } from '../types'
 
 interface DocumentStoreCardProps {
@@ -19,40 +19,6 @@ interface DocumentStoreCardProps {
   onConvert: () => void
   onDeconvert: () => void
   scanning: boolean
-}
-
-function DatabaseIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <ellipse cx="12" cy="5" rx="9" ry="3" />
-      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-    </svg>
-  )
-}
-
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  )
-}
-
-function DownloadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
-    </svg>
-  )
-}
-
-function UploadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5-5 5 5M12 5v12" />
-    </svg>
-  )
 }
 
 function ScanStatusBadge({ status, error }: { status: string; error: string | null }) {
@@ -172,7 +138,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted shrink-0">
-            <DatabaseIcon className="w-5 h-5 qt-text-secondary" />
+            <Icon name="database" className="w-5 h-5 qt-text-secondary" />
           </div>
           <div className="min-w-0">
             <h2 className="qt-section-title truncate">{store.name}</h2>
@@ -218,7 +184,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
           className={`qt-button-secondary flex-1 inline-flex items-center justify-center gap-1.5 ${actionsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Scan for changes"
         >
-          <RefreshIcon className={`w-4 h-4 ${scanning || store.scanStatus === 'scanning' ? 'animate-spin' : ''}`} />
+          <Icon name="refresh" className={`w-4 h-4 ${scanning || store.scanStatus === 'scanning' ? 'animate-spin' : ''}`} />
           {scanning || store.scanStatus === 'scanning' ? 'Scanning...' : 'Scan'}
         </button>
         {isDatabaseBacked ? (
@@ -228,7 +194,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
             className={`qt-button-secondary inline-flex items-center justify-center gap-1.5 ${actionsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             title="Export everything out to a filesystem directory and switch to filesystem-backed"
           >
-            <DownloadIcon className={`w-4 h-4 ${store.conversionStatus === 'deconverting' ? 'animate-pulse' : ''}`} />
+            <Icon name="download" className={`w-4 h-4 ${store.conversionStatus === 'deconverting' ? 'animate-pulse' : ''}`} />
             {store.conversionStatus === 'deconverting' ? 'Deconverting...' : 'Deconvert'}
           </button>
         ) : (
@@ -238,7 +204,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
             className={`qt-button-secondary inline-flex items-center justify-center gap-1.5 ${actionsDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             title="Move every file into the encrypted database and switch to database-backed"
           >
-            <UploadIcon className={`w-4 h-4 ${store.conversionStatus === 'converting' ? 'animate-pulse' : ''}`} />
+            <Icon name="upload" className={`w-4 h-4 ${store.conversionStatus === 'converting' ? 'animate-pulse' : ''}`} />
             {store.conversionStatus === 'converting' ? 'Converting...' : 'Convert'}
           </button>
         )}
@@ -248,7 +214,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
           className={`qt-button-secondary ${conversionInFlight ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Edit document store"
         >
-          <PencilIcon className="w-4 h-4" />
+          <Icon name="pencil" className="w-4 h-4" />
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
@@ -256,7 +222,7 @@ export function DocumentStoreCard({ store, onClick, onEdit, onDelete, onScan, on
           className={`qt-button-destructive qt-shadow-sm ${conversionInFlight ? 'opacity-50 cursor-not-allowed' : ''}`}
           title="Delete document store"
         >
-          <TrashIcon className="w-4 h-4" />
+          <Icon name="trash" className="w-4 h-4" />
         </button>
       </div>
     </div>

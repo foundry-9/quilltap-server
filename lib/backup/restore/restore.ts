@@ -20,6 +20,7 @@ import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-clien
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
+import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
@@ -76,12 +77,26 @@ export async function restore(
       }
     }
 
-    // 2. Connection profiles (no entity dependencies, but have tag refs)
+    // 2. Connection profiles (no entity dependencies, but have tag refs).
+    // Names are unique per user (DB index). Pre-migration backups can carry
+    // duplicate names, and merge restores can collide with existing profiles —
+    // rename on collision rather than letting the constraint drop the profile.
+    const existingConnectionProfiles = await repos.connections.findAll();
+    const takenConnectionNames = new Set(existingConnectionProfiles.map((p) => normalizeProfileName(p.name)));
     for (const profile of data.connectionProfiles) {
       try {
         const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
         // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
-        await repos.connections.create({ ...profileData, apiKeyId: null }, { id: profile.id });
+        const uniqueName = makeUniqueProfileName(profileData.name, takenConnectionNames);
+        if (uniqueName !== profileData.name) {
+          moduleLogger.debug('Renamed connection profile on restore to avoid name collision', {
+            profileId: profile.id,
+            from: profileData.name,
+            to: uniqueName,
+          });
+        }
+        takenConnectionNames.add(normalizeProfileName(uniqueName));
+        await repos.connections.create({ ...profileData, name: uniqueName, apiKeyId: null }, { id: profile.id });
       } catch (error) {
         warnings.push(`Failed to restore connection profile "${profile.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore connection profile', { profileId: profile.id, error });
@@ -278,12 +293,31 @@ export async function restore(
     let projectsRestored = 0;
     for (const project of data.projects) {
       try {
-        const { userId, createdAt, updatedAt, ...projectData } = project;
+        // userId no longer exists on Project (projects are global).
+        const { createdAt, updatedAt, ...projectData } = project;
         await repos.projects.create(projectData, { id: project.id });
         projectsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore project', { projectId: project.id, error });
+      }
+    }
+
+    // 13a. Groups — parallel to projects: a slim row plus an official document
+    // store. `groups.create` (store-backed) discards any incoming
+    // officialMountPointId and provisions a fresh store, writing the hydrated
+    // description/instructions/state/properties back into it — exactly as
+    // projects restore above. Membership and additional-store links are restored
+    // later (22h-i / 22h-ii), once doc-mount points exist.
+    let groupsRestored = 0;
+    for (const group of data.groups || []) {
+      try {
+        const { createdAt, updatedAt, ...groupData } = group;
+        await repos.groups.create(groupData, { id: group.id });
+        groupsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore group "${group.name}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore group', { groupId: group.id, error });
       }
     }
 
@@ -349,18 +383,15 @@ export async function restore(
       }
     }
 
-    // 19. Wardrobe Items
+    // 19. Wardrobe Items — DEFERRED to step 22g (after doc-store mounts exist).
+    // Wardrobe is vault-only: `wardrobe.create` writes into the character's
+    // Character Vault / Quilltap General document store and now refuses a
+    // SQL-row fallback. At this point in the restore those mounts haven't been
+    // recreated yet (they land at 22a), so resolving the vault would fail.
+    // Items from a post-cutover backup already restore as `Wardrobe/*.md`
+    // documents via 22c–22e; only LEGACY (pre-cutover) backups carry
+    // `data.wardrobeItems`, and those are seeded into the vault at 22g.
     let wardrobeItemsRestored = 0;
-    for (const item of data.wardrobeItems || []) {
-      try {
-        const { id, createdAt, updatedAt, ...itemData } = item;
-        await globalRepos.wardrobe.create(itemData, { id: item.id });
-        wardrobeItemsRestored++;
-      } catch (error) {
-        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
-        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
-      }
-    }
 
     // 20. Outfit Presets — REMOVED: presets are now composite WardrobeItems and
     // were folded into data.wardrobeItems at parse time for back-compat with
@@ -509,6 +540,25 @@ export async function restore(
       }
     }
 
+    // 22f-bis. Legacy wardrobe items (deferred from step 19). The doc-store
+    // mounts, folders, and file rows now exist (22a–22f), so each character's
+    // Character Vault — and Quilltap General for shared archetypes — resolves.
+    // `wardrobe.create` therefore writes these straight into the vault document
+    // store (its sole home); it no longer falls back to a SQL `wardrobe_items`
+    // row. Post-cutover backups carry their wardrobe as `Wardrobe/*.md`
+    // documents (already restored above) and leave `data.wardrobeItems` empty,
+    // so this loop only fires for older, pre-cutover backups.
+    for (const item of data.wardrobeItems || []) {
+      try {
+        const { id, createdAt, updatedAt, ...itemData } = item;
+        await globalRepos.wardrobe.create(itemData, { id: item.id });
+        wardrobeItemsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
+      }
+    }
+
     // 22g. Document store embedded chunks. The repo's create() accepts the
     // chunk in serialised form; the schema rehydrates embedding as Float32Array.
     let docMountChunksRestored = 0;
@@ -533,6 +583,34 @@ export async function restore(
       } catch (error) {
         warnings.push(`Failed to restore project↔store link: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore project doc mount link', { linkId: link.id, error });
+      }
+    }
+
+    // 22h-i. Group ↔ document-store links (a group's *additional* linked stores;
+    // the official store rides on the group row). Mirror of projectDocMountLinks.
+    let groupDocMountLinksRestored = 0;
+    for (const link of data.groupDocMountLinks || []) {
+      try {
+        const { id, createdAt, updatedAt, ...linkData } = link;
+        await globalRepos.groupDocMountLinks.create(linkData, { id: link.id });
+        groupDocMountLinksRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore group↔store link: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore group doc mount link', { linkId: link.id, error });
+      }
+    }
+
+    // 22h-ii. Group ↔ character membership. groupId/characterId both reference
+    // main-DB rows already restored above (groups at 13a, characters at 6).
+    let groupCharacterMembersRestored = 0;
+    for (const member of data.groupCharacterMembers || []) {
+      try {
+        const { id, createdAt, updatedAt, ...memberData } = member;
+        await globalRepos.groupCharacterMembers.create(memberData, { id: member.id });
+        groupCharacterMembersRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore group membership: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore group character member', { memberId: member.id, error });
       }
     }
 
@@ -777,6 +855,7 @@ export async function restore(
       },
       providerModels: providerModelsRestored,
       projects: projectsRestored,
+      groups: groupsRestored,
       llmLogs: llmLogsRestored,
       pluginConfigs: pluginConfigsRestored,
       chatSettings: chatSettingsRestored,
@@ -801,6 +880,8 @@ export async function restore(
       docMountDocuments: docMountDocumentsRestored,
       docMountBlobs: docMountBlobsRestored,
       projectDocMountLinks: projectDocMountLinksRestored,
+      groupDocMountLinks: groupDocMountLinksRestored,
+      groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
       warnings,
     };

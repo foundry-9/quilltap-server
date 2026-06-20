@@ -22,12 +22,16 @@ import type { DocFocusInput } from '../../doc-focus-tool';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   postLibrarianOpenAnnouncement,
+  documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import { databaseDocumentExists } from '@/lib/mount-index/database-store';
 import {
   logger,
   type DocEditToolContext,
+  applyQtapUriToInput,
   buildReadResolutionContext,
+  uriForResolvedPath,
+  assertCharacterMayRead,
 } from './shared';
 
 /**
@@ -36,9 +40,10 @@ import {
  * a structured response that the frontend interprets to open the editor pane.
  */
 export async function handleOpenDocument(
-  input: DocOpenDocumentInput,
+  rawInput: DocOpenDocumentInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: unknown; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
   const repos = getRepositories();
   const scope = (input.scope || 'project') as 'document_store' | 'project' | 'general';
   const mode = input.mode || 'split';
@@ -46,6 +51,11 @@ export async function handleOpenDocument(
   let displayTitle = input.title || 'Untitled document';
   let isNew = false;
   let mtime: number | undefined;
+  let docUri: string | undefined;
+  // A character_read:false document must not be announced to characters. The
+  // read gate already blocks characters from opening one; this covers the
+  // operator-override path that bypasses the gate.
+  let hiddenFromCharacters = false;
 
   if (filePath) {
     // Opening an existing file — resolve the path to verify it exists.
@@ -53,6 +63,10 @@ export async function handleOpenDocument(
     // cross-character read flag is enabled.
     try {
       const resolved = await resolveDocEditPath(scope, filePath, await buildReadResolutionContext({ mount_point: input.mount_point }, context));
+      // character_read:false → not-found for characters (operator unaffected).
+      await assertCharacterMayRead(resolved, context);
+      hiddenFromCharacters = await documentHiddenFromCharacters(resolved.mountPointId, resolved.relativePath);
+      docUri = await uriForResolvedPath(resolved, context);
       if (resolved.mountType === 'database' && resolved.mountPointId) {
         const exists = await databaseDocumentExists(resolved.mountPointId, resolved.relativePath);
         if (!exists) throw new Error(`File not found: ${filePath}`);
@@ -86,6 +100,7 @@ export async function handleOpenDocument(
       await fs.writeFile(resolved.absolutePath, '', 'utf-8');
       const stat = await fs.stat(resolved.absolutePath);
       mtime = stat.mtimeMs;
+      docUri = await uriForResolvedPath(resolved, context);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       return { success: false, error: `Failed to create blank document: ${errorMsg}` };
@@ -118,6 +133,7 @@ export async function handleOpenDocument(
   const result: DocOpenDocumentOutput = {
     success: true,
     filePath,
+    uri: docUri,
     scope,
     mountPoint: input.mount_point,
     displayTitle,
@@ -158,6 +174,7 @@ export async function handleOpenDocument(
     origin: characterName
       ? { kind: 'opened-by-character', characterName }
       : { kind: 'opened-by-user' },
+    hiddenFromCharacters,
   });
 
   return {

@@ -49,6 +49,7 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
       'rng-tool',
       'run-tool',
       'shell-tools',
+      'brahma-console',
     ],
   },
   {

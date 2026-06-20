@@ -141,4 +141,32 @@ describe('resolveEquippedOutfitForCharacter', () => {
     const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots)
     expect(resolved.outfitValues.top).toEqual(['Borrowed jacket'])
   })
+
+  it('forwards projectMountPointIds to the findByIdsForCharacter fallback (tri-tier)', async () => {
+    // A garment that lives in a project store — absent from the character's own
+    // wardrobe, resolved only when the project tier is supplied.
+    const projectItem = makeItem('proj-item', 'Project livery coat', ['top'])
+    const findByIdsForCharacter = jest.fn(
+      async (_characterId: string, ids: string[], opts?: { projectMountPointIds?: string[] }) =>
+        ids.includes('proj-item') && opts?.projectMountPointIds?.includes('proj-mount')
+          ? [projectItem]
+          : [],
+    )
+    const repos = {
+      wardrobe: {
+        findByCharacterId: jest.fn(async () => []),
+        findByIdsForCharacter,
+      },
+    } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
+    const slots: EquippedSlots = { ...emptySlots(), top: ['proj-item'] }
+    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, slots, {
+      projectMountPointIds: ['proj-mount'],
+    })
+    expect(resolved.outfitValues.top).toEqual(['Project livery coat'])
+    expect(findByIdsForCharacter).toHaveBeenCalledWith(
+      CHAR_ID,
+      ['proj-item'],
+      { projectMountPointIds: ['proj-mount'] },
+    )
+  })
 })

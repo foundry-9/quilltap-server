@@ -18,6 +18,20 @@ Image generation allows your AI to create images based on descriptions you provi
 
 The AI sends your description to an image generation service, which creates and returns an image.
 
+## On the Shape of a Picture — Orientation
+
+A portrait wishes to stand tall; a sweeping vista wishes to lie down and stretch out. Alas, the various ateliers cannot agree on how one *asks* for such a thing. Some expect an exact measurement in pixels (and quarrel over which measurements are permissible, model by model); others insist upon an aspect ratio and turn up their noses at pixel counts entirely; and a few can be persuaded only by the wording of the request itself.
+
+Quilltap now spares you the whole tedious diplomacy. You — and any character wielding the `generate_image` tool — simply name an **orientation**:
+
+- **portrait** — taller than wide, the proper carriage for a face or a figure
+- **landscape** — wider than tall, the natural posture of a scene or a horizon
+- **square** — even-handed, beholden to neither dimension
+
+The establishment then translates that wish into whatever each provider actually honours — a concrete size, an aspect ratio, or a discreet phrase slipped into the prompt — so the same instruction works everywhere. Where a provider is wholly incapable of a given shape (the venerable DALL·E 2, for instance, paints only squares), Quilltap declines to send a measurement it would reject and instead nudges the composition with words.
+
+Sensible defaults are already in place: **avatars arrive in portrait**, **story backgrounds in cinematic landscape**. And because providers have a habit of returning a different shape than was requested, Quilltap now measures every finished picture and records its *true* dimensions, rather than trusting the order it placed.
+
 ## Accessing Image Generation Profiles
 
 1. Click **Settings** (gear icon) in the left sidebar

@@ -26,7 +26,7 @@ export function ThinkingDisplaySettings({ settings, saving, onUpdate }: Thinking
   return (
     <SettingsCard title="Thinking / Reasoning" subtitle="Whether new chats show reasoning models' chain-of-thought">
       <div className="space-y-3">
-        <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
+        <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
           <input
             type="checkbox"
             checked={defaultVisible}
@@ -43,7 +43,7 @@ export function ThinkingDisplaySettings({ settings, saving, onUpdate }: Thinking
           </div>
         </label>
 
-        <label className={`flex items-start gap-3 p-4 border qt-border-default rounded transition-colors ${defaultVisible ? 'hover:bg-accent cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+        <label className={`flex items-start gap-3 p-4 border qt-border-default rounded transition-colors ${defaultVisible ? 'qt-hover-accent cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
           <input
             type="checkbox"
             checked={defaultCollapsed}

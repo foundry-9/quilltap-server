@@ -45,6 +45,7 @@ import { hasTextBlockMarkers } from '@/lib/tools'
 import {
   buildAgentModeInstructions,
   buildForceFinalMessage,
+  extractSubmitFinalResponseFromText,
 } from '@/lib/services/chat-message/agent-mode-resolver.service'
 import {
   triggerTurnMemoryExtraction,
@@ -579,27 +580,6 @@ async function processHelpResponse(
   }
 
   return finalMessageId
-}
-
-/**
- * Extract the response text from a submit_final_response JSON that was
- * output as plain text instead of a proper tool call.
- * Some models (e.g., ChatGPT-5) sometimes output the tool call arguments
- * as raw JSON text: {"response":"actual content here"}
- */
-function extractSubmitFinalResponseFromText(text: string): string {
-  const trimmed = text.trim()
-  if (!trimmed.startsWith('{"response"')) return text
-
-  try {
-    const parsed = JSON.parse(trimmed)
-    if (typeof parsed?.response === 'string' && parsed.response.length > 0) {
-      return parsed.response
-    }
-  } catch {
-    // Not valid JSON, return as-is
-  }
-  return text
 }
 
 /**

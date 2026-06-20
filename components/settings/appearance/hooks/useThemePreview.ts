@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import type { ThemeTokens } from '@/lib/themes/types'
+import type { ThemeTokens, ThemePreviewImage } from '@/lib/themes/types'
 import type { ThemeFont } from '@/components/providers/theme/types'
 
 /**
@@ -18,6 +18,8 @@ interface ThemeTokensResponse {
   tokens: ThemeTokens
   fonts?: ThemeFont[]
   cssOverrides?: string
+  icons?: { name: string; src: string }[]
+  images?: ThemePreviewImage[]
 }
 
 /**
@@ -30,6 +32,10 @@ export interface UseThemePreviewResult {
   fonts: ThemeFont[]
   /** CSS overrides from the theme */
   cssOverrides: string | null
+  /** Icon overrides for the theme */
+  icons: { name: string; src: string }[]
+  /** Preview images for the theme */
+  images: ThemePreviewImage[]
   /** Whether the theme is currently loading */
   isLoading: boolean
   /** Any error that occurred during loading */
@@ -53,6 +59,8 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
   const [tokens, setTokens] = useState<ThemeTokens | null>(null)
   const [fonts, setFonts] = useState<ThemeFont[]>([])
   const [cssOverrides, setCssOverrides] = useState<string | null>(null)
+  const [icons, setIcons] = useState<{ name: string; src: string }[]>([])
+  const [images, setImages] = useState<ThemePreviewImage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -71,6 +79,8 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
       setTokens(cached.tokens)
       setFonts(cached.fonts || [])
       setCssOverrides(cached.cssOverrides || null)
+      setIcons(cached.icons || [])
+      setImages(cached.images || [])
       return
     }
 
@@ -98,6 +108,8 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
         setTokens(data.tokens)
         setFonts(data.fonts || [])
         setCssOverrides(data.cssOverrides || null)
+        setIcons(data.icons || [])
+        setImages(data.images || [])
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load theme'
@@ -118,6 +130,8 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
       setTokens(null)
       setFonts([])
       setCssOverrides(null)
+      setIcons([])
+      setImages([])
     }
   }, [themeId])
 
@@ -125,6 +139,8 @@ export function useThemePreview(themeId: string | null): UseThemePreviewResult {
     tokens,
     fonts,
     cssOverrides,
+    icons,
+    images,
     isLoading,
     error,
     fetchTokens,

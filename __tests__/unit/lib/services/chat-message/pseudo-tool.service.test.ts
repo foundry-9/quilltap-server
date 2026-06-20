@@ -49,8 +49,11 @@ describe('pseudo-tool.service', () => {
       helpSettings: true,
       helpNavigate: true,
       wardrobeList: true,
-      wardrobeUpdateOutfit: true,
-      wardrobeCreateItem: false,
+      wardrobeWear: true,
+      wardrobeTakeOff: true,
+      wardrobeCreate: false,
+      wardrobeUpdate: false,
+      wardrobeArchive: false,
     })
   })
 
@@ -68,14 +71,17 @@ describe('pseudo-tool.service', () => {
       helpNavigate: false,
       createNote: true,
       wardrobeList: true,
-      wardrobeUpdateOutfit: true,
-      wardrobeChangeItem: true,
-      wardrobeCreateItem: true,
+      wardrobeRead: true,
+      wardrobeWear: true,
+      wardrobeTakeOff: true,
+      wardrobeCreate: true,
+      wardrobeUpdate: true,
+      wardrobeArchive: true,
     })
 
     expect(instructions).toContain('[[WARDROBE /]]')
-    expect(instructions).toContain('[[CHANGE_ITEM mode="wear"')
-    expect(instructions).toContain('[[SET_OUTFIT mode="wear"')
+    expect(instructions).toContain('[[WEAR mode="wear"')
+    expect(instructions).toContain('[[TAKE_OFF mode="remove"')
     expect(instructions).toContain('[[CREATE_WARDROBE_ITEM title="Red Scarf"')
     expect(instructions).not.toContain('[[SEARCH_WEB]]')
   })
@@ -84,34 +90,32 @@ describe('pseudo-tool.service', () => {
     const response = [
       'First I will check my options.',
       '[[WARDROBE /]]',
-      'Then I will change clothes.',
-      '[[CHANGE_ITEM mode="equip" title="Charcoal Sweater" /]]',
+      'Then I will put on a sweater.',
+      '[[WEAR mode="wear" title="Charcoal Sweater" /]]',
       'And put on the formal outfit.',
-      '[[SET_OUTFIT mode="wear" title="Black Tie Ensemble" /]]',
+      '[[WEAR mode="wear" title="Black Tie Ensemble" /]]',
       '[[CREATE_WARDROBE_ITEM title="Red Scarf" types="accessories"]]A soft crimson scarf with golden tassels[[/CREATE_WARDROBE_ITEM]]',
     ].join('\n')
 
     expect(parseTextBlocksFromResponse(response)).toEqual([
       {
-        name: 'list_wardrobe',
+        name: 'wardrobe_list',
         arguments: {},
       },
       {
-        name: 'wardrobe_change_item',
+        name: 'wardrobe_wear',
         arguments: {
-          mode: 'equip',
-          item_title: 'Charcoal Sweater',
+          operations: [{ mode: 'wear', item_title: 'Charcoal Sweater' }],
         },
       },
       {
-        name: 'wardrobe_set_outfit',
+        name: 'wardrobe_wear',
         arguments: {
-          mode: 'wear',
-          item_title: 'Black Tie Ensemble',
+          operations: [{ mode: 'wear', item_title: 'Black Tie Ensemble' }],
         },
       },
       {
-        name: 'create_wardrobe_item',
+        name: 'wardrobe_create',
         arguments: {
           title: 'Red Scarf',
           types: 'accessories',

@@ -9,6 +9,7 @@
 
 import type { ChatSettings } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { isModerationExemptChatType } from '@/lib/schemas/chat.types'
 import { isConciergeOffDuty } from './chat-override'
 
 /**
@@ -18,7 +19,7 @@ export interface ResolvedDangerousContentSettings {
   /** The effective settings */
   settings: DangerousContentSettings
   /** Where the settings came from */
-  source: 'global' | 'default' | 'chat-off-duty'
+  source: 'global' | 'default' | 'chat-off-duty' | 'chat-type-exempt'
 }
 
 /**
@@ -67,8 +68,17 @@ export const OFF_DUTY_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
  */
 export function resolveDangerousContentSettings(
   globalSettings: ChatSettings | null,
-  chat?: { conciergeOverride?: 'OFF' | null } | null
+  chat?: { conciergeOverride?: 'OFF' | null; chatType?: string | null } | null
 ): ResolvedDangerousContentSettings {
+  // Help Chats and the Brahma Console are never moderated — the Concierge has
+  // no standing on those surfaces at all, regardless of the global setting.
+  if (chat && isModerationExemptChatType(chat.chatType)) {
+    return {
+      settings: OFF_DUTY_DANGEROUS_CONTENT_SETTINGS,
+      source: 'chat-type-exempt',
+    }
+  }
+
   if (chat && isConciergeOffDuty(chat)) {
     return {
       settings: OFF_DUTY_DANGEROUS_CONTENT_SETTINGS,

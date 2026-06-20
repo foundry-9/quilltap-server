@@ -16,7 +16,10 @@
  */
 
 import { useEffect, useState } from 'react'
-import useSWR from 'swr'
+import { Icon } from '@/components/ui/icon'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 type RunState = 'idle' | 'running' | 'paused' | 'stopped' | 'budgetExhausted' | 'error'
 
@@ -39,12 +42,6 @@ interface AutonomousRoom {
 
 const POLL_INTERVAL_MS = 5_000
 const TICK_INTERVAL_MS = 1_000
-
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: 'no-store' })
-  if (!res.ok) throw new Error('Failed to load')
-  return res.json()
-}
 
 function abbreviate(text: string): string {
   return text
@@ -152,31 +149,48 @@ function buildTooltip(room: AutonomousRoom, readout: BudgetReadout): string {
   return `${projectLine}\n${titleLine}\n${limitLine}\nstatus: ${status}`
 }
 
-function PlayIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
-      <polygon points="2,1 9,5 2,9" fill="currentColor" />
-    </svg>
-  )
-}
-
-function PauseIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" focusable="false">
-      <rect x="2" y="1" width="2" height="8" fill="currentColor" />
-      <rect x="6" y="1" width="2" height="8" fill="currentColor" />
-    </svg>
-  )
-}
 
 export function AutonomousRoomBadges() {
-  const { data, mutate } = useSWR<{ rooms: AutonomousRoom[] }>(
-    '/api/v1/system/autonomous-rooms',
-    fetcher,
-    { refreshInterval: POLL_INTERVAL_MS },
-  )
+  const queryClient = useQueryClient()
+  const { data } = useQuery({
+    queryKey: queryKeys.system.autonomousRooms,
+    queryFn: ({ signal }) =>
+      apiFetch<{ rooms: AutonomousRoom[] }>('/api/v1/system/autonomous-rooms', { signal, cache: 'no-store' }),
+    refetchInterval: POLL_INTERVAL_MS,
+  })
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
   const [nowMs, setNowMs] = useState<number>(() => Date.now())
+
+  // Optimistic toggle: patch the cached run state immediately, roll back on
+  // error, revalidate on settle (the TanStack equivalent of SWR's
+  // mutate(post, { optimisticData, rollbackOnError, revalidate })).
+  const toggleMutation = useMutation({
+    mutationFn: async ({ roomId, verb }: { roomId: string; verb: 'pause' | 'resume' | 'start' }) => {
+      const res = await fetch(`/api/v1/chats/${roomId}/autonomous-room?action=${verb}`, { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.error || `Failed to ${verb}`)
+      }
+    },
+    onMutate: async ({ roomId, verb }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.system.autonomousRooms })
+      const previous = queryClient.getQueryData<{ rooms: AutonomousRoom[] }>(queryKeys.system.autonomousRooms)
+      const optimisticState: RunState = verb === 'pause' ? 'paused' : 'running'
+      queryClient.setQueryData<{ rooms: AutonomousRoom[] }>(queryKeys.system.autonomousRooms, (cur) => ({
+        rooms: (cur?.rooms ?? []).map((r) => (r.id === roomId ? { ...r, runState: optimisticState } : r)),
+      }))
+      return { previous }
+    },
+    onError: (err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(queryKeys.system.autonomousRooms, context.previous)
+      }
+      console.error('Autonomous-room badge action failed', err)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.system.autonomousRooms })
+    },
+  })
 
   const rooms = (data?.rooms ?? []).filter(
     (r) => r.runState === 'idle' || r.runState === 'running' || r.runState === 'paused',
@@ -207,34 +221,11 @@ export function AutonomousRoomBadges() {
     // pause → paused), so we can reflect it optimistically the instant the
     // button is clicked instead of waiting for the POST + revalidation
     // round-trip — which can lag when the server is busy running a turn.
-    const optimisticState: RunState = verb === 'pause' ? 'paused' : 'running'
-    const applyOptimistic = (cur?: { rooms: AutonomousRoom[] }) => ({
-      rooms: (cur?.rooms ?? []).map((r) =>
-        r.id === room.id ? { ...r, runState: optimisticState } : r,
-      ),
-    })
     setBusyChatId(room.id)
     try {
-      const post = (async (): Promise<{ rooms: AutonomousRoom[] } | undefined> => {
-        const res = await fetch(`/api/v1/chats/${room.id}/autonomous-room?action=${verb}`, {
-          method: 'POST',
-        })
-        if (!res.ok) {
-          const body = await res.json().catch(() => null)
-          throw new Error(body?.error || `Failed to ${verb}`)
-        }
-        // Resolve to undefined so SWR falls through to the revalidation fetch
-        // (populateCache: false, revalidate: true) for the authoritative state.
-        return undefined
-      })()
-      await mutate(post, {
-        optimisticData: applyOptimistic,
-        rollbackOnError: true,
-        populateCache: false,
-        revalidate: true,
-      })
-    } catch (err) {
-      console.error('Autonomous-room badge action failed', err)
+      await toggleMutation.mutateAsync({ roomId: room.id, verb })
+    } catch {
+      // Already logged in the mutation's onError handler.
     } finally {
       setBusyChatId(null)
     }
@@ -267,7 +258,7 @@ export function AutonomousRoomBadges() {
               aria-label={isRunning ? 'Pause' : 'Resume'}
               title={isRunning ? 'Pause' : 'Resume'}
             >
-              {isRunning ? <PauseIcon /> : <PlayIcon />}
+              {isRunning ? <Icon name="pause" className="w-2.5 h-2.5" /> : <Icon name="play" className="w-2.5 h-2.5" />}
             </button>
           </a>
         )

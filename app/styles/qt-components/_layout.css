@@ -427,41 +427,6 @@
   }
 
   /**
-   * Sidebar header - brand logo and collapse toggle
-   */
-  .qt-left-sidebar-header {
-    @apply flex items-center justify-between px-3;
-    @apply border-b shrink-0;
-    height: var(--qt-left-sidebar-header-height);
-    border-color: var(--qt-left-sidebar-border);
-  }
-
-  .qt-left-sidebar-collapsed .qt-left-sidebar-header {
-    @apply flex-col justify-center items-center gap-2 px-2 py-3 border-b-0;
-    height: auto;
-  }
-
-  /**
-   * Brand logo in sidebar header
-   */
-  .qt-left-sidebar-brand {
-    @apply flex items-center;
-    @apply transition-opacity duration-150;
-  }
-
-  .qt-left-sidebar-brand:hover {
-    @apply opacity-80;
-  }
-
-  .qt-left-sidebar-brand-icon {
-    @apply flex-shrink-0;
-  }
-
-  .qt-left-sidebar-collapsed .qt-left-sidebar-brand {
-    @apply justify-center;
-  }
-
-  /**
    * Collapse toggle button
    */
   .qt-left-sidebar-toggle {
@@ -1000,16 +965,52 @@
   }
 
   /* ==========================================================================
+     PRE-THEME / BOOTSTRAP BACKDROP
+     Setup, unlock, the version-guard & instance-lock gates, and the startup
+     progress screen all paint before the user's theme has loaded. They share
+     the About page's background art (public/images/about.webp) so the very
+     first thing a visitor sees is on-brand rather than a flat slab. Placement
+     mirrors the About page exactly: right center / cover — vertical crops stay
+     centred, horizontal crops anchor right so the crop comes off the left.
+
+     The art is dark, so unlike the About page (which dims the image to 0.35
+     over a fully-themed background) we keep the image close to full strength
+     and lay only a light translucent scrim over it — enough to seat the centred
+     card without drowning the artwork. A solid colour sits underneath so the
+     backdrop is fully opaque even if the image is slow or missing. There is no
+     theme-gating and no intro animation: these screens have no theme to wait
+     for.
+     ========================================================================== */
+  :root {
+    /* Declared at :root (NOT under [data-theme]) so it resolves at first paint,
+       before the theme injector sets data-theme on <html>. Single source of
+       truth for the bootstrap image path, placement, and darkness compensation. */
+    --qt-pretheme-scrim: rgb(12 14 22 / 0.45);
+    --qt-pretheme-backdrop:
+      linear-gradient(var(--qt-pretheme-scrim), var(--qt-pretheme-scrim))
+        center / cover no-repeat fixed,
+      url('/images/about.webp') right center / cover no-repeat fixed,
+      #10121a;
+  }
+
+  .qt-pretheme-bg {
+    background: var(--qt-pretheme-backdrop);
+  }
+
+  /* ==========================================================================
      AUTH LAYOUT
      ========================================================================== */
 
   /**
-   * Auth page wrapper - full page gradient background
+   * Auth page wrapper - full page backdrop.
+   * Shares the bootstrap backdrop (About art) since these screens render
+   * before any theme has loaded; the solid colour layer preserves the old
+   * dark fallback when the image cannot be shown.
    */
   .qt-auth-page {
     @apply flex min-h-screen items-center justify-center;
     @apply p-4;
-    background: var(--qt-auth-page-bg, linear-gradient(to bottom right, var(--color-slate-900, #0f172a), var(--color-slate-800, #1e293b)));
+    background: var(--qt-pretheme-backdrop);
   }
 
   /**

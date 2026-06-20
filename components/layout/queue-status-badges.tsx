@@ -53,7 +53,7 @@ const QUEUE_TYPES = [
     key: 'summary',
     label: 'Sum',
     title: 'Post-turn processing queue (summaries, titles, scene state, rendering)',
-    jobTypes: ['CONTEXT_SUMMARY', 'TITLE_UPDATE', 'SCENE_STATE_TRACKING', 'CONVERSATION_RENDER'],
+    jobTypes: ['CONTEXT_SUMMARY', 'TITLE_UPDATE', 'SCENE_STATE_TRACKING', 'CONVERSATION_RENDER', 'REGENERATE_CONVERSATION_SUMMARIES'],
     badgeClass: 'qt-queue-badge-summary',
   },
   {

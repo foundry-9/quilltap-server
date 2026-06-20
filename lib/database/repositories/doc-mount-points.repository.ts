@@ -145,6 +145,40 @@ export class DocMountPointsRepository extends AbstractBaseRepository<DocMountPoi
   }
 
   /**
+   * Find enabled mount points whose name matches (case-insensitive, trimmed).
+   * Mount-point names are NOT unique in the schema and are user-renameable, so
+   * this can return more than one row. Producers use the count to decide
+   * whether a `qtap://` URI can safely use the readable name form or must fall
+   * back to the UUID escape hatch (see `formatDocStoreUri`).
+   * @param name The mount-point name to match
+   * @returns Promise<DocMountPoint[]> Matching enabled mount points
+   */
+  async findByName(name: string): Promise<DocMountPoint[]> {
+    return this.safeQuery(
+      async () => {
+        const enabled = await this.findEnabled();
+        const needle = name.trim().toLowerCase();
+        return enabled.filter(mp => mp.name.trim().toLowerCase() === needle);
+      },
+      'Error finding mount points by name',
+      { name },
+      []
+    );
+  }
+
+  /**
+   * Count enabled mount points whose name matches (case-insensitive). A result
+   * greater than 1 means the name is ambiguous and a `qtap://` URI must use the
+   * mount-point UUID rather than the name.
+   * @param name The mount-point name to match
+   * @returns Promise<number> Count of matching enabled mount points
+   */
+  async countByName(name: string): Promise<number> {
+    const matches = await this.findByName(name);
+    return matches.length;
+  }
+
+  /**
    * Update scan results after a successful scan
    * @param id The mount point ID
    * @param fileCount Number of active files found

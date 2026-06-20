@@ -22,6 +22,7 @@ import type { Chat, Message } from '../types'
 import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
 import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog'
+import ComposeMailDialog from '@/components/chat/ComposeMailDialog'
 import type { ReattributeDialogState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
@@ -62,6 +63,8 @@ interface ChatModalsProps {
   closeStandaloneGenerateImage: () => void
   insertAnnouncementOpen: boolean
   closeInsertAnnouncement: () => void
+  composeMailOpen: boolean
+  closeComposeMail: () => void
   allLLMPauseModalOpen: boolean
   setAllLLMPauseModalOpen: (open: boolean) => void
   // Complex modal states
@@ -118,6 +121,7 @@ export function ChatModals({
   libraryFilePickerOpen, closeLibraryFilePicker,
   standaloneGenerateImageOpen, closeStandaloneGenerateImage,
   insertAnnouncementOpen, closeInsertAnnouncement,
+  composeMailOpen, closeComposeMail,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
@@ -318,6 +322,25 @@ export function ChatModals({
             .filter(p => p.type === 'CHARACTER' && !p.removedAt)
             .map(p => p.character?.id)
             .filter((id): id is string => id !== null && id !== undefined) || []}
+          onPosted={() => {
+            fetchChat()
+          }}
+        />
+      )}
+
+      {composeMailOpen && (
+        <ComposeMailDialog
+          isOpen={composeMailOpen}
+          onClose={closeComposeMail}
+          chatId={chatId}
+          participants={(chat?.participants || [])
+            .filter((p) => p.type === 'CHARACTER' && !p.removedAt && p.character)
+            .map((p) => ({
+              id: p.character!.id,
+              name: p.character!.name,
+              controlledBy: p.controlledBy ?? 'llm',
+              avatarUrl: p.character!.avatarUrl ?? null,
+            }))}
           onPosted={() => {
             fetchChat()
           }}

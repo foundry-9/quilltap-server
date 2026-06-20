@@ -9,7 +9,7 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
-import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent } from '@/lib/schemas/types'
+import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent, isHelpLikeChatType } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
 import { logger } from '@/lib/logger'
@@ -17,6 +17,8 @@ import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/ser
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { enqueueTitleUpdate } from '@/lib/background-jobs/queue-service'
 import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/services/librarian-notifications/writer'
+import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
+import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
 
 /**
  * Rolling-window summarization cadence.
@@ -90,9 +92,16 @@ export function evaluateSummarizationGate(
  * meter. Autonomous rooms have no human user, so that floor is permanently
  * zero; instead, count each assistant turn as one interchange so the title
  * check and summarization gate fire on the natural cadence of the room.
+ *
+ * Staff whispers (`systemSender` set — host/prospero/aurora/commonplaceBook/
+ * librarian/etc.) carry role ASSISTANT but are synthetic system messages, not
+ * real turns. They are excluded from the count: each autonomous turn drags
+ * along several whispers, so counting them inflated the meter by ~5/turn and
+ * collapsed the title-check / summarization cadence (meant to fire roughly
+ * every 10 interchanges) down to nearly every turn.
  */
 export function calculateInterchangeCount(
-  messages: Array<{ role?: string; type?: string }>,
+  messages: Array<{ role?: string; type?: string; systemSender?: string | null }>,
   chatType?: string,
 ): number {
   let userMessages = 0
@@ -101,6 +110,11 @@ export function calculateInterchangeCount(
   for (const msg of messages) {
     // Skip non-message types (like context-summary, tool-result, etc.)
     if (msg.type && msg.type !== 'message') {
+      continue
+    }
+
+    // Skip staff whispers — they are not interchange-bearing turns.
+    if (msg.systemSender) {
       continue
     }
 
@@ -140,10 +154,10 @@ export function shouldCheckTitleAtInterchange(
   lastCheckedInterchange: number,
   chatType?: string
 ): boolean {
-  const isHelpChat = chatType === 'help'
+  const isHelpChat = isHelpLikeChatType(chatType)
 
-  // Help chats fire at interchange 1 (right after first Q&A)
-  // Regular chats never check before interchange 2
+  // Help-like chats (Help Chat, Brahma Console) fire at interchange 1 (right
+  // after first Q&A). Regular chats never check before interchange 2
   const minimumInterchange = isHelpChat ? 1 : 2
   if (currentInterchange < minimumInterchange) {
     return false
@@ -448,6 +462,47 @@ export async function generateContextSummary(
       logger.error('[Context Summary] Failed to post broadcast summary whisper:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
+    // Mirror the fresh summary into every participant character's vault under
+    // "Conversation Summaries/" (Commonplace Book retrieval — Part A). The UUID
+    // in the file's frontmatter lets this replace its own prior file across
+    // renames. Best-effort: a vault-write failure must never fail the summary.
+    try {
+      const participantCharacterIds = Array.from(
+        new Set(chat.participants.map(p => p.characterId))
+      )
+      const stats = computeConversationStats(allChatMessages)
+      await writeConversationSummaryToVaults({
+        chatId,
+        chatTitle: chat.title,
+        summary: newSummary,
+        summaryGeneration: newGeneration,
+        participantCharacterIds,
+        messageCount: stats.messageCount,
+        firstMessageAt: stats.firstMessageAt,
+        lastMessageAt: stats.lastMessageAt,
+        updatedAt: new Date().toISOString(),
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Failed to mirror summary into character vaults:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
+    // Relevance drifts as the conversation advances, so re-run ONLY the
+    // relevant-past-conversations search against the fresh summary and post a
+    // refreshed Commonplace Book whisper to each present character. Ordering is
+    // deliberate: the vault summary above is written first, so this search reads
+    // the fresh corpus rather than racing it. Best-effort — never fails a fold.
+    try {
+      await refreshRelevantConversationsOnFold({
+        chatId,
+        summary: newSummary,
+        userId,
+        embeddingProfileId: undefined,
+        maxContext: connectionProfile.maxContext ?? null,
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Failed to refresh relevant conversations:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {
       try {
         const costResult = await estimateMessageCost(
@@ -470,7 +525,7 @@ export async function generateContextSummary(
     }
 
     try {
-      const titleResult = chat.chatType === 'help'
+      const titleResult = isHelpLikeChatType(chat.chatType)
         ? await generateHelpChatTitleFromSummary(newSummary, cheapLLM, userId, chatId)
         : await generateTitleFromSummary(newSummary, cheapLLM, userId, chatId)
       if (titleResult.success && titleResult.result) {
@@ -623,7 +678,7 @@ export async function checkAndGenerateSummaryIfNeeded(
   const isAtTitleCheckpoint = shouldCheckTitleAtInterchange(currentInterchange, lastCheckedInterchange, chat.chatType)
 
   if (isAtTitleCheckpoint) {
-    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${chat.chatType === 'help' ? 'help ' : ''}chat ${chatId}`)
+    logger.info(`[Title Update] Checking title at interchange ${currentInterchange} for ${isHelpLikeChatType(chat.chatType) ? 'help-like ' : ''}chat ${chatId}`)
 
     // Enqueue a TITLE_UPDATE job rather than running the cheap-LLM call
     // inline. Inline used to leak writes when this path ran inside the

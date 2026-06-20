@@ -243,18 +243,28 @@ describe('handleRunTool', () => {
 
     it('preserves structured tool results in the stored chat message', async () => {
       mockExecuteToolCallWithContext.mockResolvedValue({
-        toolName: 'update_outfit_item',
+        toolName: 'wardrobe_wear',
         success: true,
         result: {
-          formattedText: 'Updated outfit successfully',
-          action: 'equipped',
-          slot: 'top',
-          item: { item_id: 'item-1', title: 'Crimson Jacket' },
+          formattedText: 'Wore the Crimson Jacket',
+          operations: [
+            {
+              mode: 'wear',
+              effect: 'layered',
+              effect_summary: 'Layered "Crimson Jacket" into top.',
+              item: { item_id: 'item-1', title: 'Crimson Jacket' },
+              slots_affected: ['top'],
+            },
+          ],
+          current_state: { top: ['item-1'], bottom: [], footwear: [], accessories: [] },
           coverage_summary: 'Wearing: Crimson Jacket (top)',
         },
       });
 
-      const req = createRequest({ toolName: 'update_outfit_item', arguments: { slot: 'top', item_id: 'item-1' } });
+      const req = createRequest({
+        toolName: 'wardrobe_wear',
+        arguments: { operations: [{ mode: 'wear', item_id: 'item-1' }] },
+      });
       const ctx = createMockContext();
 
       await handleRunTool(req, 'chat-123', ctx);
@@ -263,10 +273,17 @@ describe('handleRunTool', () => {
       const messageContent = JSON.parse(addMessageCall[1].content);
       expect(typeof messageContent.result).toBe('object');
       expect(messageContent.result).toEqual({
-        formattedText: 'Updated outfit successfully',
-        action: 'equipped',
-        slot: 'top',
-        item: { item_id: 'item-1', title: 'Crimson Jacket' },
+        formattedText: 'Wore the Crimson Jacket',
+        operations: [
+          {
+            mode: 'wear',
+            effect: 'layered',
+            effect_summary: 'Layered "Crimson Jacket" into top.',
+            item: { item_id: 'item-1', title: 'Crimson Jacket' },
+            slots_affected: ['top'],
+          },
+        ],
+        current_state: { top: ['item-1'], bottom: [], footwear: [], accessories: [] },
         coverage_summary: 'Wearing: Crimson Jacket (top)',
       });
     });

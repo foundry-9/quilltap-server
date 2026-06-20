@@ -341,6 +341,20 @@
   }
 
   /**
+   * User bubbles render markdown through MessageContent, whose `.qt-prose-auto`
+   * pins `--tw-prose-body` to the global foreground in dark themes. Left alone,
+   * that prose colour overrides the bubble's `text-primary-foreground`, leaving
+   * light prose on the primary fill — unreadable in dark themes such as
+   * Madman's Box. Pin the prose body (and plain text) back to the primary
+   * foreground, mirroring the Salon's user-bubble treatment.
+   */
+  .qt-help-msg-user .qt-chat-message-content {
+    --tw-prose-body: var(--color-primary-foreground);
+    --tw-prose-invert-body: var(--color-primary-foreground);
+    color: var(--color-primary-foreground);
+  }
+
+  /**
    * Help chat message bubble — assistant messages
    */
   .qt-help-msg-assistant {

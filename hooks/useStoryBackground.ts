@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 interface StoryBackgroundState {
   backgroundUrl: string | null
@@ -51,14 +53,20 @@ export function useStoryBackground(
     backgroundUrl_toFetch = `/api/v1/projects/${projectId}?action=get-background`
   }
 
-  const { data, isLoading: loading, error, mutate: mutateBackground } = useSWR<{
-    backgroundUrl?: string
-    fileId?: string | null
-    filename?: string | null
-  }>(backgroundUrl_toFetch, {
-    refreshInterval: enablePassivePolling ? 30000 : 0,
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
+  const { data, isLoading: loading, error, refetch: refetchBackground } = useQuery({
+    queryKey: chatId
+      ? queryKeys.chats.background(chatId)
+      : queryKeys.projects.background(projectId ?? ''),
+    queryFn: ({ signal }) =>
+      apiFetch<{ backgroundUrl?: string; fileId?: string | null; filename?: string | null }>(
+        chatId
+          ? `/api/v1/chats/${chatId}?action=get-background`
+          : `/api/v1/projects/${projectId}?action=get-background`,
+        { signal }
+      ),
+    enabled: !!backgroundUrl_toFetch,
+    refetchInterval: enablePassivePolling ? 30000 : false,
+    refetchOnReconnect: false,
   })
 
   // Derive background state from SWR data
@@ -102,8 +110,8 @@ export function useStoryBackground(
     pollingIntervalRef.current = setInterval(async () => {
       pollCount++
 
-      const result = await mutateBackground()
-      const newUrl = result?.backgroundUrl ?? null
+      const result = await refetchBackground()
+      const newUrl = result.data?.backgroundUrl ?? null
 
       // Stop if we detect a change (new URL or URL appeared where there was none)
       if (newUrl !== initialUrlRef.current) {
@@ -117,7 +125,7 @@ export function useStoryBackground(
         stopPolling()
       }
     }, 5000)
-  }, [backgroundUrl_derived, mutateBackground, stopPolling])
+  }, [backgroundUrl_derived, refetchBackground, stopPolling])
 
   // Passive-polling path: SWR revalidates every 30s when enablePassivePolling is true.
   // If the background URL changes between revalidations (because a background job wrote one),
@@ -149,7 +157,7 @@ export function useStoryBackground(
     loading,
     error: error ? (error instanceof Error ? error.message : 'Failed to load background') : null,
     polling,
-    refetch: () => mutateBackground().then(() => {}),
+    refetch: () => refetchBackground().then(() => {}),
     startPolling,
     stopPolling,
   }

@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
+import { combineScenarioText } from '@/lib/chat/scenario-text';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
@@ -57,6 +59,7 @@ import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
   postProsperoContextAnnouncement,
+  postProsperoGroupContextWhisper,
 } from '@/lib/services/prospero-notifications/writer';
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
@@ -85,7 +88,7 @@ const createParticipantSchema = z.object({
 const createChatSchema = z.object({
   participants: z.array(createParticipantSchema).min(1, 'At least one participant is required'),
   title: z.string().optional(),
-  scenario: z.string().optional(), // Custom scenario text override (highest precedence)
+  scenario: z.string().optional(), // Free-text scenario notes; appended beneath any resolved preset body, or used as the whole scenario when no preset is chosen.
   scenarioId: z.string().uuid().optional(), // ID of a named scenario from the character's scenarios array
   /**
    * Relative path of a project scenario file (`Scenarios/<filename>.md`) inside the
@@ -101,6 +104,17 @@ const createChatSchema = z.object({
    * `projectId`: general scenarios apply to project-less chats too.
    */
   generalScenarioPath: z.string().max(500).optional(),
+  /**
+   * Relative path of a group scenario file (`Scenarios/<filename>.md`) inside a
+   * group's official document store, paired with `groupScenarioGroupId` (which
+   * group's store to resolve it from). Offered in the New Chat dialog whenever
+   * ANY selected participant is a member of the group (the one sanctioned
+   * exception to per-responding-character group isolation — a chat-creation menu,
+   * not a per-turn access grant). Lower precedence than `projectScenarioPath`,
+   * higher than `generalScenarioPath`.
+   */
+  groupScenarioPath: z.string().max(500).optional(),
+  groupScenarioGroupId: z.uuid().optional(),
   timestampConfig: TimestampConfigSchema.optional(),
   projectId: z.uuid().optional(),
   imageProfileId: z.uuid().optional(), // Chat-level image profile (shared by all participants)
@@ -358,6 +372,30 @@ async function createInitialMessagesScenarioAndStaff(
     });
   }
 
+  // Seed each character in the room with a targeted Prospero whisper naming the
+  // document stores they can reach by group membership plus their own vault.
+  // Unlike the public project/general announcement above, these are gated by
+  // membership / are personal, so they are whispered per character (and post
+  // nothing for characters with no group stores and no vault). Reload the chat
+  // to get persisted participant ids. Fails soft — chat creation must not break.
+  try {
+    const seededChat = await repos.chats.findById(chatId);
+    for (const participant of seededChat?.participants ?? []) {
+      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
+      if (participant.status === 'removed') continue;
+      await postProsperoGroupContextWhisper({
+        chatId,
+        targetParticipantId: participant.id,
+        characterId: participant.characterId,
+      });
+    }
+  } catch (error) {
+    logger.warn('[Chats v1] Failed to post chat-start Prospero group-context whispers', {
+      chatId,
+      error: getErrorMessage(error, 'Unknown error'),
+    });
+  }
+
   // Phase C: emit Host whispers establishing the opening state — scenario,
   // user-character intro, and (in multi-character chats) a welcome for each
   // LLM-controlled character so the others learn about them. These replace
@@ -403,6 +441,9 @@ async function createInitialMessagesScenarioAndStaff(
   const allCharacterParticipants = participants.filter(
     (p) => p.type === 'CHARACTER' && p.characterId,
   );
+  // Project tier for tri-tier wardrobe resolution — shared with every
+  // participant's equipped-item lookup below.
+  const equippedProjectMountPointIds = await resolveProjectMountPointIds(projectId);
   for (const participant of allCharacterParticipants) {
     try {
       const characterId = participant.characterId as string;
@@ -421,7 +462,9 @@ async function createInitialMessagesScenarioAndStaff(
         ] as string[]
       ).filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds)
+        ? await repos.wardrobe.findByIdsForCharacter(characterId, equippedItemIds, {
+            projectMountPointIds: equippedProjectMountPointIds,
+          })
         : [];
       const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
 
@@ -901,8 +944,11 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Fetch the primary character for defaults resolution
   const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-  // Resolve scenario: custom text > character scenarioId > project scenario path > nothing
-  let resolvedScenario = validatedData.scenario;
+  // Resolve the chosen preset scenario body (if any), by precedence:
+  // character scenarioId > project scenario path > group scenario path > general
+  // scenario path > nothing. The free-text `scenario` is NOT part of this chain —
+  // it is appended to whatever the chain resolves (see combineScenarioText below).
+  let resolvedScenario: string | undefined;
   if (!resolvedScenario && validatedData.scenarioId) {
     const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
     if (matchingScenario) {
@@ -920,7 +966,9 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
         projectScenarioPath: validatedData.projectScenarioPath,
       });
     } else {
-      const project = await repos.projects.findById(validatedData.projectId);
+      // Only the store pointer is needed here, which lives on the raw row — use
+      // findByIdRaw so scenario resolution doesn't throw on a degraded store.
+      const project = await repos.projects.findByIdRaw(validatedData.projectId);
       if (!project?.officialMountPointId) {
         logger.warn('[Chats v1] projectScenarioPath provided but project has no officialMountPointId', {
           projectId: validatedData.projectId,
@@ -943,6 +991,37 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       }
     }
   }
+  if (!resolvedScenario && validatedData.groupScenarioPath) {
+    if (!validatedData.groupScenarioGroupId) {
+      logger.warn('[Chats v1] groupScenarioPath provided without groupScenarioGroupId; ignoring', {
+        groupScenarioPath: validatedData.groupScenarioPath,
+      });
+    } else {
+      // Only the store pointer is needed — read the slim row so resolution
+      // doesn't throw on a degraded store.
+      const group = await repos.groups.findByIdRaw(validatedData.groupScenarioGroupId);
+      if (!group?.officialMountPointId) {
+        logger.warn('[Chats v1] groupScenarioPath provided but group has no officialMountPointId', {
+          groupScenarioGroupId: validatedData.groupScenarioGroupId,
+          groupScenarioPath: validatedData.groupScenarioPath,
+        });
+      } else {
+        const { resolveGroupScenarioBody } = await import('@/lib/mount-index/group-scenarios');
+        const body = await resolveGroupScenarioBody(
+          group.officialMountPointId,
+          validatedData.groupScenarioPath,
+        );
+        if (body) {
+          resolvedScenario = body;
+        } else {
+          logger.warn('[Chats v1] groupScenarioPath did not resolve to a body', {
+            groupScenarioGroupId: validatedData.groupScenarioGroupId,
+            groupScenarioPath: validatedData.groupScenarioPath,
+          });
+        }
+      }
+    }
+  }
   if (!resolvedScenario && validatedData.generalScenarioPath) {
     const { resolveGeneralScenarioBody } = await import('@/lib/mount-index/general-scenarios');
     const body = await resolveGeneralScenarioBody(validatedData.generalScenarioPath);
@@ -955,6 +1034,10 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
   }
 
+  // Append the user's free-text scenario notes. When a preset resolved above, the
+  // notes are layered beneath it; when none did, the notes ARE the scenario.
+  const presetBody = resolvedScenario;
+  resolvedScenario = combineScenarioText(presetBody, validatedData.scenario);
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
@@ -963,7 +1046,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   );
 
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
-  const defaultRoleplayTemplateId = chatSettings?.defaultRoleplayTemplateId || null;
   const now = new Date().toISOString();
   const participantsWithTimestamps: ChatParticipantBaseInput[] = buildResult.participants.map((p) => ({
     ...p,
@@ -979,6 +1061,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   };
   let projectAvatarGenerationDefault: boolean | null = null;
   let projectDefaultImageProfileId: string | null = null;
+  let projectDefaultRoleplayTemplateId: string | null = null;
 
   if (validatedData.projectId) {
     const project = await repos.projects.findById(validatedData.projectId);
@@ -993,6 +1076,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     };
     projectAvatarGenerationDefault = project.defaultAvatarGenerationEnabled ?? null;
     projectDefaultImageProfileId = project.defaultImageProfileId ?? null;
+    projectDefaultRoleplayTemplateId = project.defaultRoleplayTemplateId ?? null;
 
     if (!project.allowAnyCharacter) {
       const characterIds = participantsWithTimestamps
@@ -1014,11 +1098,16 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // Resolve image profile: request > project default > character default > null
   const chatImageProfileId = validatedData.imageProfileId || projectDefaultImageProfileId || buildResult.firstImageProfileId || null;
 
+  // Resolve roleplay template: project default > user/global default > null.
+  // Baked onto the chat at creation so the project's preference sticks.
+  const defaultRoleplayTemplateId =
+    projectDefaultRoleplayTemplateId || chatSettings?.defaultRoleplayTemplateId || null;
+
   const chat = await repos.chats.create({
     userId: user.id,
     participants: participantsWithTimestamps,
     title: validatedData.title || `Chat with ${chatContext.character.name}`,
-    contextSummary: validatedData.scenario || null,
+    contextSummary: resolvedScenario || null,
     tags: Array.from(buildResult.tags),
     roleplayTemplateId: defaultRoleplayTemplateId,
     timestampConfig: resolvedTimestampConfig,

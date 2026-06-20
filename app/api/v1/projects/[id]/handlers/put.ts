@@ -7,10 +7,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
-import { handlePutDefault, handleSetState } from '../actions';
+import { handlePutDefault, handleSetState, handlePutAesthetic } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
-const PROJECT_PUT_ACTIONS = ['set-state'] as const;
+const PROJECT_PUT_ACTIONS = ['set-state', 'aesthetic'] as const;
 type ProjectPutAction = typeof PROJECT_PUT_ACTIONS[number];
 
 /**
@@ -29,6 +29,7 @@ export async function handlePut(
 
   const actionHandlers: Record<ProjectPutAction, () => Promise<NextResponse>> = {
     'set-state': () => handleSetState(req, projectId, ctx),
+    'aesthetic': () => handlePutAesthetic(req, projectId, ctx),
   };
 
   return actionHandlers[action]();

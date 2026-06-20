@@ -17,7 +17,9 @@ import {
   useRef,
   useMemo,
 } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -98,7 +100,10 @@ const ComposerPlugins = forwardRef<
   const [editor] = useLexicalComposerContext()
   const controlRef = useRef<ExternalControlHandle>(null)
   const { getMarkdown, setMarkdown } = useMarkdownBridge()
-  const { data: chatSettings } = useSWR<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat', { signal }),
+  })
   const spellCheck = chatSettings?.composerSpellcheck ?? true
 
   // Expose the ComposerEditorHandle to parent

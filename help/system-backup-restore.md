@@ -21,6 +21,7 @@ A complete backup includes everything needed to recreate your Quilltap environme
 - All files you've uploaded (images, documents, attachments)
 - All folder structures you've created
 - Projects and their settings
+- Character groups — the whole fellowship preserved intact: each group's roster of members, its description and instructions, its scenarios and linked knowledge stores. (Time was, a restored archive returned your characters as so many strangers, every association between them quietly mislaid; that oversight has been set right, and a group now travels with its membership and its stores entire.)
 - Wardrobe items and outfit presets
 
 **Profiles & Settings**

@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import useSWR from 'swr'
+import { useState, useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast } from '@/lib/toast'
 import type { LLMLog } from '@/lib/schemas/types'
 import type { Message } from '../types'
@@ -20,9 +22,12 @@ export function useLLMLogs({
   const [inspectorScrollToMessageId, setInspectorScrollToMessageId] = useState<string | null>(null)
 
   // Fetch all logs for this chat using the combined endpoint (only fetch when messages exist)
-  const { data: logsData, isLoading, mutate: mutateLogs } = useSWR<{ logs: LLMLog[] }>(
-    messages.length > 0 ? `/api/v1/llm-logs?chatId=${chatId}&includeMessages=true` : null
-  )
+  const { data: logsData, isLoading, refetch: refetchLogs } = useQuery({
+    queryKey: queryKeys.llmLogs.byChat(chatId),
+    queryFn: ({ signal }) =>
+      apiFetch<{ logs: LLMLog[] }>(`/api/v1/llm-logs?chatId=${chatId}&includeMessages=true`, { signal }),
+    enabled: messages.length > 0,
+  })
 
   const allChatLogs = useMemo(() => logsData?.logs || [], [logsData])
 
@@ -60,8 +65,8 @@ export function useLLMLogs({
 
   // Refresh logs (e.g., after streaming completes)
   const refreshLogs = useCallback(() => {
-    mutateLogs()
-  }, [mutateLogs])
+    refetchLogs()
+  }, [refetchLogs])
 
   return {
     messagesWithLogs,

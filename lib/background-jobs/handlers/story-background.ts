@@ -28,6 +28,11 @@ import {
   type AppearanceResolutionResult,
 } from '@/lib/image-gen/appearance-resolution';
 import {
+  resolveAesthetic,
+  resolveDepictionGuidelines,
+  getProjectOfficialMountPointId,
+} from '@/lib/image-gen/aesthetic';
+import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import {
@@ -36,10 +41,13 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { resolveOrientation } from '@/lib/image-gen/orientation';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character } from '@/lib/schemas/types';
 
 // Detection helper lives in the shared dangerous-content service so the
@@ -50,14 +58,6 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function deriveGenderPrefix(char: Character): string {
-  if (!char.pronouns) return '';
-  const subj = char.pronouns.subject.toLowerCase();
-  if (subj === 'he') return 'A man. ';
-  if (subj === 'she') return 'A woman. ';
-  return '';
-}
-
 function buildBasicEnumeration(char: Character): string {
   const primary = char.physicalDescription;
   const desc =
@@ -66,7 +66,7 @@ function buildBasicEnumeration(char: Character): string {
     primary?.longPrompt ||
     primary?.fullDescription ||
     char.name;
-  return `${deriveGenderPrefix(char)}${desc}`.trim();
+  return `${genderPrefixFromPronouns(char.pronouns)}${desc}`.trim();
 }
 
 /**
@@ -247,16 +247,19 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // expanded via resolveEquippedOutfitForCharacter before flattening for
   // the appearance-resolution input.
   const appearanceInputs: AppearanceResolutionInput[] = [];
+  const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
   for (const char of validCharacters) {
-    let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null }> | undefined;
+    let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> | undefined;
     try {
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       if (equippedSlots) {
-        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots);
-        const flat: Array<{ slot: string; title: string; description?: string | null }> = [];
+        const resolved = await resolveEquippedOutfitForCharacter(repos, char!.id, equippedSlots, {
+          projectMountPointIds,
+        });
+        const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
         for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
           for (const item of resolved.leafItemsBySlot[slot]) {
-            flat.push({ slot, title: item.title, description: item.description });
+            flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
           }
         }
         if (flat.length > 0) {
@@ -442,13 +445,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     const resolved = resolvedAppearances?.find(a => a.characterId === char!.id);
 
     // Derive a gender prefix from standard pronouns so image generators know the character's sex
-    let genderPrefix = '';
-    const pronouns = char!.pronouns;
-    if (pronouns) {
-      const subj = pronouns.subject.toLowerCase();
-      if (subj === 'he') genderPrefix = 'A man. ';
-      else if (subj === 'she') genderPrefix = 'A woman. ';
-    }
+    const genderPrefix = genderPrefixFromPronouns(char!.pronouns);
 
     if (resolved) {
       const descParts = [genderPrefix + resolved.physicalDescription];
@@ -471,13 +468,26 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   });
 
 
-  // 9. Craft the background prompt using cheap LLM
+  // 9. Resolve default aesthetics (lantern=scene, aurora=figures) and the Ariel
+  // Clause (per-character depiction guidelines). Both aesthetics resolve
+  // project-over-global; the Ariel Clause reads each character's own vault.
+  const projectOfficialMountPointId = await getProjectOfficialMountPointId(chat.projectId);
+  const [sceneAesthetic, characterAesthetic] = await Promise.all([
+    resolveAesthetic({ kind: 'lantern', projectOfficialMountPointId }),
+    resolveAesthetic({ kind: 'aurora', projectOfficialMountPointId }),
+  ]);
+  const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
+
+  // 10. Craft the background prompt using cheap LLM
 
   const craftResult = await craftStoryBackgroundPrompt(
     {
       sceneContext,
       characters: characterDescriptions,
       provider: imageProfile.provider,
+      sceneAesthetic,
+      characterAesthetic,
+      depictionGuidelines,
     },
     cheapLLMSelection,
     job.userId,
@@ -515,6 +525,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
           sceneContext,
           characters: characterDescriptions,
           provider: imageProfile.provider,
+          sceneAesthetic,
+          characterAesthetic,
+          depictionGuidelines,
         },
         uncensoredLLMSelection,
         job.userId,
@@ -604,13 +617,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   let generationResponse;
   const genStartTime = Date.now();
+  // Backgrounds default to landscape; the resolver maps that onto the provider's
+  // own size / aspect ratio / prompt wording.
+  const resolved = resolveOrientation(imageProfile.provider, imageProfile.modelName, 'landscape');
+  const genPrompt = resolved.promptHint ? `${finalPrompt}\n\n${resolved.promptHint}` : finalPrompt;
   try {
-    // Request landscape-oriented image for backgrounds
     generationResponse = await provider.generateImage({
-      prompt: finalPrompt,
+      prompt: genPrompt,
       model: imageProfile.modelName,
       n: 1,
-      size: '1792x1024', // Wide landscape for backgrounds (16:9 roughly)
+      ...resolved.params,
       quality: (imageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural', // Natural style works better for ambient backgrounds
     }, decryptedKey);
@@ -683,12 +699,15 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
+    // Re-resolve for the reroute provider/model — its shape mechanism may differ.
+    const rerouteResolved = resolveOrientation(reroute.profile.provider, reroute.profile.modelName, 'landscape');
+    const reroutePrompt = rerouteResolved.promptHint ? `${finalPrompt}\n\n${rerouteResolved.promptHint}` : finalPrompt;
     try {
       generationResponse = await rerouteProvider.generateImage({
-        prompt: finalPrompt,
+        prompt: reroutePrompt,
         model: reroute.profile.modelName,
         n: 1,
-        size: '1792x1024',
+        ...rerouteResolved.params,
         quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
         style: 'natural',
       }, reroute.apiKey);
@@ -861,8 +880,10 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       originalFilename,
       mimeType: storedMimeType,
       size: storedSize,
-      width: 1792,
-      height: 1024,
+      // Actual dimensions measured from the stored bytes (see
+      // image-orientation-gating) — providers may return a different shape.
+      width: converted.width ?? null,
+      height: converted.height ?? null,
       linkedTo,
       source,
       category,

@@ -15,7 +15,9 @@
  */
 
 import { useEffect } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 const MAX_DICTIONARY_WORDS = 5000
 
@@ -57,7 +59,10 @@ interface CharactersResponse {
  * `/api/v1/characters` payload changes. Silent no-op outside Electron.
  */
 export function useDictionaryFeed(): void {
-  const { data } = useSWR<CharactersResponse>('/api/v1/characters')
+  const { data } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<CharactersResponse>('/api/v1/characters', { signal }),
+  })
 
   useEffect(() => {
     if (typeof window === 'undefined') return

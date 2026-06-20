@@ -209,7 +209,7 @@ export function ImageUploadDialog({ isOpen, onClose, onSuccess, contextType, con
 
                 {/* Context Info */}
                 {contextType && contextId && (
-                  <div className="bg-accent border qt-border-default rounded-md p-3">
+                  <div className="qt-bg-muted border qt-border-default rounded-md p-3">
                     <p className="text-sm text-primary">
                       This image will be automatically tagged with this {contextType.toLowerCase()}.
                     </p>

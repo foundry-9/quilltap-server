@@ -2,7 +2,7 @@
 
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { formatDateTime } from '@/lib/format-time'
-import { CheckIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 import { UserProfile } from './types'
 
 export interface ProfileInfoSectionProps {
@@ -11,26 +11,6 @@ export interface ProfileInfoSectionProps {
 
 function formatDate(dateStr: string | null): string {
   return formatDateTime(dateStr, { monthStyle: 'long' }) || 'Never'
-}
-
-/**
- * Copy icon SVG
- */
-function CopyIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  )
 }
 
 /**
@@ -62,9 +42,9 @@ function InfoField({
           aria-label={`Copy ${label}`}
         >
           {copied ? (
-            <CheckIcon className="w-4 h-4" />
+            <Icon name="check" className="w-4 h-4" />
           ) : (
-            <CopyIcon className="w-4 h-4" />
+            <Icon name="copy" className="w-4 h-4" />
           )}
         </button>
       )}

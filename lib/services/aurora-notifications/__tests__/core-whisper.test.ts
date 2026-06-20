@@ -65,6 +65,33 @@ describe('Core whisper builders', () => {
   });
 });
 
+describe('group-sourced Core file labels', () => {
+  const packetWithGroup: CorePacket = {
+    files: [
+      { path: 'Core/manifesto.md', body: 'I keep my own counsel.' },
+      {
+        path: 'Core/charter.md',
+        body: 'The Circle keeps faith with its own.',
+        sourceLabel: 'The Ravenmoor Circle',
+      },
+    ],
+    approxTokens: 40,
+  };
+
+  it('personal files render an unlabeled heading; group files carry [Shared — <group>]', () => {
+    for (const out of [
+      buildCoreWhisperContent(packetWithGroup),
+      buildCoreWhisperOpaqueContent(packetWithGroup),
+      buildCoreWhisperLLMContext(packetWithGroup),
+    ]) {
+      expect(out).toContain('### Core/manifesto.md');
+      expect(out).not.toContain('### [Shared — The Ravenmoor Circle] Core/manifesto.md');
+      expect(out).toContain('### [Shared — The Ravenmoor Circle] Core/charter.md');
+      expect(out).toContain('The Circle keeps faith with its own.');
+    }
+  });
+});
+
 describe('resolveCoreWhisperConfig', () => {
   const defaults = {
     enabled: true,

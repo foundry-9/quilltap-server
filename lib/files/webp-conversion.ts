@@ -39,6 +39,32 @@ export interface WebPConversionResult {
   filename: string;
   /** Whether conversion actually happened */
   wasConverted: boolean;
+  /**
+   * Actual pixel width of the output image, measured from the bytes. Undefined
+   * for vector (SVG) inputs or when measurement fails. Callers should store this
+   * instead of trusting any requested size — image providers frequently return a
+   * different shape than was asked for.
+   */
+  width?: number;
+  /** Actual pixel height of the output image, measured from the bytes. */
+  height?: number;
+}
+
+/**
+ * Best-effort read of an image buffer's pixel dimensions via sharp. Never
+ * throws — returns an empty object if the bytes can't be measured (e.g. SVG, or
+ * a format sharp can't decode).
+ */
+async function measureDimensions(
+  buffer: Buffer,
+): Promise<{ width?: number; height?: number }> {
+  try {
+    const sharp = (await import('sharp')).default;
+    const meta = await sharp(buffer).metadata();
+    return { width: meta.width, height: meta.height };
+  } catch {
+    return {};
+  }
 }
 
 /**
@@ -84,9 +110,12 @@ export async function convertToWebP(
   mimeType: string,
   filename: string,
 ): Promise<WebPConversionResult> {
-  // Pass through non-convertible types
+  // Pass through non-convertible types. Raster passthroughs (e.g. already-WebP)
+  // can still be measured; SVG and friends fall back to undefined dims.
   if (!needsWebPConversion(mimeType)) {
-    return { buffer, mimeType, filename, wasConverted: false };
+    const dims =
+      mimeType === 'image/svg+xml' ? {} : await measureDimensions(buffer);
+    return { buffer, mimeType, filename, wasConverted: false, ...dims };
   }
 
   try {
@@ -99,11 +128,15 @@ export async function convertToWebP(
 
     const newFilename = replaceExtensionWithWebP(filename);
 
+    // Measure the *output* bytes so stored dims match the stored image.
+    const dims = await measureDimensions(webpBuffer);
+
     return {
       buffer: webpBuffer,
       mimeType: 'image/webp',
       filename: newFilename,
       wasConverted: true,
+      ...dims,
     };
   } catch (error) {
     logger.warn('WebP conversion failed, keeping original format', {
@@ -113,6 +146,7 @@ export async function convertToWebP(
       error: error instanceof Error ? error.message : String(error),
     });
 
-    return { buffer, mimeType, filename, wasConverted: false };
+    const dims = await measureDimensions(buffer);
+    return { buffer, mimeType, filename, wasConverted: false, ...dims };
   }
 }

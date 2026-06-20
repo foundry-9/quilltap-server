@@ -1,5 +1,34 @@
 // Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
+exports[`tool definitions: derived OpenAI parameters askCarina: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "The name of the character to ask. Any character with Carina answerer capability can be asked; additionally, if you are yourself a Carina answerer, you may ask any character (a Carina line opens when either side is an answerer).",
+      "minLength": 1,
+      "type": "string",
+    },
+    "question": {
+      "description": "The question to ask.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "whisper": {
+      "default": false,
+      "description": "If true, the answer is whispered back to the caller only. If false, the answer appears in the chat publicly.",
+      "type": "boolean",
+    },
+  },
+  "required": [
+    "character",
+    "question",
+    "whisper",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters attachImage: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -53,7 +82,7 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
   "additionalProperties": false,
   "properties": {
     "dest_mount_point": {
-      "description": "Name (or ID) of the document store to copy the file into. Must be different from source_mount_point.",
+      "description": "Name (or ID) of the document store to copy the file into. Pass "self" for your own character vault. Must be different from source_mount_point.",
       "minLength": 1,
       "type": "string",
     },
@@ -61,8 +90,12 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
       "description": "Destination path within the destination document store. If this path already exists as a directory, the file is dropped into it with the source filename. Otherwise it is treated as the full path with filename. Use "" or "." to copy to the root of the destination store.",
       "type": "string",
     },
+    "dest_uri": {
+      "description": "A qtap:// URI for the destination, e.g. "qtap://Shared/Notes/today.md". When provided, it supersedes dest_mount_point/dest_path.",
+      "type": "string",
+    },
     "source_mount_point": {
-      "description": "Name (or ID) of the document store to copy the file from.",
+      "description": "Name (or ID) of the document store to copy the file from. Pass "self" for your own character vault.",
       "minLength": 1,
       "type": "string",
     },
@@ -71,13 +104,11 @@ exports[`tool definitions: derived OpenAI parameters docCopyFile: parameters sna
       "minLength": 1,
       "type": "string",
     },
+    "source_uri": {
+      "description": "A qtap:// URI for the source document, e.g. "qtap://self/Notes/today.md". When provided, it supersedes source_mount_point/source_path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "source_mount_point",
-    "source_path",
-    "dest_mount_point",
-    "dest_path",
-  ],
   "type": "object",
 }
 `;
@@ -87,7 +118,7 @@ exports[`tool definitions: derived OpenAI parameters docCreateFolder: parameters
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -104,10 +135,11 @@ exports[`tool definitions: derived OpenAI parameters docCreateFolder: parameters
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -117,18 +149,18 @@ exports[`tool definitions: derived OpenAI parameters docDeleteBlob: parameters s
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name or ID holding the blob.",
+      "description": "Mount point name or ID holding the blob. Pass "self" for your own character vault.",
       "type": "string",
     },
     "path": {
       "description": "Relative path to the blob within the mount point.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "mount_point",
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -138,7 +170,7 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFile: parameters s
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -155,10 +187,11 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFile: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -168,7 +201,7 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFolder: parameters
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -185,10 +218,11 @@ exports[`tool definitions: derived OpenAI parameters docDeleteFolder: parameters
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -247,7 +281,7 @@ exports[`tool definitions: derived OpenAI parameters docGrep: parameters snapsho
       "type": "integer",
     },
     "mount_point": {
-      "description": "Optional: restrict search to a specific mount point. Without this, searches all mounted points.",
+      "description": "Optional: restrict search to a specific mount point (name or ID). Pass "self" to search only your own character vault. Without this, searches all mounted points.",
       "type": "string",
     },
     "normalize_diacritics": {
@@ -261,6 +295,10 @@ exports[`tool definitions: derived OpenAI parameters docGrep: parameters snapsho
     },
     "query": {
       "description": "Search string or regex pattern to find.",
+      "type": "string",
+    },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
       "type": "string",
     },
   },
@@ -280,7 +318,7 @@ exports[`tool definitions: derived OpenAI parameters docInsertText: parameters s
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "normalize_diacritics": {
@@ -325,9 +363,12 @@ exports[`tool definitions: derived OpenAI parameters docInsertText: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "position",
     "content",
   ],
@@ -344,13 +385,14 @@ exports[`tool definitions: derived OpenAI parameters docListBlobs: parameters sn
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name or ID to enumerate blobs for.",
+      "description": "Mount point name or ID to enumerate blobs for. Pass "self" for your own character vault.",
+      "type": "string",
+    },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
       "type": "string",
     },
   },
-  "required": [
-    "mount_point",
-  ],
   "type": "object",
 }
 `;
@@ -369,7 +411,7 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "type": "boolean",
     },
     "mount_point": {
-      "description": "Optional: restrict listing to a specific mount point. Without this, lists all mount points.",
+      "description": "Optional: restrict listing to a specific mount point (name or ID). Pass "self" to list only your own character vault. Without this, lists all mount points.",
       "type": "string",
     },
     "pattern": {
@@ -382,12 +424,17 @@ exports[`tool definitions: derived OpenAI parameters docListFiles: parameters sn
       "type": "boolean",
     },
     "scope": {
-      "description": "Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files.",
+      "description": "Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files, "group" for the document stores of the groups the responding character is a member of.",
       "enum": [
         "document_store",
         "project",
         "general",
+        "group",
       ],
+      "type": "string",
+    },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
       "type": "string",
     },
   },
@@ -400,7 +447,7 @@ exports[`tool definitions: derived OpenAI parameters docMoveFile: parameters sna
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "new_path": {
@@ -421,9 +468,12 @@ exports[`tool definitions: derived OpenAI parameters docMoveFile: parameters sna
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "new_path",
   ],
   "type": "object",
@@ -435,7 +485,7 @@ exports[`tool definitions: derived OpenAI parameters docMoveFolder: parameters s
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "new_path": {
@@ -454,9 +504,12 @@ exports[`tool definitions: derived OpenAI parameters docMoveFolder: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "new_path",
   ],
   "type": "object",
@@ -477,7 +530,7 @@ exports[`tool definitions: derived OpenAI parameters docOpenDocument: parameters
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -498,6 +551,10 @@ exports[`tool definitions: derived OpenAI parameters docOpenDocument: parameters
       "description": "Display title for new blank documents. Ignored if path is provided.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "type": "object",
 }
@@ -513,18 +570,18 @@ exports[`tool definitions: derived OpenAI parameters docReadBlob: parameters sna
       "type": "boolean",
     },
     "mount_point": {
-      "description": "Mount point name or ID holding the blob.",
+      "description": "Mount point name or ID holding the blob. Pass "self" for your own character vault.",
       "type": "string",
     },
     "path": {
       "description": "Relative path to the blob within the mount point (e.g. images/avatar.webp).",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "mount_point",
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -540,7 +597,7 @@ exports[`tool definitions: derived OpenAI parameters docReadFile: parameters sna
       "type": "integer",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "offset": {
@@ -563,10 +620,11 @@ exports[`tool definitions: derived OpenAI parameters docReadFile: parameters sna
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -583,7 +641,7 @@ exports[`tool definitions: derived OpenAI parameters docReadFrontmatter: paramet
       "type": "array",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -600,10 +658,11 @@ exports[`tool definitions: derived OpenAI parameters docReadFrontmatter: paramet
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-  ],
   "type": "object",
 }
 `;
@@ -623,7 +682,7 @@ exports[`tool definitions: derived OpenAI parameters docReadHeading: parameters 
       "type": "integer",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -640,11 +699,11 @@ exports[`tool definitions: derived OpenAI parameters docReadHeading: parameters 
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
-  "required": [
-    "path",
-    "heading",
-  ],
   "type": "object",
 }
 `;
@@ -663,7 +722,7 @@ exports[`tool definitions: derived OpenAI parameters docStrReplace: parameters s
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "normalize_diacritics": {
@@ -689,9 +748,12 @@ exports[`tool definitions: derived OpenAI parameters docStrReplace: parameters s
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "find",
     "replace",
   ],
@@ -704,7 +766,7 @@ exports[`tool definitions: derived OpenAI parameters docUpdateFrontmatter: param
   "additionalProperties": false,
   "properties": {
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -734,9 +796,12 @@ exports[`tool definitions: derived OpenAI parameters docUpdateFrontmatter: param
       },
       "type": "object",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "updates",
   ],
   "type": "object",
@@ -762,7 +827,7 @@ exports[`tool definitions: derived OpenAI parameters docUpdateHeading: parameter
       "type": "integer",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -784,10 +849,12 @@ exports[`tool definitions: derived OpenAI parameters docUpdateHeading: parameter
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
-    "heading",
     "content",
   ],
   "type": "object",
@@ -811,7 +878,7 @@ exports[`tool definitions: derived OpenAI parameters docWriteBlob: parameters sn
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name or ID that should receive the blob.",
+      "description": "Mount point name or ID that should receive the blob. Pass "self" for your own character vault.",
       "type": "string",
     },
     "original_filename": {
@@ -822,10 +889,12 @@ exports[`tool definitions: derived OpenAI parameters docWriteBlob: parameters sn
       "description": "Desired relative path within the mount point, e.g. "images/avatar.png". If the upload is transcoded to WebP the extension is rewritten to .webp.",
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "mount_point",
-    "path",
     "data_base64",
     "original_filename",
     "mime_type",
@@ -850,7 +919,7 @@ exports[`tool definitions: derived OpenAI parameters docWriteFile: parameters sn
       "type": "string",
     },
     "mount_point": {
-      "description": "Mount point name. Required when scope is "document_store".",
+      "description": "Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.",
       "type": "string",
     },
     "path": {
@@ -867,9 +936,12 @@ exports[`tool definitions: derived OpenAI parameters docWriteFile: parameters sn
       ],
       "type": "string",
     },
+    "uri": {
+      "description": "A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.",
+      "type": "string",
+    },
   },
   "required": [
-    "path",
     "content",
   ],
   "type": "object",
@@ -949,7 +1021,7 @@ exports[`tool definitions: derived OpenAI parameters imageGeneration: parameters
   "additionalProperties": false,
   "properties": {
     "aspectRatio": {
-      "description": "Aspect ratio for image generation. Only used for providers that support aspect ratios (e.g., Google Imagen). Examples: 1:1 (square), 16:9 (landscape), 9:16 (portrait).",
+      "description": "Advanced, provider-dependent: an exact aspect ratio honoured only by aspect-ratio providers (e.g. Google, Grok, OpenRouter). Prefer \`orientation\`.",
       "enum": [
         "1:1",
         "3:4",
@@ -969,6 +1041,15 @@ exports[`tool definitions: derived OpenAI parameters imageGeneration: parameters
     "negativePrompt": {
       "description": "Optional description of what to avoid in the image. Example: "blurry, low quality, watermark"",
       "maxLength": 1000,
+      "type": "string",
+    },
+    "orientation": {
+      "description": "PREFERRED way to control image shape. The system maps this onto whatever each provider supports (a concrete size, an aspect ratio, or prompt wording), so it works everywhere. "portrait" = taller than wide, "landscape" = wider than tall, "square" = 1:1. Use this instead of \`size\`/\`aspectRatio\` unless you have a specific reason not to.",
+      "enum": [
+        "portrait",
+        "landscape",
+        "square",
+      ],
       "type": "string",
     },
     "prompt": {
@@ -999,7 +1080,7 @@ Bad: "A woman with brown hair sitting with a man" (missing placeholders!)",
     },
     "size": {
       "default": "1024x1024",
-      "description": "Image dimensions. Use 1024x1024 for square, 1792x1024 for landscape, 1024x1792 for portrait.",
+      "description": "Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Most providers ignore it. Prefer \`orientation\`.",
       "enum": [
         "1024x1024",
         "1792x1024",
@@ -1048,6 +1129,14 @@ exports[`tool definitions: derived OpenAI parameters keepImage: parameters snaps
   "required": [
     "uuid",
   ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters listEmail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
   "type": "object",
 }
 `;
@@ -1200,6 +1289,40 @@ exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters runSql: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "database": {
+      "default": "main",
+      "description": "Which Quilltap database to query. "main" (quilltap.db): characters, chats, chat_messages, memories, connection_profiles, projects, groups, settings. "llm-logs" (quilltap-llm-logs.db): the llm_logs table (full request/response JSON, token usage, cost, duration). "mount-index" (quilltap-mount-index.db): document stores and ALL character/project/group vault content. Databases are physically separate — you cannot JOIN across them in one query.",
+      "enum": [
+        "main",
+        "llm-logs",
+        "mount-index",
+      ],
+      "type": "string",
+    },
+    "max_rows": {
+      "default": 200,
+      "description": "Maximum rows to return (hard-capped at 1000). Use aggregates for large sets rather than dumping rows.",
+      "maximum": 1000,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "sql": {
+      "description": "A single read-only SQL query (SELECT or WITH … SELECT). One statement only. Read-only PRAGMAs like PRAGMA table_info(<table>) are allowed for schema inspection. Writes (INSERT/UPDATE/DELETE/CREATE/DROP/ALTER/REINDEX/VACUUM, mutating PRAGMAs) are rejected — this tool cannot change data.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "sql",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters searchScriptorium: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1226,11 +1349,12 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
     },
     "scope": {
       "default": "all",
-      "description": "Which document stores the \`documents\` and \`knowledge\` sources reach into. "all" (the default) searches every store you can see — your own character vault, every document store linked to this chat's project, and the instance-wide Quilltap General store. "project" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). "character" narrows to just your own character vault. \`scope\` has no effect on \`memories\` or \`conversations\`.",
+      "description": "Which document stores the \`documents\` and \`knowledge\` sources reach into. "all" (the default) searches every store you can see — your own character vault, the stores of every group you belong to, every document store linked to this chat's project, and the instance-wide Quilltap General store. "project" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). "character" narrows to just your own character vault. "group" narrows to just the document stores of the groups you are a member of (returns nothing if you belong to no groups). \`scope\` has no effect on \`memories\` or \`conversations\`.",
       "enum": [
         "all",
         "project",
         "character",
+        "group",
       ],
       "type": "string",
     },
@@ -1255,32 +1379,123 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters selfInventory: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters searchScriptoriumBrahma: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
-    "sections": {
-      "description": "Optional list of section names to return. If omitted or empty, all top-level sections are returned (equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "quilltap"). Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information. The "quilltap.*" sub-sections let you fetch one piece of the Quilltap section without pulling the changelog (which can be large).",
+    "limit": {
+      "default": 10,
+      "description": "Maximum number of results to return across all sources. Default is 10.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "What to search for across the operator's conversations, documents, and knowledge base. Be specific about the topic, event, or detail you want to find.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "scope": {
+      "default": "all",
+      "description": "Which document stores the \`documents\` and \`knowledge\` sources reach into. The Brahma Console searches every enabled document store regardless of scope, so this parameter has no practical effect here.",
+      "enum": [
+        "all",
+        "project",
+        "character",
+        "group",
+      ],
+      "type": "string",
+    },
+    "sources": {
+      "description": "Which layers to search. Defaults to all available sources if not specified. "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store; "knowledge" searches only files under a \`Knowledge/\` folder inside those stores. NOTE: this console has NO access to memories — the commonplace-book memory source is deliberately unavailable here.",
       "items": {
-        "description": "Which section(s) to include. Options: "vault" (files in your character vault), "vaultAccess" (who can read/write your vault in this chat), "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" (release notes for the current or most recent release only), "quilltap.changelog" (the changelog only).",
         "enum": [
-          "vault",
-          "vaultAccess",
-          "memory",
-          "loadedMemories",
-          "chats",
-          "prompt",
-          "lastTurn",
-          "quilltap",
-          "quilltap.version",
-          "quilltap.releaseNotes",
-          "quilltap.changelog",
+          "conversations",
+          "documents",
+          "knowledge",
         ],
         "type": "string",
       },
       "type": "array",
     },
   },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters selfInventory: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "includeAutomaticImages": {
+      "description": "When listing vault files (the "vault", "vault.character", or "vault.groups" sections), include auto-generated images — character avatars and story backgrounds. Defaults to false: these are hidden to keep the listing focused on authored content. OS junk files (.DS_Store, Thumbs.db, dot-files) are always hidden regardless of this flag.",
+      "type": "boolean",
+    },
+    "sections": {
+      "description": "Optional list of section names to return. If omitted or empty, all top-level sections are returned (equivalent to passing "vault", "vaultAccess", "memory", "loadedMemories", "chats", "prompt", "lastTurn", "carina", "quilltap", "context"). Pass one or more section names to receive only those sections — useful for saving tokens when you only need specific information. The "quilltap.*", "vault.*", "vaultAccess.*", and "context.*" sub-sections let you fetch one piece of a section without pulling the rest (e.g. the changelog, which can be large).",
+      "items": {
+        "description": "Which section(s) to include. Options: "vault" (files in your own character vault AND your group vaults), with finer-grained dotted variants "vault.character" (just your own vault) and "vault.groups" (just the vaults of the groups you belong to); "vaultAccess" (who can read/write your character vault in this chat AND who can read/write your group vaults), with dotted variants "vaultAccess.character" (this chat only) and "vaultAccess.groups" (group members, in any chat); "memory" (total and high-importance memory counts), "loadedMemories" (memories actually loaded into this turn's prompt), "chats" (conversation count and date range), "prompt" (the static system prompt assembled for every turn), "lastTurn" (provider/model/token usage from the most recent LLM call), "carina" (whether you yourself are a Carina answerer, plus everyone you can reach via Carina — every other character if you are an answerer, with the ones who are also answerers noted; only the Carina answerers if you are not), "quilltap" (Quilltap version, runtime environment, client shell, release notes, and changelog — all three parts). For finer-grained quilltap queries, ask for one or more of the dotted sub-sections: "quilltap.version" (version + runtime + client shell only), "quilltap.releaseNotes" (release notes for the current or most recent release only), "quilltap.changelog" (the changelog only); "context" (where you are right now: this chat, the current project, your groups, the characters present with you, and the files attached to this chat with instructions for reaching each via the doc_* tools), with dotted variants "context.chat", "context.project", "context.groups", "context.characters", and "context.files".",
+        "enum": [
+          "vault",
+          "vault.character",
+          "vault.groups",
+          "vaultAccess",
+          "vaultAccess.character",
+          "vaultAccess.groups",
+          "memory",
+          "loadedMemories",
+          "chats",
+          "prompt",
+          "lastTurn",
+          "carina",
+          "quilltap",
+          "quilltap.version",
+          "quilltap.releaseNotes",
+          "quilltap.changelog",
+          "context",
+          "context.chat",
+          "context.project",
+          "context.groups",
+          "context.characters",
+          "context.files",
+        ],
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters sendMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "character": {
+      "description": "The name (or id) of the character you are writing to. Suparṇā will find them by their nameplate; any soul with a postbox may be written to.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "in_reply_to": {
+      "description": "Optional. The message id (the Mail/… path) of a letter in YOUR OWN postbox that you are answering. When supplied, your reply is prefaced with a quoted copy of that original letter.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "message": {
+      "description": "Your letter, written in Markdown — the body only. Do not pen any frontmatter or envelope; the Post Office stamps all of that for you.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "character",
+    "message",
+  ],
   "type": "object",
 }
 `;
@@ -1420,48 +1635,24 @@ exports[`tool definitions: derived OpenAI parameters upsertAnnotation: parameter
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters wardrobeChangeItem: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters wardrobeArchive: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
     "item_id": {
-      "description": "The ID of the wardrobe item. Required for "wear", "replace", and "add_to_slot". Optional for "remove_from_slot" (omit to clear the slot). Ignored by "clear_slot". The item must be a leaf (no components); composites are rejected — use wardrobe_set_outfit for those.",
+      "description": "The wardrobe item ID to archive. Preferred lookup.",
       "type": "string",
     },
     "item_title": {
-      "description": "Fallback lookup by title if item_id is not known.",
-      "type": "string",
-    },
-    "mode": {
-      "description": ""wear" (put it on honoring the item's replace flag — layers if the flag is off, replaces the slots if on), "replace" (clear the slots it covers, then put it on — a forced swap), "add_to_slot" (layer into one slot), "remove_from_slot" (take off one item), "clear_slot" (empty the slot entirely).",
-      "enum": [
-        "wear",
-        "replace",
-        "add_to_slot",
-        "remove_from_slot",
-        "clear_slot",
-      ],
-      "type": "string",
-    },
-    "slot": {
-      "description": "Required for "add_to_slot", "remove_from_slot", and "clear_slot". Optional for "wear"/"replace" — slots are inferred from the item.",
-      "enum": [
-        "top",
-        "bottom",
-        "footwear",
-        "accessories",
-      ],
+      "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
     },
   },
-  "required": [
-    "mode",
-  ],
   "type": "object",
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
@@ -1470,7 +1661,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: paramet
       "type": "string",
     },
     "component_item_ids": {
-      "description": "IDs of existing wardrobe items that this new item bundles. Supplying this makes the new item a composite. The slots it covers are computed from the union of the components' slots.",
+      "description": "IDs of existing wardrobe items that this new item bundles. Supplying this makes the new item a composite. The slots it covers are computed from the union of the components' slots. Components may come from the character's own wardrobe, the project, or Quilltap General.",
       "items": {
         "type": "string",
       },
@@ -1491,6 +1682,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreateItem: paramet
       "default": false,
       "description": "If true, wear the item immediately after creation. Defaults to false. Wearing honors the new item's replace flag: off (the default) layers it over what is already worn, on replaces those slots. For composites this places the composite (as a single id) into every slot it covers. The response reports the resulting effect (layered vs replaced).",
       "type": "boolean",
+    },
+    "image_prompt": {
+      "description": "Optional Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator IN PLACE OF the title (e.g. "intricate dense burnished-gold circular rank glyph on the shoulder"). Terse, never Markdown; it is joined into a comma-separated outfit list. Omit to fall back to the title.",
+      "type": "string",
     },
     "recipient": {
       "description": "Name of a character in this chat to give the item to. If omitted, the item is added to your own wardrobe.",
@@ -1555,30 +1750,180 @@ exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters sn
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters wardrobeUpdateOutfit: parameters snapshot 1`] = `
+exports[`tool definitions: derived OpenAI parameters wardrobeRead: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
   "properties": {
     "item_id": {
-      "description": "The ID of the composite wardrobe item. The item must have components (componentItemIds non-empty); leaf items are rejected — use wardrobe_change_item for those.",
+      "description": "The wardrobe item ID to read. Preferred lookup.",
       "type": "string",
     },
     "item_title": {
-      "description": "Fallback lookup by title if item_id is not known.",
-      "type": "string",
-    },
-    "mode": {
-      "description": ""wear" — put the composite outfit on, honoring its replace flag (additive bundles layer over what is worn; replace bundles clear those slots first). "replace" — clear every slot the bundle covers, then put it on (a forced swap). "remove" — take the composite outfit off; layered items stay.",
-      "enum": [
-        "wear",
-        "replace",
-        "remove",
-      ],
+      "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
       "type": "string",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeTakeOff: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "operations": {
+      "description": "An ordered list of take-off changes applied in sequence. Apply multiple removals in one call rather than calling the tool repeatedly.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "description": "The worn item to take off. Required for mode=remove (with item_title as a fallback). For a composite outfit, this filters the outfit out of every slot it covers. Items from the character's own wardrobe, the project, and Quilltap General all resolve.",
+            "type": "string",
+          },
+          "item_title": {
+            "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
+            "type": "string",
+          },
+          "mode": {
+            "description": ""remove" (default) — take the named item off across every slot it covers; other layers in those slots stay. Pass a slot to restrict the removal to that one slot. "clear_slot" — empty one named slot entirely (requires slot).",
+            "enum": [
+              "remove",
+              "clear_slot",
+            ],
+            "type": "string",
+          },
+          "slot": {
+            "description": "Required for clear_slot. Optional for remove (restricts the removal to that single slot instead of every slot the item covers).",
+            "enum": [
+              "top",
+              "bottom",
+              "footwear",
+              "accessories",
+            ],
+            "type": "string",
+          },
+        },
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
   "required": [
-    "mode",
+    "operations",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "appropriateness": {
+      "description": "New context tags (e.g. "casual", "formal"). Omit to leave unchanged.",
+      "type": "string",
+    },
+    "component_item_ids": {
+      "description": "Replace the composite component list. An empty array makes the item a leaf. Omit to leave unchanged.",
+      "items": {
+        "type": "string",
+      },
+      "type": "array",
+    },
+    "description": {
+      "description": "New description. Omit to leave unchanged.",
+      "type": "string",
+    },
+    "image_prompt": {
+      "description": "New Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator in place of the title. Terse, never Markdown. Omit to leave unchanged.",
+      "type": "string",
+    },
+    "is_default": {
+      "description": "Whether this item is part of the default outfit. Omit to leave unchanged.",
+      "type": "boolean",
+    },
+    "item_id": {
+      "description": "The wardrobe item ID to edit. Preferred lookup.",
+      "type": "string",
+    },
+    "item_title": {
+      "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
+      "type": "string",
+    },
+    "replace": {
+      "description": "Composite behaviour on equip: false = additive (layer), true = clear-then-set. Omit to leave unchanged.",
+      "type": "boolean",
+    },
+    "title": {
+      "description": "New name. Omit to leave unchanged.",
+      "minLength": 1,
+      "type": "string",
+    },
+    "types": {
+      "description": "Replace the coverage slots. Omit to leave unchanged.",
+      "items": {
+        "enum": [
+          "top",
+          "bottom",
+          "footwear",
+          "accessories",
+        ],
+        "type": "string",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters wardrobeWear: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "operations": {
+      "description": "An ordered list of put-on changes applied in sequence. Each operation builds on the result of the previous one (e.g. force-swap the top, then layer a cardigan over it). Apply multiple changes in one call rather than calling the tool repeatedly.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "description": "The wardrobe item to put on. Required for every mode (with item_title as a fallback). May be a single garment OR a composite outfit — both are handled the same way. Items from the character's own wardrobe, the project, and Quilltap General all resolve.",
+            "type": "string",
+          },
+          "item_title": {
+            "description": "Fallback lookup by title (case-insensitive) when item_id is unknown.",
+            "type": "string",
+          },
+          "mode": {
+            "description": ""wear" (default) — put the item on across every slot it covers, honoring its replace flag (off layers over what is worn; on replaces those slots). "replace" — force a swap: clear every slot it covers, then put it on. "add_to_slot" — layer the item into one named slot (requires slot).",
+            "enum": [
+              "wear",
+              "replace",
+              "add_to_slot",
+            ],
+            "type": "string",
+          },
+          "slot": {
+            "description": "Target slot. Required for add_to_slot; ignored by wear/replace.",
+            "enum": [
+              "top",
+              "bottom",
+              "footwear",
+              "accessories",
+            ],
+            "type": "string",
+          },
+        },
+        "type": "object",
+      },
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "operations",
   ],
   "type": "object",
 }

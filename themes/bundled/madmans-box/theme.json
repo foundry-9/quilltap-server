@@ -1,0 +1,284 @@
+{
+  "format": "qtap-theme",
+  "formatVersion": 1,
+  "id": "madmans-box",
+  "name": "Madman's Box",
+  "description": "Bigger on the inside, and dressed for the occasion. A mad inventor's time-machine cabin in dark walnut and brass — bakelite knobs, vacuum tubes aglow with amber, a Jacob's ladder crackling cyan between two posts. The room is warm and lamplit; the screens and the energy run cool phosphor-cyan. Banker's-lamp green where things go right. Dark by decree, never by accident. Raleway signage, Lora prose, and a Fira Code console for the dials.",
+  "version": "1.1.4",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "supportsDarkMode": false,
+  "tags": [
+    "steampunk",
+    "art-deco",
+    "dark",
+    "brass",
+    "walnut",
+    "amber",
+    "cyan",
+    "retro-futurist",
+    "tubes",
+    "ornate"
+  ],
+  "tokensPath": "tokens.json",
+  "stylesPath": "styles.css",
+  "fonts": [
+    {
+      "family": "Raleway",
+      "src": "fonts/Raleway-Light.woff2",
+      "weight": "300",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Raleway",
+      "src": "fonts/Raleway-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Raleway",
+      "src": "fonts/Raleway-Medium.woff2",
+      "weight": "500",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Raleway",
+      "src": "fonts/Raleway-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Raleway",
+      "src": "fonts/Raleway-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-Italic.woff2",
+      "weight": "400",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-Medium.woff2",
+      "weight": "500",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-MediumItalic.woff2",
+      "weight": "500",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-SemiBoldItalic.woff2",
+      "weight": "600",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Lora",
+      "src": "fonts/Lora-BoldItalic.woff2",
+      "weight": "700",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-Italic.woff2",
+      "weight": "400",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-Medium.woff2",
+      "weight": "500",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-MediumItalic.woff2",
+      "weight": "500",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-SemiBold.woff2",
+      "weight": "600",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-SemiBoldItalic.woff2",
+      "weight": "600",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Mulish",
+      "src": "fonts/Mulish-BoldItalic.woff2",
+      "weight": "700",
+      "style": "italic",
+      "display": "swap"
+    },
+    {
+      "family": "Fira Code",
+      "src": "fonts/FiraCode-Regular.woff2",
+      "weight": "400",
+      "style": "normal",
+      "display": "swap"
+    },
+    {
+      "family": "Fira Code",
+      "src": "fonts/FiraCode-Bold.woff2",
+      "weight": "700",
+      "style": "normal",
+      "display": "swap"
+    }
+  ],
+  "icons": {
+    "close": "icons/close.svg",
+    "pencil": "icons/pencil.svg",
+    "refresh": "icons/refresh.svg",
+    "check": "icons/check.svg",
+    "check-circle": "icons/check-circle.svg",
+    "chat": "icons/chat.svg",
+    "info": "icons/info.svg",
+    "trash": "icons/trash.svg",
+    "copy": "icons/copy.svg",
+    "plus": "icons/plus.svg",
+    "minus": "icons/minus.svg",
+    "search": "icons/search.svg",
+    "download": "icons/download.svg",
+    "upload": "icons/upload.svg",
+    "cloud-upload": "icons/cloud-upload.svg",
+    "external-link": "icons/external-link.svg",
+    "link": "icons/link.svg",
+    "send": "icons/send.svg",
+    "paperclip": "icons/paperclip.svg",
+    "eye": "icons/eye.svg",
+    "eye-off": "icons/eye-off.svg",
+    "star": "icons/star.svg",
+    "bookmark": "icons/bookmark.svg",
+    "tag": "icons/tag.svg",
+    "expand": "icons/expand.svg",
+    "compress": "icons/compress.svg",
+    "chevron-down": "icons/chevron-down.svg",
+    "chevron-right": "icons/chevron-right.svg",
+    "chevron-left": "icons/chevron-left.svg",
+    "arrow-left": "icons/arrow-left.svg",
+    "arrow-right": "icons/arrow-right.svg",
+    "arrow-up": "icons/arrow-up.svg",
+    "arrow-down": "icons/arrow-down.svg",
+    "sort": "icons/sort.svg",
+    "alert-triangle": "icons/alert-triangle.svg",
+    "alert-circle": "icons/alert-circle.svg",
+    "shield": "icons/shield.svg",
+    "ban": "icons/ban.svg",
+    "clock": "icons/clock.svg",
+    "calendar": "icons/calendar.svg",
+    "image": "icons/image.svg",
+    "camera": "icons/camera.svg",
+    "play": "icons/play.svg",
+    "pause": "icons/pause.svg",
+    "stop": "icons/stop.svg",
+    "zoom-in": "icons/zoom-in.svg",
+    "zoom-out": "icons/zoom-out.svg",
+    "projects": "icons/projects.svg",
+    "files": "icons/files.svg",
+    "file": "icons/file.svg",
+    "file-plus": "icons/file-plus.svg",
+    "folder": "icons/folder.svg",
+    "folder-plus": "icons/folder-plus.svg",
+    "book": "icons/book.svg",
+    "characters": "icons/characters.svg",
+    "scriptorium": "icons/scriptorium.svg",
+    "photos": "icons/photos.svg",
+    "scenarios": "icons/scenarios.svg",
+    "profile": "icons/profile.svg",
+    "user": "icons/user.svg",
+    "user-plus": "icons/user-plus.svg",
+    "users": "icons/users.svg",
+    "megaphone": "icons/megaphone.svg",
+    "mail": "icons/mail.svg",
+    "dice": "icons/dice.svg",
+    "sparkles": "icons/sparkles.svg",
+    "wand": "icons/wand.svg",
+    "wrench": "icons/wrench.svg",
+    "code": "icons/code.svg",
+    "cpu": "icons/cpu.svg",
+    "database": "icons/database.svg",
+    "layers": "icons/layers.svg",
+    "zap": "icons/zap.svg",
+    "swap": "icons/swap.svg",
+    "log-out": "icons/log-out.svg",
+    "settings": "icons/settings.svg",
+    "themes": "icons/themes.svg",
+    "wardrobe": "icons/wardrobe.svg",
+    "help": "icons/help.svg",
+    "brahma-console": "icons/brahma-console.svg",
+    "sun": "icons/sun.svg",
+    "moon": "icons/moon.svg",
+    "monitor": "icons/monitor.svg",
+    "brand": "icons/brand.svg"
+  },
+  "subsystems": {
+    "aurora": { "backgroundImage": "textures/aurora-bg.webp" },
+    "prospero": { "backgroundImage": "textures/prospero-bg.webp" },
+    "salon": { "backgroundImage": "textures/salon-bg.webp" },
+    "commonplace-book": { "backgroundImage": "textures/commonplace-book-bg.webp" },
+    "scriptorium": { "backgroundImage": "textures/scriptorium-bg.webp" },
+    "lantern": { "backgroundImage": "textures/lantern-bg.webp" },
+    "forge": { "backgroundImage": "textures/forge-bg.webp" },
+    "calliope": { "backgroundImage": "textures/calliope-bg.webp" }
+  }
+}

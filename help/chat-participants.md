@@ -262,14 +262,32 @@ Click any chip to unfold it into its full announcement; click it again — or th
 ### Adding Characters
 
 1. Click **Add Character** at the bottom of the sidebar
-2. A character selector opens
-3. Choose a character from your library
+2. A character selector opens, offering three doors:
+   - **Choose from your library** — pick a soul already in your keeping
+   - **Create New NPC** — conjure an ad-hoc character on the spot (see below)
+   - **Summon from Lore** — distil a character out of your worldbuilding notes (see below)
+3. Whichever door you take, the chosen character lands back in the selector, ready for you to settle the particulars
 4. Configure options:
    - **History Access** — Can they see previous messages?
    - **Join Scenario** — Optional entrance description
    - **Starting Outfit** — The wardrobe with which they cross the threshold: defaults, a slot-by-slot composition, the cheap LLM's best guess from the scene, or nothing at all
 5. Click **Add** to confirm
 6. Character appears in the sidebar
+
+#### Creating an Ad-Hoc NPC
+
+For a quick walk-on who needn't trouble your permanent library, click **Create New NPC** and fill in a few essentials:
+
+- **Name** and **Description** (the description doubles as the character's personality)
+- Optionally a **Physical Description**, a **Scenario**, a custom **System Prompt**, and an **Avatar**
+
+Every field you complete is set down faithfully — Scenario and Physical Description included. Confirm, and the new NPC is preselected in the picker so you can choose their connection profile and starting outfit before adding them to the chat.
+
+#### Summoning from Lore
+
+When the soul you want is already implied by your notes, click **Summon from Lore** to open the summoning apparatus. Upload lore files or paste text, choose a connection profile for the conjuration, and let the wizard draw out a fully-formed character. The summoned character is added to your library and preselected in the picker, where you finish as you would for any other arrival.
+
+A single summoning produces a single soul; should the lore yield more than one (or none at all), the apparatus will say so and leave the picker untouched — repair to **Aurora** to sort out a crowded conjuration.
 
 ### Removing Characters
 

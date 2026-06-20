@@ -1,5 +1,7 @@
 'use client'
 
+import { Icon } from '@/components/ui/icon'
+
 interface ImportResult {
   imported: Record<string, number>
   skipped?: Record<string, number>
@@ -18,19 +20,7 @@ export function ImportCompleteStep({ importResult }: ImportCompleteStepProps) {
     <div className="space-y-4">
       <div className="flex flex-col items-center justify-center py-6">
         <div className="w-12 h-12 rounded-full qt-bg-success/10 flex items-center justify-center mb-4">
-          <svg
-            className="w-6 h-6 qt-text-success"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
+          <Icon name="check" className="w-6 h-6 qt-text-success" />
         </div>
         <h3 className="qt-heading-4 text-foreground">
           Import Complete

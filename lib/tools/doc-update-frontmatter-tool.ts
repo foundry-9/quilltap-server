@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-update-frontmatter tool's input.
  */
 export const docUpdateFrontmatterToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -18,11 +22,12 @@ export const docUpdateFrontmatterToolInputSchema = z.object({
     .optional(),
   mount_point: z
     .string()
-    .describe('Mount point name. Required when scope is "document_store".')
+    .describe('Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.')
     .optional(),
   path: z
     .string()
-    .describe('Relative path to the markdown file within the selected scope.'),
+    .describe('Relative path to the markdown file within the selected scope.')
+    .optional(),
   updates: z
     .record(z.string(), z.unknown())
     .describe('Key-value pairs to set or update. Use null as a value to delete a key. Can contain nested objects and arrays.'),
@@ -31,7 +36,7 @@ export const docUpdateFrontmatterToolInputSchema = z.object({
     .default(false)
     .describe('If true, replace the entire frontmatter block with updates. If false (default), merge updates with existing frontmatter.')
     .optional(),
-});
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc-update-frontmatter tool
@@ -59,5 +64,7 @@ export function validateDocUpdateFrontmatterInput(input: unknown): input is DocU
 export interface DocUpdateFrontmatterOutput {
   success: boolean;
   path: string;
+  /** Canonical qtap:// URI for the file. */
+  uri?: string;
   mtime: number;
 }

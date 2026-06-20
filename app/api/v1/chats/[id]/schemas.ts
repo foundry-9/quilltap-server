@@ -163,6 +163,7 @@ const STAFF_SENDER_ENUM = z.enum([
   'host',
   'commonplaceBook',
   'ariel',
+  'suparna',
 ]);
 
 export const insertAnnouncementSchema = z.object({
@@ -179,4 +180,17 @@ export const insertAnnouncementPreviewSchema = z.object({
   characterId: z.uuid(),
   connectionProfileId: z.uuid(),
   systemPromptId: z.uuid().optional(),
+});
+
+/**
+ * Compose Mail composer action: the operator posts a letter as one of their
+ * player-characters. `fromCharacterId` must be a `controlledBy:'user'` CHARACTER
+ * participant of this chat (re-verified server-side — never trust the client).
+ * `inReplyToPath` is a `Mail/…` path in the FROM character's own mailbox.
+ */
+export const sendMailActionSchema = z.object({
+  fromCharacterId: z.uuid(),
+  toCharacterId: z.uuid(),
+  bodyMarkdown: z.string().min(1),
+  inReplyToPath: z.string().min(1).nullable().optional(),
 });

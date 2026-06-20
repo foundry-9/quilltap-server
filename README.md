@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.6.1-green.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.7.0-green.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -149,6 +149,8 @@ Connect to any major AI provider — or several at once. Quilltap uses a three-m
 | **OpenAI** | GPT families. Tool calling, image generation (GPT-Image, DALL-E). |
 | **Google** | Gemini families. Multimodal, Imagen image generation, tool use. |
 | **xAI** | Grok families. Native image generation, web search. |
+| **DeepSeek** | DeepSeek chat and reasoning models. Tool use, chain-of-thought reasoning. |
+| **Z.AI** | GLM families (GLM-4.6, GLM-4.5, vision). Reasoning, web search, CogView image generation. |
 | **Ollama** | Local/offline models (Llama, Phi, Mistral, etc.). Fully local, no API key needed. |
 | **OpenRouter** | 200+ models through a unified API with automatic pricing. |
 | **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
@@ -264,7 +266,7 @@ See [Backup & Restore](docs/BACKUP-RESTORE.md) and [Database Protection](help/da
 
 ## Themes & Appearance
 
-Switch themes live without reloading. Five bundled themes ship with the application:
+Switch themes live without reloading. Six bundled themes ship with the application:
 
 | Theme | Style |
 | ----- | ----- |
@@ -273,6 +275,7 @@ Switch themes live without reloading. Five bundled themes ship with the applicat
 | **The Great Estate** | Warm, manor-inspired design with mahogany and gold |
 | **Earl Grey** | High-contrast dark theme with modern minimal styling |
 | **Rains** | Warm, earthy palette with cozy amber accents |
+| **Madman's Box** | A mad inventor's time-machine cabin — dark walnut and brass, amber tubes, and cool phosphor-cyan dials |
 
 Themes are distributed as `.qtap-theme` bundles — declarative archives containing JSON design tokens, CSS, fonts, and images. No build tools, no npm packages, no TypeScript — just edit and install. Create your own with `npx create-quilltap-theme my-theme`, manage from the CLI with `npx quilltap themes`, or browse and install from theme registries in Settings with Ed25519 signature verification.
 
@@ -285,7 +288,7 @@ Quilltap was built to be extended. The plugin system supports eight extension po
 | Plugin Type | What It Does |
 | ----------- | ------------ |
 | **LLM Provider** | Add new AI chat services with tool use, streaming, and multimodal support |
-| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok) |
+| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok, Z.AI/CogView) |
 | **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, built-in) |
 | **Theme** | Custom visual styles via `.qtap-theme` bundles or legacy npm plugins |
 | **Template** | Roleplay formatting templates for different prompt styles |
@@ -297,11 +300,11 @@ Quilltap was built to be extended. The plugin system supports eight extension po
 
 Quilltap is a single Next.js 16 application (App Router) that serves both the UI and API routes. The tech stack:
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability
+- **Frontend:** React 19, TypeScript, Tailwind CSS 4 with a semantic `qt-*` class system for full theme overrideability, TanStack Query for server-state, Lexical for rich-text editing, and the SVAR file manager for the document browser
 - **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
 - **Build:** GitHub Actions CI/CD with automated releases — Docker multi-arch images and npm package built from a single tag push
 
-The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
+The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, DeepSeek, Z.AI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
 
 > **Repository note:** Server source lives at [`foundry-9/quilltap-server`](https://github.com/foundry-9/quilltap-server). The original `foundry-9/quilltap` repository is reserved for the next-generation native Quilltap application currently under development. If your tooling references the old URL, update it.
 
@@ -356,7 +359,7 @@ See the [Development Guide](docs/developer/DEVELOPMENT.md) for local setup, test
 
 ## Tech Stack
 
-Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · Docker · Zod · GitHub Actions
+Next.js 16 (App Router) · React 19 · TypeScript · SQLite with SQLCipher (better-sqlite3-multiple-ciphers) · Tailwind CSS 4 · TanStack Query · Lexical · SVAR · Docker · Zod · GitHub Actions
 
 ---
 
@@ -387,7 +390,7 @@ Quilltap stands on the shoulders of these excellent open source projects, and is
 
 **AI & LLM:** OpenAI SDK, Anthropic SDK, Google Generative AI SDK, xAI/Grok SDK, Model Context Protocol SDK
 
-**UI:** Tailwind CSS, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
+**UI:** Tailwind CSS, TanStack Query, Lexical, SVAR File Manager, React Markdown, React Syntax Highlighter, PDF.js, sharp, Lucide Icons
 
 **Infrastructure:** Docker
 

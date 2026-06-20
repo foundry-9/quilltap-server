@@ -21,15 +21,12 @@
  * @module file-storage/lantern-store-bridge
  */
 
-import path from 'path';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
 import { getLanternBackgroundsMountPointId } from '@/lib/instance-settings';
+import { storeMountFile } from '@/lib/mount-index/store-file';
 import { buildMountBlobStorageKey } from './project-store-bridge';
-import { sanitizeLeafName, resolveUniqueRelativePath } from './bridge-path-helpers';
+import { sanitizeLeafName } from './bridge-path-helpers';
 
 interface LanternStoreTarget {
   mountPointId: string;
@@ -84,44 +81,51 @@ interface WriteLanternBackgroundResult {
 export async function writeLanternBackgroundToMountStore(
   input: WriteLanternBackgroundInput
 ): Promise<WriteLanternBackgroundResult> {
+  // In the forked job child the DB connection is readonly and writes are
+  // buffered (no read-your-writes). The `linkBlobContent` insert below returns
+  // a server-generated `blobId` (deduped by sha, so it may reference a
+  // pre-existing blob) that gets baked into the returned `storageKey` and
+  // persisted into `files.create`; a buffered/synthetic id would dangle. Route
+  // the whole write to the parent's RW connection via host-RPC and return the
+  // real result. Mirrors `FileStorageManager.uploadFile`.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client');
+    return callHost<WriteLanternBackgroundResult>(
+      'writeLanternBackgroundToMountStore',
+      input,
+    );
+  }
+
   const target = await getLanternBackgroundsStore();
   if (!target) {
     throw new Error('Lantern Backgrounds mount has not been provisioned');
   }
 
-  const repos = getRepositories();
   const safeName = sanitizeLeafName(input.filename);
-  const transcoded = await transcodeToWebP(input.content, input.contentType);
   const desiredPath = `${input.subfolder}/${safeName}`;
-  const basePath = normaliseBlobRelativePath(desiredPath, transcoded.storedMimeType);
-  const relativePath = await resolveUniqueRelativePath(target.mountPointId, basePath);
 
-  const folderId = await ensureFolderPath(target.mountPointId, input.subfolder);
-
-  const { blobId } = await repos.docMountFileLinks.linkBlobContent({
+  const result = await storeMountFile({
     mountPointId: target.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    folderId,
-    originalFileName: safeName,
+    relativePath: desiredPath,
+    data: input.content,
     originalMimeType: input.contentType,
-    storedMimeType: transcoded.storedMimeType,
-    sha256: transcoded.sha256,
-    description: input.description ?? '',
-    data: transcoded.data,
+    originalFileName: safeName,
+    description: input.description,
+    collisionStrategy: 'unique-suffix',
+    treatNativeTextAsDocument: false,
+    transcodeImages: true,
+    extractText: false,
+    enqueueEmbedding: false,
+    assetStorage: 'database',
   });
 
-  emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
-  repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
-
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
-    mountPointId: target.mountPointId,
-    blobId,
-    relativePath,
-    storedMimeType: transcoded.storedMimeType,
-    sizeBytes: transcoded.data.length,
-    sha256: transcoded.sha256,
+    storageKey: buildMountBlobStorageKey(result.mountPointId, result.blobId!),
+    mountPointId: result.mountPointId,
+    blobId: result.blobId!,
+    relativePath: result.relativePath,
+    storedMimeType: result.storedMimeType,
+    sizeBytes: result.sizeBytes,
+    sha256: result.sha256,
   };
 }
-

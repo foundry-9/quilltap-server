@@ -68,11 +68,21 @@ function formatCategoryPhrase(categories: RankedCategory[], scoreWord: string): 
   return `${head} and ${tail.label} (${scoreWord} ${tail.score.toFixed(2)})`;
 }
 
-function formatAssayer(details: ConciergeDangerDetails): string {
+/**
+ * Bare noun phrase naming the classifier that rendered the verdict, e.g.
+ * "the house's OPENAI moderation assayer" or "the cheap-LLM assayer, OPENAI".
+ * Returns '' when no provider is known.
+ */
+function assayerNounPhrase(details: ConciergeDangerDetails): string {
   if (!details.providerName) return '';
   return details.source === 'moderation'
-    ? ` (per the house's ${details.providerName} moderation assayer)`
-    : ` (per the cheap-LLM assayer, ${details.providerName})`;
+    ? `the house's ${details.providerName} moderation assayer`
+    : `the cheap-LLM assayer, ${details.providerName}`;
+}
+
+function formatAssayer(details: ConciergeDangerDetails): string {
+  const noun = assayerNounPhrase(details);
+  return noun ? ` (per ${noun})` : '';
 }
 
 export function buildDangerContent(details?: ConciergeDangerDetails): string {
@@ -93,9 +103,24 @@ export function buildDangerContent(details?: ConciergeDangerDetails): string {
   const threshold = details.threshold.toFixed(2);
   const assayer = formatAssayer(details);
 
-  const specifics = phrase
-    ? `The matter that drew his eye: ${phrase} — together registering ${overall} against the present threshold of ${threshold}${assayer}.`
-    : `The matter, on close inspection, registered ${overall} against the present threshold of ${threshold}${assayer}.`;
+  // When the overall severity actually meets the threshold, the arithmetic
+  // itself drew the line. When it does not, the classifier flagged the matter
+  // of its own accord (e.g. OpenAI's moderation endpoint returning `flagged`
+  // against its own catalogue, independent of our numeric threshold) — so say
+  // so plainly, and offer the severities as informational rather than decisive.
+  const crossedThreshold = details.score >= details.threshold;
+
+  let specifics: string;
+  if (crossedThreshold) {
+    specifics = phrase
+      ? `The matter that drew his eye: ${phrase} — together registering ${overall} against the present threshold of ${threshold}${assayer}.`
+      : `The matter, on close inspection, registered ${overall} against the present threshold of ${threshold}${assayer}.`;
+  } else {
+    const verdictBy = assayerNounPhrase(details) || 'the house assayer';
+    specifics = phrase
+      ? `The matter was marked by the direct verdict of ${verdictBy}: ${phrase}. The severities themselves stayed shy of the present threshold of ${threshold} (the highest reading ${overall}) — it was the assayer's own judgement, not the tally, that drew his eye.`
+      : `The matter was marked by the direct verdict of ${verdictBy}, the severities notwithstanding — they stayed shy of the present threshold of ${threshold} (registering ${overall}).`;
+  }
 
   return `${opener} ${specifics} ${closer}`;
 }
@@ -114,13 +139,24 @@ export function buildDangerOpaqueContent(details?: ConciergeDangerDetails): stri
   const triggers = formatCategoryPhrase(ranked, 'score');
   const overall = details.score.toFixed(2);
   const threshold = details.threshold.toFixed(2);
-  const via = details.providerName
-    ? ` Classified by ${details.providerName} (${details.source === 'moderation' ? 'moderation endpoint' : 'cheap-LLM fallback'}).`
-    : '';
+  const providerVia = details.providerName
+    ? `${details.providerName} (${details.source === 'moderation' ? 'moderation endpoint' : 'cheap-LLM fallback'})`
+    : 'the classifier';
+  const crossedThreshold = details.score >= details.threshold;
 
-  const specifics = triggers
-    ? `Triggers: ${triggers}. Overall score ${overall} against threshold ${threshold}.${via}`
-    : `Overall score ${overall} against threshold ${threshold}.${via}`;
+  let specifics: string;
+  if (crossedThreshold) {
+    const via = details.providerName ? ` Classified by ${providerVia}.` : '';
+    specifics = triggers
+      ? `Triggers: ${triggers}. Overall score ${overall} against threshold ${threshold}.${via}`
+      : `Overall score ${overall} against threshold ${threshold}.${via}`;
+  } else {
+    // Flagged by the classifier itself, below the numeric threshold. Report the
+    // scores for context but make clear they did not drive the decision.
+    specifics = triggers
+      ? `Flagged directly by ${providerVia}, below the numeric threshold. Triggers: ${triggers}. Highest score ${overall}, threshold ${threshold} (not reached).`
+      : `Flagged directly by ${providerVia}, below the numeric threshold. Overall score ${overall}, threshold ${threshold} (not reached).`;
+  }
 
   return `${opener} ${specifics} ${closer}`;
 }

@@ -27,4 +27,5 @@ export type {
   AttachmentSupport,
   ModelInfo,
   ImageGenerationModelInfo,
+  ImageOrientationSupport,
 } from '@quilltap/plugin-types';

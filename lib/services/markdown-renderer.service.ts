@@ -21,7 +21,22 @@ import remarkRehype from 'remark-rehype';
 import rehypeStringify from 'rehype-stringify';
 import rehypeHighlight from 'rehype-highlight';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
+import {
+  type CompiledRule,
+  DEFAULT_RENDERING_PATTERNS,
+  DEFAULT_DIALOGUE_DETECTION,
+  compileRenderingPatterns,
+  tokenizeInline,
+  lineMatchFor,
+  wrapBlockMatchFor,
+  isDialogueParagraph,
+  segmentsToHtml,
+  escapeMarkdownInBrackets,
+} from '@/lib/chat/roleplay-rendering';
 import { logger } from '@/lib/logger';
+
+// Re-export the shared escape helper so existing importers keep working.
+export { escapeMarkdownInBrackets };
 
 // ============================================================================
 // TYPES
@@ -34,143 +49,20 @@ export interface MarkdownRenderOptions {
   dialogueDetection?: DialogueDetection | null;
 }
 
-// Internal compiled pattern type (exported for testing)
-export interface CompiledPattern {
-  regex: RegExp;
-  className: string;
-}
-
-// ============================================================================
-// DEFAULT PATTERNS (mirrors MessageContent.tsx)
-// ============================================================================
-
-/**
- * Default rendering patterns used when template doesn't specify any.
- * Includes common patterns from both Standard and Quilltap-style formatting.
- */
-const DEFAULT_RENDERING_PATTERNS: RenderingPattern[] = [
-  // OOC: ((comments)) - double parentheses
-  { pattern: '\\(\\([^)]+\\)\\)', className: 'qt-chat-ooc' },
-  // OOC: // comment - line prefix style
-  { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' },
-  // Dialogue: "speech" - straight and curly quotes
-  { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
-  // Narration: *actions* - single asterisks (not bold **)
-  { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
-  // Narration: [actions] - square brackets (not links)
-  { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
-  // Internal monologue: {thoughts} - excludes {{template}} variables
-  { pattern: '(?<!\\{)\\{[^{}]+\\}(?!\\})', className: 'qt-chat-inner-monologue' },
-];
-
-/**
- * Default dialogue detection for paragraph-level styling.
- * Handles straight and curly quotes.
- */
-const DEFAULT_DIALOGUE_DETECTION: DialogueDetection = {
-  openingChars: ['"', '"'],
-  closingChars: ['"', '"'],
-  className: 'qt-chat-dialogue',
-};
-
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
 /**
- * Compile string patterns to RegExp objects
- */
-function compilePatterns(patterns: RenderingPattern[]): CompiledPattern[] {
-  return patterns.map(p => ({
-    regex: new RegExp(p.pattern, p.flags || 'g'),
-    className: p.className,
-  }));
-}
-
-/**
- * Escape markdown syntax characters inside roleplay brackets to prevent
- * markdown from breaking up the segments before we can style them.
- * This handles cases like [narration with *emphasis* inside]
+ * Process roleplay syntax in HTML content and wrap inline matches with styled
+ * spans. Applied AFTER markdown conversion to handle the text nodes.
  *
- * IMPORTANT: This function preserves fenced code blocks (``` ... ```) unchanged
- * to prevent corrupting code content with escape sequences.
+ * Splits HTML by tags and only applies patterns to text content (avoiding
+ * corruption of HTML attributes that contain quotes), and skips content inside
+ * <code>/<pre> blocks. The actual match-walk is the shared `tokenizeInline`
+ * core, so client and server can't diverge.
  */
-export function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
-  // Characters that trigger markdown parsing
-  const markdownChars = /([*_~`])/g;
-
-  // Check if patterns include bracket-style narration [...]
-  const hasBracketNarration = patterns.some(p => p.pattern.includes('\\['));
-  // Check if patterns include brace-style monologue {...}
-  const hasBraceMonologue = patterns.some(p => p.pattern.includes('\\{'));
-  // Check if patterns include single-asterisk narration *...*
-  const hasAsteriskNarration = patterns.some(p =>
-    p.pattern.includes('\\*') && p.className === 'qt-chat-narration'
-  );
-
-  // If no relevant patterns, return content unchanged
-  if (!hasBracketNarration && !hasBraceMonologue && !hasAsteriskNarration) {
-    return content;
-  }
-
-  // Split content by fenced code blocks to preserve them unchanged
-  // Match ``` optionally followed by language, then content, then closing ```
-  const codeBlockRegex = /(```[\s\S]*?```)/g;
-  const parts = content.split(codeBlockRegex);
-
-  // Process only non-code-block parts
-  const processedParts = parts.map((part, index) => {
-    // Odd indices are code blocks (captured groups from split)
-    if (index % 2 === 1) {
-      return part; // Return code blocks unchanged
-    }
-
-    let result = part;
-
-    // Escape inside [...] if bracket narration is in patterns
-    if (hasBracketNarration) {
-      result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
-        // Escape markdown characters with backslash
-        const escaped = inner.replace(markdownChars, '\\$1');
-        return `[${escaped}]`;
-      });
-    }
-
-    // Escape inside {...} if brace monologue is in patterns
-    // Excludes {{template}} variables using lookbehind/lookahead
-    if (hasBraceMonologue) {
-      result = result.replace(/(?<!\{)\{([^{}]+)\}(?!\})/g, (match, inner) => {
-        const escaped = inner.replace(markdownChars, '\\$1');
-        return `{${escaped}}`;
-      });
-    }
-
-    // Escape inside *...* if single asterisks are used for narration
-    // Be careful not to double-escape or break bold **...**
-    if (hasAsteriskNarration) {
-      // Match single asterisk pairs that aren't bold
-      result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
-        // Only escape if there are nested markdown chars (unlikely but safe)
-        const escaped = inner.replace(/([_~`])/g, '\\$1');
-        return `*${escaped}*`;
-      });
-    }
-
-    return result;
-  });
-
-  return processedParts.join('');
-}
-
-/**
- * Process roleplay syntax in HTML content and wrap matches with styled spans.
- * This is applied AFTER markdown conversion to handle the text nodes.
- *
- * IMPORTANT: This function splits HTML by tags and only applies patterns to
- * text content, avoiding corruption of HTML attributes that contain quotes.
- * It also skips content inside <code> and <pre> blocks to preserve code formatting.
- */
-export function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]): string {
+export function applyRoleplayPatterns(html: string, compiledRules: CompiledRule[]): string {
   // Split by HTML tags to avoid matching inside them
   // This regex captures HTML tags as separate array elements
   const tagRegex = /(<[^>]*>)/g;
@@ -198,57 +90,11 @@ export function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPa
       return part;
     }
 
-    // Apply patterns to text content outside code blocks. Walk the text once,
-    // finding the earliest match among all patterns and advancing past the
-    // wrapped span — mirrors the client-side processRoleplayText in
-    // MessageContent.tsx. A naive per-pattern replace would let later patterns
-    // (e.g. dialogue's "...") match the quoted class attribute inside spans
-    // inserted by earlier patterns, producing malformed nested HTML.
-    let remaining = part;
-    let output = '';
-    while (remaining.length > 0) {
-      let earliestMatch: { index: number; length: number; className: string; text: string } | null = null;
-      for (const pattern of compiledPatterns) {
-        const regex = new RegExp(pattern.regex.source, pattern.regex.flags.replace('g', ''));
-        const match = remaining.match(regex);
-        if (match && match.index !== undefined) {
-          if (!earliestMatch || match.index < earliestMatch.index) {
-            earliestMatch = {
-              index: match.index,
-              length: match[0].length,
-              className: pattern.className,
-              text: match[0],
-            };
-          }
-        }
-      }
-      if (earliestMatch) {
-        output += remaining.substring(0, earliestMatch.index);
-        output += `<span class="${earliestMatch.className}">${earliestMatch.text}</span>`;
-        remaining = remaining.substring(earliestMatch.index + earliestMatch.length);
-      } else {
-        output += remaining;
-        break;
-      }
-    }
-    return output;
+    // Tokenize the text run with the shared core and emit HTML spans.
+    return segmentsToHtml(tokenizeInline(part, compiledRules));
   });
 
   return processedParts.join('');
-}
-
-/**
- * Check if text content represents dialogue based on configured detection
- * Uses the openingChars and closingChars from DialogueDetection config
- */
-function isDialogueParagraph(text: string, detection: DialogueDetection): boolean {
-  const trimmed = text.trim();
-  if (trimmed.length < 2) return false;
-
-  const firstChar = trimmed[0];
-  const lastChar = trimmed[trimmed.length - 1];
-
-  return detection.openingChars.includes(firstChar) && detection.closingChars.includes(lastChar);
 }
 
 /**
@@ -273,6 +119,84 @@ export function applyDialogueDetection(html: string, detection: DialogueDetectio
 
     return match;
   });
+}
+
+/**
+ * Apply whole-line (line-scoped) classes to block elements in HTML.
+ *
+ * Mirrors `applyDialogueDetection`, but for line-scoped rendering rules
+ * (`linePrefix`/`tagPrefix`): if a block element's plain text is a single line
+ * matching a line rule, the rule's class lands on the block element itself
+ * rather than an inline span. No-op when there are no line-scoped rules.
+ */
+export function applyLineScopedClasses(html: string, compiledRules: CompiledRule[]): string {
+  const lineRules = compiledRules.filter((r) => r.scope === 'line');
+  if (lineRules.length === 0) return html;
+
+  return html.replace(
+    /<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g,
+    (match, tag, attrs, content) => {
+      // Strip HTML tags to get plain text for the line-match check
+      const plainText = content.replace(/<[^>]+>/g, '');
+      const lm = lineMatchFor(plainText, lineRules);
+      if (!lm) return match;
+
+      // When the rule hides its delimiter, drop the leading marker/tag from the
+      // block's content. The prefix is literal text before any inline tag, so a
+      // leading slice is safe and preserves inline formatting in the body.
+      let body = content as string;
+      if (lm.hideDelimiters && lm.prefix && body.startsWith(lm.prefix)) {
+        body = body.slice(lm.prefix.length);
+      }
+
+      if (attrs.includes('class="')) {
+        const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${lm.className}"`);
+        return `<${tag}${newAttrs}>${body}</${tag}>`;
+      }
+      return `<${tag}${attrs} class="${lm.className}">${body}</${tag}>`;
+    },
+  );
+}
+
+/**
+ * Wrap whole-block hidden WRAP delimiters in a styled inline span.
+ *
+ * The server counterpart of the client's wrap-block path in
+ * `MessageContent.renderLineBlock`: if a block element's plain text is entirely a
+ * single hidden-delimiter wrap (e.g. a `<p>` that is wholly `+narration+`), strip
+ * the opening/closing delimiters from the block's inner HTML and wrap what's left
+ * in `<span class="…">`. The markdown inside the wrap is already real HTML by now
+ * (`+a <em>b</em> c+`), so wrapping preserves it — the inline tokenizer can't,
+ * since it walks text runs between tags. The class lands on an inline span, never
+ * the block, because the chat classes are `display: inline`. No-op when no
+ * hidden-delimiter wrap rules exist.
+ */
+export function applyWrapBlockClasses(html: string, compiledRules: CompiledRule[]): string {
+  const wrapRules = compiledRules.filter((r) => r.scope === 'inline' && r.hideDelimiters);
+  if (wrapRules.length === 0) return html;
+
+  return html.replace(
+    /<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g,
+    (match, tag, attrs, content) => {
+      // Strip HTML tags to get plain text for the whole-block wrap check.
+      const plainText = (content as string).replace(/<[^>]+>/g, '');
+      const wrap = wrapBlockMatchFor(plainText, wrapRules);
+      if (!wrap) return match;
+
+      // The delimiters are literal text at the very start/end of the inner HTML
+      // (they were left un-escaped and aren't markdown), so slicing them off
+      // preserves the inline tags between them.
+      let inner = content as string;
+      if (wrap.prefix && inner.startsWith(wrap.prefix)) {
+        inner = inner.slice(wrap.prefix.length);
+      }
+      if (wrap.suffix && inner.endsWith(wrap.suffix)) {
+        inner = inner.slice(0, inner.length - wrap.suffix.length);
+      }
+
+      return `<${tag}${attrs}><span class="${wrap.className}">${inner}</span></${tag}>`;
+    },
+  );
 }
 
 // ============================================================================
@@ -337,7 +261,7 @@ export async function renderMarkdownToHtml(
   try {
     // Step 1: Compile patterns
     const patterns = renderingPatterns.length > 0 ? renderingPatterns : DEFAULT_RENDERING_PATTERNS;
-    const compiledPatterns = compilePatterns(patterns);
+    const compiledRules = compileRenderingPatterns(patterns);
 
     // Step 2: Trim leading/trailing whitespace — a leading tab triggers markdown's
     // indented code block rule, rendering the whole message as preformatted text
@@ -351,14 +275,22 @@ export async function renderMarkdownToHtml(
     const file = await processor.process(escapedContent);
     let html = String(file);
 
-    // Step 5: Apply roleplay patterns
-    html = applyRoleplayPatterns(html, compiledPatterns);
+    // Step 5: Wrap whole-block hidden-delimiter wraps in a styled span. Runs
+    // before inline patterns so the stripped delimiters can't be re-matched, and
+    // so the wrap's inner markdown (already real HTML) is preserved.
+    html = applyWrapBlockClasses(html, compiledRules);
 
-    // Step 6: Apply dialogue detection
+    // Step 6: Apply inline roleplay patterns
+    html = applyRoleplayPatterns(html, compiledRules);
+
+    // Step 7: Apply whole-line (line-scoped) classes to block elements
+    html = applyLineScopedClasses(html, compiledRules);
+
+    // Step 8: Apply dialogue detection
     const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION;
     html = applyDialogueDetection(html, dialogueConfig);
 
-    // Step 7: Wrap in container div with appropriate classes
+    // Step 9: Wrap in container div with appropriate classes
     // Note: We don't add the outer container class here - the client handles that
     return html;
   } catch (error) {

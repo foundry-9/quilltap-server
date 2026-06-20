@@ -6,6 +6,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
 import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   AppearanceResolutionItem,
@@ -19,6 +20,38 @@ import type {
   StoryBackgroundPromptContext,
   UncensoredFallbackOptions,
 } from './types'
+
+interface AestheticPromptInputs {
+  sceneAesthetic?: string | null
+  characterAesthetic?: string | null
+  depictionGuidelines?: Array<{ characterName: string; content: string }> | null
+}
+
+/**
+ * Build the labelled aesthetic + Ariel-Clause block appended to a crafting
+ * call's user message. Returns '' when nothing is set, so existing behaviour is
+ * unchanged. Per-character depiction guidelines are flagged MANDATORY and the
+ * matching system-prompt section instructs the model to treat them as binding.
+ */
+function buildAestheticSection(inputs: AestheticPromptInputs): string {
+  const parts: string[] = []
+  if (inputs.sceneAesthetic) {
+    parts.push(`Overall image aesthetic (apply this style to the whole image):\n${inputs.sceneAesthetic}`)
+  }
+  if (inputs.characterAesthetic) {
+    parts.push(`Character depiction aesthetic (how people and clothing should look):\n${inputs.characterAesthetic}`)
+  }
+  if (inputs.depictionGuidelines && inputs.depictionGuidelines.length > 0) {
+    const lines = inputs.depictionGuidelines
+      .map(g => `- ${g.characterName}: ${g.content}`)
+      .join('\n')
+    parts.push(
+      `Per-character depiction guidelines (MANDATORY — follow exactly for the named character, overriding the general aesthetic on conflict):\n${lines}`,
+    )
+  }
+  if (parts.length === 0) return ''
+  return `\n${parts.join('\n\n')}\n`
+}
 
 /**
  * Attachment description prompt template
@@ -59,6 +92,10 @@ STYLE TRIGGER PHRASE:
 - If provided, the style trigger phrase is REQUIRED for the image to render correctly with the selected style
 - Place it naturally, typically at the beginning (e.g., "DB4RZ Daubrez style painting of a young woman...")
 - Do NOT omit or modify the trigger phrase - use it exactly as provided
+
+AESTHETIC & DEPICTION GUIDELINES:
+- You may receive an overall image aesthetic and/or a character depiction aesthetic. Apply these as the consistent visual style for the whole image (medium, era, palette, rendering).
+- You may also receive per-character depiction guidelines. These are MANDATORY, binding constraints for the named character and OVERRIDE the general aesthetic wherever they conflict. Never omit, soften, or contradict them.
 
 STRUCTURE EXAMPLE:
 BAD (concatenated): "Woman with red hair, hazel eyes, fair skin. sitting on Man with gray hair, glasses, plaid shirt.'s lap on a bench"
@@ -106,6 +143,25 @@ Discussion about space exploration:
 Respond with ONLY the scene description - no explanations, no quotes, no formatting.`
 
 /**
+ * Concise clothing summaries in the scene state are capped so a verbose cheap
+ * LLM can't bloat the `Current State` whisper. The prompts ask for ≤200 chars;
+ * this is the defensive cap applied in code after the model returns.
+ */
+export const SCENE_CLOTHING_MAX_CHARS = 200
+
+/**
+ * Defensively enforce the {@link SCENE_CLOTHING_MAX_CHARS} cap on a clothing
+ * summary the LLM returned. Trims whitespace, then truncates at the cap with a
+ * trailing ellipsis so the total never exceeds the limit. Non-strings collapse
+ * to an empty string.
+ */
+export function capClothingSummary(value: unknown): string {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (text.length <= SCENE_CLOTHING_MAX_CHARS) return text
+  return text.slice(0, SCENE_CLOTHING_MAX_CHARS - 1).trimEnd() + '…'
+}
+
+/**
  * Scene state tracking prompt for first turn
  * Analyzes conversation and character data to produce a structured scene state
  */
@@ -134,7 +190,7 @@ CRITICAL RULES — read carefully:
 - location: concise (1-2 sentences). Derive from scenario and conversation context.
 - action: what the character is doing RIGHT NOW at the end of the conversation.
 - appearance: complete snapshot of current state. Use baseline if the conversation provides no appearance info.
-- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If the character has undressed or is naked, say so explicitly (e.g. "nude", "naked", "undressed"). Only use the baseline clothing if the conversation has not described any clothing changes. If neither the conversation nor the baseline provides clothing info, use "unknown".
+- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If the character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). Only lean on the baseline clothing when the conversation has not described any clothing change. Use "unknown" only when neither the conversation nor the baseline gives any clothing information.
 - Be concise and accurate. Output ONLY the JSON object.`
 
 /**
@@ -165,7 +221,7 @@ CRITICAL RULES — read carefully:
 - If nothing changed for a field, carry it forward from the previous state.
 - Update location if the scene has moved.
 - Update action to reflect what each character is doing NOW at the end of the new messages.
-- clothing: ALWAYS provide a string describing the current clothing state. NEVER use null. Examples: "nude", "shirtless, wearing jeans", "red cocktail dress", "partially undressed — wearing only underwear". If a character has undressed or is naked, say so explicitly. If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
+- clothing: a concise, salience-based summary of what the character is visibly wearing RIGHT NOW. It MUST be a single short sentence of plain prose, **200 characters or fewer**, describing only what is visually prominent (an outer layer may hide what is under it — summarise the look, do not rattle off every piece, and drop per-item trivia and style commentary). No markdown, no bullet lists, no parentheticals, no quoted item names. ALWAYS provide a string; NEVER use null. If a character has undressed or is naked, say so plainly (e.g. "nude", "naked", "wearing only underwear"). If the previous state had clothing as null or missing, check the character baselines and new messages to determine the current clothing state.
 - Character baselines are provided for reference — use them to fill in null or missing fields from the previous state, but the new messages always take priority.
 - Be concise and accurate. Output ONLY the JSON object.`
 
@@ -207,6 +263,10 @@ When the scene context or a character description implies someone is undressed, 
 - Implied context: tousled bedding, discarded clothing on the floor, a robe thrown over a chair — let the surroundings tell the story while the figure itself is shown with tasteful concealment
 
 The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.
+
+AESTHETIC & DEPICTION GUIDELINES:
+- You may receive an overall image aesthetic and/or a character depiction aesthetic. Apply these as the consistent visual style (medium, era, palette, rendering) across the whole scene and its figures.
+- You may also receive per-character depiction guidelines. These are MANDATORY, binding constraints for the named character and OVERRIDE the general aesthetic wherever they conflict. Never omit, soften, or contradict them.
 
 GOOD EXAMPLE OUTPUT:
 "A misty forest clearing at twilight. A woman with flowing dark hair in a simple dress stands near a weathered stone bridge at the left of the frame, a man in traveler's clothes paused at the right edge. Soft golden light filters through ancient oaks; fog drifts across the mossy ground; fireflies just beginning to glow. Painterly, calm, atmospheric."
@@ -415,6 +475,9 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
 `
   }
 
+  // Default aesthetics + the Ariel Clause (empty unless any are set).
+  const aestheticSection = buildAestheticSection(expansionContext)
+
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
@@ -426,7 +489,7 @@ Style trigger phrase (MUST include exactly as shown): "${expansionContext.styleT
 
 Available descriptions:
 ${placeholderDetails}
-${styleTriggerSection}
+${styleTriggerSection}${aestheticSection}
 Target length: ${expansionContext.targetLength} characters (for ${expansionContext.provider})
 
 Create the final image prompt (maximize detail while staying under the limit):`,
@@ -622,24 +685,18 @@ Update the scene state based on these new messages:`,
     llmMessages,
     userId,
     (content: string): Record<string, unknown> => {
-      let cleanContent = content.trim()
+      const rawContent = content.trim()
 
       // Empty or near-empty response = content refusal
-      if (!cleanContent || cleanContent.length < 10) {
+      if (!rawContent || rawContent.length < 10) {
         logger.warn('[SceneStateTracking] Empty or near-empty LLM response, likely content refusal', {
-          contentLength: cleanContent.length,
-          content: cleanContent.substring(0, 100),
+          contentLength: rawContent.length,
+          content: rawContent.substring(0, 100),
         })
         throw new Error('Empty LLM response (likely content refusal)')
       }
 
-      // Remove markdown code blocks if present
-      if (cleanContent.startsWith('```json')) {
-        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-      } else if (cleanContent.startsWith('```')) {
-        cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-      }
-
+      const cleanContent = stripCodeFences(content)
       const parsed = JSON.parse(cleanContent)
 
       // Validate the parsed result has meaningful content
@@ -648,6 +705,18 @@ Update the scene state based on these new messages:`,
           location: parsed.location,
           characterCount: parsed.characters?.length,
         })
+      }
+
+      // Defensively cap each character's clothing summary to the ≤200-char
+      // budget the prompt requests, so a verbose model can't bloat the whisper.
+      if (Array.isArray(parsed.characters)) {
+        for (const ch of parsed.characters) {
+          if (ch && typeof ch === 'object' && 'clothing' in ch) {
+            ;(ch as { clothing?: unknown }).clothing = capClothingSummary(
+              (ch as { clothing?: unknown }).clothing,
+            )
+          }
+        }
       }
 
       return parsed
@@ -685,6 +754,9 @@ export async function craftStoryBackgroundPrompt(
     lengthGuidance = 'Keep the prompt under 1000 characters for Grok image generation.'
   }
 
+  // Default aesthetics + the Ariel Clause (empty unless any are set).
+  const aestheticSection = buildAestheticSection(context)
+
   const llmMessages: LLMMessage[] = [
     {
       role: 'system',
@@ -694,7 +766,7 @@ export async function craftStoryBackgroundPrompt(
       role: 'user',
       content: `Scene context: ${context.sceneContext}
 ${characterSection}
-
+${aestheticSection}
 Provider: ${context.provider}
 ${lengthGuidance}
 
@@ -760,7 +832,9 @@ export async function resolveAppearance(
     let wardrobeSection = ''
     if (char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0) {
       const valuesFor = (slot: string): string[] =>
-        char.equippedWardrobeItems!.filter(i => i.slot === slot).map(i => i.title)
+        char.equippedWardrobeItems!
+          .filter(i => i.slot === slot)
+          .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title))
       const outfitDescription = describeOutfit({
         top: valuesFor('top'),
         bottom: valuesFor('bottom'),
@@ -810,13 +884,7 @@ Determine what each character currently looks like and is wearing:`,
     userId,
     (content: string): AppearanceResolutionItem[] => {
       try {
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
         if (!Array.isArray(parsed)) {
           return []
@@ -871,13 +939,7 @@ export async function sanitizeAppearance(
     userId,
     (content: string): Array<{ characterId: string; appearanceText: string }> => {
       try {
-        let cleanContent = content.trim()
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '')
-        } else if (cleanContent.startsWith('```')) {
-          cleanContent = cleanContent.replace(/^```\s*/, '').replace(/\s*```$/, '')
-        }
-
+        const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
         if (!Array.isArray(parsed)) {
           return appearances // Return originals if parsing fails

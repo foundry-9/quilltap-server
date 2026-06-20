@@ -32,10 +32,17 @@ import type { Character, CharacterScenario, CharacterSystemPrompt, Memory } from
 
 export interface OptimizerSuggestion {
   id: string;
-  field: 'identity' | 'description' | 'manifesto' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'clothingRecord' | 'talkativeness';
+  field: 'identity' | 'description' | 'manifesto' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'talkativeness';
+  /**
+   * For an existing scenario or system prompt, the item's id. For a
+   * `physicalDescription` suggestion, the sub-field key being refined — one of
+   * `fullDescription | headAndShouldersPrompt | shortPrompt | mediumPrompt | longPrompt | completePrompt`.
+   */
   subId?: string;
   subName?: string;
   title?: string;
+  /** Suggested name for a brand-new system prompt (only when no `subId`). */
+  name?: string;
   currentValue: string;
   proposedValue: string;
   rationale: string;
@@ -69,7 +76,8 @@ export type OptimizerSubStepKind =
   | 'general'
   | 'scenario'
   | 'systemPrompt'
-  | 'newItems';
+  | 'physicalDescription'
+  | 'newSystemPrompts';
 
 export interface OptimizerSubStep {
   kind: OptimizerSubStepKind;
@@ -187,6 +195,7 @@ export function buildCharacterContext(character: Character): string {
     const pd = character.physicalDescription;
     parts.push('=== Physical Description ===');
     parts.push(`[Physical Description: "${pd.name}" (ID: ${pd.id})]`);
+    parts.push(`Head & Shoulders: ${pd.headAndShouldersPrompt || '(empty)'}`);
     parts.push(`Short: ${pd.shortPrompt || '(empty)'}`);
     parts.push(`Medium: ${pd.mediumPrompt || '(empty)'}`);
     parts.push(`Long: ${pd.longPrompt || '(empty)'}`);
@@ -231,7 +240,8 @@ Look for:
 - Behavioural quirks or consistent actions (DESCRIPTION)
 - Self-knowledge, motivations, beliefs the character privately holds (PERSONALITY)
 - Public-facing facts: station, occupation, reputation that strangers know on sight (IDENTITY)
-- Recurring settings or environments that might warrant new or updated scenarios (remember: a scenario describes the setting/environment of a chat, not a change in the character's personality)
+- Recurring settings or environments that might warrant refining an existing scenario (remember: a scenario describes the setting/environment of a chat, not a change in the character's personality)
+- Concrete physical/appearance details the memories establish — scars, hair, height, a habitual article of dress (these inform the physical description, not behaviour)
 
 Respond with JSON:
 {
@@ -248,13 +258,12 @@ Respond with JSON:
 
 const SUGGESTION_SCHEMA_PREAMBLE = `Each suggestion object in the JSON array must follow this schema:
 {
-  "field": "description|personality|scenarios|exampleDialogues|systemPrompt|physicalDescription|clothingRecord|talkativeness",
-  "subId": "ID of the specific scenario/system prompt/physical description/clothing record (only when updating an existing item)",
-  "subName": "Name of the existing sub-item (only when updating an existing item)",
-  "title": "Title for a new scenario (only when field is 'scenarios' and no subId is provided)",
-  "name": "Name for a new system prompt (only when field is 'systemPrompt' and no subId is provided)",
-  "currentValue": "The current text of the field or scenario",
-  "proposedValue": "The complete new text for the field or scenario",
+  "field": "identity|description|manifesto|personality|exampleDialogues|talkativeness|scenarios|systemPrompt|physicalDescription",
+  "subId": "ID of the existing scenario or system prompt being updated (only when refining an existing item); for a physicalDescription suggestion, the sub-field key being refined — one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt",
+  "subName": "Human-readable name of the existing sub-item, or the label of the physical sub-field (only when subId is set)",
+  "name": "Name for a NEW system prompt (only when field is 'systemPrompt' and no subId is provided)",
+  "currentValue": "The current text of the field/item being changed",
+  "proposedValue": "The complete new text for the field/item",
   "rationale": "Why this change is suggested, referencing specific behavioral patterns",
   "significance": 0.5,
   "memoryExcerpts": ["Memory excerpt 1", "Memory excerpt 2"]
@@ -265,6 +274,7 @@ Rules that apply to every suggestion:
 - Include 1-3 memory excerpts that support the suggestion.
 - Only propose changes that are meaningfully different from the current value.
 - Preserve the character's existing voice and style while incorporating the behavioral patterns.
+- Do NOT propose brand-new scenarios. Existing scenarios may be refined, but creating new scenarios is out of scope.
 - Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behavior unless the environment itself demands it.`;
 
 /**
@@ -291,7 +301,7 @@ The vantage-point rule is strict:
 - A suggestion for MANIFESTO should be rare and high-stakes — propose manifesto changes only when the memory contradicts a basic tenet, not for tonal or stylistic improvements. Manifesto edits reverberate across every other field.
 - A suggestion for PERSONALITY must reflect the character's own self-knowledge and inner drivers. Never put outward behavior someone else would observe here, and never put public-facing identity facts.
 - Do NOT propose the same content under two different fields. Pick the one whose vantage point matches.
-- Do NOT suggest edits to title, scenarios, system prompts, physical descriptions, or clothing records in this response — those are out of scope for this pass (scenarios and system prompts are handled by separate passes).
+- Do NOT suggest edits to title, scenarios, system prompts, or the physical description in this response — those are out of scope for this pass (they are each handled by their own dedicated passes).
 
 If you see nothing worth changing in the general fields, respond with an empty JSON array.
 
@@ -372,11 +382,69 @@ Respond with a JSON array of at most one suggestion.`;
 }
 
 /**
- * Suggestions prompt for proposing genuinely new scenarios or system prompts
- * based on patterns the existing items don't already cover.
+ * Suggestions prompt scoped to the character's single physical description —
+ * the prose appearance (physical-description.md) plus the tiered image-prompt
+ * fields (physical-prompts.json). Asks the model to refine only the appearance
+ * sub-fields the memories actually speak to. Each sub-field becomes its own
+ * suggestion keyed by `subId` so the apply step can merge them back into the
+ * one physicalDescription object.
  */
-export function getNewItemsSuggestionPrompt(analysis: OptimizerAnalysis): string {
-  return `Review the character's existing scenarios and system prompts (shown in the character context). Propose any NEW scenarios or NEW system prompts that are warranted by the behavioral patterns below but aren't already covered by the existing set. Do NOT propose edits to existing items here — this pass handles additions only. If no new items are warranted, respond with an empty JSON array.
+export function getPhysicalDescriptionSuggestionPrompt(
+  analysis: OptimizerAnalysis,
+  physical: Character['physicalDescription'] | null,
+): string {
+  const pd = physical ?? null;
+  const current = pd
+    ? [
+        `Name: ${pd.name}`,
+        `fullDescription: ${pd.fullDescription || '(empty)'}`,
+        `headAndShouldersPrompt: ${pd.headAndShouldersPrompt || '(empty)'}`,
+        `shortPrompt: ${pd.shortPrompt || '(empty)'}`,
+        `mediumPrompt: ${pd.mediumPrompt || '(empty)'}`,
+        `longPrompt: ${pd.longPrompt || '(empty)'}`,
+        `completePrompt: ${pd.completePrompt || '(empty)'}`,
+      ].join('\n')
+    : '(this character has no physical description yet)';
+
+  return `Focus solely on the character's PHYSICAL DESCRIPTION — their appearance. Decide whether any of its sub-fields should be refined to reflect concrete appearance details established in the memories. This is about how the character LOOKS, not how they behave; ignore behavioural patterns unless they imply a visible, physical trait (a habitual posture, a recurring article of dress, an acquired scar).
+
+The physical description has these sub-fields:
+- fullDescription — prose appearance description (the physical-description document)
+- headAndShouldersPrompt — a tight head-and-shoulders portrait prompt for avatars: face, hair, expression, neckline and visible upper attire ONLY; never breasts, torso, waist, hips, legs, or any anatomy below the shoulders
+- shortPrompt — a brief image-generation prompt (a few words / phrases)
+- mediumPrompt — a moderately detailed image-generation prompt
+- longPrompt — a detailed image-generation prompt
+- completePrompt — the most complete image-generation prompt
+
+=== Current Physical Description ===
+${current}
+
+=== Behavioural Analysis ===
+${JSON.stringify(analysis, null, 2)}
+
+Produce at most ONE suggestion per sub-field, and only for sub-fields the memories genuinely speak to. If the memories reveal nothing about the character's appearance, respond with an empty JSON array — this is the common case.
+
+${SUGGESTION_SCHEMA_PREAMBLE}
+
+Additional rules specific to physical-description refinement:
+- Set field="physicalDescription".
+- Set subId to the exact sub-field key being changed: one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt.
+- Set subName to a human label for that sub-field (e.g. "Full Description", "Head & Shoulders", "Short Prompt", "Medium Prompt", "Long Prompt", "Complete Prompt").
+- currentValue must be the existing text of that sub-field (empty string if it has none).
+- proposedValue must be the complete new text for that sub-field.
+- Keep the image prompts (headAndShoulders/short/medium/long/complete) in the comma-or-phrase style image models expect; keep fullDescription in prose.
+- For headAndShouldersPrompt specifically: describe ONLY what a head-and-shoulders crop shows (face, hair, expression, neckline, visible upper attire). Never describe breasts, torso, waist, hips, legs, or any anatomy below the shoulders.
+
+Respond with a JSON array of suggestion objects (may be empty).`;
+}
+
+/**
+ * Suggestions prompt for proposing genuinely new system prompts based on
+ * interaction styles the existing prompts don't already cover. New scenarios
+ * are intentionally NOT proposed — only existing scenarios may be refined.
+ */
+export function getNewSystemPromptsSuggestionPrompt(analysis: OptimizerAnalysis): string {
+  return `Review the character's existing system prompts (shown in the character context). Propose any NEW system prompts that are warranted by the behavioral patterns below but aren't already covered by the existing set. Do NOT propose edits to existing prompts here — this pass handles additions only. Do NOT propose new scenarios. If no new system prompt is warranted, respond with an empty JSON array.
 
 === Behavioural Analysis ===
 ${JSON.stringify(analysis, null, 2)}
@@ -384,9 +452,8 @@ ${JSON.stringify(analysis, null, 2)}
 ${SUGGESTION_SCHEMA_PREAMBLE}
 
 Additional rules specific to this pass:
-- For a new scenario: field="scenarios", omit subId, include a "title" field with a short descriptive title, and put the complete setting text in proposedValue. currentValue should be the empty string.
-- For a new system prompt: field="systemPrompt", omit subId, include a "name" field with a short label, and put the complete prompt text in proposedValue. currentValue should be the empty string.
-- Be conservative: only propose a new item if there is a clear pattern that the existing set does not cover.
+- For each new system prompt: field="systemPrompt", omit subId, include a "name" field with a short descriptive label, and put the complete prompt text in proposedValue. currentValue should be the empty string.
+- Be conservative: only propose a new prompt if there is a clear interaction style the existing set does not cover.
 
 Respond with a JSON array of suggestion objects (may be empty).`;
 }
@@ -676,7 +743,8 @@ export async function runCharacterOptimizer(
         kind: 'systemPrompt' as OptimizerSubStepKind,
         label: `System prompt: ${p.name}`,
       })),
-      { kind: 'newItems', label: 'Proposed new scenarios & prompts' },
+      { kind: 'physicalDescription', label: 'Physical description' },
+      { kind: 'newSystemPrompts', label: 'Proposed new system prompts' },
     ];
     const totalSubSteps = subSteps.length;
     let subStepIndex = 0;
@@ -804,9 +872,15 @@ export async function runCharacterOptimizer(
     }
 
     await runSubStep(
-      'newItems',
-      'Proposed new scenarios & prompts',
-      getNewItemsSuggestionPrompt(analysis),
+      'physicalDescription',
+      'Physical description',
+      getPhysicalDescriptionSuggestionPrompt(analysis, character.physicalDescription ?? null),
+    );
+
+    await runSubStep(
+      'newSystemPrompts',
+      'Proposed new system prompts',
+      getNewSystemPromptsSuggestionPrompt(analysis),
     );
 
     const suggestions = allSuggestions;
@@ -1018,16 +1092,19 @@ interface SuggestionGroup {
 function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): SuggestionGroup[] {
   const general: OptimizerSuggestion[] = [];
   const scenarioUpdates: OptimizerSuggestion[] = [];
-  const scenarioNew: OptimizerSuggestion[] = [];
   const promptUpdates: OptimizerSuggestion[] = [];
   const promptNew: OptimizerSuggestion[] = [];
+  const physical: OptimizerSuggestion[] = [];
   const other: OptimizerSuggestion[] = [];
 
   for (const s of suggestions) {
     if (s.field === 'scenarios') {
-      (s.subId ? scenarioUpdates : scenarioNew).push(s);
+      // New scenarios are no longer proposed; every scenario suggestion is a refinement.
+      scenarioUpdates.push(s);
     } else if (s.field === 'systemPrompt') {
       (s.subId ? promptUpdates : promptNew).push(s);
+    } else if (s.field === 'physicalDescription') {
+      physical.push(s);
     } else if (
       s.field === 'identity' ||
       s.field === 'description' ||
@@ -1045,7 +1122,7 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
   const groups: SuggestionGroup[] = [];
   if (general.length > 0) groups.push({ heading: 'General Fields', items: general });
   if (scenarioUpdates.length > 0) groups.push({ heading: 'Scenario Refinements', items: scenarioUpdates });
-  if (scenarioNew.length > 0) groups.push({ heading: 'Proposed New Scenarios', items: scenarioNew });
+  if (physical.length > 0) groups.push({ heading: 'Physical Description', items: physical });
   if (promptUpdates.length > 0) groups.push({ heading: 'System Prompt Refinements', items: promptUpdates });
   if (promptNew.length > 0) groups.push({ heading: 'Proposed New System Prompts', items: promptNew });
   if (other.length > 0) groups.push({ heading: 'Other', items: other });
@@ -1054,14 +1131,14 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
 
 function describeSuggestion(s: OptimizerSuggestion): string {
   if (s.field === 'scenarios') {
-    if (s.subId) return `Scenario: ${s.subName ?? s.title ?? s.subId}`;
-    return `New scenario${s.title ? `: ${s.title}` : ''}`;
+    return `Scenario: ${s.subName ?? s.title ?? s.subId ?? ''}`.trimEnd();
   }
   if (s.field === 'systemPrompt') {
-    if (s.subId) return `System prompt: ${s.subName ?? s.title ?? s.subId}`;
-    // "name" field is allowed on the wire but not on the typed interface; look it up defensively.
-    const name = (s as unknown as { name?: string }).name;
-    return `New system prompt${name ? `: ${name}` : ''}`;
+    if (s.subId) return `System prompt: ${s.subName ?? s.subId}`;
+    return `New system prompt${s.name ? `: ${s.name}` : ''}`;
+  }
+  if (s.field === 'physicalDescription') {
+    return `Physical description${s.subName ? `: ${s.subName}` : ''}`;
   }
   switch (s.field) {
     case 'identity':
@@ -1076,10 +1153,6 @@ function describeSuggestion(s: OptimizerSuggestion): string {
       return 'Example dialogues';
     case 'talkativeness':
       return 'Talkativeness';
-    case 'physicalDescription':
-      return `Physical description${s.subName ? `: ${s.subName}` : ''}`;
-    case 'clothingRecord':
-      return `Clothing record${s.subName ? `: ${s.subName}` : ''}`;
     default:
       return s.field;
   }

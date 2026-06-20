@@ -14,25 +14,55 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { formatRelativeAge } from '@/lib/memory/memory-weighting'
 import { summarizeMemoryRecap, type UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
+import {
+  searchVaultConversationSummaries,
+  renderRelevantConversationsBlock,
+  READ_CONVERSATION_CALL_NOTE,
+  type VaultConversationMatch,
+} from '@/lib/memory/conversation-summary-search'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 
-// Linear ramp: at maxContext ≤ 4K, show MIN entries (~half the budget). At ≥ 32K, show MAX.
+/**
+ * Linear ramp from `min` (at `minTokens` of context or less) to `max` (at
+ * `maxTokens` or more), rounded. `null`/`undefined` maxContext yields `max`
+ * (assume a generous window). Generalized from the old recent-conversations
+ * 5→20 ramp so both the recent and the relevant conversation lists can scale
+ * independently on the same curve.
+ */
+export function rampLimit(
+  maxContext: number | null | undefined,
+  min: number,
+  max: number,
+  minTokens: number,
+  maxTokens: number,
+): number {
+  if (maxContext == null) return max
+  if (maxContext <= minTokens) return min
+  if (maxContext >= maxTokens) return max
+  const ratio = (maxContext - minTokens) / (maxTokens - minTokens)
+  return Math.round(min + ratio * (max - min))
+}
+
+// Recent-conversations greeting block: ramp 5→20 over 4K→32K (unchanged).
 const RECENT_CONVERSATIONS_MIN = 5
 const RECENT_CONVERSATIONS_MAX = 20
 const RECENT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000
 const RECENT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
 
+// Recap conversation lists (recent + relevant): each ramps 3→10 over 4K→32K,
+// independently. Combined 6–20 entries before dedup.
+const RECAP_CONVERSATIONS_MIN = 3
+const RECAP_CONVERSATIONS_MAX = 10
+
 export function calculateRecentConversationsLimit(maxContext?: number | null): number {
-  if (maxContext == null) return RECENT_CONVERSATIONS_MAX
-  if (maxContext <= RECENT_CONVERSATIONS_RAMP_MIN_TOKENS) return RECENT_CONVERSATIONS_MIN
-  if (maxContext >= RECENT_CONVERSATIONS_RAMP_MAX_TOKENS) return RECENT_CONVERSATIONS_MAX
-  const ratio =
-    (maxContext - RECENT_CONVERSATIONS_RAMP_MIN_TOKENS) /
-    (RECENT_CONVERSATIONS_RAMP_MAX_TOKENS - RECENT_CONVERSATIONS_RAMP_MIN_TOKENS)
-  return Math.round(
-    RECENT_CONVERSATIONS_MIN + ratio * (RECENT_CONVERSATIONS_MAX - RECENT_CONVERSATIONS_MIN)
+  return rampLimit(
+    maxContext,
+    RECENT_CONVERSATIONS_MIN,
+    RECENT_CONVERSATIONS_MAX,
+    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
   )
 }
 
@@ -52,6 +82,123 @@ export async function buildRecentConversationsBlock(
     .map(c => `#### ${c.title} (\`${c.id}\`)\n${c.contextSummary}`)
     .join('\n\n')
   return `### Recent Conversations\n\n${entries}`
+}
+
+/** Cap an inlined conversation gist so the recap block stays bounded. */
+function truncateGist(text: string, maxChars = 280): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= maxChars) return trimmed
+  return trimmed.slice(0, maxChars - 1).trimEnd() + '…'
+}
+
+export interface ConversationRecallListsParams {
+  characterId: string
+  /** Current chat id, excluded from both lists. */
+  currentChatId: string | undefined
+  userId: string
+  embeddingProfileId?: string | null
+  /** Free-text describing the current moment, drives the relevant list. */
+  relevanceQuery: string
+  /** Connection profile maxContext, scales both list sizes (3→10 over 4K→32K). */
+  maxContext?: number | null
+}
+
+/**
+ * Build the recap's two conversation lists from the character's vault summaries:
+ *
+ * - **Relevant Past Conversations** — semantic retrieval over the embedded vault
+ *   summaries against the current moment.
+ * - **Recent Conversations** — recency-ordered, with a short gist.
+ *
+ * Each entry surfaces its conversation UUID in backticks; a closing note tells
+ * the LLM the UUID is callable via the `read_conversation` tool. A conversation
+ * that appears in both lists is kept in the relevant list and dropped from the
+ * recent one (so the combined block may fall below the nominal 6–20 entries —
+ * that is acceptable).
+ */
+export async function buildConversationRecallLists(
+  params: ConversationRecallListsParams,
+): Promise<string> {
+  const { characterId, currentChatId, userId, embeddingProfileId, relevanceQuery, maxContext } = params
+  const recentLimit = rampLimit(
+    maxContext,
+    RECAP_CONVERSATIONS_MIN,
+    RECAP_CONVERSATIONS_MAX,
+    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
+  )
+  const relevantLimit = rampLimit(
+    maxContext,
+    RECAP_CONVERSATIONS_MIN,
+    RECAP_CONVERSATIONS_MAX,
+    RECENT_CONVERSATIONS_RAMP_MIN_TOKENS,
+    RECENT_CONVERSATIONS_RAMP_MAX_TOKENS,
+  )
+  if (recentLimit <= 0 && relevantLimit <= 0) return ''
+
+  const repos = getRepositories()
+
+  // Relevant list — semantic retrieval over the embedded vault summaries.
+  let relevant: VaultConversationMatch[] = []
+  const trimmedQuery = relevanceQuery?.trim()
+  if (relevantLimit > 0 && trimmedQuery) {
+    try {
+      relevant = await searchVaultConversationSummaries({
+        characterId,
+        query: trimmedQuery,
+        userId,
+        embeddingProfileId,
+        limit: relevantLimit,
+        excludeConversationId: currentChatId,
+      })
+    } catch (error) {
+      recapLogger.warn('Failed to build relevant-conversations list', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Recent list — recency-ordered chats that carry a summary.
+  let recent: Awaited<ReturnType<typeof repos.chats.findRecentSummarizedByCharacter>> = []
+  if (recentLimit > 0) {
+    try {
+      recent = await repos.chats.findRecentSummarizedByCharacter(characterId, {
+        limit: recentLimit,
+        excludeChatId: currentChatId,
+      })
+    } catch (error) {
+      recapLogger.warn('Failed to build recent-conversations list', {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // Dedup: a conversation in both lists stays in relevant, dropped from recent.
+  const relevantIds = new Set(relevant.map(r => r.conversationId))
+  const recentFiltered = recent.filter(c => !relevantIds.has(c.id))
+
+  if (relevant.length === 0 && recentFiltered.length === 0) return ''
+
+  const sections: string[] = []
+  const relevantBlock = renderRelevantConversationsBlock(relevant)
+  if (relevantBlock) {
+    sections.push(relevantBlock)
+  }
+  if (recentFiltered.length > 0) {
+    const entries = recentFiltered
+      .map(c => {
+        const gist = (c.contextSummary ?? '').trim()
+        return gist.length > 0
+          ? `#### ${c.title} (\`${c.id}\`)\n${truncateGist(gist)}`
+          : `#### ${c.title} (\`${c.id}\`)`
+      })
+      .join('\n\n')
+    sections.push(`### Recent Conversations\n\n${entries}`)
+  }
+
+  return `${sections.join('\n\n')}\n\n${READ_CONVERSATION_CALL_NOTE}`
 }
 
 const recapLogger = logger.child({ module: 'MemoryRecap' })
@@ -86,10 +233,13 @@ export interface MemoryRecapResult {
  * @param characterName - The character's display name
  * @param selection - Cheap LLM selection for summarization
  * @param userId - User ID for API key access
- * @param chatId - Optional chat ID for logging (also excluded from the Recent Conversations block)
+ * @param chatId - Optional chat ID for logging (also excluded from both conversation lists)
  * @param uncensoredFallback - Optional uncensored provider fallback for dangerous content
  * @param maxContext - Connection profile's maxContext in tokens, used to scale how many
- *   recent-conversation summaries to include (linear ramp 4K→5, 32K→20)
+ *   conversation entries each list (recent + relevant) includes (ramp 4K→3, 32K→10)
+ * @param relevanceQuery - Free-text describing the current moment; drives the
+ *   relevant-conversations semantic search. Empty/omitted skips the relevant list.
+ * @param embeddingProfileId - Embedding profile for the relevant-conversations search
  * @returns MemoryRecapResult with the formatted recap content
  */
 export async function generateMemoryRecap(
@@ -99,7 +249,9 @@ export async function generateMemoryRecap(
   userId: string,
   chatId?: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  maxContext?: number | null
+  maxContext?: number | null,
+  relevanceQuery?: string,
+  embeddingProfileId?: string | null,
 ): Promise<MemoryRecapResult> {
   const startTime = Date.now()
 
@@ -126,13 +278,16 @@ export async function generateMemoryRecap(
       total: totalCount,
     })
 
-    // Always try to fetch the recent-conversations block; it's independent of memories
-    const recentConversationsLimit = calculateRecentConversationsLimit(maxContext)
-    const recentConversationsBlock = await buildRecentConversationsBlock(
+    // Build the two conversation lists (recent + relevant) from vault summaries;
+    // independent of the tiered-memory narrative below.
+    const conversationsBlock = await buildConversationRecallLists({
       characterId,
-      chatId,
-      recentConversationsLimit
-    )
+      currentChatId: chatId,
+      userId,
+      embeddingProfileId,
+      relevanceQuery: relevanceQuery ?? '',
+      maxContext,
+    })
 
     let narrative = ''
     let usage: MemoryRecapResult['usage'] | undefined
@@ -176,15 +331,15 @@ export async function generateMemoryRecap(
       }
     }
 
-    if (!narrative && !recentConversationsBlock) {
-      recapLogger.debug('No memories or recent conversations found for recap, skipping', { characterId })
+    if (!narrative && !conversationsBlock) {
+      recapLogger.debug('No memories or conversation lists found for recap, skipping', { characterId })
       return { content: '', memoriesUsed: 0 }
     }
 
     const intro = `## What You Remember\nAs ${characterName}, here is what you recall from your experiences and past conversations:`
     const sections = [intro]
     if (narrative) sections.push(narrative)
-    if (recentConversationsBlock) sections.push(recentConversationsBlock)
+    if (conversationsBlock) sections.push(conversationsBlock)
     const formattedContent = sections.join('\n\n')
 
     const elapsed = Date.now() - startTime
@@ -194,7 +349,7 @@ export async function generateMemoryRecap(
       characterName,
       memoriesUsed: totalCount,
       narrativeLength: narrative.length,
-      hasRecentConversations: !!recentConversationsBlock,
+      hasConversationLists: !!conversationsBlock,
       elapsed,
       usage,
     })

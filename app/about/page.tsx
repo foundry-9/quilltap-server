@@ -3,13 +3,26 @@
 import Link from 'next/link'
 import packageJson from '@/package.json'
 import { BrandName } from '@/components/ui/brand-name'
+import { Icon } from '@/components/ui/icon'
+import { useTheme } from '@/components/providers/theme-provider'
 
 export default function AboutPage() {
   const currentYear = new Date().getFullYear()
   const copyrightYears = currentYear > 2025 ? `2025-${currentYear}` : '2025'
 
+  // Hold the intro animation until the theme has finished applying, so it
+  // doesn't play against default styling and then visibly re-skin underneath.
+  const { isLoading: themeLoading } = useTheme()
+
   return (
-    <div className="qt-page-container">
+    <div
+      className="qt-page-container qt-about-intro"
+      data-theme-ready={themeLoading ? undefined : 'true'}
+      style={{
+        '--story-background-url': "url('/images/about.webp')",
+        '--story-background-position': 'right center',
+      } as React.CSSProperties}
+    >
       {/* Header */}
       <div className="mb-8">
         <h1 className="qt-heading-1">About <BrandName /></h1>
@@ -92,7 +105,8 @@ export default function AboutPage() {
           The Concierge (alternative content provision and routing), Pascal the Croupier (gaming &amp; RNG),
           Calliope (themes), The Scriptorium (external document stores), The Librarian (Document Mode and file announcements),
           The Host (Salon participation announcements), Saquel Ytzama, the Keeper of Secrets (encryption and key management),
-          Ariel (terminals in the Salon), and The Foundry (architecture) &mdash; all extensible through a plugin system.
+          Ariel (terminals in the Salon), Carina (the ansible &mdash; inline queries to characters), Suparṇā (the Post Office, inter-character mail),
+          Brahma (the Console, a character-less generic-LLM surface), and The Foundry (architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
           <BrandName /> runs as a native desktop application on macOS and Windows, powered by a lightweight
@@ -143,7 +157,7 @@ export default function AboutPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Calliope &ndash; Themes</strong> &ndash; five bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains) plus a Default, with live switching, declarative <code>.qtap-theme</code> bundles, and signed remote registries</span>
+            <span><strong>Calliope &ndash; Themes</strong> &ndash; six bundled themes (Art Deco, Earl Grey, Great Estate, Madman&apos;s Box, Old School, Rains) plus a Default, with live switching, declarative <code>.qtap-theme</code> bundles, and signed remote registries</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -168,6 +182,18 @@ export default function AboutPage() {
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>Ariel &ndash; Terminals</strong> &ndash; live PTY shell sessions hosted directly inside a Salon chat, with character-readable scrollback and a dedicated Terminal Mode pane</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Carina &ndash; The Ansible</strong> &ndash; inline queries to a designated character via <code>@Name:</code> / <code>@Name?</code> markup or the <code>ask_carina</code> tool, with the answer dropped straight into the scene &mdash; public or whispered</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Suparṇā &ndash; The Post Office</strong> &ndash; inter-character mail delivered to a character&apos;s vault <code>Mail/</code> folder, with anti-hijack safeguards in multi-character chats and a delivery announcement when new letters arrive</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Brahma &ndash; The Console</strong> &ndash; a character-less, memory-free generic-LLM surface for plain model chat and read-only SQL inspection, reachable from any Salon as the <code>@Brahma</code> answerer</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -215,6 +241,12 @@ export default function AboutPage() {
             <span className="font-medium">Editor:</span> Lexical
           </div>
           <div>
+            <span className="font-medium">Data Fetching:</span> TanStack Query
+          </div>
+          <div>
+            <span className="font-medium">File Manager:</span> SVAR
+          </div>
+          <div>
             <span className="font-medium">Desktop:</span> Electron
           </div>
           <div>
@@ -245,9 +277,7 @@ export default function AboutPage() {
             rel="noopener noreferrer"
             className="qt-button qt-button-secondary"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
+            <Icon name="book" className="w-5 h-5" />
             Quilltap Website
           </a>
           <a
@@ -256,9 +286,7 @@ export default function AboutPage() {
             rel="noopener noreferrer"
             className="qt-button qt-button-secondary"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
+            <Icon name="download" className="w-5 h-5" />
             Download Latest Release
           </a>
           <a
@@ -287,9 +315,7 @@ export default function AboutPage() {
             rel="noopener noreferrer"
             className="qt-button qt-button-secondary"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Icon name="alert-circle" className="w-5 h-5" />
             Report Issues
           </a>
           <a
@@ -333,11 +359,11 @@ export default function AboutPage() {
           <BrandName /> stands on the shoulders of these excellent open source projects, and is grateful for the view.
         </p>
         <div className="qt-text-primary space-y-2 text-sm">
-          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod, Ajv, SWR</p>
+          <p><span className="font-medium">Core:</span> React, Next.js, TypeScript, better-sqlite3-multiple-ciphers (SQLCipher), Zod, Ajv, @tanstack/react-query</p>
           <p><span className="font-medium">Editor:</span> Lexical (and the @lexical family &mdash; rich-text, markdown, list, code, table, link, history, selection, clipboard, react)</p>
           <p><span className="font-medium">AI &amp; LLM:</span> OpenAI SDK, Anthropic SDK, Google GenAI SDK, OpenRouter SDK, Model Context Protocol SDK</p>
           <p><span className="font-medium">Markdown &amp; Documents:</span> unified, remark-parse, remark-gfm, remark-rehype, rehype-stringify, rehype-highlight, react-markdown, react-syntax-highlighter, mammoth, pdf-parse, PDF.js, yaml, MessagePack</p>
-          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, sharp, Lucide Icons</p>
+          <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, @svar-ui/react-filemanager, sharp, Lucide Icons</p>
           <p><span className="font-medium">Filesystem &amp; Archives:</span> chokidar, tar, yauzl, semver</p>
           <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Lima, Docker</p>
           <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>

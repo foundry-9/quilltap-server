@@ -26,7 +26,17 @@ export type CommonplaceWhisperKind =
   | 'memory-recap'
   | 'relevant-memories'
   | 'inter-character-memories'
-  | 'consolidated';
+  | 'consolidated'
+  /**
+   * Standalone refresh of the relevant-past-conversations list, posted on each
+   * summary fold (relevance drifts as the conversation advances). Unlike the
+   * per-turn `consolidated` whisper — recomputed and inlined every turn, and
+   * stripped from LLM context — this kind PERSISTS across turns (until the next
+   * fold replaces it) and is intentionally exempt from the consolidated sweep
+   * and the LLM-context strip, so the freshened list reaches both the salon UI
+   * and the responding character.
+   */
+  | 'relevant-conversations';
 
 /**
  * Memory content parts for a single turn's recall. Each section is the raw
@@ -52,6 +62,13 @@ export interface CommonplaceParts {
    * otherwise. Independent of the memory sections.
    */
   knowledge?: string;
+  /**
+   * The relevant-past-conversations list (already rendered as a markdown block
+   * with its `read_conversation` call note). Used by the fold-triggered refresh
+   * whisper; the per-turn consolidated whisper leaves this empty (its
+   * conversation lists ride inside `recap` at chat-start / character-join).
+   */
+  relevantConversations?: string;
 }
 
 /**
@@ -65,6 +82,7 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
   const knowledge = parts.knowledge?.trim();
+  const relevantConversations = parts.relevantConversations?.trim();
 
   if (currentState) {
     sections.push(
@@ -91,6 +109,11 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
       `*The Commonplace Book pulls down volumes from your own shelves — the references and reckonings you yourself have curated —*\n\n${knowledge}`,
     );
   }
+  if (relevantConversations) {
+    sections.push(
+      `*The conversation has wandered on, and the Commonplace Book re-marks the past dialogues that now bear on the present —*\n\n${relevantConversations}`,
+    );
+  }
   return sections.join('\n\n').trim();
 }
 
@@ -106,6 +129,7 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   const relevant = parts.relevant?.trim();
   const interChar = parts.interChar?.trim();
   const knowledge = parts.knowledge?.trim();
+  const relevantConversations = parts.relevantConversations?.trim();
 
   if (currentState) {
     sections.push(`Here is the present state of the scene:\n\n${currentState}`);
@@ -122,6 +146,9 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   if (knowledge) {
     sections.push(`You also recall the following from your knowledge base:\n\n${knowledge}`);
   }
+  if (relevantConversations) {
+    sections.push(`You also recall these past conversations that bear on the present:\n\n${relevantConversations}`);
+  }
   return sections.join('\n\n').trim();
 }
 
@@ -131,13 +158,19 @@ interface PostParams {
   targetParticipantId?: string | null;
   /** Pre-formatted body text. The persona voicing is the caller's responsibility. */
   content: string;
+  /**
+   * Persona-free body swapped into opaque characters' LLM context (paired with
+   * `content` exactly as other Staff writers do). Omit for whispers that are
+   * stripped from LLM context anyway (the per-turn consolidated whisper).
+   */
+  opaqueContent?: string | null;
   kind: CommonplaceWhisperKind;
 }
 
 export async function postCommonplaceWhisper(
   params: PostParams,
 ): Promise<MessageEvent | null> {
-  const { chatId, targetParticipantId, content, kind } = params;
+  const { chatId, targetParticipantId, content, opaqueContent, kind } = params;
 
   if (!content || content.trim().length === 0) {
     return null;
@@ -159,6 +192,7 @@ export async function postCommonplaceWhisper(
       id: messageId,
       role: 'ASSISTANT',
       content,
+      opaqueContent: opaqueContent ?? null,
       attachments: [],
       createdAt: now,
       participantId: null,

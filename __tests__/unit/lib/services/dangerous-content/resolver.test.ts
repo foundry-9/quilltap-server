@@ -182,4 +182,57 @@ describe('resolveDangerousContentSettings', () => {
       expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanImageGeneration).toBe(false)
     })
   })
+
+  describe('moderation-exempt chat types (Help Chat, Brahma Console)', () => {
+    const customSettings: DangerousContentSettings = {
+      mode: 'AUTO_ROUTE',
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: true,
+      displayMode: 'SHOW',
+      showWarningBadges: true,
+    }
+    const globalSettings: ChatSettings = {
+      id: 'test',
+      tokenDisplay: 'minimal',
+      contextCompression: false,
+      memoryCascade: false,
+      showTimestamps: false,
+      agentMode: false,
+      dangerousContentSettings: customSettings,
+    }
+
+    it('forces OFF for help chats regardless of global AUTO_ROUTE', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'help' })
+      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.source).toBe('chat-type-exempt')
+    })
+
+    it('forces OFF for brahma chats regardless of global AUTO_ROUTE', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'brahma' })
+      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.source).toBe('chat-type-exempt')
+    })
+
+    it('exemption wins even when the chat is not off-duty', () => {
+      const result = resolveDangerousContentSettings(globalSettings, {
+        chatType: 'brahma',
+        conciergeOverride: null,
+      })
+      expect(result.source).toBe('chat-type-exempt')
+    })
+
+    it('does NOT exempt salon chats', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'salon' })
+      expect(result.settings).toEqual(customSettings)
+      expect(result.source).toBe('global')
+    })
+
+    it('does NOT exempt autonomous rooms', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'autonomous' })
+      expect(result.settings).toEqual(customSettings)
+      expect(result.source).toBe('global')
+    })
+  })
 })

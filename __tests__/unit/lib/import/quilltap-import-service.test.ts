@@ -436,6 +436,10 @@ describe('quilltap-import-service', () => {
       expect(result.imported.characters).toBe(1);
       expect(mockUserRepos.characters.create).toHaveBeenCalled();
 
+      // The created character's destination id is surfaced so callers (e.g. the
+      // Salon "Summon from Lore" flow) can find what was just brought into being.
+      expect(result.importedCharacterIds).toHaveLength(1);
+
       // Verify name was modified
       const createCall = mockUserRepos.characters.create.mock.calls[0][0];
       expect(createCall.name).toBe('Original (imported)');
@@ -1328,6 +1332,126 @@ describe('quilltap-import-service', () => {
         template.id,
         expect.objectContaining({
           tags: [newTagId],
+        })
+      );
+    });
+  });
+
+  // ============================================================================
+  // executeImport() - Project Field Reconciliation Tests
+  // ============================================================================
+
+  describe('executeImport() - project relationship reconciliation', () => {
+    const makeProject = (overrides: Record<string, unknown>) => ({
+      id: generateId(),
+      userId: testUserId,
+      name: 'Test Project',
+      description: null,
+      instructions: null,
+      allowAnyCharacter: false,
+      characterRoster: [],
+      color: null,
+      icon: null,
+      defaultDisabledTools: [],
+      defaultDisabledToolGroups: [],
+      state: {},
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...overrides,
+    });
+
+    // jest.clearAllMocks() in the outer beforeEach clears call data but NOT
+    // implementations, so findById stubs set by earlier suites leak in. These
+    // tests rely on the image profile / roleplay template being treated as NEW
+    // (default null) so they're created and land in the id maps; force that
+    // baseline before each case.
+    beforeEach(() => {
+      mockUserRepos.projects.findById.mockResolvedValue(null);
+      mockUserRepos.imageProfiles.findById.mockResolvedValue(null);
+      mockGlobalRepos.roleplayTemplates.findById.mockResolvedValue(null);
+    });
+
+    // `projects.findById` doubles as the import existence-check and the
+    // reconcile lookup; a test that stubs it must not leak that into later
+    // suites (e.g. the memory projectId test that needs the default null).
+    afterEach(() => {
+      mockUserRepos.projects.findById.mockReset();
+      mockUserRepos.projects.findById.mockResolvedValue(null);
+    });
+
+    it('should remap defaultImageProfileId for projects', async () => {
+      const oldProfileId = generateId();
+      const newProfileId = generateId();
+      const profile = createMockSanitizedImageProfile({ id: oldProfileId });
+      const project = makeProject({ defaultImageProfileId: oldProfileId });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          imageProfiles: [profile],
+          projects: [project],
+        },
+      };
+
+      mockUserRepos.imageProfiles.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newProfileId,
+      }) as any);
+      mockUserRepos.projects.findById.mockResolvedValue({
+        ...project,
+        defaultImageProfileId: oldProfileId,
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.projects.update).toHaveBeenCalledWith(
+        project.id,
+        expect.objectContaining({
+          defaultImageProfileId: newProfileId,
+        })
+      );
+    });
+
+    it('should remap defaultRoleplayTemplateId for projects', async () => {
+      const oldTemplateId = generateId();
+      const newTemplateId = generateId();
+      const template = createMockRoleplayTemplate({
+        id: oldTemplateId,
+        userId: testUserId,
+        isBuiltIn: false,
+        pluginName: null,
+      });
+      const project = makeProject({ defaultRoleplayTemplateId: oldTemplateId });
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'characters' }),
+        data: {
+          roleplayTemplates: [template],
+          projects: [project],
+        },
+      };
+
+      mockGlobalRepos.roleplayTemplates.create.mockImplementation(async (data) => ({
+        ...data,
+        id: newTemplateId,
+      }) as any);
+      mockUserRepos.projects.findById.mockResolvedValue({
+        ...project,
+        defaultRoleplayTemplateId: oldTemplateId,
+      } as any);
+
+      await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(mockUserRepos.projects.update).toHaveBeenCalledWith(
+        project.id,
+        expect.objectContaining({
+          defaultRoleplayTemplateId: newTemplateId,
         })
       );
     });

@@ -48,9 +48,10 @@ export function containsLiteralPhrase(
  *
  * The knowledge sources scale the fraction by how "close" the knowledge is
  * to the responding character — `LITERAL_BOOST_CHARACTER` for the
- * character's own vault, `LITERAL_BOOST_PROJECT` for the project's linked
- * mounts, `LITERAL_BOOST_GLOBAL` for the Quilltap General mount — so a
- * verbatim hit in a personal vault outranks the same hit in a shared pool.
+ * character's own vault, `LITERAL_BOOST_GROUP` for the responding character's
+ * group stores, `LITERAL_BOOST_PROJECT` for the project's linked mounts,
+ * `LITERAL_BOOST_GLOBAL` for the Quilltap General mount — so a verbatim hit in
+ * a closer pool outranks the same hit in a wider pool.
  *
  * Applied to the cosine similarity of items that ALSO scored a literal
  * phrase hit. The intent is to ensure a buried verbatim match cannot be
@@ -63,6 +64,9 @@ export function applyLiteralBoost(score: number, fraction: number = 0.5): number
 
 /** Literal-hit boost fraction for the responding character's vault Knowledge/ folder. */
 export const LITERAL_BOOST_CHARACTER = 0.5
+
+/** Literal-hit boost fraction for a responding-character group store's Knowledge/ folder. */
+export const LITERAL_BOOST_GROUP = 0.45
 
 /** Literal-hit boost fraction for a chat-project-linked mount's Knowledge/ folder. */
 export const LITERAL_BOOST_PROJECT = 0.4

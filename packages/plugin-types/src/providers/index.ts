@@ -24,6 +24,7 @@ export type {
 
 // Shape 2: Text -> Image
 export type {
+  ImageOrientation,
   ImageGenParams,
   GeneratedImage,
   ImageGenResponse,

@@ -21,6 +21,7 @@ import type {
   RoleplayTemplate,
   ProviderModel,
   Project,
+  Group,
   LLMLog,
   PluginConfig,
   CharacterPluginData,
@@ -43,6 +44,8 @@ import type {
   DocMountDocument,
   DocMountBlobMetadata,
   ProjectDocMountLink,
+  GroupDocMountLink,
+  GroupCharacterMember,
 } from '@/lib/schemas/mount-index.types';
 
 /**
@@ -123,6 +126,8 @@ export interface BackupManifest {
    * - 3 = adds doc-mount tables, chat_documents, instance_settings,
    *       conversation_chunks, vector indices, embedding_status, tfidf
    *       vocabularies, and `mount-blobs/` for binary doc-store assets
+   * - 4 = adds groups and their join tables (group_character_members,
+   *       group_doc_mount_links). Older restorers simply skip the new files.
    */
   backupFormat?: number;
 
@@ -163,6 +168,8 @@ export interface BackupManifest {
     providerModels: number;
     /** Number of Project entities */
     projects: number;
+    /** Number of Group entities */
+    groups?: number;
     /** Number of LLMLog entities */
     llmLogs: number;
     /** Number of PluginConfig entities (user plugin configurations) */
@@ -211,6 +218,10 @@ export interface BackupManifest {
     docMountBlobs?: number;
     /** Number of ProjectDocMountLink entities */
     projectDocMountLinks?: number;
+    /** Number of GroupDocMountLink entities (group → additional doc stores) */
+    groupDocMountLinks?: number;
+    /** Number of GroupCharacterMember entities (group ↔ character membership) */
+    groupCharacterMembers?: number;
     /** Number of TextReplacementRule entities (global find→replace rules) */
     textReplacementRules?: number;
   };
@@ -266,6 +277,15 @@ export interface BackupData {
 
   /** Array of Project entities */
   projects: Project[];
+
+  /**
+   * Array of Group entities (hydrated from each group's official document
+   * store, mirroring projects). The group's store *content* rides along in the
+   * doc-mount tables; these slim rows + the join tables below carry the group
+   * identity, membership, and additional-store links that would otherwise be
+   * lost on restore.
+   */
+  groups?: Group[];
 
   /** Array of LLMLog entities */
   llmLogs: LLMLog[];
@@ -352,6 +372,12 @@ export interface BackupData {
 
   /** Project ↔ document store associations. */
   projectDocMountLinks?: ProjectDocMountLink[];
+
+  /** Group ↔ additional document store associations (mount-index join table). */
+  groupDocMountLinks?: GroupDocMountLink[];
+
+  /** Group ↔ character membership (mount-index join table). */
+  groupCharacterMembers?: GroupCharacterMember[];
 
   /**
    * Global find→replace rules (no userId). Ordinary user content, not a
@@ -453,6 +479,9 @@ export interface RestoreSummary {
   /** Number of Project entities restored */
   projects: number;
 
+  /** Number of Group entities restored */
+  groups?: number;
+
   /** Number of LLMLog entities restored */
   llmLogs: number;
 
@@ -524,6 +553,12 @@ export interface RestoreSummary {
 
   /** Number of ProjectDocMountLink entities restored */
   projectDocMountLinks?: number;
+
+  /** Number of GroupDocMountLink entities restored */
+  groupDocMountLinks?: number;
+
+  /** Number of GroupCharacterMember entities restored */
+  groupCharacterMembers?: number;
 
   /** Number of TextReplacementRule entities restored */
   textReplacementRules?: number;

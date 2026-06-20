@@ -21,7 +21,9 @@
  */
 
 import { useEffect, useRef } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import {
   $getSelection,
@@ -72,7 +74,10 @@ interface CandidateWord {
 
 export function TextReplacementPlugin(): null {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
+  })
   const { compiled } = useTextReplacementRules()
 
   // Keep latest values in refs so the registered command handler doesn't need

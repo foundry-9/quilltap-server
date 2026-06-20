@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { BackupDialog } from './backup-dialog'
 import { RestoreDialog } from './restore'
+import { Icon } from '@/components/ui/icon'
 
 export default function BackupRestoreCard() {
   const [showBackupDialog, setShowBackupDialog] = useState(false)
@@ -21,19 +22,7 @@ export default function BackupRestoreCard() {
           </p>
         </div>
         <div className="flex-shrink-0 text-primary">
-          <svg
-            className="w-8 h-8"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-            />
-          </svg>
+          <Icon name="upload" className="w-8 h-8" />
         </div>
       </div>
 
@@ -43,18 +32,14 @@ export default function BackupRestoreCard() {
           onClick={() => setShowBackupDialog(true)}
           className="qt-button qt-button-primary flex items-center justify-center gap-2"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
+          <Icon name="upload" className="w-5 h-5" />
           Create Backup
         </button>
         <button
           onClick={() => setShowRestoreDialog(true)}
           className="qt-button qt-button-secondary flex items-center justify-center gap-2"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
+          <Icon name="download" className="w-5 h-5" />
           Restore from Backup
         </button>
       </div>

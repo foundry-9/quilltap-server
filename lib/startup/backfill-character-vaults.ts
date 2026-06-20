@@ -16,6 +16,10 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import {
+  readCharacterVaultProperties,
+  writeCharacterVaultManagedFields,
+} from '@/lib/database/repositories/character-properties-overlay';
 
 const logger = createServiceLogger('Startup:CharacterVaultBackfill');
 
@@ -23,6 +27,8 @@ export interface BackfillResult {
   scanned: number;
   vaultsCreated: number;
   alreadyLinked: number;
+  /** Pre-linked vaults whose missing files we repopulated from the raw row. */
+  filesRepopulated: number;
   errors: number;
 }
 
@@ -31,6 +37,7 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
     scanned: 0,
     vaultsCreated: 0,
     alreadyLinked: 0,
+    filesRepopulated: 0,
     errors: 0,
   };
 
@@ -59,6 +66,23 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
         result.vaultsCreated++;
       } else {
         result.alreadyLinked++;
+        // ensureCharacterVault early-returns on a set FK WITHOUT verifying the
+        // vault files exist. A linked-but-unpopulated vault now reads as
+        // CharacterVaultUnavailableError (the overlay throws on missing
+        // properties.json), so heal it here from the raw row — mirrors the
+        // project/group store backfills.
+        const existingProps = await readCharacterVaultProperties(outcome.mountPointId, character.id);
+        if (!existingProps) {
+          // Repopulate the missing content files. Wardrobe is not part of this
+          // projection — it lives solely in the vault (no DB rows to source
+          // from) and is reconciled by the one-time refresh-vault-wardrobe task.
+          await writeCharacterVaultManagedFields(outcome.mountPointId, { character });
+          result.filesRepopulated++;
+          logger.warn('Repopulated character vault with missing files', {
+            characterId: character.id,
+            mountPointId: outcome.mountPointId,
+          });
+        }
       }
     } catch (err) {
       result.errors++;
@@ -78,7 +102,7 @@ export async function backfillCharacterVaults(): Promise<BackfillResult> {
   logger.info('Character vault backfill complete', result);
   startupProgress.publish({
     rawLabel: 'subsystem:vault-backfill:complete',
-    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
+    detail: `${result.vaultsCreated} created, ${result.alreadyLinked} already linked${result.filesRepopulated > 0 ? `, ${result.filesRepopulated} repopulated` : ''}${result.errors > 0 ? `, ${result.errors} errors` : ''}`,
     level: result.errors > 0 ? 'warn' : 'info',
   });
   startupProgress.setSubProgress(null);

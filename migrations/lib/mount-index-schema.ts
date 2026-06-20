@@ -51,3 +51,28 @@ export function alignDocMountPointsSchema(db: DatabaseType): void {
     db.exec(`ALTER TABLE "doc_mount_points" ADD COLUMN ${col.definition}`);
   }
 }
+
+// Per-document policy columns on the link row (see the
+// add-doc-mount-file-policy-flags migration). Positive sense: `1` == permissive
+// == the frontmatter default, so a freshly-added column protects nothing until
+// the indexer/migration backfills the actual frontmatter-derived value.
+const DOC_MOUNT_FILE_LINKS_ADDABLE_COLUMNS: AddableColumn[] = [
+  { name: 'allowEmbed',          definition: `"allowEmbed" INTEGER NOT NULL DEFAULT 1` },
+  { name: 'allowCharacterRead',  definition: `"allowCharacterRead" INTEGER NOT NULL DEFAULT 1` },
+  { name: 'allowCharacterWrite', definition: `"allowCharacterWrite" INTEGER NOT NULL DEFAULT 1` },
+];
+
+export function alignDocMountFileLinksSchema(db: DatabaseType): void {
+  const tableRow = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'doc_mount_file_links'`
+  ).get();
+  if (!tableRow) return;
+
+  const existing = db.prepare(`PRAGMA table_info("doc_mount_file_links")`).all() as Array<{ name: string }>;
+  const existingNames = new Set(existing.map(c => c.name));
+
+  for (const col of DOC_MOUNT_FILE_LINKS_ADDABLE_COLUMNS) {
+    if (existingNames.has(col.name)) continue;
+    db.exec(`ALTER TABLE "doc_mount_file_links" ADD COLUMN ${col.definition}`);
+  }
+}

@@ -138,6 +138,10 @@ Use a default template if you:
 4. Existing chats keep their settings
 5. You can still override per-chat
 
+### Per-Project Defaults
+
+A project may appoint its own default template that overrides your global one for chats begun inside it. Open the project's page (Prospero), find the **Model Behavior** card, and choose a **Default Roleplay Template**. New chats in that project inherit the project's choice; leave it on "Inherit from global default" to defer to the global setting. See [Project Settings](project-settings.md) for the full priority chain.
+
 ## Creating Custom Templates
 
 ### Why Create Custom Templates?
@@ -308,6 +312,25 @@ Speech (dialogue) is everything that isn't delimited as narration. If your templ
 |----------|---------------------|---------------------|
 | Standard | `*` | `*She crossed her arms.* ` |
 | Quilltap RP | `[`, `]` | `[She crossed her arms.]` |
+
+### Formatting Delimiters and Their Kinds
+
+Beyond narration, a template can declare a list of **formatting delimiters**. Each delimiter is defined once and powers a composer toolbar button *and* the styling applied to matching text — in the live chat and in server-rendered views alike, so they always agree. Every delimiter has a **kind**:
+
+- **Wrap** — an open/close marker around an inline span. The marker can be the same on both sides (`*action*`) or a distinct pair (`[action]`, `{thoughts}`). This is the classic inline style.
+- **Line prefix** — a marker at the *start of a line* that styles the whole line, such as `// ` for an out-of-character aside. (The Quilltap RP built-in uses this for OOC.)
+- **Tag prefix** — a bracketed token at the start of a line that styles the whole line *when the token matches a pattern you choose*. For example, `[CAPTAIN] All hands on deck!` styles the entire line. The default token rule accepts uppercase letters and non-cased scripts but never lowercase, so `[captain] …` would not match. This is a general capability you author yourself — Quilltap does not ship a "ranks" template, just the building block.
+
+Wrap delimiters style only the span between the markers; line-prefix and tag-prefix delimiters style the entire line they begin.
+
+### Markdown Within the Delimiters
+
+A delicate matter, this: what becomes of ordinary Markdown — your `*italics*`, your `_underlines_` — when it strays *inside* a delimiter's embrace? Quilltap now keeps its composure on both counts.
+
+- **When a wrap delimiter hides its markers** (the "hide delimiter" toggle) and a whole paragraph is given over to it, the markers quietly vanish, the passage takes on its style, and any Markdown nestled within is rendered as written — italics stay italic. Your narration may now carry emphasis without the markers showing their faces.
+- **When a delimiter keeps its markers on display** — or when the wrap sits mid-line amid other prose — the Markdown characters inside are shown verbatim, so the markers themselves are never mistaken or mangled.
+
+In short: a fully-wrapped, marker-hiding passage renders its inner Markdown; a marker-showing or inline wrap presents that Markdown as plain characters.
 
 ### Formatting Conventions
 

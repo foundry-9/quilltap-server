@@ -170,6 +170,7 @@ export {
   ChatMetadataBaseSchema,
   ChatMetadataLegacySchema,
   ChatTypeEnum,
+  isHelpLikeChatType,
   AutonomousRunStateEnum,
   AutonomousRunVisibilityEnum,
 } from './chat.types';
@@ -256,14 +257,36 @@ export type {
 // ============================================================================
 export {
   ProjectSchema,
+  ProjectRowSchema,
+  ProjectPropertiesSchema,
   ProjectContextSchema,
+  PROJECT_STORE_MANAGED_FIELDS,
 } from './project.types';
 
 export type {
   Project,
   ProjectInput,
+  ProjectRow,
+  ProjectProperties,
   ProjectContext,
 } from './project.types';
+
+// ============================================================================
+// GROUP TYPES
+// ============================================================================
+export {
+  GroupSchema,
+  GroupRowSchema,
+  GroupPropertiesSchema,
+  GROUP_STORE_MANAGED_FIELDS,
+} from './group.types';
+
+export type {
+  Group,
+  GroupInput,
+  GroupRow,
+  GroupProperties,
+} from './group.types';
 
 // ============================================================================
 // TEMPLATE TYPES
@@ -427,6 +450,8 @@ export {
   DocMountFileSchema,
   DocMountChunkSchema,
   ProjectDocMountLinkSchema,
+  GroupDocMountLinkSchema,
+  GroupCharacterMemberSchema,
 } from './mount-index.types';
 
 export type {
@@ -434,4 +459,6 @@ export type {
   DocMountFile,
   DocMountChunk,
   ProjectDocMountLink,
+  GroupDocMountLink,
+  GroupCharacterMember,
 } from './mount-index.types';

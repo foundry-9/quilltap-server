@@ -268,7 +268,7 @@ var safeJSON = (text) => {
 var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // node_modules/openai/version.mjs
-var VERSION = "6.42.0";
+var VERSION = "6.44.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -2423,7 +2423,12 @@ _AbstractChatCompletionRunner_instances = /* @__PURE__ */ new WeakSet(), _Abstra
   for (let i = this.messages.length - 1; i >= 0; i--) {
     const message = this.messages[i];
     if (isAssistantMessage(message) && message?.tool_calls?.length) {
-      return message.tool_calls.filter((x) => x.type === "function").at(-1)?.function;
+      for (let j = message.tool_calls.length - 1; j >= 0; j--) {
+        const toolCall = message.tool_calls[j];
+        if (toolCall?.type === "function") {
+          return toolCall.function;
+        }
+      }
     }
   }
   return;
@@ -3770,6 +3775,23 @@ var SpendAlerts = class extends APIResource {
     });
   }
   /**
+   * Retrieves an organization spend alert.
+   *
+   * @example
+   * ```ts
+   * const organizationSpendAlert =
+   *   await client.admin.organization.spendAlerts.retrieve(
+   *     'alert_id',
+   *   );
+   * ```
+   */
+  retrieve(alertID, options) {
+    return this._client.get(path`/organization/spend_alerts/${alertID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
    * Updates an organization spend alert.
    *
    * @example
@@ -4796,6 +4818,25 @@ var SpendAlerts2 = class extends APIResource {
   create(projectID, body, options) {
     return this._client.post(path`/organization/projects/${projectID}/spend_alerts`, {
       body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Retrieves a project spend alert.
+   *
+   * @example
+   * ```ts
+   * const projectSpendAlert =
+   *   await client.admin.organization.projects.spendAlerts.retrieve(
+   *     'alert_id',
+   *     { project_id: 'project_id' },
+   *   );
+   * ```
+   */
+  retrieve(alertID, params, options) {
+    const { project_id } = params;
+    return this._client.get(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
@@ -11107,6 +11148,42 @@ var plugin = {
    */
   createImageProvider: (baseUrl) => {
     return new OpenAIImageProvider();
+  },
+  /**
+   * Statically-declared image generation models with per-model orientation
+   * support. OpenAI is the proof case for model-keyed orientation: gpt-image
+   * portrait is 1024x1536, DALL·E 3 portrait is 1024x1792, and DALL·E 2 is
+   * square only (its portrait/landscape are omitted so the host degrades to a
+   * prompt hint rather than sending a size the API rejects).
+   */
+  getImageGenerationModels: () => {
+    const gptImageOrientation = {
+      strategy: "size",
+      portrait: { size: "1024x1536", nominalWidth: 1024, nominalHeight: 1536 },
+      landscape: { size: "1536x1024", nominalWidth: 1536, nominalHeight: 1024 },
+      square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+    };
+    const dalle3Orientation = {
+      strategy: "size",
+      portrait: { size: "1024x1792", nominalWidth: 1024, nominalHeight: 1792 },
+      landscape: { size: "1792x1024", nominalWidth: 1792, nominalHeight: 1024 },
+      square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+    };
+    const dalle2Orientation = {
+      strategy: "size",
+      // DALL·E 2 supports square only; portrait/landscape intentionally omitted.
+      portrait: {},
+      landscape: {},
+      square: { size: "1024x1024", nominalWidth: 1024, nominalHeight: 1024 }
+    };
+    return [
+      { id: "gpt-image-2", name: "GPT Image 2", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "gpt-image-1.5", name: "GPT Image 1.5", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "gpt-image-1", name: "GPT Image 1", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "gpt-image-1-mini", name: "GPT Image 1 Mini", supportedSizes: ["1024x1024", "1024x1536", "1536x1024", "auto"], orientationSupport: gptImageOrientation },
+      { id: "dall-e-3", name: "DALL\xB7E 3", supportedSizes: ["1024x1024", "1024x1792", "1792x1024"], orientationSupport: dalle3Orientation },
+      { id: "dall-e-2", name: "DALL\xB7E 2", supportedSizes: ["256x256", "512x512", "1024x1024"], orientationSupport: dalle2Orientation }
+    ];
   },
   /**
    * Factory method to create an OpenAI embedding provider instance

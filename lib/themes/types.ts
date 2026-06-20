@@ -283,6 +283,10 @@ export const ThemeManifestSchema = z.object({
   // Optional: Custom fonts to load
   fonts: z.array(FontDefinitionSchema).optional().describe('Custom fonts to load'),
 
+  // Optional: Per-icon overrides (icon name -> bundle-relative asset path; .svg keeps currentColor, .webp bakes color)
+  icons: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.string().min(1)).optional()
+    .describe('Per-icon override map: icon name -> bundle-relative asset path (svg or webp)'),
+
   // Optional: Component-specific CSS overrides (Tier 3)
   componentStyles: z.string().optional().describe('Path to component override CSS file'),
 
@@ -357,6 +361,10 @@ export const QtapThemeManifestSchema = z.object({
 
   // Fonts
   fonts: z.array(FontDefinitionSchema).optional().describe('Custom font definitions'),
+
+  // Per-icon overrides (icon name -> bundle-relative asset path; .svg keeps currentColor, .webp bakes color)
+  icons: z.record(z.string().regex(/^[a-z][a-z0-9-]*$/), z.string().min(1)).optional()
+    .describe('Per-icon override map: icon name -> bundle-relative asset path (svg or webp)'),
 
   // Subsystem overrides
   subsystems: z.record(z.string(), z.object({
@@ -441,6 +449,18 @@ export const RegistryPreviewColorsSchema = z.object({
 });
 
 export type RegistryPreviewColors = z.infer<typeof RegistryPreviewColorsSchema>;
+
+/** A manifest-referenced preview image for a theme (gallery source). */
+export interface ThemePreviewImage {
+  /** Display name, derived from the source key/filename. */
+  name: string;
+  /** Browser-usable URL (already resolved to an asset route). */
+  src: string;
+  /** Where the reference came from. */
+  kind: 'preview' | 'background' | 'thumbnail';
+  /** Subsystem key when kind is background/thumbnail (e.g. "aurora"); undefined for preview. */
+  subsystem?: string;
+}
 
 /**
  * A theme entry in a registry index

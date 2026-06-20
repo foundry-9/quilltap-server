@@ -1,0 +1,678 @@
+/**
+ * Madman's Box Theme — Quilltap
+ * "Bigger on the inside, and dressed for the occasion."
+ *
+ * Palette: walnut + brass (warm room) / amber tube-glow / phosphor cyan (screens
+ *          & energy) / banker's-lamp green (success). Warm by decree.
+ * UI / display font: Raleway (geometric Deco-era sans, signage + headings)
+ * User-message font: Mulish (rounded sans with REAL drawn italics)
+ * Assistant prose font: Lora (readable text serif — chat prose)
+ * Mono / console font: Fira Code (the dials and readouts)
+ *
+ * Fonts are self-hosted via theme.json's fonts array and served by the
+ * Quilltap theme font API.
+ *
+ * Design Philosophy:
+ * A mad inventor's time-machine cabin: dark walnut panelling, brass fittings,
+ * bakelite knobs, Nixie and vacuum tubes glowing amber, a Jacob's ladder
+ * crackling between two posts. The ROOM is warm — brass and wood and lamplight.
+ * The SCREENS and the ENERGY are cool — CRT phosphor cyan, the arc, the gas in
+ * the tubes. So cyan is reserved for live readouts: links, focus, active state.
+ * This theme is DARK BY DECREE (supportsDarkMode: false): there is no light
+ * mode, only the lamplit dusk of the cabin. Every selector below therefore
+ * applies unconditionally, whether or not the host has toggled a `.dark` class.
+ */
+
+/* ============================================================================
+   ROOT BASELINE
+   ============================================================================ */
+[data-theme="madmans-box"] {
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  color-scheme: dark;
+}
+
+/* ============================================================================
+   QT-* VARIABLE OVERRIDES — applied in every mode (theme is always dark)
+   ============================================================================ */
+[data-theme="madmans-box"],
+[data-theme="madmans-box"].dark,
+[data-theme="madmans-box"].light {
+
+  /* ==========================================================================
+     FONT STACKS
+     ========================================================================== */
+  --theme-font-sans: Raleway, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --theme-font-serif: Lora, Georgia, Cambria, "Times New Roman", Times, serif;
+  --theme-font-mono: "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --theme-font-brand: Raleway, sans-serif;
+  --theme-font-chat-user: Mulish, Raleway, system-ui, sans-serif;
+
+  /* ==========================================================================
+     MADMAN'S BOX DECORATIVE TOKENS (theme-specific)
+     ========================================================================== */
+  /* Walnut — the cabin walls and panelling */
+  --box-walnut: hsl(28 32% 7%);
+  --box-walnut-panel: hsl(28 30% 11%);
+  --box-walnut-mid: hsl(30 28% 16%);
+  --box-walnut-rim: hsl(32 30% 22%);
+
+  /* Brass — fittings, trim, roundels, primary action */
+  --box-brass: hsl(40 72% 52%);
+  --box-brass-light: hsl(42 70% 66%);
+  --box-brass-dark: hsl(38 62% 38%);
+
+  /* Tube amber — Nixie / vacuum-tube glow (warm highlight, accent) */
+  --tube-amber: hsl(33 92% 55%);
+  --tube-amber-bright: hsl(35 95% 64%);
+  --tube-amber-glow: hsl(33 92% 55% / 0.30);
+  --tube-amber-glow-soft: hsl(33 92% 55% / 0.10);
+
+  /* Phosphor cyan — the screens and the energy (links, focus, active) */
+  --rotor-cyan: hsl(184 78% 50%);
+  --rotor-cyan-bright: hsl(184 84% 62%);
+  --rotor-cyan-dim: hsl(186 55% 34%);
+  --rotor-glow: hsl(184 78% 50% / 0.32);
+  --rotor-glow-soft: hsl(184 78% 50% / 0.10);
+
+  /* Banker's-lamp green — success / enabled */
+  --lamp-green: hsl(140 52% 42%);
+  --lamp-green-bright: hsl(140 56% 56%);
+
+  /* Geometry */
+  --box-corner-size: 12px;
+  --box-line-thin: 1px;
+  --box-line-medium: 2px;
+
+  /* Select dropdown chevron — brass so it reads on the warm walnut inputs.
+     Data URIs can't take a CSS var; stroke mirrors --box-brass
+     hsl(40 72% 52%) ≈ #D99B24. */
+  --qt-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23D99B24' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+
+  /* ==========================================================================
+     BUTTON VARIABLES
+     ========================================================================== */
+  --qt-button-radius: var(--radius-lg);
+  --qt-button-padding-x: 1.25rem;
+  --qt-button-padding-y: 0.5rem;
+  --qt-button-font-size: 0.8125rem;
+  --qt-button-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-button-primary-hover-bg: var(--box-brass-light);
+  --qt-button-primary-shadow: 0 4px 14px -4px hsl(28 50% 3% / 0.55);
+
+  --qt-button-secondary-hover-bg: color-mix(in srgb, var(--color-secondary) 80%, var(--tube-amber) 8%);
+
+  --qt-button-destructive-hover-bg: color-mix(in srgb, var(--color-destructive) 90%, black);
+
+  /* ==========================================================================
+     ALERT TOKENS
+     ========================================================================== */
+  --qt-alert-success-bg: hsl(140 52% 42% / 0.12);
+  --qt-alert-success-fg: hsl(140 54% 58%);
+  --qt-alert-success-border: hsl(140 52% 42% / 0.35);
+
+  --qt-alert-warning-bg: hsl(38 92% 54% / 0.12);
+  --qt-alert-warning-fg: hsl(38 90% 64%);
+  --qt-alert-warning-border: hsl(38 92% 54% / 0.35);
+
+  --qt-alert-error-bg: hsl(4 72% 50% / 0.12);
+  --qt-alert-error-fg: hsl(4 78% 68%);
+  --qt-alert-error-border: hsl(4 72% 50% / 0.35);
+
+  --qt-alert-info-bg: hsl(184 78% 50% / 0.12);
+  --qt-alert-info-fg: hsl(184 80% 66%);
+  --qt-alert-info-border: hsl(184 78% 50% / 0.35);
+
+  /* ==========================================================================
+     CARD VARIABLES — brass-edged with a faint tube-glow
+     ========================================================================== */
+  --qt-card-padding: 1.5rem;
+  --qt-card-border: var(--box-brass);
+  --qt-card-border-opacity: 0.5;
+  --qt-card-shadow: 0 1px 3px hsl(28 50% 3% / 0.50), 0 0 1px hsl(40 60% 60% / 0.08);
+  --qt-card-shadow-hover: 0 4px 12px hsl(28 50% 3% / 0.58), 0 0 10px var(--tube-amber-glow-soft);
+  --qt-card-transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --qt-entity-card-radius: var(--radius-xl);
+  --qt-entity-card-bg: color-mix(in srgb, var(--color-card) 92%, transparent);
+
+  /* ==========================================================================
+     NAVBAR VARIABLES
+     ========================================================================== */
+  --qt-navbar-height: 4rem;
+  --qt-navbar-blur: blur(8px);
+  --qt-navbar-link-padding-x: 0.75rem;
+  --qt-navbar-link-padding-y: 0.5rem;
+
+  /* ==========================================================================
+     TYPOGRAPHY VARIABLES
+     ========================================================================== */
+  --qt-heading-font: var(--theme-font-brand);
+
+  /* ==========================================================================
+     SIDEBAR VARIABLES
+     ========================================================================== */
+  --qt-sidebar-width: 16rem;
+  --qt-sidebar-item-padding-x: 0.75rem;
+  --qt-sidebar-item-padding-y: 0.5rem;
+  --qt-sidebar-item-hover-bg: hsl(184 78% 50% / 0.08);
+  --qt-sidebar-item-active-bg: hsl(184 78% 50% / 0.12);
+  --qt-sidebar-item-active-border: var(--rotor-cyan);
+
+  /* ==========================================================================
+     LEFT SIDEBAR VARIABLES (App Navigation)
+     ========================================================================== */
+  --qt-left-sidebar-width: 16rem;
+  --qt-left-sidebar-min-width: 16rem;
+  --qt-left-sidebar-max-width: 32rem;
+  --qt-left-sidebar-collapsed-width: 4rem;
+  --qt-left-sidebar-resize-handle-width: 4px;
+  --qt-left-sidebar-bg: hsl(28 34% 5%);
+  --qt-left-sidebar-border: var(--box-brass-dark);
+  --qt-left-sidebar-header-height: 4rem;
+  --qt-left-sidebar-section-padding: 0.75rem;
+  --qt-left-sidebar-section-gap: 0.25rem;
+  --qt-left-sidebar-section-title-fg: var(--box-brass-light);
+  --qt-left-sidebar-item-gap: 0.5rem;
+  --qt-left-sidebar-item-icon-size: 1.25rem;
+  --qt-left-sidebar-overlay-bg: rgb(0 0 0 / 0.6);
+
+  /* ==========================================================================
+     APP HEADER VARIABLES
+     ========================================================================== */
+  --qt-app-header-height: 4rem;
+  --qt-app-header-blur: blur(8px);
+
+  /* ==========================================================================
+     PANEL/DIALOG/POPOVER VARIABLES
+     ========================================================================== */
+  --qt-panel-shadow: 0 10px 25px -5px hsl(28 50% 3% / 0.58);
+  --qt-dialog-border: var(--box-brass);
+  --qt-dialog-shadow: 0 25px 50px -12px hsl(28 50% 2% / 0.68), 0 0 24px var(--tube-amber-glow-soft);
+  --qt-dialog-backdrop: rgb(14 8 3 / 0.7);
+  --qt-popover-shadow: 0 10px 25px -5px hsl(28 50% 3% / 0.58);
+
+  /* ==========================================================================
+     CHAT VARIABLES
+     ========================================================================== */
+  --qt-chat-message-padding: 1rem;
+  --qt-chat-message-shadow: 0 2px 8px -2px hsl(28 50% 3% / 0.45);
+
+  --qt-chat-user-border: hsl(40 55% 45% / 0.30);
+  --qt-chat-user-font: var(--theme-font-chat-user);
+
+  --qt-chat-assistant-font: var(--theme-font-serif);
+  --qt-chat-assistant-font-weight: 500;
+
+  /* Whisper messages — deep plum, a confidence by lamplight */
+  --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(310 35% 28%) 45%);
+  --qt-chat-whisper-border: hsl(310 42% 46%);
+  --qt-chat-whisper-label-fg: hsl(310 48% 72%);
+
+  /* Silent messages — muted teal, a screen at rest */
+  --qt-chat-silent-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, hsl(184 28% 24%) 40%);
+  --qt-chat-silent-border: hsl(184 30% 38%);
+  --qt-chat-silent-label-fg: hsl(184 32% 56%);
+
+  /* Wardrobe action notices — burnished brass */
+  --qt-chat-wardrobe-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 55%, hsl(40 62% 34%) 45%);
+  --qt-chat-wardrobe-border: hsl(40 64% 36%);
+  --qt-chat-wardrobe-label-fg: hsl(40 78% 64%);
+
+  --qt-chat-composer-padding-x: 1.25rem;
+  --qt-chat-composer-padding-y: 1rem;
+  --qt-chat-toolbar-gap: 0.5rem;
+
+  --qt-chat-attachment-hover-border: var(--rotor-cyan);
+  --qt-chat-attachment-overlay: rgb(14 8 3 / 0.35);
+
+  --qt-page-max-width: 75rem;
+  --qt-card-grid-auto-min: 550px;
+
+  --qt-chat-sidebar-width: 20rem;
+  --qt-chat-sidebar-collapsed-width: 4rem;
+
+  /* Response status indicator */
+  --qt-response-status-bg: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  --qt-response-status-compressing-fg: hsl(184 76% 58%);
+  --qt-response-status-gathering-fg: var(--tube-amber);
+  --qt-response-status-building-fg: var(--box-brass-dark);
+  --qt-response-status-sending-fg: hsl(184 76% 58%);
+  --qt-response-status-streaming-fg: var(--lamp-green-bright);
+  --qt-response-status-tool-fg: var(--rotor-cyan);
+
+  --qt-participant-card-active-border: var(--rotor-cyan);
+  --qt-participant-card-active-shadow: 0 0 12px var(--rotor-glow);
+
+  /* ==========================================================================
+     ROLEPLAY ANNOTATION VARIABLES
+     ========================================================================== */
+  /* Roleplay-template palette (qt-roleplay-1..4) — brass / copper / verdigris / crimson */
+  --qt-roleplay-1-bg: hsl(40 60% 45%);
+  --qt-roleplay-1-fg: hsl(28 32% 8%);
+  --qt-roleplay-2-bg: hsl(22 70% 48%);
+  --qt-roleplay-2-fg: hsl(28 32% 8%);
+  --qt-roleplay-3-bg: hsl(170 45% 34%);
+  --qt-roleplay-3-fg: hsl(40 50% 92%);
+  --qt-roleplay-4-bg: hsl(355 60% 44%);
+  --qt-roleplay-4-fg: hsl(40 50% 92%);
+
+  --qt-rp-narration-color: hsl(40 58% 76%);
+  --qt-rp-narration-bg: hsl(28 30% 11% / 0.85);
+  --qt-rp-narration-radius: 0.25rem;
+
+  --qt-rp-inner-monologue-color: hsl(310 62% 76%);
+  --qt-rp-inner-monologue-bg: hsl(310 28% 14% / 0.85);
+  --qt-rp-inner-monologue-radius: 0.25rem;
+
+  --qt-rp-ooc-color: hsl(184 80% 64%);
+  --qt-rp-ooc-bg: hsl(28 34% 6%);
+  --qt-rp-ooc-font: var(--theme-font-mono);
+  --qt-rp-ooc-radius: 0.25rem;
+
+  --qt-rp-button-narration-bg: hsl(30 30% 22%);
+  --qt-rp-button-narration-fg: hsl(40 58% 76%);
+  --qt-rp-button-internal-bg: hsl(310 48% 48%);
+  --qt-rp-button-ooc-bg: var(--rotor-cyan-dim);
+  --qt-rp-button-ooc-fg: hsl(28 34% 6%);
+
+  /* ==========================================================================
+     BADGE VARIABLES
+     ========================================================================== */
+  --qt-badge-radius: 3px;
+  --qt-badge-padding-x: 0.75rem;
+  --qt-badge-padding-y: 0.25rem;
+  --qt-badge-font-weight: 600;
+
+  /* Entity-type badge colors — brass/amber/cyan-tinted variants */
+  --qt-badge-character-bg: hsl(184 78% 50% / 0.14);
+  --qt-badge-character-fg: hsl(184 76% 64%);
+  --qt-badge-user-character-bg: hsl(40 72% 52% / 0.15);
+  --qt-badge-user-character-fg: hsl(40 74% 64%);
+  --qt-badge-chat-bg: hsl(140 52% 42% / 0.15);
+  --qt-badge-chat-fg: hsl(140 54% 58%);
+  --qt-badge-tag-bg: hsl(25 90% 55% / 0.15);
+  --qt-badge-tag-fg: hsl(25 88% 64%);
+  --qt-badge-memory-bg: hsl(310 56% 58% / 0.15);
+  --qt-badge-memory-fg: hsl(310 58% 72%);
+  --qt-badge-message-bg: hsl(40 70% 50% / 0.12);
+  --qt-badge-message-fg: hsl(40 72% 64%);
+  --qt-badge-project-bg: hsl(33 92% 55% / 0.13);
+  --qt-badge-project-fg: hsl(33 88% 64%);
+
+  /* Status badge colors */
+  --qt-badge-enabled-bg: hsl(140 52% 42% / 0.15);
+  --qt-badge-enabled-fg: hsl(140 54% 58%);
+  --qt-badge-related-bg: hsl(184 78% 50% / 0.15);
+  --qt-badge-related-fg: hsl(184 76% 64%);
+  --qt-badge-manual-bg: hsl(40 72% 52% / 0.15);
+  --qt-badge-manual-fg: hsl(40 74% 64%);
+
+  /* Plugin source badge colors */
+  --qt-badge-source-included-bg: hsl(40 72% 52% / 0.15);
+  --qt-badge-source-included-fg: hsl(40 74% 64%);
+  --qt-badge-source-npm-bg: hsl(4 72% 50% / 0.15);
+  --qt-badge-source-npm-fg: hsl(4 76% 68%);
+  --qt-badge-source-git-bg: hsl(184 78% 50% / 0.14);
+  --qt-badge-source-git-fg: hsl(184 74% 62%);
+
+  /* Capability badge colors */
+  --qt-badge-capability-bg: hsl(184 78% 50% / 0.10);
+  --qt-badge-capability-fg: hsl(184 74% 62%);
+
+  /* Queue status badge colors */
+  --qt-queue-badge-memory-bg: hsl(30 32% 24%);
+  --qt-queue-badge-memory-fg: var(--box-brass);
+  --qt-queue-badge-embedding-bg: hsl(310 36% 32%);
+  --qt-queue-badge-embedding-fg: var(--rotor-cyan-bright);
+  --qt-queue-badge-summary-bg: hsl(140 50% 38%);
+  --qt-queue-badge-danger-bg: hsl(4 70% 48%);
+  --qt-queue-badge-story-bg: hsl(30 30% 22%);
+  --qt-queue-badge-story-fg: hsl(40 58% 76%);
+  --qt-queue-badge-idle-opacity: 0.4;
+
+  /* ==========================================================================
+     AVATAR VARIABLES
+     ========================================================================== */
+  --qt-avatar-radius: 3px;
+  --qt-avatar-size: 2.5rem;
+  --qt-avatar-size-sm: 2rem;
+  --qt-avatar-size-lg: 3rem;
+  --qt-avatar-size-xl: 4rem;
+  --qt-avatar-border: var(--box-brass-dark);
+
+  /* ==========================================================================
+     CODE BLOCK VARIABLES
+     ========================================================================== */
+  --qt-code-font: var(--theme-font-mono);
+
+  /* ==========================================================================
+     LINK VARIABLES — phosphor cyan (screen energy)
+     ========================================================================== */
+  --qt-link-color: var(--rotor-cyan);
+  --qt-link-hover-color: var(--rotor-cyan-bright);
+  --qt-link-decoration: underline;
+
+  /* ==========================================================================
+     FOOTER VARIABLES
+     ========================================================================== */
+  --qt-footer-link-hover: var(--rotor-cyan-bright);
+
+  /* ==========================================================================
+     BRAND VARIABLES
+     ========================================================================== */
+  --qt-brand-fg: var(--box-brass);
+
+  /* ==========================================================================
+     AUTH PAGE VARIABLES — lamplit cabin
+     ========================================================================== */
+  --qt-auth-page-bg: radial-gradient(ellipse at 50% 38%, hsl(30 40% 14%), hsl(28 36% 5%) 70%);
+  --qt-auth-title-fg: var(--box-brass);
+
+  /* ==========================================================================
+     HIGHLIGHT VARIABLES (Search result highlighting)
+     ========================================================================== */
+  --qt-highlight-bg: var(--tube-amber);
+  --qt-highlight-fg: hsl(28 45% 7%);
+
+  /* ==========================================================================
+     FILTER CHIP VARIABLES
+     ========================================================================== */
+  --qt-filter-chip-radius: 3px;
+  --qt-filter-chip-padding-y: 0.25rem;
+  --qt-filter-chip-inactive-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--tube-amber) 6%);
+
+  /* ==========================================================================
+     TAB VARIABLES
+     ========================================================================== */
+  --qt-tab-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  --qt-tab-padding-x: 1rem;
+  --qt-tab-padding-y: 0.625rem;
+  --qt-tab-gap: 0.5rem;
+  --qt-tab-hover-bg: color-mix(in srgb, var(--color-muted) 80%, var(--tube-amber) 6%);
+  --qt-tab-active-fg: var(--rotor-cyan-bright);
+  --qt-tab-group-gap: 0.25rem;
+
+  /* ==========================================================================
+     OVERLAY VARIABLES
+     ========================================================================== */
+  --qt-overlay-bg: hsl(28 36% 5% / 0.92);
+  --qt-overlay-medium-bg: hsl(28 36% 5% / 0.6);
+  --qt-overlay-light-bg: hsl(28 30% 11% / 0.25);
+  --qt-overlay-caption-bg: hsl(28 36% 5% / 0.6);
+  --qt-overlay-btn-bg: hsl(33 92% 55% / 0.12);
+  --qt-overlay-btn-hover-bg: hsl(33 92% 55% / 0.25);
+  --qt-overlay-fg: hsl(40 30% 90%);
+  --qt-overlay-muted-fg: hsl(40 22% 90% / 0.7);
+
+  /* ==========================================================================
+     SPINNER VARIABLES — the Jacob's ladder arc
+     ========================================================================== */
+  --qt-spinner-track: color-mix(in srgb, var(--rotor-cyan) 18%, transparent);
+  --qt-spinner-indicator: var(--rotor-cyan);
+
+  /* ==========================================================================
+     FAVORITE VARIABLES
+     ========================================================================== */
+  --qt-favorite-color: var(--tube-amber);
+
+  /* ==========================================================================
+     TOGGLE VARIABLES
+     ========================================================================== */
+  --qt-toggle-knob-bg: hsl(40 30% 92%);
+
+  /* ==========================================================================
+     WARNING BOX VARIABLES
+     ========================================================================== */
+  --qt-warning-box-bg: hsl(38 92% 54% / 0.1);
+  --qt-warning-box-border: hsl(38 92% 54% / 0.35);
+  --qt-warning-box-fg: hsl(38 90% 64%);
+
+  /* ==========================================================================
+     TERMINAL VARIABLES — the console readout
+     Near-black walnut pane, phosphor-cyan cursor, brass chrome.
+     ========================================================================== */
+  --qt-terminal-bg: hsl(28 34% 5%);
+  --qt-terminal-fg: hsl(40 28% 84%);
+  --qt-terminal-cursor: var(--rotor-cyan-bright);
+  --qt-terminal-selection: hsl(184 78% 50% / 0.28);
+  --qt-terminal-ansi-black: hsl(30 26% 14%);
+  --qt-terminal-ansi-red: hsl(4 72% 60%);
+  --qt-terminal-ansi-green: hsl(140 52% 52%);
+  --qt-terminal-ansi-yellow: hsl(40 82% 62%);
+  --qt-terminal-ansi-blue: hsl(200 70% 62%);
+  --qt-terminal-ansi-magenta: hsl(310 56% 68%);
+  --qt-terminal-ansi-cyan: hsl(184 74% 58%);
+  --qt-terminal-ansi-white: hsl(40 25% 86%);
+  --qt-terminal-ansi-bright-black: hsl(30 18% 40%);
+  --qt-terminal-ansi-bright-red: hsl(4 80% 72%);
+  --qt-terminal-ansi-bright-green: hsl(140 58% 64%);
+  --qt-terminal-ansi-bright-yellow: hsl(40 90% 72%);
+  --qt-terminal-ansi-bright-blue: hsl(200 78% 74%);
+  --qt-terminal-ansi-bright-magenta: hsl(310 66% 78%);
+  --qt-terminal-ansi-bright-cyan: hsl(184 84% 74%);
+  --qt-terminal-ansi-bright-white: hsl(40 30% 96%);
+
+  /* Chrome — brass-edged inlay around the terminal pane */
+  --qt-terminal-chrome-bg: hsl(28 32% 9%);
+  --qt-terminal-chrome-border: hsl(40 62% 34%);
+  --qt-terminal-chrome-fg: hsl(40 30% 84%);
+  --qt-terminal-chrome-muted-fg: hsl(40 25% 60%);
+  --qt-terminal-closed-badge-bg: hsl(30 28% 18%);
+  --qt-terminal-closed-badge-fg: hsl(40 70% 70%);
+}
+
+/* ============================================================================
+   BODY BACKGROUND — lamplit cabin
+   A warm amber bloom (the tube glow on the console) over dark walnut, framed by
+   faint brass roundel rings, with a deep vignette toward the corners of the
+   room. Pure CSS — no texture asset required.
+   ============================================================================ */
+[data-theme="madmans-box"] body {
+  position: relative;
+  min-height: 100vh;
+  background-color: var(--box-walnut);
+  background-image:
+    /* tube/console glow from the centre — warm amber */
+    radial-gradient(ellipse 60% 45% at 50% 34%, hsl(33 70% 20% / 0.45), transparent 70%),
+    /* roundel rings — concentric brass circles, very faint */
+    radial-gradient(circle at 50% 36%, transparent 0 116px, hsl(40 60% 50% / 0.06) 116px 118px, transparent 119px),
+    radial-gradient(circle at 50% 36%, transparent 0 168px, hsl(40 60% 50% / 0.045) 168px 170px, transparent 171px),
+    /* deep vignette toward the corners */
+    radial-gradient(ellipse at 50% 50%, transparent 35%, hsl(28 55% 2% / 0.55) 100%);
+  background-size: cover, auto, auto, cover;
+  background-position: center top, center 36px, center 36px, center center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+/* Ensure the cabin glow shows through main containers */
+[data-theme="madmans-box"] .bg-background { background: transparent !important; }
+[data-theme="madmans-box"] .qt-app-layout { background: transparent; }
+[data-theme="madmans-box"] .qt-app-main { background: transparent; }
+[data-theme="madmans-box"] .qt-page,
+[data-theme="madmans-box"] .qt-page-with-navbar { background: transparent; }
+[data-theme="madmans-box"] .qt-content { background: transparent; }
+[data-theme="madmans-box"] .qt-content-scroll { background: transparent; }
+[data-theme="madmans-box"] .qt-auth-page { background: transparent; }
+[data-theme="madmans-box"] .qt-page-container { background: transparent; }
+
+/* ============================================================================
+   STORY BACKGROUND OVERRIDE
+   When a built-in story background is active, yield to it: drop the cabin
+   glow and restore solid theme colors on containers.
+   ============================================================================ */
+[data-theme="madmans-box"] body:has([style*="--story-background-url"]) {
+  background-image: none;
+  background-color: var(--color-background);
+}
+[data-theme="madmans-box"] body:has([style*="--story-background-url"]) .bg-background {
+  background: var(--color-background) !important;
+}
+[data-theme="madmans-box"] body:has([style*="--story-background-url"]) .qt-app-layout {
+  background: var(--color-background);
+}
+[data-theme="madmans-box"] body:has([style*="--story-background-url"]) .qt-app-main {
+  background: var(--color-background);
+}
+[data-theme="madmans-box"] body:has([style*="--story-background-url"]) .qt-content {
+  background: var(--qt-content-bg);
+}
+[data-theme="madmans-box"] body:has([style*="--story-background-url"]) .qt-content-scroll {
+  background: var(--qt-content-scroll-bg);
+}
+
+/* ============================================================================
+   HOMEPAGE BACKGROUND — Madman's Box only
+   The homepage uses .qt-homepage-container (a centred, max-width column) and
+   sets no per-page --story-background-url, so by default it shows the whole-body
+   cabin gradient. Lay a fixed, full-viewport image over it here — mirroring the
+   app's own .qt-page-container::before pattern so it covers the viewport rather
+   than just the centred column. Dark-only theme ⇒ a single asset; no light
+   variant is ever shown. If home-bg.webp is absent the cabin gradient still
+   shows through, so the homepage degrades gracefully.
+   ============================================================================ */
+[data-theme="madmans-box"] .qt-homepage-container {
+  position: relative;
+}
+[data-theme="madmans-box"] .qt-homepage-container::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url('/api/themes/assets/bundle:madmans-box/textures/home-bg.webp') center center / cover no-repeat;
+  z-index: 0;
+  opacity: 0.5;
+  pointer-events: none;
+}
+[data-theme="madmans-box"] .qt-homepage-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+   HEADING TYPOGRAPHY — geometric uppercase signage
+   ============================================================================ */
+[data-theme="madmans-box"] h1,
+[data-theme="madmans-box"] h2,
+[data-theme="madmans-box"] h3 {
+  font-family: var(--theme-font-brand);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 300;
+}
+
+/* The brand wordmark catches the tube glow */
+[data-theme="madmans-box"] .qt-brand,
+[data-theme="madmans-box"] [class*="brand"] {
+  text-shadow: 0 0 10px var(--tube-amber-glow-soft);
+}
+
+/* ============================================================================
+   CARDS — brass edge
+   ============================================================================ */
+[data-theme="madmans-box"] [class*="card"],
+[data-theme="madmans-box"] [class*="Card"] {
+  border-color: color-mix(in srgb, var(--box-brass) calc(var(--qt-card-border-opacity) * 100%), transparent);
+}
+
+/* ============================================================================
+   SIDEBAR ACTIVE ITEM — phosphor-cyan bar (a lit readout)
+   ============================================================================ */
+[data-theme="madmans-box"] [data-sidebar] [aria-current="page"],
+[data-theme="madmans-box"] [data-sidebar] .active {
+  border-left: 3px solid var(--rotor-cyan);
+  color: var(--rotor-cyan-bright);
+}
+
+/* ============================================================================
+   SCROLLBAR — brass thumb in a walnut track
+   ============================================================================ */
+[data-theme="madmans-box"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+[data-theme="madmans-box"] ::-webkit-scrollbar-track {
+  background: var(--box-walnut);
+}
+[data-theme="madmans-box"] ::-webkit-scrollbar-thumb {
+  background: var(--box-brass-dark);
+  border-radius: 0;
+  border: 1px solid var(--box-walnut);
+}
+[data-theme="madmans-box"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--box-brass);
+}
+
+/* ============================================================================
+   SELECTION — warm amber wash
+   ============================================================================ */
+[data-theme="madmans-box"] ::selection {
+  background: hsl(33 92% 55% / 0.28);
+  color: hsl(40 30% 94%);
+}
+
+/* ============================================================================
+   BUTTONS — Deco signage tracking
+   ============================================================================ */
+[data-theme="madmans-box"] button {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.8125rem;
+}
+
+/* Primary buttons get a brass face with a faint tube underglow */
+[data-theme="madmans-box"] button[class*="primary"]:not(:disabled):hover {
+  box-shadow: 0 4px 16px -6px hsl(28 50% 2% / 0.6), 0 0 12px var(--tube-amber-glow-soft);
+}
+
+/* ============================================================================
+   INPUTS — minimal rounding, geometric
+   ============================================================================ */
+[data-theme="madmans-box"] input,
+[data-theme="madmans-box"] textarea,
+[data-theme="madmans-box"] select {
+  border-radius: var(--radius-md);
+}
+
+/* ============================================================================
+   FOCUS RING — phosphor cyan with a soft halo
+   ============================================================================ */
+[data-theme="madmans-box"] :focus-visible {
+  outline: 2px solid var(--rotor-cyan);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--rotor-glow-soft);
+}
+
+/* ============================================================================
+   DIALOG / MODAL — brass border
+   ============================================================================ */
+[data-theme="madmans-box"] [role="dialog"] {
+  border: 1px solid color-mix(in srgb, var(--box-brass) 42%, transparent);
+}
+
+/* ============================================================================
+   JACOB'S LADDER PULSE — a slow cyan breathing on the loading spinner,
+   evoking the arc crackling between the two posts. Honors reduced-motion below.
+   ============================================================================ */
+@keyframes madmans-box-arc-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px var(--rotor-glow-soft)); opacity: 0.85; }
+  50%      { filter: drop-shadow(0 0 8px var(--rotor-glow)); opacity: 1; }
+}
+[data-theme="madmans-box"] .qt-spinner,
+[data-theme="madmans-box"] [class*="spinner"],
+[data-theme="madmans-box"] [role="status"] svg {
+  animation: madmans-box-arc-pulse 2.4s ease-in-out infinite;
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="madmans-box"] * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

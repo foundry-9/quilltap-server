@@ -30,6 +30,7 @@ import type { AuthenticatedContext } from '@/lib/api/middleware';
 const createCharacterSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   title: z.string().optional(),
+  identity: z.string().optional(),
   description: z.string().optional(),
   manifesto: z.string().optional(),
   personality: z.string().optional(),
@@ -95,6 +96,7 @@ const wizardRequestSchema = z.object({
   existingData: z
     .object({
       title: z.string().optional(),
+      identity: z.string().optional(),
       description: z.string().optional(),
       manifesto: z.string().optional(),
       personality: z.string().optional(),
@@ -108,6 +110,7 @@ const wizardRequestSchema = z.object({
     z.enum([
       'name',
       'title',
+      'identity',
       'description',
       'manifesto',
       'personality',
@@ -318,6 +321,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     userId: user.id,
     name: validatedData.name,
     title: validatedData.title || null,
+    identity: validatedData.identity || null,
     description: validatedData.description || null,
     manifesto: validatedData.manifesto || null,
     personality: validatedData.personality || null,

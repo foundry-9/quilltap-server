@@ -26,6 +26,7 @@ interface UseProjectDetailReturn {
   handleSaveAgentMode: (enabled: boolean | null) => Promise<void>
   handleSaveAvatarGeneration: (enabled: boolean | null) => Promise<void>
   handleSaveDefaultImageProfile: (profileId: string | null) => Promise<void>
+  handleSaveDefaultRoleplayTemplate: (templateId: string | null) => Promise<void>
   handleSaveBackgroundDisplayMode: (mode: BackgroundDisplayMode) => Promise<void>
   handleSaveAlertCharactersOfLanternImages: (enabled: boolean | null) => Promise<void>
   handleRemoveCharacter: (characterId: string) => Promise<void>
@@ -171,6 +172,27 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     }
   }, [projectId])
 
+  const handleSaveDefaultRoleplayTemplate = useCallback(async (templateId: string | null) => {
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaultRoleplayTemplateId: templateId }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update default roleplay template')
+      const data = await res.json()
+      setProject(data.project)
+      showSuccessToast(templateId
+        ? 'Default roleplay template set for project'
+        : 'Roleplay template set to inherit from global')
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update roleplay template'
+      console.error('useProjectDetail: save default roleplay template error', errorMsg)
+      showErrorToast(errorMsg)
+    }
+  }, [projectId])
+
   const handleSaveAlertCharactersOfLanternImages = useCallback(async (enabled: boolean | null) => {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}`, {
@@ -252,6 +274,7 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
     handleSaveAgentMode,
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
+    handleSaveDefaultRoleplayTemplate,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,
     handleRemoveCharacter,

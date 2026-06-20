@@ -16,6 +16,7 @@ import type {
   MessageEvent,
   RoleplayTemplate,
   Project,
+  Group,
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
@@ -36,6 +37,7 @@ export type ExportEntityType =
   | 'embedding-profiles'
   | 'tags'
   | 'projects'
+  | 'groups'
   | 'document-stores';
 
 // ============================================================================
@@ -68,6 +70,7 @@ export interface QuilltapExportCounts {
   tags?: number;
   memories?: number;
   projects?: number;
+  groups?: number;
   documentStores?: number;
   documentStoreFolders?: number;
   documentStoreDocuments?: number;
@@ -240,6 +243,22 @@ export interface ProjectsExportData {
 }
 
 /**
+ * Group with resolved relationships
+ */
+export interface ExportedGroup extends Group {
+  _memberNames?: string[];
+  _memberCharacterIds?: string[];
+  _linkedStoreMountPointIds?: string[];
+}
+
+/**
+ * Groups export data
+ */
+export interface GroupsExportData {
+  groups: ExportedGroup[];
+}
+
+/**
  * Document store / Scriptorium export data
  *
  * Portable representation of a set of document stores. For database-backed
@@ -329,6 +348,7 @@ export type QuilltapExportData =
   | EmbeddingProfilesExportData
   | TagsExportData
   | ProjectsExportData
+  | GroupsExportData
   | DocumentStoresExportData;
 
 /**
@@ -402,6 +422,11 @@ export interface QtapRoleplayTemplateRecord {
 export interface QtapProjectRecord {
   kind: 'project';
   data: ExportedProject;
+}
+
+export interface QtapGroupRecord {
+  kind: 'group';
+  data: ExportedGroup;
 }
 
 /**
@@ -535,6 +560,7 @@ export type QtapRecord =
   | QtapEmbeddingProfileRecord
   | QtapRoleplayTemplateRecord
   | QtapProjectRecord
+  | QtapGroupRecord
   | QtapCharacterRecord
   | QtapWardrobeItemRecord
   | QtapCharacterPluginDataRecord

@@ -1,6 +1,12 @@
 /**
+ * @jest-environment node
+ *
  * Unit Tests for Encryption Service
  * After field-level encryption removal, only passphrase-based and masking functions remain.
+ *
+ * Runs in the `node` environment (not jsdom) because this suite exercises the
+ * real native SQLCipher binding, which can SIGSEGV during jsdom realm teardown
+ * when parallel workers exit. See the "Jest native SQLCipher SIGSEGV" convention.
  */
 
 // Unmock the encryption module to test the real implementation

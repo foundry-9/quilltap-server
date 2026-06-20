@@ -29,7 +29,7 @@ export function PreviewModal({
       <button
         type="button"
         onClick={() => onCopy(template)}
-        className="px-4 py-2 text-sm rounded-md border qt-border-default hover:bg-accent"
+        className="px-4 py-2 text-sm rounded-md border qt-border-default qt-hover-accent"
       >
         {copiedId === template.id ? 'Copied!' : 'Copy to Clipboard'}
       </button>
@@ -40,7 +40,7 @@ export function PreviewModal({
             onCopyAsNew(template)
             onClose()
           }}
-          className="px-4 py-2 text-sm rounded-md border qt-border-default hover:bg-accent"
+          className="px-4 py-2 text-sm rounded-md border qt-border-default qt-hover-accent"
         >
           Copy as New
         </button>

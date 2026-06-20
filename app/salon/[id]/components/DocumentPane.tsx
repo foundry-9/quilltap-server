@@ -12,7 +12,10 @@
  */
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import useSWR from 'swr'
+import { Icon } from '@/components/ui/icon'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import DocumentGutter, { type LinePosition } from './DocumentGutter'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -118,7 +121,10 @@ function DocumentEditorPlugins({
   onFocusProcessed?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useSWR<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat', { signal }),
+  })
   const spellCheck = chatSettings?.composerSpellcheck ?? true
 
   // Sync editable state
@@ -406,15 +412,10 @@ export default function DocumentPane({
             title={mode === 'focus' ? 'Show chat' : 'Maximize'}
             aria-label={mode === 'focus' ? 'Show chat' : 'Maximize document'}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {mode === 'focus' ? (
-                // Shrink icon (show chat)
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M15 9V4.5M15 9h4.5M15 9l5.5-5.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 15v4.5m0-4.5h4.5m-4.5 0l5.5 5.5" />
-              ) : (
-                // Expand icon (maximize)
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5h-4m4 0v-4m0 4l-5-5" />
-              )}
-            </svg>
+            {mode === 'focus'
+              ? <Icon name="compress" className="w-4 h-4" />
+              : <Icon name="expand" className="w-4 h-4" />
+            }
           </button>
 
           {/* Delete the underlying file */}
@@ -425,9 +426,7 @@ export default function DocumentPane({
             title="Delete document"
             aria-label="Delete document"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-            </svg>
+            <Icon name="trash" className="w-4 h-4" />
           </button>
 
           {/* Exit document mode */}
@@ -438,9 +437,7 @@ export default function DocumentPane({
             title="Exit document mode"
             aria-label="Exit document mode"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-4 h-4" />
           </button>
         </div>
       </div>

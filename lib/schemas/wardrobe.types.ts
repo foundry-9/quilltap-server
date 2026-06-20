@@ -29,6 +29,36 @@ export type WardrobeItemType = z.infer<typeof WardrobeItemTypeEnum>;
 export const WARDROBE_SLOT_TYPES = ['top', 'bottom', 'footwear', 'accessories'] as const;
 
 // ============================================================================
+// WARDROBE ITEM API SCHEMAS (single source for create + update routes)
+// ============================================================================
+
+/**
+ * The editable field set shared by the project-wardrobe create and update
+ * endpoints. `createWardrobeSchema` uses these required fields as-is;
+ * `updateWardrobeSchema` is `.partial()` of this so every field becomes
+ * optional for PATCH/PUT-style updates.
+ */
+export const wardrobeItemFieldsSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().nullable().optional(),
+  /** Plain-text image-generation cue; preferred over title in image prompts. */
+  imagePrompt: z.string().nullable().optional(),
+  types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
+  appropriateness: z.string().nullable().optional(),
+  isDefault: z.boolean().optional(),
+  /** IDs of other items this composite bundles. Empty/omitted = leaf item. */
+  componentItemIds: z.array(z.string()).optional(),
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace: z.boolean().optional(),
+});
+
+/** Body schema for creating a project wardrobe item (required fields). */
+export const createWardrobeSchema = wardrobeItemFieldsSchema;
+
+/** Body schema for updating a project wardrobe item (all fields optional). */
+export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial();
+
+// ============================================================================
 // WARDROBE ITEM
 // ============================================================================
 
@@ -38,6 +68,16 @@ export const WardrobeItemSchema = z.object({
   characterId: UUIDSchema.nullable().optional(),
   title: z.string().min(1),
   description: z.string().nullable().optional(),
+  /**
+   * Optional plain-text phrase fed to image-generation pipelines (avatar +
+   * Lantern scene) IN PLACE OF the title when present; falls back to `title`
+   * when absent/empty. Unlike `description` (human prose / Markdown, stripped
+   * from image prompts), this is a short, literal visual cue meant for a
+   * diffusion model — e.g. "intricate dense burnished-gold circular rank glyph
+   * on the shoulder". Keep it terse; it is joined into a comma-separated outfit
+   * list. Never Markdown.
+   */
+  imagePrompt: z.string().nullable().optional(),
   /** Coverage tags — which slots this item covers (e.g., ["top"], ["top","bottom"] for a dress) */
   types: z.array(WardrobeItemTypeEnum).min(1),
   /**

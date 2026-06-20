@@ -1,5 +1,7 @@
 'use client'
 
+import { Icon } from '@/components/ui/icon'
+
 interface WizardErrorStepProps {
   title: string
   error: string | null
@@ -13,19 +15,7 @@ export function WizardErrorStep({ title, error }: WizardErrorStepProps) {
     <div className="space-y-4">
       <div className="flex flex-col items-center justify-center py-6">
         <div className="w-12 h-12 rounded-full qt-bg-destructive/10 flex items-center justify-center mb-4">
-          <svg
-            className="w-6 h-6 qt-text-destructive"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
+          <Icon name="close" className="w-6 h-6 qt-text-destructive" />
         </div>
         <h3 className="qt-heading-4 text-foreground">{title}</h3>
       </div>

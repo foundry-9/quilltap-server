@@ -193,6 +193,40 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Roleplay-Template Styles */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Roleplay-Template Styles
+        </h3>
+        <p style={{ color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          Style classes a roleplay-template delimiter can be assigned: four high-contrast chips (each theme picks its own four hues) plus a semantic set. Add-on flourishes (bold, italic, reverse, underline, border, font) compose on top.
+        </p>
+        <div className="qt-chat-message-content" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '36rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+            <span className="qt-roleplay-1">Style 1</span>
+            <span className="qt-roleplay-2">Style 2</span>
+            <span className="qt-roleplay-3">Style 3</span>
+            <span className="qt-roleplay-4">Style 4</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+            <span className="qt-roleplay-danger">Danger</span>
+            <span className="qt-roleplay-warning">Warning</span>
+            <span className="qt-roleplay-success">Success</span>
+            <span className="qt-roleplay-info">Info</span>
+            <span className="qt-roleplay-muted">Muted</span>
+            <span className="qt-roleplay-code">code</span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+            <span className="qt-roleplay-2 qt-rp-bold">Bold</span>
+            <span className="qt-roleplay-3 qt-rp-italic">Italic</span>
+            <span className="qt-roleplay-1 qt-rp-reverse">Reverse</span>
+            <span className="qt-roleplay-4 qt-rp-underline-double">Underline</span>
+            <span className="qt-roleplay-info qt-rp-border-dashed">Dashed border</span>
+            <span className="qt-roleplay-muted qt-rp-font-serif">Serif font</span>
+          </div>
+        </div>
+      </section>
+
       {/* Whisper Messages */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

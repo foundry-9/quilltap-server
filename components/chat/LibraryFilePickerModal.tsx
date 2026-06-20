@@ -15,7 +15,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import FileBrowser, { type FileInfo, type FileBrowserMountPoint } from '@/components/files/FileBrowser'
@@ -113,14 +115,18 @@ export default function LibraryFilePickerModal({
   const [selectedMount, setSelectedMount] = useState<FileBrowserMountPoint | null>(null)
   const [linking, setLinking] = useState(false)
 
-  const { data: projectsData, isLoading: projectsLoading } = useSWR<{ projects: Project[] }>(
-    isOpen ? '/api/v1/projects' : null
-  )
+  const { data: projectsData, isLoading: projectsLoading } = useQuery({
+    queryKey: queryKeys.projects.list(),
+    queryFn: ({ signal }) => apiFetch<{ projects: Project[] }>('/api/v1/projects', { signal }),
+    enabled: isOpen,
+  })
   const projects = projectsData?.projects || []
 
-  const { data: mountsData, isLoading: mountsLoading } = useSWR<MountPointsResponse>(
-    isOpen ? '/api/v1/mount-points' : null
-  )
+  const { data: mountsData, isLoading: mountsLoading } = useQuery({
+    queryKey: queryKeys.mountPoints.list(),
+    queryFn: ({ signal }) => apiFetch<MountPointsResponse>('/api/v1/mount-points', { signal }),
+    enabled: isOpen,
+  })
   // Show database-backed stores that aren't private character vaults — those
   // are managed via the character optimizer / Aurora tab and are conceptually
   // off-limits for the human composer.
@@ -131,9 +137,22 @@ export default function LibraryFilePickerModal({
   // "My Gallery" routes to the user's active persona vault for this chat —
   // the same `photos/` folder Aurora's character page shows. Falls back to
   // the global Quilltap Uploads gallery when no user persona is set.
-  const { data: albumsData } = useSWR<PhotoAlbumsResponse>(
-    isOpen ? `/api/v1/chats/${chatId}?action=photo-albums` : null
-  )
+  const { data: albumsData } = useQuery({
+    queryKey: queryKeys.chats.photoAlbums(chatId),
+    queryFn: ({ signal }) =>
+      apiFetch<PhotoAlbumsResponse>(`/api/v1/chats/${chatId}?action=photo-albums`, { signal }),
+    enabled: isOpen,
+  })
+
+  // "Group Files" — document stores belonging to groups the user-persona
+  // character(s) in this chat are members of.
+  const { data: groupStoresData, isLoading: groupStoresLoading } = useQuery({
+    queryKey: queryKeys.chats.groupStores(chatId),
+    queryFn: ({ signal }) =>
+      apiFetch<{ stores: MountPointSummary[] }>(`/api/v1/chats/${chatId}?action=group-stores`, { signal }),
+    enabled: isOpen,
+  })
+  const groupStores = groupStoresData?.stores || []
   const userPersonaAlbum =
     albumsData?.albums.find(a => a.kind === 'character' && a.isUserCharacter && a.isDefault) ??
     albumsData?.albums.find(a => a.kind === 'character' && a.isUserCharacter) ??
@@ -350,8 +369,10 @@ export default function LibraryFilePickerModal({
         <ScopePicker
           projects={projects}
           docStores={docStores}
+          groupStores={groupStores}
           projectsLoading={projectsLoading}
           mountsLoading={mountsLoading}
+          groupStoresLoading={groupStoresLoading}
           userPersonaName={userPersonaAlbum?.name ?? null}
           onPickGeneral={() => handleProjectScopeSelect(null, 'General')}
           onPickGallery={handleGalleryScopeSelect}
@@ -397,8 +418,10 @@ export default function LibraryFilePickerModal({
 function ScopePicker({
   projects,
   docStores,
+  groupStores,
   projectsLoading,
   mountsLoading,
+  groupStoresLoading,
   userPersonaName,
   onPickGeneral,
   onPickGallery,
@@ -407,8 +430,10 @@ function ScopePicker({
 }: {
   projects: Project[]
   docStores: MountPointSummary[]
+  groupStores: MountPointSummary[]
   projectsLoading: boolean
   mountsLoading: boolean
+  groupStoresLoading: boolean
   userPersonaName: string | null
   onPickGeneral: () => void
   onPickGallery: () => void
@@ -425,6 +450,25 @@ function ScopePicker({
         <ScopeCard icon="📁" title="General" subtitle="Files not assigned to any project" onClick={onPickGeneral} />
         <ScopeCard icon="🖼️" title={galleryTitle} subtitle={gallerySubtitle} onClick={onPickGallery} />
       </section>
+
+      {groupStores.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="qt-text-label">Group Files</h3>
+          {groupStores.map((store) => (
+            <ScopeCard
+              key={store.id}
+              icon="👥"
+              title={store.name}
+              subtitle="Shared with your group"
+              onClick={() => onPickMount(store)}
+            />
+          ))}
+        </section>
+      )}
+
+      {groupStoresLoading && (
+        <p className="qt-text-secondary py-2 text-center text-sm">Loading groups…</p>
+      )}
 
       {projects.length > 0 && (
         <section className="space-y-2">
@@ -500,12 +544,21 @@ function GalleryPanel({
   onPick: (entry: GalleryEntry) => void
   linking: boolean
 }) {
-  // Same `photos/` folder Aurora's character page reads when a user persona
-  // is set; falls back to the global Quilltap Uploads gallery otherwise.
-  const fetchUrl = userPersona?.characterId
-    ? `/api/v1/characters/${userPersona.characterId}/photos?limit=200`
-    : '/api/v1/photos?limit=200'
-  const { data, isLoading, error } = useSWR<GalleryResponse>(fetchUrl)
+  // Same `photos/` folder Aurora's character page reads when a user persona is
+  // set; falls back to the global Quilltap Uploads gallery otherwise. The URL is
+  // built inside the queryFn from `userPersona`, which the key already encodes.
+  const { data, isLoading, error } = useQuery({
+    queryKey: userPersona?.characterId
+      ? queryKeys.characters.photos(userPersona.characterId)
+      : queryKeys.photos.list({ limit: 200 }),
+    queryFn: ({ signal }) =>
+      apiFetch<GalleryResponse>(
+        userPersona?.characterId
+          ? `/api/v1/characters/${userPersona.characterId}/photos?limit=200`
+          : '/api/v1/photos?limit=200',
+        { signal }
+      ),
+  })
   const entries = data?.entries ?? []
 
   if (isLoading) {

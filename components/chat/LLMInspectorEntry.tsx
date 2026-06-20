@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { LLMLog, LLMLogType } from '@/lib/schemas/types'
+import { Icon } from '@/components/ui/icon'
 
 interface LLMInspectorEntryProps {
   log: LLMLog
@@ -110,30 +111,19 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
         {/* Message link indicator */}
         {log.messageId && (
           <span className="text-xs qt-text-muted flex-shrink-0" title="Linked to a message">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+            <Icon name="chat" className="w-3.5 h-3.5" />
           </span>
         )}
 
         {/* Error indicator */}
         {log.response.error && (
           <span className="qt-text-destructive flex-shrink-0" title={log.response.error}>
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
+            <Icon name="alert-circle" className="w-3.5 h-3.5" />
           </span>
         )}
 
         {/* Chevron */}
-        <svg
-          className={`w-4 h-4 qt-text-secondary transition-transform duration-150 flex-shrink-0 ${expanded ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <Icon name="chevron-down" className={`w-4 h-4 qt-text-secondary transition-transform duration-150 flex-shrink-0 ${expanded ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Expanded detail - lazy rendered */}

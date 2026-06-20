@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 // Using native img tag instead of next/image because /api/files/* routes
 // are dynamic API endpoints that can't go through Next.js image optimization
 import dynamic from 'next/dynamic'
@@ -15,6 +17,10 @@ import { CharacterDeleteDialog } from '@/components/character-delete-dialog'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { processTemplate } from '@/lib/templates/processor'
+import { useGroups } from '@/app/aurora/hooks/useGroups'
+import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
+import { Icon } from '@/components/ui/icon'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
@@ -34,6 +40,7 @@ interface Character {
   }
   isFavorite: boolean
   controlledBy: 'llm' | 'user'
+  canBeCarina?: boolean
   npc: boolean
   defaultPartnerName?: string | null
   createdAt: string
@@ -50,12 +57,46 @@ export default function CharactersPage() {
   const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
   const [resetBuiltinsInProgress, setResetBuiltinsInProgress] = useState(false)
   const [deleteDialogCharacter, setDeleteDialogCharacter] = useState<Character | null>(null)
+  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupDescription, setNewGroupDescription] = useState('')
+  const [creatingGroup, setCreatingGroup] = useState(false)
   const { getProfileProvider } = useConnectionProfiles()
   const { style } = useAvatarDisplay()
   const { shouldHideByIds } = useQuickHide()
   const router = useRouter()
+  const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
+  const bgStyle = useSubsystemBackgroundStyle('aurora')
 
-  const { data, isLoading: loading, error: loadError, mutate: mutateCharacters } = useSWR<{ characters: Character[] }>('/api/v1/characters')
+  // Fetch groups on mount
+  useEffect(() => {
+    fetchGroups()
+  }, [fetchGroups])
+
+  const queryClient = useQueryClient()
+  const { data, isLoading: loading, error: loadError } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: Character[] }>('/api/v1/characters', { signal }),
+  })
+  // Shim preserving SWR's `mutate` signature so the handlers below stay
+  // unchanged: with an updater it writes optimistically (revalidating unless
+  // `{ revalidate: false }`), with no args it revalidates.
+  const mutateCharacters = useCallback(
+    async (
+      updater?: (prev: { characters: Character[] } | undefined) => { characters: Character[] } | undefined,
+      opts?: { revalidate?: boolean }
+    ): Promise<void> => {
+      if (updater) {
+        queryClient.setQueryData<{ characters: Character[] }>(queryKeys.characters.list(), updater)
+        if (opts?.revalidate !== false) {
+          await queryClient.invalidateQueries({ queryKey: queryKeys.characters.list() })
+        }
+        return
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.list() })
+    },
+    [queryClient]
+  )
   const characters = useMemo(() => data?.characters ?? [], [data])
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null
 
@@ -159,6 +200,21 @@ export default function CharactersPage() {
     }
   }
 
+  const toggleCarina = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    try {
+      const res = await fetch(`/api/v1/characters/${id}?action=toggle-carina`, { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to toggle Carina eligibility')
+      const data = await res.json()
+      await mutateCharacters(
+        (prev) => prev && { characters: prev.characters.map((c) => (c.id === id ? { ...c, canBeCarina: data.character.canBeCarina } : c)) },
+        { revalidate: false }
+      )
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to toggle Carina eligibility')
+    }
+  }
+
   const handleCardClick = (e: React.MouseEvent, characterId: string) => {
     // Don't navigate if clicking on a button, link, or interactive element
     const target = e.target as HTMLElement
@@ -167,6 +223,31 @@ export default function CharactersPage() {
     }
     router.push(`/aurora/${characterId}/view`)
   }
+
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newGroupName.trim()) return
+
+    try {
+      setCreatingGroup(true)
+      const newGroup = await createGroup(newGroupName, newGroupDescription || null)
+      if (newGroup) {
+        setCreateGroupDialogOpen(false)
+        setNewGroupName('')
+        setNewGroupDescription('')
+        // Navigate to the new group
+        router.push(`/aurora/groups/${newGroup.id}`)
+      }
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to create group')
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
+  const handleDeleteGroup = useCallback((groupId: string) => {
+    deleteGroup(groupId)
+  }, [deleteGroup])
 
   const handleImport = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -231,7 +312,7 @@ export default function CharactersPage() {
   }
 
   return (
-    <div className="character-page qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/aurora.webp)' } as React.CSSProperties}>
+    <div className="character-page qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="qt-page-title">Characters</h1>
         <div className="flex flex-wrap gap-3">
@@ -255,6 +336,13 @@ export default function CharactersPage() {
           >
             Summon From Lore
           </button>
+          <button
+            onClick={() => setCreateGroupDialogOpen(true)}
+            className="qt-button character-toolbar__button inline-flex items-center rounded-lg border qt-border-default qt-bg-muted/70 px-4 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Create a new group"
+          >
+            Create Group
+          </button>
           <Link
             href="/aurora/new"
             className="qt-button character-toolbar__button character-toolbar__button--primary inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground qt-shadow-md transition hover:qt-bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -264,6 +352,18 @@ export default function CharactersPage() {
         </div>
       </div>
 
+      {/* Groups Section — rendered unconditionally so GroupsGrid can show its
+          empty state ("No groups yet") for first-time users. */}
+      <div className="mt-8">
+        <h2 className="qt-heading-2 mb-6 text-foreground">Groups</h2>
+        <GroupsGrid
+          groups={groups}
+          onCreateClick={() => setCreateGroupDialogOpen(true)}
+          onDeleteClick={handleDeleteGroup}
+        />
+      </div>
+
+      {/* Characters Section */}
       {visibleCharacters.length === 0 ? (
         <div className="character-empty-state mt-12 rounded-2xl border border-dashed qt-border-default/70 qt-bg-card/80 px-8 py-12 text-center qt-shadow-sm">
           <p className="mb-4 text-lg qt-text-secondary">No characters yet</p>
@@ -325,20 +425,18 @@ export default function CharactersPage() {
                     {character.isFavorite ? '⭐' : '☆'}
                   </button>
                   <button
+                    onClick={(e) => toggleCarina(e, character.id)}
+                    className={`transition hover:scale-110 ${character.canBeCarina ? 'qt-text-favorite' : 'qt-text-secondary'}`}
+                    title={character.canBeCarina ? 'Disable Carina answers (@-queries)' : 'Enable Carina answers (@-queries)'}
+                  >
+                    <Icon name="monitor" className="w-6 h-6" />
+                  </button>
+                  <button
                     onClick={(e) => toggleControlledBy(e, character.id)}
-                    className="qt-text-favorite transition-transform hover:scale-110"
+                    className={`transition hover:scale-110 ${character.controlledBy === 'user' ? 'qt-text-favorite' : 'qt-text-secondary'}`}
                     title={character.controlledBy === 'user' ? 'Switch to LLM control' : 'Switch to user control'}
                   >
-                    {character.controlledBy === 'user' ? (
-                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                      </svg>
-                    ) : (
-                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    )}
+                    <Icon name="user" className="w-6 h-6" />
                   </button>
                 </div>
               </div>
@@ -358,9 +456,7 @@ export default function CharactersPage() {
                   className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground qt-shadow-sm transition hover:qt-bg-success/90"
                   title="Start a chat with this character"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
+                  <Icon name="chat" className="w-5 h-5" />
                   Chat
                 </Link>
                 <a
@@ -368,18 +464,14 @@ export default function CharactersPage() {
                   className="character-card__action inline-flex items-center justify-center gap-2 rounded-lg border qt-border-default qt-bg-muted/80 px-3 py-2 text-sm qt-text-primary qt-shadow-sm transition hover:qt-bg-muted"
                   title="Export character data"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v6a2 2 0 002 2h12a2 2 0 002-2v-6m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
+                  <Icon name="download" className="w-5 h-5" />
                 </a>
                 <button
                   onClick={() => openDeleteDialog(character)}
                   className="character-card__action qt-button-destructive qt-shadow-sm"
                   title="Delete this character"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
+                  <Icon name="trash" className="w-5 h-5" />
                 </button>
               </div>
             </div>
@@ -492,6 +584,66 @@ export default function CharactersPage() {
           onClose={() => setDeleteDialogCharacter(null)}
           onConfirm={handleDeleteConfirm}
         />
+      )}
+
+      {/* Create Group Dialog */}
+      {createGroupDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border qt-border-default qt-bg-card p-6 shadow-2xl">
+            <h3 className="mb-4 qt-dialog-title text-foreground">
+              Create Group
+            </h3>
+            <form onSubmit={handleCreateGroup}>
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Group Name *
+                </label>
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="e.g., Adventuring Party"
+                  className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="mb-6">
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={newGroupDescription}
+                  onChange={(e) => setNewGroupDescription(e.target.value)}
+                  placeholder="Optional description of this group"
+                  rows={3}
+                  className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm resize-none"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateGroupDialogOpen(false)
+                    setNewGroupName('')
+                    setNewGroupDescription('')
+                  }}
+                  disabled={creatingGroup}
+                  className="inline-flex items-center rounded-lg border qt-border-default qt-bg-card px-4 py-2 text-sm qt-text-primary qt-shadow-sm hover:qt-bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingGroup || !newGroupName.trim()}
+                  className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:qt-bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {creatingGroup ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
     </div>

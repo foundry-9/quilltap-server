@@ -44,8 +44,8 @@ You must adhere to the following standard roleplay syntax for all outputs.
     isBuiltIn: true,
     tags: [],
     delimiters: [
-      { name: 'Narration', buttonName: 'Nar', delimiters: '*', style: 'qt-chat-narration' },
-      { name: 'Out of Character', buttonName: 'OOC', delimiters: ['((', '))'], style: 'qt-chat-ooc' },
+      { kind: 'wrap', name: 'Narration', buttonName: 'Nar', delimiters: '*', style: 'qt-chat-narration' },
+      { kind: 'wrap', name: 'Out of Character', buttonName: 'OOC', delimiters: ['((', '))'], style: 'qt-chat-ooc' },
     ],
     // Rendering patterns for message content styling
     renderingPatterns: [
@@ -90,12 +90,12 @@ You must adhere to the following custom syntax for all outputs. Do NOT use stand
     isBuiltIn: true,
     tags: [],
     delimiters: [
-      { name: 'Narration', buttonName: 'Nar', delimiters: ['[', ']'], style: 'qt-chat-narration' },
-      { name: 'Internal Monologue', buttonName: 'Int', delimiters: ['{', '}'], style: 'qt-chat-inner-monologue' },
-      { name: 'Out of Character', buttonName: 'OOC', delimiters: ['// ', ''], style: 'qt-chat-ooc' },
+      { kind: 'wrap', name: 'Narration', buttonName: 'Nar', delimiters: ['[', ']'], style: 'qt-chat-narration' },
+      { kind: 'wrap', name: 'Internal Monologue', buttonName: 'Int', delimiters: ['{', '}'], style: 'qt-chat-inner-monologue' },
+      { kind: 'linePrefix', name: 'Out of Character', buttonName: 'OOC', marker: '// ', style: 'qt-chat-ooc' },
     ],
     renderingPatterns: [
-      { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' },
+      { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm', scope: 'line' },
       { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
       { pattern: '\\{[^}]+\\}', className: 'qt-chat-inner-monologue' },
     ],

@@ -81,24 +81,41 @@ const TEXT_BLOCK_TOOL_NAME_MAP: Record<string, string> = {
   'project': 'project_info',
 
   // Wardrobe tools
-  'list_wardrobe': 'list_wardrobe',
-  'wardrobe': 'list_wardrobe',
-  'closet': 'list_wardrobe',
+  'wardrobe_list': 'wardrobe_list',
+  'list_wardrobe': 'wardrobe_list',
+  'wardrobe': 'wardrobe_list',
+  'closet': 'wardrobe_list',
 
-  'wardrobe_set_outfit': 'wardrobe_set_outfit',
-  'set_outfit': 'wardrobe_set_outfit',
-  'wear_outfit': 'wardrobe_set_outfit',
-  'outfit': 'wardrobe_set_outfit',
-  'wear': 'wardrobe_set_outfit',
+  'wardrobe_read': 'wardrobe_read',
+  'read_wardrobe': 'wardrobe_read',
+  'inspect': 'wardrobe_read',
 
-  'wardrobe_change_item': 'wardrobe_change_item',
-  'change_item': 'wardrobe_change_item',
-  'equip': 'wardrobe_change_item',
-  'unequip': 'wardrobe_change_item',
-  'layer': 'wardrobe_change_item',
-  'swap': 'wardrobe_change_item',
+  'wardrobe_wear': 'wardrobe_wear',
+  'wear': 'wardrobe_wear',
+  'equip': 'wardrobe_wear',
+  'layer': 'wardrobe_wear',
+  'swap': 'wardrobe_wear',
+  'set_outfit': 'wardrobe_wear',
+  'wear_outfit': 'wardrobe_wear',
+  'outfit': 'wardrobe_wear',
+  'change_item': 'wardrobe_wear',
 
-  'create_wardrobe_item': 'create_wardrobe_item',
+  'wardrobe_take_off': 'wardrobe_take_off',
+  'take_off': 'wardrobe_take_off',
+  'unequip': 'wardrobe_take_off',
+  'remove': 'wardrobe_take_off',
+  'undress': 'wardrobe_take_off',
+
+  'wardrobe_create': 'wardrobe_create',
+  'create_wardrobe_item': 'wardrobe_create',
+
+  'wardrobe_update': 'wardrobe_update',
+  'update_wardrobe_item': 'wardrobe_update',
+  'edit_wardrobe': 'wardrobe_update',
+
+  'wardrobe_archive': 'wardrobe_archive',
+  'archive_wardrobe_item': 'wardrobe_archive',
+  'discard': 'wardrobe_archive',
 
   // Scriptorium search
   'search': 'search',
@@ -142,20 +159,38 @@ const PARAM_ALIAS_MAP: Record<string, Record<string, string>> = {
     'section': 'category',
     'type': 'category',
   },
-  wardrobe_set_outfit: {
+  wardrobe_wear: {
     'id': 'item_id',
     'title': 'item_title',
     'name': 'item_title',
   },
-  wardrobe_change_item: {
+  wardrobe_take_off: {
     'id': 'item_id',
     'title': 'item_title',
     'name': 'item_title',
   },
-  create_wardrobe_item: {
+  wardrobe_read: {
+    'id': 'item_id',
+    'title': 'item_title',
+    'name': 'item_title',
+  },
+  wardrobe_archive: {
+    'id': 'item_id',
+    'title': 'item_title',
+    'name': 'item_title',
+  },
+  wardrobe_update: {
+    // `id`/`name` locate the item; `title` is the NEW name, so it is NOT aliased.
+    'id': 'item_id',
+    'name': 'item_title',
+    'cue': 'image_prompt',
+    'context': 'appropriateness',
+  },
+  wardrobe_create: {
     'name': 'title',
     'type': 'types',
     'context': 'appropriateness',
+    'cue': 'image_prompt',
     'to': 'recipient',
     'for': 'recipient',
     'give_to': 'recipient',
@@ -324,6 +359,22 @@ export function convertTextBlockToToolCallRequest(parsed: ParsedTextBlock): Tool
           args[key] = num
         }
       }
+    }
+  }
+
+  // wardrobe_wear / wardrobe_take_off take an `operations` array; the flat
+  // text-block syntax expresses a single operation, so wrap the resolved
+  // mode/item/slot into a one-element array. (The legacy surface is single-op.)
+  if (internalName === 'wardrobe_wear' || internalName === 'wardrobe_take_off') {
+    const { mode, item_id, item_title, slot, ...rest } = args
+    const op: Record<string, unknown> = {}
+    if (mode !== undefined) op.mode = mode
+    if (item_id !== undefined) op.item_id = item_id
+    if (item_title !== undefined) op.item_title = item_title
+    if (slot !== undefined) op.slot = slot
+    return {
+      name: internalName,
+      arguments: { ...rest, operations: [op] },
     }
   }
 

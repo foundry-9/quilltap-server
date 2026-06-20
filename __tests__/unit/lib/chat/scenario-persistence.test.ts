@@ -10,10 +10,12 @@
  * These tests exercise the scenario resolution logic extracted from
  * app/api/v1/chats/route.ts handleCreate, verifying:
  * 1. scenarioId is resolved to scenario content from character's scenarios array
- * 2. Custom scenario text takes priority over scenarioId
+ * 2. Free-text scenario notes are appended beneath the resolved scenarioId body
  * 3. Missing/invalid scenarioId falls back gracefully (no crash)
  * 4. Resolved scenario is stored in chat's scenarioText field
  */
+
+import { combineScenarioText } from '@/lib/chat/scenario-text'
 
 // Uses global jest (not @jest/globals) for proper SWC mock hoisting
 
@@ -131,7 +133,7 @@ function createMockConnectionProfile() {
 // ============================================================================
 
 interface ScenarioInput {
-  scenario?: string        // Custom scenario text override
+  scenario?: string        // Free-text scenario notes, appended to any resolved preset
   scenarioId?: string      // ID of a named scenario from the character's scenarios array
 }
 
@@ -140,21 +142,22 @@ interface CharacterScenarios {
 }
 
 /**
- * Resolves scenario text using the same logic as handleCreate.
- * Custom text takes priority; then scenarioId is looked up on the character.
+ * Resolves scenario text using the same logic as handleCreate: look up the
+ * scenarioId preset body on the character, then append the free-text notes
+ * beneath it via combineScenarioText (the real production helper).
  */
 function resolveScenario(
   input: ScenarioInput,
   character: CharacterScenarios | null
 ): string | undefined {
-  let resolvedScenario = input.scenario
-  if (!resolvedScenario && input.scenarioId) {
+  let presetBody: string | undefined
+  if (input.scenarioId) {
     const matchingScenario = character?.scenarios?.find(s => s.id === input.scenarioId)
     if (matchingScenario) {
-      resolvedScenario = matchingScenario.content
+      presetBody = matchingScenario.content
     }
   }
-  return resolvedScenario
+  return combineScenarioText(presetBody, input.scenario)
 }
 
 // ============================================================================
@@ -225,11 +228,11 @@ describe('Scenario Persistence on Chat Creation', () => {
   })
 
   // --------------------------------------------------------------------------
-  // 2. Custom scenario text takes priority over scenarioId
+  // 2. Free-text notes are appended beneath the resolved scenarioId body
   // --------------------------------------------------------------------------
 
-  describe('custom scenario priority', () => {
-    it('should use custom scenario text when both scenario and scenarioId are provided', () => {
+  describe('custom scenario combines with scenarioId', () => {
+    it('should append custom scenario text beneath the resolved scenarioId body', () => {
       const character = createMockCharacter()
       const customText = 'A custom scenario about a moonlit garden.'
 
@@ -238,27 +241,27 @@ describe('Scenario Persistence on Chat Creation', () => {
         character
       )
 
-      expect(result).toBe(customText)
+      expect(result).toBe(`You meet in a dimly lit tavern.\n\n${customText}`)
     })
 
-    it('should use custom scenario text even when scenarioId would match', () => {
+    it('should append custom scenario text to a different matching scenarioId body', () => {
       const character = createMockCharacter()
-      const customText = 'Override scenario'
+      const customText = 'Extra scene-setting.'
 
       const result = resolveScenario(
         { scenario: customText, scenarioId: 'scenario-2' },
         character
       )
 
-      expect(result).toBe(customText)
+      expect(result).toBe(`You are both studying in the grand library.\n\n${customText}`)
       expect(result).not.toBe('You are both studying in the grand library.')
     })
 
-    it('should use custom scenario text even with an empty string scenarioId', () => {
+    it('should use custom scenario text alone when scenarioId is an empty string', () => {
       const character = createMockCharacter()
       const customText = 'Some custom scenario text.'
 
-      // scenarioId is empty-ish but custom text is provided
+      // scenarioId is empty-ish, so no preset resolves and the notes ARE the scenario
       const result = resolveScenario({ scenario: customText, scenarioId: '' }, character)
 
       expect(result).toBe(customText)

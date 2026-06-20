@@ -37,6 +37,9 @@ import {
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
+import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveAesthetic, getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
+import { resolveOrientation } from '@/lib/image-gen/orientation';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -103,7 +106,18 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   // hasn't been committed to the chat.
   const equippedSlots = payload.equippedSlotsOverride
     ?? await repos.chats.getEquippedOutfitForCharacter(payload.chatId, payload.characterId);
-  const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, { equippedSlots });
+  const avatarProjectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
+  // Aurora character aesthetic (people/outfit look), project-over-global. The
+  // Ariel Clause (depiction-guidelines.md) deliberately does NOT apply to avatars.
+  const characterAesthetic = await resolveAesthetic({
+    kind: 'aurora',
+    projectOfficialMountPointId: await getProjectOfficialMountPointId(chat.projectId),
+  });
+  const { prompt, hasAppearance, leafCounts } = await buildCharacterAvatarPrompt(repos, character, {
+    equippedSlots,
+    projectMountPointIds: avatarProjectMountPointIds,
+    characterAesthetic,
+  });
 
   if (!hasAppearance) {
     logger.warn('[CharacterAvatar] No appearance data available, skipping', {
@@ -212,11 +226,15 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const genStartTime = Date.now();
   try {
     const provider = createImageProvider(effectiveImageProfile.provider);
+    // Avatars default to portrait; the resolver maps that onto the provider's
+    // own size / aspect ratio / prompt wording.
+    const resolved = resolveOrientation(effectiveImageProfile.provider, effectiveImageProfile.modelName, 'portrait');
+    const genPrompt = resolved.promptHint ? `${prompt}\n\n${resolved.promptHint}` : prompt;
     generationResponse = await provider.generateImage({
-      prompt,
+      prompt: genPrompt,
       model: effectiveImageProfile.modelName,
       n: 1,
-      size: '1024x1792', // Portrait orientation for 3/4 shot
+      ...resolved.params,
       quality: (effectiveImageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
       style: 'natural',
     }, effectiveApiKey);
@@ -289,12 +307,16 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
+    // Re-resolve for the reroute provider/model — its shape mechanism may differ
+    // from the original profile's.
+    const rerouteResolved = resolveOrientation(reroute.profile.provider, reroute.profile.modelName, 'portrait');
+    const reroutePrompt = rerouteResolved.promptHint ? `${prompt}\n\n${rerouteResolved.promptHint}` : prompt;
     try {
       generationResponse = await rerouteProvider.generateImage({
-        prompt,
+        prompt: reroutePrompt,
         model: reroute.profile.modelName,
         n: 1,
-        size: '1024x1792',
+        ...rerouteResolved.params,
         quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
         style: 'natural',
       }, reroute.apiKey);
@@ -477,8 +499,10 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       originalFilename,
       mimeType: storedMimeType,
       size: storedSize,
-      width: 1024,
-      height: 1792,
+      // Actual dimensions measured from the stored bytes — providers often
+      // return a different shape than requested (see image-orientation-gating).
+      width: converted.width ?? null,
+      height: converted.height ?? null,
       linkedTo: [payload.chatId, payload.characterId],
       source,
       category,

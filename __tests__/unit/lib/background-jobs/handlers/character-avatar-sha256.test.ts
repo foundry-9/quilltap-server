@@ -201,3 +201,44 @@ describe('character-avatar handler — sha256 of stored bytes', () => {
     expect(Buffer.compare(vaultArg.content, CONVERTED_WEBP_BYTES)).toBe(0)
   })
 })
+
+describe('character-avatar handler — orientation + measured dimensions', () => {
+  it('stores the measured dimensions from the converted buffer, not a hard-coded portrait size', async () => {
+    mockConvertToWebP.mockResolvedValue({
+      buffer: CONVERTED_WEBP_BYTES,
+      mimeType: 'image/webp',
+      filename: 'avatar_Tess.webp',
+      wasConverted: true,
+      width: 768,
+      height: 1024,
+    } as any)
+
+    await handleCharacterAvatarGeneration(makeJob())
+
+    const arg = filesCreate.mock.calls[0][0] as { width: number | null; height: number | null }
+    expect(arg.width).toBe(768)
+    expect(arg.height).toBe(1024)
+    // The old hard-coded 1024x1792 must be gone.
+    expect(arg.height).not.toBe(1792)
+  })
+
+  it('records null dimensions when the converter could not measure them', async () => {
+    // beforeEach's convertToWebP mock returns no width/height.
+    await handleCharacterAvatarGeneration(makeJob())
+
+    const arg = filesCreate.mock.calls[0][0] as { width: number | null; height: number | null }
+    expect(arg.width ?? null).toBeNull()
+    expect(arg.height ?? null).toBeNull()
+  })
+
+  it('requests portrait orientation (no hard-coded size) and appends the portrait hint when the provider is unknown to the registry', async () => {
+    await handleCharacterAvatarGeneration(makeJob())
+
+    const providerInstance = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    const genArg = providerInstance.generateImage.mock.calls[0][0] as { prompt: string; size?: string }
+
+    // No registry plugin in the unit env → host fallback (prompt hint, no size).
+    expect(genArg.size).toBeUndefined()
+    expect(genArg.prompt).toMatch(/portrait/i)
+  })
+})

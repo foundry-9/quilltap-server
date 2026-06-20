@@ -15,6 +15,10 @@ When enabled, the system classifies user messages before they are sent to the ma
 
 The system is designed to be fail-safe: classification errors never block your messages.
 
+### What is never moderated
+
+Moderation applies only to roleplay surfaces — the Salon and autonomous rooms. **Help Chats and the Brahma Console are exempt entirely:** the Concierge never classifies, flags, reroutes, or announces on them, regardless of your global settings. They are utility surfaces, not roleplay, so the gatekeeper has no standing there.
+
 ### Smart Classification
 
 Quilltap automatically selects the best available classification method:
@@ -150,6 +154,8 @@ Once a chat is classified as dangerous, it stays marked as dangerous permanently
 When a chat is first marked as dangerous, the Concierge — one of "the Staff" — steps quietly to the table and posts a brief message of his own. Worded with deliberate discretion, it lets every character at the table (those who can see the Staff) know that the conversation, and any errands attending it, will henceforth be entrusted to a desk better suited to the matter. The announcement carries the Concierge's avatar and is part of the normal chat history; nothing further is required of the user.
 
 The announcement now names *what drew his eye* — the contributing categories with their severity scores, the overall score, the threshold in force, and which assayer (moderation provider or cheap-LLM fallback, by provider name) rendered the verdict. This makes it transparent why the reroute happened and lets you tune the threshold or correct misclassifications with confidence.
+
+The wording also distinguishes *how* the verdict was reached. A chat is marked dangerous when **either** the overall severity meets your threshold **or** the assayer flags the content of its own accord — moderation providers such as OpenAI return a `flagged` decision against their own internal catalogue, independent of your numeric threshold, so this fires even when the reported severities sit well below it. When the threshold was actually met, the announcement reads "registering X against the present threshold of Y." When the assayer flagged it directly while the severities stayed below the bar, it instead says the matter was marked "by the direct verdict of" the assayer, reports the (sub-threshold) severities for context, and notes that it was the assayer's judgement — not the arithmetic — that drew his eye. So a notice can legitimately show a severity *below* your configured threshold.
 
 ### Optimizations for Permanently Dangerous Chats
 

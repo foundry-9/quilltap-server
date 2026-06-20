@@ -25,6 +25,7 @@ import {
   deleteMemoriesWithUnlinkBatch,
 } from './memory-gate'
 import { calculateEffectiveWeight } from './memory-weighting'
+import { combineRecallMultipliers, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -32,6 +33,15 @@ export type { MemoryGateOutcome } from './memory-gate'
 
 /** Fraction of the per-character cap at which auto-housekeeping engages. */
 const HOUSEKEEPING_WATERMARK = 0.9
+
+/**
+ * Minimum gap between watermark-triggered housekeeping sweeps for a single
+ * character, enforced durably via the background-jobs table so it survives
+ * restarts and holds across the forked-child job pool. Prevents a room sitting
+ * at its cap from kicking off an (often expensive) sweep on every turn. The
+ * daily scheduled sweep is unaffected.
+ */
+const WATERMARK_SWEEP_THROTTLE_MS = 15 * 60 * 1000 // 15 minutes
 
 /**
  * If auto-housekeeping is enabled for this user and the character has reached
@@ -68,6 +78,35 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
     // sweep anyway burns 10–15 minutes of main-thread time for no benefit
     // and blocks the next chat turn's context build. Back off for an hour.
     if (shouldSkipWatermarkSweep(characterId)) {
+      return
+    }
+
+    // Durable cross-process / post-restart throttle. The in-memory cache above
+    // is process-local, but watermark enqueues fire from forked job children
+    // (memory extraction) while sweeps complete in *other* children — so that
+    // signal is frequently invisible across the pool, and it's wiped on every
+    // restart. The result is a storm of redundant (often expensive, because
+    // mergeSimilar compares embeddings) sweeps when a room sits right at its
+    // cap. Back it with a DB floor: if a sweep for this character already
+    // completed or is running within the throttle window, don't pile on
+    // another. The daily scheduled sweep still handles deep cleaning.
+    const recentHousekeeping = await repos.backgroundJobs.findRecentByType(
+      'MEMORY_HOUSEKEEPING',
+      50,
+    )
+    const nowMs = Date.now()
+    const throttledByRecentSweep = recentHousekeeping.some(j => {
+      const jobCharId = (j.payload as Record<string, unknown> | undefined)?.characterId
+      if (jobCharId !== characterId) return false
+      if (j.status !== 'COMPLETED' && j.status !== 'PROCESSING') return false
+      const ts = j.updatedAt ? new Date(j.updatedAt).getTime() : 0
+      return nowMs - ts < WATERMARK_SWEEP_THROTTLE_MS
+    })
+    if (throttledByRecentSweep) {
+      logger.debug('[Housekeeping] Skipping watermark sweep — recent sweep within throttle window', {
+        characterId,
+        throttleMs: WATERMARK_SWEEP_THROTTLE_MS,
+      })
       return
     }
 
@@ -153,6 +192,12 @@ export interface CreateMemoryOptions {
   aboutCharacterId?: string | null
   /** Source chat ID */
   chatId?: string | null
+  /**
+   * Project the source chat belongs to, when any. Persisted on the memory so
+   * recall-time scope (`scope: narrow`) comparisons have a rename-proof,
+   * collision-proof key. Null for project-less chats and manual entries.
+   */
+  projectId?: string | null
   /** How the memory was created */
   source?: 'AUTO' | 'MANUAL'
   /** Source message ID for auto-created memories */
@@ -195,6 +240,21 @@ export interface SemanticSearchResult {
   usedEmbedding: boolean
   /** Effective weight combining importance with time decay (0-1) */
   effectiveWeight?: number
+  /**
+   * Recall-context adjustment record — present only when a `recallContext` was
+   * supplied to `searchMemoriesSemantic`. Lets the injector show *why* a memory
+   * ranked where it did and lets tests assert on the post-adjustment ordering.
+   */
+  recallAdjustment?: {
+    /** Combined, clamped multiplier applied to the blended score. */
+    multiplier: number
+    /** Short labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
+    fired: string[]
+    /** Blended `0.4·cosine + 0.6·weight` score before the multiplier. */
+    blendedBefore: number
+    /** Blended score after the multiplier (the value actually sorted on). */
+    blendedAfter: number
+  }
 }
 
 /**
@@ -344,6 +404,7 @@ async function createMemoryDirect(
     importance,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
+    projectId: data.projectId ?? null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
     witnessedContext: data.witnessedContext ?? null,
@@ -415,6 +476,7 @@ async function createMemoryDirectWithEmbedding(
     importance,
     aboutCharacterId: data.aboutCharacterId || null,
     chatId: data.chatId || null,
+    projectId: data.projectId ?? null,
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
     witnessedContext: data.witnessedContext ?? null,
@@ -565,6 +627,22 @@ export async function searchMemoriesSemantic(
      * unified `search` tool; per-turn injectors leave this off.
      */
     applyLiteralPhraseBoost?: boolean
+    /**
+     * Per-turn recall context. When supplied, the targeting tags
+     * (`temporal`/`scope`/`context`) and `projectId` carried on each candidate
+     * are read back and turned into bounded, clamped multipliers applied to the
+     * final blended score *after* the `0.4/0.6` blend is computed (see
+     * `lib/memory/recall-tags.ts`). Absent → ranking is byte-identical to the
+     * historical behavior. The `search` tool and tests leave this off.
+     */
+    recallContext?: RecallContext
+    /**
+     * Restrict results to memories the searching character holds *about* this
+     * other character (`memory.aboutCharacterId === aboutCharacterId`). Used by
+     * the per-turn inter-character recall to fill the "relevant about them" half
+     * alongside the importance/recency half. Absent → no inter-character filter.
+     */
+    aboutCharacterId?: string
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -699,14 +777,62 @@ export async function searchMemoriesSemantic(
       if (options.source) {
         results = results.filter(r => r.memory.source === options.source)
       }
+      if (options.aboutCharacterId) {
+        results = results.filter(r => r.memory.aboutCharacterId === options.aboutCharacterId)
+      }
 
-      // Combine cosine similarity with effective weight for final ranking
-      // Weight dominates (60%), with similarity influencing ordering (40%)
-      results.sort((a, b) => {
-        const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
-        const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
-        return finalScoreB - finalScoreA
-      })
+      // Blended ranking key: cosine (40%) + effective weight (60%). The blend
+      // itself is never modified — when a recallContext is supplied, the
+      // targeting-tag adjustments are bounded, clamped multipliers applied to
+      // this blended score *after* it is computed (see lib/memory/recall-tags.ts),
+      // so semantic relevance and recency keep their relative footing and each
+      // adjustment is auditable in isolation. No recallContext → the exact
+      // historical sort, byte-for-byte.
+      if (options.recallContext) {
+        const recallContext = options.recallContext
+        const adjusted: SemanticSearchResult[] = []
+        for (const r of results) {
+          const blendedBefore = r.score * 0.4 + (r.effectiveWeight ?? 0) * 0.6
+          const adj = combineRecallMultipliers(r.memory, recallContext)
+          if (adj.exclude) {
+            continue
+          }
+          const blendedAfter = blendedBefore * adj.multiplier
+          r.recallAdjustment = { multiplier: adj.multiplier, fired: adj.fired, blendedBefore, blendedAfter }
+          adjusted.push(r)
+        }
+        adjusted.sort(
+          (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
+        )
+
+        // Item 5 — one-hop related-memory expansion. After the top hits are
+        // ranked, pull each top hit's strongly-linked neighbors in as low-cost
+        // extra candidates (capped), score them against the same query embedding,
+        // run them through the same blend + multipliers, and re-rank the union.
+        // This catches the memory that's relevant by association but didn't clear
+        // the embedding threshold directly — the classic RAG miss. Only runs when
+        // the caller opts in via recallContext, since it costs one extra batched
+        // hydration.
+        if (recallContext.expandRelated) {
+          const expanded = await expandRelatedMemories(
+            adjusted,
+            limit,
+            embeddingResult.embedding,
+            recallContext,
+            { minImportance: options.minImportance, source: options.source },
+            characterId,
+          )
+          results = expanded
+        } else {
+          results = adjusted
+        }
+      } else {
+        results.sort((a, b) => {
+          const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
+          const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
+          return finalScoreB - finalScoreA
+        })
+      }
 
       const tDone = performance.now()
 
@@ -722,6 +848,89 @@ export async function searchMemoriesSemantic(
   const textResults = await searchMemoriesText(characterId, query, options)
   bumpAccessTimes(characterId, textResults.map(r => r.memory.id))
   return textResults
+}
+
+/**
+ * Item 5 — one-hop related-memory expansion.
+ *
+ * Given the already-ranked candidate pool (`ranked`, sorted by post-adjustment
+ * blended score), pull the strongly-linked neighbors of the top hits in as extra
+ * candidates, score them against the same query embedding, run them through the
+ * same blend + recall multipliers, union them with the pool, and re-rank.
+ *
+ * Bounded on every axis so a corpus-heavy character can't balloon the candidate
+ * set: only the top `limit` hits seed neighbors, at most {@link RELATED_EXPANSION}
+ * `.maxPerHit` per seed and `.maxTotal` overall. Neighbors already in the pool are
+ * skipped; neighbors without a dimension-matching embedding can't be cosine-scored
+ * and are skipped; the same `minImportance`/`source` filters and cross-project
+ * exclusion that gate the main pool apply here too. `minScore` is intentionally
+ * NOT re-applied — a low-cosine neighbor relevant purely by association is the
+ * whole point of expansion.
+ */
+async function expandRelatedMemories(
+  ranked: SemanticSearchResult[],
+  limit: number,
+  queryEmbedding: ArrayLike<number>,
+  recallContext: RecallContext,
+  filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL' },
+  characterId: string,
+): Promise<SemanticSearchResult[]> {
+  const repos = getRepositories()
+  const inPool = new Set(ranked.map(r => r.memory.id))
+
+  // Collect capped neighbor ids from the top hits only.
+  const neighborIds: string[] = []
+  const neighborSet = new Set<string>()
+  for (const seed of ranked.slice(0, limit)) {
+    let pulledFromSeed = 0
+    for (const neighborId of seed.memory.relatedMemoryIds ?? []) {
+      if (neighborIds.length >= RELATED_EXPANSION.maxTotal) break
+      if (pulledFromSeed >= RELATED_EXPANSION.maxPerHit) break
+      if (inPool.has(neighborId) || neighborSet.has(neighborId)) continue
+      neighborSet.add(neighborId)
+      neighborIds.push(neighborId)
+      pulledFromSeed++
+    }
+    if (neighborIds.length >= RELATED_EXPANSION.maxTotal) break
+  }
+
+  if (neighborIds.length === 0) {
+    return ranked
+  }
+
+  const neighbors = await repos.memories.findByIds(neighborIds)
+  const survivors: SemanticSearchResult[] = []
+  for (const memory of neighbors) {
+    // Character-scope + filter guards mirror the main pool.
+    if (memory.characterId !== characterId) continue
+    if (filters.minImportance !== undefined && memory.importance < filters.minImportance) continue
+    if (filters.source && memory.source !== filters.source) continue
+    if (!memory.embedding || memory.embedding.length !== queryEmbedding.length) continue
+
+    const cosineScore = cosineSimilarity(queryEmbedding, memory.embedding)
+    const { effectiveWeight } = calculateEffectiveWeight(memory)
+    const blendedBefore = cosineScore * 0.4 + (effectiveWeight ?? 0) * 0.6
+    const adj = combineRecallMultipliers(memory, recallContext)
+    if (adj.exclude) continue
+    const blendedAfter = blendedBefore * adj.multiplier
+    survivors.push({
+      memory,
+      score: cosineScore,
+      usedEmbedding: true,
+      effectiveWeight,
+      recallAdjustment: { multiplier: adj.multiplier, fired: [...adj.fired, 'related↗'], blendedBefore, blendedAfter },
+    })
+  }
+
+  if (survivors.length === 0) {
+    return ranked
+  }
+
+  const union = [...ranked, ...survivors]
+  union.sort(
+    (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
+  )
+  return union
 }
 
 /**
@@ -762,6 +971,7 @@ async function searchMemoriesText(
     limit?: number
     minImportance?: number
     source?: 'AUTO' | 'MANUAL'
+    aboutCharacterId?: string
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -810,6 +1020,9 @@ async function searchMemoriesText(
   }
   if (options.source) {
     memories = memories.filter(m => m.source === options.source)
+  }
+  if (options.aboutCharacterId) {
+    memories = memories.filter(m => m.aboutCharacterId === options.aboutCharacterId)
   }
 
   // Score based on text matching

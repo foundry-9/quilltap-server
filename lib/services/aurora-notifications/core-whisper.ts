@@ -65,10 +65,16 @@ const LLM_CONTEXT_OPENER =
   'Your own center of gravity, as you have written it for yourself:';
 
 export interface CoreFile {
-  /** Relative path inside the character vault, e.g. `Core/manifesto.md`. */
+  /** Relative path inside the source store, e.g. `Core/manifesto.md`. */
   path: string;
   /** File body with YAML frontmatter stripped. */
   body: string;
+  /**
+   * Group name when this Core file came from a group store the character
+   * belongs to (shared grounding). Absent for the character's own vault Core.
+   * Drives the `[Shared — <group>]` heading label in the rendered packet.
+   */
+  sourceLabel?: string;
 }
 
 export interface CorePacket {
@@ -135,54 +141,26 @@ export async function assembleCorePacket(
 ): Promise<CorePacket | null> {
   try {
     const repos = getRepositories();
-    const character = await repos.characters.findById(characterId);
+    // findByIdRaw: we only need the vault pointer, and this must survive a
+    // broken vault overlay so group Core can still be offered. Returns null
+    // (→ no packet) when the character row is missing entirely.
+    const character = await repos.characters.findByIdRaw(characterId);
     if (!character) {
       return null;
     }
     const mountPointId = character.characterDocumentMountPointId ?? null;
-    if (!mountPointId) {
+
+    // The character's own vault Core (may be empty when there is no vault or no
+    // Core/ folder), then the shared Core of every group they belong to.
+    const personalFiles = mountPointId
+      ? await readVaultCoreFiles(characterId, mountPointId)
+      : [];
+    const groupFiles = await assembleGroupCoreFiles(characterId, mountPointId);
+
+    const files = [...personalFiles, ...groupFiles];
+    if (files.length === 0) {
       return null;
     }
-
-    const docs = await repos.docMountDocuments.findManyByMountPointsInFolder(
-      [mountPointId],
-      'Core',
-      '.md',
-      { recursive: true },
-    );
-
-    if (docs.length === 0) {
-      return null;
-    }
-
-    const byKey = new Map<string, { path: string; content: string }>();
-    for (const doc of docs) {
-      const key = doc.relativePath.toLowerCase();
-      const existing = byKey.get(key);
-      if (existing) {
-        const winner =
-          existing.path.localeCompare(doc.relativePath) <= 0
-            ? existing.path
-            : doc.relativePath;
-        logger.error('[CoreWhisper] Two vault paths fold to the same key; keeping the lexicographically first', {
-          context: LOG_CONTEXT,
-          characterId,
-          mountPointId,
-          firstStoredPath: existing.path,
-          secondStoredPath: doc.relativePath,
-          kept: winner,
-        });
-        if (winner === existing.path) continue;
-      }
-      byKey.set(key, { path: doc.relativePath, content: doc.content ?? '' });
-    }
-
-    const sortedKeys = Array.from(byKey.keys()).sort();
-    const files: CoreFile[] = sortedKeys.map((key) => {
-      const entry = byKey.get(key)!;
-      const body = stripFrontmatterBody(entry.content);
-      return { path: entry.path, body };
-    });
 
     const personaText = renderPacketBodies(files);
     const approxTokens = estimateTokens(`${CORE_WHISPER_PREAMBLE}\n\n${personaText}`);
@@ -195,6 +173,7 @@ export async function assembleCorePacket(
         approxTokens,
         packetTokenBudget,
         fileCount: files.length,
+        groupFileCount: groupFiles.length,
       });
     }
 
@@ -209,6 +188,153 @@ export async function assembleCorePacket(
   }
 }
 
+/**
+ * Read every `Core/*.md` file from a single store, de-duplicating on a
+ * case-folded path and sorting by path (case-insensitive ascending). On a
+ * case-fold collision (two distinct stored paths fold to the same key) logs
+ * `logger.error` and keeps the lexicographically first stored path — a
+ * vault-layer inconsistency we surface rather than paper over.
+ */
+async function readVaultCoreFiles(
+  characterId: string,
+  mountPointId: string,
+): Promise<CoreFile[]> {
+  const repos = getRepositories();
+  const docs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+    [mountPointId],
+    'Core',
+    '.md',
+    { recursive: true },
+  );
+
+  if (docs.length === 0) {
+    return [];
+  }
+
+  const byKey = new Map<string, { path: string; content: string }>();
+  for (const doc of docs) {
+    const key = doc.relativePath.toLowerCase();
+    const existing = byKey.get(key);
+    if (existing) {
+      const winner =
+        existing.path.localeCompare(doc.relativePath) <= 0
+          ? existing.path
+          : doc.relativePath;
+      logger.error('[CoreWhisper] Two vault paths fold to the same key; keeping the lexicographically first', {
+        context: LOG_CONTEXT,
+        characterId,
+        mountPointId,
+        firstStoredPath: existing.path,
+        secondStoredPath: doc.relativePath,
+        kept: winner,
+      });
+      if (winner === existing.path) continue;
+    }
+    byKey.set(key, { path: doc.relativePath, content: doc.content ?? '' });
+  }
+
+  const sortedKeys = Array.from(byKey.keys()).sort();
+  return sortedKeys.map((key) => {
+    const entry = byKey.get(key)!;
+    return { path: entry.path, body: stripFrontmatterBody(entry.content) };
+  });
+}
+
+/**
+ * Read the shared `Core/*.md` files from every group the character belongs to,
+ * labeled by group name. Mounts already consumed by the character's own vault
+ * (or by an earlier group, when two groups link the same store) are skipped so
+ * no file is offered twice. Groups are emitted alphabetically by name. Fails
+ * soft — group Core is supplementary; a lookup failure never blocks the
+ * character's own Core.
+ */
+async function assembleGroupCoreFiles(
+  characterId: string,
+  characterMountPointId: string | null,
+): Promise<CoreFile[]> {
+  try {
+    const repos = getRepositories();
+    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+    if (memberships.length === 0) {
+      return [];
+    }
+
+    // Track mounts already accounted for so a store shared across the vault or
+    // multiple groups is read once. Seed with the character's own vault.
+    const seenMounts = new Set<string>();
+    if (characterMountPointId) seenMounts.add(characterMountPointId);
+
+    const groups: Array<{ name: string; mountIds: string[] }> = [];
+    for (const membership of memberships) {
+      try {
+        const group = await repos.groups.findByIdRaw(membership.groupId);
+        if (!group) continue;
+
+        const mountIds: string[] = [];
+        if (group.officialMountPointId && !seenMounts.has(group.officialMountPointId)) {
+          seenMounts.add(group.officialMountPointId);
+          mountIds.push(group.officialMountPointId);
+        }
+        const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
+        for (const link of links) {
+          if (seenMounts.has(link.mountPointId)) continue;
+          seenMounts.add(link.mountPointId);
+          mountIds.push(link.mountPointId);
+        }
+
+        if (mountIds.length > 0) {
+          groups.push({ name: group.name, mountIds });
+        }
+      } catch (error) {
+        logger.warn('[CoreWhisper] Failed to resolve group Core mounts', {
+          context: LOG_CONTEXT,
+          characterId,
+          groupId: membership.groupId,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+
+    groups.sort((a, b) => a.name.localeCompare(b.name));
+
+    const result: CoreFile[] = [];
+    for (const group of groups) {
+      const docs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+        group.mountIds,
+        'Core',
+        '.md',
+        { recursive: true },
+      );
+      if (docs.length === 0) continue;
+
+      // First-wins dedup on case-folded path within the group, sorted by path.
+      const byKey = new Map<string, { path: string; content: string }>();
+      for (const doc of docs) {
+        const key = doc.relativePath.toLowerCase();
+        if (!byKey.has(key)) {
+          byKey.set(key, { path: doc.relativePath, content: doc.content ?? '' });
+        }
+      }
+      for (const key of Array.from(byKey.keys()).sort()) {
+        const entry = byKey.get(key)!;
+        result.push({
+          path: entry.path,
+          body: stripFrontmatterBody(entry.content),
+          sourceLabel: group.name,
+        });
+      }
+    }
+    return result;
+  } catch (error) {
+    logger.warn('[CoreWhisper] Failed to assemble group Core files', {
+      context: LOG_CONTEXT,
+      characterId,
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+}
+
 function stripFrontmatterBody(content: string): string {
   if (!content) return '';
   const parsed = parseFrontmatter(content);
@@ -220,7 +346,10 @@ function stripFrontmatterBody(content: string): string {
 
 function renderPacketBodies(files: CoreFile[]): string {
   return files
-    .map((f) => `### ${f.path}\n\n${f.body}`)
+    .map((f) => {
+      const heading = f.sourceLabel ? `### [Shared — ${f.sourceLabel}] ${f.path}` : `### ${f.path}`;
+      return `${heading}\n\n${f.body}`;
+    })
     .join('\n\n');
 }
 

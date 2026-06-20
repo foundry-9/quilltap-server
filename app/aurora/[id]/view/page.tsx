@@ -9,7 +9,7 @@ import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
 import { NewChatModal } from '@/components/new-chat'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
-import { useCharacterView } from './hooks'
+import { useCharacterView, useCharacterStats } from './hooks'
 import {
   CharacterHeader,
   CharacterDetails,
@@ -59,7 +59,9 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     defaultImageProfileId,
     avatarRefreshKey,
     templateCounts,
+    literalCounts,
     replacingTemplate,
+    reversingTemplate,
     fetchCharacter,
     fetchProfiles,
     fetchUserControlledCharacters,
@@ -67,6 +69,7 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchImageProfiles,
     setCharacter,
     handleTemplateReplace,
+    handleReverseTemplate,
     handleSaveConnectionProfile,
     handleSaveDefaultPartner,
     handleSaveImageProfile,
@@ -80,9 +83,11 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     handleToggleNpc,
     handleToggleFavorite,
     handleToggleControlledBy,
+    handleToggleCarina,
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
+    togglingCarina,
     savingAgentMode,
     savingHelpTools,
     savingCanDressThemselves,
@@ -91,6 +96,8 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     savingDefaultScenario,
     savingDefaultSystemPrompt,
   } = useCharacterView(id)
+
+  const { stats, groups, fetchStats } = useCharacterStats(id)
 
   const characterTagIds = character?.tags || []
 
@@ -102,6 +109,12 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
     fetchDefaultPartner()
     fetchImageProfiles()
   }, [fetchCharacter, fetchProfiles, fetchUserControlledCharacters, fetchDefaultPartner, fetchImageProfiles, id])
+
+  // Refresh the header stats on mount and whenever an action mutates the
+  // underlying data (e.g. Search & Replace touching memories/messages).
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats, dataRefreshKey])
 
   // Open the chat modal when arriving via ?action=chat (initialize once)
   useEffect(() => {
@@ -152,9 +165,13 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
             characterId={id}
             character={character}
             templateCounts={templateCounts}
+            literalCounts={literalCounts}
             replacingTemplate={replacingTemplate}
+            reversingTemplate={reversingTemplate}
             defaultPartnerName={defaultPartnerName}
+            userControlledCharacters={userControlledCharacters}
             onTemplateReplace={handleTemplateReplace}
+            onReverseTemplate={handleReverseTemplate}
           />
         )
 
@@ -301,16 +318,20 @@ export default function ViewCharacterPage({ params }: { params: Promise<{ id: st
           character={character}
           style={style}
           avatarRefreshKey={avatarRefreshKey}
+          stats={stats}
+          groups={groups}
           onStartChat={handleStartChat}
           onToggleNpc={handleToggleNpc}
           onToggleFavorite={handleToggleFavorite}
           onToggleControlledBy={handleToggleControlledBy}
+          onToggleCarina={handleToggleCarina}
           onOptimize={() => setShowOptimizerModal(true)}
           onSearchReplace={() => setShowSearchReplaceModal(true)}
           onGenerateExternalPrompt={() => setShowExternalPromptDialog(true)}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}
           togglingControlledBy={togglingControlledBy}
+          togglingCarina={togglingCarina}
         />
 
         {/* Tabbed Content */}

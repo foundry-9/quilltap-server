@@ -198,6 +198,47 @@ export interface EmbeddingModelInfo {
 }
 
 /**
+ * The mechanism a provider uses to control image shape.
+ *
+ * - `size`: a concrete pixel size string (e.g. OpenAI, Z.AI).
+ * - `aspectRatio`: an aspect-ratio string (e.g. Google, Grok, OpenRouter).
+ * - `prompt`: the API takes no shape parameter; shape is influenced only by
+ *   wording appended to the prompt.
+ */
+export type OrientationStrategy = 'size' | 'aspectRatio' | 'prompt';
+
+/**
+ * How a provider realises one orientation. For a `size`/`aspectRatio` strategy
+ * the matching concrete field is set; for `prompt` (or as a degraded fallback)
+ * `promptHint` is set. Omit an orientation entirely to signal the provider does
+ * not support it (the host resolver then degrades to a generic prompt hint).
+ */
+export interface OrientationMapping {
+  /** Concrete size string, when strategy === 'size' (e.g. '1024x1536'). */
+  size?: string;
+  /** Aspect ratio, when strategy === 'aspectRatio' (e.g. '3:4'). */
+  aspectRatio?: string;
+  /** Phrase appended to the prompt, when strategy === 'prompt'. */
+  promptHint?: string;
+  /** Nominal pixel dims for UI hints only; the host still measures the result. */
+  nominalWidth?: number;
+  nominalHeight?: number;
+}
+
+/**
+ * How a provider (or a specific model) satisfies each semantic orientation.
+ * `portrait` and `landscape` MUST be present so the host can always offer them;
+ * `square` SHOULD be present.
+ */
+export interface ImageOrientationSupport {
+  /** Primary mechanism this provider uses to control shape. */
+  strategy: OrientationStrategy;
+  portrait: OrientationMapping;
+  landscape: OrientationMapping;
+  square?: OrientationMapping;
+}
+
+/**
  * Information about an image generation model
  */
 export interface ImageGenerationModelInfo {
@@ -211,6 +252,11 @@ export interface ImageGenerationModelInfo {
   supportedSizes?: string[];
   /** Description of the model */
   description?: string;
+  /**
+   * Per-model orientation support, overriding any provider-level default.
+   * Required for providers (OpenAI, Z.AI) whose legal sizes differ by model.
+   */
+  orientationSupport?: ImageOrientationSupport;
 }
 
 /**
@@ -260,6 +306,12 @@ export interface ImageProviderConstraints {
    * incorporating any required trigger phrases.
    */
   styleInfo?: Record<string, ImageStyleInfo>;
+  /**
+   * Default orientation support when no per-model override applies. Use this
+   * for providers whose shape mechanism is uniform across their image models
+   * (e.g. Grok, Z.AI).
+   */
+  orientationSupport?: ImageOrientationSupport;
 }
 
 /**

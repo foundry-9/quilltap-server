@@ -71,13 +71,15 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, { user, r
 // POST Handler
 // ============================================================================
 
-export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, repos }) => {
+export const POST = createAuthenticatedHandler(async (req: NextRequest, { repos }) => {
   const body = await req.json();
   const validatedData = createProjectSchema.parse(body);
 
-
+  // `repos.projects.create` provisions the official document store and writes
+  // the four overlay files (description/instructions/state/properties) before
+  // returning a fully-hydrated project. It fails hard if the store can't be
+  // provisioned — a storeless project would throw on every read.
   const project = await repos.projects.create({
-    userId: user.id,
     name: validatedData.name,
     description: validatedData.description || null,
     instructions: validatedData.instructions || null,
@@ -94,28 +96,22 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
   logger.info('[Projects v1] Project created', {
     projectId: project.id,
     name: project.name,
-    userId: user.id,
   });
 
-  // Ensure the project's official document store and Scenarios folder exist
-  // synchronously so the Files tab and Scenarios are immediately usable.
-  // Failure here doesn't block project creation — the startup hook will heal
-  // on next boot, and the GET /scenarios endpoint also calls these helpers.
+  // create() handles the store + overlay files; ensure the Scenarios/ folder
+  // too (it doesn't) so it's usable immediately. Non-fatal — the GET /scenarios
+  // endpoint and the startup hook also ensure it.
   try {
-    const { ensureProjectOfficialStore } = await import('@/lib/mount-index/ensure-project-store');
-    const { ensureProjectScenariosFolder } = await import('@/lib/mount-index/project-scenarios');
-    const result = await ensureProjectOfficialStore(project.id, project.name);
-    if (result) {
-      await ensureProjectScenariosFolder(result.mountPointId);
+    if (project.officialMountPointId) {
+      const { ensureProjectScenariosFolder } = await import('@/lib/mount-index/project-scenarios');
+      await ensureProjectScenariosFolder(project.officialMountPointId);
     }
   } catch (ensureError) {
-    logger.warn('[Projects v1] Failed to ensure project document store on create', {
+    logger.warn('[Projects v1] Failed to ensure project Scenarios folder on create', {
       projectId: project.id,
       error: ensureError instanceof Error ? ensureError.message : String(ensureError),
     });
   }
 
-  // Return the latest project row so the FK is reflected in the response.
-  const finalProject = await repos.projects.findById(project.id);
-  return created({ project: finalProject ?? project });
+  return created({ project });
 });

@@ -34,7 +34,7 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: var(--story-background-url) top center/cover no-repeat;
+    background: var(--story-background-url) var(--story-background-position, top center)/cover no-repeat;
     z-index: 0;
     opacity: 0.35;
     pointer-events: none;
@@ -53,6 +53,39 @@
   .qt-page-container > * {
     position: relative;
     z-index: 1;
+  }
+
+  /* ==========================================================================
+     ABOUT PAGE — staged intro for the text layer over the background image
+     The content stays hidden until the theme has finished applying (the
+     container gains [data-theme-ready] once useTheme().isLoading is false),
+     so the pre-theme flash is never seen. The intro then holds hidden for
+     ~1s, fades to full strength, blinks out, then fades back in and settles.
+     The ::before background layer is untouched (only direct children animate).
+     ========================================================================== */
+  @keyframes qt-about-intro {
+    0%, 40% { opacity: 0; } /* hidden for the first ~1s after the theme is ready */
+    60%     { opacity: 1; } /* fade in over ~0.5s */
+    80%     { opacity: 0; } /* fade out over ~0.5s */
+    100%    { opacity: 1; } /* fade back in over ~0.5s and stay */
+  }
+
+  /* Hold content hidden while the theme is still loading. */
+  .qt-about-intro:not([data-theme-ready]) > * {
+    opacity: 0;
+  }
+
+  /* Once the theme is applied, run the staged intro from its hidden 0% frame. */
+  .qt-about-intro[data-theme-ready] > * {
+    animation: qt-about-intro 2.5s ease-in-out both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    /* Skip the flashing; just reveal the content once the theme is ready. */
+    .qt-about-intro[data-theme-ready] > * {
+      opacity: 1;
+      animation: none;
+    }
   }
 
   /* ==========================================================================

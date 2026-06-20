@@ -172,7 +172,8 @@ describe('Cheap LLM Tasks Service', () => {
       expect(map.get('user-char-id')).toEqual([{
         content: 'User mentioned they have a cat named Whiskers',
         summary: 'User has a cat named Whiskers',
-        keywords: ['cat', 'pet', 'Whiskers'],
+        // Free keywords, then the three defaulted targeting tags (no tags in input).
+        keywords: ['cat', 'pet', 'Whiskers', 'present', 'scope: wide', 'information'],
         importance: 0.7,
       }])
       expect(result.usage).toEqual({ promptTokens: 100, completionTokens: 50, totalTokens: 150 })
@@ -237,7 +238,7 @@ describe('Cheap LLM Tasks Service', () => {
       expect(result.success).toBe(true)
       const map = result.result as Map<string, MemoryCandidate[]>
       expect(map.get('user-char-id')).toEqual([
-        { content: 'ok', summary: 'c', keywords: [], importance: 0.6 },
+        { content: 'ok', summary: 'c', keywords: ['present', 'scope: wide', 'information'], importance: 0.6 },
       ])
     })
 

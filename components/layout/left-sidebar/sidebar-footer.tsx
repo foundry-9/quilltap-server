@@ -19,7 +19,9 @@ import { ProfileMenu } from './profile-menu'
 import { NavUserMenuThemeContent } from '@/components/dashboard/nav-user-menu-theme'
 import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboard/nav-user-menu-quick-hide'
 import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
+import { useBrahmaConsoleOptional } from '@/components/providers/brahma-console-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { Icon } from '@/components/ui/icon'
 
 // Match a UUID immediately following /salon/. If the user is reading a chat,
 // the sidebar's Wardrobe button should pass that chat id along so the dialog
@@ -88,90 +90,6 @@ async function resolveDefaultCharacterForChat(
   }
 }
 
-/**
- * Foundry icon (anvil/wrench)
- */
-function FoundryIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  )
-}
-
-/**
- * Palette icon (for themes)
- */
-function PaletteIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
-      <circle cx="17.5" cy="10.5" r="0.5" fill="currentColor" stroke="none" />
-      <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor" stroke="none" />
-      <circle cx="6.5" cy="12.5" r="0.5" fill="currentColor" stroke="none" />
-      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.555C21.965 6.012 17.461 2 12 2z" />
-    </svg>
-  )
-}
-
-/**
- * Wardrobe icon (clothes hanger)
- */
-function WardrobeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
-      <path d="M12 9v2" />
-      <path d="M12 11 3.5 16.5a1 1 0 0 0 .5 1.85h16a1 1 0 0 0 .5-1.85L12 11z" />
-    </svg>
-  )
-}
-
-/**
- * Help icon (question mark in circle)
- */
-function HelpIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-      <path d="M12 17h.01" />
-    </svg>
-  )
-}
-
 type PopoutMenu = 'themes' | 'quickHide' | null
 
 export function SidebarFooter() {
@@ -179,6 +97,7 @@ export function SidebarFooter() {
   const { hasDangerousChats } = useHasDangerousChats()
   const theme = useTheme()
   const helpChat = useHelpChatOptional()
+  const brahmaConsole = useBrahmaConsoleOptional()
   const wardrobeDialog = useWardrobeDialogOptional()
   const pathname = usePathname()
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
@@ -235,7 +154,18 @@ export function SidebarFooter() {
             className={`qt-left-sidebar-item justify-center px-0 ${!helpChat.isEligible && !helpChat.eligibilityLoading ? 'opacity-40 cursor-not-allowed' : ''}`}
             title={helpChat.isEligible ? 'Help' : 'Help (requires a help-enabled character with a tool-capable connection)'}
           >
-            <HelpIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+            <Icon name="help" className="qt-left-sidebar-item-icon w-7 h-7" />
+          </button>
+        )}
+        {brahmaConsole && (
+          <button
+            type="button"
+            onClick={brahmaConsole.openConsole}
+            disabled={!brahmaConsole.isEligible}
+            className={`qt-left-sidebar-item justify-center px-0 ${!brahmaConsole.isEligible ? 'opacity-40 cursor-not-allowed' : ''}`}
+            title={brahmaConsole.isEligible ? 'Brahma Console' : 'Brahma Console (requires a connection profile)'}
+          >
+            <Icon name="brahma-console" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
         {wardrobeDialog && (
@@ -256,7 +186,7 @@ export function SidebarFooter() {
             className="qt-left-sidebar-item justify-center px-0"
             title="Wardrobe"
           >
-            <WardrobeIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+            <Icon name="wardrobe" className="qt-left-sidebar-item-icon w-7 h-7" />
           </button>
         )}
 
@@ -265,7 +195,7 @@ export function SidebarFooter() {
           className="qt-left-sidebar-item justify-center px-0"
           title="Settings"
         >
-          <FoundryIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+          <Icon name="settings" className="qt-left-sidebar-item-icon w-7 h-7" />
         </a>
 
         {showThemes && (
@@ -273,10 +203,10 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleThemeClick}
-              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'bg-accent' : ''}`}
+              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'themes' ? 'qt-bg-primary/10' : ''}`}
               title="Themes"
             >
-              <PaletteIcon className="qt-left-sidebar-item-icon w-5 h-5" />
+              <Icon name="themes" className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'themes' && (
               <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">
@@ -291,10 +221,10 @@ export function SidebarFooter() {
             <button
               type="button"
               onClick={handleQuickHideClick}
-              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'bg-accent' : ''}`}
+              className={`qt-left-sidebar-item w-full justify-center px-0 ${openPopout === 'quickHide' ? 'qt-bg-primary/10' : ''}`}
               title={hasAnyHidden ? 'Show' : 'Hide'}
             >
-              <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-5 h-5" />
+              <QuickHideIcon hasHidden={hasAnyHidden} className="qt-left-sidebar-item-icon w-7 h-7" />
             </button>
             {openPopout === 'quickHide' && (
               <div className="absolute bottom-full left-0 mb-1 w-56 bg-popover border qt-border-default rounded-lg qt-shadow-lg z-50">

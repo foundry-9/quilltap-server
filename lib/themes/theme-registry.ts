@@ -13,7 +13,7 @@ import path from 'node:path';
 import { logger } from '@/lib/logger';
 import { pluginRegistry, getEnabledPluginsByCapability } from '@/lib/plugins';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
-import type { ThemeTokens, ThemeManifest } from './types';
+import type { ThemeTokens, ThemeManifest, ThemePreviewImage } from './types';
 import { safeValidateThemeTokens } from './types';
 import { DEFAULT_THEME_TOKENS, DEFAULT_THEME_METADATA } from './default-tokens';
 import { mergeThemeTokens, themeTokensToCSS } from './utils';
@@ -50,6 +50,18 @@ export interface LoadedThemeFont {
   isEmbedded?: boolean;
   /** Embedded font data (base64 or data URL) */
   embeddedData?: string;
+}
+
+/**
+ * Per-icon override for loaded themes
+ */
+export interface LoadedThemeIcon {
+  /** Canonical icon name (must match an app IconName to take effect) */
+  name: string;
+  /** Plugin/bundle name for URL construction (e.g. "bundle:madmans-box") */
+  pluginName: string;
+  /** Original source path relative to the bundle (e.g. "icons/prospero.webp") */
+  src: string;
 }
 
 /**
@@ -102,6 +114,9 @@ export interface LoadedTheme {
 
   /** Custom fonts bundled with the theme */
   fonts?: LoadedThemeFont[];
+
+  /** Per-icon overrides bundled with the theme */
+  icons?: LoadedThemeIcon[];
 
   /** Subsystem display overrides from theme plugin */
   subsystems?: Record<string, {
@@ -685,6 +700,20 @@ class ThemeRegistry extends AbstractMapRegistry<
       }
     }
 
+    // Build icon override entries (icon name -> bundle-relative asset path).
+    // Schema validation guarantees names are kebab-case; the asset is served by
+    // the existing /api/themes/assets route, so no file existence check here.
+    const icons: LoadedThemeIcon[] = [];
+    if (manifest.icons) {
+      for (const [iconName, assetPath] of Object.entries(manifest.icons)) {
+        icons.push({
+          name: iconName,
+          pluginName: `bundle:${themeId}`,
+          src: assetPath,
+        });
+      }
+    }
+
     // Resolve subsystem overrides
     const subsystems = resolveSubsystemOverrides(
       manifest.subsystems as Record<string, { name?: string; description?: string; thumbnail?: string; backgroundImage?: string }> | undefined,
@@ -710,6 +739,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       source: 'bundle',
       bundlePath: installPath,
       fonts: fonts.length > 0 ? fonts : undefined,
+      icons: icons.length > 0 ? icons : undefined,
       subsystems,
     };
 
@@ -721,6 +751,7 @@ class ThemeRegistry extends AbstractMapRegistry<
       version: loadedTheme.version,
       supportsDarkMode: loadedTheme.supportsDarkMode,
       fontCount: fonts.length,
+      iconCount: icons.length,
     });
   }
 
@@ -811,6 +842,99 @@ class ThemeRegistry extends AbstractMapRegistry<
   getFonts(themeId: string): LoadedThemeFont[] {
     const theme = this.state.themes.get(themeId);
     return theme?.fonts || [];
+  }
+
+  /**
+   * Get per-icon overrides for a theme
+   */
+  getIcons(themeId: string): LoadedThemeIcon[] {
+    const theme = this.state.themes.get(themeId);
+    return theme?.icons || [];
+  }
+
+  /**
+   * Manifest-referenced preview images for a theme (previewImage + subsystem
+   * background/thumbnail refs). Resolved to asset URLs, de-duped, sorted by name.
+   * Does NOT enumerate the bundle directory — manifest references only.
+   */
+  getImages(themeId: string): ThemePreviewImage[] {
+    const theme = this.state.themes.get(themeId);
+    if (!theme) return [];
+
+    const humanize = (key: string): string =>
+      key
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+
+    const entries: ThemePreviewImage[] = [];
+
+    if (theme.previewImage) {
+      const src = resolveThemeAssetUrl(theme.previewImage, theme.pluginName);
+      if (src && src !== 'none') {
+        entries.push({ kind: 'preview', name: 'Preview', src });
+      } else {
+        logger.debug('theme-registry.getImages skipped preview (unresolved)', {
+          themeId,
+          value: theme.previewImage,
+        });
+      }
+    }
+
+    for (const [key, sub] of Object.entries(theme.subsystems ?? {})) {
+      const base = sub.name && sub.name.trim() ? sub.name.trim() : humanize(key);
+      const hasBackground = !!(sub.backgroundImage && sub.backgroundImage !== 'none');
+      const hasThumbnail = !!(sub.thumbnail && sub.thumbnail !== 'none');
+      const both = hasBackground && hasThumbnail;
+
+      if (hasBackground) {
+        const src = resolveThemeAssetUrl(sub.backgroundImage, theme.pluginName);
+        if (src && src !== 'none') {
+          entries.push({
+            kind: 'background',
+            subsystem: key,
+            name: both ? `${base} Background` : base,
+            src,
+          });
+        } else {
+          logger.debug('theme-registry.getImages skipped background (unresolved)', {
+            themeId,
+            subsystem: key,
+            value: sub.backgroundImage,
+          });
+        }
+      }
+
+      if (hasThumbnail) {
+        const src = resolveThemeAssetUrl(sub.thumbnail, theme.pluginName);
+        if (src && src !== 'none') {
+          entries.push({
+            kind: 'thumbnail',
+            subsystem: key,
+            name: both ? `${base} Thumbnail` : base,
+            src,
+          });
+        } else {
+          logger.debug('theme-registry.getImages skipped thumbnail (unresolved)', {
+            themeId,
+            subsystem: key,
+            value: sub.thumbnail,
+          });
+        }
+      }
+    }
+
+    const seen = new Set<string>();
+    const deduped = entries.filter((e) => {
+      if (seen.has(e.src)) return false;
+      seen.add(e.src);
+      return true;
+    });
+
+    deduped.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    return deduped;
   }
 
   /**

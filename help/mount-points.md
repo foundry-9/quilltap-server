@@ -105,6 +105,30 @@ Document chunks appear as a new source type in the unified search tool. When a c
 
 To search only documents, specify `sources: ["documents"]` in the search tool call. To search everything (the default), simply omit the sources parameter.
 
+## Per-Document Discretion: `embed`, `character_read`, `character_write`
+
+Not every manuscript on your shelves is meant for every pair of eyes. A Markdown document may carry, in the YAML frontmatter at its very head, three small instructions that govern how Quilltap and your characters may treat it:
+
+```yaml
+---
+embed: false
+character_read: false
+character_write: false
+---
+```
+
+Each flag **defaults to true** — which is to say, in the absence of any instruction a document is freely indexed, freely read, and freely amended, exactly as before. You need only declare a flag when you wish to withhold a privilege. The values are agreeably forgiving: you may write them bare (`false`) or quoted (`"false"`), in any case you please, and `no`, `0`, and `off` are all understood to mean the same thing.
+
+- **`embed: false`** keeps the document out of the embedding pipeline entirely, and — should it already have been embedded — quietly erases its vectors. The text remains on the shelf for direct reading, but the document will never again surface as a semantic-search hit. Useful for a volume you wish to keep on hand without it colouring every retrieval.
+- **`character_read: false`** draws the curtain: no character may read the document through the `doc_` tools, it is omitted from `doc_list_files` and `doc_grep`, and it will never appear in a character's semantic recall. A character who goes looking for it is told, quite simply, that no such file exists — so a protected manuscript cannot even be *probed for* by name.
+- **`character_write: false`** sets the document under glass: a character may not write to it, replace text within it, insert into it, revise its frontmatter or headings, move it, rename it, or delete it. Nor may a character spirit it away by deleting or relocating the folder that contains it — such an attempt fails outright, naming the protected volume.
+
+A word on how the three relate: **`character_read` is the master switch.** A volume a character may not read is, of necessity, one they can neither search for nor amend — so setting `character_read: false` quietly carries the other two false along with it, whatever they may say. You need not write all three to seal a document away; `character_read: false` alone suffices to remove it from your characters' sight, their searches, and their pens at a stroke. The finer-grained pair come into their own only when reading is permitted: a document that characters may *read* but not *embed* (a large reference they should open deliberately rather than have surface in every search), or one they may read but not *write* (a canon you keep authoritative).
+
+Crucially, **these flags govern your characters, never you.** The human at the desk — in Document Mode, the Open-Document picker, or the Brahma Console — sees and edits every document regardless of what its frontmatter says. The flags are the means by which you, the proprietor, keep certain volumes for your own consultation while leaving the rest of the library open to your characters.
+
+Only Markdown documents carry frontmatter, so only they may bear these instructions; other formats (PDFs, plain text, and the like) remain fully accessible as before. And because the flags are read afresh each time a document is re-indexed, the way to change a document's discretion is simply to edit its frontmatter — at the desk, or directly on disk in your editor of choice — and let the Scriptorium take note on its next pass.
+
 ## In-Chat Navigation
 
 To navigate to The Scriptorium:

@@ -17,7 +17,8 @@ export {
   batchExtractMemories,
   considerTitleUpdate,
   deriveSceneContext,
-  renderCanonBlock,
+  renderSelfCanonBlock,
+  renderOtherCanonBlock,
   loadCanonForSelf,
   loadCanonForObserverAboutSubject,
   NO_CANON_FALLBACK,
@@ -27,6 +28,7 @@ export {
   type CheapLLMTaskResult,
   type DeriveSceneContextInput,
   type CanonSource,
+  type SelfCanon,
 } from './cheap-llm-tasks'
 
 // Memory Processor (per-turn extraction)

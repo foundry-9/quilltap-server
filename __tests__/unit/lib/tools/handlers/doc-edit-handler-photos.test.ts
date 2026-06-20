@@ -142,6 +142,12 @@ jest.mock('@/lib/services/librarian-notifications/writer', () => ({
   postLibrarianDeleteAnnouncement: jest.fn(),
   postLibrarianFolderCreatedAnnouncement: jest.fn(),
   postLibrarianFolderDeletedAnnouncement: jest.fn(),
+  postLibrarianWriteAnnouncement: jest.fn(),
+  postLibrarianMoveAnnouncement: jest.fn(),
+  postLibrarianCopyAnnouncement: jest.fn(),
+  postLibrarianBlobWriteAnnouncement: jest.fn(),
+  contentHiddenFromCharacters: jest.fn(() => false),
+  documentHiddenFromCharacters: jest.fn(async () => false),
 }));
 
 const mockRepos = {

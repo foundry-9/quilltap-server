@@ -203,7 +203,7 @@ describe('Roleplay Template Routes', () => {
         tags: [],
         delimiters: [],
         renderingPatterns: [
-          { pattern: '(?<!\\*)\\*[^\\*]+\\*(?!\\*)', className: 'qt-chat-narration' },
+          { pattern: '(?<!\\*)\\*(?<rpBody>[^\\*]+)\\*(?!\\*)', className: 'qt-chat-narration' },
         ],
         dialogueDetection: null,
         narrationDelimiters: '*',

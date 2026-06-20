@@ -122,6 +122,22 @@ Tool settings show:
 - Number of disabled groups
 - Summary of restrictions
 
+## Default Roleplay Template
+
+Every project may keep its own house style of prose. Set a default [roleplay template](roleplay-templates.md) here and each new chat begun within the project arrives already dressed in it — the delimiters, the rendering flourishes, and the formatting instructions all in place — without your having to choose afresh each time.
+
+1. Open the **Model Behavior** card
+2. Find the **Default Roleplay Template** dropdown
+3. Select a template, or "Inherit from global default" to leave it unset
+4. Changes save automatically
+
+The priority chain for the roleplay template of a new chat:
+1. The project's default roleplay template (most specific)
+2. Your global default roleplay template (set under **Settings → Roleplay Templates**)
+3. No template at all
+
+Leave the dropdown on "Inherit from global default" and the project quietly defers to whatever your global default happens to be. Should a chat have been created before a project default was appointed and still carry no template of its own, it will adopt the project's default the next time it speaks.
+
 ## Character Access Settings
 
 Control which characters can participate in project chats.
@@ -332,3 +348,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Project Chats](project-chats.md) — Conversations in projects
 - [Project Characters](project-characters.md) — Character roster
 - [Tools Settings](tools-settings.md) — Global tool configuration
+- [Roleplay Templates](roleplay-templates.md) — Prose formatting templates and the global default

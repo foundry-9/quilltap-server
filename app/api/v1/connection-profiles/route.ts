@@ -19,8 +19,9 @@ import { ProviderEnum } from '@/lib/schemas/types';
 import { supportsMimeType as providerSupportsMimeType } from '@/lib/llm/attachment-support';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
-import { badRequest, serverError, notFound, successResponse, created } from '@/lib/api/responses';
+import { badRequest, serverError, notFound, successResponse, created, conflict } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
+import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
@@ -191,6 +192,20 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       return badRequest('Model name is required');
     }
 
+    // Connection-profile names must be unique per user (case-insensitive,
+    // trimmed) — the name is the load-bearing identifier in the participant
+    // picker. The DB also enforces this via a unique index; this check yields
+    // a friendly 409 before we hit the constraint.
+    const existingProfiles = await repos.connections.findByUserId(user.id);
+    const normalizedName = normalizeProfileName(name);
+    if (existingProfiles.some((p) => normalizeProfileName(p.name) === normalizedName)) {
+      logger.debug('Rejected duplicate connection-profile name on create', {
+        userId: user.id,
+        name: name.trim(),
+      });
+      return conflict(`A connection profile named "${name.trim()}" already exists`);
+    }
+
     // Validate apiKeyId if provided. Courier profiles never carry an apiKey.
     if (apiKeyId && !isCourier) {
       const apiKey = await repos.connections.findApiKeyById(apiKeyId);
@@ -225,7 +240,6 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     }
 
     // If setting as default, unset other defaults
-    const existingProfiles = await repos.connections.findByUserId(user.id);
     if (isDefault) {
       for (const existingProfile of existingProfiles) {
         if (existingProfile.isDefault) {

@@ -101,10 +101,12 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       accessories: [],
     })
 
-    // The handler must use the overlay-aware lookup, not the raw one.
+    // The handler must use the overlay-aware lookup, not the raw one. It now
+    // also passes the resolved project tier (empty here — no project context).
     expect(ctx.repos.wardrobe.findByIdForCharacter).toHaveBeenCalledWith(
       'char-1',
-      vaultItem.id
+      vaultItem.id,
+      expect.objectContaining({ projectMountPointIds: [] })
     )
     expect(ctx.repos.wardrobe.findById).not.toHaveBeenCalled()
 

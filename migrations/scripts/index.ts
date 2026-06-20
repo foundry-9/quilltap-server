@@ -252,6 +252,8 @@ import { migrateOutfitPresetsToCompositesMigration } from './migrate-outfit-pres
 import { convertEquippedOutfitToArraysMigration } from './convert-equipped-outfit-to-arrays-v1';
 // Drop the outfit_presets table (after backup snapshot)
 import { dropOutfitPresetsTableMigration } from './drop-outfit-presets-table-v1';
+// Drop the wardrobe_items table (after backup snapshot; gated on vault population)
+import { dropWardrobeItemsTableMigration } from './drop-wardrobe-items-table-v1';
 // Provision the global Lantern Backgrounds mount point
 import { provisionLanternBackgroundsMountMigration } from './provision-lantern-backgrounds-mount';
 // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
@@ -302,6 +304,12 @@ import { addTextReplacementRulesTableMigration } from './add-text-replacement-ru
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
 import { cutoverCharactersToVaultMigration } from './cutover-characters-to-vault';
+// 4.7 project store cutover: move every project field into its official store and drop the DB columns (incl. userId)
+import { cutoverProjectsToStoreMigration } from './cutover-projects-to-store';
+// Groups: slim groups table (main DB)
+import { createGroupsTableMigration } from './create-groups-table';
+// Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
+import { createGroupJoinTablesMigration } from './create-group-join-tables';
 // 4.6 private character rooms: schema substrate for autonomous-room runs and scheduling
 import { addAutonomousRoomsFieldsMigration } from './add-autonomous-rooms-fields';
 // 4.6 turn rotation: persist spokenThisCycle so user characters can join the rotation
@@ -326,6 +334,18 @@ import { addAutoScrollOnResponseCompleteFieldMigration } from './add-auto-scroll
 import { addAutonomousBudgetCacheModeMigration } from './add-autonomous-budget-cache-mode';
 // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
 import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milestones';
+// Carina (inline LLM queries): canBeCarina answerer flag on characters
+import { addCarinaFlagMigration } from './add-carina-flag-v1';
+// Carina (inline LLM queries): carinaMeta provenance column on chat_messages
+import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
+// RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
+import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
+// Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
+import { addConsoleConnectionProfileFieldMigration } from './add-console-connection-profile-field';
+// Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
+import { addConnectionProfileUniqueNameIndexMigration } from './add-connection-profile-unique-name-index';
+// Scriptorium per-document policy: allowEmbed / allowCharacterRead / allowCharacterWrite columns + frontmatter backfill
+import { addDocMountFilePolicyFlagsMigration } from './add-doc-mount-file-policy-flags';
 
 /**
  * All available migrations.
@@ -574,6 +594,8 @@ export const migrations: Migration[] = [
   convertEquippedOutfitToArraysMigration,
   // Drop the outfit_presets table (after backup snapshot)
   dropOutfitPresetsTableMigration,
+  // Drop the wardrobe_items table (after backup snapshot; gated on vault population)
+  dropWardrobeItemsTableMigration,
   // Provision the global Lantern Backgrounds mount point
   provisionLanternBackgroundsMountMigration,
   // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
@@ -648,6 +670,24 @@ export const migrations: Migration[] = [
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Carina (inline LLM queries): canBeCarina answerer flag on characters
+  addCarinaFlagMigration,
+  // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
+  addCarinaMessageMetaMigration,
+  // 4.7 project store cutover: fold each project into its official document store and drop the legacy columns (incl. userId)
+  cutoverProjectsToStoreMigration,
+  // Groups: slim groups table (main DB)
+  createGroupsTableMigration,
+  // Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
+  createGroupJoinTablesMigration,
+  // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
+  rpDelimiterKindsMigration,
+  // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
+  addConsoleConnectionProfileFieldMigration,
+  // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
+  addConnectionProfileUniqueNameIndexMigration,
+  // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
+  addDocMountFilePolicyFlagsMigration,
 ];
 
 export {
@@ -881,6 +921,8 @@ export {
   convertEquippedOutfitToArraysMigration,
   // Drop the outfit_presets table (after backup snapshot)
   dropOutfitPresetsTableMigration,
+  // Drop the wardrobe_items table (after backup snapshot; gated on vault population)
+  dropWardrobeItemsTableMigration,
   // Provision the global Lantern Backgrounds mount point
   provisionLanternBackgroundsMountMigration,
   // Move _general/story-backgrounds/ and root _general/generated_*.webp into Lantern Backgrounds mount
@@ -951,5 +993,23 @@ export {
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Carina (inline LLM queries): canBeCarina answerer flag on characters
+  addCarinaFlagMigration,
+  // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
+  addCarinaMessageMetaMigration,
+  // 4.7 project store cutover
+  cutoverProjectsToStoreMigration,
+  // Groups: slim groups table (main DB)
+  createGroupsTableMigration,
+  // Groups: join tables — group_doc_mount_links + group_character_members (mount-index DB)
+  createGroupJoinTablesMigration,
+  // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
+  rpDelimiterKindsMigration,
+  // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
+  addConsoleConnectionProfileFieldMigration,
+  // Unique connection-profile names: de-dup + unique index on (userId, lower(trim(name)))
+  addConnectionProfileUniqueNameIndexMigration,
+  // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
+  addDocMountFilePolicyFlagsMigration,
 };
 

@@ -15,6 +15,7 @@ A theme is a complete visual design for Quilltap that includes:
 - **Color scheme** — Primary, secondary, accent, and background colors for light and dark modes
 - **Typography** — Font families used for headings and body text
 - **Component styles** — Visual appearance of buttons, cards, inputs, and other UI elements
+- **Icon overrides** — Custom glyphs replacing any of the application's standard icons (`.qtap-theme` bundles only)
 - **Dark mode support** — Some themes provide separate styling for light and dark modes
 
 Quilltap comes with a built-in default theme and can be extended with custom themes installed as plugins or uploaded as `.qtap-theme` bundles.
@@ -67,7 +68,7 @@ Theme bundles require no build tools, npm packages, or JavaScript code -- they a
 Bundle themes can be uninstalled from the Appearance settings:
 
 1. Find the bundle theme in your theme list (marked with a "Bundle" badge)
-2. Expand its preview
+2. Click its **Preview** button to open the preview window
 3. Click the trash icon to uninstall
 4. The theme is removed from your system
 
@@ -78,7 +79,7 @@ Note: Plugin themes and the built-in default theme cannot be uninstalled from th
 Any installed theme (including plugin themes and the default) can be exported as a `.qtap-theme` bundle:
 
 1. Find the theme in your theme list
-2. Expand its preview
+2. Click its **Preview** button to open the preview window
 3. Click the download/export icon
 4. Save the `.qtap-theme` file to your computer
 5. Share it with others or use it as a starting point for a new theme
@@ -237,14 +238,17 @@ For each theme, you can see:
 - **Dark mode support** — Whether the theme supports dark mode
 - **Active indicator** — Shows which theme is currently active
 
-### Previewing Themes
+### Previewing a Theme
 
-When viewing theme options:
+Every theme on the shelf wears a small **Preview** button, and pressing it throws open a full-page viewing window — a proper showroom rather than a keyhole. Within, you will find:
 
-1. Hover over a theme to see more details
-2. Click to preview the theme in the background
-3. See how colors look before committing
-4. Switch back if you prefer a different theme
+- **A banner in the theme's own livery** — the theme's background color, with the lettering automatically set to whichever shade (ivory or ink) reads most legibly against it. No more squinting at pale text on a brilliant ground.
+- **A Light / Dark switch** — flip between the two to see how the theme comports itself in either light. (Themes that keep no evening wardrobe show only the Light setting.)
+- **A live sampler** — genuine headings, buttons, inputs, badges, and a card, all dressed in the theme's colors and fonts, so you may judge the cut before committing.
+- **A gallery of the theme's bundled images** — any preview image and the backdrops it hangs in Quilltap's principal halls, arranged alphabetically over a faint checkerboard so transparent artwork reads clearly. A theme that bundles no imagery simply says so.
+- **A sheet of the theme's re-cut icons** — should the theme replace any of Quilltap's standard glyphs, each appears here in four guises (ordinary, muted, hovered, and set upon a colored button), with its name printed beneath in plain type for easy copying. A theme that leaves the icons alone says as much.
+
+From the banner you may **Apply** the theme outright, **Export** it as a `.qtap-theme` bundle, or — for bundle themes not presently in use — **Uninstall** it. Close the window by the **×**, the Escape key, or a click upon the surrounding gloom; nothing is committed until you press **Apply**.
 
 ## Color Modes Explained
 
@@ -301,6 +305,81 @@ npx create-quilltap-theme my-theme --plugin
 ```
 
 See the **Theme Plugin Development Guide** for details on the plugin format.
+
+### Custom Icons
+
+Beyond the customary palette and typography, `.qtap-theme` bundles may declare their own icon artwork — replacing any of the application's eighty standard glyphs with designs of the author's own devising. When the theme is active, the substitution is instantaneous and entirely silent: no reload, no ceremony, simply a different glyph appearing in the expected place.
+
+For a demonstration of the form taken to its logical conclusion, activate the bundled **Madman's Box** theme: every last glyph in the house has been re-cut to its specifications — brass clockwork, sharp corners, and not a rounded cap in sight.
+
+#### Declaring Icon Overrides
+
+In your `theme.json`, add an `icons` record mapping each icon's name to a bundle-relative asset path:
+
+```json
+{
+  "icons": {
+    "brand":    "icons/brand.webp",
+    "settings": "icons/settings.svg",
+    "wardrobe": "icons/wardrobe.svg",
+    "help":     "icons/help.svg"
+  }
+}
+```
+
+Names must correspond to entries in Quilltap's canonical icon list — the complete catalogue appears in the **Icons** story of `@quilltap/theme-storybook`, which the `create-quilltap-theme` scaffold includes in its Storybook setup automatically. Icons not declared in the map are left at their defaults; the entire list need not be addressed, only those whose default glyph the theme wishes to improve upon.
+
+#### Two Modes of Replacement
+
+The file format governs how the replacement is rendered:
+
+- **`.svg` files** are painted in *mask mode*: the glyph is tinted by the surrounding text colour (`currentColor`). Ideal for clean monochrome line drawings that should harmonise with the theme's foreground, active, or muted states — the icon responds to hover and disabled colouring exactly as a stock glyph would. Passing splendidly in polite society, one might say.
+- **`.webp` files** (and other non-SVG formats) are displayed in *image mode*: the artwork is shown exactly as authored, colours unchanged by the interface. Well-suited to icons that carry their own palette — a brass-inlaid quill, a hand-lettered monogram, or an illustration that must retain its specific hue regardless of what the surrounding typography is doing.
+
+The `brand` icon obeys the same rule as the rest of the company: an `.svg` brand mark is tinted along with everything else, while a `.webp` brand mark keeps its own colours. Should your masthead insist upon arriving in full regalia — gilt, enamel, and all — supply it as `.webp`; supply it as `.svg` and it will dress to match the room.
+
+#### Validating Icon Overrides
+
+The `npx quilltap themes validate` command checks the `icons` block as part of its inspection — it confirms that asset paths end in `.svg` or `.webp`, contain no suspicious traversal sequences, and that the values are non-empty. Icon names that fail the kebab-case convention receive a warning rather than an error, given that future Quilltap releases may extend the canonical list.
+
+### Page Backgrounds
+
+Each of Quilltap's principal halls keeps a faint backdrop behind its furniture — Aurora has its portrait gallery, the Salon its parlour, the Scriptorium its stacks, and so on, with the Settings page changing its scene to suit whichever tab is presently in hand. Like the icons, these backdrops are yours to redress. A theme may hang its own painting in any of these rooms, or strip the walls bare entirely, and the swap is as silent and immediate as the rest.
+
+#### Declaring Background Overrides
+
+In your `theme.json`, add a `subsystems` record. Each key names a Quilltap subsystem; each value supplies a `backgroundImage` pointing at a bundle-relative asset:
+
+```json
+{
+  "subsystems": {
+    "aurora":           { "backgroundImage": "textures/aurora-bg.webp" },
+    "prospero":         { "backgroundImage": "textures/prospero-bg.webp" },
+    "salon":            { "backgroundImage": "textures/salon-bg.webp" },
+    "commonplace-book": { "backgroundImage": "textures/commonplace-book-bg.webp" },
+    "scriptorium":      { "backgroundImage": "textures/scriptorium-bg.webp" },
+    "lantern":          { "backgroundImage": "textures/lantern-bg.webp" }
+  }
+}
+```
+
+The subsystem keys are Quilltap's own — `aurora` (Characters), `prospero` (Projects), `salon` (Chats), `commonplace-book` (Files; note the hyphen), `scriptorium` (Document Stores), and `lantern` (Photos), among others. Only the rooms you name are re-papered; any subsystem left unmentioned keeps the house default, so a theme need address only those backdrops it wishes to improve upon.
+
+Bundle-relative paths (`textures/…`) resolve to the theme's own assets exactly as icon paths do; a fully-rooted `/path`, an `http(s)://` URL, or a `data:` URI is honoured as written. The art is painted at a polite low opacity behind the page's contents, so a sympathetic, unhurried image serves best.
+
+#### Suppressing a Background
+
+To leave a particular room's walls bare — no backdrop at all — set the value to the sentinel `"none"`:
+
+```json
+"subsystems": {
+  "salon": { "backgroundImage": "none" }
+}
+```
+
+Quilltap then renders that page with no story background whatsoever, rather than falling through to the stock image.
+
+For a worked example, activate the bundled **Madman's Box** theme, which dresses its principal halls in walnut and brass to match the rest of its furnishings.
 
 ### Managing Themes via CLI
 

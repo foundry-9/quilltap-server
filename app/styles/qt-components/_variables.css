@@ -226,7 +226,6 @@
   --qt-left-sidebar-border: var(--color-sidebar-border);
   --qt-left-sidebar-transition: width 200ms ease, transform 300ms ease;
 
-  --qt-left-sidebar-header-height: 3.5rem;
   --qt-left-sidebar-footer-height: auto;
 
   --qt-left-sidebar-section-padding: 0.625rem;
@@ -408,6 +407,18 @@
   --qt-rp-button-internal-fg: hsl(0 0% 100%);
   --qt-rp-button-ooc-bg: hsl(152 60% 28%);
   --qt-rp-button-ooc-fg: hsl(152 60% 80%);
+
+  /* Roleplay-template palette (qt-roleplay-1..4): four distinct high-contrast
+     chips a delimiter can opt into. Each chip carries its own fg/bg so it reads
+     on any bubble; themes override these four pairs to taste. */
+  --qt-roleplay-1-bg: hsl(217 91% 53%);
+  --qt-roleplay-1-fg: hsl(0 0% 100%);
+  --qt-roleplay-2-bg: hsl(270 65% 55%);
+  --qt-roleplay-2-fg: hsl(0 0% 100%);
+  --qt-roleplay-3-bg: hsl(38 92% 50%);
+  --qt-roleplay-3-fg: hsl(30 45% 12%);
+  --qt-roleplay-4-bg: hsl(168 78% 36%);
+  --qt-roleplay-4-fg: hsl(0 0% 100%);
 
   /* ==========================================================================
      BADGE VARIABLES
@@ -727,6 +738,12 @@
   --qt-card-shadow: 0 1px 3px hsl(225 12% 0% / 0.25), 0 0 1px hsl(225 12% 100% / 0.04);
   --qt-card-shadow-hover: 0 4px 12px hsl(225 12% 0% / 0.35), 0 0 1px hsl(225 12% 100% / 0.06);
   --qt-card-border-opacity: 0.75;
+
+  /* Roleplay-template palette — brightened for dark bubbles */
+  --qt-roleplay-1-bg: hsl(217 91% 60%);
+  --qt-roleplay-2-bg: hsl(270 70% 64%);
+  --qt-roleplay-3-bg: hsl(38 95% 56%);
+  --qt-roleplay-4-bg: hsl(168 70% 44%);
 
   /* Alert tokens — lifted brightness for dark backgrounds */
   --qt-alert-success-bg: hsl(152 55% 38% / 0.15);

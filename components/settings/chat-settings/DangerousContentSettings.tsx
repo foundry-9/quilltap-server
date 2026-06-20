@@ -138,7 +138,7 @@ export function DangerousContentSettings({
                 What to Scan
               </label>
 
-              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.scanTextChat}
@@ -152,7 +152,7 @@ export function DangerousContentSettings({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.scanImagePrompts}
@@ -166,7 +166,7 @@ export function DangerousContentSettings({
                 </div>
               </label>
 
-              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.scanImageGeneration}
@@ -275,7 +275,7 @@ export function DangerousContentSettings({
                 </p>
               </div>
 
-              <label className="flex items-start gap-3 p-3 border qt-border-default rounded hover:bg-accent cursor-pointer">
+              <label className="flex items-start gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer">
                 <input
                   type="checkbox"
                   checked={dangerSettings.showWarningBadges}

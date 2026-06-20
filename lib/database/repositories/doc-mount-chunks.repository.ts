@@ -204,6 +204,41 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   }
 
   /**
+   * NULL out the embedding for every chunk of a link without deleting the
+   * chunk rows. Used to enforce `embed:false`: the chunk text survives for
+   * non-RAG uses and can be re-embedded if the flag flips back, but the
+   * vectors are gone so the document can't surface in semantic retrieval.
+   * Returns the number of chunks whose embedding was cleared (already-NULL
+   * rows are not recounted). Invalidates the mount-chunk cache when it
+   * actually clears anything.
+   */
+  async clearEmbeddingsByLinkId(linkId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        if (isMountIndexDegraded()) return 0;
+        const db = getRawMountIndexDatabase();
+        if (!db) return 0;
+
+        const mp = db.prepare(
+          'SELECT mountPointId FROM doc_mount_chunks WHERE linkId = ? LIMIT 1'
+        ).get(linkId) as { mountPointId: string } | undefined;
+
+        const res = db.prepare(
+          'UPDATE doc_mount_chunks SET embedding = NULL WHERE linkId = ? AND embedding IS NOT NULL'
+        ).run(linkId);
+
+        if (res.changes > 0 && mp?.mountPointId) {
+          invalidateMountPoint(mp.mountPointId);
+        }
+        return res.changes;
+      },
+      'Error clearing embeddings by link ID',
+      { linkId },
+      0
+    );
+  }
+
+  /**
    * Delete all chunks for a link.
    */
   async deleteByLinkId(linkId: string): Promise<number> {

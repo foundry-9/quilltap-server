@@ -10,9 +10,11 @@ jest.mock('@/lib/logging/create-logger', () => ({
 }))
 
 const mockToBuffer = jest.fn<() => Promise<Buffer>>()
+const mockMetadata = jest.fn<() => Promise<{ width?: number; height?: number }>>()
 const mockSharpInstance = {
   webp: jest.fn().mockReturnThis(),
   toBuffer: mockToBuffer,
+  metadata: mockMetadata,
 }
 const mockSharp = jest.fn(() => mockSharpInstance)
 ;(mockSharp as any).default = mockSharp
@@ -25,6 +27,9 @@ describe('webp-conversion', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockToBuffer.mockResolvedValue(Buffer.from('converted-webp'))
+    // Default: no measurable dimensions, so the existing exact-shape assertions
+    // (which omit width/height) keep passing — toEqual ignores undefined props.
+    mockMetadata.mockResolvedValue({})
   })
 
   it('identifies raster image formats that should be converted', () => {
@@ -76,5 +81,46 @@ describe('webp-conversion', () => {
       filename: 'portrait.jpg',
       wasConverted: false,
     })
+  })
+
+  it('measures the converted output dimensions from the stored bytes', async () => {
+    mockMetadata.mockResolvedValue({ width: 1024, height: 1536 })
+    const original = Buffer.from('png-bytes')
+
+    const result = await convertToWebP(original, 'image/png', 'portrait.png')
+
+    expect(result.wasConverted).toBe(true)
+    expect(result.width).toBe(1024)
+    expect(result.height).toBe(1536)
+    // Dimensions are read off the *output* webp buffer, not the input bytes.
+    expect(mockSharp).toHaveBeenCalledWith(Buffer.from('converted-webp'))
+  })
+
+  it('measures dimensions for an already-webp passthrough', async () => {
+    mockMetadata.mockResolvedValue({ width: 800, height: 600 })
+    const original = Buffer.from('webp-bytes')
+
+    const result = await convertToWebP(original, 'image/webp', 'photo.webp')
+
+    expect(result.wasConverted).toBe(false)
+    expect(result.width).toBe(800)
+    expect(result.height).toBe(600)
+  })
+
+  it('leaves dimensions undefined for svg without invoking sharp', async () => {
+    const result = await convertToWebP(Buffer.from('<svg />'), 'image/svg+xml', 'icon.svg')
+
+    expect(result.width).toBeUndefined()
+    expect(result.height).toBeUndefined()
+    expect(mockSharp).not.toHaveBeenCalled()
+  })
+
+  it('never throws if dimension measurement fails — dims just stay undefined', async () => {
+    mockMetadata.mockRejectedValueOnce(new Error('cannot decode'))
+    const result = await convertToWebP(Buffer.from('png-bytes'), 'image/png', 'p.png')
+
+    expect(result.wasConverted).toBe(true)
+    expect(result.width).toBeUndefined()
+    expect(result.height).toBeUndefined()
   })
 })

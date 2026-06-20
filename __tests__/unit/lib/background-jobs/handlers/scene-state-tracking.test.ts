@@ -5,6 +5,15 @@ import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap
 import { createSystemEvent } from '@/lib/services/system-events.service'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service'
+import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash'
+
+jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
+  resolveEquippedOutfitForCharacter: jest.fn().mockResolvedValue({
+    outfitValues: { top: [], bottom: [], footwear: [], accessories: [] },
+    leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+    itemsById: new Map(),
+  }),
+}))
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
@@ -96,6 +105,7 @@ const createMockRepos = () => ({
       contextSummary: null,
     }),
     getMessages: jest.fn().mockResolvedValue([]),
+    getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null),
     update: jest.fn().mockResolvedValue(undefined),
   },
   characters: {
@@ -217,6 +227,85 @@ describe('handleSceneStateTracking', () => {
         }),
       })
     )
+  })
+
+  // ─── 3b: Clothing hash-cache reuse / re-summarize ───────────────────────────
+
+  it('reuses the cached clothing summary when the equipped-outfit hash is unchanged', async () => {
+    const slots = { top: ['t1'], bottom: [], footwear: [], accessories: [] }
+    const matchingHash = hashEquippedSlots(slots)
+
+    // Previous scene state holds a cached clothing line + the hash it came from.
+    repos.chats.findById.mockResolvedValue({
+      id: 'chat-1',
+      userId: 'user-1',
+      messageCount: 10,
+      isDangerousChat: false,
+      participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active' }],
+      contextSummary: null,
+      sceneState: {
+        location: 'Garden',
+        updatedAtMessageCount: 0,
+        characters: [{ characterId: 'char-1', characterName: 'Alice', clothing: 'an old gown', clothingHash: matchingHash }],
+      },
+    } as any)
+    repos.chats.getEquippedOutfitForCharacter.mockResolvedValue(slots as any)
+
+    const sceneTypesMock = jest.requireMock('@/lib/schemas/chat.types') as { SceneStateSchema: { safeParse: jest.Mock } }
+    sceneTypesMock.SceneStateSchema.safeParse.mockReturnValueOnce({ success: true, data: { updatedAtMessageCount: 0 } })
+
+    // LLM proposes a different (fresh) clothing line.
+    mockUpdateSceneState.mockResolvedValue({
+      success: true,
+      result: { location: 'Garden', characters: [{ characterId: 'char-1', characterName: 'Alice', clothing: 'a red dress' }] },
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+
+    await handleSceneStateTracking(buildJob() as any)
+
+    const persisted = repos.chats.update.mock.calls[0][1].sceneState as any
+    const alice = persisted.characters.find((c: any) => c.characterId === 'char-1')
+    expect(alice.clothing).toBe('an old gown') // cached summary reused, not the LLM's fresh line
+    expect(alice.clothingHash).toBe(matchingHash)
+  })
+
+  it('takes the LLM clothing line and records a new hash when the wardrobe changed', async () => {
+    const cachedSlots = { top: ['t1'], bottom: [], footwear: [], accessories: [] }
+    const liveSlots = { top: ['t1', 't2'], bottom: [], footwear: [], accessories: [] }
+    const cachedHash = hashEquippedSlots(cachedSlots)
+    const liveHash = hashEquippedSlots(liveSlots)
+
+    repos.chats.findById.mockResolvedValue({
+      id: 'chat-1',
+      userId: 'user-1',
+      messageCount: 10,
+      isDangerousChat: false,
+      participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active' }],
+      contextSummary: null,
+      sceneState: {
+        location: 'Garden',
+        updatedAtMessageCount: 0,
+        characters: [{ characterId: 'char-1', characterName: 'Alice', clothing: 'an old gown', clothingHash: cachedHash }],
+      },
+    } as any)
+    repos.chats.getEquippedOutfitForCharacter.mockResolvedValue(liveSlots as any)
+
+    const sceneTypesMock = jest.requireMock('@/lib/schemas/chat.types') as { SceneStateSchema: { safeParse: jest.Mock } }
+    sceneTypesMock.SceneStateSchema.safeParse.mockReturnValueOnce({ success: true, data: { updatedAtMessageCount: 0 } })
+
+    mockUpdateSceneState.mockResolvedValue({
+      success: true,
+      result: { location: 'Garden', characters: [{ characterId: 'char-1', characterName: 'Alice', clothing: 'a red dress' }] },
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } as any)
+
+    await handleSceneStateTracking(buildJob() as any)
+
+    const persisted = repos.chats.update.mock.calls[0][1].sceneState as any
+    const alice = persisted.characters.find((c: any) => c.characterId === 'char-1')
+    expect(alice.clothing).toBe('a red dress') // wardrobe changed → fresh LLM line kept
+    expect(alice.clothingHash).toBe(liveHash)
+    expect(alice.clothingHash).not.toBe(cachedHash)
   })
 
   // ─── 4: Creates system event when usage present ─────────────────────────────

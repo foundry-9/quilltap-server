@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import FileBrowser, { type FileInfo } from '@/components/files/FileBrowser'
@@ -55,6 +56,8 @@ interface AccessibleStore {
   mountType: 'filesystem' | 'obsidian' | 'database'
   storeType: 'documents' | 'character'
   characterId?: string
+  /** True when reached via a group membership — bucketed into "Group Files". */
+  isGroupStore?: boolean
 }
 
 /** The project's official document store, when provisioned (see server). */
@@ -408,11 +411,14 @@ export default function DocumentPickerModal({
     return currentFolder.split('/')
   }, [currentFolder])
 
-  // Bucket the chat-accessible stores for the right-column accordions.
+  // Bucket the chat-accessible stores for the right-column accordions. Group
+  // stores get their own bucket and are held out of the generic Database-/
+  // Filesystem-backed buckets so each store appears exactly once.
   const storeBuckets = useMemo(() => ({
     characterVaults: accessibleStores.filter(s => s.storeType === 'character'),
-    databaseStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType === 'database'),
-    filesystemStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType !== 'database'),
+    groupStores: accessibleStores.filter(s => s.isGroupStore),
+    databaseStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType === 'database' && !s.isGroupStore),
+    filesystemStores: accessibleStores.filter(s => s.storeType === 'documents' && s.mountType !== 'database' && !s.isGroupStore),
   }), [accessibleStores])
 
   // Clicking a store row drills into its file browser (Step 2). We pass the
@@ -423,15 +429,11 @@ export default function DocumentPickerModal({
       onClick={() => handleSelectScope('document_store', { id: store.mountPointId, name: store.name, type: store.mountType })}
       className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
     >
-      <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
+      <Icon name="file" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
       <div className="flex-1 min-w-0">
         <div className="text-sm qt-text-primary font-medium truncate" title={store.label}>{store.label}</div>
       </div>
-      <svg className="w-3 h-3 flex-shrink-0 qt-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-      </svg>
+      <Icon name="chevron-right" className="w-3 h-3 flex-shrink-0 qt-text-muted" />
     </button>
   ), [handleSelectScope])
 
@@ -456,9 +458,7 @@ export default function DocumentPickerModal({
               className="w-full flex items-center gap-3 p-4 rounded-lg border border-dashed qt-border hover:qt-bg-hover transition-colors text-left"
             >
               <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
-                <svg className="w-5 h-5 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Icon name="plus" className="w-5 h-5 qt-text-secondary" />
               </div>
               <div>
                 <div className="font-medium qt-text-primary">New blank document</div>
@@ -477,9 +477,7 @@ export default function DocumentPickerModal({
                 className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
               >
                 <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
-                  <svg className="w-5 h-5 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                  </svg>
+                  <Icon name="folder" className="w-5 h-5 qt-text-secondary" />
                 </div>
                 <div>
                   <div className="font-medium qt-text-primary">Project library</div>
@@ -494,9 +492,7 @@ export default function DocumentPickerModal({
               className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
             >
               <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
-                <svg className="w-5 h-5 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" />
-                </svg>
+                <Icon name="scriptorium" className="w-5 h-5 qt-text-secondary" />
               </div>
               <div>
                 <div className="font-medium qt-text-primary">General library</div>
@@ -510,11 +506,7 @@ export default function DocumentPickerModal({
               title="Recent"
               description="Documents you've lately had open"
               defaultOpen={recentDocuments.length > 0}
-              icon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
+              icon={<Icon name="clock" className="w-5 h-5" />}
             >
               <div className="space-y-1">
                 {recentDocuments.length === 0 && (
@@ -533,13 +525,10 @@ export default function DocumentPickerModal({
                       onClick={() => handleReopenDocument(doc)}
                       className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
                     >
-                      <svg className="w-5 h-5 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        {doc.isActive ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        )}
-                      </svg>
+                      {doc.isActive
+                        ? <Icon name="file" className="w-5 h-5 flex-shrink-0 qt-text-secondary" />
+                        : <Icon name="clock" className="w-5 h-5 flex-shrink-0 qt-text-secondary" />
+                      }
                       <div className="flex-1 min-w-0">
                         <div className="font-medium qt-text-primary truncate">
                           {doc.displayTitle || doc.filePath}
@@ -574,11 +563,7 @@ export default function DocumentPickerModal({
               title="Character Vaults"
               description={lookEverywhere ? 'Every character vault' : 'Vaults of characters in this chat'}
               defaultOpen={storeBuckets.characterVaults.length > 0}
-              icon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              }
+              icon={<Icon name="characters" className="w-5 h-5" />}
             >
               <div className="space-y-0.5">
                 {storeBuckets.characterVaults.length > 0
@@ -587,16 +572,26 @@ export default function DocumentPickerModal({
               </div>
             </CollapsibleCard>
 
+            {storeBuckets.groupStores.length > 0 && (
+              <CollapsibleCard
+                key={`group-${lookEverywhere}-${storeBuckets.groupStores.length > 0}`}
+                title="Group Files"
+                description="Stores shared with characters' groups"
+                defaultOpen={storeBuckets.groupStores.length > 0}
+                icon={<Icon name="users" className="w-5 h-5" />}
+              >
+                <div className="space-y-0.5">
+                  {storeBuckets.groupStores.map(renderStoreRow)}
+                </div>
+              </CollapsibleCard>
+            )}
+
             <CollapsibleCard
               key={`db-${lookEverywhere}-${storeBuckets.databaseStores.length > 0}`}
               title="Database-backed document stores"
               description={lookEverywhere ? 'Every store kept inside Quilltap' : 'Project stores kept inside Quilltap'}
               defaultOpen={storeBuckets.databaseStores.length > 0}
-              icon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                </svg>
-              }
+              icon={<Icon name="database" className="w-5 h-5" />}
             >
               <div className="space-y-0.5">
                 {storeBuckets.databaseStores.length > 0
@@ -610,11 +605,7 @@ export default function DocumentPickerModal({
               title="Filesystem-backed document stores"
               description={lookEverywhere ? 'Every store backed by folders on disk' : 'Project stores backed by folders on disk'}
               defaultOpen={storeBuckets.filesystemStores.length > 0}
-              icon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-              }
+              icon={<Icon name="folder" className="w-5 h-5" />}
             >
               <div className="space-y-0.5">
                 {storeBuckets.filesystemStores.length > 0
@@ -636,9 +627,7 @@ export default function DocumentPickerModal({
               onClick={handleBack}
               className="flex items-center gap-1 text-sm qt-text-secondary hover:qt-text-primary transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <Icon name="arrow-left" className="w-4 h-4" />
               Back
             </button>
             <span className="text-sm qt-text-muted">
@@ -686,9 +675,7 @@ export default function DocumentPickerModal({
                         onClick={handleNavigateUp}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
                       >
-                        <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 17l-5-5m0 0l5-5m-5 5h12" />
-                        </svg>
+                        <Icon name="arrow-left" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                         <span className="text-sm qt-text-secondary">..</span>
                       </button>
                     )}
@@ -701,9 +688,7 @@ export default function DocumentPickerModal({
                       onClick={handleNewBlankInFolder}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
                     >
-                      <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+                      <Icon name="file-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                       <span className="text-sm qt-text-secondary">New document here</span>
                     </button>
 
@@ -711,9 +696,7 @@ export default function DocumentPickerModal({
                     {showNewFolderInput ? (
                       <div className="flex flex-col gap-1 px-3 py-2 rounded-md qt-bg-hover">
                         <div className="flex items-center gap-2">
-                          <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                          </svg>
+                          <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                           <input
                             type="text"
                             autoFocus
@@ -756,9 +739,7 @@ export default function DocumentPickerModal({
                         onClick={handleStartNewFolder}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
                       >
-                        <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                         <span className="text-sm qt-text-secondary">New folder</span>
                       </button>
                     )}
@@ -770,15 +751,11 @@ export default function DocumentPickerModal({
                         onClick={() => handleNavigateFolder(folder)}
                         className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
                       >
-                        <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                        </svg>
+                        <Icon name="folder" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                         <div className="flex-1 min-w-0">
                           <div className="text-sm qt-text-primary font-medium truncate">{folder}</div>
                         </div>
-                        <svg className="w-3 h-3 flex-shrink-0 qt-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <Icon name="chevron-right" className="w-3 h-3 flex-shrink-0 qt-text-muted" />
                       </button>
                     ))}
 
@@ -791,9 +768,7 @@ export default function DocumentPickerModal({
                           onClick={() => handleMountPointFileSelect(file)}
                           className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
                         >
-                          <svg className="w-4 h-4 flex-shrink-0 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                          <Icon name="file" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                           <div className="flex-1 min-w-0">
                             <div className="text-sm qt-text-primary truncate" title={file.relativePath}>
                               {fileName}

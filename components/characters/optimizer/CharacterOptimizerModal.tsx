@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Icon } from '@/components/ui/icon';
 import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { createPortal } from 'react-dom';
 import type { CharacterOptimizerModalProps, OptimizerFilterOptions, OptimizerOutputMode } from './types';
@@ -18,22 +19,6 @@ import { AnalysisSummary } from './components/AnalysisSummary';
 import { SuggestionCard } from './components/SuggestionCard';
 import { ApplyConfirmation } from './components/ApplyConfirmation';
 import { ProgressBar } from './components/ProgressBar';
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg className={`animate-spin ${className ?? 'w-5 h-5'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className ?? 'w-5 h-5'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  );
-}
 
 const STEP_LABELS: Record<string, string> = {
   loading: 'Retrieving the Commonplace Book…',
@@ -60,9 +45,9 @@ function ProgressStep({
     <div className={`flex items-center gap-3 py-2 px-3 rounded-md transition-colors ${isActive ? 'qt-bg-primary/10' : isDone ? 'opacity-60' : 'opacity-40'}`}>
       <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center">
         {isActive ? (
-          <SpinnerIcon className="w-4 h-4 text-primary" />
+          <Icon name="refresh" className="w-4 h-4 text-primary animate-spin" />
         ) : isDone ? (
-          <CheckIcon className="w-4 h-4 qt-text-success" />
+          <Icon name="check" className="w-4 h-4 qt-text-success" />
         ) : (
           <div className="w-2 h-2 rounded-full qt-bg-muted-foreground" />
         )}
@@ -144,9 +129,7 @@ export function CharacterOptimizerModal({
         <div className="qt-dialog-header flex items-start justify-between flex-shrink-0">
           <div className="flex flex-col gap-0.5">
             <h2 className="qt-dialog-title flex items-center gap-2">
-              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+              <Icon name="book" className="w-5 h-5 text-primary" />
               Refine from Memories
             </h2>
             <p className="qt-dialog-description">
@@ -165,9 +148,7 @@ export function CharacterOptimizerModal({
             className="qt-button-icon qt-button-ghost disabled:opacity-50 flex-shrink-0"
             aria-label="Close"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-5 h-5" />
           </button>
         </div>
 
@@ -189,9 +170,7 @@ export function CharacterOptimizerModal({
               {profiles.length === 0 ? (
                 <div className="qt-card p-4 qt-border-destructive/30 qt-bg-destructive/5">
                   <div className="flex items-center gap-2 qt-text-destructive mb-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <Icon name="alert-triangle" className="w-4 h-4" />
                     <span className="text-sm font-semibold">No Connection Profile Available</span>
                   </div>
                   <p className="qt-body-sm qt-text-secondary">
@@ -386,9 +365,7 @@ export function CharacterOptimizerModal({
 
               {optimizer.noSuggestionsMessage && !optimizer.loading && (
                 <div className="qt-card p-4 text-center flex flex-col items-center gap-3">
-                  <svg className="w-10 h-10 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Icon name="check-circle" className="w-10 h-10 qt-text-secondary" />
                   <p className="qt-body-sm qt-text-secondary leading-relaxed max-w-sm">
                     {optimizer.noSuggestionsMessage}
                   </p>
@@ -472,9 +449,7 @@ export function CharacterOptimizerModal({
           {optimizer.phase === 'suggestions-file-written' && (
             <div className="flex flex-col items-center gap-4 py-8 text-center">
               <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
-                <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <Icon name="file" className="w-8 h-8 qt-text-success" />
               </div>
               <div className="flex flex-col gap-1">
                 <h3 className="qt-section-title">Suggestions Inscribed</h3>
@@ -498,9 +473,7 @@ export function CharacterOptimizerModal({
               {applySuccess ? (
                 <div className="flex flex-col items-center gap-4 py-8 text-center">
                   <div className="w-14 h-14 rounded-full qt-bg-success/10 flex items-center justify-center">
-                    <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Icon name="check" className="w-8 h-8 qt-text-success" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <h3 className="qt-section-title">Refinements Commissioned</h3>
@@ -545,9 +518,7 @@ export function CharacterOptimizerModal({
               disabled={!selectedProfileId || profiles.length === 0}
               className="qt-button-primary disabled:opacity-50"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
+              <Icon name="book" className="w-4 h-4" />
               Commence Refinement
             </button>
           </div>
@@ -562,9 +533,7 @@ export function CharacterOptimizerModal({
                 disabled={optimizer.currentIndex === 0}
                 className="qt-button-ghost qt-button-sm disabled:opacity-30"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+                <Icon name="chevron-left" className="w-4 h-4" />
                 Previous
               </button>
 
@@ -577,9 +546,7 @@ export function CharacterOptimizerModal({
                   className="qt-button-secondary qt-button-sm"
                 >
                   Next
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <Icon name="chevron-right" className="w-4 h-4" />
                 </button>
               ) : (
                 <button
@@ -588,9 +555,7 @@ export function CharacterOptimizerModal({
                   className="qt-button-primary qt-button-sm"
                 >
                   Review Changes
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  <Icon name="chevron-right" className="w-4 h-4" />
                 </button>
               )}
             </div>

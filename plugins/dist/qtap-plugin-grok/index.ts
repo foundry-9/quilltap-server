@@ -33,6 +33,13 @@ const GROK_IMAGE_CONSTRAINTS: ImageProviderConstraints = {
   maxPromptBytes: 8000,
   promptConstraintWarning: 'Grok Imagine models support prompts up to approximately 8000 characters. Keep your prompt within this limit.',
   supportedAspectRatios: ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '2:1', '1:2', '19.5:9', '9:19.5', '20:9', '9:20'],
+  // Uniform across Grok image models: portrait → 3:4, landscape → 16:9, square → 1:1.
+  orientationSupport: {
+    strategy: 'aspectRatio',
+    portrait: { aspectRatio: '3:4' },
+    landscape: { aspectRatio: '16:9' },
+    square: { aspectRatio: '1:1' },
+  },
 };
 
 /**

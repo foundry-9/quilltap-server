@@ -26,6 +26,7 @@ import {
   importTags,
   importRoleplayTemplates,
   importProjects,
+  importGroups,
   importChats,
   importMemories,
 } from './import-entities';
@@ -62,6 +63,7 @@ export async function executeImport(
     embeddingProfiles: new Map(),
     roleplayTemplates: new Map(),
     projects: new Map(),
+    groups: new Map(),
     mountPoints: new Map(),
   };
 
@@ -77,6 +79,7 @@ export async function executeImport(
     tags: 0,
     memories: 0,
     projects: 0,
+    groups: 0,
   };
 
   const skipped: QuilltapExportCounts = {
@@ -90,6 +93,7 @@ export async function executeImport(
     tags: 0,
     memories: 0,
     projects: 0,
+    groups: 0,
   };
 
   const data = getExportData(exportData);
@@ -175,6 +179,20 @@ export async function executeImport(
       skipped.projects = counts.skipped;
     }
 
+    // 5.6. Groups (before characters since groups reference characters in membership)
+    if (data.groups && data.groups.length > 0) {
+      const counts = await importGroups(
+        userId,
+        data.groups,
+        options,
+        idMaps,
+        repos,
+        warnings
+      );
+      imported.groups = counts.imported;
+      skipped.groups = counts.skipped;
+    }
+
     // 6. Characters
     if (data.characters && data.characters.length > 0) {
       const counts = await importCharacters(
@@ -255,6 +273,66 @@ export async function executeImport(
       imported.chatDocuments = chatDocsImported;
     }
 
+    // 7c. Group character membership and linked document stores. Remap
+    // group and character IDs; skip members/links that don't exist in the import.
+    if (data.groups && data.groups.length > 0) {
+      const groupsData = data.groups as Array<{
+        id: string;
+        _memberCharacterIds?: string[];
+        _linkedStoreMountPointIds?: string[];
+      }>;
+
+      for (const groupExport of groupsData) {
+        const remappedGroupId = idMaps.groups.get(groupExport.id) ?? groupExport.id;
+
+        // Re-establish character membership
+        if (groupExport._memberCharacterIds && groupExport._memberCharacterIds.length > 0) {
+          for (const characterId of groupExport._memberCharacterIds) {
+            const remappedCharacterId = idMaps.characters.get(characterId);
+            if (!remappedCharacterId) {
+              moduleLogger.debug('Skipping group member — character not in import', {
+                groupId: groupExport.id,
+                characterId,
+              });
+              continue;
+            }
+            try {
+              await repos.groupCharacterMembers.addMember(remappedGroupId, remappedCharacterId);
+            } catch (error) {
+              moduleLogger.warn('Failed to add group member', {
+                groupId: remappedGroupId,
+                characterId: remappedCharacterId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }
+
+        // Link additional document stores (beyond the official mount point)
+        if (groupExport._linkedStoreMountPointIds && groupExport._linkedStoreMountPointIds.length > 0) {
+          for (const mountPointId of groupExport._linkedStoreMountPointIds) {
+            const remappedMountPointId = idMaps.mountPoints.get(mountPointId);
+            if (!remappedMountPointId) {
+              moduleLogger.debug('Skipping group linked store — mount point not in import', {
+                groupId: groupExport.id,
+                mountPointId,
+              });
+              continue;
+            }
+            try {
+              await repos.groupDocMountLinks.link(remappedGroupId, remappedMountPointId);
+            } catch (error) {
+              moduleLogger.warn('Failed to link document store to group', {
+                groupId: remappedGroupId,
+                mountPointId: remappedMountPointId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }
+      }
+    }
+
     // 8. Memories (if includeMemories option is enabled)
     if (options.includeMemories && data.memories && data.memories.length > 0) {
       const counts = await importMemories(
@@ -292,11 +370,17 @@ export async function executeImport(
     // Post-import reconciliation
     await reconcileRelationships(userId, repos, idMaps, warnings);
 
+    // Destination character IDs — for the `duplicate` strategy every value is a
+    // freshly created character (see import-characters). The Salon "Summon from
+    // Lore" flow reads these to select the character it just summoned.
+    const importedCharacterIds = Array.from(idMaps.characters.values());
+
     moduleLogger.info('Import execution completed successfully', {
       userId,
       imported,
       skipped,
       warningCount: warnings.length,
+      importedCharacterIdCount: importedCharacterIds.length,
     });
 
     return {
@@ -304,6 +388,7 @@ export async function executeImport(
       imported,
       skipped,
       warnings,
+      importedCharacterIds,
     };
   } catch (error) {
     const errorMessage =
@@ -321,6 +406,7 @@ export async function executeImport(
         ...warnings,
         `Import failed: ${errorMessage}`,
       ],
+      importedCharacterIds: Array.from(idMaps.characters.values()),
     };
   }
 }

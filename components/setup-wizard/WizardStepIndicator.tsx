@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon } from '@/components/ui/icon'
 import { WIZARD_STEPS, STEP_LABELS, type WizardStep } from './useProviderWizardState'
 
 interface WizardStepIndicatorProps {
@@ -37,9 +38,7 @@ export function WizardStepIndicator({ currentStep, completedSteps = [] }: Wizard
                 aria-current={isActive ? 'step' : undefined}
               >
                 {isCompleted && !isActive ? (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Icon name="check" className="w-4 h-4" />
                 ) : (
                   stepNumber
                 )}

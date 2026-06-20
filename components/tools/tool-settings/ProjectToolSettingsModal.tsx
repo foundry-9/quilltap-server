@@ -8,7 +8,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { ToolSettingsContent } from './ToolSettingsContent'
@@ -35,10 +37,12 @@ export function ProjectToolSettingsModal({
   const [localDisabledGroups, setLocalDisabledGroups] = useState<Set<string>>(new Set(disabledToolGroups))
   const [saving, setSaving] = useState(false)
 
-  // Fetch available tools via SWR (gated by isOpen)
-  const { data: toolsData, isLoading: loading } = useSWR<{ tools: AvailableTool[] }>(
-    isOpen ? '/api/v1/tools' : null
-  )
+  // Fetch available tools via TanStack Query (gated by isOpen)
+  const { data: toolsData, isLoading: loading } = useQuery({
+    queryKey: queryKeys.tools.all,
+    queryFn: ({ signal }) => apiFetch<{ tools: AvailableTool[] }>('/api/v1/tools', { signal }),
+    enabled: isOpen,
+  })
 
   const availableTools = toolsData?.tools ?? []
 

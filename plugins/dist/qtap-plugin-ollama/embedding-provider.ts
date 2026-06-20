@@ -37,6 +37,26 @@ const numCtxCache = new Map<string, number>();
 const numCtxInflight = new Map<string, Promise<{ numCtx: number; derived: boolean }>>();
 
 /**
+ * Validate an embedding vector returned by Ollama. Some models (notably
+ * qwen3-embedding) can emit NaN/Inf components for pathological inputs; on
+ * newer Ollama these fail server-side with "json: unsupported value: NaN",
+ * but on lenient parses a non-finite vector can slip through. A NaN component
+ * poisons cosine similarity (every comparison becomes NaN) and breaks JSON
+ * serialization downstream, so reject it here with a clear, identifiable error
+ * rather than persisting a corrupt vector.
+ */
+function assertFiniteEmbedding(embedding: unknown): asserts embedding is number[] {
+  if (!Array.isArray(embedding) || embedding.length === 0) {
+    throw new Error('No embedding returned from Ollama');
+  }
+  for (let i = 0; i < embedding.length; i++) {
+    if (typeof embedding[i] !== 'number' || !Number.isFinite(embedding[i])) {
+      throw new Error('Ollama returned a non-finite (NaN/Inf) embedding');
+    }
+  }
+}
+
+/**
  * Ollama Embedding Provider
  *
  * Wraps Ollama's embeddings API for generating text embeddings.
@@ -71,6 +91,13 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
   ): Promise<EmbeddingResult> {
     void apiKey;
     void options;
+
+    // Empty/whitespace-only input has no meaningful embedding and is a known
+    // trigger for NaN vectors on Ollama embedding models. Reject it up front
+    // with a clear, deterministic error so callers can skip rather than retry.
+    if (!text || text.trim().length === 0) {
+      throw new Error('Cannot embed empty input');
+    }
 
     const numCtx = await this.resolveNumCtx(model);
 
@@ -117,10 +144,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     const data = await response.json();
     const embedding = Array.isArray(data.embeddings) ? data.embeddings[0] : undefined;
 
-    if (!embedding) {
-      throw new Error('No embedding returned from Ollama');
-    }
-
+    assertFiniteEmbedding(embedding);
 
     return {
       embedding,
@@ -136,6 +160,9 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
    * minimal payload and let Ollama use whatever context it loaded with.
    */
   private async generateEmbeddingLegacy(text: string, model: string): Promise<EmbeddingResult> {
+    if (!text || text.trim().length === 0) {
+      throw new Error('Cannot embed empty input');
+    }
     const response = await fetch(`${this.baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: {
@@ -160,9 +187,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
     const data = await response.json();
     const embedding = data.embedding;
 
-    if (!embedding) {
-      throw new Error('No embedding returned from Ollama');
-    }
+    assertFiniteEmbedding(embedding);
 
     return {
       embedding,

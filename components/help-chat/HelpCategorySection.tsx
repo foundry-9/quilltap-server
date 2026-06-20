@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
+import { Icon } from '@/components/ui/icon'
 
 interface DocumentInfo {
   id: string
@@ -91,15 +92,7 @@ export function HelpCategorySection({
         onClick={toggle}
         aria-expanded={isExpanded}
       >
-        <svg
-          className={`qt-help-guide-category-chevron ${isExpanded ? 'qt-help-guide-category-chevron-open' : ''}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        <Icon name="chevron-right" className={`qt-help-guide-category-chevron ${isExpanded ? 'qt-help-guide-category-chevron-open' : ''}`} />
         <span className="qt-help-guide-category-label">{label}</span>
         <span className="qt-help-guide-category-badge">({documents.length})</span>
       </button>

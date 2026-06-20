@@ -19,7 +19,9 @@ import {
   type ReactNode,
 } from 'react'
 import { usePathname } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 // ============================================================================
 // TYPES
@@ -113,14 +115,15 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   )
   const previousPathname = useRef(pathname)
 
-  const { data: eligibilityData, isLoading: eligibilityIsLoading, mutate: mutateEligibility } = useSWR<{ characters: HelpChatEligibleCharacter[] }>(
-    '/api/v1/help-chats?action=eligibility'
-  )
+  const { data: eligibilityData, isPending: eligibilityIsLoading, refetch: mutateEligibility } = useQuery({
+    queryKey: queryKeys.helpChat.eligibility,
+    queryFn: ({ signal }) => apiFetch<{ characters: HelpChatEligibleCharacter[] }>('/api/v1/help-chats?action=eligibility', { signal }),
+  })
 
-  // Update state from SWR data
+  // Update state from Query data
   useEffect(() => {
     if (eligibilityData?.characters) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state that's also mutated by action handlers (filter/delete/update)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Query data must sync to local state that's also mutated by action handlers (filter/delete/update)
       setEligibleCharacters(eligibilityData.characters)
 
       // Auto-select first eligible character if none selected

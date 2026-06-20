@@ -7,13 +7,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { checkOwnership } from '@/lib/api/middleware';
+import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { notFound } from '@/lib/api/responses';
+import { badRequest, notFound, successResponse } from '@/lib/api/responses';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
+import { writeStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 
 const updateCharacterSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -35,6 +37,7 @@ const updateCharacterSchema = z.object({
     .optional(),
   firstMessage: z.string().optional(),
   exampleDialogues: z.string().optional(),
+  talkativeness: z.number().min(0.1).max(1.0).optional(),
   defaultConnectionProfileId: z.uuid()
     .optional()
     .or(
@@ -61,11 +64,13 @@ const updateCharacterSchema = z.object({
     .nullable(),
   systemTransparency: z.boolean().nullable().optional(),
   coreWhisperEnabled: z.boolean().nullable().optional(),
+  canBeCarina: z.boolean().nullable().optional(),
   physicalDescription: z
     .object({
       id: z.string().uuid().optional(),
       name: z.string().min(1),
       usageContext: z.string().max(200).nullable().optional(),
+      headAndShouldersPrompt: z.string().max(500).nullable().optional(),
       shortPrompt: z.string().max(350).nullable().optional(),
       mediumPrompt: z.string().max(500).nullable().optional(),
       longPrompt: z.string().max(750).nullable().optional(),
@@ -85,10 +90,32 @@ export async function handlePut(
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
 
-  const existingCharacter = await repos.characters.findById(id);
+  // Existence/ownership check only — use the raw row so a character with a
+  // broken vault can still be edited (and thereby repaired: update() routes
+  // managed fields back to the vault and auto-provisions a missing one).
+  // findById would throw CharacterVaultUnavailableError → 503.
+  const existingCharacter = await repos.characters.findByIdRaw(id);
 
   if (!checkOwnership(existingCharacter, user.id)) {
     return notFound('Character');
+  }
+
+  // Action dispatch: the depiction-guidelines (Ariel Clause) file lives in the
+  // character's vault root, not the character row.
+  if (getActionParam(req) === 'depiction-guidelines') {
+    const mountId = existingCharacter.characterDocumentMountPointId;
+    if (!mountId) {
+      return badRequest('Character has no document vault to store depiction guidelines');
+    }
+    const aestheticBody = await req.json().catch(() => ({}));
+    const content = typeof aestheticBody?.content === 'string' ? aestheticBody.content : '';
+    await writeStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME, content);
+    logger.info('[Characters v1] Depiction guidelines updated', {
+      characterId: id,
+      length: content.trim().length,
+      deleted: content.trim().length === 0,
+    });
+    return successResponse({ success: true });
   }
 
   const body = await req.json();
@@ -116,6 +143,7 @@ export async function handlePut(
         id: rawPhysical.id ?? crypto.randomUUID(),
         name: rawPhysical.name,
         usageContext: rawPhysical.usageContext ?? null,
+        headAndShouldersPrompt: rawPhysical.headAndShouldersPrompt ?? null,
         shortPrompt: rawPhysical.shortPrompt ?? null,
         mediumPrompt: rawPhysical.mediumPrompt ?? null,
         longPrompt: rawPhysical.longPrompt ?? null,

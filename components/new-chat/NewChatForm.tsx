@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { TimestampConfigCard } from '@/components/settings/chat-settings/components/TimestampConfigCard'
@@ -13,6 +14,7 @@ import { AutonomousRoomCard } from './AutonomousRoomCard'
 import type {
   ConnectionProfile,
   GeneralScenarioOption,
+  GroupScenarioOption,
   ImageProfile,
   NewChatAutonomousState,
   NewChatFormState,
@@ -25,6 +27,7 @@ import type { ProjectListEntry } from './hooks/useNewChat'
 import {
   CUSTOM_SCENARIO_VALUE,
   GENERAL_SCENARIO_PREFIX,
+  GROUP_SCENARIO_PREFIX,
   PROJECT_SCENARIO_PREFIX,
 } from './types'
 
@@ -41,6 +44,8 @@ interface NewChatFormProps {
   projectScenarios?: ProjectScenarioOption[]
   /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
   generalScenarios?: GeneralScenarioOption[]
+  /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
+  groupScenarios?: GroupScenarioOption[]
   /**
    * In-form project picker plumbing. When `availableProjects` is non-empty and
    * `onSelectedProjectIdChange` is supplied, the form renders a dropdown so the
@@ -92,6 +97,7 @@ export function NewChatForm({
   project,
   projectScenarios = [],
   generalScenarios = [],
+  groupScenarios = [],
   availableProjects,
   selectedProjectId,
   onSelectedProjectIdChange,
@@ -109,6 +115,15 @@ export function NewChatForm({
   )
   const singleLlm = llmSelected.length === 1 ? llmSelected[0] : null
 
+  // The single source of truth for "who the user plays as": the cast member
+  // whose `controlledBy` is 'user'. Both the "Play As" dropdown and the picker
+  // panel's per-character select read and mutate this same slot.
+  const userEntry = useMemo(
+    () => selectedCharacters.find((sc) => sc.controlledBy === 'user'),
+    [selectedCharacters]
+  )
+  const hasUserControlled = Boolean(userEntry)
+
   const singleCharacterScenarios = useMemo(() => {
     if (!singleLlm) return null
     const s = singleLlm.character.scenarios
@@ -117,14 +132,34 @@ export function NewChatForm({
 
   const hasProjectScenarios = projectScenarios.length > 0
   const hasGeneralScenarios = generalScenarios.length > 0
+  const hasGroupScenarios = groupScenarios.length > 0
   const hasCharacterScenarios = singleCharacterScenarios && singleCharacterScenarios.length > 0
-  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasCharacterScenarios
+  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasGroupScenarios || hasCharacterScenarios
+
+  // Group scenarios by groupId for rendering as optgroups
+  const groupScenariosByGroup = useMemo(() => {
+    const groups = new Map<string, { groupName: string; scenarios: GroupScenarioOption[] }>()
+    for (const scenario of groupScenarios) {
+      if (!groups.has(scenario.groupId)) {
+        groups.set(scenario.groupId, { groupName: scenario.groupName, scenarios: [] })
+      }
+      groups.get(scenario.groupId)!.scenarios.push(scenario)
+    }
+    return groups
+  }, [groupScenarios])
 
   const selectedProjectScenario = state.projectScenarioPath
     ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
     : undefined
   const selectedGeneralScenario = state.generalScenarioPath
     ? generalScenarios.find((s) => s.path === state.generalScenarioPath)
+    : undefined
+  const selectedGroupScenario = state.groupScenarioPath
+    ? groupScenarios.find(
+        (s) =>
+          s.path === state.groupScenarioPath &&
+          s.groupId === state.groupScenarioGroupId
+      )
     : undefined
   const selectedCharacterScenario = state.scenarioId
     ? singleCharacterScenarios?.find((s) => s.id === state.scenarioId)
@@ -133,10 +168,11 @@ export function NewChatForm({
     ? { kind: 'project' as const, content: selectedProjectScenario.body }
     : selectedGeneralScenario
       ? { kind: 'general' as const, content: selectedGeneralScenario.body }
-      : selectedCharacterScenario
-        ? { kind: 'character' as const, content: selectedCharacterScenario.content }
-        : null
-  const showCustomTextarea = !selectedPreset
+      : selectedGroupScenario
+        ? { kind: 'group' as const, content: selectedGroupScenario.body }
+        : selectedCharacterScenario
+          ? { kind: 'character' as const, content: selectedCharacterScenario.content }
+          : null
 
   // The character's own default — used to render the override-visibility note
   // when the form is currently using the project default but the character
@@ -155,9 +191,11 @@ export function NewChatForm({
     ? `${PROJECT_SCENARIO_PREFIX}${selectedProjectScenario.path}`
     : selectedGeneralScenario
       ? `${GENERAL_SCENARIO_PREFIX}${selectedGeneralScenario.path}`
-      : selectedCharacterScenario
-        ? selectedCharacterScenario.id
-        : CUSTOM_SCENARIO_VALUE
+      : selectedGroupScenario
+        ? `${GROUP_SCENARIO_PREFIX}${selectedGroupScenario.groupId}:${selectedGroupScenario.path}`
+        : selectedCharacterScenario
+          ? selectedCharacterScenario.id
+          : CUSTOM_SCENARIO_VALUE
 
   const handleScenarioSelectChange = (value: string) => {
     if (value === CUSTOM_SCENARIO_VALUE || value === '') {
@@ -166,6 +204,8 @@ export function NewChatForm({
         scenarioId: null,
         projectScenarioPath: null,
         generalScenarioPath: null,
+        groupScenarioPath: null,
+        groupScenarioGroupId: null,
       }))
       return
     }
@@ -175,8 +215,9 @@ export function NewChatForm({
         ...prev,
         projectScenarioPath: path,
         generalScenarioPath: null,
+        groupScenarioPath: null,
+        groupScenarioGroupId: null,
         scenarioId: null,
-        scenario: '',
       }))
       return
     }
@@ -186,10 +227,28 @@ export function NewChatForm({
         ...prev,
         generalScenarioPath: path,
         projectScenarioPath: null,
+        groupScenarioPath: null,
+        groupScenarioGroupId: null,
         scenarioId: null,
-        scenario: '',
       }))
       return
+    }
+    if (value.startsWith(GROUP_SCENARIO_PREFIX)) {
+      const rest = value.slice(GROUP_SCENARIO_PREFIX.length)
+      const colonIdx = rest.indexOf(':')
+      if (colonIdx > -1) {
+        const groupId = rest.slice(0, colonIdx)
+        const path = rest.slice(colonIdx + 1)
+        setState((prev) => ({
+          ...prev,
+          groupScenarioPath: path,
+          groupScenarioGroupId: groupId,
+          projectScenarioPath: null,
+          generalScenarioPath: null,
+          scenarioId: null,
+        }))
+        return
+      }
     }
     // Character scenario UUID
     setState((prev) => ({
@@ -197,7 +256,8 @@ export function NewChatForm({
       scenarioId: value,
       projectScenarioPath: null,
       generalScenarioPath: null,
-      scenario: '',
+      groupScenarioPath: null,
+      groupScenarioGroupId: null,
     }))
   }
 
@@ -208,6 +268,8 @@ export function NewChatForm({
       scenarioId: characterDefaultScenario.id,
       projectScenarioPath: null,
       generalScenarioPath: null,
+      groupScenarioPath: null,
+      groupScenarioGroupId: null,
       scenario: '',
     }))
   }
@@ -239,12 +301,78 @@ export function NewChatForm({
       name: sc.character.name,
       isUserControlled: false,
     }))
-    const userChar = userControlledCharacters.find((c) => c.id === state.selectedUserCharacterId)
-    if (userChar) {
-      list.push({ id: userChar.id, name: userChar.name, isUserControlled: true })
+    if (userEntry) {
+      list.push({
+        id: userEntry.character.id,
+        name: userEntry.character.name,
+        isUserControlled: true,
+      })
     }
     return list
-  }, [llmSelected, userControlledCharacters, state.selectedUserCharacterId])
+  }, [llmSelected, userEntry])
+
+  // "Play As" options: every cast member (so any added character can take the
+  // user's chair) plus default-user characters not yet in the cast (preserving
+  // the ability to pull in a persona that wasn't picked).
+  const playAsOptions = useMemo(() => {
+    const castIds = new Set(selectedCharacters.map((sc) => sc.character.id))
+    const fromCast = selectedCharacters.map((sc) => ({
+      id: sc.character.id,
+      label: formatCharacterName(sc.character),
+    }))
+    const fromDefaults = userControlledCharacters
+      .filter((c) => !castIds.has(c.id))
+      .map((c) => ({ id: c.id, label: formatCharacterName(c) }))
+    return [...fromCast, ...fromDefaults]
+  }, [selectedCharacters, userControlledCharacters, formatCharacterName])
+
+  // Mark one character as the user's persona, in place. Reverting the prior
+  // user entry: a default-user persona pulled in by this dropdown is removed;
+  // a default-LLM character that was flipped is handed back to the LLM (its
+  // profile is cleared, matching CharacterPickerPanel.handleProfileChange, so
+  // the submit guard will ask for a profile again).
+  const handlePlayAsChange = useCallback(
+    (nextId: string) => {
+      const defaultUserIds = new Set(userControlledCharacters.map((c) => c.id))
+      setSelectedCharacters((prev) => {
+        let next = prev
+        const current = prev.find((sc) => sc.controlledBy === 'user')
+        if (current) {
+          if (defaultUserIds.has(current.character.id)) {
+            next = prev.filter((sc) => sc.character.id !== current.character.id)
+          } else {
+            next = prev.map((sc) =>
+              sc.character.id === current.character.id
+                ? { ...sc, controlledBy: 'llm' as const, connectionProfileId: '' }
+                : sc
+            )
+          }
+        }
+        if (nextId === '') return next // "Chat as yourself"
+        if (next.some((sc) => sc.character.id === nextId)) {
+          return next.map((sc) =>
+            sc.character.id === nextId
+              ? { ...sc, controlledBy: 'user' as const, connectionProfileId: '' }
+              : sc
+          )
+        }
+        const fromDefault = userControlledCharacters.find((c) => c.id === nextId)
+        if (fromDefault) {
+          return [
+            ...next,
+            {
+              character: fromDefault,
+              connectionProfileId: '',
+              selectedSystemPromptId: null,
+              controlledBy: 'user' as const,
+            },
+          ]
+        }
+        return next
+      })
+    },
+    [userControlledCharacters, setSelectedCharacters]
+  )
 
   const handleOutfitSelectionsChange = useCallback(
     (selections: OutfitSelection[]) => {
@@ -276,9 +404,6 @@ export function NewChatForm({
       setState((prev) => ({
         ...prev,
         autonomous: { ...prev.autonomous, enabled: next },
-        // Strip the Play-As selection when flipping into autonomous mode —
-        // autonomous rooms have no user. We leave it alone if flipping back.
-        selectedUserCharacterId: next ? '' : prev.selectedUserCharacterId,
       }))
     },
     [setState]
@@ -307,7 +432,7 @@ export function NewChatForm({
             checked={isAutonomous}
             onChange={(e) => handleAutonomousToggle(e.target.checked)}
             className="qt-checkbox mt-1"
-            disabled={creating}
+            disabled={creating || hasUserControlled}
           />
           <span>
             <span className="font-medium text-foreground">Make this an autonomous room</span>
@@ -321,9 +446,10 @@ export function NewChatForm({
             </span>
           </span>
         </label>
-        {isAutonomous && state.selectedUserCharacterId && (
+        {hasUserControlled && !isAutonomous && (
           <p className="mt-2 qt-text-xs qt-text-warning">
-            User character will be removed on submit — autonomous rooms have no user.
+            A character is set to Play As (user). Autonomous rooms have no user —
+            revert it to &ldquo;Chat as yourself&rdquo; to enable.
           </p>
         )}
       </div>
@@ -390,24 +516,22 @@ export function NewChatForm({
           </div>
         )}
 
-        {!isAutonomous && userControlledCharacters.length > 0 && (
+        {!isAutonomous && playAsOptions.length > 0 && (
           <div>
             <label htmlFor="new-chat-partner" className="mb-2 block text-sm qt-text-primary">
               Play As (Optional)
             </label>
             <select
               id="new-chat-partner"
-              value={state.selectedUserCharacterId}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, selectedUserCharacterId: e.target.value }))
-              }
+              value={userEntry?.character.id ?? ''}
+              onChange={(e) => handlePlayAsChange(e.target.value)}
               disabled={creating}
               className="qt-select"
             >
               <option value="">Chat as yourself</option>
-              {userControlledCharacters.map((char) => (
-                <option key={char.id} value={char.id}>
-                  {formatCharacterName(char)}
+              {playAsOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -423,7 +547,7 @@ export function NewChatForm({
               value={state.imageProfileId || null}
               onChange={handleImageProfileChange}
               characterId={characterIdForImage}
-              userCharacterId={state.selectedUserCharacterId}
+              userCharacterId={userEntry?.character.id}
             />
           ) : (
             <p className="qt-text-xs qt-text-muted">
@@ -467,6 +591,17 @@ export function NewChatForm({
                   ))}
                 </optgroup>
               )}
+              {hasGroupScenarios && Array.from(groupScenariosByGroup.entries()).map(([groupId, { groupName, scenarios }]) => (
+                <optgroup key={`group:${groupId}`} label={`Group Scenarios: ${groupName}`}>
+                  {scenarios.map((s) => (
+                    <option key={`group:${groupId}:${s.path}`} value={`${GROUP_SCENARIO_PREFIX}${groupId}:${s.path}`}>
+                      {s.name}
+                      {s.isDefault ? ' (group default)' : ''}
+                      {s.description ? ` — ${s.description}` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
               {hasCharacterScenarios && (
                 <optgroup label="Character Scenarios">
                   {singleCharacterScenarios!.map((s) => (
@@ -499,16 +634,19 @@ export function NewChatForm({
               {selectedPreset.content}
             </div>
           )}
-          {showCustomTextarea && (
-            <MarkdownLexicalEditor
-              value={state.scenario}
-              onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
-              disabled={creating}
-              namespace="NewChatForm.scenario"
-              ariaLabel="Starting scenario"
-              minHeight="6rem"
-            />
+          {selectedPreset && (
+            <p className="mb-1 mt-2 text-xs qt-text-muted">
+              Your notes here are added beneath the scenario above.
+            </p>
           )}
+          <MarkdownLexicalEditor
+            value={state.scenario}
+            onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
+            disabled={creating}
+            namespace="NewChatForm.scenario"
+            ariaLabel={selectedPreset ? 'Additional scenario notes' : 'Starting scenario'}
+            minHeight="6rem"
+          />
         </div>
 
         {outfitCharacters.length > 0 && (
@@ -518,6 +656,7 @@ export function NewChatForm({
             disabled={creating}
             sourceChatId={continuationFromChatId ?? null}
             previousOutfitSummary={previousOutfitSummary ?? null}
+            projectId={selectedProjectId ?? null}
           />
         )}
 
@@ -575,9 +714,7 @@ export function NewChatForm({
                   availableProjects.find((p) => p.id === selectedProjectId)?.color || 'var(--muted)',
               }}
             >
-              <svg className="w-3 h-3 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
+              <Icon name="folder" className="w-3 h-3 qt-text-secondary" />
             </div>
             <select
               id="new-chat-project-select"
@@ -602,9 +739,7 @@ export function NewChatForm({
               className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: project.color || 'var(--muted)' }}
             >
-              <svg className="w-3 h-3 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
+              <Icon name="folder" className="w-3 h-3 qt-text-secondary" />
             </div>
             <div className="min-w-0">
               <p className="qt-text-xs qt-text-muted">In project</p>

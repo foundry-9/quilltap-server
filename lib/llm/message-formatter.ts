@@ -378,3 +378,59 @@ export function stripCharacterNamePrefix(content: string, characterName?: string
 
   return result
 }
+
+/** Result of {@link truncateAtForeignSpeaker}. */
+export interface ForeignSpeakerTruncation {
+  /** The response up to (not including) the first foreign speaker tag, right-trimmed. */
+  text: string
+  /**
+   * Offset into the INPUT where truncation occurred (start of the foreign tag's
+   * line), or `null` if no foreign tag was found. `0` means the input began with
+   * a foreign tag.
+   */
+  truncatedAt: number | null
+}
+
+/**
+ * Multi-character anti-hijack safeguard: detect the point where a model has
+ * begun writing ANOTHER participant's turn — a line that opens with a known
+ * other-participant name as a speaker tag, either `[Name]` or `Name:` — and
+ * truncate the response there. Returns the text before that tag (right-trimmed)
+ * plus the offset it cut at.
+ *
+ * This is a model-agnostic structural backstop to the system-prompt
+ * anti-impersonation guidance: even if an LLM ignores "only write your own
+ * turn", its output can never carry another character's lines into the
+ * transcript. It deliberately matches ONLY the supplied `foreignNames` (and
+ * their aliases) as line-anchored speaker tags — never arbitrary bracketed
+ * content — so roleplay action tags (`[*sighs*]`), status lines
+ * (`[Whisper sent.]`), prose mentions ("I told Charlie:"), and the speaker's
+ * OWN name are all left intact. Strip the speaker's own leading prefix with
+ * {@link stripCharacterNamePrefix} first; pass only the OTHER participants here.
+ */
+export function truncateAtForeignSpeaker(
+  content: string,
+  foreignNames: string[],
+): ForeignSpeakerTruncation {
+  if (!content || foreignNames.length === 0) return { text: content, truncatedAt: null }
+
+  const escaped = foreignNames
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0)
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  if (escaped.length === 0) return { text: content, truncatedAt: null }
+
+  const names = escaped.join('|')
+  // Line-anchored (start of string or after a newline), optional leading
+  // whitespace, then either "[Name]" or "Name:" — the two screenplay speaker
+  // formats LLMs slip into when continuing the scene for everyone.
+  const re = new RegExp(`(?:^|\\n)[ \\t]*(?:\\[(?:${names})\\]|(?:${names})[ \\t]*:)`, 'i')
+  const m = re.exec(content)
+  if (!m) return { text: content, truncatedAt: null }
+
+  // m.index is the position of the matched newline (or 0 at string start).
+  // Slicing there drops the newline and everything after it.
+  const cut = m.index
+  const text = content.slice(0, cut).replace(/\s+$/, '')
+  return { text, truncatedAt: cut }
+}

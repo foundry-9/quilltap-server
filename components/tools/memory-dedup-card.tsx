@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -122,14 +123,7 @@ export function MemoryDedupCard() {
             </p>
           </div>
           <div className="flex-shrink-0 text-primary">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-              />
-            </svg>
+            <Icon name="cpu" className="w-8 h-8" />
           </div>
         </div>
 
@@ -177,14 +171,7 @@ export function MemoryDedupCard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 qt-bg-primary/10 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
-                        />
-                      </svg>
+                      <Icon name="cpu" className="w-5 h-5 text-primary" />
                     </div>
                     <h2 className="qt-heading-4">
                       {step === 'complete' ? 'Deduplication Complete' : 'Memory Deduplication'}
@@ -195,9 +182,7 @@ export function MemoryDedupCard() {
                     className="qt-button qt-button-ghost qt-text-secondary hover:text-foreground p-1"
                     aria-label="Close dialog"
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <Icon name="close" className="w-6 h-6" />
                   </button>
                 </div>
               </div>
@@ -307,9 +292,7 @@ export function MemoryDedupCard() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-center">
                       <div className="w-16 h-16 qt-bg-success/10 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 qt-text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Icon name="check" className="w-8 h-8 qt-text-success" />
                       </div>
                     </div>
 

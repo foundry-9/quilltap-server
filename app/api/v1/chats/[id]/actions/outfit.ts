@@ -5,7 +5,7 @@
  * GET /api/v1/chats/[id]?action=outfit-summary — Per-character resolved title summary
  * POST /api/v1/chats/[id]?action=equip         — Mutate equipped state
  *
- * The POST body uses the same `mode` enum as the `wardrobe_set_outfit` LLM
+ * The POST body uses the same `mode` enum as the `wardrobe_wear`/`wardrobe_take_off` LLM
  * tool: `equip`, `add_to_slot`, `remove_from_slot`, `clear_slot`. Internally
  * each mode dispatches to the matching primitive in
  * `lib/wardrobe/outfit-displacement.ts`.
@@ -27,6 +27,10 @@ import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generati
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { WARDROBE_SLOT_TYPES, EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
+import {
+  resolveProjectMountPointIds,
+  resolveProjectMountPointIdsForChat,
+} from '@/lib/mount-index/tiered-mount-pool';
 
 const equipBodySchema = z
   .object({
@@ -125,10 +129,12 @@ export async function handleGetOutfitSummary(
 
     const itemsById = new Map<string, WardrobeItem>();
     if (allItemIds.size > 0) {
-      // No global wardrobe table post-cutover: seed shared archetypes (Quilltap
-      // General) so composite components that are shared items resolve, then
-      // layer each participant character's own vault wardrobe on top.
-      for (const arche of await repos.wardrobe.findArchetypes(true)) {
+      // No global wardrobe table post-cutover: seed shared items (Quilltap
+      // General + the chat project's stores) so composite components that are
+      // shared items resolve, then layer each participant character's own vault
+      // wardrobe on top.
+      const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
+      for (const arche of await repos.wardrobe.findArchetypes(true, { projectMountPointIds })) {
         itemsById.set(arche.id, arche);
       }
       for (const characterId of Object.keys(equippedOutfit)) {
@@ -182,7 +188,7 @@ export async function handleGetOutfitSummary(
  * POST ?action=equip — Mutate equipped state for a character in this chat.
  *
  * Body: `{ characterId, mode, slot?, itemId? }` — same `mode` semantics as
- * the `wardrobe_set_outfit` LLM tool.
+ * the `wardrobe_wear`/`wardrobe_take_off` LLM tools.
  */
 export async function handleEquipSlot(
   req: NextRequest,
@@ -193,6 +199,11 @@ export async function handleEquipSlot(
   try {
     const body = await req.json();
     const { characterId, mode, slot, itemId, slots: bodySlots } = equipBodySchema.parse(body);
+
+    // Project tier for tri-tier wardrobe resolution — lets a chat equip items
+    // that live in the project's document store, not just the character vault
+    // or Quilltap General.
+    const projectMountPointIds = await resolveProjectMountPointIdsForChat(chatId);
 
     let updatedSlots;
 
@@ -205,7 +216,9 @@ export async function handleEquipSlot(
         for (const id of bodySlots![key]) allIds.add(id);
       }
       if (allIds.size > 0) {
-        const found = await repos.wardrobe.findByIdsForCharacter(characterId, Array.from(allIds));
+        const found = await repos.wardrobe.findByIdsForCharacter(characterId, Array.from(allIds), {
+          projectMountPointIds,
+        });
         const foundIds = new Set(found.map((i) => i.id));
         for (const id of allIds) {
           if (!foundIds.has(id)) {
@@ -220,7 +233,9 @@ export async function handleEquipSlot(
     } else if (mode === 'wear' || mode === 'equip') {
       // itemId guaranteed by schema. Validate the item resolves and covers
       // at least one slot we recognize.
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, {
+        projectMountPointIds,
+      });
       if (!item) {
         return notFound('Wardrobe item');
       }
@@ -231,7 +246,9 @@ export async function handleEquipSlot(
         context: 'wardrobe',
       });
     } else if (mode === 'replace') {
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, {
+        projectMountPointIds,
+      });
       if (!item) {
         return notFound('Wardrobe item');
       }
@@ -242,7 +259,9 @@ export async function handleEquipSlot(
         context: 'wardrobe',
       });
     } else if (mode === 'add_to_slot') {
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!);
+      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, {
+        projectMountPointIds,
+      });
       if (!item) {
         return notFound('Wardrobe item');
       }

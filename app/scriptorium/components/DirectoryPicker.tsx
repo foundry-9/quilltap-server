@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import { Icon } from '@/components/ui/icon'
 
 interface DirectoryEntry {
   name: string
@@ -28,22 +29,6 @@ interface DirectoryPickerProps {
   name?: string
   placeholder?: string
   required?: boolean
-}
-
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
-
-function ChevronUpIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-    </svg>
-  )
 }
 
 export function DirectoryPicker({ value, onChange, name, placeholder, required }: DirectoryPickerProps) {
@@ -114,7 +99,7 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
           className="qt-button-secondary inline-flex items-center gap-1.5 shrink-0"
           title="Browse folders"
         >
-          <FolderIcon className="w-4 h-4" />
+          <Icon name="folder" className="w-4 h-4" />
           Browse
         </button>
       </div>
@@ -130,7 +115,7 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
                 className="p-1 rounded hover:qt-bg-muted transition-colors shrink-0"
                 title="Go to parent directory"
               >
-                <ChevronUpIcon className="w-4 h-4" />
+                <Icon name="chevron-down" className="w-4 h-4 rotate-180" />
               </button>
             )}
             <span className="text-xs font-mono qt-text-secondary truncate flex-1" title={browsePath || ''}>
@@ -156,7 +141,7 @@ export function DirectoryPicker({ value, onChange, name, placeholder, required }
                   onClick={() => handleNavigate(dir.path)}
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-foreground hover:qt-bg-muted/50 transition-colors"
                 >
-                  <FolderIcon className="w-4 h-4 qt-text-secondary shrink-0" />
+                  <Icon name="folder" className="w-4 h-4 qt-text-secondary shrink-0" />
                   <span className="truncate">{dir.name}</span>
                 </button>
               ))

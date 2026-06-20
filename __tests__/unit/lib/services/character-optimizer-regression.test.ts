@@ -149,8 +149,7 @@ describe('Character Optimizer regression', () => {
         scenarios: [],
         exampleDialogues: null,
         systemPrompts: [],
-        physicalDescriptions: [],
-        clothingRecords: [],
+        physicalDescription: null,
         talkativeness: undefined as unknown as number,
       });
 

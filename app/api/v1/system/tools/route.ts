@@ -5,6 +5,8 @@
  * GET /api/v1/system/tools?action=delete-data-preview - Preview what will be deleted
  * GET /api/v1/system/tools?action=tasks-queue - Get tasks queue status
  * POST /api/v1/system/tools?action=tasks-queue - Control tasks queue (start/stop)
+ * GET /api/v1/system/tools?action=job-concurrency - Get global background-job concurrency cap
+ * POST /api/v1/system/tools?action=job-concurrency - Set global background-job concurrency cap (1-32)
  * POST /api/v1/system/tools?action=export - Export user data (Quilltap format)
  * GET /api/v1/system/tools?action=export-entities - Get available entities for export
  * GET /api/v1/system/tools?action=export-preview - Preview export contents
@@ -21,14 +23,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { createHash } from 'crypto';
 import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, validationError } from '@/lib/api/responses';
 import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
 import { BackgroundJob } from '@/lib/schemas/types';
-import { startProcessor, stopProcessor, getProcessorStatus } from '@/lib/background-jobs/processor';
+import { startProcessor, stopProcessor, getProcessorStatus, wakeProcessor } from '@/lib/background-jobs/processor';
+import { getMaxConcurrentJobs, setMaxConcurrentJobs } from '@/lib/instance-settings';
 import { previewExport } from '@/lib/export/quilltap-export-service';
 import { createNdjsonStream, QTAP_NDJSON_CONTENT_TYPE } from '@/lib/export/ndjson-writer';
 import { previewImport, executeImport, type QuilltapExport, type ConflictStrategy } from '@/lib/import/quilltap-import-service';
@@ -44,6 +48,7 @@ import type { ExportEntityType } from '@/lib/export/types';
 
 const TOOLS_GET_ACTIONS = [
   'tasks-queue',
+  'job-concurrency',
   'delete-data-preview',
   'export-entities',
   'export-preview',
@@ -57,6 +62,7 @@ type ToolsGetAction = typeof TOOLS_GET_ACTIONS[number];
 const TOOLS_POST_ACTIONS = [
   'delete-data',
   'tasks-queue',
+  'job-concurrency',
   'export',
   'import-preview',
   'import-execute',
@@ -275,7 +281,9 @@ async function handleTasksQueue(req: NextRequest, context: any) {
       };
     });
 
-    const processorStatus = getProcessorStatus();return NextResponse.json({
+    const processorStatus = getProcessorStatus();
+    const maxConcurrentJobs = await getMaxConcurrentJobs();
+    return NextResponse.json({
       stats: {
         pending: stats.pending,
         processing: stats.processing,
@@ -288,6 +296,7 @@ async function handleTasksQueue(req: NextRequest, context: any) {
       jobs: jobDetails,
       totalEstimatedTokens,
       processorStatus,
+      maxConcurrentJobs,
     });
   } catch (error) {
     logger.error(
@@ -333,6 +342,54 @@ async function handleTasksQueueControl(req: NextRequest, context: any) {
       error instanceof Error ? error : undefined
     );
     return serverError('Failed to control queue');
+  }
+}
+
+const jobConcurrencySchema = z.object({
+  concurrency: z.number().int().min(1).max(32),
+});
+
+async function handleJobConcurrency(req: NextRequest, context: any) {
+  const { user } = context;
+  try {
+    const concurrency = await getMaxConcurrentJobs();
+    return NextResponse.json({ success: true, concurrency });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error reading job concurrency cap',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to read job concurrency');
+  }
+}
+
+async function handleJobConcurrencyControl(req: NextRequest, context: any) {
+  const { user } = context;
+  try {
+    const body = await req.json().catch(() => ({}));
+    const parsed = jobConcurrencySchema.safeParse(body);
+    if (!parsed.success) {
+      return validationError(parsed.error);
+    }
+
+    await setMaxConcurrentJobs(parsed.data.concurrency);
+    // Nudge the dispatcher so the new cap applies immediately rather than on the
+    // next 2 s poll.
+    wakeProcessor();
+
+    logger.info('[System Tools v1] Background-job concurrency cap updated', {
+      userId: user.id,
+      concurrency: parsed.data.concurrency,
+    });
+    return NextResponse.json({ success: true, concurrency: parsed.data.concurrency });
+  } catch (error) {
+    logger.error(
+      '[System Tools v1] Error setting job concurrency cap',
+      { userId: user.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError('Failed to set job concurrency');
   }
 }
 
@@ -743,6 +800,7 @@ async function handleImportExecute(req: NextRequest, context: any) {
       imported: result.imported,
       skipped: result.skipped,
       warningCount: result.warnings.length,
+      importedCharacterIdCount: result.importedCharacterIds.length,
     });
 
     return NextResponse.json(result);
@@ -1142,6 +1200,7 @@ export const GET = createAuthenticatedHandler(async (req: NextRequest, context) 
 
   const actionHandlers: Record<ToolsGetAction, () => Promise<NextResponse>> = {
     'tasks-queue': () => handleTasksQueue(req, context),
+    'job-concurrency': () => handleJobConcurrency(req, context),
     'delete-data-preview': () => handleDeleteDataPreview(req, context),
     'export-entities': () => handleExportEntities(req, context),
     'export-preview': () => handleExportPreview(req, context),
@@ -1166,6 +1225,7 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, context)
   const actionHandlers: Record<ToolsPostAction, () => Promise<NextResponse>> = {
     'delete-data': () => handleDeleteData(req, context),
     'tasks-queue': () => handleTasksQueueControl(req, context),
+    'job-concurrency': () => handleJobConcurrencyControl(req, context),
     'export': () => handleExport(req, context),
     'import-preview': () => handleImportPreview(req, context),
     'import-execute': () => handleImportExecute(req, context),

@@ -6,7 +6,7 @@ jest.mock('@/lib/chat/connection-resolver', () => ({
   resolveConnectionProfile: jest.fn(() => 'conn-1'),
 }))
 
-import { resolveRespondingParticipant } from '@/lib/services/chat-message/participant-resolver.service'
+import { resolveRespondingParticipant, getRoleplayTemplate } from '@/lib/services/chat-message/participant-resolver.service'
 import type { ChatMetadataBase, ChatParticipantBase, Character } from '@/lib/schemas/types'
 
 const now = new Date().toISOString()
@@ -133,5 +133,85 @@ describe('resolveRespondingParticipant — first-responder selection', () => {
       const result = await resolveRespondingParticipant(repos, chat, 'user-1')
       expect(result.characterParticipant.controlledBy).not.toBe('user')
     }
+  })
+})
+
+describe('getRoleplayTemplate — project/user default precedence', () => {
+  const TEMPLATES: Record<string, { systemPrompt: string }> = {
+    'tpl-chat': { systemPrompt: 'chat-own template' },
+    'tpl-project': { systemPrompt: 'project default template' },
+    'tpl-user': { systemPrompt: 'user default template' },
+  }
+
+  const buildTemplateRepos = (project: { defaultRoleplayTemplateId?: string | null } | null) => {
+    const update = jest.fn().mockResolvedValue(undefined)
+    const projectsFindById = jest.fn((_id: string) => Promise.resolve(project))
+    const repos = {
+      chats: { update },
+      projects: { findById: projectsFindById },
+      roleplayTemplates: {
+        findById: jest.fn((id: string) => Promise.resolve(TEMPLATES[id] ?? null)),
+      },
+    } as never
+    return { repos, update, projectsFindById }
+  }
+
+  const chatWith = (overrides: Partial<ChatMetadataBase>): ChatMetadataBase => ({
+    id: 'chat-1',
+    roleplayTemplateId: null,
+    projectId: null,
+    ...overrides,
+  } as unknown as ChatMetadataBase)
+
+  it("uses the chat's own template and never inherits", async () => {
+    const { repos, update, projectsFindById } = buildTemplateRepos({ defaultRoleplayTemplateId: 'tpl-project' })
+    const chat = chatWith({ roleplayTemplateId: 'tpl-chat', projectId: 'proj-1' })
+
+    const result = await getRoleplayTemplate(repos, chat, { defaultRoleplayTemplateId: 'tpl-user' })
+
+    expect(result).toEqual({ systemPrompt: 'chat-own template' })
+    expect(projectsFindById).not.toHaveBeenCalled()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('prefers the project default over the user default for a null-template project chat and auto-saves it', async () => {
+    const { repos, update } = buildTemplateRepos({ defaultRoleplayTemplateId: 'tpl-project' })
+    const chat = chatWith({ roleplayTemplateId: null, projectId: 'proj-1' })
+
+    const result = await getRoleplayTemplate(repos, chat, { defaultRoleplayTemplateId: 'tpl-user' })
+
+    expect(result).toEqual({ systemPrompt: 'project default template' })
+    expect(update).toHaveBeenCalledWith('chat-1', { roleplayTemplateId: 'tpl-project' })
+  })
+
+  it('falls back to the user default when the project has no default', async () => {
+    const { repos, update } = buildTemplateRepos({ defaultRoleplayTemplateId: null })
+    const chat = chatWith({ roleplayTemplateId: null, projectId: 'proj-1' })
+
+    const result = await getRoleplayTemplate(repos, chat, { defaultRoleplayTemplateId: 'tpl-user' })
+
+    expect(result).toEqual({ systemPrompt: 'user default template' })
+    expect(update).toHaveBeenCalledWith('chat-1', { roleplayTemplateId: 'tpl-user' })
+  })
+
+  it('uses the user default for a non-project chat without any project lookup', async () => {
+    const { repos, projectsFindById, update } = buildTemplateRepos(null)
+    const chat = chatWith({ roleplayTemplateId: null, projectId: null })
+
+    const result = await getRoleplayTemplate(repos, chat, { defaultRoleplayTemplateId: 'tpl-user' })
+
+    expect(result).toEqual({ systemPrompt: 'user default template' })
+    expect(projectsFindById).not.toHaveBeenCalled()
+    expect(update).toHaveBeenCalledWith('chat-1', { roleplayTemplateId: 'tpl-user' })
+  })
+
+  it('returns null when neither the project nor the user has a default', async () => {
+    const { repos, update } = buildTemplateRepos({ defaultRoleplayTemplateId: null })
+    const chat = chatWith({ roleplayTemplateId: null, projectId: 'proj-1' })
+
+    const result = await getRoleplayTemplate(repos, chat, null)
+
+    expect(result).toBeNull()
+    expect(update).not.toHaveBeenCalled()
   })
 })

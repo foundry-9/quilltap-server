@@ -9,6 +9,7 @@ const {
   loadDbKey,
   openMountIndexDb,
 } = require('./db-helpers');
+const { isQtapUri, parseQtapUri, formatDocStoreUri } = require('./qtap-uri');
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -77,21 +78,35 @@ Server-required subcommands (background-job queue lives in the running server):
                                          Enqueue embedding jobs for un-embedded chunks
 
 Write subcommands (server required for database-backed mounts):
-  write [--force] <mount> <path> [file]  Write a file from <file> or stdin
-  delete <mount> <path>                  Idempotent file delete
-  mkdir <mount> <path>                   Idempotent folder create
-  move <srcMount> <srcPath> <dstMount> <dstPath>           Move file (hard-link when possible)
-  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath> Copy file (hard-link unless --force)
+  write [--force] [--base64] <mount> <path> [file]  Write a file from <file> or stdin
+  delete <mount> <path>                              Idempotent file delete
+  mkdir <mount> <path>                               Idempotent folder create
+  move <srcMount> <srcPath> <dstMount> <dstPath>                   Move file (hard-link when possible)
+  copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>         Copy file (hard-link unless --force)
+  link <srcMount> <srcPath> <dstMount> <dstPath>                   Hard-link file (server-required)
+  rmdir <mount> <path>                               Delete an empty folder (server-required)
+  mvdir <mount> <fromPath> <toPath>                  Rename/move a folder (server-required)
 
 <mount> may be a mount name or UUID. Names are case-insensitive; ambiguous
 names print candidates and exit non-zero.
+
+Addressing with qtap:// URIs: anywhere a <mount> <relativePath> pair is taken,
+you may instead pass a single qtap:// URI in its place — e.g.
+  quilltap docs read qtap://notes/today.md
+  quilltap docs move qtap://drafts/foo.md qtap://notes/2026/foo.md
+The CLI addresses document stores only: qtap://self/… needs a character context
+and qtap://project/… and qtap://general/… are not CLI-addressable; pass a store
+name or UUID instead. --mount on find/grep also accepts a qtap://store/ URI.
 
 Options:
   -d, --data-dir <path>     Override data directory
   -i, --instance <name>     Use a registered instance (see 'quilltap instances')
   --passphrase <pass>       Decrypt .dbkey if peppered
   --port <number>           Server port for API calls (default: 3000)
-  --json                    Machine-readable output
+  --json                    Machine-readable output (find/grep/ls/files/tree rows
+                            carry a 'uri' field)
+  --uri                     For find/grep/files: show the canonical qtap:// URI
+                            as the locator instead of the mount/path columns
   --rendered                For 'read': output extracted plaintext
   --folder <path>           For 'files': narrow to a folder prefix
   --recursive, -R           For 'ls': list all files recursively, grouped by folder
@@ -107,6 +122,11 @@ Options:
                             For 'write': overwrite existing destination
                             For 'copy':  overwrite + force a real byte copy
                                          (skips the default hard-link path)
+  --base64                  For 'write': send content as base64 JSON via PUT
+                                         .../files/{path} (portable path used
+                                         by the file browser; server-required)
+                            For 'read':  fetch raw bytes via GET .../files/{path}
+                                         ?encoding=base64 and emit to stdout
   -h, --help                Show this help
 
 Read-only operations (list, show, files, read, export) open the mount-index
@@ -129,10 +149,17 @@ Examples:
   quilltap docs move drafts foo.md notes 2026/foo.md
   quilltap docs copy notes today.md archive 2026-05/today.md
   quilltap docs copy --force notes today.md archive copy.md
+  quilltap docs link notes today.md archive 2026-05/today.md
+  quilltap docs rmdir notes 2026/may
+  quilltap docs mvdir notes drafts/old drafts/archive
+  quilltap docs write --base64 notes image.png < image.png
+  quilltap docs read --base64 notes image.png > image.png
   quilltap docs find Manifesto
   quilltap docs find --mount notes --ext md Knowledge
   quilltap docs grep --mount notes --ignore-case "five-point Calvinist"
   quilltap docs grep --mount notes -l "TODO"
+  quilltap docs read qtap://notes/today.md
+  quilltap docs find --uri Manifesto
   quilltap docs status
   quilltap docs status --mount notes --top 10
   quilltap docs reindex notes Knowledge --force
@@ -174,6 +201,8 @@ function parseFlags(args) {
     // semantic search
     semantic: false,
     threshold: -1,
+    // base64 read/write flag
+    base64: false,
   };
   const positional = [];
   let i = 0;
@@ -193,6 +222,7 @@ function parseFlags(args) {
         break;
       }
       case '--json': flags.json = true; break;
+      case '--uri': flags.uri = true; break;
       case '--rendered': flags.rendered = true; break;
       case '--folder': flags.folder = args[++i]; break;
       case '--force': flags.force = true; break;
@@ -219,6 +249,7 @@ function parseFlags(args) {
       case '--long': flags.long = true; break;
       case '--names-only': flags.namesOnly = true; break;
       case '--semantic': flags.semantic = true; break;
+      case '--base64': flags.base64 = true; break;
       case '--threshold': {
         const v = parseFloat(args[++i]);
         if (isNaN(v) || v < 0 || v > 1) {
@@ -299,6 +330,44 @@ function assertDocsSchema(db, dataDir) {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Expand a single `qtap://…` argument into the CLI's `[mountSpec, relPath]`
+ * pair. The CLI addresses document stores only, so non-`document_store` scopes
+ * and the character-context-only `self` authority are rejected with guidance
+ * (throws; the docs dispatcher prints `Error: <message>`).
+ */
+function expandQtapArg(arg) {
+  const p = parseQtapUri(arg);
+  if (p.scope !== 'document_store') {
+    throw new Error(
+      'The CLI addresses document stores only; project/general scopes ' +
+        '(qtap://project/…, qtap://general/…) are not CLI-addressable. Pass a store name or UUID.'
+    );
+  }
+  if (p.mountPoint && p.mountPoint.toLowerCase() === 'self') {
+    throw new Error(
+      '"self" requires a character context and is not resolvable from the CLI; pass a store name or UUID.'
+    );
+  }
+  return [p.mountPoint, p.path];
+}
+
+/**
+ * Walk a subcommand's positional args, expanding any `qtap://…` argument into
+ * the `<mount> <relativePath>` pair the existing handlers consume. A bare
+ * `<mount> <path>` pair is left untouched, so both forms work. Two-target
+ * commands (move/copy/link) accept two `qtap://` args (→ four positionals) or
+ * the legacy four positionals.
+ */
+function expandQtapPositionals(positional) {
+  const out = [];
+  for (const arg of positional) {
+    if (isQtapUri(arg)) out.push(...expandQtapArg(arg));
+    else out.push(arg);
+  }
+  return out;
+}
+
 function requireMount(db, spec) {
   if (!spec) {
     console.error('Error: mount name or id is required');
@@ -330,6 +399,33 @@ function requireMount(db, spec) {
     process.exit(1);
   }
   return rows[0];
+}
+
+/**
+ * Lower-cased names that map to more than one enabled mount — i.e. names that
+ * are ambiguous and must use the UUID form in a `qtap://` URI. Mirrors the
+ * server's `countByName` ambiguity check.
+ */
+function loadAmbiguousMountNames(db) {
+  const rows = db.prepare('SELECT name FROM doc_mount_points WHERE enabled = 1').all();
+  const counts = new Map();
+  for (const r of rows) {
+    const key = String(r.name || '').trim().toLowerCase();
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const ambiguous = new Set();
+  for (const [key, count] of counts) if (count > 1) ambiguous.add(key);
+  return ambiguous;
+}
+
+/**
+ * Canonical document-store `qtap://` URI for a CLI result row: the readable
+ * store name unless it is ambiguous (then the UUID), matching the resolver's
+ * name-first / id-as-fallback rule.
+ */
+function rowQtapUri(mountName, mountId, relativePath, ambiguousNames) {
+  const useId = !mountName || ambiguousNames.has(String(mountName).trim().toLowerCase());
+  return formatDocStoreUri(useId ? mountId : mountName, relativePath || '');
 }
 
 function formatBytes(n) {
@@ -477,16 +573,21 @@ async function handleFiles(flags, id) {
         ORDER BY l.relativePath
       `).all(mount.id);
     }
+    const ambiguousNames = loadAmbiguousMountNames(db);
+    const rowsWithUri = rows.map(r => ({
+      ...r,
+      uri: rowQtapUri(mount.name, mount.id, r.relativePath, ambiguousNames),
+    }));
     if (flags.json) {
-      process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+      process.stdout.write(JSON.stringify(rowsWithUri, null, 2) + '\n');
       return;
     }
     if (rows.length === 0) {
       console.log('(no files)');
       return;
     }
-    const display = rows.map(r => ({
-      relativePath: r.relativePath,
+    const display = rowsWithUri.map(r => ({
+      ...(flags.uri ? { uri: r.uri } : { relativePath: r.relativePath }),
       type: r.fileType,
       source: r.source,
       size: formatBytes(r.fileSizeBytes || 0),
@@ -726,6 +827,7 @@ async function handleLs(flags, mountSpec, rawPath) {
 
     // JSON output
     if (flags.json) {
+      const ambiguousNames = loadAmbiguousMountNames(db);
       const out = [];
       if (!flags.recursive) {
         for (const folder of folders) {
@@ -733,6 +835,7 @@ async function handleLs(flags, mountSpec, rawPath) {
             type: 'folder',
             name: folder.name,
             path: folder.path,
+            uri: rowQtapUri(mount.name, mount.id, folder.path, ambiguousNames),
             createdAt: folder.createdAt,
             updatedAt: folder.updatedAt,
           });
@@ -751,6 +854,7 @@ async function handleLs(flags, mountSpec, rawPath) {
           type: 'file',
           name: file.fileName,
           relativePath: file.relativePath,
+          uri: rowQtapUri(mount.name, mount.id, file.relativePath, ambiguousNames),
           fileType: file.fileType,
           source: file.source,
           fileSizeBytes: file.fileSizeBytes,
@@ -989,16 +1093,19 @@ function renderTreeAscii(node, prefix, isLast, isRoot, maxNodes, nodeCount) {
   }
 }
 
-function treeToJson(node) {
+function treeToJson(node, ctx) {
   return {
     name: node.name,
     type: node.type,
     path: node.path || undefined,
     relativePath: node.relativePath || undefined,
+    uri: ctx
+      ? rowQtapUri(ctx.mountName, ctx.mountId, node.relativePath || node.path || '', ctx.ambiguousNames)
+      : undefined,
     size: node.size !== undefined ? node.size : undefined,
     chunkCount: node.chunkCount !== undefined ? node.chunkCount : undefined,
     children: node.children && node.children.length > 0
-      ? node.children.map(treeToJson)
+      ? node.children.map((child) => treeToJson(child, ctx))
       : undefined,
   };
 }
@@ -1031,7 +1138,8 @@ async function handleTree(flags, mountSpec, rawPath) {
     const tree = buildFolderTree(db, mount.id, startPath, maxDepth);
 
     if (flags.json) {
-      const output = treeToJson(tree);
+      const ambiguousNames = loadAmbiguousMountNames(db);
+      const output = treeToJson(tree, { mountName: mount.name, mountId: mount.id, ambiguousNames });
       process.stdout.write(JSON.stringify(output, null, 2) + '\n');
       return;
     }
@@ -1078,8 +1186,48 @@ function ttyGuard(fileType, flags, label) {
 
 async function handleRead(flags, id, relativePath) {
   if (!id || !relativePath) {
-    console.error('Usage: quilltap docs read [--rendered] <mount-id> <relativePath>');
+    console.error('Usage: quilltap docs read [--rendered] [--base64] <mount-id> <relativePath>');
     process.exit(1);
+  }
+
+  // --base64: fetch raw bytes via the item route (server-required).
+  if (flags.base64) {
+    const { db } = await openDb(flags);
+    let mount;
+    try {
+      mount = requireMount(db, id);
+    } finally {
+      db.close();
+    }
+    const url = fileItemUrl(flags.port, mount.id, relativePath) + '?encoding=base64';
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (err) {
+      if (isConnectionRefused(err)) {
+        console.error(`Cannot reach Quilltap server at localhost:${flags.port}. --base64 read requires the running server.`);
+        console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+        process.exit(1);
+      }
+      throw err;
+    }
+    if (!res.ok) {
+      let body = null;
+      try { body = await res.json(); } catch { /* ignore */ }
+      const msg = body && body.error ? body.error : `HTTP ${res.status}`;
+      console.error(`Read failed: ${msg}`);
+      process.exit(1);
+    }
+    let body = null;
+    try { body = await res.json(); } catch { /* ignore */ }
+    // A zero-byte file legitimately returns content: "" (falsy), so check the
+    // type, not truthiness — otherwise empty files fail to round-trip.
+    if (!body || typeof body.content !== 'string') {
+      console.error('Read failed: server returned no content');
+      process.exit(1);
+    }
+    process.stdout.write(Buffer.from(body.content, 'base64'));
+    return;
   }
 
   const { db } = await openDb(flags);
@@ -1469,6 +1617,35 @@ async function writeViaHttp(port, mountId, relativePath, data, force) {
   return { reachable: true, ok: true, result: unwrap(body) };
 }
 
+// fileItemUrl — builds the item-route URL for the new PUT/GET .../files/{path}
+// Each path segment is independently URL-encoded to preserve the slash
+// structure of the route.
+function fileItemUrl(port, mountId, relativePath) {
+  const encodedSegments = relativePath
+    .split('/')
+    .map(seg => encodeURIComponent(seg))
+    .join('/');
+  return `http://localhost:${port}/api/v1/mount-points/${encodeURIComponent(mountId)}/files/${encodedSegments}`;
+}
+
+async function writeViaHttpBase64(port, mountId, relativePath, data, force) {
+  const content = data.toString('base64');
+  const url = fileItemUrl(port, mountId, relativePath);
+  const attempt = await tryFetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, encoding: 'base64', force: !!force }),
+  });
+  if (!attempt.ok) return { reachable: false };
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    const code = body && body.code ? body.code : null;
+    return { reachable: true, ok: false, status: attempt.res.status, error: msg, code };
+  }
+  return { reachable: true, ok: true, result: unwrap(body) };
+}
+
 async function handleWrite(flags, positional) {
   const force = flags.force;
   const [mountSpec, relativePath, filename] = positional;
@@ -1486,6 +1663,31 @@ async function handleWrite(flags, positional) {
     mount = requireMount(db, mountSpec);
   } finally {
     db.close();
+  }
+
+  // --base64: use the new item-route PUT (server-required; no offline fallback).
+  if (flags.base64) {
+    const http = await writeViaHttpBase64(flags.port, mount.id, relativePath, data, force);
+    if (!http.reachable) {
+      console.error(`Cannot reach Quilltap server at localhost:${flags.port}. --base64 write requires the running server.`);
+      console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+      process.exit(1);
+    }
+    if (!http.ok) {
+      console.error(`Write failed: ${http.error}`);
+      process.exit(http.code === 'DEST_EXISTS' ? 2 : 1);
+    }
+    const r = http.result;
+    if (r.sha256 !== sourceSha) {
+      console.error(`Checksum mismatch: source ${sourceSha} != dest ${r.sha256}`);
+      process.exit(1);
+    }
+    if (flags.json) {
+      process.stdout.write(JSON.stringify({ ...r, sourceSha256: sourceSha }, null, 2) + '\n');
+      return;
+    }
+    console.log(`${GREEN}Wrote${RESET} ${mount.name}:${r.relativePath ?? relativePath} (${formatBytes(r.sizeBytes)}, sha=${r.sha256.slice(0, 12)}…)`);
+    return;
   }
 
   const http = await writeViaHttp(flags.port, mount.id, relativePath, data, force);
@@ -1869,6 +2071,169 @@ async function handleFileOp(flags, positional, action) {
 }
 
 // ----------------------------------------------------------------------------
+// link — hard-link via server (server-required; no offline fallback)
+// ----------------------------------------------------------------------------
+
+async function handleLink(flags, positional) {
+  const [srcMountSpec, srcPath, dstMountSpec, dstPath] = positional;
+  if (!srcMountSpec || !srcPath || !dstMountSpec || !dstPath) {
+    console.error('Usage: quilltap docs link <srcMount> <srcPath> <dstMount> <dstPath>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let sourceMount, destMount;
+  try {
+    sourceMount = requireMount(db, srcMountSpec);
+    destMount = requireMount(db, dstMountSpec);
+  } finally {
+    db.close();
+  }
+
+  const http = await fileOpViaHttp(flags.port, 'link-file', sourceMount.id, {
+    sourcePath: srcPath,
+    destMountPointId: destMount.id,
+    destPath: dstPath,
+  });
+  if (!http.reachable) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. 'link' requires the running server (hard-link logic lives there).`);
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+  if (!http.ok) {
+    const r = http;
+    if (r.code === 'DEST_EXISTS') {
+      console.error(`Link failed: destination already exists at ${dstPath}`);
+      process.exit(2);
+    }
+    if (r.code === 'UNSUPPORTED') {
+      console.error(`Link failed: hard links are not supported across storage types or devices for this mount pair`);
+      process.exit(1);
+    }
+    if (r.code === 'SOURCE_NOT_FOUND') {
+      console.error(`Link failed: source not found at ${srcPath} in mount ${sourceMount.name}`);
+      process.exit(1);
+    }
+    console.error(`Link failed: ${r.error}`);
+    process.exit(1);
+  }
+  const r = http.result;
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  const strategy = r.strategy ? ` (${r.strategy})` : '';
+  const size = r.sizeBytes != null ? `, ${formatBytes(r.sizeBytes)}` : '';
+  const sha = r.destSha256 ? `, sha=${r.destSha256.slice(0, 12)}…` : '';
+  console.log(`${GREEN}Linked${RESET} ${sourceMount.name}:${srcPath} → ${destMount.name}:${dstPath}${DIM}${strategy}${size}${sha}${RESET}`);
+}
+
+// ----------------------------------------------------------------------------
+// rmdir — delete an empty folder (server-required)
+// ----------------------------------------------------------------------------
+
+async function handleRmdir(flags, positional) {
+  const [mountSpec, folderPath] = positional;
+  if (!mountSpec || !folderPath) {
+    console.error('Usage: quilltap docs rmdir <mount> <path>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const attempt = await tryFetch(actionUrl(flags.port, mount.id, 'delete-folder'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: folderPath }),
+  });
+  if (!attempt.ok) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. 'rmdir' requires the running server.`);
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const code = body && body.code ? body.code : null;
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    if (code === 'NOT_EMPTY' || code === 'CONFLICT') {
+      console.error(`rmdir failed: folder is not empty — ${folderPath}`);
+      console.error('Remove all files inside it first, or use delete to remove individual files.');
+      process.exit(1);
+    }
+    if (code === 'NOT_FOUND' || attempt.res.status === 404) {
+      console.error(`rmdir failed: folder not found — ${folderPath}`);
+      process.exit(1);
+    }
+    console.error(`rmdir failed: ${msg}`);
+    process.exit(1);
+  }
+  const r = unwrap(body);
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  console.log(`${GREEN}Removed${RESET} ${mount.name}:${folderPath}`);
+}
+
+// ----------------------------------------------------------------------------
+// mvdir — rename/move a folder (server-required)
+// ----------------------------------------------------------------------------
+
+async function handleMvdir(flags, positional) {
+  const [mountSpec, fromPath, toPath] = positional;
+  if (!mountSpec || !fromPath || !toPath) {
+    console.error('Usage: quilltap docs mvdir <mount> <fromPath> <toPath>');
+    process.exit(1);
+  }
+
+  const { db } = await openDb(flags);
+  let mount;
+  try {
+    mount = requireMount(db, mountSpec);
+  } finally {
+    db.close();
+  }
+
+  const attempt = await tryFetch(actionUrl(flags.port, mount.id, 'move-folder'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromPath, toPath }),
+  });
+  if (!attempt.ok) {
+    console.error(`Cannot reach Quilltap server at localhost:${flags.port}. 'mvdir' requires the running server.`);
+    console.error('Start the server (`quilltap`) or pass --port to match a non-default port.');
+    process.exit(1);
+  }
+  const body = await readBodyJson(attempt.res);
+  if (!attempt.res.ok) {
+    const code = body && body.code ? body.code : null;
+    const msg = body && body.error ? body.error : `HTTP ${attempt.res.status}`;
+    if (code === 'DEST_EXISTS') {
+      console.error(`mvdir failed: destination already exists — ${toPath}`);
+      process.exit(2);
+    }
+    if (code === 'SOURCE_NOT_FOUND' || attempt.res.status === 404) {
+      console.error(`mvdir failed: source folder not found — ${fromPath}`);
+      process.exit(1);
+    }
+    console.error(`mvdir failed: ${msg}`);
+    process.exit(1);
+  }
+  const r = unwrap(body);
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(r, null, 2) + '\n');
+    return;
+  }
+  console.log(`${GREEN}Moved${RESET} ${mount.name}:${fromPath} → ${mount.name}:${toPath}`);
+}
+
+// ----------------------------------------------------------------------------
 // dispatch
 // ----------------------------------------------------------------------------
 
@@ -1892,6 +2257,8 @@ function resolveSearchMounts(db, mountSpec) {
 }
 
 async function handleFind(flags, positional) {
+  // --mount may be given as a qtap://store/ URI; reduce it to the store spec.
+  if (flags.mount && isQtapUri(flags.mount)) flags.mount = expandQtapArg(flags.mount)[0];
   const pattern = positional[0];
   if (!pattern) {
     console.error('Usage: quilltap docs find [--mount <name|id|all>] [--type file|folder] [--ext <ext>] [--limit N] [--json] <pattern>');
@@ -1908,6 +2275,7 @@ async function handleFind(flags, positional) {
   try {
     const mounts = resolveSearchMounts(db, flags.mount);
     const showMountColumn = !flags.mount || flags.mount === 'all';
+    const ambiguousNames = loadAmbiguousMountNames(db);
 
     const liked = `%${escapeLike(pattern)}%`;
 
@@ -1935,6 +2303,7 @@ async function handleFind(flags, positional) {
             mount: { id: mount.id, name: mount.name },
             kind: 'file',
             relativePath: r.relativePath,
+            uri: rowQtapUri(mount.name, mount.id, r.relativePath, ambiguousNames),
             size: r.fileSizeBytes,
             fileType: r.fileType,
             lastModified: r.lastModified,
@@ -1962,6 +2331,7 @@ async function handleFind(flags, positional) {
             mount: { id: mount.id, name: mount.name },
             kind: 'folder',
             relativePath: r.path,
+            uri: rowQtapUri(mount.name, mount.id, r.path, ambiguousNames),
             name: r.name,
             updatedAt: r.updatedAt,
           });
@@ -1979,13 +2349,17 @@ async function handleFind(flags, positional) {
       console.log('(no matches)');
       return;
     }
-    // Plain text columns.
-    const headers = showMountColumn
+    // Plain text columns. `--uri` swaps the mount/path columns for the single
+    // canonical qtap:// URI.
+    const headers = flags.uri
+      ? ['uri', 'size', 'modified']
+      : showMountColumn
       ? ['mount', 'path', 'size', 'modified']
       : ['path', 'size', 'modified'];
     const rows = out.map(r => {
       const size = r.size != null ? formatBytes(r.size) : '-';
       const mod = r.lastModified || r.updatedAt || '';
+      if (flags.uri) return [r.uri, size, mod];
       return showMountColumn
         ? [r.mount.name, r.relativePath, size, mod]
         : [r.relativePath, size, mod];
@@ -2091,6 +2465,8 @@ async function handleSemanticGrep(flags, query) {
 }
 
 async function handleGrep(flags, positional) {
+  // --mount may be given as a qtap://store/ URI; reduce it to the store spec.
+  if (flags.mount && isQtapUri(flags.mount)) flags.mount = expandQtapArg(flags.mount)[0];
   const pattern = positional[0];
   if (!pattern) {
     console.error('Usage: quilltap docs grep [--mount <name|id|all>] [--ignore-case] [-l] [--max N] [--context N] [--json] <pattern>');
@@ -2107,6 +2483,7 @@ async function handleGrep(flags, positional) {
   try {
     const mounts = resolveSearchMounts(db, flags.mount);
     const showMountColumn = !flags.mount || flags.mount === 'all';
+    const ambiguousNames = loadAmbiguousMountNames(db);
 
     const linksByMount = db.prepare(`
       SELECT l.id AS linkId, l.fileId, l.relativePath, l.extractedText,
@@ -2148,6 +2525,7 @@ async function handleGrep(flags, positional) {
         results.push({
           mount: { id: mount.id, name: mount.name },
           relativePath: link.relativePath,
+          uri: rowQtapUri(mount.name, mount.id, link.relativePath, ambiguousNames),
           matches,
         });
       }
@@ -2163,14 +2541,16 @@ async function handleGrep(flags, positional) {
     }
 
     for (const r of results) {
-      const prefix = showMountColumn ? `${r.mount.name}:` : '';
+      // `--uri` uses the canonical qtap:// URI as the locator; otherwise the
+      // familiar [mount:]path form.
+      const locator = flags.uri ? r.uri : `${showMountColumn ? `${r.mount.name}:` : ''}${r.relativePath}`;
       if (flags.pathsOnly) {
-        console.log(`${prefix}${r.relativePath}`);
+        console.log(locator);
         continue;
       }
       for (const m of r.matches) {
         const oneLine = m.snippet.replace(/\n/g, ' ⏎ ');
-        console.log(`${prefix}${r.relativePath}:${m.line}: ${oneLine}`);
+        console.log(`${locator}:${m.line}: ${oneLine}`);
       }
     }
   } finally {
@@ -2529,7 +2909,9 @@ async function docsCommand(args) {
     process.exit(1);
   }
 
-  const { flags, positional } = parseFlags(args);
+  const parsed = parseFlags(args);
+  const flags = parsed.flags;
+  let positional = parsed.positional;
 
   if (flags.help) {
     printDocsHelp();
@@ -2543,7 +2925,20 @@ async function docsCommand(args) {
 
   const verb = positional.shift();
 
+  // Verbs that take positional `<mount> <relativePath>` accept a single
+  // `qtap://…` URI in its place; expand it before dispatch so every handler
+  // keeps consuming the familiar mount/path positionals. (find/grep address a
+  // mount via `--mount`, handled inside those handlers; export's second
+  // positional is a local output dir, so it is excluded.)
+  const QTAP_POSITIONAL_VERBS = new Set([
+    'read', 'write', 'delete', 'mkdir', 'ls', 'dir', 'tree', 'files',
+    'move', 'copy', 'link', 'rmdir', 'mvdir', 'show', 'scan',
+  ]);
+
   try {
+    if (QTAP_POSITIONAL_VERBS.has(verb)) {
+      positional = expandQtapPositionals(positional);
+    }
     switch (verb) {
       case 'list':
         await handleList(flags);
@@ -2584,6 +2979,15 @@ async function docsCommand(args) {
         break;
       case 'copy':
         await handleFileOp(flags, positional, 'copy');
+        break;
+      case 'link':
+        await handleLink(flags, positional);
+        break;
+      case 'rmdir':
+        await handleRmdir(flags, positional);
+        break;
+      case 'mvdir':
+        await handleMvdir(flags, positional);
         break;
       case 'status':
         await handleStatus(flags);

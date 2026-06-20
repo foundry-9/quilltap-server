@@ -45,9 +45,7 @@ export interface ThemeCardProps {
   isActive: boolean
   onSelect: () => void
   disabled?: boolean
-  /** Whether the preview is expanded */
-  isExpanded?: boolean
-  /** Callback to toggle preview expansion */
+  /** Callback to open the full-page preview modal for this theme */
   onToggleExpand?: () => void
   /** Callback to uninstall (only for bundle themes) */
   onUninstall?: () => void

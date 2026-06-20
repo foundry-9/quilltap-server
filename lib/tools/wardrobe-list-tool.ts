@@ -41,7 +41,7 @@ export const wardrobeListToolInputSchema = z.object({
 })
 
 /**
- * Input parameters for the list_wardrobe tool
+ * Input parameters for the wardrobe_list tool
  */
 export type WardrobeListToolInput = z.infer<typeof wardrobeListToolInputSchema>
 
@@ -52,8 +52,12 @@ export interface WardrobeListItemResult {
   item_id: string;
   title: string;
   description: string | null;
+  /** Portrait Cue — the visual phrase steering image generation (null = falls back to title). */
+  image_prompt: string | null;
   types: string[];
   appropriateness: string | null;
+  /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
+  is_own: boolean;
   is_equipped: boolean;
   /**
    * Which slot the item is currently equipped in (the first if multi-slot
@@ -86,7 +90,7 @@ export interface WardrobeListPresetResult {
 }
 
 /**
- * Output from the list_wardrobe tool
+ * Output from the wardrobe_list tool
  */
 export interface WardrobeListToolOutput {
   success: boolean;
@@ -104,15 +108,16 @@ export interface WardrobeListToolOutput {
 export const wardrobeListToolDefinition = {
   type: 'function',
   function: {
-    name: 'list_wardrobe',
+    name: 'wardrobe_list',
     description:
-      'Retrieve wardrobe items for the current character. ' +
-      'Returns clothing and accessory items from the character\'s wardrobe, ' +
-      'with optional filtering by item type and appropriateness context. ' +
-      'Each item includes its equipped status (which slot[s] it occupies, if any) ' +
-      'and a composite flag indicating whether it bundles other items. ' +
-      'Use wardrobe_change_item to put on / take off / layer single garments, ' +
-      'and wardrobe_set_outfit to wear or remove a composite outfit. ' +
+      'Retrieve wardrobe items available to the current character — from their ' +
+      'own wardrobe plus shared items in the project and Quilltap General. ' +
+      'Supports optional filtering by item type and appropriateness context. ' +
+      'Each item includes its equipped status (which slot[s] it occupies, if any), ' +
+      'a composite flag indicating whether it bundles other items, and an is_own ' +
+      'flag (shared archetypes can be worn but not edited). ' +
+      'Use wardrobe_wear to put on / layer items, wardrobe_take_off to remove them, ' +
+      'and wardrobe_read for the full detail (including the Portrait Cue) of one item. ' +
       'Archived items are excluded from results.',
     parameters: zodToOpenAISchema(wardrobeListToolInputSchema),
   },

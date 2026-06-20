@@ -41,19 +41,30 @@ import {
 } from '@/lib/tools/delete-annotation-tool';
 import {
   searchScriptoriumToolDefinition,
+  searchScriptoriumBrahmaToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
+import { runSqlToolDefinition } from '@/lib/tools/run-sql-tool';
 import {
   wardrobeListToolDefinition,
 } from '@/lib/tools/wardrobe-list-tool';
 import {
-  wardrobeUpdateOutfitToolDefinition,
-} from '@/lib/tools/wardrobe-update-outfit-tool';
+  wardrobeReadToolDefinition,
+} from '@/lib/tools/wardrobe-read-tool';
 import {
-  wardrobeChangeItemToolDefinition,
-} from '@/lib/tools/wardrobe-change-item-tool';
+  wardrobeCreateToolDefinition,
+} from '@/lib/tools/wardrobe-create-tool';
 import {
-  wardrobeCreateItemToolDefinition,
-} from '@/lib/tools/wardrobe-create-item-tool';
+  wardrobeUpdateToolDefinition,
+} from '@/lib/tools/wardrobe-update-tool';
+import {
+  wardrobeArchiveToolDefinition,
+} from '@/lib/tools/wardrobe-archive-tool';
+import {
+  wardrobeWearToolDefinition,
+} from '@/lib/tools/wardrobe-wear-tool';
+import {
+  wardrobeTakeOffToolDefinition,
+} from '@/lib/tools/wardrobe-take-off-tool';
 import { docReadFileToolDefinition as docReadFileTool } from '@/lib/tools/doc-read-file-tool';
 import { docWriteFileToolDefinition as docWriteFileTool } from '@/lib/tools/doc-write-file-tool';
 import { docStrReplaceToolDefinition as docStrReplaceTool } from '@/lib/tools/doc-str-replace-tool';
@@ -81,6 +92,11 @@ import {
 import {
   terminalListToolDefinition,
 } from '@/lib/tools/terminal-list-tool';
+import {
+  askCarinaToolDefinition,
+} from '@/lib/tools/ask-carina-tool';
+import { sendMailToolDefinition } from '@/lib/tools/send-mail-tool';
+import { listEmailToolDefinition } from '@/lib/tools/list-email-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -195,17 +211,26 @@ export interface BuildToolsOptions {
   /** Whether to enable whisper tool (for multi-character private messaging) */
   whisper?: boolean;
 
-  /** Whether to enable list_wardrobe tool (gated by canDressThemselves) */
+  /** Whether to enable wardrobe_list tool (gated by canDressThemselves) */
   wardrobeList?: boolean;
 
-  /** Whether to enable wardrobe_set_outfit tool — composite outfits only (gated by canDressThemselves) */
-  wardrobeUpdateOutfit?: boolean;
+  /** Whether to enable wardrobe_read tool (gated by canDressThemselves) */
+  wardrobeRead?: boolean;
 
-  /** Whether to enable wardrobe_change_item tool — atomic items only (gated by canDressThemselves) */
-  wardrobeChangeItem?: boolean;
+  /** Whether to enable wardrobe_wear tool (gated by canDressThemselves) */
+  wardrobeWear?: boolean;
 
-  /** Whether to enable create_wardrobe_item tool (gated by canCreateOutfits) */
-  wardrobeCreateItem?: boolean;
+  /** Whether to enable wardrobe_take_off tool (gated by canDressThemselves) */
+  wardrobeTakeOff?: boolean;
+
+  /** Whether to enable wardrobe_create tool (gated by canCreateOutfits) */
+  wardrobeCreate?: boolean;
+
+  /** Whether to enable wardrobe_update tool (gated by canCreateOutfits) */
+  wardrobeUpdate?: boolean;
+
+  /** Whether to enable wardrobe_archive tool (gated by canCreateOutfits) */
+  wardrobeArchive?: boolean;
 
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
@@ -218,6 +243,35 @@ export interface BuildToolsOptions {
 
   /** Tool configurations for plugin tools (keyed by tool name) */
   toolConfigs?: Map<string, Record<string, unknown>>;
+
+  /** Whether to enable the ask_carina tool (inline Carina answerer) */
+  askCarina?: boolean;
+
+  /**
+   * Whether to include the always-on "workspace" tool set: self-inventory,
+   * Post Office mail (send_mail/list_email), conversation reading, annotations,
+   * terminal inspection, and the RNG/state game tools. Defaults to `true`
+   * (every character surface gets them). The **Brahma Console** sets this to
+   * `false` — it is a character-less, stripped-down generic-LLM surface that
+   * keeps only search, the doc_* family, web/curl, and submit_final_response.
+   */
+  includeWorkspaceTools?: boolean;
+
+  /**
+   * When true, the `search` (scriptorium) tool is built from its **Brahma**
+   * variant, whose input schema omits the `memories` source — the Brahma
+   * Console has zero memory access. Defaults to `false` (the standard search
+   * tool, which can search memories).
+   */
+  excludeMemorySearch?: boolean;
+
+  /**
+   * When true, include the `run_sql` tool — read-only SQL access to the three
+   * Quilltap databases. Offered on the **Brahma Console** surface only;
+   * execution is additionally gated on `operatorSurface` in the tool executor.
+   * Defaults to `false`.
+   */
+  sqlAccess?: boolean;
 }
 
 /**
@@ -265,11 +319,16 @@ export async function buildToolsForProvider(
       state: options.state,
       whisper: options.whisper,
       wardrobeList: options.wardrobeList,
-      wardrobeUpdateOutfit: options.wardrobeUpdateOutfit,
-      wardrobeChangeItem: options.wardrobeChangeItem,
-      wardrobeCreateItem: options.wardrobeCreateItem,
+      wardrobeRead: options.wardrobeRead,
+      wardrobeWear: options.wardrobeWear,
+      wardrobeTakeOff: options.wardrobeTakeOff,
+      wardrobeCreate: options.wardrobeCreate,
+      wardrobeUpdate: options.wardrobeUpdate,
+      wardrobeArchive: options.wardrobeArchive,
       documentEditing: options.documentEditing,
       includePluginTools: options.includePluginTools,
+      askCarina: options.askCarina,
+      sqlAccess: options.sqlAccess,
     },
   });
 
@@ -317,47 +376,90 @@ export async function buildToolsForProvider(
     universalTools.push(helpNavigateToolDefinition as UniversalTool);
   }
 
+  // The "workspace" tool set — always on for character surfaces, stripped for
+  // the character-less Brahma Console (includeWorkspaceTools === false). This
+  // bundle covers RNG/state, self-inventory, Post Office mail, conversation
+  // reading, annotations, and terminal inspection.
+  const includeWorkspaceTools = options.includeWorkspaceTools !== false;
+
   // Add RNG tool if enabled (defaults to true when not specified)
-  if (options.rng !== false) {
+  if (includeWorkspaceTools && options.rng !== false) {
     universalTools.push(rngToolDefinition as UniversalTool);
   }
 
   // Add state tool if enabled (defaults to true when not specified)
-  if (options.state !== false) {
+  if (includeWorkspaceTools && options.state !== false) {
     universalTools.push(stateToolDefinition as UniversalTool);
   }
 
-  // Self-inventory tool is always available to character participants —
-  // pure introspection, no side effects.
-  universalTools.push(selfInventoryToolDefinition as UniversalTool);
+  if (includeWorkspaceTools) {
+    // Self-inventory tool is always available to character participants —
+    // pure introspection, no side effects.
+    universalTools.push(selfInventoryToolDefinition as UniversalTool);
 
-  // Scriptorium tools (always enabled - conversation reading, annotations, and search)
-  universalTools.push(readConversationToolDefinition as UniversalTool);
-  universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
-  universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
-  universalTools.push(searchScriptoriumToolDefinition as UniversalTool);
+    // Post Office tools are always available — mail is ungated (any character may
+    // write to any character, and a character may always list its own postbox).
+    universalTools.push(sendMailToolDefinition as UniversalTool);
+    universalTools.push(listEmailToolDefinition as UniversalTool);
 
-  // Terminal tools (always enabled for Prospero - read-only terminal inspection)
-  universalTools.push(terminalListToolDefinition as UniversalTool);
-  universalTools.push(terminalReadToolDefinition as UniversalTool);
+    // Scriptorium conversation reading + annotations (always enabled for characters)
+    universalTools.push(readConversationToolDefinition as UniversalTool);
+    universalTools.push(upsertAnnotationToolDefinition as UniversalTool);
+    universalTools.push(deleteAnnotationToolDefinition as UniversalTool);
+  }
+
+  // Unified search — available on every surface. The Brahma variant drops the
+  // `memories` source so the console can never search memories.
+  universalTools.push(
+    (options.excludeMemorySearch
+      ? searchScriptoriumBrahmaToolDefinition
+      : searchScriptoriumToolDefinition) as UniversalTool
+  );
+
+  // Read-only SQL access — Brahma Console only. Execution is additionally gated
+  // on `operatorSurface` in the tool executor, so a leaked tool name can never
+  // run from a character surface.
+  if (options.sqlAccess) {
+    universalTools.push(runSqlToolDefinition as UniversalTool);
+  }
+
+  if (includeWorkspaceTools) {
+    // Terminal tools (always enabled for Prospero - read-only terminal inspection)
+    universalTools.push(terminalListToolDefinition as UniversalTool);
+    universalTools.push(terminalReadToolDefinition as UniversalTool);
+  }
 
   // Add whisper tool if enabled (multi-character chats only)
   if (options.whisper) {
     universalTools.push(whisperToolDefinition as UniversalTool);
   }
 
+  // Add ask_carina tool if enabled (inline Carina answerer)
+  if (options.askCarina) {
+    universalTools.push(askCarinaToolDefinition as UniversalTool);
+  }
+
   // Add wardrobe tools if enabled (gated by character wardrobe flags)
   if (options.wardrobeList) {
     universalTools.push(wardrobeListToolDefinition as UniversalTool);
   }
-  if (options.wardrobeUpdateOutfit) {
-    universalTools.push(wardrobeUpdateOutfitToolDefinition as UniversalTool);
+  if (options.wardrobeRead) {
+    universalTools.push(wardrobeReadToolDefinition as UniversalTool);
   }
-  if (options.wardrobeChangeItem) {
-    universalTools.push(wardrobeChangeItemToolDefinition as UniversalTool);
+  if (options.wardrobeWear) {
+    universalTools.push(wardrobeWearToolDefinition as UniversalTool);
   }
-  if (options.wardrobeCreateItem) {
-    universalTools.push(wardrobeCreateItemToolDefinition as UniversalTool);
+  if (options.wardrobeTakeOff) {
+    universalTools.push(wardrobeTakeOffToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeCreate) {
+    universalTools.push(wardrobeCreateToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeUpdate) {
+    universalTools.push(wardrobeUpdateToolDefinition as UniversalTool);
+  }
+  if (options.wardrobeArchive) {
+    universalTools.push(wardrobeArchiveToolDefinition as UniversalTool);
   }
 
   // Add submit_final_response tool if agent mode is enabled

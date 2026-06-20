@@ -23,24 +23,36 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_copy_file tool's input.
  */
 export const docCopyFileToolInputSchema = z.object({
+  source_uri: z
+    .string()
+    .describe('A qtap:// URI for the source document, e.g. "qtap://self/Notes/today.md". When provided, it supersedes source_mount_point/source_path.')
+    .optional(),
+  dest_uri: z
+    .string()
+    .describe('A qtap:// URI for the destination, e.g. "qtap://Shared/Notes/today.md". When provided, it supersedes dest_mount_point/dest_path.')
+    .optional(),
   source_mount_point: z
     .string()
     .min(1)
-    .describe('Name (or ID) of the document store to copy the file from.'),
+    .describe('Name (or ID) of the document store to copy the file from. Pass "self" for your own character vault.')
+    .optional(),
   source_path: z
     .string()
     .min(1)
-    .describe('Relative path to the source file within the source document store.'),
+    .describe('Relative path to the source file within the source document store.')
+    .optional(),
   dest_mount_point: z
     .string()
     .min(1)
-    .describe('Name (or ID) of the document store to copy the file into. Must be different from source_mount_point.'),
+    .describe('Name (or ID) of the document store to copy the file into. Pass "self" for your own character vault. Must be different from source_mount_point.')
+    .optional(),
   dest_path: z
     .string()
     .describe(
       'Destination path within the destination document store. If this path already exists as a directory, the file is dropped into it with the source filename. Otherwise it is treated as the full path with filename. Use "" or "." to copy to the root of the destination store.'
-    ),
-});
+    )
+    .optional(),
+}).refine((d) => Boolean((d.source_uri || (d.source_mount_point && d.source_path)) && (d.dest_uri || (d.dest_mount_point && d.dest_path !== undefined))), 'Provide source_uri or (source_mount_point + source_path), and dest_uri or (dest_mount_point + dest_path).');
 
 /**
  * Input parameters for the doc_copy_file tool
@@ -70,5 +82,7 @@ export interface DocCopyFileOutput {
   source_path: string;
   dest_mount_point: string;
   dest_path: string;
+  /** Canonical qtap:// URI for the copy's destination. */
+  uri?: string;
   mtime: number;
 }

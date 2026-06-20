@@ -8,6 +8,27 @@ url: /aurora
 
 This guide covers character deletion, relationships, partnerships, NPCs, and other management tasks.
 
+## The Character Card
+
+Open any character and you are greeted, at the very top, by their calling card — portrait to the left, the dossier in the middle, and a tidy column of actions to the right.
+
+The middle panel reads top to bottom:
+
+- **Name and title** — the character's name in full, with their title set just beneath it. A trio of small switches keeps to the upper right: the favourite star, a little console (lit when the character is enrolled as a Carina answerer, able to field quick **@-queries** without joining the conversation — see [Carina](carina.md)), and the user-control figure. The pronouns sit alongside the title (hover them for the full subject / object / possessive breakdown). These pronouns also have a quiet word with the portraitist: a *she/her* lady is drawn as a woman and a *he/him* gentleman as a man, so a character caught in borrowed or masculine attire — a man's shirt, say — is still rendered as the lady she is, rather than left to the easel's guesswork. Anything other than the plain *he* or *she* (a *they*, a coinage of your own, or none at all) is left entirely to the artist's discretion.
+- **Aliases** — every other name the character answers to, arranged as a little row of badges.
+- **The ledger** — a single line of figures, taken at a glance, telling you how richly furnished this character has become:
+  - **memories** — entries in their Commonplace Book
+  - **conversations** — chats in which they have appeared
+  - **wardrobe items** — garments and accessories in their wardrobe
+  - **photos** — portraits kept in their gallery
+  - **scenarios** — scene-setting openers written for them
+  - **knowledge** — documents tucked into their vault's *Knowledge* folder
+  - **core** — documents in their vault's *Core* folder, the packet re-offered to them from time to time
+  - **character files** — shown as a fraction (such as **8/8**), this counts how many of the canonical managed files their vault holds against the full set expected. A complete fraction means their vault wants for nothing; a shortfall is a gentle hint that something has gone astray.
+- **Groups** — should the character belong to any groups, each appears as a badge wearing that group's own colour and emblem. Hover a badge to read the group's description, or give one a click to call upon the group directly.
+
+Each figure in the ledger carries a tooltip of its own — pause your cursor over any of them to learn what it represents.
+
 ## Reset Built-in Characters
 
 On the Characters page toolbar, click **Reset Built-in Characters** to restore the first-run editions of **Lorian** and **Riya**.

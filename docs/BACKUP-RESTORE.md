@@ -31,6 +31,7 @@ The backup creates a ZIP file containing:
 - Prompt templates (user-created)
 - Roleplay templates (user-created)
 - Projects and their configurations
+- Character groups (slim rows plus the `group_character_members` and `group_doc_mount_links` join tables; the group's description/scenarios/knowledge ride along in the document-store tables)
 - LLM request/response logs
 - Plugin configurations (per-plugin settings)
 - Provider model cache

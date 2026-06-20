@@ -56,6 +56,16 @@ The Tasks Queue displays:
 - Error messages
 - Retry options
 
+## Setting How Many Tasks Run at Once
+
+At the top of the Tasks Queue card sits the **Simultaneous Labours** dial — a single lever governing how many background errands the engine may undertake at the same moment, across *every* sort of task (memory extraction, imports, image conjuring, autonomous turns, and the rest).
+
+- The factory setting is **four**, a figure that suits most households handsomely.
+- A stouter machine — a generous local model, or a cloud provider that tolerates a flurry of simultaneous requests — may be permitted up to **two-and-thirty**.
+- Slide it down to **one** when you would rather the works proceed in stately single file, sparing a modest backend from being overrun.
+
+Drag the slider and release; the new allowance takes hold within a breath or two — no restart required — and persists across restarts. Bear in mind that a single ravenous task type, set loose at a high allowance, may monopolise the works and leave lighter errands waiting their turn.
+
 ## Task Types
 
 **Memory Extraction**
