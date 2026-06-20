@@ -66,6 +66,8 @@ import {
   writeCharacterVaultManagedFields,
   projectVaultWardrobe,
 } from '../../lib/database/repositories/character-properties-overlay';
+import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
+import { loadMountIndexConfig } from '../../lib/database/config';
 import { getRepositories } from '../../lib/repositories/factory';
 import { writeDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Character } from '../../lib/schemas/character.types';
@@ -364,6 +366,13 @@ export const cutoverCharactersToVaultMigration: Migration = {
     'add-character-document-mount-point-field-v1',
     'add-read-properties-from-document-store-field-v1',
     'migrate-clothing-records-to-wardrobe-v1',
+    // The cutover writes each character's vault files, which insert
+    // `doc_mount_file_links` rows referencing the allowEmbed /
+    // allowCharacterRead / allowCharacterWrite columns. Those columns are
+    // added by the policy-flags migration, so it MUST run first — otherwise
+    // every vault write throws "table doc_mount_file_links has no column
+    // named allowEmbed". (Same dependency the projects cutover declares.)
+    'add-doc-mount-file-policy-flags-v1',
   ],
 
   async shouldRun(): Promise<boolean> {
@@ -383,6 +392,35 @@ export const cutoverCharactersToVaultMigration: Migration = {
     try {
       logger.info('Ensuring physical backups exist before per-character work', ctx);
       await ensureBackupsExist(ctx);
+
+      // Open the mount-index DB connection explicitly. `ensureCharacterVault`'s
+      // first DB touch is `docMountPoints.create` — a mount-index repository
+      // that reads its connection from a process-global singleton and never
+      // triggers the lazy main-DB `connect()` that would populate it. That
+      // singleton is normally established either by the app backend's
+      // `connect()` (which runs *after* migrations) or, in a warm dev process,
+      // by a prior boot left over in `globalThis`. On a genuinely cold boot —
+      // e.g. an instance restarted after a long dormancy, where the projects
+      // cutover (which opens this itself) already applied in an earlier run —
+      // nothing has opened it yet, so every vault write throws "Mount index
+      // database not initialized". Open it here first; the app's later
+      // `connect()` reuses this same connection.
+      const mountIndexDb = getMountIndexSQLiteClient(loadMountIndexConfig());
+      if (!mountIndexDb) {
+        const message =
+          'Refusing to migrate — the mount-index database could not be opened, so character ' +
+          'vaults are unreachable. Aborting before any destructive work.';
+        logger.error(message, ctx);
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: 0,
+          message,
+          error: 'mount index unavailable',
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      }
 
       const db = getSQLiteDatabase();
       const rawCount = (db.prepare('SELECT COUNT(*) AS n FROM characters').get() as { n: number }).n;
