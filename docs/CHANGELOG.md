@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.7-dev
+### 4.7.0
 
 #### Fix: Cold boot on iCloud could hollow out characters (partial-materialization + lost vault links)
 
