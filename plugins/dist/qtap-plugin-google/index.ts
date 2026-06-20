@@ -10,7 +10,7 @@
  * - Web search integration via Google Search
  */
 
-import type { TextProviderPlugin, ImageGenerationModelInfo } from './types';
+import type { TextProviderPlugin, ImageGenerationModelInfo, ImageOrientationSupport } from './types';
 import { GoogleProvider } from './provider';
 import { GoogleImagenProvider } from './image-provider';
 import {
@@ -251,6 +251,14 @@ export const plugin: TextProviderPlugin = {
    * Returns cached information about Google image generation models
    */
   getImageGenerationModels: (): ImageGenerationModelInfo[] => {
+    // All Google image models take an aspect_ratio. Portrait → 3:4 (avatar-
+    // friendly framing); landscape → 16:9 (cinematic backgrounds); square → 1:1.
+    const aspectOrientation: ImageOrientationSupport = {
+      strategy: 'aspectRatio',
+      portrait: { aspectRatio: '3:4' },
+      landscape: { aspectRatio: '16:9' },
+      square: { aspectRatio: '1:1' },
+    };
     return [
       // Gemini image generation models (use generateContent API)
       {
@@ -268,6 +276,7 @@ export const plugin: TextProviderPlugin = {
           '16:9',
           '21:9',
         ],
+        orientationSupport: aspectOrientation,
         description:
           'Fast, efficient model for general image generation with text rendering',
       },
@@ -286,6 +295,7 @@ export const plugin: TextProviderPlugin = {
           '16:9',
           '21:9',
         ],
+        orientationSupport: aspectOrientation,
         description:
           'Advanced image generation with reasoning, fine-grained creative controls, 2K/4K output, up to 14 reference images',
       },
@@ -294,12 +304,14 @@ export const plugin: TextProviderPlugin = {
         id: 'imagen-4',
         name: 'Imagen 4',
         supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        orientationSupport: aspectOrientation,
         description: 'High-quality image generation with Imagen 4',
       },
       {
         id: 'imagen-4-fast',
         name: 'Imagen 4 Fast',
         supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+        orientationSupport: aspectOrientation,
         description: 'Faster image generation variant of Imagen 4',
       },
     ];

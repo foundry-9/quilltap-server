@@ -12,6 +12,19 @@
  * by reimplementing it here based on the source code.
  */
 
+// The pure roleplay-rendering core is import-safe in Jest (no ESM-only deps).
+// The local HTML wrappers below delegate to it so this test exercises the REAL
+// match-walk / escaping, not a drifting reimplementation.
+import {
+  type CompiledRule,
+  escapeMarkdownInBrackets as coreEscapeMarkdownInBrackets,
+  tokenizeInline,
+  segmentsToHtml,
+  lineMatchFor,
+  wrapBlockMatchFor,
+  isDialogueParagraph as coreIsDialogueParagraph,
+} from '@/lib/chat/roleplay-rendering';
+
 // Mock logger to suppress log output during tests
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -69,65 +82,20 @@ function canPreRenderMessage(
   return true;
 }
 
-/**
- * Reimplementation of escapeMarkdownInBrackets for testing
- * Mirrors the actual implementation in markdown-renderer.service.ts
- */
-function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
-  const markdownChars = /([*_~`])/g;
+/** Escaping is the shared core function (no reimplementation). */
+const escapeMarkdownInBrackets = coreEscapeMarkdownInBrackets;
 
-  const hasBracketNarration = patterns.some(p => p.pattern.includes('\\['));
-  const hasBraceMonologue = patterns.some(p => p.pattern.includes('\\{'));
-  const hasAsteriskNarration = patterns.some(p =>
-    p.pattern.includes('\\*') && p.className === 'qt-chat-narration'
-  );
-
-  if (!hasBracketNarration && !hasBraceMonologue && !hasAsteriskNarration) {
-    return content;
-  }
-
-  const codeBlockRegex = /(```[\s\S]*?```)/g;
-  const parts = content.split(codeBlockRegex);
-
-  const processedParts = parts.map((part, index) => {
-    if (index % 2 === 1) {
-      return part;
-    }
-
-    let result = part;
-
-    if (hasBracketNarration) {
-      result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
-        const escaped = inner.replace(markdownChars, '\\$1');
-        return `[${escaped}]`;
-      });
-    }
-
-    if (hasBraceMonologue) {
-      result = result.replace(/(?<!\{)\{([^{}]+)\}(?!\})/g, (match, inner) => {
-        const escaped = inner.replace(markdownChars, '\\$1');
-        return `{${escaped}}`;
-      });
-    }
-
-    if (hasAsteriskNarration) {
-      result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
-        const escaped = inner.replace(/([_~`])/g, '\\$1');
-        return `*${escaped}*`;
-      });
-    }
-
-    return result;
-  });
-
-  return processedParts.join('');
+/** Adapt a test CompiledPattern to the core CompiledRule shape. */
+function toRule(p: CompiledPattern, scope: 'inline' | 'line' = 'inline'): CompiledRule {
+  return { regex: new RegExp(p.regex.source, p.regex.flags.replace('g', '')), className: p.className, scope };
 }
 
 /**
- * Reimplementation of applyRoleplayPatterns for testing
- * Mirrors the actual implementation in markdown-renderer.service.ts
+ * HTML wrapper mirroring markdown-renderer.service.applyRoleplayPatterns, but the
+ * inner match-walk delegates to the REAL shared tokenizeInline + segmentsToHtml.
  */
 function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]): string {
+  const rules = compiledPatterns.map((p) => toRule(p));
   const tagRegex = /(<[^>]*>)/g;
   const parts = html.split(tagRegex);
 
@@ -148,32 +116,17 @@ function applyRoleplayPatterns(html: string, compiledPatterns: CompiledPattern[]
       return part;
     }
 
-    let result = part;
-    for (const pattern of compiledPatterns) {
-      const regex = new RegExp(pattern.regex.source, pattern.regex.flags.includes('g') ? pattern.regex.flags : pattern.regex.flags + 'g');
-      result = result.replace(regex, (match) => {
-        return `<span class="${pattern.className}">${match}</span>`;
-      });
-    }
-    return result;
+    return segmentsToHtml(tokenizeInline(part, rules));
   });
 
   return processedParts.join('');
 }
 
-/**
- * Reimplementation of isDialogueParagraph for testing
- */
-function isDialogueParagraph(text: string, detection: DialogueDetection): boolean {
-  const trimmed = text.trim();
-  if (trimmed.length < 2) return false;
-
-  return detection.openingChars.includes(trimmed[0]) && detection.closingChars.includes(trimmed[trimmed.length - 1]);
-}
+/** Dialogue predicate is the shared core function. */
+const isDialogueParagraph = coreIsDialogueParagraph;
 
 /**
- * Reimplementation of applyDialogueDetection for testing
- * Mirrors the actual implementation in markdown-renderer.service.ts
+ * HTML wrapper mirroring markdown-renderer.service.applyDialogueDetection.
  */
 function applyDialogueDetection(html: string, detection: DialogueDetection): string {
   return html.replace(/<p([^>]*)>([\s\S]*?)<\/p>/g, (match, attrs, content) => {
@@ -189,6 +142,44 @@ function applyDialogueDetection(html: string, detection: DialogueDetection): str
     }
 
     return match;
+  });
+}
+
+/**
+ * HTML wrapper mirroring markdown-renderer.service.applyWrapBlockClasses: a block
+ * that is wholly a hidden-delimiter wrap gets its delimiters stripped and its body
+ * wrapped in an inline styled span (preserving any inner markdown HTML).
+ */
+function applyWrapBlockClasses(html: string, rules: CompiledRule[]): string {
+  const wrapRules = rules.filter((r) => r.scope === 'inline' && r.hideDelimiters);
+  if (wrapRules.length === 0) return html;
+  return html.replace(/<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g, (match, tag, attrs, content) => {
+    const plainText = (content as string).replace(/<[^>]+>/g, '');
+    const wrap = wrapBlockMatchFor(plainText, wrapRules);
+    if (!wrap) return match;
+    let inner = content as string;
+    if (wrap.prefix && inner.startsWith(wrap.prefix)) inner = inner.slice(wrap.prefix.length);
+    if (wrap.suffix && inner.endsWith(wrap.suffix)) inner = inner.slice(0, inner.length - wrap.suffix.length);
+    return `<${tag}${attrs}><span class="${wrap.className}">${inner}</span></${tag}>`;
+  });
+}
+
+/**
+ * HTML wrapper mirroring markdown-renderer.service.applyLineScopedClasses: a
+ * line-scoped rule's class lands on the whole block element, not an inline span.
+ */
+function applyLineScopedClasses(html: string, rules: CompiledRule[]): string {
+  const lineRules = rules.filter((r) => r.scope === 'line');
+  if (lineRules.length === 0) return html;
+  return html.replace(/<(p|li|blockquote|h[1-6])([^>]*)>([\s\S]*?)<\/\1>/g, (match, tag, attrs, content) => {
+    const plainText = content.replace(/<[^>]+>/g, '');
+    const cls = lineMatchFor(plainText, lineRules)?.className;
+    if (!cls) return match;
+    if (attrs.includes('class="')) {
+      const newAttrs = attrs.replace(/class="([^"]*)"/, `class="$1 ${cls}"`);
+      return `<${tag}${newAttrs}>${content}</${tag}>`;
+    }
+    return `<${tag}${attrs} class="${cls}">${content}</${tag}>`;
   });
 }
 
@@ -486,6 +477,96 @@ describe('markdown-renderer.service', () => {
       const html2 = '<p>Only end quote"</p>';
       const result2 = applyDialogueDetection(html2, DEFAULT_DETECTION);
       expect(result2).not.toContain('class="qt-chat-dialogue"');
+    });
+  });
+
+  describe('applyLineScopedClasses', () => {
+    const lineRules: CompiledRule[] = [
+      { regex: /^\/\/ .+$/, className: 'qt-chat-ooc', scope: 'line' },
+      { regex: /^\[(?:[^\p{Ll}]+)\].*$/u, className: 'qt-chat-tag', scope: 'line' },
+    ];
+
+    it('adds the line class to a paragraph whose whole text is a line prefix', () => {
+      const result = applyLineScopedClasses('<p>// an aside</p>', lineRules);
+      expect(result).toContain('class="qt-chat-ooc"');
+    });
+
+    it('adds the line class to a tag-prefixed paragraph (uppercase token)', () => {
+      const result = applyLineScopedClasses('<p>[CAPTAIN] All hands!</p>', lineRules);
+      expect(result).toContain('class="qt-chat-tag"');
+    });
+
+    it('does not match a lowercase tag token', () => {
+      const result = applyLineScopedClasses('<p>[captain] hi</p>', lineRules);
+      expect(result).not.toContain('class="qt-chat-tag"');
+    });
+
+    it('applies the class to other block elements (h2, li, blockquote)', () => {
+      expect(applyLineScopedClasses('<h2>// note</h2>', lineRules)).toContain('class="qt-chat-ooc"');
+      expect(applyLineScopedClasses('<li>// note</li>', lineRules)).toContain('class="qt-chat-ooc"');
+      expect(applyLineScopedClasses('<blockquote>// note</blockquote>', lineRules)).toContain('class="qt-chat-ooc"');
+    });
+
+    it('leaves a non-matching paragraph untouched', () => {
+      const html = '<p>just ordinary prose</p>';
+      expect(applyLineScopedClasses(html, lineRules)).toBe(html);
+    });
+
+    it('is a no-op when there are no line-scoped rules', () => {
+      const html = '<p>// looks like ooc</p>';
+      const inlineOnly: CompiledRule[] = [{ regex: /\*[^*]+\*/, className: 'qt-chat-narration', scope: 'inline' }];
+      expect(applyLineScopedClasses(html, inlineOnly)).toBe(html);
+    });
+  });
+
+  describe('applyWrapBlockClasses', () => {
+    // The "Covenant RP" narration: +…+, delimiters hidden.
+    const wrapRules: CompiledRule[] = [
+      {
+        regex: /(?<!\+)\+(?<rpBody>[^+]+)\+(?!\+)/,
+        className: 'qt-chat-narration qt-rp-italic',
+        scope: 'inline',
+        hideDelimiters: true,
+      },
+    ];
+
+    it('wraps a whole-block hidden wrap in a styled span and strips the delimiters', () => {
+      const result = applyWrapBlockClasses('<p>+the room holds its breath+</p>', wrapRules);
+      expect(result).toBe(
+        '<p><span class="qt-chat-narration qt-rp-italic">the room holds its breath</span></p>',
+      );
+    });
+
+    it('PRESERVES inner markdown (the bug): an <em> inside the wrap survives', () => {
+      // This is exactly the reported failure: markdown inside +…+ used to leave the
+      // delimiters literal and unstyled. Now the <em> is kept inside the span.
+      const html = '<p>+al-Latif called his father <em>Father</em> in public+</p>';
+      const result = applyWrapBlockClasses(html, wrapRules);
+      expect(result).toBe(
+        '<p><span class="qt-chat-narration qt-rp-italic">al-Latif called his father <em>Father</em> in public</span></p>',
+      );
+    });
+
+    it('does not touch a block that is only partly wrapped', () => {
+      const html = '<p>she said +softly+ to him</p>';
+      expect(applyWrapBlockClasses(html, wrapRules)).toBe(html);
+    });
+
+    it('handles other block elements (h2, li, blockquote)', () => {
+      expect(applyWrapBlockClasses('<h2>+a beat+</h2>', wrapRules)).toContain(
+        '<h2><span class="qt-chat-narration qt-rp-italic">a beat</span></h2>',
+      );
+      expect(applyWrapBlockClasses('<li>+a beat+</li>', wrapRules)).toContain(
+        '<li><span class="qt-chat-narration qt-rp-italic">a beat</span></li>',
+      );
+    });
+
+    it('is a no-op when there are no hidden-delimiter wrap rules', () => {
+      const html = '<p>+narration+</p>';
+      const shown: CompiledRule[] = [
+        { regex: /(?<!\+)\+(?<rpBody>[^+]+)\+(?!\+)/, className: 'qt-chat-narration', scope: 'inline', hideDelimiters: false },
+      ];
+      expect(applyWrapBlockClasses(html, shown)).toBe(html);
     });
   });
 

@@ -8,6 +8,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { toolRegistry } from '@/lib/plugins/tool-registry'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext as PluginToolContext } from '@/lib/plugins/interfaces/tool-plugin'
+import type { MessageEvent } from '@/lib/schemas/types'
 import {
   executeImageGenerationTool,
   type ImageToolExecutionContext,
@@ -80,20 +81,35 @@ import {
   type WardrobeListToolContext,
 } from '@/lib/tools/handlers/wardrobe-list-handler';
 import {
-  executeWardrobeUpdateOutfitTool,
-  formatWardrobeUpdateOutfitResults,
-  type WardrobeUpdateOutfitToolContext,
-} from '@/lib/tools/handlers/wardrobe-update-outfit-handler';
+  executeWardrobeReadTool,
+  formatWardrobeReadResults,
+  type WardrobeReadToolContext,
+} from '@/lib/tools/handlers/wardrobe-read-handler';
 import {
-  executeWardrobeChangeItemTool,
-  formatWardrobeChangeItemResults,
-  type WardrobeChangeItemToolContext,
-} from '@/lib/tools/handlers/wardrobe-change-item-handler';
+  executeWardrobeCreateTool,
+  formatWardrobeCreateResults,
+  type WardrobeCreateToolContext,
+} from '@/lib/tools/handlers/wardrobe-create-handler';
 import {
-  executeWardrobeCreateItemTool,
-  formatWardrobeCreateItemResults,
-  type WardrobeCreateItemToolContext,
-} from '@/lib/tools/handlers/wardrobe-create-item-handler';
+  executeWardrobeUpdateTool,
+  formatWardrobeUpdateResults,
+  type WardrobeUpdateToolContext,
+} from '@/lib/tools/handlers/wardrobe-update-handler';
+import {
+  executeWardrobeArchiveTool,
+  formatWardrobeArchiveResults,
+  type WardrobeArchiveToolContext,
+} from '@/lib/tools/handlers/wardrobe-archive-handler';
+import {
+  executeWardrobeWearTool,
+  formatWardrobeWearResults,
+  type WardrobeWearToolContext,
+} from '@/lib/tools/handlers/wardrobe-wear-handler';
+import {
+  executeWardrobeTakeOffTool,
+  formatWardrobeTakeOffResults,
+  type WardrobeTakeOffToolContext,
+} from '@/lib/tools/handlers/wardrobe-take-off-handler';
 import {
   executeReadConversationTool,
   formatReadConversationResults,
@@ -104,6 +120,9 @@ import {
   formatSearchScriptoriumResults,
   type SearchScriptoriumToolContext,
 } from '@/lib/tools/handlers/search-scriptorium-handler';
+import {
+  executeRunSqlTool,
+} from '@/lib/tools/handlers/run-sql-handler';
 import {
   executeUpsertAnnotationTool,
   formatUpsertAnnotationResults,
@@ -185,6 +204,26 @@ export interface ToolExecutionContext {
    * back to immediate enqueue.
    */
   pendingWardrobeAnnouncements?: Set<string>;
+  /**
+   * Surface a Carina (`ask_carina`) answer to the Salon the instant it posts,
+   * via the turn's live SSE stream. Set by the orchestrator (which holds the
+   * stream controller); absent in the autonomous-room/forked-child path, where
+   * there is no client stream and the post-turn refresh handles surfacing.
+   */
+  emitCarinaAnswer?: (message: MessageEvent) => void;
+  /**
+   * Operator surface (the **Brahma Console**): a character-less, memory-free
+   * direct line to the LLM. When true:
+   *  - the `search` tool runs WITHOUT a character — memories are never searched,
+   *    documents/knowledge reach every enabled store, and conversations are
+   *    searched operator-wide (all the user's chats);
+   *  - the `doc_*` tools resolve against ALL the user's enabled document stores
+   *    (the operator "look everywhere" scope), since the console has no character
+   *    vault of its own but is the operator's own surface.
+   * Character tool handlers never set this, so their per-character sandbox is
+   * unchanged.
+   */
+  operatorSurface?: boolean;
 }
 
 /**
@@ -211,16 +250,26 @@ const BUILT_IN_TOOLS = new Set<string>([
   'upsert_annotation',
   'delete_annotation',
   'search',
+  // Brahma Console — read-only SQL access (operator surface only)
+  'run_sql',
   // Wardrobe tools
-  'list_wardrobe',
-  'wardrobe_set_outfit',
-  'wardrobe_change_item',
-  'create_wardrobe_item',
+  'wardrobe_list',
+  'wardrobe_read',
+  'wardrobe_create',
+  'wardrobe_update',
+  'wardrobe_archive',
+  'wardrobe_wear',
+  'wardrobe_take_off',
   // Document editing / management / UI tools — Scriptorium Phase 3.3+
   ...DOC_EDIT_TOOL_NAMES,
   // Terminal tools — Prospero Phase 2
   'terminal_read',
   'terminal_list',
+  // Carina — inline answerer tool
+  'ask_carina',
+  // Post Office — inter-character mail
+  'send_mail',
+  'list_email',
 ]);
 
 export async function executeToolCallWithContext(
@@ -554,6 +603,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         characterId,
+        projectId: context.projectId,
         callingParticipantId: context.callingParticipantId,
         loadedMemories: context.loadedMemories,
       };
@@ -575,6 +625,7 @@ export async function executeToolCallWithContext(
       if (result.prompt) structuredResult.prompt = result.prompt;
       if (result.lastTurn) structuredResult.lastTurn = result.lastTurn;
       if (result.quilltap) structuredResult.quilltap = result.quilltap;
+      if (result.context) structuredResult.context = result.context;
 
       return {
         toolName: 'self_inventory',
@@ -613,8 +664,8 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle list_wardrobe
-    if (toolCall.name === 'list_wardrobe') {
+    // Handle wardrobe_list
+    if (toolCall.name === 'wardrobe_list') {
       const wardrobeContext: WardrobeListToolContext = {
         userId,
         chatId,
@@ -625,7 +676,7 @@ export async function executeToolCallWithContext(
       const formattedResult = formatWardrobeListResults(result);
 
       return {
-        toolName: 'list_wardrobe',
+        toolName: 'wardrobe_list',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,
@@ -636,73 +687,41 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle wardrobe_set_outfit (composite outfits only)
-    if (toolCall.name === 'wardrobe_set_outfit') {
-      const wardrobeContext: WardrobeUpdateOutfitToolContext = {
+    // Handle wardrobe_read
+    if (toolCall.name === 'wardrobe_read') {
+      const wardrobeContext: WardrobeReadToolContext = {
         userId,
         chatId,
         characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
       };
 
-      const result = await executeWardrobeUpdateOutfitTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeUpdateOutfitResults(result);
+      const result = await executeWardrobeReadTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeReadResults(result);
 
       return {
-        toolName: 'wardrobe_set_outfit',
+        toolName: 'wardrobe_read',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,
-          action: result.action,
-          item: result.item,
-          slots_affected: result.slots_affected,
-          current_state: result.current_state,
-          coverage_summary: result.coverage_summary,
+          ...result,
         } : null,
         error: result.success ? undefined : result.error,
       };
     }
 
-    // Handle wardrobe_change_item (atomic items only)
-    if (toolCall.name === 'wardrobe_change_item') {
-      const wardrobeContext: WardrobeChangeItemToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeChangeItemTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeChangeItemResults(result);
-
-      return {
-        toolName: 'wardrobe_change_item',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          action: result.action,
-          slot: result.slot,
-          item: result.item,
-          current_state: result.current_state,
-          coverage_summary: result.coverage_summary,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle create_wardrobe_item
-    if (toolCall.name === 'create_wardrobe_item') {
-      const wardrobeContext: WardrobeCreateItemToolContext = {
+    // Handle wardrobe_create
+    if (toolCall.name === 'wardrobe_create') {
+      const wardrobeContext: WardrobeCreateToolContext = {
         userId,
         chatId,
         characterId: characterId || '',
       };
 
-      const result = await executeWardrobeCreateItemTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeCreateItemResults(result);
+      const result = await executeWardrobeCreateTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeCreateResults(result);
 
       return {
-        toolName: 'create_wardrobe_item',
+        toolName: 'wardrobe_create',
         success: result.success,
         result: result.success ? {
           formattedText: formattedResult,
@@ -712,6 +731,103 @@ export async function executeToolCallWithContext(
           recipient_name: result.recipient_name,
           current_state: result.current_state,
         } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle wardrobe_update
+    if (toolCall.name === 'wardrobe_update') {
+      const wardrobeContext: WardrobeUpdateToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+      };
+
+      const result = await executeWardrobeUpdateTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeUpdateResults(result);
+
+      return {
+        toolName: 'wardrobe_update',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          ...result,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle wardrobe_archive (soft retire)
+    if (toolCall.name === 'wardrobe_archive') {
+      const wardrobeContext: WardrobeArchiveToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      };
+
+      const result = await executeWardrobeArchiveTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeArchiveResults(result);
+
+      return {
+        toolName: 'wardrobe_archive',
+        success: result.success,
+        result: result.success ? {
+          formattedText: formattedResult,
+          item_id: result.item_id,
+          title: result.title,
+          action: result.action,
+        } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle wardrobe_wear (put on / layer — array of operations)
+    if (toolCall.name === 'wardrobe_wear') {
+      const wardrobeContext: WardrobeWearToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      };
+
+      const result = await executeWardrobeWearTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeWearResults(result);
+
+      return {
+        toolName: 'wardrobe_wear',
+        success: result.success,
+        result: {
+          formattedText: formattedResult,
+          operations: result.operations,
+          current_state: result.current_state,
+          coverage_summary: result.coverage_summary,
+        },
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle wardrobe_take_off (remove / clear — array of operations)
+    if (toolCall.name === 'wardrobe_take_off') {
+      const wardrobeContext: WardrobeTakeOffToolContext = {
+        userId,
+        chatId,
+        characterId: characterId || '',
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      };
+
+      const result = await executeWardrobeTakeOffTool(toolCall.arguments, wardrobeContext);
+      const formattedResult = formatWardrobeTakeOffResults(result);
+
+      return {
+        toolName: 'wardrobe_take_off',
+        success: result.success,
+        result: {
+          formattedText: formattedResult,
+          operations: result.operations,
+          current_state: result.current_state,
+          coverage_summary: result.coverage_summary,
+        },
         error: result.success ? undefined : result.error,
       };
     }
@@ -820,7 +936,10 @@ export async function executeToolCallWithContext(
 
     // Handle search (Scriptorium unified search)
     if (toolCall.name === 'search') {
-      if (!characterId) {
+      // Character surfaces require a character (memories/conversations are
+      // per-character). The operator surface (Brahma Console) is character-less:
+      // it searches operator-wide and never touches memories.
+      if (!characterId && !context.operatorSurface) {
         return {
           toolName: 'search',
           success: false,
@@ -834,6 +953,7 @@ export async function executeToolCallWithContext(
         characterId,
         embeddingProfileId,
         projectId: context.projectId,
+        operatorSurface: context.operatorSurface,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
@@ -851,6 +971,30 @@ export async function executeToolCallWithContext(
           totalFound: result.totalFound,
           query: result.query,
         } : null,
+        error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle run_sql (Brahma Console — read-only SQL access). Gated on the
+    // operator surface: the tool is only ever OFFERED to the console, and even
+    // if a tool name leaked into history, a character surface can never EXECUTE
+    // it. Both gates are independent (see brahma-sql-access spec §8).
+    if (toolCall.name === 'run_sql') {
+      if (!context.operatorSurface) {
+        return {
+          toolName: 'run_sql',
+          success: false,
+          result: null,
+          error: 'run_sql is only available in the Brahma Console.',
+        };
+      }
+
+      const result = await executeRunSqlTool(toolCall.arguments, { userId });
+
+      return {
+        toolName: 'run_sql',
+        success: result.success,
+        result: result.success ? result : null,
         error: result.success ? undefined : result.error,
       };
     }
@@ -919,6 +1063,8 @@ export async function executeToolCallWithContext(
         chatId,
         projectId: context.projectId,
         characterId,
+        // Operator surface (Brahma Console): resolve against every enabled store.
+        operatorOverride: context.operatorSurface,
       };
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);
@@ -944,6 +1090,56 @@ export async function executeToolCallWithContext(
           ...(result.result && typeof result.result === 'object' ? result.result as Record<string, unknown> : {}),
         } : null,
         error: result.success ? undefined : result.error,
+      };
+    }
+
+    // Handle ask_carina (inline Carina answerer)
+    if (toolCall.name === 'ask_carina') {
+      const { executeAskCarinaTool } = await import('@/lib/tools/handlers/ask-carina-handler');
+      const out = await executeAskCarinaTool(toolCall.arguments, {
+        userId,
+        chatId,
+        callingParticipantId: context.callingParticipantId,
+        emitCarinaAnswer: context.emitCarinaAnswer,
+      });
+      return {
+        toolName: 'ask_carina',
+        success: out.success,
+        result: out.success ? { answer: out.answer } : null,
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle send_mail (Post Office — deliver a letter to another character)
+    if (toolCall.name === 'send_mail') {
+      const { executeSendMailTool, formatSendMailResults } = await import('@/lib/tools/handlers/send-mail-handler');
+      const out = await executeSendMailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+        callingParticipantId: context.callingParticipantId,
+      });
+      return {
+        toolName: 'send_mail',
+        success: out.success,
+        result: { formattedText: formatSendMailResults(out), path: out.path },
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle list_email (Post Office — list the caller's own mailbox)
+    if (toolCall.name === 'list_email') {
+      const { executeListEmailTool, formatListEmailResults } = await import('@/lib/tools/handlers/list-email-handler');
+      const out = await executeListEmailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+      });
+      return {
+        toolName: 'list_email',
+        success: out.success,
+        result: { formattedText: formatListEmailResults(out), count: out.count },
+        error: out.success ? undefined : out.error,
       };
     }
 

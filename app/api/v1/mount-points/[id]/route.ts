@@ -26,7 +26,11 @@ import {
   validateDeconvertTarget,
 } from '@/lib/mount-index/conversion';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
-import { copyFile, moveFile, writeFile, deleteFile, FileOpError } from '@/lib/mount-index/file-ops';
+import { copyFile, moveFile, writeFile, deleteFile, linkFile, FileOpError } from '@/lib/mount-index/file-ops';
+import { deleteFolder, moveFolder } from '@/lib/mount-index/folder-ops';
+import { DatabaseStoreError } from '@/lib/mount-index/database-store';
+import { fileOpStatus } from '@/lib/mount-index/file-op-status';
+import { deriveMountCapabilities } from '@/lib/mount-index/capabilities';
 
 // ============================================================================
 // Schemas
@@ -63,8 +67,12 @@ export const GET = createAuthenticatedParamsHandler<{ id: string }>(
         c => c.embedding != null && c.embedding.length > 0
       ).length;
 
+      // Derived (non-persisted) per-mount capability flags so the file-manager UI
+      // can gate verbs from a single server-side source of truth.
+      const capabilities = deriveMountCapabilities(mountPoint);
+
       return NextResponse.json({
-        mountPoint: { ...mountPoint, embeddedChunkCount },
+        mountPoint: { ...mountPoint, embeddedChunkCount, capabilities },
       });
     } catch (error) {
       logger.error('[Mount Points v1] Error fetching mount point', { mountPointId: id }, error instanceof Error ? error : undefined);
@@ -422,21 +430,14 @@ const copyFileSchema = moveFileSchema.extend({
   force: z.boolean().optional(),
 });
 
-function fileOpStatus(err: FileOpError): number {
-  switch (err.code) {
-    case 'MOUNT_NOT_FOUND':
-    case 'SOURCE_NOT_FOUND':
-      return 404;
-    case 'DEST_EXISTS':
-      return 409;
-    case 'INVALID_PATH':
-    case 'UNSUPPORTED':
-      return 400;
-    case 'VERIFY_FAILED':
-    default:
-      return 500;
-  }
-}
+const deleteFolderSchema = z.object({
+  path: z.string().min(1),
+});
+
+const moveFolderSchema = z.object({
+  fromPath: z.string().min(1),
+  toPath: z.string().min(1),
+});
 
 async function handleMoveFile(
   req: NextRequest,
@@ -512,6 +513,80 @@ async function handleCopyFile(
       err instanceof Error ? err : undefined
     );
     return serverError('Failed to copy file');
+  }
+}
+
+async function handleLinkFile(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = moveFileSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Link requires sourcePath, destMountPointId, and destPath');
+  }
+  try {
+    const result = await linkFile({
+      sourceMountPointId: id,
+      sourcePath: parsed.data.sourcePath,
+      destMountPointId: parsed.data.destMountPointId,
+      destPath: parsed.data.destPath,
+    });
+    logger.info('[Mount Points v1] Linked file', { ...result, userId: user.id });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
+    }
+    logger.error('[Mount Points v1] Error linking file', { mountPointId: id }, err instanceof Error ? err : undefined);
+    return serverError('Failed to link file');
+  }
+}
+
+async function handleDeleteFolder(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = deleteFolderSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Delete folder requires a non-empty path');
+  }
+  try {
+    const result = await deleteFolder({ mountPointId: id, relativePath: parsed.data.path });
+    logger.info('[Mount Points v1] Deleted folder', { ...result, userId: user.id });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError || err instanceof DatabaseStoreError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
+    }
+    logger.error('[Mount Points v1] Error deleting folder', { mountPointId: id }, err instanceof Error ? err : undefined);
+    return serverError('Failed to delete folder');
+  }
+}
+
+async function handleMoveFolder(
+  req: NextRequest,
+  { user }: RequestContext,
+  { id }: { id: string }
+): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const parsed = moveFolderSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest('Move folder requires fromPath and toPath');
+  }
+  try {
+    const result = await moveFolder({ mountPointId: id, fromPath: parsed.data.fromPath, toPath: parsed.data.toPath });
+    logger.info('[Mount Points v1] Moved folder', { ...result, userId: user.id });
+    return successResponse(result);
+  } catch (err) {
+    if (err instanceof FileOpError || err instanceof DatabaseStoreError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: fileOpStatus(err) });
+    }
+    logger.error('[Mount Points v1] Error moving folder', { mountPointId: id }, err instanceof Error ? err : undefined);
+    return serverError('Failed to move folder');
   }
 }
 
@@ -687,8 +762,11 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       deconvert: handleDeconvert,
       'move-file': handleMoveFile,
       'copy-file': handleCopyFile,
+      'link-file': handleLinkFile,
       'write-file': handleWriteFile,
       'delete-file': handleDeleteFile,
+      'delete-folder': handleDeleteFolder,
+      'move-folder': handleMoveFolder,
       reindex: handleReindex,
       embed: handleEmbed,
     });

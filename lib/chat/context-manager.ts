@@ -17,6 +17,8 @@ import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampCo
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
+import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
@@ -25,7 +27,7 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
-import { extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
+import { extractVisibleConversation, stripToolArtifacts, extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
@@ -49,7 +51,12 @@ import {
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
+import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import {
+  resolveTieredMountPool,
+  type TieredMountPool,
+} from '@/lib/mount-index/tiered-mount-pool'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
@@ -85,6 +92,13 @@ import {
   buildCommonplaceLLMContext,
   postCommonplaceWhisper,
 } from '@/lib/services/commonplace-notifications/writer'
+import {
+  buildSuparnaMailWhisper,
+  buildSuparnaMailLLMContext,
+  postSuparnaMailWhisper,
+} from '@/lib/services/suparna-notifications/writer'
+import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail'
 import {
   assembleCorePacket,
   buildCoreWhisperContent,
@@ -130,10 +144,15 @@ export {
   selectRecentMessages,
 }
 
-// Per-character cap on inter-character memories. Top 10 by SQL ordering
-// (importance DESC, lastReinforcedAt/createdAt DESC); the formatter then
-// re-ranks the slice by effective weight inside each character's block.
-const INTER_CHAR_PER_CHARACTER_LIMIT = 10
+// Per-character cap on the importance/recency half of inter-character memories.
+// Top N by SQL ordering (importance DESC, lastReinforcedAt/createdAt DESC); the
+// formatter then merges this with the relevance half and re-ranks inside each
+// character's block. Halved from 10 so the freed budget goes to the relevance
+// half below.
+const INTER_CHAR_PER_CHARACTER_LIMIT = 5
+// Per-character cap on the relevance half: memories the responding character
+// holds about a present character that score highly for the current moment.
+const INTER_CHAR_RELEVANCE_PER_CHARACTER_LIMIT = 5
 
 /**
  * Message format expected by the context manager
@@ -893,6 +912,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       options.onStatusChange('generating_recap', `Recalling ${character.name}'s memories...`)
     }
 
+    // Query for the recap's relevant-conversations list: the present moment, as
+    // best we can sketch it at chat-start / character-join. Falls back through
+    // the freshest signal available.
+    const recapRelevanceQuery =
+      newUserMessage ||
+      (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '') ||
+      chat.scenarioText ||
+      chat.contextSummary ||
+      ''
+
     try {
       const recapResult = await generateMemoryRecap(
         character.id,
@@ -901,7 +930,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         userId,
         chat.id,
         options.uncensoredFallbackOptions,
-        budgetInfo?.maxContext
+        budgetInfo?.maxContext,
+        recapRelevanceQuery,
+        embeddingProfileId,
       )
 
       if (recapResult.content) {
@@ -964,9 +995,80 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         )
       } else if (memorySearchQuery) {
         memoryPath = 'two-pool'
+
+        // Query unification (item 3): route the dynamic head through the SAME
+        // cheap-LLM keyword distillation the proactive path uses, instead of
+        // embedding the raw last user message verbatim. The distillation also
+        // emits a best-guess turn-level temporal/context, which drives context
+        // steering. This branch is the fallback (first turn / continue mode /
+        // empty proactive result), so the extra cheap-LLM call is rare — and it
+        // degrades gracefully: no cheap-LLM selection, or an empty/failed
+        // distillation, falls back to the raw query and today's behavior.
+        let distilledQuery = memorySearchQuery
+        let turnContext: ContextTag | null = null
+        let turnTemporal: TemporalTag | null = null
+        if (options.cheapLLMSelection) {
+          try {
+            // existingMessages here is the trimmed role/content view (not the
+            // ChatEvent shape), so map it directly.
+            const recentForDistill = existingMessages
+              .slice(-12)
+              .map(m => {
+                const role = m.role.toLowerCase() as 'user' | 'assistant' | 'system'
+                const content = role === 'assistant' ? (stripToolArtifacts(m.content || '') ?? '') : (m.content || '')
+                return { role, content }
+              })
+              .filter(m => m.content.length > 0)
+            if (newUserMessage) recentForDistill.push({ role: 'user', content: newUserMessage })
+
+            const distill = await extractMemorySearchKeywords(
+              recentForDistill,
+              character.name,
+              options.cheapLLMSelection,
+              userId,
+              chat.id,
+              character.id,
+            )
+            if (distill.success && distill.result && distill.result.keywords.length > 0) {
+              distilledQuery = distill.result.keywords.join(' ')
+              turnContext = distill.result.context ?? null
+              turnTemporal = distill.result.temporal ?? null
+            }
+          } catch (error) {
+            logger.debug('[ContextManager] Dynamic-head keyword distillation failed; using raw query', {
+              characterId: character.id,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        // Characters present in the room this turn (responding character + every
+        // other character participant) for the participant-aware boost (item 4).
+        // Mirrors the set the orchestrator computes for the proactive path.
+        const presentAboutCharacterIds = Array.from(
+          new Set(
+            [character.id, ...(participantCharacters?.keys() ?? [])].filter(
+              (id): id is string => typeof id === 'string' && id.length > 0,
+            ),
+          ),
+        )
+
+        // Read the instance-wide recall settings and assemble the full per-turn
+        // recall context so the dynamic head reads the targeting tags back
+        // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof
+        // comparand for scope: narrow gating.
+        const recallSettings = await getMemoryRecallSettings()
+        const recallContext: RecallContext = {
+          currentProjectId: chat.projectId ?? null,
+          scopePolicy: recallSettings.scopePolicy,
+          turnContext,
+          turnTemporal,
+          presentAboutCharacterIds,
+          expandRelated: recallSettings.expandRelated,
+        }
         const memoryResults = await searchMemoriesSemantic(
           character.id,
-          memorySearchQuery,
+          distilledQuery,
           {
             userId,
             embeddingProfileId,
@@ -974,6 +1076,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             // still leaves enough candidates to fill the head.
             limit: DYNAMIC_HEAD_DEFAULT_SIZE * 3,
             minImportance: minMemoryImportance,
+            recallContext,
           },
         )
         dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
@@ -1020,6 +1123,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const priorEmissionByCharacter = new Map<string, SceneStateEmissionEntry>(
     Object.entries(priorCache?.[cacheTargetKey] ?? {}),
   )
+  // The tri-tier mount pool (character vault / project stores / Quilltap
+  // General) is needed by both the live-wardrobe resolution below and the
+  // knowledge retrieval further down. Resolve it at most once per turn, lazily,
+  // so turns that need neither pay nothing.
+  let _turnMountPool: TieredMountPool | null = null
+  const getTurnMountPool = async (): Promise<TieredMountPool> => {
+    if (!_turnMountPool) {
+      _turnMountPool = await resolveTieredMountPool({
+        userId,
+        // characterId is REQUIRED for the group tier to resolve — the group
+        // tier is keyed on the responding character's own group memberships
+        // (never the chat). characterMountPointId remains the fast path for the
+        // character vault so the vault lookup is still skipped.
+        characterId: character.id ?? null,
+        characterMountPointId: character.characterDocumentMountPointId ?? null,
+        projectId: options.chat.projectId ?? null,
+      })
+    }
+    return _turnMountPool
+  }
+
   let currentStateContent = ''
   let currentStateTokens = 0
   let emittedSceneStateByCharacter: Map<string, SceneStateEmissionEntry> | null = null
@@ -1043,11 +1167,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       sceneTime = calculateCurrentTimestamp(options.timestampConfig, options.timezone).formatted
     }
 
-    // Scene-state tracking only re-runs at turn boundaries, so its cached
-    // clothing field can lag mid-turn wardrobe edits and `wardrobe_*` tool
-    // calls. The wardrobe slots are the source of truth — read them live so
-    // the responding character's prompt always reflects what each present
-    // character is actually wearing right now.
+    // The scene-state tracker owns a concise, salience-based clothing summary
+    // (cached in `c.clothing`, keyed by the equipped-outfit hash in
+    // `c.clothingHash`). It only re-runs at turn boundaries, so the cached
+    // summary can lag a mid-turn wardrobe edit or `wardrobe_*` tool call.
+    // Detect that by hashing the live equipped slots and comparing against the
+    // hash the cached summary was derived from: only when they differ do we
+    // override — and then with a CONCISE title-only description, never the
+    // verbose per-item prose. When the wardrobe is unchanged (or the character
+    // has none equipped), the cached concise summary stands.
     const liveClothingByCharacterId = new Map<string, string>()
     if (parsedScene && parsedScene.characters.length > 0) {
       const repos = getRepositories()
@@ -1055,13 +1183,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         if (!c.characterId) return
         try {
           const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chat.id, c.characterId)
-          if (!equippedSlots) return
-          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots)
+          if (!hasEquippedItems(equippedSlots)) return
+          const liveHash = hashEquippedSlots(equippedSlots)
+          // Wardrobe unchanged since the cached summary was derived — keep it.
+          if (liveHash === (c.clothingHash ?? null)) return
+          const { projectMountPointIds } = await getTurnMountPool()
+          const resolved = await resolveEquippedOutfitForCharacter(repos, c.characterId, equippedSlots!, {
+            projectMountPointIds,
+          })
           const description = describeOutfit({
-            top: decorateOutfitItems(resolved.leafItemsBySlot.top),
-            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom),
-            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear),
-            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories),
+            top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
+            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
+            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
+            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
           })
           if (description) liveClothingByCharacterId.set(c.characterId, description)
         } catch (error) {
@@ -1122,19 +1256,51 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       )
 
       if (otherCharacterIds.length > 0 && interCharacterBudget > 0) {
+        // Importance/recency half — direct DB query, top-N per other character.
         const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
           character.id,
           otherCharacterIds,
           INTER_CHAR_PER_CHARACTER_LIMIT,
         )
-        interCharacterLoadedCount = interCharacterMemories.length
 
-        if (interCharacterMemories.length > 0) {
+        // Relevance half — semantic search per other character filtered by
+        // aboutCharacterId, ranking by relevance to the current moment. Skipped
+        // when there is no search query (e.g. continue-mode first turn). Runs
+        // concurrently across the present characters.
+        let interCharacterRelevance: SemanticSearchResult[] = []
+        if (memorySearchQuery) {
+          const relevanceLists = await Promise.all(
+            otherCharacterIds.map(async (otherId) => {
+              try {
+                return await searchMemoriesSemantic(character.id!, memorySearchQuery, {
+                  userId,
+                  embeddingProfileId,
+                  limit: INTER_CHAR_RELEVANCE_PER_CHARACTER_LIMIT,
+                  minImportance: minMemoryImportance,
+                  aboutCharacterId: otherId,
+                })
+              } catch (relevanceError) {
+                logger.warn('[ContextManager] Inter-character relevance search failed', {
+                  characterId: character.id,
+                  aboutCharacterId: otherId,
+                  error: relevanceError instanceof Error ? relevanceError.message : String(relevanceError),
+                })
+                return [] as SemanticSearchResult[]
+              }
+            }),
+          )
+          interCharacterRelevance = relevanceLists.flat()
+        }
+
+        interCharacterLoadedCount = interCharacterMemories.length + interCharacterRelevance.length
+
+        if (interCharacterMemories.length > 0 || interCharacterRelevance.length > 0) {
           const formatted = formatInterCharacterMemoriesForContext(
             interCharacterMemories,
             otherCharacterNames,
             interCharacterBudget,
-            provider
+            provider,
+            interCharacterRelevance,
           )
 
           interCharacterMemoryContent = formatted.content
@@ -1169,30 +1335,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     budget.knowledgeBudget > 0
   ) {
     try {
-      const repos = getRepositories()
+      const { characterMountPointId, groupMountPointIds, projectMountPointIds, globalMountPointId } =
+        await getTurnMountPool()
 
-      const projectId = options.chat.projectId ?? null
-      const projectMountPointIds = projectId
-        ? (await repos.projectDocMountLinks.findByProjectId(projectId)).map(l => l.mountPointId)
-        : []
-
-      let globalMountPointId: string | null = null
-      try {
-        const { getGeneralMountPointId } = await import('@/lib/instance-settings')
-        globalMountPointId = await getGeneralMountPointId()
-      } catch {
-        /* general mount not provisioned yet — skip global knowledge tier */
-      }
-
-      const characterMountPointId = character.characterDocumentMountPointId ?? null
-
-      if (characterMountPointId || projectMountPointIds.length > 0 || globalMountPointId) {
+      if (
+        characterMountPointId ||
+        groupMountPointIds.length > 0 ||
+        projectMountPointIds.length > 0 ||
+        globalMountPointId
+      ) {
         const result = await retrieveKnowledgeForTurn({
           characterId: character.id,
           userId,
           embeddingProfileId,
           query: memorySearchQuery,
           characterMountPointId,
+          groupMountPointIds,
           projectMountPointIds,
           globalMountPointId,
           budgetTokens: budget.knowledgeBudget,
@@ -1644,7 +1802,14 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         const refreshed = await getRepositories().chats.getMessages(chat.id)
         const stale = refreshed
           .filter((m): m is MessageEvent => m.type === 'message')
-          .filter(m => m.systemSender === 'commonplaceBook' && m.id !== posted.id)
+          // Sweep prior consolidated whispers, but NOT the fold-posted
+          // `relevant-conversations` whisper — it persists across turns and is
+          // swept on its own cadence by the fold refresh.
+          .filter(m =>
+            m.systemSender === 'commonplaceBook' &&
+            m.systemKind !== 'relevant-conversations' &&
+            m.id !== posted.id,
+          )
           .filter(m => {
             const ids = m.targetParticipantIds
             if (targetParticipantId === null) {
@@ -1673,6 +1838,53 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
+  // Post Office: after the Commonplace Book whisper, check this character's
+  // mailbox for letters Suparṇā has not yet announced. Each new letter triggers
+  // a Suparṇā whisper — EVENT-like, not a snapshot, so we never sweep prior mail
+  // whispers — and is then marked `alerted`.
+  //
+  // Parent-vs-child write boundary: buildContext runs in both the parent (HTTP)
+  // and the forked background-jobs child. The `alerted` flip is a CONTENT update
+  // to an existing file (no link/folder deletion, no GC), routed through
+  // writeDatabaseDocument; the mount-index partition's writes buffer over IPC in
+  // the child and commit parent-side, so the flip replays correctly there too.
+  // The whole check is wrapped warn-only — a mail failure must never break the turn.
+  let suparnaMailLLMContext = ''
+  const mailVaultId = character.characterDocumentMountPointId ?? null
+  if (mailVaultId) {
+    try {
+      const unalerted = await collectUnalertedMail(mailVaultId)
+      if (unalerted.length > 0) {
+        const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+        await postSuparnaMailWhisper({
+          chatId: chat.id,
+          targetParticipantId,
+          content: buildSuparnaMailWhisper(unalerted),
+        })
+        suparnaMailLLMContext = buildSuparnaMailLLMContext(unalerted)
+        for (const letter of unalerted) {
+          await markAlerted(mailVaultId, letter.path)
+        }
+      }
+    } catch (mailError) {
+      logger.warn('[Suparna] Mail check failed; turn continues', {
+        chatId: chat.id,
+        characterId: character.id,
+        vaultId: mailVaultId,
+        error: getErrorMessage(mailError),
+      })
+    }
+  }
+
+  // Post Office: the block above only covers the RESPONDING (LLM) character's
+  // own mailbox. The operator is always playing a character too, and that
+  // character never takes an LLM turn — so a letter addressed to it would never
+  // be announced. Sweep the operator's character vault(s) as well, posting a
+  // whisper targeted at the operator's participant (visible to them, private
+  // from the others). Idempotent (markAlerted) and warn-only inside, so it
+  // never breaks the turn; the chat-load GET runs the same sweep for idle rooms.
+  await surfaceOperatorMailForChat(chat.id, chat.participants)
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -1684,6 +1896,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     const trailingContextSections: string[] = []
     if (coreWhisperLLMContext) trailingContextSections.push(coreWhisperLLMContext)
     if (llmRecallText) trailingContextSections.push(llmRecallText)
+    if (suparnaMailLLMContext) trailingContextSections.push(suparnaMailLLMContext)
     const composedUserContent = trailingContextSections.length > 0
       ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
       : newUserMessage

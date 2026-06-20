@@ -11,6 +11,7 @@
  * and review the diff in the PR.
  */
 
+import { askCarinaToolDefinition } from '../ask-carina-tool'
 import { attachImageToolDefinition } from '../attach-image-tool'
 import { deleteAnnotationToolDefinition } from '../delete-annotation-tool'
 import { docCloseDocumentToolDefinition } from '../doc-close-document-tool'
@@ -41,27 +42,34 @@ import { helpSearchToolDefinition } from '../help-search-tool'
 import { helpSettingsToolDefinition } from '../help-settings-tool'
 import { imageGenerationToolDefinition } from '../image-generation-tool'
 import { keepImageToolDefinition } from '../keep-image-tool'
+import { listEmailToolDefinition } from '../list-email-tool'
 import { listImagesToolDefinition } from '../list-images-tool'
 import { memorySearchToolDefinition } from '../memory-search-tool'
+import { sendMailToolDefinition } from '../send-mail-tool'
 import { projectInfoToolDefinition } from '../project-info-tool'
 import { readConversationToolDefinition } from '../read-conversation-tool'
 import { requestFullContextToolDefinition } from '../request-full-context-tool'
 import { rngToolDefinition } from '../rng-tool'
-import { searchScriptoriumToolDefinition } from '../search-scriptorium-tool'
+import { runSqlToolDefinition } from '../run-sql-tool'
+import { searchScriptoriumToolDefinition, searchScriptoriumBrahmaToolDefinition } from '../search-scriptorium-tool'
 import { selfInventoryToolDefinition } from '../self-inventory-tool'
 import { stateToolDefinition } from '../state-tool'
 import { submitFinalResponseToolDefinition } from '../submit-final-response-tool'
 import { terminalListToolDefinition } from '../terminal-list-tool'
 import { terminalReadToolDefinition } from '../terminal-read-tool'
 import { upsertAnnotationToolDefinition } from '../upsert-annotation-tool'
-import { wardrobeChangeItemToolDefinition } from '../wardrobe-change-item-tool'
-import { wardrobeCreateItemToolDefinition } from '../wardrobe-create-item-tool'
 import { wardrobeListToolDefinition } from '../wardrobe-list-tool'
-import { wardrobeUpdateOutfitToolDefinition } from '../wardrobe-update-outfit-tool'
+import { wardrobeReadToolDefinition } from '../wardrobe-read-tool'
+import { wardrobeCreateToolDefinition } from '../wardrobe-create-tool'
+import { wardrobeUpdateToolDefinition } from '../wardrobe-update-tool'
+import { wardrobeArchiveToolDefinition } from '../wardrobe-archive-tool'
+import { wardrobeWearToolDefinition } from '../wardrobe-wear-tool'
+import { wardrobeTakeOffToolDefinition } from '../wardrobe-take-off-tool'
 import { webSearchToolDefinition } from '../web-search-tool'
 import { whisperToolDefinition } from '../whisper-tool'
 
 const ALL_TOOLS = {
+  askCarina: askCarinaToolDefinition,
   attachImage: attachImageToolDefinition,
   deleteAnnotation: deleteAnnotationToolDefinition,
   docCloseDocument: docCloseDocumentToolDefinition,
@@ -92,23 +100,30 @@ const ALL_TOOLS = {
   helpSettings: helpSettingsToolDefinition,
   imageGeneration: imageGenerationToolDefinition,
   keepImage: keepImageToolDefinition,
+  listEmail: listEmailToolDefinition,
   listImages: listImagesToolDefinition,
   memorySearch: memorySearchToolDefinition,
+  sendMail: sendMailToolDefinition,
   projectInfo: projectInfoToolDefinition,
   readConversation: readConversationToolDefinition,
   requestFullContext: requestFullContextToolDefinition,
   rng: rngToolDefinition,
+  runSql: runSqlToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
+  searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
   selfInventory: selfInventoryToolDefinition,
   state: stateToolDefinition,
   submitFinalResponse: submitFinalResponseToolDefinition,
   terminalList: terminalListToolDefinition,
   terminalRead: terminalReadToolDefinition,
   upsertAnnotation: upsertAnnotationToolDefinition,
-  wardrobeChangeItem: wardrobeChangeItemToolDefinition,
-  wardrobeCreateItem: wardrobeCreateItemToolDefinition,
   wardrobeList: wardrobeListToolDefinition,
-  wardrobeUpdateOutfit: wardrobeUpdateOutfitToolDefinition,
+  wardrobeRead: wardrobeReadToolDefinition,
+  wardrobeCreate: wardrobeCreateToolDefinition,
+  wardrobeUpdate: wardrobeUpdateToolDefinition,
+  wardrobeArchive: wardrobeArchiveToolDefinition,
+  wardrobeWear: wardrobeWearToolDefinition,
+  wardrobeTakeOff: wardrobeTakeOffToolDefinition,
   webSearch: webSearchToolDefinition,
   whisper: whisperToolDefinition,
 }

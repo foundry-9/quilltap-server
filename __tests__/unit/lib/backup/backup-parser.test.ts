@@ -64,6 +64,9 @@ function createBackupZipFile(options: {
   roleplayTemplates?: any[]
   providerModels?: any[]
   projects?: any[]
+  groups?: any[]
+  groupDocMountLinks?: any[]
+  groupCharacterMembers?: any[]
   textReplacementRules?: any[]
   rootFolder?: string
   includeFileData?: Array<{
@@ -108,6 +111,9 @@ function createBackupZipFile(options: {
       roleplayTemplates: options.roleplayTemplates?.length || 0,
       providerModels: options.providerModels?.length || 0,
       projects: options.projects?.length || 0,
+      groups: options.groups?.length || 0,
+      groupDocMountLinks: options.groupDocMountLinks?.length || 0,
+      groupCharacterMembers: options.groupCharacterMembers?.length || 0,
       textReplacementRules: options.textReplacementRules?.length || 0,
     },
     ...options.manifest,
@@ -186,6 +192,26 @@ function createBackupZipFile(options: {
     fs.writeFileSync(
       path.join(stagingDir, 'data', 'projects.json'),
       JSON.stringify(options.projects, null, 2)
+    )
+  }
+  // Optional: groups and their mount-index join tables (format-4). Omit the
+  // files entirely to simulate a pre-format-4 backup.
+  if (options.groups !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'groups.json'),
+      JSON.stringify(options.groups, null, 2)
+    )
+  }
+  if (options.groupDocMountLinks !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'group-doc-mount-links.json'),
+      JSON.stringify(options.groupDocMountLinks, null, 2)
+    )
+  }
+  if (options.groupCharacterMembers !== undefined) {
+    fs.writeFileSync(
+      path.join(stagingDir, 'data', 'group-character-members.json'),
+      JSON.stringify(options.groupCharacterMembers, null, 2)
     )
   }
   // Optional: text replacement rules (omit the file entirely to simulate a
@@ -301,6 +327,81 @@ describe('Backup Parser', () => {
         expect(byId['trr-1']).toMatchObject({ fromText: 'teh', toText: 'the', caseSensitive: false, enabled: true, sortOrder: 0 })
         expect(byId['trr-2']).toMatchObject({ fromText: 'QT', toText: 'Quilltap', caseSensitive: true, enabled: false, sortOrder: 1 })
 
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('round-trips groups and their join tables through the archive', async () => {
+      const now = new Date().toISOString()
+      const groups = [
+        { id: 'group-1', name: 'The Conspirators', officialMountPointId: 'mp-1', description: 'A cabal', state: {}, createdAt: now, updatedAt: now },
+      ]
+      const groupCharacterMembers = [
+        { id: 'gcm-1', groupId: 'group-1', characterId: 'char-1', createdAt: now, updatedAt: now },
+        { id: 'gcm-2', groupId: 'group-1', characterId: 'char-2', createdAt: now, updatedAt: now },
+      ]
+      const groupDocMountLinks = [
+        { id: 'gdml-1', groupId: 'group-1', mountPointId: 'mp-2', createdAt: now, updatedAt: now },
+      ]
+
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+        groups,
+        groupCharacterMembers,
+        groupDocMountLinks,
+      })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+
+        // Manifest counts reflect the seeded group data.
+        expect(result.manifest.counts.groups).toBe(1)
+        expect(result.manifest.counts.groupCharacterMembers).toBe(2)
+        expect(result.manifest.counts.groupDocMountLinks).toBe(1)
+
+        // The rows survive the archive with their identity and FKs intact.
+        expect(result.groups).toHaveLength(1)
+        expect(result.groups?.[0]).toMatchObject({ id: 'group-1', name: 'The Conspirators', officialMountPointId: 'mp-1' })
+        expect(result.groupCharacterMembers).toHaveLength(2)
+        expect((result.groupCharacterMembers ?? []).map((m) => m.characterId).sort()).toEqual(['char-1', 'char-2'])
+        expect(result.groupDocMountLinks).toHaveLength(1)
+        expect(result.groupDocMountLinks?.[0]).toMatchObject({ groupId: 'group-1', mountPointId: 'mp-2' })
+
+        fs.rmSync(extractDir, { recursive: true, force: true })
+      } finally {
+        cleanupZip(zipPath)
+      }
+    }, 15000)
+
+    it('parses a pre-format-4 backup with no groups files', async () => {
+      // Omit groups entirely → the data files are never written, simulating a
+      // backup taken before format 4. The optional read guards must default
+      // each to an empty array rather than throwing.
+      const zipPath = createBackupZipFile({
+        characters: [],
+        chats: [],
+        tags: [],
+        connectionProfiles: [],
+        imageProfiles: [],
+        embeddingProfiles: [],
+        memories: [],
+        files: [],
+      })
+
+      try {
+        const { data: result, extractDir } = await parseBackupZip(zipPath)
+        expect(result.groups).toEqual([])
+        expect(result.groupCharacterMembers).toEqual([])
+        expect(result.groupDocMountLinks).toEqual([])
         fs.rmSync(extractDir, { recursive: true, force: true })
       } finally {
         cleanupZip(zipPath)

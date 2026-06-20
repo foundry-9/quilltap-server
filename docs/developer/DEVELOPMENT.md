@@ -105,7 +105,7 @@ quilltap/
 │   ├── theme-storybook/      # Storybook preset for theme development (@quilltap/theme-storybook)
 │   └── create-quilltap-theme/ # Scaffolding CLI for new themes
 ├── themes/                   # Bundled and built themes
-│   └── bundled/              # 5 .qtap-theme bundles (art-deco, earl-grey, great-estate, old-school, rains)
+│   └── bundled/              # 6 .qtap-theme bundles (art-deco, earl-grey, great-estate, madmans-box, old-school, rains)
 ├── hooks/                    # Custom React hooks
 ├── types/                    # TypeScript type augmentations
 ├── __tests__/                # Jest test files (unit and integration)

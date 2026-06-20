@@ -125,11 +125,11 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/archives.md')
+    expect(result.content).toContain('### Knowledge (character) — qtap://self/Knowledge/archives.md')
     expect(result.content).toContain('Tags: archives, history · sunlit reading-room')
     expect(result.content).toContain('The archives lie beneath the sunlit reading-room.')
     expect(result.content).toContain(
-      'doc_read_file(scope="document_store", mount_point="Robin Character Vault", path="Knowledge/archives.md")',
+      'doc_read_file(uri="qtap://self/Knowledge/archives.md")',
     )
     expect(result.debug).toHaveLength(1)
     expect(result.debug[0].inline).toBe(true)
@@ -150,10 +150,10 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/archives.md')
+    expect(result.content).toContain('### Knowledge (character) — qtap://self/Knowledge/archives.md')
     expect(result.content).toContain('Why: Sunlit Archives')
     expect(result.content).toContain(
-      'Read with: doc_read_file(scope="document_store", mount_point="Robin Character Vault", path="Knowledge/archives.md")',
+      'Read with: doc_read_file(uri="qtap://self/Knowledge/archives.md")',
     )
     expect(result.content).not.toContain('AAAAAAAAAA')
     expect(result.debug[0].inline).toBe(false)
@@ -172,7 +172,7 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn(baseParams)
 
-    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/legacy.pdf')
+    expect(result.content).toContain('### Knowledge (character) — qtap://self/Knowledge/legacy.pdf')
     expect(result.content).toContain('Read with: doc_read_file')
     expect(mockFindDocumentByPath).not.toHaveBeenCalled()
     expect(result.debug[0].inline).toBe(false)
@@ -207,7 +207,7 @@ describe('retrieveKnowledgeForTurn', () => {
 
     const result = await retrieveKnowledgeForTurn({ ...baseParams, budgetTokens: 200 })
 
-    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/big.md')
+    expect(result.content).toContain('### Knowledge (character) — qtap://self/Knowledge/big.md')
     expect(result.content).not.toContain('B'.repeat(50))
     expect(result.tokenCount).toBeLessThanOrEqual(200)
   })
@@ -248,9 +248,9 @@ describe('retrieveKnowledgeForTurn', () => {
     })
 
     expect(result.debug.map(d => d.tier).sort()).toEqual(['character', 'general'.replace('general', 'global'), 'project'].sort())
-    expect(result.content).toContain('### Knowledge (character) — Robin Character Vault/Knowledge/char.md')
-    expect(result.content).toContain('### Knowledge (project) — Storyboard Mount/Knowledge/project.md')
-    expect(result.content).toContain('### Knowledge (general) — Quilltap General/Knowledge/general.md')
+    expect(result.content).toContain('### Knowledge (character) — qtap://self/Knowledge/char.md')
+    expect(result.content).toContain('### Knowledge (project) — qtap://Storyboard%20Mount/Knowledge/project.md')
+    expect(result.content).toContain('### Knowledge (general) — qtap://Quilltap%20General/Knowledge/general.md')
 
     // Confirm tier-specific boost fractions were passed through to the
     // search call for each mount.

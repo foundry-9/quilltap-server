@@ -508,7 +508,11 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
   }
 
   /**
-   * Cleanup old completed jobs
+   * @deprecated Single-window reaper that treats COMPLETED and DEAD jobs the
+   * same. Retention now differs by status (completed jobs are short-lived,
+   * dead jobs are kept longer as a forensic trail), so production should call
+   * {@link cleanupOldJobsByStatus}. Retained only so the existing
+   * queue-service unit test keeps compiling.
    */
   async cleanupOldJobs(olderThan: Date): Promise<number> {
     return this.safeQuery(
@@ -524,6 +528,44 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
       'Error cleaning up old jobs',
       {},
       0
+    );
+  }
+
+  /**
+   * Reap finished jobs on per-status retention windows, keyed off
+   * `completedAt`. COMPLETED jobs are reaped after the shorter window; DEAD
+   * (retry-exhausted) jobs after the longer one. PENDING, PROCESSING, FAILED,
+   * and PAUSED are deliberately left alone — FAILED in particular is the
+   * transient between-retries state and must not be reaped on a timer.
+   *
+   * @returns counts of rows deleted in each bucket.
+   */
+  async cleanupOldJobsByStatus(
+    completedOlderThan: Date,
+    deadOlderThan: Date
+  ): Promise<{ completed: number; dead: number }> {
+    return this.safeQuery(
+      async () => {
+        const completed = await this.deleteMany({
+          status: 'COMPLETED',
+          completedAt: { $lt: completedOlderThan.toISOString() },
+        });
+        const dead = await this.deleteMany({
+          status: 'DEAD',
+          completedAt: { $lt: deadOlderThan.toISOString() },
+        });
+
+        logger.info('Reaped finished background jobs by status', {
+          completed,
+          dead,
+          completedOlderThan: completedOlderThan.toISOString(),
+          deadOlderThan: deadOlderThan.toISOString(),
+        });
+        return { completed, dead };
+      },
+      'Error reaping finished jobs by status',
+      {},
+      { completed: 0, dead: 0 }
     );
   }
 

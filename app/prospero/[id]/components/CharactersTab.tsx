@@ -8,7 +8,7 @@
 
 import Link from 'next/link'
 import type { Project } from '../types'
-import { CloseIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 
 interface CharactersTabProps {
   project: Project
@@ -55,7 +55,7 @@ export function CharactersTab({ project, onRemoveCharacter }: CharactersTabProps
                 className="qt-text-secondary hover:qt-text-destructive"
                 title="Remove from roster"
               >
-                <CloseIcon className="w-5 h-5" />
+                <Icon name="close" className="w-5 h-5" />
               </button>
             </div>
           ))}

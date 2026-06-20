@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import type { PluginIconData } from '@/components/image-profiles/ProviderIcon'
 
 interface ProviderInfo {
@@ -12,64 +14,35 @@ interface ProviderInfo {
   type: string
 }
 
-// Module-level cache so multiple components don't re-fetch
-let cachedProviders: ProviderInfo[] | null = null
-let fetchPromise: Promise<ProviderInfo[]> | null = null
-
-async function fetchProviders(): Promise<ProviderInfo[]> {
-  if (cachedProviders) return cachedProviders
-
-  if (fetchPromise) return fetchPromise
-
-  try {
-    fetchPromise = fetch('/api/v1/providers')
-      .then(res => res.json())
-      .then(data => {
-        const providers = (data.providers || []).map((p: Record<string, unknown>) => ({
-          id: p.id as string,
-          name: p.name as string,
-          displayName: (p.displayName as string) || (p.name as string),
-          abbreviation: (p.abbreviation as string) || '',
-          icon: (p.icon as PluginIconData) || null,
-          type: (p.type as string) || 'llm',
-        }))
-        cachedProviders = providers
-        fetchPromise = null
-        return providers
-      })
-      .catch(() => {
-        fetchPromise = null
-        return [] as ProviderInfo[]
-      })
-
-    return fetchPromise
-  } catch {
-    fetchPromise = null
-    return []
-  }
+interface ProvidersResponse {
+  providers?: Array<Record<string, unknown>>
 }
+
+function mapProviders(data: ProvidersResponse): ProviderInfo[] {
+  return (data.providers || []).map((p) => ({
+    id: p.id as string,
+    name: p.name as string,
+    displayName: (p.displayName as string) || (p.name as string),
+    abbreviation: (p.abbreviation as string) || '',
+    icon: (p.icon as PluginIconData) || null,
+    type: (p.type as string) || 'llm',
+  }))
+}
+
+const EMPTY_PROVIDERS: ProviderInfo[] = []
 
 /**
  * Hook to fetch and cache the list of available providers with their icon data.
- * Uses module-level caching so multiple components share the same data.
+ * Backed by the shared TanStack Query cache (dedups by key across components);
+ * a long staleTime keeps its "fetch once, share everywhere" reference-data feel.
  */
 export function useProviders() {
-  const [providers, setProviders] = useState<ProviderInfo[]>(cachedProviders || [])
-  const [loading, setLoading] = useState(!cachedProviders)
-
-  useEffect(() => {
-    // If cache was populated between render and effect, skip fetch
-    if (cachedProviders) return
-
-    let cancelled = false
-    fetchProviders().then(result => {
-      if (!cancelled) {
-        setProviders(result)
-        setLoading(false)
-      }
-    })
-    return () => { cancelled = true }
-  }, [])
+  const { data: providers = EMPTY_PROVIDERS, isLoading: loading } = useQuery({
+    queryKey: queryKeys.providers.all,
+    queryFn: ({ signal }) => apiFetch<ProvidersResponse>('/api/v1/providers', { signal }),
+    select: mapProviders,
+    staleTime: Infinity,
+  })
 
   return {
     providers,

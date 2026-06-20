@@ -14,8 +14,9 @@ import { createAuthenticatedParamsHandler, AuthenticatedContext } from '@/lib/ap
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError, conflict } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
+import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
@@ -160,6 +161,19 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       if (name !== undefined) {
         if (typeof name !== 'string' || name.trim().length === 0) {
           return badRequest('Name must be a non-empty string');
+        }
+        // Names are unique per user (case-insensitive, trimmed). Reject a
+        // rename that collides with a *different* profile before the DB's
+        // unique index would. Renaming a profile to its own name is fine.
+        const normalizedName = normalizeProfileName(name);
+        const userProfiles = await repos.connections.findByUserId(user.id);
+        if (userProfiles.some((p) => p.id !== id && normalizeProfileName(p.name) === normalizedName)) {
+          logger.debug('Rejected duplicate connection-profile name on update', {
+            userId: user.id,
+            profileId: id,
+            name: name.trim(),
+          });
+          return conflict(`A connection profile named "${name.trim()}" already exists`);
         }
         updateData.name = name.trim();
       }

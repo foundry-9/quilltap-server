@@ -22,6 +22,19 @@ jest.mock('@/lib/memory/memory-weighting', () => ({
   formatRelativeAge: jest.fn(),
 }))
 
+jest.mock('@/lib/memory/conversation-summary-search', () => ({
+  searchVaultConversationSummaries: jest.fn(),
+  // Mirror the real renderer/note so the recap block assembles in tests.
+  renderRelevantConversationsBlock: (matches: Array<{ conversationId: string; conversationTitle: string }>) =>
+    matches.length === 0
+      ? ''
+      : `### Relevant Past Conversations\n\n${matches
+          .map(m => `#### ${m.conversationTitle} (\`${m.conversationId}\`)`)
+          .join('\n')}`,
+  READ_CONVERSATION_CALL_NOTE:
+    '_Pass any of the conversation IDs above (in backticks) to the `read_conversation` tool to revisit the full transcript._',
+}))
+
 jest.mock('@/lib/logger', () => ({
   logger: {
     info: jest.fn(),
@@ -47,10 +60,14 @@ const cheapLlmMock = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
 const weightingMock = jest.requireMock('@/lib/memory/memory-weighting') as {
   formatRelativeAge: jest.Mock
 }
+const conversationSearchMock = jest.requireMock('@/lib/memory/conversation-summary-search') as {
+  searchVaultConversationSummaries: jest.Mock
+}
 
 const mockGetRepositories = repositoriesMock.getRepositories
 const mockSummarizeMemoryRecap = cheapLlmMock.summarizeMemoryRecap
 const mockFormatRelativeAge = weightingMock.formatRelativeAge
+const mockSearchVaultConversationSummaries = conversationSearchMock.searchVaultConversationSummaries
 
 // Mock repository
 const mockFindRecentByImportanceTier = jest.fn()
@@ -106,6 +123,9 @@ describe('Memory Recap Service', () => {
     // Default: no recent summarized chats. Tests that exercise the Recent Conversations
     // block override this.
     mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+    // Default: no relevant conversations. Tests that exercise the Relevant
+    // Conversations list (which requires a relevanceQuery argument) override this.
+    mockSearchVaultConversationSummaries.mockResolvedValue([])
 
     // Re-import the module under test so it picks up mocked dependencies
     jest.isolateModules(() => {
@@ -540,51 +560,121 @@ describe('Memory Recap Service', () => {
       )
     })
 
-    it('should scale the recent-conversations limit linearly with maxContext', async () => {
+    it('should scale the recap conversation-list limit with maxContext (3→10 over 4K→32K)', async () => {
       mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
       mockFindRecentSummarizedByCharacter.mockResolvedValue([])
 
-      // 4K → 5
+      // 4K → 3
       await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 4000)
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
-        expect.objectContaining({ limit: 5 })
+        expect.objectContaining({ limit: 3 })
       )
 
-      // 32K → 20
+      // 32K → 10
       await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 32000)
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
-        expect.objectContaining({ limit: 20 })
+        expect.objectContaining({ limit: 10 })
       )
 
-      // Midpoint 18K → ~12.5 → rounds to 13
+      // Midpoint 18K → 3 + 0.5*7 = 6.5 → rounds to 7
       await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 18000)
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
-        expect.objectContaining({ limit: 13 })
+        expect.objectContaining({ limit: 7 })
       )
 
       // Below 4K clamps to MIN
       await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 2000)
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
-        expect.objectContaining({ limit: 5 })
+        expect.objectContaining({ limit: 3 })
       )
 
       // Above 32K clamps to MAX
       await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, 200000)
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
-        expect.objectContaining({ limit: 20 })
+        expect.objectContaining({ limit: 10 })
       )
 
       // null/undefined defaults to MAX
       await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, undefined, undefined, null)
       expect(mockFindRecentSummarizedByCharacter).toHaveBeenLastCalledWith(
         testCharacterId,
-        expect.objectContaining({ limit: 20 })
+        expect.objectContaining({ limit: 10 })
       )
+    })
+
+    it('should render a Relevant Past Conversations list from vault semantic search', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+      mockSearchVaultConversationSummaries.mockResolvedValue([
+        { conversationId: 'rel-A', conversationTitle: 'The Orchid Wager', relativePath: 'Conversation Summaries/orchid.md', score: 0.9 },
+      ])
+
+      const result = await generateMemoryRecap(
+        testCharacterId,
+        testCharacterName,
+        testSelection,
+        testUserId,
+        testChatId,
+        undefined,
+        32000,
+        'orchids and wagers',
+        'embed-profile-1',
+      )
+
+      expect(mockSearchVaultConversationSummaries).toHaveBeenCalledWith(
+        expect.objectContaining({
+          characterId: testCharacterId,
+          query: 'orchids and wagers',
+          embeddingProfileId: 'embed-profile-1',
+          excludeConversationId: testChatId,
+        })
+      )
+      expect(result.content).toContain('### Relevant Past Conversations')
+      expect(result.content).toContain('#### The Orchid Wager (`rel-A`)')
+      expect(result.content).toContain('read_conversation')
+    })
+
+    it('should not call vault search when no relevance query is supplied', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, testChatId)
+
+      expect(mockSearchVaultConversationSummaries).not.toHaveBeenCalled()
+    })
+
+    it('should dedup a conversation present in both lists, keeping it in relevant', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({ high: [], medium: [], low: [] })
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'dup', title: 'Shared Memory', contextSummary: 'It was a fine afternoon.' },
+        { id: 'recent-only', title: 'Recent Only', contextSummary: 'A quiet evening.' },
+      ])
+      mockSearchVaultConversationSummaries.mockResolvedValue([
+        { conversationId: 'dup', conversationTitle: 'Shared Memory', relativePath: 'x.md', score: 0.95 },
+      ])
+
+      const result = await generateMemoryRecap(
+        testCharacterId,
+        testCharacterName,
+        testSelection,
+        testUserId,
+        testChatId,
+        undefined,
+        32000,
+        'a fine afternoon',
+      )
+
+      // 'dup' appears once, under Relevant; the Recent list keeps only 'recent-only'.
+      expect(result.content).toContain('### Relevant Past Conversations')
+      expect(result.content).toContain('#### Shared Memory (`dup`)')
+      expect(result.content).toContain('#### Recent Only (`recent-only`)')
+      const dupOccurrences = (result.content.match(/`dup`/g) || []).length
+      expect(dupOccurrences).toBe(1)
     })
 
     it('should count memories across all tiers correctly', async () => {

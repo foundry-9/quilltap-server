@@ -114,6 +114,7 @@ export async function migrateVaultPhysicalFiles(): Promise<VaultPhysicalMigratio
         PHYSICAL_PROMPTS_PATH,
         JSON.stringify(
           {
+            headAndShoulders: primary?.headAndShouldersPrompt ?? null,
             short: primary?.shortPrompt ?? null,
             medium: primary?.mediumPrompt ?? null,
             long: primary?.longPrompt ?? null,

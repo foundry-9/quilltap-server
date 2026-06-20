@@ -58,7 +58,7 @@ export function DangerFlagBadge({ dangerFlags, onOverride }: DangerFlagBadgeProp
       {!allOverridden && onOverride && (
         <button
           onClick={onOverride}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs qt-bg-muted qt-text-secondary hover:bg-accent cursor-pointer"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs qt-bg-muted qt-text-secondary qt-hover-accent cursor-pointer"
           title="Mark as not dangerous"
         >
           Not Dangerous

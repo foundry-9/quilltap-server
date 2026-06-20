@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 interface StateEditorModalProps {
   isOpen: boolean
@@ -33,19 +35,17 @@ export default function StateEditorModal({
   const [resetting, setResetting] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  // Fetch state via SWR (gated by isOpen)
-  const stateUrl = isOpen
-    ? entityType === 'chat'
-      ? `/api/v1/chats/${entityId}?action=get-state`
-      : `/api/v1/projects/${entityId}?action=get-state`
-    : null
-
-  const { data: stateData, isLoading: loading, mutate: mutateState } = useSWR<{
-    state: Record<string, unknown>
-    chatState?: Record<string, unknown>
-    projectState?: Record<string, unknown> | null
-    projectId?: string
-  }>(stateUrl)
+  // Fetch state via TanStack Query (gated by isOpen)
+  const { data: stateData, isPending: loading, refetch: mutateState } = useQuery({
+    queryKey: entityType === 'chat' ? queryKeys.chats.state(entityId) : queryKeys.projects.state(entityId),
+    queryFn: ({ signal }) => apiFetch<{
+      state: Record<string, unknown>
+      chatState?: Record<string, unknown>
+      projectState?: Record<string, unknown> | null
+      projectId?: string
+    }>(entityType === 'chat' ? `/api/v1/chats/${entityId}?action=get-state` : `/api/v1/projects/${entityId}?action=get-state`, { signal }),
+    enabled: isOpen,
+  })
 
   // Sync state data when fetched
   useEffect(() => {

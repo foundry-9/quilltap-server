@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Link from 'next/link'
+import { Icon } from '@/components/ui/icon'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ChatCard } from '@/components/chat/ChatCard'
 import { showConfirmation } from '@/lib/alert'
@@ -288,14 +289,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
             onChange={handleSearch}
             className="qt-input pl-10"
           />
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" />
         </div>
         <button
           onClick={handleRefreshArchive}
@@ -303,18 +297,14 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
           title="Re-render and re-embed all conversations for this character"
           className="qt-button-ghost text-xs whitespace-nowrap"
         >
-          <svg className={`w-3.5 h-3.5 ${refreshingArchive ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <Icon name="refresh" className={`w-3.5 h-3.5 ${refreshingArchive ? 'animate-spin' : ''}`} />
           {refreshingArchive ? 'Refreshing...' : 'Refresh Conversation Archive'}
         </button>
         <Link
           href={`/aurora/${characterId}/view?action=chat`}
           className="flex items-center gap-2 px-4 py-2 qt-button-primary font-medium text-sm whitespace-nowrap"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Icon name="plus" className="w-4 h-4" />
           New Chat
         </Link>
       </div>
@@ -322,19 +312,7 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       {/* Conversations List */}
       {visibleChats.length === 0 ? (
         <div className="text-center py-12 border border-dashed qt-border-default rounded-lg">
-          <svg
-            className="mx-auto h-12 w-12 qt-text-secondary"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
+          <Icon name="chat" className="mx-auto h-12 w-12 qt-text-secondary" />
           <p className="mt-2 qt-text-small">
             {searchQuery
               ? `No conversations found matching "${searchQuery}"`

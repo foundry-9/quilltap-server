@@ -13,15 +13,19 @@
  */
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import Avatar from '@/components/ui/Avatar'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import CreateNPCDialog from './CreateNPCDialog'
+import SummonFromLoreModal from './SummonFromLoreModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection } from '@/components/wardrobe'
+import { Icon } from '@/components/ui/icon'
 
 interface CharacterOption {
   id: string
@@ -71,6 +75,7 @@ export default function AddCharacterDialog({
   const [searchTerm, setSearchTerm] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [isCreateNPCOpen, setIsCreateNPCOpen] = useState(false)
+  const [isSummonOpen, setIsSummonOpen] = useState(false)
   const [outfitSelection, setOutfitSelection] = useState<OutfitSelection | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -79,12 +84,16 @@ export default function AddCharacterDialog({
   // intercepts console calls and triggers setState. Logging should only happen
   // inside useEffect, event handlers, or other non-render contexts.
 
-  const { data: charactersData, isLoading } = useSWR<{ characters: CharacterOption[] }>(
-    isOpen ? '/api/v1/characters' : null
-  )
-  const { data: profilesData, error: profilesError } = useSWR<{ profiles: ConnectionProfile[] }>(
-    isOpen ? '/api/v1/connection-profiles' : null
-  )
+  const { data: charactersData, isLoading } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: CharacterOption[] }>('/api/v1/characters', { signal }),
+    enabled: isOpen,
+  })
+  const { data: profilesData, error: profilesError } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
+    enabled: isOpen,
+  })
 
   const characters = useMemo(() => charactersData?.characters ?? [], [charactersData])
   const connectionProfiles = useMemo(() => profilesData?.profiles ?? [], [profilesData])
@@ -248,6 +257,14 @@ export default function AddCharacterDialog({
     setIsCreateNPCOpen(false)
   }
 
+  const handleSummoned = (characterId: string) => {
+    // Hand the freshly-summoned character back to the picker, preselected, so
+    // the operator can finish adding it (connection profile, outfit) via the
+    // usual controls — mirrors handleNPCCreated.
+    setSelectedCharacterId(characterId)
+    setIsSummonOpen(false)
+  }
+
   if (!isOpen) return null
 
   return (
@@ -266,9 +283,7 @@ export default function AddCharacterDialog({
             className="qt-button qt-button-ghost p-2"
             disabled={isAdding}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-6 h-6" />
           </button>
         </div>
 
@@ -349,9 +364,7 @@ export default function AddCharacterDialog({
 
                               {/* Selected indicator */}
                               {isSelected && (
-                                <svg className="w-5 h-5 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
+                                <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
                               )}
                             </div>
                           </button>
@@ -409,9 +422,7 @@ export default function AddCharacterDialog({
 
                                   {/* Selected indicator */}
                                   {isSelected && (
-                                    <svg className="w-5 h-5 text-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
+                                    <Icon name="check-circle" className="w-5 h-5 text-primary flex-shrink-0" />
                                   )}
                                 </div>
                               </button>
@@ -429,9 +440,7 @@ export default function AddCharacterDialog({
                         <div className="flex items-center gap-3">
                           {/* User Plus Icon */}
                           <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                            </svg>
+                            <Icon name="user-plus" className="w-6 h-6" />
                           </div>
 
                           {/* Text */}
@@ -441,6 +450,30 @@ export default function AddCharacterDialog({
                             </div>
                             <div className="qt-text-xs qt-text-secondary truncate">
                               Add an ad-hoc character
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Summon from Lore Button */}
+                      <button
+                        onClick={() => setIsSummonOpen(true)}
+                        disabled={isAdding}
+                        className="p-3 rounded-lg border border-dashed qt-border-default hover:qt-border-primary/50 hover:qt-bg-primary/5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Sparkles Icon */}
+                          <div className="w-10 h-10 flex items-center justify-center rounded qt-bg-primary/10 text-primary flex-shrink-0">
+                            <Icon name="sparkles" className="w-6 h-6" />
+                          </div>
+
+                          {/* Text */}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-primary truncate">
+                              Summon from Lore
+                            </div>
+                            <div className="qt-text-xs qt-text-secondary truncate">
+                              Conjure a soul from your worldbuilding notes
                             </div>
                           </div>
                         </div>
@@ -540,6 +573,7 @@ export default function AddCharacterDialog({
                   characters={outfitCharacters}
                   onSelectionsChange={handleOutfitSelectionsChange}
                   disabled={isAdding}
+                  chatId={chatId}
                 />
               )}
             </div>
@@ -570,9 +604,7 @@ export default function AddCharacterDialog({
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Icon name="plus" className="w-4 h-4" />
                 Add Character
               </>
             )}
@@ -586,6 +618,13 @@ export default function AddCharacterDialog({
         onClose={() => setIsCreateNPCOpen(false)}
         chatId={chatId}
         onNPCCreated={handleNPCCreated}
+      />
+
+      {/* Summon from Lore Dialog */}
+      <SummonFromLoreModal
+        isOpen={isSummonOpen}
+        onClose={() => setIsSummonOpen(false)}
+        onSummoned={handleSummoned}
       />
     </div>
   )

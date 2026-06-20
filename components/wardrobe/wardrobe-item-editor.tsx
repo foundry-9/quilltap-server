@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
@@ -11,14 +12,26 @@ import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { unionTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
+import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
+import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
+import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
+import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
 type EditorMode = 'single' | 'bundle'
+
+/** Where a newly-created wardrobe item is written. */
+export type WardrobeCreateScope = 'character' | 'global' | 'project'
 
 interface WardrobeItemEditorProps {
   characterId: string
   item?: WardrobeItem | null
   /** Whether this item is being created/edited as a shared item */
   isShared?: boolean
+  /**
+   * Project context (the chat's project). When present, the create-scope
+   * selector offers a "this project" destination for new shared items.
+   */
+  projectId?: string | null
   /** Pre-populated component IDs (used by Save-as-outfit from the Outfit Builder). */
   initialComponentItemIds?: string[]
   /** Force a starting mode (used by Save-as-outfit to open in bundle mode). */
@@ -29,44 +42,11 @@ interface WardrobeItemEditorProps {
   onSave: () => void
 }
 
-/** A wardrobe item summary shape used by the components multi-select. */
-interface CandidateItem {
-  id: string
-  title: string
-  types: WardrobeItemType[]
-  componentItemIds: string[]
-  /** Whether this is a shared archetype (no characterId) */
-  isShared: boolean
-}
-
-type CandidateGroup = 'top' | 'bottom' | 'footwear' | 'accessories' | 'multi'
-
-const GROUP_LABEL: Record<CandidateGroup, string> = {
-  top: 'Tops',
-  bottom: 'Bottoms',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
-  multi: 'Multi-slot',
-}
-
-const GROUP_ORDER: CandidateGroup[] = ['top', 'bottom', 'footwear', 'accessories', 'multi']
-
-const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
-  top: 'qt-badge-wardrobe-top',
-  bottom: 'qt-badge-wardrobe-bottom',
-  footwear: 'qt-badge-wardrobe-footwear',
-  accessories: 'qt-badge-wardrobe-accessories',
-}
-
-function getCandidateGroup(c: CandidateItem): CandidateGroup {
-  if (c.types.length > 1) return 'multi'
-  return (c.types[0] as CandidateGroup) ?? 'multi'
-}
-
 export function WardrobeItemEditor({
   characterId,
   item,
   isShared: isSharedProp = false,
+  projectId = null,
   initialComponentItemIds,
   initialMode,
   autoFocusTitle = false,
@@ -74,14 +54,23 @@ export function WardrobeItemEditor({
   onSave,
 }: WardrobeItemEditorProps) {
   const isEditing = !!item
-  // Determine if the item is shared: either explicitly passed as shared,
-  // or the existing item has no characterId (archetype)
+  // Whether the item lives in a shared tier (Quilltap General or a project
+  // store) rather than a character vault. On edit this is fixed by the item's
+  // own tier; on create the "Add to" selector (`createScope`) governs routing,
+  // and this only seeds the notice / default selector.
   const existingIsShared = isEditing && !item.characterId
-  const [isShared, setIsShared] = useState(isSharedProp || existingIsShared)
+  const isShared = isSharedProp || existingIsShared
+  // Destination for a NEW item: this character, shared-everywhere (Quilltap
+  // General), or this project's store. Only meaningful when creating; editing
+  // keeps an item in its existing tier.
+  const [createScope, setCreateScope] = useState<WardrobeCreateScope>(
+    isSharedProp ? 'global' : 'character',
+  )
 
   const { formData, handleChange } = useFormState({
     title: item?.title || '',
     description: item?.description || '',
+    imagePrompt: item?.imagePrompt || '',
     appropriateness: item?.appropriateness || '',
     isDefault: item?.isDefault || false,
   })
@@ -144,45 +133,44 @@ export function WardrobeItemEditor({
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
 
-  // Load candidate items (this character's wardrobe + shared archetypes) so
-  // the user can pick components for a composite. We do this once on mount;
-  // adding fresh items mid-edit is rare and a re-open will refresh.
+  // Load candidate items (this character's wardrobe + project + shared
+  // archetypes) so the user can pick components for a composite. We do this once
+  // on mount; adding fresh items mid-edit is rare and a re-open will refresh.
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
       setCandidatesLoading(true)
       try {
-        const [personalRes, archetypeRes] = await Promise.all([
+        const [personalRes, projectRes, archetypeRes] = await Promise.all([
           fetch(`/api/v1/characters/${characterId}/wardrobe`),
+          projectId ? fetch(`/api/v1/projects/${projectId}/wardrobe`) : Promise.resolve(null),
           fetch('/api/v1/wardrobe'),
         ])
 
         const collected: CandidateItem[] = []
-        if (personalRes.ok) {
-          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          for (const w of data.wardrobeItems ?? []) {
+        const pushCandidates = (list: WardrobeItem[] | undefined, shared: boolean) => {
+          for (const w of list ?? []) {
+            if (collected.some((c) => c.id === w.id)) continue
             collected.push({
               id: w.id,
               title: w.title,
               types: w.types,
               componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-              isShared: false,
+              isShared: shared,
             })
           }
         }
+        if (personalRes.ok) {
+          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          pushCandidates(data.wardrobeItems, false)
+        }
+        if (projectRes && projectRes.ok) {
+          const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          pushCandidates(data.wardrobeItems, true)
+        }
         if (archetypeRes.ok) {
           const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          for (const w of data.wardrobeItems ?? []) {
-            if (!collected.some((c) => c.id === w.id)) {
-              collected.push({
-                id: w.id,
-                title: w.title,
-                types: w.types,
-                componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-                isShared: true,
-              })
-            }
-          }
+          pushCandidates(data.wardrobeItems, true)
         }
         if (!cancelled) setCandidates(collected)
       } catch (err) {
@@ -198,7 +186,7 @@ export function WardrobeItemEditor({
     return () => {
       cancelled = true
     }
-  }, [characterId])
+  }, [characterId, projectId])
 
   /**
    * Items the user can pick as components, excluding:
@@ -354,6 +342,7 @@ export function WardrobeItemEditor({
       const payload: Record<string, unknown> = {
         title: formData.title,
         description: formData.description || null,
+        imagePrompt: formData.imagePrompt || null,
         types: typesToSave,
         appropriateness: formData.appropriateness || null,
         isDefault: formData.isDefault,
@@ -362,14 +351,20 @@ export function WardrobeItemEditor({
         replace: isBundle ? replace : false,
       }
 
-      // Route to the correct API endpoint based on shared status
+      // Route to the correct API endpoint. Editing keeps the item in its
+      // existing tier (shared → Quilltap General, else the character vault);
+      // creating honours the chosen destination scope.
       let url: string
-      if (isShared) {
-        const sharedBaseUrl = '/api/v1/wardrobe'
-        url = isEditing ? `${sharedBaseUrl}/${item.id}` : sharedBaseUrl
+      if (isEditing) {
+        url = isShared
+          ? `/api/v1/wardrobe/${item.id}`
+          : `/api/v1/characters/${characterId}/wardrobe/${item.id}`
+      } else if (createScope === 'project' && projectId) {
+        url = `/api/v1/projects/${projectId}/wardrobe`
+      } else if (createScope === 'global') {
+        url = '/api/v1/wardrobe'
       } else {
-        const charBaseUrl = `/api/v1/characters/${characterId}/wardrobe`
-        url = isEditing ? `${charBaseUrl}/${item.id}` : charBaseUrl
+        url = `/api/v1/characters/${characterId}/wardrobe`
       }
       const method = isEditing ? 'PUT' : 'POST'
 
@@ -423,14 +418,55 @@ export function WardrobeItemEditor({
                 onClick={onClose}
                 className="qt-text-secondary hover:text-foreground"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <Icon name="close" className="w-5 h-5" />
               </button>
             </div>
           </div>
 
           <div className="qt-dialog-body space-y-4 flex-1">
+            {/* Destination scope — only when creating. Editing keeps an item in
+                its existing tier. */}
+            {!isEditing && (
+              <div>
+                <span className="qt-label mb-2 block">Add to</span>
+                <div
+                  role="radiogroup"
+                  aria-label="Where to save this item"
+                  className="inline-flex flex-wrap gap-1 qt-bg-muted/50 rounded-lg p-1"
+                >
+                  {([
+                    { scope: 'character' as const, label: 'This character' },
+                    { scope: 'global' as const, label: 'Shared — everywhere' },
+                    ...(projectId
+                      ? [{ scope: 'project' as const, label: 'Shared — this project' }]
+                      : []),
+                  ]).map(({ scope, label }) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      role="radio"
+                      aria-checked={createScope === scope}
+                      onClick={() => setCreateScope(scope)}
+                      className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                        createScope === scope
+                          ? 'qt-bg-default text-foreground shadow-sm'
+                          : 'qt-text-secondary hover:text-foreground'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="qt-text-xs qt-text-secondary mt-1">
+                  {createScope === 'character'
+                    ? 'Only this character can wear it.'
+                    : createScope === 'project'
+                      ? "Every character in this project's chats can wear it."
+                      : 'Every character, in every chat, can wear it.'}
+                </p>
+              </div>
+            )}
+
             {/* Mode toggle — Single garment vs. Outfit bundle */}
             <div
               role="tablist"
@@ -534,203 +570,32 @@ export function WardrobeItemEditor({
 
             {/* Bundle mode: Components section */}
             {isBundle && (
-              <div>
-                <div className="flex items-center justify-between mb-1 gap-2">
-                  <span className="qt-label">
-                    Components <span className="qt-text-xs qt-text-secondary">(auto types)</span>
-                  </span>
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {effectiveTypes.length === 0 ? (
-                      <span className="qt-text-xs qt-text-secondary italic">
-                        no slots covered yet
-                      </span>
-                    ) : (
-                      effectiveTypes.map((t) => (
-                        <span
-                          key={t}
-                          className={`qt-badge ${TYPE_BADGE_CLASS[t]} qt-text-xs uppercase`}
-                        >
-                          {t}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-                <p className="qt-text-xs qt-text-small mb-2">
-                  Pick the items this outfit bundles together.
-                </p>
-
-                {selectedComponents.length > 0 && (
-                  <div className="mb-2">
-                    <p className="qt-text-xs qt-text-secondary mb-1">
-                      Currently in this outfit:
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedComponents.map((c) => (
-                        <span
-                          key={c.id}
-                          className="inline-flex items-center gap-1 rounded-full qt-bg-muted border qt-border-default px-2 py-0.5 qt-text-xs"
-                        >
-                          {c.title}
-                          {c.isShared ? (
-                            <span className="qt-badge qt-badge-info qt-text-xs ml-1">
-                              shared
-                            </span>
-                          ) : null}
-                          <button
-                            type="button"
-                            aria-label={`Remove ${c.title}`}
-                            onClick={() => toggleComponent(c.id)}
-                            className="qt-text-secondary hover:text-foreground"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <input
-                  type="search"
-                  value={componentSearch}
-                  onChange={(e) => setComponentSearch(e.target.value)}
-                  onBlur={() => setTouched((t) => ({ ...t, components: true }))}
-                  placeholder="Search items to add as components…"
-                  className="qt-input mb-2"
-                />
-
-                <div className="max-h-64 overflow-y-auto rounded border qt-border-default qt-bg-muted/40">
-                  {candidatesLoading ? (
-                    <div className="px-3 py-2 qt-text-small qt-text-secondary">
-                      Loading…
-                    </div>
-                  ) : eligibleCandidates.length === 0 ? (
-                    <div className="px-3 py-2 qt-text-small qt-text-secondary">
-                      {candidates.length === 0
-                        ? 'No other wardrobe items to bundle.'
-                        : 'No candidates match your filter.'}
-                    </div>
-                  ) : (
-                    GROUP_ORDER.map((group) => {
-                      const items = groupedCandidates.get(group) ?? []
-                      if (items.length === 0) return null
-                      const expanded = expandedGroups.has(group)
-                      return (
-                        <div key={group}>
-                          <button
-                            type="button"
-                            onClick={() => toggleGroup(group)}
-                            className="w-full flex items-center justify-between px-3 py-1.5 qt-bg-muted/60 hover:qt-bg-muted text-sm font-medium qt-text-primary"
-                          >
-                            <span className="flex items-center gap-2">
-                              <span aria-hidden="true">{expanded ? '▼' : '▶'}</span>
-                              <span>{GROUP_LABEL[group]}</span>
-                              <span className="qt-text-xs qt-text-secondary">
-                                ({items.length})
-                              </span>
-                            </span>
-                          </button>
-                          {expanded && (
-                            <ul className="divide-y qt-border-default">
-                              {items.map((c) => {
-                                const checked = componentItemIds.includes(c.id)
-                                return (
-                                  <li key={c.id}>
-                                    <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:qt-bg-muted">
-                                      <input
-                                        type="checkbox"
-                                        className="qt-checkbox"
-                                        checked={checked}
-                                        onChange={() => toggleComponent(c.id)}
-                                      />
-                                      <span className="flex-1 truncate text-sm text-foreground">
-                                        {c.title}
-                                        {c.isShared ? (
-                                          <span className="ml-1 qt-badge qt-badge-info qt-text-xs">
-                                            shared
-                                          </span>
-                                        ) : null}
-                                      </span>
-                                      <span className="qt-text-xs qt-text-secondary">
-                                        {c.types.join(', ')}
-                                        {c.componentItemIds.length > 0 ? ' · bundle' : ''}
-                                      </span>
-                                    </label>
-                                  </li>
-                                )
-                              })}
-                            </ul>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-                {showComponentsError && (
-                  <p className="mt-1 text-xs qt-text-destructive">
-                    Add at least one component
-                  </p>
-                )}
-
-                {/* Composite equip behaviour: additive (default) vs replace. */}
-                <div className="mt-3 border-t qt-border-default pt-3">
-                  <label
-                    className="inline-flex items-start gap-2 cursor-pointer"
-                    title="Check this if the outfit should replace everything in its designated slots."
-                  >
-                    <input
-                      type="checkbox"
-                      className="qt-checkbox mt-0.5"
-                      checked={replace}
-                      onChange={(e) => setReplace(e.target.checked)}
-                    />
-                    <span className="text-sm text-foreground">
-                      Replace everything in its designated slots
-                      <span className="block qt-text-xs qt-text-muted">
-                        Off by default this outfit layers onto whatever&apos;s already worn.
-                        Check it to clear its designated slots first.
-                      </span>
-                    </span>
-                  </label>
-
-                  {replace && (
-                    <div className="mt-2">
-                      <p className="qt-text-xs qt-text-secondary mb-1">
-                        Slots this outfit clears (its components&apos; slots are always included):
-                      </p>
-                      <div className="flex flex-wrap gap-3">
-                        {WARDROBE_SLOT_TYPES.map((slot) => {
-                          const locked = computedTypes.includes(slot)
-                          const checked = effectiveTypes.includes(slot)
-                          return (
-                            <label
-                              key={slot}
-                              className={`inline-flex items-center gap-1.5 ${
-                                locked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                              }`}
-                              title={locked ? 'Covered by a component — always cleared' : undefined}
-                            >
-                              <input
-                                type="checkbox"
-                                className="qt-checkbox"
-                                checked={checked}
-                                disabled={locked}
-                                onChange={() => handleTypeToggle(slot)}
-                              />
-                              <span className="text-sm capitalize text-foreground">{slot}</span>
-                            </label>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <WardrobeComponentPicker
+                effectiveTypes={effectiveTypes}
+                selectedComponents={selectedComponents}
+                componentSearch={componentSearch}
+                candidatesLoading={candidatesLoading}
+                candidates={candidates}
+                eligibleCandidates={eligibleCandidates}
+                groupedCandidates={groupedCandidates}
+                expandedGroups={expandedGroups}
+                componentItemIds={componentItemIds}
+                replace={replace}
+                computedTypes={computedTypes}
+                showComponentsError={showComponentsError}
+                onComponentSearchChange={setComponentSearch}
+                onComponentsBlur={() => setTouched((t) => ({ ...t, components: true }))}
+                onToggleComponent={toggleComponent}
+                onToggleGroup={toggleGroup}
+                onToggleType={handleTypeToggle}
+                onReplaceChange={setReplace}
+              />
             )}
 
-            {/* Default + Shared compact row — moved up so they're visible on first screen */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Default-outfit toggle. Whether an item is shared is governed by
+                the "Add to" selector at the top (create) or the item's existing
+                tier (edit) — there is no separate "shared" checkbox. */}
+            <div>
               <label className="inline-flex items-start gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -741,29 +606,6 @@ export function WardrobeItemEditor({
                 />
                 <span className="text-sm text-foreground">
                   Part of this character&apos;s default outfit
-                </span>
-              </label>
-              <label
-                className={`inline-flex items-start gap-2 ${
-                  isEditing && !existingIsShared
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'cursor-pointer'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isShared}
-                  onChange={(e) => setIsShared(e.target.checked)}
-                  disabled={isEditing && !existingIsShared}
-                  className="qt-checkbox mt-0.5"
-                />
-                <span className="text-sm text-foreground">
-                  Available to all characters
-                  {isEditing && !existingIsShared && (
-                    <span className="block qt-text-xs qt-text-muted">
-                      personal items can&apos;t be converted to shared
-                    </span>
-                  )}
                 </span>
               </label>
             </div>
@@ -790,6 +632,34 @@ export function WardrobeItemEditor({
               />
               <p className="mt-1 text-xs qt-text-small">
                 When is this appropriate to wear? e.g., formal, casual, intimate, combat.
+              </p>
+            </div>
+
+            {/* Portrait cue — plain-text phrase handed to the image-makers. */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="wardrobe-image-prompt" className="qt-label">
+                  Portrait Cue
+                </label>
+                <span className={`text-xs ${charCountClass(formData.imagePrompt.length, 200)}`}>
+                  {formData.imagePrompt.length}/200
+                </span>
+              </div>
+              <input
+                type="text"
+                id="wardrobe-image-prompt"
+                name="imagePrompt"
+                value={formData.imagePrompt}
+                onChange={handleChange}
+                maxLength={200}
+                placeholder="e.g., intricate burnished-gold circular rank glyph on the shoulder"
+                className="qt-input"
+              />
+              <p className="mt-1 text-xs qt-text-small">
+                A short, literal phrase whispered to the portraitist and the Lantern when a likeness
+                is drawn --- used <em>in place of</em> the title above, should the bare name fail to
+                conjure the right picture. Keep it terse and visual; the flowery Description below is
+                for human eyes and never reaches the easel. Leave it empty to let the title speak.
               </p>
             </div>
 
@@ -827,54 +697,12 @@ export function WardrobeItemEditor({
 
       {/* Bundle → Single confirmation prompt */}
       {showKeepResetPrompt && (
-        <>
-          <button
-            className="qt-dialog-overlay !p-0 cursor-default border-none z-[90]"
-            onClick={() => setShowKeepResetPrompt(false)}
-            aria-label="Cancel"
-            type="button"
-          />
-          <div
-            className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[100] pointer-events-auto"
-            style={{ width: 'min(420px, calc(100vw - 2rem))' }}
-          >
-            <div className="qt-dialog">
-              <div className="qt-dialog-header">
-                <h3 className="qt-dialog-title">Switch to a single garment?</h3>
-              </div>
-              <div className="qt-dialog-body">
-                <p className="qt-text-small">
-                  This will discard the {componentItemIds.length} component
-                  {componentItemIds.length === 1 ? '' : 's'}. Keep types as they are
-                  now, or reset?
-                </p>
-              </div>
-              <div className="qt-dialog-footer flex flex-wrap gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setShowKeepResetPrompt(false)}
-                  className="qt-button-ghost"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmReset}
-                  className="qt-button-secondary"
-                >
-                  Reset types
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmKeepTypes}
-                  className="qt-button-primary"
-                >
-                  Keep types
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
+        <WardrobeModeChangePrompt
+          componentCount={componentItemIds.length}
+          onCancel={() => setShowKeepResetPrompt(false)}
+          onReset={handleConfirmReset}
+          onKeepTypes={handleConfirmKeepTypes}
+        />
       )}
     </>
   )

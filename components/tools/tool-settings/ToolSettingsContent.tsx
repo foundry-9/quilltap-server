@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import type { AvailableTool, ToolGroup, ToolSubgroup, CheckState, ToolSettingsContentProps } from './types'
 import {
   makePluginGroupPattern,
@@ -16,42 +17,6 @@ import {
   buildToolHierarchy,
   extractAllGroupIds,
 } from './utils'
-
-// ============================================================================
-// Icon Components
-// ============================================================================
-
-function ChevronDownIcon({ className }: Readonly<{ className?: string }>) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  )
-}
-
-function ChevronRightIcon({ className }: Readonly<{ className?: string }>) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  )
-}
 
 // ============================================================================
 // Main Component
@@ -384,7 +349,6 @@ function GroupSection({
   const countableTools = showAvailability ? allTools.filter(t => t.available !== false) : allTools
   const availableToolCount = countableTools.length
   const enabledToolCount = countableTools.filter(isToolEnabled).length
-  const ChevronIcon = isExpanded ? ChevronDownIcon : ChevronRightIcon
 
   return (
     <div className="border qt-border-default rounded-lg overflow-hidden">
@@ -395,7 +359,7 @@ function GroupSection({
           onClick={onToggleExpand}
           className="flex items-center gap-2 flex-1 text-left"
         >
-          <ChevronIcon className="w-4 h-4 qt-text-secondary shrink-0" />
+          <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} className="w-4 h-4 qt-text-secondary shrink-0" />
           <span className="font-medium text-sm">{group.displayName}</span>
           <span className="text-xs qt-text-secondary">({enabledToolCount}/{availableToolCount})</span>
         </button>
@@ -462,7 +426,6 @@ function SubgroupSection({
   onToggleTool,
   showAvailability,
 }: Readonly<SubgroupSectionProps>) {
-  const ChevronIcon = isExpanded ? ChevronDownIcon : ChevronRightIcon
   // Only count tools that are actually available (not grayed out) when showAvailability is true
   const countableTools = showAvailability ? subgroup.tools.filter(t => t.available !== false) : subgroup.tools
   const totalCount = countableTools.length
@@ -477,7 +440,7 @@ function SubgroupSection({
           onClick={onToggleExpand}
           className="flex items-center gap-2 flex-1 text-left"
         >
-          <ChevronIcon className="w-3 h-3 qt-text-secondary shrink-0" />
+          <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} className="w-3 h-3 qt-text-secondary shrink-0" />
           <span className="qt-label text-foreground/80">{subgroup.displayName}</span>
           <span className="text-xs qt-text-secondary">({enabledCount}/{totalCount})</span>
         </button>
@@ -527,9 +490,7 @@ function TriStateCheckbox({ state, onChange, label }: Readonly<TriStateCheckboxP
       aria-checked={state === 'checked' ? true : state === 'indeterminate' ? 'mixed' : false}
     >
       {state === 'checked' && (
-        <svg className="w-3.5 h-3.5 text-primary" viewBox="0 0 20 20" fill="currentColor">
-          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-        </svg>
+        <Icon name="check" className="w-3.5 h-3.5 text-primary" />
       )}
       {state === 'indeterminate' && (
         <div className="w-2.5 h-0.5 bg-primary rounded-full" />

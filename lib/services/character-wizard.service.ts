@@ -61,6 +61,7 @@ export interface WizardRequest {
 
 export interface GeneratedPhysicalDescription {
   name: string;
+  headAndShouldersPrompt: string;
   shortPrompt: string;
   mediumPrompt: string;
   longPrompt: string;
@@ -193,7 +194,21 @@ Write as direct instructions to the AI, in second person ("You are...", "You alw
 Keep it under 500 words but comprehensive.`,
 };
 
+/**
+ * Head-and-shoulders portrait prompt. Exported so the avatar-backfill job
+ * (lib/background-jobs/handlers/character-headshoulders-backfill.ts) can reuse
+ * the exact same instruction when generating the field for existing characters.
+ */
+export const HEAD_AND_SHOULDERS_PHYSICAL_PROMPT = `Create a head-and-shoulders portrait description for image generation, maximum 500 characters.
+This describes ONLY what is visible in a tight head-and-shoulders crop: face shape, skin tone, eye color/shape, hair color/length/style, facial expression, and the neckline plus any visible collar, shoulders, or upper attire.
+Do NOT describe breasts, chest, torso, waist, hips, legs, or ANY anatomy below the shoulders — they are outside the crop and must never appear.
+Do NOT describe full outfits; only the topmost visible neckline/collar.
+Write as a continuous comma/phrase-style description like the medium prompt, no line breaks.
+OUTPUT ONLY THE DESCRIPTION, NO EXPLANATION.`;
+
 const PHYSICAL_DESCRIPTION_PROMPTS: Record<string, string> = {
+  headAndShoulders: HEAD_AND_SHOULDERS_PHYSICAL_PROMPT,
+
   short: `Create an extremely concise visual description for image generation, maximum 350 characters.
 Focus ONLY on: hair, eyes, skin, body type, and one distinctive feature.
 Format: [trait], [trait], [trait]...
@@ -530,6 +545,9 @@ export async function generatePhysicalDescriptions(
     );
 
     switch (level) {
+      case 'headAndShoulders':
+        results.headAndShouldersPrompt = content.substring(0, 500);
+        break;
       case 'short':
         results.shortPrompt = content.substring(0, 350);
         break;

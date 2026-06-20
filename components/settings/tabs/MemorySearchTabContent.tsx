@@ -5,8 +5,10 @@ import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
 import { MemoryHousekeepingCard } from '@/components/tools/memory-housekeeping-card'
+import { MemoryRecallCard } from '@/components/tools/memory-recall-card'
 import { MemoryBackfillCard } from '@/components/tools/memory-backfill-card'
 import { MemoryRegenerateCard } from '@/components/tools/memory-regenerate-card'
+import { ConversationSummaryRegenerateCard } from '@/components/tools/conversation-summary-regenerate-card'
 import { useSettingsSection } from './useSettingsSection'
 
 export function MemorySearchTabContent() {
@@ -30,12 +32,20 @@ export function MemorySearchTabContent() {
           <MemoryHousekeepingCard />
         </CollapsibleCard>
 
+        <CollapsibleCard title="Recall Relevance" description="Keep project-specific memories from wandering into unrelated chats" sectionId="memory-recall" forceOpen={activeSection === 'memory-recall'}>
+          <MemoryRecallCard />
+        </CollapsibleCard>
+
         <CollapsibleCard title="Memory Deduplication" description="Find and remove duplicate memories" sectionId="memory-deduplication" forceOpen={activeSection === 'memory-deduplication'}>
           <MemoryDedupCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="Regenerate Memories" description="Wipe and rebuild every chat-linked memory using the current extraction pipeline" sectionId="memory-regenerate" forceOpen={activeSection === 'memory-regenerate'}>
           <MemoryRegenerateCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Regenerate Conversation Summaries" description="Re-mirror every summarised chat into its characters' vaults for relevant-conversation recall" sectionId="conversation-summaries-regenerate" forceOpen={activeSection === 'conversation-summaries-regenerate'}>
+          <ConversationSummaryRegenerateCard />
         </CollapsibleCard>
       </div>
     </div>

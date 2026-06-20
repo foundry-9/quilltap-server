@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useRef, type KeyboardEvent, type RefObject } from 'react'
+import { Icon } from '@/components/ui/icon'
 
 interface HelpChatComposerProps {
   onSend: (content: string) => void
@@ -68,10 +69,7 @@ export function HelpChatComposer({ onSend, disabled, placeholder = 'Ask a questi
         className="qt-help-composer-send"
         title="Send"
       >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="m22 2-7 20-4-9-9-4 20-7Z" />
-          <path d="M22 2 11 13" />
-        </svg>
+        <Icon name="send" className="w-4 h-4" />
       </button>
     </div>
   )

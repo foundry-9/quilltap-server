@@ -33,8 +33,8 @@ export interface Message {
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage?: boolean
-  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements) */
-  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | null
+  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements, 'suparna' for Post Office mail-delivery announcements) */
+  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | 'carina' | 'suparna' | null
   /** Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender. */
   systemKind?: string | null
   /** Ad-hoc announcer metadata for user-authored announcement bubbles (Insert Announcement composer button). Mutually exclusive with systemSender. */
@@ -42,6 +42,11 @@ export interface Message {
     kind: 'character' | 'custom'
     characterId?: string | null
     displayName?: string | null
+  } | null
+  /** Carina (inline LLM queries) provenance, set on systemSender='carina' messages. answererId drives avatar resolution (the answerer character's own avatar); question is the verbatim text asked. */
+  carinaMeta?: {
+    answererId: string
+    question: string
   } | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
@@ -152,7 +157,7 @@ export interface Chat {
   id: string
   title: string
   /** Discriminates salon chats from autonomous rooms ("enclaves"). Gates the Edit Enclave control. */
-  chatType?: 'salon' | 'autonomous' | 'help'
+  chatType?: 'salon' | 'autonomous' | 'help' | 'brahma'
   roleplayTemplateId?: string | null
   participants: Participant[]
   user: {

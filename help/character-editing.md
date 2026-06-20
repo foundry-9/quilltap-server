@@ -126,7 +126,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `personality.md` | **Personality** (the inward, self-knowledge prose field) |
 | `example-dialogues.md` | **Example Dialogues** (style samples for the LLM) |
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
-| `physical-prompts.json` | The **short / medium / long / complete** prompts of the first (default) physical description (JSON with `short`, `medium`, `long`, `complete` keys) |
+| `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys) |
 | `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
 | `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context |
 | `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, `appropriateness`, the `default` flag, and timestamps; the body beneath is the freeform description |
@@ -142,8 +142,8 @@ By default, every one of these is read from the character's database row — the
 
 **Copying between the two.** Whenever a character has a linked vault — switch on or switch off — a small pair of buttons sits beneath the overlay switch, offering to carry state from one ledger to the other:
 
-- **Copy vault → database.** Reads the vault's current files and writes their values straight into the character's database row — and, for the wardrobe, into the `wardrobe_items` and `outfit_presets` tables as well — bringing the understudy up to speed with whatever the vault has lately become. Fields whose vault files are missing or invalid are left alone; the rest are written. For the wardrobe, the vault's listing is treated as authoritative: any items or presets no longer in `Wardrobe/` or `Outfits/` are removed from the database (including archived ones), and each item/preset is inserted with its id and timestamps preserved so references from outfit-preset slots survive the round-trip. Do this before flipping the overlay switch off if you want the database to remember the vault's current state; otherwise, turning the overlay off reveals whatever values the database has been quietly holding all along.
-- **Copy database → vault.** The reverse errand: reads the character's database row (and `wardrobe_items`, `outfit_presets`) and projects every one of them out into the matching vault files, replacing whatever was there before. Useful when you've been editing a character with the overlay switch *off* and would like the vault to catch up, or when you've just linked a new vault and want it seeded with the database's current values. Prompts, scenarios, wardrobe items, and outfit presets are reprojected wholesale — any `.md` files in the vault's `Prompts/`, `Scenarios/`, `Wardrobe/`, or `Outfits/` folders that don't correspond to a database entry are removed so the folder listings match the database state exactly. The physical-description files are written from the character's first (default) physical description; if the character has none, the `physical-description.md` and `physical-prompts.json` files are skipped rather than written empty.
+- **Copy vault → database.** Reads the vault's current files and writes their values straight into the character's database row, bringing the understudy up to speed with whatever the vault has lately become. Fields whose vault files are missing or invalid are left alone; the rest are written. The wardrobe is exempt from this errand: its items reside only in the vault's `Wardrobe/` folder, there being no longer any database ledger to copy them into. Do this before flipping the overlay switch off if you want the database to remember the vault's current state; otherwise, turning the overlay off reveals whatever values the database has been quietly holding all along.
+- **Copy database → vault.** The reverse errand: reads the character's database row and projects every one of those fields out into the matching vault files, replacing whatever was there before. Useful when you've been editing a character with the overlay switch *off* and would like the vault to catch up, or when you've just linked a new vault and want it seeded with the database's current values. Prompts and scenarios are reprojected wholesale — any `.md` files in the vault's `Prompts/` or `Scenarios/` folders that don't correspond to a database entry are removed so the folder listings match the database state exactly. The wardrobe is left untouched here, dwelling in the vault alone. The physical-description files are written from the character's first (default) physical description; if the character has none, the `physical-description.md` and `physical-prompts.json` files are skipped rather than written empty.
 
 **A note on physical descriptions.** The `physical-description.md` and `physical-prompts.json` overlays target the **first** physical description (the one at index 0 — typically your character's default). Subsequent descriptions remain database-canonical. The overlay requires at least one physical description already present in the database; if your character has none, populate the first description the usual way in the Descriptions tab before filling in the vault files.
 
@@ -268,6 +268,13 @@ Physical descriptions help:
 
 ### Physical Description Types
 
+**Head & Shoulders** (used for avatars)
+
+- The prompt the avatar generator reaches for first, since an avatar is a head-and-shoulders crop
+- Describe only what such a crop reveals: face, hair, expression, neckline, and any visible upper attire — never the chest, waist, hips, legs, or other anatomy below the shoulders
+- Keeping it above the collar also keeps image-provider moderation from balking at a portrait it would otherwise refuse
+- Example: "Young woman, glossy jet-black wavy hair from a center part, deep brown almond eyes, warm wheatish skin, high cheekbones, a warm closed-lipped smile, pearl stud earrings, open collar of a deep-wine field shirt"
+
 **Short Description** (1 sentence)
 
 - Quick visual reference
@@ -388,46 +395,49 @@ Clothing records describe what your character wears in different situations. The
 - **Expand:** Click the chevron to see the full description rendered as markdown
 - Multiple outfits can be defined per character for different contexts
 
-## Using Rename/Replace Tab
+## Template Placeholders on the Character Page
 
-The Rename/Replace tab helps with bulk changes to character content.
+Quilltap's roleplay machinery understands two travelling tokens — `{{char}}`, which stands in for whichever character is speaking, and `{{user}}`, which stands in for the person they are addressing. A character authored with these tokens rather than hard-coded names travels gracefully: lend them to a new conversation partner and they greet the newcomer by the correct name without a word of editing.
 
-### Simple Rename
+The character's **Details** view does two helpful things on your behalf. First, it quietly underlines every spot where a bare name *could* become a token, and every token that is already in place. Second, when there is honest work to be done, it offers up to four buttons at the top of the page — each appearing only when it has something to do, with the number of affected occurrences noted in parentheses:
 
-If you want to rename the character and update all references:
+- **Name → `{{char}}`** — sweeps through the character's prose and swaps every literal occurrence of *their own name* for the `{{char}}` token.
+- **Partner → `{{user}}`** — does the same for the name of the character's **default conversation partner**, swapping it for `{{user}}`. This one keeps its peace unless a default partner has been appointed (see the **Defaults** tab).
+- **`{{char}}` → Name** — the reverse errand: bakes the character's own name back into the prose wherever `{{char}}` appears, should you ever want the plain article instead of the token.
+- **`{{user}}` → name…** — opens a small dialog bearing a dropdown of your **user-controlled characters**. Choose one, and every `{{user}}` token is replaced with that character's name. (The character you are presently viewing is, sensibly, kept off its own list.)
 
-1. Click **Rename/Replace** tab
-2. Enter **New Name**
-3. Select **Replace in all content** option
-4. Click **Rename**
-5. Character renamed everywhere (description, prompts, etc.)
+Every one of these sweeps reaches the *entire* dossier — identity, description, manifesto, personality, every scenario, the first message, the example dialogues, all of the character's system prompts, and the physical-description prose and image prompts. The work is saved at once and the page refreshed, so the counts and buttons settle to reflect the new state of affairs. (System prompts are filed through their own ledger behind the scenes, so a token swap inside a non-default prompt is no longer quietly mislaid.)
 
-### Find and Replace
+## Using the Rename/Replace Tab
 
-For bulk text replacement:
+Where the tools above polish a single field, the **Rename/Replace** tab conducts a wholesale renaming — a careful sweep that follows a name (or any turn of phrase) clear across the character's entire estate and quietly replaces it everywhere at once.
 
-1. Click **Rename/Replace** tab
-2. Enter **Find** text
-3. Enter **Replace** text
-4. Click **Preview** to see what will change
-5. Click **Replace All** to confirm
-6. All matching text updated
+### What it reaches
+
+A single sweep visits the character's own dossier (the name itself, title, identity, description, manifesto, personality, every scenario, the first message, the example dialogues, the aliases, and all of the character's system prompts), the physical-description prose together with its short/medium/long/complete image prompts, every one of the character's memories, and — most far-reaching of all — the titles and the actual message bodies of every conversation the character has ever appeared in. Messages authored by the Staff (the Lantern, Aurora, the Host, and their colleagues) are left untouched, since their wording is bookkeeping rather than prose.
+
+### Renaming the character
+
+1. Open the **Rename/Replace** tab.
+2. Type the **New Name**. The **Current Name** is shown beside it, fixed, for reference.
+3. Tick **Case sensitive matching** only if the capitalisation must match exactly.
+4. Click **Preview Changes**.
+
+### Replacing nicknames, aliases, or any other term
+
+Beneath the rename, the **Additional Replacements** section takes any number of find-and-replace pairs — splendid for nicknames, an old surname, or a wholesale change of setting. Click **Add**, fill in **Find** and **Replace with**, and toggle the **Aa** box on a row that ought to mind its capitals. You may rename the character, supply additional replacements, or both in the one pass.
 
 **Examples:**
 
-- Find: "pirate ship" → Replace: "airship" (changing genre)
-- Find: "he" → Replace: "she" (changing gender)
-- Find: "London" → Replace: "New York" (changing setting)
+- Find: "Snips" → Replace with: "Ace" (an outdated nickname)
+- Find: "pirate ship" → Replace with: "airship" (changing the genre)
+- Find: "London" → Replace with: "New York" (changing the setting)
 
-### Preview Changes
+### Always preview first
 
-Always use Preview before Replace All:
+**Preview Changes** commits nothing. It lays out a tally — how many occurrences fall under character fields, descriptions, memories, chat titles, and messages — and a table showing each `before → after`, with surrounding context. Read it over; only then click **Execute *N* Replacements** and confirm the dialog. The change cannot be undone, so the preview is your safety net.
 
-1. Enter find/replace terms
-2. Click **Preview**
-3. See highlighted changes
-4. Review carefully
-5. Click **Replace All** if correct
+Once executed, any conversation whose messages were altered is re-indexed for search behind the scenes, so the Scriptorium's archive reflects the new wording rather than the old.
 
 ## Keyboard Shortcuts for Editing
 

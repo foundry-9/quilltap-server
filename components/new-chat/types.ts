@@ -43,6 +43,23 @@ export interface GeneralScenarioOption {
   body: string
 }
 
+/**
+ * Group-scoped scenario sourced from a group's `Scenarios/` folder
+ * (`/api/v1/groups/scenarios`). Same shape as project and general
+ * scenarios, but applies when specific participant character IDs
+ * are selected that belong to a group.
+ */
+export interface GroupScenarioOption {
+  groupId: string
+  groupName: string
+  path: string
+  filename: string
+  name: string
+  description?: string
+  isDefault: boolean
+  body: string
+}
+
 export interface Character {
   id: string
   name: string
@@ -83,11 +100,13 @@ export interface ImageProfile {
   modelName: string
 }
 
-export interface UserControlledCharacter {
-  id: string
-  name: string
-  title?: string | null
-}
+/**
+ * A character eligible to be the user's persona in the "Play As" dropdown.
+ * Carries the full {@link Character} so a chosen default-user character can be
+ * added to `selectedCharacters` in place (flipped to `controlledBy: 'user'`)
+ * without a second fetch.
+ */
+export type UserControlledCharacter = Character
 
 export interface Project {
   id: string
@@ -131,7 +150,6 @@ export interface NewChatAutonomousState {
 }
 
 export interface NewChatFormState {
-  selectedUserCharacterId: string
   imageProfileId: string
   scenario: string
   scenarioId: string | null
@@ -139,6 +157,10 @@ export interface NewChatFormState {
   projectScenarioPath: string | null
   /** Relative path of a selected general scenario; mutually exclusive with the other scenario fields. */
   generalScenarioPath: string | null
+  /** Relative path of a selected group scenario; mutually exclusive with the other scenario fields. */
+  groupScenarioPath: string | null
+  /** Group ID of the selected group scenario; paired with `groupScenarioPath`. */
+  groupScenarioGroupId: string | null
   timestampConfig: TimestampConfig | null
   avatarGenerationEnabled: boolean
   outfitSelections: OutfitSelection[]
@@ -158,3 +180,8 @@ export const PROJECT_SCENARIO_PREFIX = 'project:'
  * `general:<relativePath>`.
  */
 export const GENERAL_SCENARIO_PREFIX = 'general:'
+/**
+ * Stable token for group scenarios in the dropdown. Format:
+ * `group:<groupId>:<relativePath>`.
+ */
+export const GROUP_SCENARIO_PREFIX = 'group:'

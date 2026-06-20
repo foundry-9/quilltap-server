@@ -27,9 +27,12 @@ import { helpNavigateToolDefinition } from './help-navigate-tool'
 import { stateToolDefinition } from './state-tool'
 import { whisperToolDefinition } from './whisper-tool'
 import { wardrobeListToolDefinition } from './wardrobe-list-tool'
-import { wardrobeUpdateOutfitToolDefinition } from './wardrobe-update-outfit-tool'
-import { wardrobeChangeItemToolDefinition } from './wardrobe-change-item-tool'
-import { wardrobeCreateItemToolDefinition } from './wardrobe-create-item-tool'
+import { wardrobeReadToolDefinition } from './wardrobe-read-tool'
+import { wardrobeCreateToolDefinition } from './wardrobe-create-tool'
+import { wardrobeUpdateToolDefinition } from './wardrobe-update-tool'
+import { wardrobeArchiveToolDefinition } from './wardrobe-archive-tool'
+import { wardrobeWearToolDefinition } from './wardrobe-wear-tool'
+import { wardrobeTakeOffToolDefinition } from './wardrobe-take-off-tool'
 
 /**
  * Which tools to document in the prompt. Mirrors the shape of
@@ -48,9 +51,12 @@ export interface SimpleJsonPromptOptions {
   helpNavigate?: boolean
   createNote?: boolean
   wardrobeList?: boolean
-  wardrobeUpdateOutfit?: boolean
-  wardrobeChangeItem?: boolean
-  wardrobeCreateItem?: boolean
+  wardrobeRead?: boolean
+  wardrobeWear?: boolean
+  wardrobeTakeOff?: boolean
+  wardrobeCreate?: boolean
+  wardrobeUpdate?: boolean
+  wardrobeArchive?: boolean
 }
 
 /**
@@ -199,14 +205,23 @@ export function buildSimpleJsonToolInstructions(options: SimpleJsonPromptOptions
   if (options.wardrobeList) {
     entries.push(renderToolEntry(wardrobeListToolDefinition as unknown as OpenAIToolDefinition))
   }
-  if (options.wardrobeUpdateOutfit) {
-    entries.push(renderToolEntry(wardrobeUpdateOutfitToolDefinition as unknown as OpenAIToolDefinition))
+  if (options.wardrobeRead) {
+    entries.push(renderToolEntry(wardrobeReadToolDefinition as unknown as OpenAIToolDefinition))
   }
-  if (options.wardrobeChangeItem) {
-    entries.push(renderToolEntry(wardrobeChangeItemToolDefinition as unknown as OpenAIToolDefinition))
+  if (options.wardrobeWear) {
+    entries.push(renderToolEntry(wardrobeWearToolDefinition as unknown as OpenAIToolDefinition))
   }
-  if (options.wardrobeCreateItem) {
-    entries.push(renderToolEntry(wardrobeCreateItemToolDefinition as unknown as OpenAIToolDefinition))
+  if (options.wardrobeTakeOff) {
+    entries.push(renderToolEntry(wardrobeTakeOffToolDefinition as unknown as OpenAIToolDefinition))
+  }
+  if (options.wardrobeCreate) {
+    entries.push(renderToolEntry(wardrobeCreateToolDefinition as unknown as OpenAIToolDefinition))
+  }
+  if (options.wardrobeUpdate) {
+    entries.push(renderToolEntry(wardrobeUpdateToolDefinition as unknown as OpenAIToolDefinition))
+  }
+  if (options.wardrobeArchive) {
+    entries.push(renderToolEntry(wardrobeArchiveToolDefinition as unknown as OpenAIToolDefinition))
   }
 
   if (entries.length === 0) {

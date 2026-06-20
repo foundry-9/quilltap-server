@@ -92,6 +92,7 @@ export interface AIImportStepResults {
     isDefault: boolean;
   }>;
   physical_descriptions?: {
+    headAndShouldersPrompt: string;
     shortPrompt: string;
     mediumPrompt: string;
     longPrompt: string;
@@ -196,6 +197,7 @@ Do NOT include clothing, outfits, or accessories — those are handled separatel
 
 Respond with JSON:
 {
+  "headAndShouldersPrompt": "Head-and-shoulders portrait description, max 500 chars. ONLY face shape, skin tone, eyes, hair, expression, neckline and visible upper attire. NEVER describe breasts, chest, torso, waist, hips, legs, or anything below the shoulders. No full outfits — only the topmost neckline/collar.",
   "shortPrompt": "Extremely concise visual description, max 350 chars. Comma-separated descriptors: hair, eyes, skin, body type, one distinctive feature. No clothing.",
   "mediumPrompt": "Concise visual description, max 500 chars. Include hair, eyes, skin, body type, facial features. No clothing. Continuous description.",
   "longPrompt": "Detailed visual description, max 750 chars. Complete hair, eye details, skin, facial structure, body type, posture, marks/features. No clothing.",
@@ -272,15 +274,12 @@ Create 5-8 messages showing natural conversation flow with the character's uniqu
  */
 export function stripCodeFences(text: string): string {
   let cleaned = text.trim();
-  // Remove ```json ... ``` or ``` ... ```
-  if (cleaned.startsWith('```')) {
-    const firstNewline = cleaned.indexOf('\n');
-    if (firstNewline !== -1) {
-      cleaned = cleaned.substring(firstNewline + 1);
-    }
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.substring(0, cleaned.length - 3);
-    }
+  // Remove ```json ... ``` or ``` ... ``` (single source for every cheap-LLM JSON
+  // parser; the regex form tolerates both newline- and inline-delimited fences).
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
   }
   return cleaned.trim();
 }
@@ -642,6 +641,7 @@ export function assembleQtapExport(
       ? {
           id: crypto.randomUUID(),
           name: 'AI Generated',
+          headAndShouldersPrompt: (stepResults.physical_descriptions.headAndShouldersPrompt || '').substring(0, 500),
           shortPrompt: (stepResults.physical_descriptions.shortPrompt || '').substring(0, 350),
           mediumPrompt: (stepResults.physical_descriptions.mediumPrompt || '').substring(0, 500),
           longPrompt: (stepResults.physical_descriptions.longPrompt || '').substring(0, 750),

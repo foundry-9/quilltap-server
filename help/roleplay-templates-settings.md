@@ -181,6 +181,45 @@ To create a brand new custom template:
   - `*` — Standard asterisk narration: `*She sighed heavily.*`
   - `[`, `]` — Bracket narration: `[She sighed heavily.]`
 
+#### Formatting Delimiters
+
+Below the prompt and narration fields, the **Formatting Delimiters** list adds toolbar buttons and styling rules. Click **+ Add Delimiter** for each rule, then choose its **Kind**:
+
+- **Wrap** — an opening and closing marker around an inline span (e.g. `*action*` or `[action]`). Choose **Same** for one marker on both sides, or **Pair** for different open/close markers.
+- **Line prefix** — a marker at the start of a line styles the *whole line* (e.g. `// ` for an out-of-character aside). Set the **Line marker**.
+- **Tag prefix** — a bracketed token at the start of a line styles the *whole line* when the token matches a pattern you set. For example, `[CAPTAIN] All hands on deck!` with the default "uppercase only" token rule. Set the **Brackets** (open and close) and the **Token pattern** — a regular expression whose default accepts uppercase and non-cased scripts but never lowercase. Edit it to suit (for example `\d+` to match a number).
+
+Each rule also has:
+
+- **Name** — the full label shown in the button's tooltip
+- **Button Label** — the short text on the composer toolbar button (max 10 characters)
+- **Style (CSS class)** — pick a built-in style or type your own theme class for a custom look. The built-in roster now runs to:
+  - The classics — **Narration**, **Dialogue**, **Out of Character**, **Inner Monologue**
+  - **Style 1–4** — four boldly contrasting liveries that every theme dresses in its own four hues, so a marked passage fairly leaps off the page
+  - The semantics — **Danger**, **Warning**, **Success**, **Info**, **Muted**, and **Code** (the last in a monospace hand), each drawn from the theme's standing palette
+
+#### Concealing the Marks
+
+Each delimiter carries a **Conceal the marks when rendered** switch. Flip it on and the delimiters themselves vanish from the finished view while the styling remains — so `+a hush fell+` is read simply as *a hush fell*, handsomely dressed, with nary a `+` in sight. The marks stay in the underlying text (and in what the model is asked to produce); only the reader is spared them. It works for all three kinds: a wrap's bookends, a line prefix's marker, and a tag prefix's `[TAG]` are all quietly tidied away.
+
+#### Flourishes
+
+Beneath each rule sits a small parade of optional **Flourishes**, layered atop the chosen Style:
+
+- **Bold** and **Italic** — the usual emphases
+- **Reverse** — swaps foreground and background, turning light-on-dark into dark-on-light and vice versa
+- **Underline** — none, single, or a distinguished **double** rule
+- **Border** — none, a solid hairline, or a **dashed** one
+- **Font** — leave it at *Default* or borrow the theme's Sans, Serif, Mono, Display, or Script hand
+
+Mix them freely; they compose with whatever Style you've picked.
+
+A delimiter is defined once and drives three things at once: the composer toolbar button, and how matching text is styled in both the live chat and the server-rendered views — so they always agree.
+
+#### Draft Formatting Instructions
+
+Next to the **LLM Prompt** label is a **Draft formatting instructions** button. Click it to append a starter paragraph describing your current delimiters to the prompt (for example, "Narration and action: wrap in `*…*`"). It is only a starting point — edit the text freely; the prompt remains exactly what is sent to the model.
+
 ### Previewing Your Templates
 
 To see a custom template's details:

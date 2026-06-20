@@ -8,6 +8,7 @@ import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template
 import type { Message, CharacterData, ChatSettings } from '../types'
 import type { SwipeState } from '../hooks/useChatData'
 import type { RenderItem } from '../announcement-render-items'
+import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
 import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
@@ -298,6 +299,9 @@ export function VirtualizedMessageList({
                   editContent={editContent}
                   viewSourceMessageIds={viewSourceMessageIds}
                   isSystemMessageCollapsed={
+                    // Carina reference answers always render as a full row (with
+                    // the answerer's avatar + the answer), never a collapsed chip.
+                    message.systemSender !== 'carina' &&
                     !!message.systemSender && !expandedSystemMessageIds.has(message.id)
                   }
                   onToggleSystemMessageExpanded={onToggleSystemMessageExpanded}
@@ -395,19 +399,7 @@ export function VirtualizedMessageList({
           aria-label="Jump to latest message"
           title="Jump to latest message"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
+          <Icon name="chevron-down" className="w-5 h-5" aria-hidden="true" />
         </button>
       )}
     </div>

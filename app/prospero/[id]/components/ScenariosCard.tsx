@@ -25,10 +25,12 @@ export function ScenariosCard({ projectId, expanded, onToggle }: ScenariosCardPr
   const mutator = useProjectScenarios(projectId)
 
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
+    <div className="qt-card qt-bg-card qt-border rounded-lg">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
+        className={`w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors ${
+          expanded ? 'rounded-t-lg' : 'rounded-lg'
+        }`}
       >
         <div className="flex items-center gap-3">
           <ScenariosIcon className="w-5 h-5 qt-text-primary" />

@@ -28,9 +28,11 @@ import {
   extractOtherMemoriesFromTurn,
   loadCanonForSelf,
   loadCanonForObserverAboutSubject,
-  renderCanonBlock,
+  renderSelfCanonBlock,
+  renderOtherCanonBlock,
   MemoryCandidate,
   UncensoredFallbackOptions,
+  type OrientingContext,
 } from './cheap-llm-tasks'
 import type { OtherSubjectInput } from './cheap-llm-tasks'
 import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -103,6 +105,21 @@ export interface TurnMemoryExtractionContext {
    */
   participantCharacters: Map<string, Character>
   chatId: string
+  /**
+   * Project the chat belongs to, when any. Stamped onto every derived memory's
+   * `projectId` so scope (`scope: narrow`) comparisons at recall time have a
+   * rename-proof, collision-proof key to compare against. Null for chats with
+   * no project.
+   */
+  projectId?: string | null
+  /**
+   * Non-canonical orienting context fed into the extraction footer (never the
+   * cached body prefix). `projectDescription` lets the model judge a memory's
+   * scope; `chatContextSummary` (the rolling Librarian summary) frames its
+   * temporal hinge. Both are background only — never a source of memories.
+   */
+  projectDescription?: string | null
+  chatContextSummary?: string | null
   userId: string
   connectionProfile: ConnectionProfile
   cheapLLMSettings: CheapLLMSettings
@@ -212,6 +229,7 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
       characterId: opts.characterId,
       aboutCharacterId: opts.aboutCharacterId,
       chatId: opts.ctx.chatId,
+      projectId: opts.ctx.projectId ?? null,
       content: opts.candidate.content || '',
       summary: opts.candidate.summary || '',
       keywords: opts.candidate.keywords || [],
@@ -324,6 +342,14 @@ export async function processTurnForMemory(
 
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)
 
+    // Non-canonical orienting context, identical across every SELF/OTHER call
+    // this turn — built once so it stays in the variable footer without
+    // disturbing the cached body prefix.
+    const orienting: OrientingContext = {
+      projectDescription: ctx.projectDescription ?? null,
+      chatContextSummary: ctx.chatContextSummary ?? null,
+    }
+
     // Pre-resolve per-character rate limits so we know which characters to
     // skip entirely, throttle, or allow before we start firing LLM calls.
     const rateLimits = new Map<string, RateLimitDecision>()
@@ -353,26 +379,48 @@ export async function processTurnForMemory(
     // the user-controlled character (if any). The user's character record is
     // also used here just like an AI character's — we look up its identity
     // and vault mount point exactly the same way.
+    //
+    // A user-controlled character now arrives as a slice as well (built from
+    // the turn opener), so it would appear both here in the slice loop and in
+    // the explicit user block below. De-dupe by character ID: the slice loop
+    // wins (it carries the authoritative speaker), and the explicit block only
+    // fires as a fallback when the user character is present but silent (e.g. a
+    // greeting turn produced no opener slice).
     // ---------------------------------------------------------------------
-    type Subject = { id: string; name: string; identity: string | null; isUser: boolean }
+    type Subject = { id: string; name: string; identity: string | null; description: string | null; isUser: boolean }
     const subjects: Subject[] = []
+    const seenSubjectIds = new Set<string>()
     for (const slice of allowedSlices) {
+      if (seenSubjectIds.has(slice.characterId)) continue
+      seenSubjectIds.add(slice.characterId)
       const character = ctx.participantCharacters.get(slice.characterId)
       subjects.push({
         id: slice.characterId,
         name: slice.characterName,
         identity: character?.identity ?? null,
-        isUser: false,
+        description: character?.description ?? null,
+        // The user-controlled character's subject entry stays tagged so other
+        // observers' OTHER prompts still read "(the user-controlled character)".
+        isUser: slice.isUserControlled ?? false,
       })
     }
     if (ctx.transcript.userCharacterId && ctx.transcript.userCharacterName) {
-      const userCharacter = ctx.participantCharacters.get(ctx.transcript.userCharacterId)
-      subjects.push({
-        id: ctx.transcript.userCharacterId,
-        name: ctx.transcript.userCharacterName,
-        identity: userCharacter?.identity ?? null,
-        isUser: true,
-      })
+      if (seenSubjectIds.has(ctx.transcript.userCharacterId)) {
+        debugLogs.push(
+          `[Memory] Skipped duplicate user subject for ${ctx.transcript.userCharacterName} ` +
+          `— already present as a turn slice`
+        )
+      } else {
+        seenSubjectIds.add(ctx.transcript.userCharacterId)
+        const userCharacter = ctx.participantCharacters.get(ctx.transcript.userCharacterId)
+        subjects.push({
+          id: ctx.transcript.userCharacterId,
+          name: ctx.transcript.userCharacterName,
+          identity: userCharacter?.identity ?? null,
+          description: userCharacter?.description ?? null,
+          isUser: true,
+        })
+      }
     }
 
     // ---------------------------------------------------------------------
@@ -382,9 +430,12 @@ export async function processTurnForMemory(
     for (const slice of allowedSlices) {
       const rl = rateLimits.get(slice.characterId)!
       const observerCharacter = ctx.participantCharacters.get(slice.characterId)
-      const selfCanonBlock = renderCanonBlock(loadCanonForSelf({
+      const selfCanonBlock = renderSelfCanonBlock(loadCanonForSelf({
         id: slice.characterId,
         name: slice.characterName,
+        manifesto: observerCharacter?.manifesto ?? null,
+        personality: observerCharacter?.personality ?? null,
+        description: observerCharacter?.description ?? null,
         identity: observerCharacter?.identity ?? null,
       }))
 
@@ -398,6 +449,7 @@ export async function processTurnForMemory(
         ctx.chatId,
         cheapMaxTokens,
         ctx.inAutonomousRoom === true,
+        orienting,
       )
 
       if (selfResult.usage) {
@@ -417,7 +469,10 @@ export async function processTurnForMemory(
             `for ${slice.characterName} below importance ${rl.floor}`
           )
         }
-        debugLogs.push(`[Memory] SELF for ${slice.characterName}: ${candidates.length} candidate(s)`)
+        debugLogs.push(
+          `[Memory] SELF for ${slice.characterName}` +
+          `${slice.isUserControlled ? ' (user-controlled)' : ''}: ${candidates.length} candidate(s)`
+        )
         for (const candidate of candidates) {
           await writeCandidate({
             characterId: slice.characterId,
@@ -467,7 +522,7 @@ export async function processTurnForMemory(
       const resolvedSubjects: ResolvedSubject[] = []
       for (const subject of observerSubjects) {
         const canon = await loadCanonForObserverAboutSubject(observerVault, subject)
-        const subjectCanonBlock = renderCanonBlock(canon)
+        const subjectCanonBlock = renderOtherCanonBlock(canon)
         const pronouns: Pronouns | null = subject.isUser
           ? (ctx.transcript.userCharacterPronouns ?? null)
           : (ctx.transcript.characterSlices.find(s => s.characterId === subject.id)?.characterPronouns ?? null)
@@ -492,6 +547,7 @@ export async function processTurnForMemory(
         ctx.chatId,
         cheapMaxTokens,
         ctx.inAutonomousRoom === true,
+        orienting,
       )
 
       if (otherResult.usage) {
@@ -520,7 +576,8 @@ export async function processTurnForMemory(
           )
         }
         debugLogs.push(
-          `[Memory] OTHER observer=${observer.characterName} subject=${subject.subjectName} ` +
+          `[Memory] OTHER observer=${observer.characterName}` +
+          `${observer.isUserControlled ? ' (user-controlled)' : ''} subject=${subject.subjectName} ` +
           `canon=${subject.canonSource}: ${candidates.length} candidate(s)`
         )
         for (const candidate of candidates) {

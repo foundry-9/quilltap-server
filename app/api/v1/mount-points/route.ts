@@ -121,6 +121,10 @@ async function handleSemanticSearch(req: NextRequest, userId: string) {
       limit: top,
       minScore: threshold,
       query,
+      // Operator Document-Mode search: the human sees every document, including
+      // those flagged character_read:false. The per-character retrieval paths
+      // (knowledge injector, search tool, etc.) keep the default filtering.
+      includeBlocked: true,
     });
     return NextResponse.json({
       results,

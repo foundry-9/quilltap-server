@@ -1,9 +1,12 @@
 import { defineConfig } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
+import pluginQuery from '@tanstack/eslint-plugin-query'
 import quilltapPlugin from './eslint-quilltap-plugin.js'
 
 const eslintConfig = defineConfig([
   ...nextVitals,
+  // TanStack Query lint guardrails (exhaustive-deps, no-rest-destructuring, …)
+  ...pluginQuery.configs['flat/recommended'],
   {
     ignores: [
       '.next/**',
@@ -14,6 +17,11 @@ const eslintConfig = defineConfig([
       'dist/**',
       '.git/**',
       'coverage/**',
+      // Claude Code tooling scratch — agent worktrees, plans, etc. These are
+      // gitignored and may contain full repo checkouts whose nested build
+      // artifacts (plugins/dist, pdf.worker.mjs) escape the root-anchored
+      // ignores below. Never lint anything under here.
+      '.claude/**',
       // Bundled plugin JavaScript files (source is in TypeScript)
       'plugins/dist/**/*.js',
       // PDF.js worker file (third-party, copied from node_modules)

@@ -46,6 +46,14 @@ jest.mock('@/lib/mount-index/db-store-events', () => ({
   emitDocumentMoved: jest.fn(),
 }));
 
+// Mock the chunker so writeDatabaseDocument's inline re-chunk is observable
+// without a real database.
+jest.mock('@/lib/doc-edit/reindex-file', () => ({
+  reindexSingleFile: jest.fn().mockResolvedValue(undefined),
+}));
+const reindexSingleFileMock = jest.requireMock('@/lib/doc-edit/reindex-file')
+  .reindexSingleFile as jest.Mock;
+
 // Mock getRepositories - must be declared before usage
 jest.mock('@/lib/repositories/factory');
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;
@@ -580,6 +588,28 @@ describe('database-store folder operations', () => {
           folderId: null,
         })
       );
+    });
+
+    it('chunks the document inline on a parent write (so it is searchable without a rescan)', async () => {
+      repos.docMountFileLinks.findByMountPointAndPath.mockResolvedValue(null);
+      delete process.env.QUILLTAP_JOB_CHILD;
+      reindexSingleFileMock.mockClear();
+
+      await writeDatabaseDocument(MOUNT_ID, 'note.md', 'hello');
+
+      expect(reindexSingleFileMock).toHaveBeenCalledWith(MOUNT_ID, 'note.md', '');
+    });
+
+    it('does NOT chunk inline inside the forked job child (buffered write, no read-your-writes)', async () => {
+      repos.docMountFileLinks.findByMountPointAndPath.mockResolvedValue(null);
+      reindexSingleFileMock.mockClear();
+      process.env.QUILLTAP_JOB_CHILD = '1';
+      try {
+        await writeDatabaseDocument(MOUNT_ID, 'note.md', 'hello');
+        expect(reindexSingleFileMock).not.toHaveBeenCalled();
+      } finally {
+        delete process.env.QUILLTAP_JOB_CHILD;
+      }
     });
   });
 

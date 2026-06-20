@@ -11,14 +11,18 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_list_files tool's input.
  */
 export const docListFilesToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   mount_point: z
     .string()
-    .describe('Optional: restrict listing to a specific mount point. Without this, lists all mount points.')
+    .describe('Optional: restrict listing to a specific mount point (name or ID). Pass "self" to list only your own character vault. Without this, lists all mount points.')
     .optional(),
   scope: z
-    .enum(['document_store', 'project', 'general'])
+    .enum(['document_store', 'project', 'general', 'group'])
     .describe(
-      'Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files.'
+      'Optional: restrict to files in a specific scope. "document_store" for mounted stores, "project" for project files, "general" for general files, "group" for the document stores of the groups the responding character is a member of.'
     )
     .optional(),
   folder: z
@@ -68,7 +72,9 @@ export const docListFilesToolDefinition = {
 export interface DocFileInfo {
   path: string;
   mount_point?: string;
-  scope: 'document_store' | 'project' | 'general';
+  /** Canonical qtap:// URI addressing this entry. */
+  uri?: string;
+  scope: 'document_store' | 'project' | 'general' | 'group';
   size: number;
   modified: number;
   kind?: 'file' | 'folder';

@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Icon } from '@/components/ui/icon';
 import { showErrorToast } from '@/lib/toast';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { TagBadge } from '@/components/tags/tag-badge';
@@ -215,7 +216,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               setTimeout(() => inputRef.current?.focus(), 0);
             }}
             disabled={loading}
-            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted text-foreground hover:bg-accent focus:outline-none disabled:opacity-50"
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium qt-bg-muted text-foreground qt-hover-accent focus:outline-none disabled:opacity-50"
           >
             + Add Tag
           </button>
@@ -242,17 +243,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
               className="inline-flex items-center justify-center w-5 h-5 qt-text-secondary hover:text-foreground focus:outline-none disabled:opacity-50"
               aria-label="Cancel adding tag"
             >
-              <svg
-                className="w-4 h-4"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <Icon name="close" className="w-4 h-4" />
             </button>
 
             {/* Suggestions dropdown */}
@@ -269,7 +260,7 @@ export function TagEditor({ entityType, entityId, onTagsChange }: TagEditorProps
                           type="button"
                           onClick={() => addTag(tag.name)}
                           disabled={loading}
-                          className="w-full px-4 py-2 text-left qt-text-small hover:bg-accent text-foreground disabled:opacity-50 whitespace-nowrap"
+                          className="w-full px-4 py-2 text-left qt-text-small qt-hover-accent text-foreground disabled:opacity-50 whitespace-nowrap"
                         >
                           {tag.name}
                         </button>

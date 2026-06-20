@@ -14,7 +14,6 @@ export {
 export {
   imageGenerationToolDefinition,
   validateImageGenerationInput,
-  getProviderConstraints,
   type ImageGenerationToolConfig,
   type ImageGenerationToolInput,
   type ImageGenerationToolOutput,
@@ -28,6 +27,48 @@ export {
   ImageGenerationError,
   type ImageToolExecutionContext,
 } from './handlers/image-generation-handler';
+
+// Ask Carina Tool
+export {
+  askCarinaToolDefinition,
+  validateAskCarinaInput,
+  type AskCarinaToolInput,
+  type AskCarinaToolOutput,
+} from './ask-carina-tool';
+
+export {
+  executeAskCarinaTool,
+  formatAskCarinaResults,
+  type AskCarinaToolContext,
+} from './handlers/ask-carina-handler';
+
+// Post Office — Send Mail Tool
+export {
+  sendMailToolDefinition,
+  validateSendMailInput,
+  type SendMailToolInput,
+  type SendMailToolOutput,
+} from './send-mail-tool';
+
+export {
+  executeSendMailTool,
+  formatSendMailResults,
+  type SendMailToolContext,
+} from './handlers/send-mail-handler';
+
+// Post Office — List Email Tool
+export {
+  listEmailToolDefinition,
+  validateListEmailInput,
+  type ListEmailToolInput,
+  type ListEmailToolOutput,
+} from './list-email-tool';
+
+export {
+  executeListEmailTool,
+  formatListEmailResults,
+  type ListEmailToolContext,
+} from './handlers/list-email-handler';
 
 // Web Search Tool
 export {
@@ -204,6 +245,7 @@ export {
   type SelfInventoryQuilltapSection,
   type SelfInventoryRuntimeMode,
   type SelfInventoryClientShell,
+  type SelfInventoryContextSection,
 } from './self-inventory-tool';
 
 export {
@@ -235,46 +277,85 @@ export {
 } from './handlers/wardrobe-list-handler';
 
 export {
-  wardrobeUpdateOutfitToolDefinition,
-  validateWardrobeUpdateOutfitInput,
-  type WardrobeUpdateOutfitToolInput,
-  type WardrobeUpdateOutfitToolOutput,
-} from './wardrobe-update-outfit-tool';
+  wardrobeReadToolDefinition,
+  validateWardrobeReadInput,
+  type WardrobeReadToolInput,
+  type WardrobeReadToolOutput,
+} from './wardrobe-read-tool';
 
 export {
-  executeWardrobeUpdateOutfitTool,
-  formatWardrobeUpdateOutfitResults,
-  WardrobeUpdateOutfitError,
-  type WardrobeUpdateOutfitToolContext,
-} from './handlers/wardrobe-update-outfit-handler';
+  executeWardrobeReadTool,
+  formatWardrobeReadResults,
+  type WardrobeReadToolContext,
+} from './handlers/wardrobe-read-handler';
 
 export {
-  wardrobeChangeItemToolDefinition,
-  validateWardrobeChangeItemInput,
-  type WardrobeChangeItemToolInput,
-  type WardrobeChangeItemToolOutput,
-} from './wardrobe-change-item-tool';
+  wardrobeCreateToolDefinition,
+  validateWardrobeCreateInput,
+  type WardrobeCreateToolInput,
+  type WardrobeCreateToolOutput,
+} from './wardrobe-create-tool';
 
 export {
-  executeWardrobeChangeItemTool,
-  formatWardrobeChangeItemResults,
-  WardrobeChangeItemError,
-  type WardrobeChangeItemToolContext,
-} from './handlers/wardrobe-change-item-handler';
+  executeWardrobeCreateTool,
+  formatWardrobeCreateResults,
+  WardrobeCreateError,
+  type WardrobeCreateToolContext,
+} from './handlers/wardrobe-create-handler';
 
 export {
-  wardrobeCreateItemToolDefinition,
-  validateWardrobeCreateItemInput,
-  type WardrobeCreateItemToolInput,
-  type WardrobeCreateItemToolOutput,
-} from './wardrobe-create-item-tool';
+  wardrobeUpdateToolDefinition,
+  validateWardrobeUpdateInput,
+  type WardrobeUpdateToolInput,
+  type WardrobeUpdateToolOutput,
+} from './wardrobe-update-tool';
 
 export {
-  executeWardrobeCreateItemTool,
-  formatWardrobeCreateItemResults,
-  WardrobeCreateItemError,
-  type WardrobeCreateItemToolContext,
-} from './handlers/wardrobe-create-item-handler';
+  executeWardrobeUpdateTool,
+  formatWardrobeUpdateResults,
+  type WardrobeUpdateToolContext,
+} from './handlers/wardrobe-update-handler';
+
+export {
+  wardrobeArchiveToolDefinition,
+  validateWardrobeArchiveInput,
+  type WardrobeArchiveToolInput,
+  type WardrobeArchiveToolOutput,
+} from './wardrobe-archive-tool';
+
+export {
+  executeWardrobeArchiveTool,
+  formatWardrobeArchiveResults,
+  type WardrobeArchiveToolContext,
+} from './handlers/wardrobe-archive-handler';
+
+export {
+  wardrobeWearToolDefinition,
+  validateWardrobeWearInput,
+  type WardrobeWearToolInput,
+  type WardrobeWearToolOutput,
+  type WardrobeWearOpResult,
+} from './wardrobe-wear-tool';
+
+export {
+  executeWardrobeWearTool,
+  formatWardrobeWearResults,
+  type WardrobeWearToolContext,
+} from './handlers/wardrobe-wear-handler';
+
+export {
+  wardrobeTakeOffToolDefinition,
+  validateWardrobeTakeOffInput,
+  type WardrobeTakeOffToolInput,
+  type WardrobeTakeOffToolOutput,
+  type WardrobeTakeOffOpResult,
+} from './wardrobe-take-off-tool';
+
+export {
+  executeWardrobeTakeOffTool,
+  formatWardrobeTakeOffResults,
+  type WardrobeTakeOffToolContext,
+} from './handlers/wardrobe-take-off-handler';
 
 // Scriptorium Tools (Conversation Rendering + Annotations)
 export {
@@ -311,6 +392,20 @@ export {
   formatSearchScriptoriumResults,
   type SearchScriptoriumToolContext,
 } from './handlers/search-scriptorium-handler';
+
+// Brahma Console read-only SQL access
+export {
+  runSqlToolDefinition,
+  validateRunSqlInput,
+  type RunSqlInput,
+  type RunSqlOutput,
+} from './run-sql-tool';
+
+export {
+  executeRunSqlTool,
+  type RunSqlToolContext,
+  type RunSqlResult,
+} from './handlers/run-sql-handler';
 
 // Tool Support (for checking model capabilities and tool mode)
 export {

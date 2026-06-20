@@ -97,6 +97,63 @@ Produce a single block of condensed memory notes as a bulleted list. Each bullet
 
 **Target length:** {{targetTokens}} tokens.`
 
+// ============================================================================
+// Shared helpers
+// ============================================================================
+
+/** Rough token estimate: 1 token ≈ 4 characters. */
+function estimateTokens(s: string): number {
+  return Math.ceil(s.length / 4)
+}
+
+/** Shared CompressionResult parser — trims content and estimates compressed tokens. */
+function parseCompressionResult(originalTokens: number): (content: string) => CompressionResult {
+  return (content: string): CompressionResult => {
+    const compressedText = content.trim()
+    const compressedTokens = estimateTokens(compressedText)
+    return { compressedText, originalTokens, compressedTokens }
+  }
+}
+
+interface RunCompressionArgs {
+  systemPrompt: string
+  userContent: string
+  originalTokens: number
+  taskType: string
+  selection: CheapLLMSelection
+  userId: string
+  chatId?: string
+  uncensoredFallback?: UncensoredFallbackOptions
+}
+
+/**
+ * Shared execution wrapper: builds the two LLMMessages, calls
+ * `executeCheapLLMTask` with the standard CompressionResult parser, and
+ * returns the result. All three public compression functions delegate here.
+ */
+function runCompression(args: RunCompressionArgs): Promise<CheapLLMTaskResult<CompressionResult>> {
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: args.systemPrompt },
+    { role: 'user', content: args.userContent },
+  ]
+
+  return executeCheapLLMTask(
+    args.selection,
+    llmMessages,
+    args.userId,
+    parseCompressionResult(args.originalTokens),
+    args.taskType,
+    args.chatId,
+    undefined,
+    args.uncensoredFallback,
+    4000
+  )
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
 /**
  * Compresses older conversation history into a structured summary
  *
@@ -126,46 +183,21 @@ export async function compressConversationHistory(
     })
     .join('\n\n')
 
-  // Estimate original token count (rough approximation: 1 token ≈ 4 characters)
-  const originalTokens = Math.ceil(conversationText.length / 4)
-
-  // Build the prompt with dynamic values
   const systemPrompt = MESSAGE_COMPRESSION_PROMPT
     .replace(/\{\{userName\}\}/g, userName)
     .replace(/\{\{characterName\}\}/g, characterName)
     .replace(/\{\{targetTokens\}\}/g, String(targetTokens))
 
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: systemPrompt,
-    },
-    {
-      role: 'user',
-      content: `Compress the following conversation history:\n\n${conversationText}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
+  return runCompression({
+    systemPrompt,
+    userContent: `Compress the following conversation history:\n\n${conversationText}`,
+    originalTokens: estimateTokens(conversationText),
+    taskType: 'compress-conversation-history',
     selection,
-    llmMessages,
     userId,
-    (content: string): CompressionResult => {
-      const compressedText = content.trim()
-      const compressedTokens = Math.ceil(compressedText.length / 4)
-
-      return {
-        compressedText,
-        originalTokens,
-        compressedTokens,
-      }
-    },
-    'compress-conversation-history',
     chatId,
-    undefined,
     uncensoredFallback,
-    4000
-  )
+  })
 }
 
 /**
@@ -185,44 +217,19 @@ export async function compressSystemPrompt(
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
-  // Estimate original token count
-  const originalTokens = Math.ceil(systemPrompt.length / 4)
-
-  // Build the prompt with target tokens
   const prompt = SYSTEM_PROMPT_COMPRESSION_PROMPT
     .replace(/\{\{targetTokens\}\}/g, String(targetTokens))
 
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: prompt,
-    },
-    {
-      role: 'user',
-      content: `Compress this system prompt:\n\n${systemPrompt}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
+  return runCompression({
+    systemPrompt: prompt,
+    userContent: `Compress this system prompt:\n\n${systemPrompt}`,
+    originalTokens: estimateTokens(systemPrompt),
+    taskType: 'compress-system-prompt',
     selection,
-    llmMessages,
     userId,
-    (content: string): CompressionResult => {
-      const compressedText = content.trim()
-      const compressedTokens = Math.ceil(compressedText.length / 4)
-
-      return {
-        compressedText,
-        originalTokens,
-        compressedTokens,
-      }
-    },
-    'compress-system-prompt',
     chatId,
-    undefined,
     uncensoredFallback,
-    4000
-  )
+  })
 }
 
 /**
@@ -246,43 +253,18 @@ export async function compressMemories(
   uncensoredFallback?: UncensoredFallbackOptions,
   chatId?: string
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
-  // Estimate original token count
-  const originalTokens = Math.ceil(formattedMemoryText.length / 4)
-
-  // Build the prompt with dynamic values
   const systemPrompt = MEMORY_COMPRESSION_PROMPT
     .replace(/\{\{characterName\}\}/g, characterName)
     .replace(/\{\{targetTokens\}\}/g, String(targetTokens))
 
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: systemPrompt,
-    },
-    {
-      role: 'user',
-      content: `Compress the following recalled memories:\n\n${formattedMemoryText}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
+  return runCompression({
+    systemPrompt,
+    userContent: `Compress the following recalled memories:\n\n${formattedMemoryText}`,
+    originalTokens: estimateTokens(formattedMemoryText),
+    taskType: 'compress-memories',
     selection,
-    llmMessages,
     userId,
-    (content: string): CompressionResult => {
-      const compressedText = content.trim()
-      const compressedTokens = Math.ceil(compressedText.length / 4)
-
-      return {
-        compressedText,
-        originalTokens,
-        compressedTokens,
-      }
-    },
-    'compress-memories',
     chatId,
-    undefined,
     uncensoredFallback,
-    4000
-  )
+  })
 }

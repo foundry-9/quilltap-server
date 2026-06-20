@@ -423,6 +423,20 @@ When a character first speaks in a chat — whether at the very beginning or upo
 - Refresh the page if needed
 - Wait for current response to complete
 
+### A character keeps speaking for everyone
+
+Now and then a character will forget its manners and start narrating the whole table — answering as the others, tagging lines with `[Someone Else]`, and carrying half the conversation single-handedly. The establishment guards against this on every turn: each character is instructed, in no uncertain terms, to speak only for itself, and should a reply nevertheless wander into another's voice, the offending remainder is quietly trimmed before it reaches the page.
+
+**Causes:**
+
+- A less capable model assigned to that character — smaller models are the usual culprits, prone to mimicking the transcript and writing everyone's lines
+- A very long, crowded scene that tempts the model to "wrap things up" for the whole cast
+
+**Solutions:**
+
+- Assign that character a more capable model (set its connection profile in the sidebar) — the single most effective remedy
+- Keep an eye on characters running on lightweight models in busy multi-character scenes
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

@@ -2,6 +2,22 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.13] - 2026-06-14
+
+### Added
+- Bundle `styles.css` template: commented `--qt-roleplay-1..4-bg/fg` scaffold so theme authors can dress the four high-contrast roleplay-template chips in their own hues. The semantic chips (`qt-roleplay-danger/warning/success/info/muted/code`) follow the theme's `--color-*` tokens and need no overrides.
+
+## [2.0.12] - 2026-06-10
+
+### Changed
+- Bundle README template: the `brand` note reflects the app-side rule change — an `.svg` brand override is tinted like any other icon; ship `.webp` to keep its own colors.
+
+## [2.0.11] - 2026-06-09
+
+### Added
+- Scaffolded bundles now include an `icons/` folder (with a commented example) for icon overrides, mirroring `fonts/`. The bundle README documents the optional `icons` manifest map and the `.svg` (theme-tinted) vs `.webp` (full-color) override modes.
+- The scaffolded Storybook stories now include the `Icons` reference story from `@quilltap/theme-storybook`.
+
 ## [2.0.10] - 2026-06-04
 
 ### Added

@@ -89,6 +89,20 @@ Quilltap stores its database, files, and logs in a platform-specific directory:
 
 Override with `--data-dir` or the `QUILLTAP_DATA_DIR` environment variable.
 
+## Named Instances
+
+Register a data directory once and point the CLI at it by name, instead of repeating `--data-dir`:
+
+```bash
+quilltap instances add Friday ~/iCloud/Quilltap/Friday   # Register (prompts for the passphrase if encrypted)
+quilltap instances list                                  # Registered instances (* marks the default)
+quilltap instances default Friday                        # Make it the fall-through for flag-free runs
+quilltap instances rename Friday Weekday                 # Rename, preserving the stored passphrase
+quilltap instances remove Friday                         # Unregister
+```
+
+Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The registry lives at `<app-support>/Quilltap/instances.json` (mode 0600; e.g. `~/Library/Application Support/Quilltap/instances.json` on macOS). **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` > the OS platform default. Pass the **instance root** (e.g. `~/iCloud/Quilltap/Friday`), not its `data/` subdirectory.
+
 ## Database Tool
 
 The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
@@ -141,11 +155,15 @@ Most subcommands accept `--json` (for piping) and `--limit N`. Names are case-in
 ```bash
 quilltap db --tables                                # List tables in active DB
 quilltap db --count chat_messages                   # Row count
-quilltap db "SELECT id FROM characters LIMIT 5"     # Raw SQL
-quilltap db --repl                                  # Interactive prompt
+quilltap db "SELECT id FROM characters LIMIT 5"     # Raw SQL (read-only)
+quilltap db --repl                                  # Interactive prompt (read-only)
+quilltap db --write "UPDATE characters SET title = 'rival' WHERE id = '...'"
+quilltap db --repl --write                          # Interactive, read-write
 quilltap db --llm-logs --tables                     # Target the LLM logs DB
 quilltap db --mount-points --tables                 # Target the mount index DB
 ```
+
+The database is opened **read-only by default**. Add `--write` to make changes: it opens the database read-write, **claims the instance lock** (`<dataDir>/quilltap.lock`) for the duration, and releases it on exit. It **refuses — with no override — if a running server or another instance holds the lock**, so stop the server first. `--repl` is read-only unless combined with `--write`. Attempting a write without `--write` fails with a hint to re-run with the flag.
 
 In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
 
@@ -169,14 +187,32 @@ quilltap docs status                            # Per-mount extraction + embeddi
 quilltap docs scan <mount>                                    # Trigger a rescan
 quilltap docs reindex <mount> [path] [--force]                # Re-extract + re-chunk
 quilltap docs embed <mount> [path] [--force] [--wait]         # Enqueue embedding jobs
-quilltap docs write [--force] <mount> <path> [file]           # Stdin or file → mount
+quilltap docs write [--force] [--base64] <mount> <path> [file]  # Stdin or file → mount
+quilltap docs read [--rendered] [--base64] <mount> <path>       # File contents → stdout
 quilltap docs delete <mount> <path>                           # Idempotent delete
 quilltap docs mkdir <mount> <path>                            # Idempotent folder create
 quilltap docs move <srcMount> <srcPath> <dstMount> <dstPath>  # Move (hard-link when possible)
 quilltap docs copy [--force] <srcMount> <srcPath> <dstMount> <dstPath>
+quilltap docs link <srcMount> <srcPath> <dstMount> <dstPath>  # Hard-link (server-required; no byte copy)
+quilltap docs rmdir <mount> <path>                            # Delete an empty folder (server-required)
+quilltap docs mvdir <mount> <fromPath> <toPath>               # Rename/move a folder (server-required)
 ```
 
-Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex` and `embed` refuse to run without a reachable server.
+Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex`, `embed`, `link`, `rmdir`, and `mvdir` refuse to run without a reachable server.
+
+### `--base64` flag
+
+`write --base64`: reads the source bytes and sends them to the server via `PUT /api/v1/mount-points/{mountId}/files/{path}` with `{content: <base64>, encoding: "base64"}`. This is the portable path the file browser uses and handles arbitrary binary files cleanly. Server-required; the direct filesystem fallback is not available with this flag.
+
+`read --base64`: fetches raw bytes via `GET /api/v1/mount-points/{mountId}/files/{path}?encoding=base64` and emits the decoded bytes to stdout, suitable for binary round-trips. Server-required.
+
+### `link`, `rmdir`, `mvdir`
+
+`link` calls `POST /api/v1/mount-points/{srcMountId}?action=link-file` with `{sourcePath, destMountPointId, destPath}`. Creates a true hard link with no byte copy; the server reports back a `strategy` field. Errors: `DEST_EXISTS` (exit 2), `UNSUPPORTED` (cross-storage or cross-device), `SOURCE_NOT_FOUND`.
+
+`rmdir` calls `POST /api/v1/mount-points/{mountId}?action=delete-folder` with `{path}`. Fails with a clear message if the folder is not empty (`NOT_EMPTY` / `CONFLICT`).
+
+`mvdir` calls `POST /api/v1/mount-points/{mountId}?action=move-folder` with `{fromPath, toPath}`. Fails with exit 2 if the destination already exists (`DEST_EXISTS`).
 
 ## Memories
 
@@ -193,6 +229,54 @@ quilltap memories status [--character <name|id>]                       # Per-hol
 ```
 
 Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
+
+## Memory Extraction Dry-Run
+
+`quilltap memory-diff <chatId>` is a diagnostic that dumps a chat's existing memories and dry-runs re-extraction against it **without writing anything** — useful for seeing how an extractor change would land on a real conversation.
+
+```bash
+quilltap memory-diff <chatId> --instance Friday          # Report to the current directory
+quilltap memory-diff <chatId> --out /tmp/diff --concurrency 8
+```
+
+Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
+
+## Maintenance & Cleanup
+
+`quilltap maintenance` is the manual trigger for the retention sweeps that otherwise run on the server's daily maintenance tick. It reaps data with no bearing on characters, stories, or memories.
+
+```bash
+quilltap maintenance status                  # Read-only: last sweep time + dry-run counts of what would be reaped
+quilltap maintenance status --instance Friday --json
+quilltap maintenance run --instance Friday    # Run the sweeps once (lock-gated; refuses while the server is up)
+```
+
+`maintenance run` is a DB writer: it claims `<dataDir>/quilltap.lock` and **refuses while a running Quilltap server holds it** — stop the server first. Because it can only run with the server down, it performs the sweeps expressible as direct SQL/filesystem work: reaping finished background jobs (COMPLETED after 7 days, DEAD after 30, keyed off `completedAt`), closed terminal sessions older than 30 days plus their transcript files, and orphaned mount-index files. The **stale-chat asset collapse** (superseded story-backgrounds and wardrobe avatars) needs the server's file-storage machinery and runs only on the server's daily tick — `status` reports a stale-chat count so you can see the backlog. Retention windows mirror `lib/background-jobs/maintenance/retention-constants.ts`.
+
+## Logs
+
+`quilltap logs` tails or prints an instance's log files without hunting down the logs directory. Prefer it over `tail -f` — it follows across log rotation and can merge streams.
+
+```bash
+quilltap logs                                 # Last 100 lines of combined.log
+quilltap logs --tail 0 --stream error         # Whole error log
+quilltap logs -f --grep "MEMORY_EXTRACTION"   # Follow, filtered by regex
+quilltap logs --stream combined,error         # Merge streams with [stream] prefixes
+```
+
+Flags: `--stream combined|error|stdout|stderr|startup` (comma-separated for multiple), `--tail N` (default 100; `0` = full file), `--follow` / `-f`, `--grep <pattern>` (JS regex). Resolves the logs directory via the same `--instance` / `--data-dir` plumbing as the rest of the CLI.
+
+## Migrations
+
+`quilltap migrations` inspects migration state read-only. The actual runner stays at server startup (where the loading screen reports progress), so the CLI deliberately won't apply anything.
+
+```bash
+quilltap migrations status        # Counts: in-source vs recorded-applied vs not-yet-recorded
+quilltap migrations pending       # Just the not-yet-recorded list
+quilltap migrations run --dry-run # List what would run (refuses without --dry-run)
+```
+
+`--json` works on all three. "Not yet recorded" includes migrations whose `shouldRun()` is `false` on this instance — the CLI doesn't evaluate the predicate, so it can't distinguish "would skip" from "would run."
 
 ## Theme Management
 

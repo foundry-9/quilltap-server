@@ -61,7 +61,7 @@ export function EquippedBundleCard({
             </span>
             <span className="qt-text-xs qt-text-secondary">· bundle</span>
             {!bundle.allOccupied && (
-              <span className="qt-badge qt-badge-warning qt-text-xs">
+              <span className="qt-badge qt-badge-warning">
                 partially worn
               </span>
             )}
@@ -70,7 +70,7 @@ export function EquippedBundleCard({
             {bundle.occupiedSlots.map((slot) => (
               <span
                 key={slot}
-                className={`qt-badge ${TYPE_BADGE_CLASS[slot]} qt-text-xs uppercase`}
+                className={`qt-badge ${TYPE_BADGE_CLASS[slot]} uppercase`}
               >
                 {SLOT_LABEL[slot]}
               </span>

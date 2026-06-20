@@ -1,10 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { TaskFilters } from './TaskFilters'
 import { TaskItem } from './TaskItem'
 import { TaskDetails } from './TaskDetails'
 import { useTasksQueue } from './hooks/useTasksQueue'
 import { formatRelativeDate } from '@/lib/format-time'
+import { Icon } from '@/components/ui/icon'
+
+const DEFAULT_CONCURRENCY = 4
+const MIN_CONCURRENCY = 1
+const MAX_CONCURRENCY = 32
 
 export function TasksQueueCard() {
   const {
@@ -20,11 +26,26 @@ export function TasksQueueCard() {
     setShowJobDialog,
     fetchQueueStatus,
     controlQueue,
+    saveConcurrency,
     viewJob,
     pauseJob,
     resumeJob,
     deleteJob,
   } = useTasksQueue()
+
+  // While dragging the concurrency slider, show the local value for a smooth
+  // drag; otherwise reflect the persisted setting from the queue status.
+  const persistedConcurrency = data?.maxConcurrentJobs ?? DEFAULT_CONCURRENCY
+  const [dragConcurrency, setDragConcurrency] = useState<number | null>(null)
+  const displayConcurrency = dragConcurrency ?? persistedConcurrency
+
+  const handleConcurrencyCommit = () => {
+    const value = dragConcurrency
+    setDragConcurrency(null)
+    if (value !== null && value !== persistedConcurrency) {
+      void saveConcurrency(value)
+    }
+  }
 
   const formatTokens = (tokens: number): string => {
     if (tokens >= 1000000) {
@@ -49,20 +70,34 @@ export function TasksQueueCard() {
           </p>
         </div>
         <div className="flex-shrink-0 text-primary">
-          <svg
-            className="w-8 h-8"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-            />
-          </svg>
+          <Icon name="layers" className="w-8 h-8" />
         </div>
+      </div>
+
+      {/* Simultaneous Labours — global background-job concurrency cap */}
+      <div className="qt-card p-4 mb-6">
+        <label htmlFor="maxConcurrentJobs" className="qt-text-body text-foreground font-medium">
+          Simultaneous Labours — {displayConcurrency}
+        </label>
+        <input
+          id="maxConcurrentJobs"
+          type="range"
+          min={MIN_CONCURRENCY}
+          max={MAX_CONCURRENCY}
+          step={1}
+          value={displayConcurrency}
+          onMouseDown={() => setDragConcurrency(persistedConcurrency)}
+          onTouchStart={() => setDragConcurrency(persistedConcurrency)}
+          onChange={(e) => setDragConcurrency(parseInt(e.target.value, 10))}
+          onMouseUp={handleConcurrencyCommit}
+          onTouchEnd={handleConcurrencyCommit}
+          className="w-full cursor-pointer mt-2"
+        />
+        <p className="qt-text-small qt-text-muted mt-1">
+          How many background errands the engine may undertake at once. Four suits most
+          households; a stouter machine may shoulder up to two-and-thirty. Mind that a single
+          ravenous task type may then monopolise the works.
+        </p>
       </div>
 
       {/* Error Message */}

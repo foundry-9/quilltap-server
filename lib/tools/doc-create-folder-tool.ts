@@ -12,6 +12,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_create_folder tool's input.
  */
 export const docCreateFolderToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   scope: z
     .enum(['document_store', 'project', 'general'])
     .default('document_store')
@@ -21,12 +25,13 @@ export const docCreateFolderToolInputSchema = z.object({
     .optional(),
   mount_point: z
     .string()
-    .describe('Mount point name. Required when scope is "document_store".')
+    .describe('Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.')
     .optional(),
   path: z
     .string()
-    .describe('Relative path for the folder to create within the selected scope.'),
-});
+    .describe('Relative path for the folder to create within the selected scope.')
+    .optional(),
+}).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 
 /**
  * Input parameters for the doc_create_folder tool
@@ -53,4 +58,6 @@ export const docCreateFolderToolDefinition = {
 export interface DocCreateFolderOutput {
   success: boolean;
   path: string;
+  /** Canonical qtap:// URI for the created folder. */
+  uri?: string;
 }

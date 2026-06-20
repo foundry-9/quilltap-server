@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 
 interface ConnectionProfileInfo {
   id: string
@@ -9,62 +11,33 @@ interface ConnectionProfileInfo {
   modelName: string
 }
 
-// Module-level cache
-let cachedProfiles: ConnectionProfileInfo[] | null = null
-let fetchPromise: Promise<ConnectionProfileInfo[]> | null = null
-
-async function fetchProfiles(): Promise<ConnectionProfileInfo[]> {
-  if (cachedProfiles) return cachedProfiles
-
-  if (fetchPromise) return fetchPromise
-
-  try {
-    fetchPromise = fetch('/api/v1/connection-profiles')
-      .then(res => res.json())
-      .then(data => {
-        const profiles = (data.profiles || []).map((p: Record<string, unknown>) => ({
-          id: p.id as string,
-          name: (p.name as string) || '',
-          provider: (p.provider as string) || '',
-          modelName: (p.modelName as string) || '',
-        }))
-        cachedProfiles = profiles
-        fetchPromise = null
-        return profiles
-      })
-      .catch(() => {
-        fetchPromise = null
-        return [] as ConnectionProfileInfo[]
-      })
-
-    return fetchPromise
-  } catch {
-    fetchPromise = null
-    return []
-  }
+interface ConnectionProfilesResponse {
+  profiles?: Array<Record<string, unknown>>
 }
 
+function mapProfiles(data: ConnectionProfilesResponse): ConnectionProfileInfo[] {
+  return (data.profiles || []).map((p) => ({
+    id: p.id as string,
+    name: (p.name as string) || '',
+    provider: (p.provider as string) || '',
+    modelName: (p.modelName as string) || '',
+  }))
+}
+
+const EMPTY_PROFILES: ConnectionProfileInfo[] = []
+
 /**
- * Hook to fetch and cache connection profiles.
- * Used to resolve a connection profile ID to its provider/model info.
+ * Hook to fetch and cache connection profiles, resolving a profile ID to its
+ * provider/model info. Backed by the shared TanStack Query cache (dedups by key);
+ * a long staleTime preserves its reference-data "fetch once, share everywhere" feel.
  */
 export function useConnectionProfiles() {
-  const [profiles, setProfiles] = useState<ConnectionProfileInfo[]>(cachedProfiles || [])
-  const [loading, setLoading] = useState(!cachedProfiles)
-
-  useEffect(() => {
-    // If cache was populated between render and effect, skip fetch
-    if (cachedProfiles) return
-
-    let cancelled = false
-    fetchProfiles().then(result => {
-      if (!cancelled) {
-        setProfiles(result)
-        setLoading(false)
-      }
-    })
-    return () => { cancelled = true }
-  }, [])
+  const { data: profiles = EMPTY_PROFILES, isLoading: loading } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) => apiFetch<ConnectionProfilesResponse>('/api/v1/connection-profiles', { signal }),
+    select: mapProfiles,
+    staleTime: Infinity,
+  })
 
   return {
     profiles,

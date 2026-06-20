@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import type {
   OutfitSelectionMode,
   WardrobeItem,
@@ -76,6 +77,10 @@ export interface OutfitSelectorProps {
    */
   sourceChatId?: string | null
   previousOutfitSummary?: PreviousOutfitSummary | null
+  /** Project the new chat will belong to — folds the project wardrobe tier into manual pickers. */
+  projectId?: string | null
+  /** Existing chat (when adding a participant) — the project tier is derived from it. */
+  chatId?: string | null
 }
 
 // ============================================================================
@@ -111,6 +116,10 @@ interface CharacterOutfitSectionProps {
    * "Same as last conversation" option.
    */
   previousChatSlots?: Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', Array<{ itemId: string; title: string }>>> | null
+  /** Project this chat will belong to — folds the project wardrobe tier into the picker. */
+  projectId?: string | null
+  /** Existing chat (when adding a participant) — the project tier is derived from it. */
+  chatId?: string | null
 }
 
 function CharacterOutfitSection({
@@ -121,14 +130,17 @@ function CharacterOutfitSection({
   showHeader,
   showPreviousChatOption,
   previousChatSlots,
+  projectId,
+  chatId,
 }: CharacterOutfitSectionProps) {
   const [expanded, setExpanded] = useState(false)
   const [internalMode, setInternalMode] = useState<OutfitSelectionMode>(selection.mode)
 
-  // Load wardrobe (personal + archetypes) only when we're in manual mode.
-  // The hook returns an empty list before items are needed.
+  // Load wardrobe (personal + project + archetypes) only when we're in manual
+  // mode. The hook returns an empty list before items are needed.
   const { items: allWardrobeItems, loading: loadingWardrobe } = useCharacterWardrobeItems(
     internalMode === 'manual' ? character.id : null,
+    { projectId, chatId },
   )
   const wardrobeFetched = !loadingWardrobe && allWardrobeItems.length > 0
 
@@ -314,19 +326,7 @@ function CharacterOutfitSection({
           disabled={disabled}
         >
           <span className="text-sm font-medium qt-text-primary">{character.name}</span>
-          <svg
-            className={`w-4 h-4 qt-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
+          <Icon name="chevron-down" className={`w-4 h-4 qt-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
         </button>
       )}
 
@@ -428,6 +428,8 @@ export function OutfitSelector({
   disabled,
   sourceChatId,
   previousOutfitSummary,
+  projectId,
+  chatId,
 }: OutfitSelectorProps) {
   // In continuation mode, default each character to "Same as last conversation"
   // so the chat picks up where the previous one left off without the user
@@ -481,6 +483,8 @@ export function OutfitSelector({
           showHeader={showHeaders}
           showPreviousChatOption={Boolean(sourceChatId)}
           previousChatSlots={previousOutfitSummary?.[char.id] ?? null}
+          projectId={projectId}
+          chatId={chatId}
         />
       ))}
     </div>

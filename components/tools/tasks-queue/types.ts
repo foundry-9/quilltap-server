@@ -43,4 +43,6 @@ export interface QueueData {
   jobs: JobDetail[]
   totalEstimatedTokens: number
   processorStatus: ProcessorStatus
+  /** Global cap on how many background jobs run at once (1-32, default 4). */
+  maxConcurrentJobs: number
 }

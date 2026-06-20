@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
-import useSWR from 'swr'
 import { SearchResults } from './search-results'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
@@ -243,19 +243,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
           {/* Search input */}
           <div className="p-4 border-b qt-border-default">
             <div className="relative">
-              <svg
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 qt-text-secondary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                />
-              </svg>
+              <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 qt-text-secondary" />
               <input
                 ref={inputRef}
                 type="text"
@@ -279,9 +267,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 qt-text-secondary hover:text-foreground"
                   aria-label="Clear search"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <Icon name="close" className="w-5 h-5" />
                 </button>
               )}
             </div>
@@ -340,10 +326,10 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
           {/* Footer with keyboard shortcuts */}
           <div className="px-4 py-2 border-t qt-border-default qt-bg-muted qt-text-xs flex justify-between">
             <span>
-              <kbd className="px-1.5 py-0.5 bg-accent rounded">↵</kbd> to search
+              <kbd className="px-1.5 py-0.5 qt-bg-accent qt-text-on-accent rounded">↵</kbd> to search
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-accent rounded">Esc</kbd> to close
+              <kbd className="px-1.5 py-0.5 qt-bg-accent qt-text-on-accent rounded">Esc</kbd> to close
             </span>
           </div>
         </div>

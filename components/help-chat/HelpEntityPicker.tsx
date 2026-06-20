@@ -9,7 +9,10 @@
  */
 
 import { useState, useMemo } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { Icon } from '@/components/ui/icon'
 
 /** Maps URL param patterns to their entity type and API source */
 interface ParamRoute {
@@ -90,9 +93,11 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
   const route = useMemo(() => findParamRoute(urlTemplate), [urlTemplate])
   const [filter, setFilter] = useState('')
 
-  const { data: fetchedData, isLoading, error: loadError } = useSWR<Record<string, unknown>>(
-    route ? route.apiUrl : null
-  )
+  const { data: fetchedData, isLoading, error: loadError } = useQuery({
+    queryKey: queryKeys.helpChat.entity(route?.apiUrl ?? ''),
+    queryFn: ({ signal }) => apiFetch<Record<string, unknown>>(route!.apiUrl, { signal }),
+    enabled: !!route,
+  })
 
   const items = useMemo(() => {
     if (!route || !fetchedData) return []
@@ -103,7 +108,7 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
     }))
   }, [route, fetchedData])
 
-  const error = !route ? 'Unknown entity type' : (loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load') : null)
+  const error = !route ? 'Unknown entity type' : (loadError ? ((loadError as ApiFetchError | null)?.message ?? 'Failed to load') : null)
   const loading = isLoading
 
   const filtered = useMemo(() => {
@@ -128,11 +133,9 @@ export function HelpEntityPicker({ urlTemplate, onSelect, onCancel }: HelpEntity
           <button
             type="button"
             onClick={onCancel}
-            className="p-0.5 rounded hover:bg-accent qt-text-secondary hover:text-foreground transition-colors"
+            className="p-0.5 rounded qt-hover-accent qt-text-secondary transition-colors"
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-3.5 h-3.5" />
           </button>
         </div>
 

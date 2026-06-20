@@ -35,11 +35,12 @@
 import path from 'path';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { transcodeToWebP, normaliseBlobRelativePath } from '@/lib/mount-index/blob-transcode';
+import { transcodeToWebP } from '@/lib/mount-index/blob-transcode';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentWritten } from '@/lib/mount-index/db-store-events';
+import { storeMountFile } from '@/lib/mount-index/store-file';
 import { buildMountBlobStorageKey } from './project-store-bridge';
-import { sanitizeLeafName, resolveUniqueRelativePath } from './bridge-path-helpers';
+import { sanitizeLeafName } from './bridge-path-helpers';
 
 interface CharacterVaultTarget {
   mountPointId: string;
@@ -125,6 +126,18 @@ interface WriteAvatarResult {
 export async function writeCharacterAvatarToVault(
   input: WriteAvatarInput
 ): Promise<WriteAvatarResult> {
+  // In the forked job child the DB connection is readonly and writes are
+  // buffered (no read-your-writes). The `linkBlobContent` insert below returns
+  // a server-generated `blobId`/`linkId` (deduped by sha, so it may reference a
+  // pre-existing blob) that gets baked into the returned `storageKey` and
+  // persisted into `files.create`; a buffered/synthetic id would dangle. Route
+  // the whole write to the parent's RW connection via host-RPC and return the
+  // real result. Mirrors `FileStorageManager.uploadFile`.
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client');
+    return callHost<WriteAvatarResult>('writeCharacterAvatarToVault', input);
+  }
+
   const target = await getCharacterVaultStore(input.characterId);
   if (!target) {
     throw new Error(
@@ -132,15 +145,22 @@ export async function writeCharacterAvatarToVault(
     );
   }
 
-  const repos = getRepositories();
-  const transcoded = await transcodeToWebP(input.content, input.contentType);
-
-  let relativePath: string;
-  let folderId: string | null;
-
+  // -------------------------------------------------------------------------
+  // `kind: 'main'` — overwrite the canonical main avatar in place.
+  //
+  // This path is intentionally NOT routed through storeMountFile because it
+  // requires a deleteWithGC of the existing link (which cascades to the blob
+  // row when it was the last reference) before writing the replacement.
+  // storeMountFile's 'overwrite' strategy calls deleteAtDest, which is
+  // filesystem-only and does not perform blob GC. Leaving this path as-is
+  // preserves the exact delete-then-insert semantics.
+  // -------------------------------------------------------------------------
   if (input.kind === 'main') {
-    relativePath = MAIN_AVATAR_PATH;
-    folderId = await ensureFolderPath(target.mountPointId, 'images');
+    const repos = getRepositories();
+    const transcoded = await transcodeToWebP(input.content, input.contentType);
+
+    const relativePath = MAIN_AVATAR_PATH;
+    const folderId = await ensureFolderPath(target.mountPointId, 'images');
 
     // Drop any existing link at the canonical main path. deleteWithGC
     // takes the underlying file and its blob along if this was the last
@@ -153,40 +173,68 @@ export async function writeCharacterAvatarToVault(
     if (existingLink) {
       await repos.docMountFileLinks.deleteWithGC(existingLink.id);
     }
-  } else {
-    const safeName = sanitizeLeafName(input.filename);
-    const desiredPath = `${HISTORY_FOLDER}/${safeName}`;
-    const basePath = normaliseBlobRelativePath(desiredPath, transcoded.storedMimeType);
-    relativePath = await resolveUniqueRelativePath(target.mountPointId, basePath);
-    folderId = await ensureFolderPath(target.mountPointId, HISTORY_FOLDER);
+
+    const safeOriginalName = sanitizeLeafName(input.filename);
+    const { link, blobId } = await repos.docMountFileLinks.linkBlobContent({
+      mountPointId: target.mountPointId,
+      relativePath,
+      fileName: path.posix.basename(relativePath),
+      folderId,
+      originalFileName: safeOriginalName || path.posix.basename(relativePath),
+      originalMimeType: input.contentType,
+      storedMimeType: transcoded.storedMimeType,
+      sha256: transcoded.sha256,
+      description: input.description ?? '',
+      data: transcoded.data,
+    });
+
+    emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
+    repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
+
+    return {
+      storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
+      mountPointId: target.mountPointId,
+      blobId,
+      linkId: link.id,
+      relativePath,
+      storedMimeType: transcoded.storedMimeType,
+      sizeBytes: transcoded.data.length,
+      sha256: transcoded.sha256,
+    };
   }
 
-  const safeOriginalName = sanitizeLeafName(input.filename);
-  const { link, blobId } = await repos.docMountFileLinks.linkBlobContent({
+  // -------------------------------------------------------------------------
+  // `kind: 'history'` — append a new blob with unique-suffix collision bumping.
+  //
+  // This path maps cleanly to storeMountFile (sanitize + unique-suffix +
+  // transcode + linkBlobContent), so it is delegated to the pipeline.
+  // -------------------------------------------------------------------------
+  const safeName = sanitizeLeafName(input.filename);
+  const desiredPath = `${HISTORY_FOLDER}/${safeName}`;
+
+  const result = await storeMountFile({
     mountPointId: target.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    folderId,
-    originalFileName: safeOriginalName || path.posix.basename(relativePath),
+    relativePath: desiredPath,
+    data: input.content,
     originalMimeType: input.contentType,
-    storedMimeType: transcoded.storedMimeType,
-    sha256: transcoded.sha256,
-    description: input.description ?? '',
-    data: transcoded.data,
+    originalFileName: safeName,
+    description: input.description,
+    collisionStrategy: 'unique-suffix',
+    treatNativeTextAsDocument: false,
+    transcodeImages: true,
+    extractText: false,
+    enqueueEmbedding: false,
+    assetStorage: 'database',
   });
 
-  emitDocumentWritten({ mountPointId: target.mountPointId, relativePath });
-  repos.docMountPoints.refreshStats(target.mountPointId).catch(() => { /* best-effort */ });
-
   return {
-    storageKey: buildMountBlobStorageKey(target.mountPointId, blobId),
-    mountPointId: target.mountPointId,
-    blobId,
-    linkId: link.id,
-    relativePath,
-    storedMimeType: transcoded.storedMimeType,
-    sizeBytes: transcoded.data.length,
-    sha256: transcoded.sha256,
+    storageKey: buildMountBlobStorageKey(result.mountPointId, result.blobId!),
+    mountPointId: result.mountPointId,
+    blobId: result.blobId!,
+    linkId: result.linkId!,
+    relativePath: result.relativePath,
+    storedMimeType: result.storedMimeType,
+    sizeBytes: result.sizeBytes,
+    sha256: result.sha256,
   };
 }
-

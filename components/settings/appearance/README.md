@@ -11,12 +11,15 @@ appearance/
 │   ├── useAppearanceSettings.ts   # Settings state management hook
 │   └── useThemePreview.ts         # Theme preview state hook
 ├── components/
-│   ├── ThemeCard.tsx              # Individual theme card component
+│   ├── ThemeCard.tsx              # Individual theme card component (Preview button opens the modal)
+│   ├── ThemePreviewModal.tsx      # Full-page theme preview modal (banner, live preview, gallery, icon sheet)
 │   ├── ThemeBrowser.tsx           # Registry browser for discovering/installing themes
 │   ├── ColorModeSelector.tsx      # Color mode selection component
 │   ├── DebugThemeInfo.tsx         # Development debug info component
 │   ├── ThemePreviewPanel.tsx      # Theme preview panel component
 │   └── ThemePreviewElements.tsx   # Theme preview elements component
+├── utils/
+│   └── contrast.ts                # Shared contrast/badge helpers (banner foreground computation)
 ├── DisplayOptions.tsx             # Display options container
 ├── ThemeSelector.tsx              # Theme selection container
 ├── index.tsx                      # Main appearance tab component
@@ -32,7 +35,7 @@ appearance/
 
 ### Theme Selection
 - Default theme with preview
-- Bundled themes (Art Deco, Earl Grey, Great Estate, Old School, Rains)
+- Bundled themes (Art Deco, Earl Grey, Great Estate, Madman's Box, Old School, Rains)
 - User-installed bundle themes (.qtap-theme format)
 - Legacy plugin-provided themes (deprecated, shown with badge)
 - Live preview of color swatches
@@ -41,6 +44,22 @@ appearance/
 - Install Theme button for uploading .qtap-theme files
 - Uninstall button for user-installed bundle themes
 - Export button for any theme
+
+### Theme Preview Modal
+- Opened by the **Preview** button on any theme card. One shared `ThemePreviewModal` instance is owned by `ThemeSelector`, driven by `previewThemeId` and keyed by theme so its local state resets per open
+- Themed banner header painted in the theme's own background color, with an accessible foreground computed from it (`utils/contrast.ts`) — fixes low-contrast headers on vivid themes
+- Light/Dark toggle that drives both the banner and the live `ThemePreviewPanel` (hidden when the theme has no dark mode)
+- Live element preview (reuses `ThemePreviewPanel` / `ThemePreviewElements`)
+- Image gallery built from manifest-referenced images only (`themeRegistry.getImages` → tokens endpoint `images`), alphabetical, over a checkerboard backing; empty state when the theme bundles none
+- Icon sheet rendering each overridden icon in four states (default / muted / hover / on-primary) inside a theme-scoped container so the bundled icon-override CSS and color tokens are in effect (uses `generateIconOverridesCSS(icons, scopePrefix)`); empty state when the theme overrides none
+- Apply / Export / Uninstall actions live in the banner
+
+### Icon Overrides
+- Active bundle themes can replace any of the 80 built-in icons via an `icons` map in `theme.json`
+- `.svg` overrides use mask mode (tinted by `currentColor`); `.webp` and other non-SVG formats use image mode (full color as authored)
+- `brand` is always image mode regardless of extension
+- Overrides are injected into the same `<style>` block as tokens — no reload, live theme-switch applies them instantly
+- Canonical icon names and the override recipe are documented in `docs/developer/ICON_INVENTORY.md` and the `@quilltap/theme-storybook` Icons story
 
 ### Theme Browser (Registry)
 - Browse themes from configured remote registries

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { Icon } from '@/components/ui/icon'
 
 interface HelpGuideSearchProps {
   value: string
@@ -12,10 +13,7 @@ export function HelpGuideSearch({ value, onChange }: HelpGuideSearchProps) {
 
   return (
     <div className="qt-help-guide-search">
-      <svg className="qt-help-guide-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
+      <Icon name="search" className="qt-help-guide-search-icon" />
       <input
         ref={inputRef}
         type="text"
@@ -32,9 +30,7 @@ export function HelpGuideSearch({ value, onChange }: HelpGuideSearchProps) {
           className="qt-help-guide-search-clear"
           aria-label="Clear search"
         >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+          <Icon name="close" className="w-3.5 h-3.5" />
         </button>
       )}
     </div>

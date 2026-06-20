@@ -15,6 +15,7 @@ export { ImageGenerationCard } from './ImageGenerationCard'
 export { ChatsSection } from './ChatsSection'
 export { DocumentStoresCard } from './DocumentStoresCard'
 export { ScenariosCard } from './ScenariosCard'
+export { WardrobeCard } from './WardrobeCard'
 
 // Legacy tab components (kept for backwards compatibility)
 export { ProjectTabs } from './ProjectTabs'

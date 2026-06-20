@@ -5,7 +5,8 @@
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals'
 import { renderHook, waitFor } from '@testing-library/react'
-import { useUserCharacterDisplayName, resetDisplayNameCache } from '@/hooks/usePersonaDisplayName'
+import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
+import { createQueryWrapper } from '../../helpers/renderWithQuery'
 
 // Mock fetch
 global.fetch = jest.fn()
@@ -13,9 +14,13 @@ global.fetch = jest.fn()
 describe('useUserCharacterDisplayName', () => {
   const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>
 
+  // A fresh QueryClient per test replaces the old module-level cache reset:
+  // an isolated, empty cache means no cross-test bleed (retries off in the helper).
+  let wrapper: ReturnType<typeof createQueryWrapper>['wrapper']
+
   beforeEach(() => {
     jest.clearAllMocks()
-    resetDisplayNameCache()
+    wrapper = createQueryWrapper().wrapper
   })
 
   afterEach(() => {
@@ -29,7 +34,7 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       expect(result.current.loading).toBe(true)
     })
@@ -40,10 +45,13 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [],
       } as Response)
 
-      renderHook(() => useUserCharacterDisplayName())
+      renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith('/api/v1/characters?controlledBy=user')
+        expect(mockFetch).toHaveBeenCalledWith(
+          '/api/v1/characters?controlledBy=user',
+          expect.anything()
+        )
       })
     })
 
@@ -53,7 +61,7 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -71,7 +79,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -95,7 +103,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -116,7 +124,7 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -133,7 +141,7 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -153,7 +161,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -176,7 +184,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -202,7 +210,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -220,7 +228,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -236,7 +244,7 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [{ id: '1', name: 'Alice', title: 'Warrior' }],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -253,7 +261,7 @@ describe('useUserCharacterDisplayName', () => {
         status: 401,
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -271,7 +279,7 @@ describe('useUserCharacterDisplayName', () => {
     it('should handle network errors', async () => {
       mockFetch.mockRejectedValue(new Error('Network error'))
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -287,7 +295,7 @@ describe('useUserCharacterDisplayName', () => {
         status: 500,
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -308,7 +316,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -328,7 +336,7 @@ describe('useUserCharacterDisplayName', () => {
         }),
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -343,7 +351,7 @@ describe('useUserCharacterDisplayName', () => {
         json: async () => [],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)
@@ -364,7 +372,7 @@ describe('useUserCharacterDisplayName', () => {
         ],
       } as Response)
 
-      const { result } = renderHook(() => useUserCharacterDisplayName())
+      const { result } = renderHook(() => useUserCharacterDisplayName(), { wrapper })
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false)

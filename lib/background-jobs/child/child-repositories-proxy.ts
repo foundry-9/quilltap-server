@@ -204,6 +204,49 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'conversationChunks.upsert': 'write',
   // doc mount points
   'docMountPoints.refreshStats': 'write',
+  // doc-mount file-link content writers (database-backed stores). These
+  // INSERT/UPDATE doc_mount_files / doc_mount_documents|blobs / doc_mount_file_links
+  // via getRawMountIndexDatabase(), so they can only work in the child by being
+  // buffered (the child DB is readonly; the parent applies them on its RW
+  // connection). Their in-child callers — database-store.writeDatabaseDocument
+  // and file-ops.writeDestBytes, reached by doc_write_file / doc_copy_file during
+  // AUTONOMOUS_ROOM_TURN — DISCARD the return value, so the `undefined` synthetic
+  // write result (syntheticWriteResult only shapes create*/upsert*) is fine. A
+  // caller that consumes the return must NOT run in the child; see
+  // CHILD_UNSUPPORTED_METHODS for why linkFilesystemFile is deliberately excluded.
+  'docMountFileLinks.linkDocumentContent': 'write',
+  'docMountFileLinks.linkBlobContent': 'write',
+};
+
+/**
+ * Methods that must NOT run through the child proxy — neither as a read (the
+ * child's DB is readonly) nor as a buffered write — because a buffered write
+ * cannot satisfy a caller that consumes the method's *generated* row ids within
+ * the same job.
+ *
+ * Unlike {@link FORBIDDEN_METHODS} (which fall through to the generic
+ * "not classified" hint), these throw a tailored message so a future maintainer
+ * doesn't "fix" the throw with a naive `METHOD_OVERRIDES = 'write'` entry — that
+ * would actively corrupt state rather than fail loudly.
+ *
+ * `linkFilesystemFile` find-or-creates a file row + link row and returns their
+ * ids; its in-child callers (`scanner.processMountFile`, `reindexSingleFile`'s
+ * filesystem branch — both reached via doc_copy/doc_move to a *filesystem* mount
+ * and fire-and-forget reindex during a turn) immediately read `link.id` to insert
+ * chunk rows. A buffered write returns `undefined` (so `.id` throws) and, even
+ * with a synthetic id, the parent's real `linkFilesystemFile` mints its own link
+ * id, so the buffered chunks would dangle and the link's `chunkCount` would lie.
+ * This path must run on the parent (host-RPC) or be deferred; it is not
+ * child-safe. The throw is always caught by those best-effort callers, so the
+ * file is written but left unindexed — the same soft-fail as before this entry.
+ */
+const CHILD_UNSUPPORTED_METHODS: Record<string, string> = {
+  'docMountFileLinks.linkFilesystemFile':
+    'it find-or-creates a file+link row and returns ids that its callers ' +
+    '(scanner.processMountFile, reindexSingleFile) consume to insert chunk rows; ' +
+    'a buffered write cannot supply the parent-generated id, so chunks would ' +
+    'dangle. Run it on the parent (host-RPC) or defer it — see ' +
+    'docs/developer/BACKGROUND_JOBS_CHILD.md.',
 };
 
 /**
@@ -224,6 +267,9 @@ function classifyMethod(repoKey: string, methodName: string): 'read' | 'write' |
   const fqn = `${repoKey}.${methodName}`;
 
   if (FORBIDDEN_METHODS.has(fqn)) return 'unknown';
+  // Child-unsupported methods stay 'unknown' (→ tailored throw in wrapRepo) even
+  // if a future prefix change would otherwise classify them as a write.
+  if (CHILD_UNSUPPORTED_METHODS[fqn]) return 'unknown';
   if (METHOD_OVERRIDES[fqn]) return METHOD_OVERRIDES[fqn];
 
   // Lifecycle / introspection methods on every repo — pass through as reads.
@@ -350,8 +396,15 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
       // Unknown — throw at call time so the offending handler is named
       // in the stack trace, not at proxy construction time.
       return () => {
+        const fqn = `${repoKey}.${key}`;
+        const unsupportedReason = CHILD_UNSUPPORTED_METHODS[fqn];
+        if (unsupportedReason) {
+          throw new Error(
+            `Repository method "${fqn}" cannot run in the job child: ${unsupportedReason}`
+          );
+        }
         throw new Error(
-          `Repository method "${repoKey}.${key}" is not classified for child execution. ` +
+          `Repository method "${fqn}" is not classified for child execution. ` +
           `Add it to METHOD_OVERRIDES in lib/background-jobs/child/child-repositories-proxy.ts.`
         );
       };

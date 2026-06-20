@@ -13,16 +13,20 @@ import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
 import { FileTable } from './components'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
 import { formatBytes } from '@/lib/utils/format-bytes'
-import { PencilIcon, RefreshIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
+import dynamic from 'next/dynamic'
+import { deriveMountCapabilities } from '@/lib/mount-index/capabilities'
+import type { DocMountPoint } from '@/lib/schemas/mount-index.types'
 import type { UpdateDocumentStoreData } from '../types'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
-function ChevronLeftIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-    </svg>
-  )
-}
+// Heavy SVAR file manager (Phase 3) — lazy + client-only so the default
+// FileTable path never loads the SVAR runtime. Opt-in via the toggle below;
+// FileTable stays the default until parity is confirmed.
+const SvarFileManager = dynamic(
+  () => import('@/components/files/svar/SvarFileManager').then((m) => m.SvarFileManager),
+  { ssr: false, loading: () => <p className="qt-section-title p-6">Summoning the file manager…</p> }
+)
 
 export default function DocumentStoreDetailPage() {
   const params = useParams()
@@ -42,6 +46,8 @@ export default function DocumentStoreDetailPage() {
   } = useDocumentStoreDetail(storeId)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [useSvarFileManager, setUseSvarFileManager] = useState(false)
+  const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
   useEffect(() => {
     fetchStore()
@@ -81,14 +87,14 @@ export default function DocumentStoreDetailPage() {
     : 'Never'
 
   return (
-    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/scriptorium.webp)' } as React.CSSProperties}>
+    <div className="qt-page-container text-foreground" style={bgStyle}>
       {/* Header */}
       <div className="mb-6">
         <button
           onClick={() => router.push('/scriptorium')}
           className="inline-flex items-center gap-1 text-sm qt-text-secondary hover:text-foreground mb-4 transition-colors"
         >
-          <ChevronLeftIcon className="w-4 h-4" />
+          <Icon name="chevron-left" className="w-4 h-4" />
           Back to The Scriptorium
         </button>
 
@@ -120,14 +126,14 @@ export default function DocumentStoreDetailPage() {
               className={`qt-button-secondary inline-flex items-center gap-1.5 ${scanning || store.scanStatus === 'scanning' ? 'opacity-50 cursor-not-allowed' : ''}`}
               title={store.mountType === 'database' ? 'Rechunk all documents in this database-backed store' : undefined}
             >
-              <RefreshIcon className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
+              <Icon name="refresh" className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
               {scanning ? 'Scanning...' : store.mountType === 'database' ? 'Re-chunk' : 'Scan Now'}
             </button>
             <button
               onClick={() => setEditDialogOpen(true)}
               className="qt-button-secondary inline-flex items-center gap-1.5"
             >
-              <PencilIcon className="w-4 h-4" />
+              <Icon name="pencil" className="w-4 h-4" />
               Edit
             </button>
           </div>
@@ -213,14 +219,31 @@ export default function DocumentStoreDetailPage() {
           an Upload button in this table; filesystem stores get populated by
           scans. */}
       <div className="border-t qt-border-default/60 pt-6">
-        <h2 className="qt-heading-3 mb-4">Indexed Files</h2>
-        <FileTable
-          files={files}
-          loading={filesLoading}
-          mountPointId={store.id}
-          mountType={store.mountType}
-          onRefresh={fetchFiles}
-        />
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="qt-heading-3">Indexed Files</h2>
+          <button
+            onClick={() => setUseSvarFileManager((v) => !v)}
+            className="qt-button-ghost inline-flex items-center gap-1.5 text-sm"
+            title="Preview the new SVAR-powered file manager"
+          >
+            <Icon name="layers" className="w-4 h-4" />
+            {useSvarFileManager ? 'Classic view' : 'New file manager (beta)'}
+          </button>
+        </div>
+        {useSvarFileManager ? (
+          <SvarFileManager
+            mountId={store.id}
+            capabilities={deriveMountCapabilities(store as unknown as DocMountPoint)}
+          />
+        ) : (
+          <FileTable
+            files={files}
+            loading={filesLoading}
+            mountPointId={store.id}
+            mountType={store.mountType}
+            onRefresh={fetchFiles}
+          />
+        )}
       </div>
 
       {/* Edit dialog */}

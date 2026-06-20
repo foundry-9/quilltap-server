@@ -16,6 +16,7 @@ import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -63,7 +64,11 @@ import SaveImageDialog from './components/SaveImageDialog'
 import { TerminalPane } from './components/TerminalPane'
 import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
+import { resolveDocumentExistsForChat } from './hooks/documentModeApi'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
+import { QtapDocContext, type QtapDocOpener } from '@/components/chat/QtapDocContext'
+import type { QtapUriParts } from '@/lib/doc-edit/qtap-uri'
+import { Icon } from '@/components/ui/icon'
 
 export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -876,9 +881,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                 href={`/projects/${chat.projectId}`}
                 className="inline-flex items-center gap-1.5 qt-text-secondary hover:text-foreground transition-colors flex-shrink-0"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
+                <Icon name="folder" className="w-4 h-4" />
                 <span>{chat.projectName}</span>
               </a>
               <span className="qt-text-muted">/</span>
@@ -934,9 +937,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="qt-danger-badge flex-shrink-0"
               title="The Concierge is off-duty for this chat. No moderation, no rerouting — set from the sidebar's Chat section."
             >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-              </svg>
+              <Icon name="check-circle" className="w-3 h-3" />
               Off-duty
             </span>
           ) : chat.isDangerousChat ? (
@@ -944,9 +945,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               className="qt-danger-badge flex-shrink-0"
               title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
             >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
+              <Icon name="alert-triangle" className="w-3 h-3" />
               Flagged
             </span>
           ) : null}
@@ -982,9 +981,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
               title="LLM Inspector (Cmd+Shift+L)"
               aria-label="Toggle LLM Inspector"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <Icon name="code" className="w-4 h-4" />
             </button>
           )}
           {showChatTotals && (
@@ -1081,6 +1078,37 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     if (message.systemSender === 'ariel') {
       return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'suparna') {
+      return { name: 'Suparṇā', title: null, avatarUrl: '/images/avatars/suparna-avatar.webp', defaultImage: null }
+    }
+    // Carina (inline LLM queries): a reference answer renders with the ANSWERER
+    // character's own avatar — there is no dedicated Carina staff avatar. Resolve
+    // them via carinaMeta.answererId among participants, then off-scene cards,
+    // then a legible placeholder.
+    if (message.systemSender === 'carina') {
+      const answererId = message.carinaMeta?.answererId
+      // The Brahma Console pseudocharacter has no character record; render its
+      // reference card with the dedicated Brahma name + avatar.
+      if (answererId === BRAHMA_CARINA_ANSWERER_ID) {
+        return { name: 'Brahma', title: null, avatarUrl: '/images/avatars/brahma-avatar.webp', defaultImage: null }
+      }
+      if (answererId) {
+        const participant = chat?.participants.find(p => p.character?.id === answererId)
+        if (participant?.character) {
+          return {
+            name: participant.character.name,
+            title: participant.character.title ?? null,
+            avatarUrl: participant.character.avatarUrl ?? null,
+            defaultImage: participant.character.defaultImage ?? null,
+          }
+        }
+        const offScene = chat?.offSceneCharacters?.find(c => c.id === answererId)
+        if (offScene) {
+          return { name: offScene.name, title: offScene.title, avatarUrl: offScene.avatarUrl, defaultImage: null }
+        }
+      }
+      return { name: 'Carina', title: null, avatarUrl: null, defaultImage: null }
+    }
     if (message.participantId) {
       const participant = participantsWithImpersonation.getParticipantById(message.participantId)
       if (participant) {
@@ -1128,6 +1156,39 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const handleOpenDocument = useCallback(async (params: Parameters<typeof documentModeHook.openDocument>[0]) => {
     await documentModeHook.openDocument(params)
   }, [documentModeHook])
+
+  // Document-Mode bridge for clickable `qtap://` links in the transcript.
+  // Existence checks are cached by (scope, mountPoint, path) for the lifetime
+  // of this chat view so repeated links to one target share a single request.
+  const qtapExistsCacheRef = useRef<Map<string, Promise<boolean>>>(new Map())
+  const qtapDocOpener = useMemo<QtapDocOpener>(() => {
+    const keyFor = (p: QtapUriParts) => `${p.scope}|${p.mountPoint ?? ''}|${p.path}`
+    return {
+      checkExists: (parts: QtapUriParts) => {
+        const cache = qtapExistsCacheRef.current
+        const key = keyFor(parts)
+        const cached = cache.get(key)
+        if (cached) return cached
+        const pending = resolveDocumentExistsForChat(id, {
+          filePath: parts.path,
+          scope: parts.scope,
+          mountPoint: parts.mountPoint,
+        })
+          .then((r) => r.exists)
+          .catch(() => false)
+        cache.set(key, pending)
+        return pending
+      },
+      open: (parts: QtapUriParts) => {
+        void documentModeHook.openDocument({
+          filePath: parts.path,
+          scope: parts.scope,
+          mountPoint: parts.mountPoint,
+          mode: 'split',
+        })
+      },
+    }
+  }, [id, documentModeHook])
 
   const handleReattributed = useCallback(async () => {
     const messageId = modals.reattributeDialogState?.messageId
@@ -1204,6 +1265,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   const isTerminalModeActive = terminalModeHook.terminalMode !== 'normal'
 
   return (
+    <QtapDocContext.Provider value={qtapDocOpener}>
     <TerminalModeContext.Provider value={terminalCtxValue}>
     <div
       className="qt-chat-layout"
@@ -1371,6 +1433,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           onLibraryFileClick={modals.openLibraryFilePicker}
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onInsertAnnouncementClick={modals.openInsertAnnouncement}
+          onComposeMailClick={modals.openComposeMail}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
@@ -1511,6 +1574,8 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
           closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
           insertAnnouncementOpen={modals.insertAnnouncementOpen}
           closeInsertAnnouncement={modals.closeInsertAnnouncement}
+          composeMailOpen={modals.composeMailOpen}
+          closeComposeMail={modals.closeComposeMail}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}
           reattributeDialogState={modals.reattributeDialogState}
@@ -1671,5 +1736,6 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
 
     </div>
     </TerminalModeContext.Provider>
+    </QtapDocContext.Provider>
   )
 }

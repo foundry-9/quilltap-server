@@ -43,6 +43,7 @@ async function handleGetTokens(themeId: string): Promise<Response> {
   const theme = themeRegistry.get(themeId);
   const tokens = themeRegistry.getTokens(themeId);
   const loadedFonts = themeRegistry.getFonts(themeId);
+  const loadedIcons = themeRegistry.getIcons(themeId);
   const cssOverrides = themeRegistry.getCSSOverrides(themeId);
 
   const fonts = loadedFonts.map(font => ({
@@ -55,9 +56,21 @@ async function handleGetTokens(themeId: string): Promise<Response> {
     display: font.display,
   }));
 
-  const subsystems = theme?.subsystems || undefined;
+  // Icon overrides resolve through the existing assets route (not the fonts route).
+  // The assets route serves with `Cache-Control: immutable`, so the URL must
+  // change when the theme changes — version the query string or browsers keep
+  // serving a prior release's glyph from cache. The extension sniff in
+  // generateIconOverrideRule strips the query before deciding mask vs image.
+  const iconVersion = encodeURIComponent(theme?.version || '0');
+  const icons = loadedIcons.map(icon => ({
+    name: icon.name,
+    src: `/api/themes/assets/${icon.pluginName}/${icon.src}?v=${iconVersion}`,
+  }));
 
-  return successResponse({ tokens, fonts, cssOverrides, subsystems });
+  const subsystems = theme?.subsystems || undefined;
+  const images = themeRegistry.getImages(themeId);
+
+  return successResponse({ tokens, fonts, icons, cssOverrides, subsystems, images });
 }
 
 /**

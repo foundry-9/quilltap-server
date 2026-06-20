@@ -8,6 +8,9 @@
 
 import { randomUUID } from 'crypto'
 import { UuidRemapper, createUuidRemapper } from '@/lib/backup/uuid-remapper'
+import { remapBackupData } from '@/lib/backup/restore/uuid-remap'
+import type { BackupData } from '@/lib/backup/types'
+import type { Project } from '@/lib/schemas/types'
 
 jest.mock('crypto', () => ({
   randomUUID: jest.fn(),
@@ -463,5 +466,152 @@ describe('UuidRemapper', () => {
       expect(remapper1.getSize()).toBe(1)
       expect(remapper2.getSize()).toBe(1)
     })
+  })
+})
+
+describe('remapBackupData() - project FK remapping', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  // Minimal BackupData with all required arrays empty; callers override only
+  // the slices a test exercises. remapBackupData does no Zod validation, so
+  // partial fixtures cast through `unknown` are sufficient.
+  const emptyBackup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+  })
+
+  it('remaps project.defaultImageProfileId to the same new id as its image profile', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      imageProfiles: [{ id: 'img-old' }] as unknown as BackupData['imageProfiles'],
+      projects: [{ id: 'proj-old', defaultImageProfileId: 'img-old' }] as unknown as Project[],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newImageProfileId = remapper.getMapping()['img-old']
+    expect(newImageProfileId).toBeDefined()
+    expect(result.imageProfiles[0].id).toBe(newImageProfileId)
+    // The bug being guarded: a dangling defaultImageProfileId on import.
+    // It must follow the image profile it references, not survive verbatim.
+    expect(result.projects[0].defaultImageProfileId).toBe(newImageProfileId)
+    expect(result.projects[0].defaultImageProfileId).not.toBe('img-old')
+    expect(result.projects[0].id).toBe(remapper.getMapping()['proj-old'])
+  })
+
+  it('also remaps project.defaultRoleplayTemplateId (sibling FK in the same field list)', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      roleplayTemplates: [{ id: 'tmpl-old' }] as unknown as BackupData['roleplayTemplates'],
+      projects: [{ id: 'proj-old', defaultRoleplayTemplateId: 'tmpl-old' }] as unknown as Project[],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newTemplateId = remapper.getMapping()['tmpl-old']
+    expect(newTemplateId).toBeDefined()
+    expect(result.projects[0].defaultRoleplayTemplateId).toBe(newTemplateId)
+  })
+
+  it('leaves a null defaultImageProfileId untouched', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      projects: [{ id: 'proj-old', defaultImageProfileId: null }] as unknown as Project[],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    expect(result.projects[0].defaultImageProfileId).toBeNull()
+  })
+})
+
+describe('remapBackupData() - group FK remapping', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  const emptyBackup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+  })
+
+  it('remaps group membership so groupId/characterId follow the rows they reference', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      characters: [{ id: 'char-old' }] as unknown as BackupData['characters'],
+      groups: [{ id: 'group-old', name: 'The Conspirators' }] as unknown as BackupData['groups'],
+      groupCharacterMembers: [
+        { id: 'member-old', groupId: 'group-old', characterId: 'char-old' },
+      ] as unknown as BackupData['groupCharacterMembers'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newGroupId = remapper.getMapping()['group-old']
+    const newCharacterId = remapper.getMapping()['char-old']
+    expect(newGroupId).toBeDefined()
+    expect(newCharacterId).toBeDefined()
+    // The whole point of the fix: membership must point at the remapped group
+    // and character, not survive with stale ids that reference nothing.
+    expect(result.groups?.[0].id).toBe(newGroupId)
+    expect(result.characters[0].id).toBe(newCharacterId)
+    expect(result.groupCharacterMembers?.[0].groupId).toBe(newGroupId)
+    expect(result.groupCharacterMembers?.[0].characterId).toBe(newCharacterId)
+    expect(result.groupCharacterMembers?.[0].id).toBe(remapper.getMapping()['member-old'])
+  })
+
+  it('remaps a group↔store link so groupId/mountPointId stay consistent', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      groups: [{ id: 'group-old', name: 'The Conspirators' }] as unknown as BackupData['groups'],
+      docMountPoints: [{ id: 'mount-old' }] as unknown as BackupData['docMountPoints'],
+      groupDocMountLinks: [
+        { id: 'link-old', groupId: 'group-old', mountPointId: 'mount-old' },
+      ] as unknown as BackupData['groupDocMountLinks'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newGroupId = remapper.getMapping()['group-old']
+    const newMountId = remapper.getMapping()['mount-old']
+    expect(result.docMountPoints?.[0].id).toBe(newMountId)
+    expect(result.groupDocMountLinks?.[0].groupId).toBe(newGroupId)
+    expect(result.groupDocMountLinks?.[0].mountPointId).toBe(newMountId)
+    expect(result.groupDocMountLinks?.[0].groupId).not.toBe('group-old')
   })
 })

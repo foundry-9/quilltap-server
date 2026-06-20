@@ -1,6 +1,7 @@
 'use client'
 
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
+import { Icon } from '@/components/ui/icon'
 
 interface PendingToolCall {
   id: string
@@ -41,9 +42,7 @@ export function PendingToolCalls({ pendingToolCalls, embedded = false, beforePro
   const details = (
     <details className="group" open={pendingToolCalls.some(tc => tc.status === 'pending')}>
           <summary className="px-4 py-2 rounded-lg qt-bg-muted border qt-border-default cursor-pointer list-none flex items-center gap-2">
-            <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <Icon name="chevron-right" className="w-4 h-4 transition-transform group-open:rotate-90" />
             <span className="text-sm qt-text-primary">
               {pendingToolCalls.map(tc => DISPLAY_NAMES[tc.name] || tc.name).join(', ')}
             </span>

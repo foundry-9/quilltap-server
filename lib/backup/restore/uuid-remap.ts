@@ -31,6 +31,7 @@ import type {
   PromptTemplate,
   RoleplayTemplate,
   Project,
+  Group,
   LLMLog,
   PluginConfig,
   CharacterPluginData,
@@ -49,6 +50,8 @@ import type {
   DocMountDocument,
   DocMountBlobMetadata,
   ProjectDocMountLink,
+  GroupDocMountLink,
+  GroupCharacterMember,
 } from '@/lib/schemas/mount-index.types';
 
 /**
@@ -239,11 +242,18 @@ export function remapBackupData(
   // Remap projects
   const remappedProjects = data.projects.map((project) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId']),
+      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
       ['characterRoster']
     ),
     userId: targetUserId,
   })) as Project[];
+
+  // Remap groups. Only the id needs remapping — like projects, the
+  // officialMountPointId is discarded and re-provisioned by `groups.create`, so
+  // it's intentionally left alone (membership/links carry the group id forward).
+  const remappedGroups = (data.groups || []).map((group) => ({
+    ...remapper.remapFields(group, ['id']),
+  })) as Group[];
 
   // Remap LLM logs
   const remappedLLMLogs = data.llmLogs.map((log) => ({
@@ -373,6 +383,15 @@ export function remapBackupData(
   const remappedProjectDocMountLinks = (data.projectDocMountLinks || []).map((link) => ({
     ...remapper.remapFields(link, ['id', 'projectId', 'mountPointId']),
   })) as ProjectDocMountLink[];
+  // Group join tables — direct analogues. groupId/characterId resolve to the
+  // same new ids the group/character rows received (remap is consistent by
+  // original id, so order within this function doesn't matter).
+  const remappedGroupDocMountLinks = (data.groupDocMountLinks || []).map((link) => ({
+    ...remapper.remapFields(link, ['id', 'groupId', 'mountPointId']),
+  })) as GroupDocMountLink[];
+  const remappedGroupCharacterMembers = (data.groupCharacterMembers || []).map((member) => ({
+    ...remapper.remapFields(member, ['id', 'groupId', 'characterId']),
+  })) as GroupCharacterMember[];
 
   // Instance settings — only the mount-point keys carry UUIDs we need to
   // remap. Everything else is opaque text (numbers, JSON config blobs).
@@ -397,6 +416,7 @@ export function remapBackupData(
     roleplayTemplates: remappedRoleplayTemplates,
     providerModels: remappedProviderModels,
     projects: remappedProjects,
+    groups: remappedGroups,
     llmLogs: remappedLLMLogs,
     pluginConfigs: remappedPluginConfigs,
     chatSettings: remappedChatSettings,
@@ -423,6 +443,8 @@ export function remapBackupData(
     docMountDocuments: remappedDocMountDocuments,
     docMountBlobs: remappedDocMountBlobs,
     projectDocMountLinks: remappedProjectDocMountLinks,
+    groupDocMountLinks: remappedGroupDocMountLinks,
+    groupCharacterMembers: remappedGroupCharacterMembers,
     // Text replacement rules: global config, no userId, no FKs to remapped
     // entities, and nothing references rule IDs — pass through unchanged.
     textReplacementRules: data.textReplacementRules || [],

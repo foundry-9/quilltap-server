@@ -114,6 +114,26 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
+  // Orienting context (background only, never a memory source): the project's
+  // description lets the extractor judge a memory's scope; the rolling chat
+  // summary frames its temporal hinge. Both ride in the prompt footer. The
+  // project lookup is guarded — a broken project store must not sink the whole
+  // extraction, so we degrade to no project description.
+  const chatContextSummary = chat.contextSummary ?? null;
+  let projectDescription: string | null = null;
+  if (chat.projectId) {
+    try {
+      const project = await repos.projects.findById(chat.projectId);
+      projectDescription = project?.description ?? null;
+    } catch (error) {
+      logger.debug('[MemoryExtraction] Project description unavailable; continuing without it', {
+        jobId: job.id,
+        chatId: payload.chatId,
+        projectId: chat.projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   // Anchor derived memories to the historical chat timestamp rather than
   // letting createdAt default to "now". Without this, a regenerate sweep
   // re-extracts a chat from 2025-08 and the new memory rows look like
@@ -140,6 +160,9 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     transcript,
     participantCharacters,
     chatId: payload.chatId,
+    projectId: chat.projectId ?? null,
+    projectDescription,
+    chatContextSummary,
     userId: job.userId,
     connectionProfile,
     cheapLLMSettings: chatSettings.cheapLLMSettings,

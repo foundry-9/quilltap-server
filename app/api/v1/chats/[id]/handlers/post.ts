@@ -40,11 +40,13 @@ import {
   handleOpenDocument,
   handleCloseDocument,
   handleReadDocument,
+  handleResolveDocument,
   handleWriteDocument,
   handleRenameDocument,
   handleDeleteDocument,
   handleInsertAnnouncement,
   handleAnnouncementPreview,
+  handleSendMail,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -81,11 +83,13 @@ const CHAT_POST_ACTIONS = [
   'open-document',
   'close-document',
   'read-document',
+  'resolve-document',
   'write-document',
   'rename-document',
   'delete-document',
   'announcement',
   'announcement-preview',
+  'send-mail',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -144,11 +148,13 @@ export async function handlePost(
     'open-document': () => handleOpenDocument(req, chatId, ctx),
     'close-document': () => handleCloseDocument(chatId, ctx),
     'read-document': () => handleReadDocument(req, chatId, ctx),
+    'resolve-document': () => handleResolveDocument(req, chatId, ctx),
     'write-document': () => handleWriteDocument(req, chatId, ctx),
     'rename-document': () => handleRenameDocument(req, chatId, ctx),
     'delete-document': () => handleDeleteDocument(chatId, ctx),
     announcement: () => handleInsertAnnouncement(req, chatId, ctx),
     'announcement-preview': () => handleAnnouncementPreview(req, chatId, ctx),
+    'send-mail': () => handleSendMail(req, chatId, chat, ctx),
   };
 
   return actionHandlers[action]();

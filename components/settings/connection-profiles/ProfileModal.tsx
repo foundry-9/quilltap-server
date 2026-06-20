@@ -10,6 +10,7 @@ import { FormActions } from '@/components/ui/FormActions'
 import { MODEL_CLASSES, getModelClass } from '@/lib/llm/model-classes'
 import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from './types'
 import { ProviderOptionsPanel } from './ProviderOptionsPanel'
+import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names'
 
 interface ProfileModalProps {
   isOpen: boolean
@@ -18,6 +19,8 @@ interface ProfileModalProps {
   profile?: ConnectionProfile | null
   apiKeys: ApiKey[]
   providers: ProviderConfig[]
+  /** Normalized names already taken by other profiles (duplicate-name guard). */
+  takenNames: Set<string>
   form: {
     formData: ProfileFormData
     setField: (name: keyof ProfileFormData, value: any) => void
@@ -47,6 +50,7 @@ export function ProfileModal({
   profile,
   apiKeys,
   providers,
+  takenNames,
   form,
   operations,
 }: ProfileModalProps) {
@@ -179,7 +183,12 @@ export function ProfileModal({
 
   const reqs = operations.getProviderRequirements(form.formData.provider)
   const isCourier = form.formData.transport === 'courier'
-  const isValid = form.formData.name.trim() && form.formData.modelName.trim()
+  // Names must be unique per user (case-insensitive). `takenNames` already
+  // excludes the profile being edited, so re-saving an unchanged name is fine.
+  const nameTaken =
+    form.formData.name.trim().length > 0 &&
+    takenNames.has(normalizeProfileName(form.formData.name))
+  const isValid = form.formData.name.trim() && form.formData.modelName.trim() && !nameTaken
 
   // Active provider's options schema (if the plugin exposes one)
   const activeProviderConfig = providers.find((p) => p.name === form.formData.provider)
@@ -231,9 +240,12 @@ export function ProfileModal({
   const handleModelChange = (modelName: string) => {
     form.setField('modelName', modelName)
 
-    // Auto-fill name with PROVIDER/MODEL if name is empty and this is a new profile
+    // Auto-fill name with PROVIDER/MODEL if name is empty and this is a new
+    // profile. A second profile on the same provider+model is exactly the
+    // case where the obvious name collides, so suffix it until it's unique.
     if (!profile?.id && !form.formData.name.trim() && modelName.trim()) {
-      form.setField('name', `${form.formData.provider}/${modelName}`)
+      const suggested = makeUniqueProfileName(`${form.formData.provider}/${modelName}`, takenNames)
+      form.setField('name', suggested)
     }
   }
 
@@ -294,6 +306,11 @@ export function ProfileModal({
                   className="qt-input"
                   autoFocus
                 />
+                {nameTaken && (
+                  <p className="qt-text-error qt-text-xs mt-1">
+                    Another connection profile already bears this name. Names must be unique.
+                  </p>
+                )}
               </div>
 
               {!isCourier && (

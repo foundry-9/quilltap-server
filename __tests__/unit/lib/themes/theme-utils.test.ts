@@ -9,6 +9,8 @@ import {
   getThemeDifferences,
   generateFontFaceRule,
   generateFontFacesCSS,
+  generateIconOverrideRule,
+  generateIconOverridesCSS,
   generateScopedThemeCSS,
 } from '@/lib/themes/utils'
 import { DEFAULT_THEME_TOKENS, getDefaultThemeTokens } from '@/lib/themes/default-tokens'
@@ -353,6 +355,85 @@ describe('theme utility helpers', () => {
 
       const optionalRule = generateFontFaceRule({ family: 'F', src: '/f.woff2', display: 'optional' })
       expect(optionalRule).toContain('font-display: optional')
+    })
+  })
+
+  describe('icon override generation', () => {
+    it('generates a mask-mode rule for .svg overrides (keeps currentColor)', () => {
+      const rule = generateIconOverrideRule({
+        name: 'chat',
+        src: '/api/themes/assets/bundle:x/icons/chat.svg',
+      })
+      expect(rule).toContain('[data-icon="chat"]')
+      expect(rule).toContain('--_qt-icon-mask: url("/api/themes/assets/bundle:x/icons/chat.svg")')
+      expect(rule).toContain('--_qt-icon-bg: none')
+      expect(rule).toContain('background-color: currentColor')
+    })
+
+    it('generates an image-mode rule for .webp overrides (full colour)', () => {
+      const rule = generateIconOverrideRule({
+        name: 'prospero',
+        src: '/api/themes/assets/bundle:x/icons/prospero.webp',
+      })
+      expect(rule).toContain('[data-icon="prospero"]')
+      expect(rule).toContain('--_qt-icon-bg: url("/api/themes/assets/bundle:x/icons/prospero.webp")')
+      expect(rule).toContain('--_qt-icon-mask: none')
+      expect(rule).toContain('background-color: transparent')
+    })
+
+    it('masks an .svg brand override like any other icon (currentColor tint)', () => {
+      const rule = generateIconOverrideRule({
+        name: 'brand',
+        src: '/api/themes/assets/bundle:x/icons/brand.svg',
+      })
+      expect(rule).toContain('--_qt-icon-mask: url("/api/themes/assets/bundle:x/icons/brand.svg")')
+      expect(rule).toContain('--_qt-icon-bg: none')
+      expect(rule).toContain('background-color: currentColor')
+    })
+
+    it('keeps image mode for a .webp brand override (full colour)', () => {
+      const rule = generateIconOverrideRule({
+        name: 'brand',
+        src: '/api/themes/assets/bundle:x/icons/brand.webp',
+      })
+      expect(rule).toContain('--_qt-icon-bg: url("/api/themes/assets/bundle:x/icons/brand.webp")')
+      expect(rule).toContain('--_qt-icon-mask: none')
+      expect(rule).toContain('background-color: transparent')
+    })
+
+    it('keeps mask mode for an .svg src carrying a cache-buster query string', () => {
+      const rule = generateIconOverrideRule({
+        name: 'settings',
+        src: '/api/themes/assets/bundle:x/icons/settings.svg?v=1.1.0',
+      })
+      expect(rule).toContain('--_qt-icon-mask: url("/api/themes/assets/bundle:x/icons/settings.svg?v=1.1.0")')
+      expect(rule).toContain('background-color: currentColor')
+    })
+
+    it('strips characters that could break out of url("...") (CSS injection guard)', () => {
+      const rule = generateIconOverrideRule({
+        name: 'chat',
+        src: '/x.webp") } body { display: none } a { background: url("y',
+      })
+      // Only the 4 structural quotes remain (data-icon="..." + url("...")); the
+      // injected quotes are stripped, so the payload can't close the url() early.
+      // Any leftover braces are now harmless literals inside the quoted url.
+      expect((rule.match(/"/g) || []).length).toBe(4)
+      expect(rule).not.toContain('"))')
+    })
+
+    it('generates a bundle of multiple icon override rules', () => {
+      const bundle = generateIconOverridesCSS([
+        { name: 'chat', src: '/icons/chat.svg' },
+        { name: 'prospero', src: '/icons/prospero.webp' },
+      ])
+      expect(bundle.split('[data-icon=').length - 1).toBe(2)
+      expect(bundle).toContain('[data-icon="chat"]')
+      expect(bundle).toContain('[data-icon="prospero"]')
+    })
+
+    it('handles empty icon array', () => {
+      expect(generateIconOverridesCSS([])).toBe('')
     })
   })
 

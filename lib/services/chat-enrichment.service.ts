@@ -209,7 +209,7 @@ export interface EnrichedChatSummary {
   storyBackground: EnrichedStoryBackground | null
   isDangerousChat: boolean
   conciergeOverride: 'OFF' | null
-  chatType: 'salon' | 'help' | 'autonomous'
+  chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
   /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
   scriptoriumStatus: 'none' | 'rendered' | 'embedded'
   _count: { messages: number; memories: number }
@@ -588,7 +588,7 @@ export async function enrichChatForList(
     storyBackground,
     isDangerousChat: chat.isDangerousChat === true,
     conciergeOverride: chat.conciergeOverride ?? null,
-    chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous',
+    chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma',
     scriptoriumStatus,
     _count: { messages: messageCount, memories: memoryCount },
     _allTagIds: allTagIds,

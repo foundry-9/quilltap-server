@@ -359,6 +359,30 @@
     color: var(--color-accent-foreground);
   }
 
+  /**
+   * Hoverable accent surface — for list rows, menu items, and option cards
+   * that should highlight on hover. On hover it paints the accent background
+   * AND forces the accent foreground onto the row and every descendant, so the
+   * whole row stays legible even on themes where --color-accent is a bold
+   * colour (e.g. Madman's Box amber). Without the descendant flip, children
+   * carrying their own colour (qt-text-small, qt-text-primary, …) would wash
+   * out — or, when their colour matches the accent, vanish entirely.
+   *
+   * The descendant selector is wrapped in :where() to keep specificity low for
+   * the *resting* state (children own their colour as usual); the :hover rules
+   * still win because the hover pseudo-class adds the deciding specificity.
+   */
+  .qt-hover-accent {
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .qt-hover-accent:hover {
+    background-color: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+  .qt-hover-accent:hover :where(*) {
+    color: var(--color-accent-foreground);
+  }
+
   /* ==========================================================================
      SHADOW UTILITIES
      ========================================================================== */

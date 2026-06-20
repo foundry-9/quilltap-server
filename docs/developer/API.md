@@ -6,11 +6,19 @@ API reference for Quilltap v4.3 and later.
 >
 > - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert actions, and per-project linking
 > - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
-> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
-> - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, `create_wardrobe_item`, `update_outfit_item`. The unified search tool is now named `search` (was `search_memories`).
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, and the `wardrobe_*` family (`wardrobe_list`/`wardrobe_read`/`wardrobe_wear`/`wardrobe_take_off`/`wardrobe_create`/`wardrobe_update`/`wardrobe_archive`). The unified search tool is now named `search` (was `search_memories`).
 > - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
-> - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`. See `lib/schemas/chat.types.ts`.
+> - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`, `carina`, `suparna`. See `lib/schemas/chat.types.ts`.
 > - **`systemTransparency` on characters** — per-character covenant toggle.
+>
+> **Freshness note (v4.7-dev):** Additions since v4.3:
+>
+> - **Brahma Console** (`/api/v1/brahma-console`) — a character-less, memory-free generic-LLM surface with its own collection/item/messages endpoints (see [Brahma Console](#brahma-console)).
+> - **The Post Office** — inter-character mail. Two new chat actions: `POST /api/v1/chats/[id]?action=send-mail` (post a letter as a player-character) and `GET /api/v1/chats/[id]?action=mailbox&characterId=…` (list a player-character's mailbox). New LLM tools `send_mail` and `list_email`; deliveries are announced by the `suparna` Staff sender.
+> - **Carina** — inline LLM queries via `@Name:` / `@Name?` markup and the `ask_carina` tool; answers post as `systemSender: 'carina'` rendered with the answerer's own avatar. `@Brahma` reaches the Brahma Console as a Carina answerer.
+> - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
+> - **Scriptorium per-document policy flags** — mounted markdown may carry `embed` / `character_read` / `character_write` frontmatter flags (stored on `doc_mount_file_links`), governing characters only.
 
 ## Table of Contents
 
@@ -40,6 +48,7 @@ API reference for Quilltap v4.3 and later.
   - [Character Wardrobe](#character-wardrobe)
   - [Outfit Presets](#outfit-presets)
   - [Chats](#chats)
+  - [Brahma Console](#brahma-console)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
   - [Chat Files](#chat-files)
@@ -2267,6 +2276,60 @@ Edit the room's schedule, budget caps, visibility, destructive-tool authorizatio
 
 ---
 
+### The Post Office
+
+Inter-character mail. A player-character can post a letter to another character; delivered mail lands in the recipient's vault `Mail/` folder and is announced by the `suparna` Staff sender. Characters also reach this through the `send_mail` and `list_email` LLM tools.
+
+#### `POST /api/v1/chats/[id]?action=send-mail`
+
+Post a letter as a player-character. Anti-hijack safeguards apply in multi-character chats so a character can only send as itself.
+
+**Response**: `200 OK` with the delivered-letter result.
+
+#### `GET /api/v1/chats/[id]?action=mailbox&characterId=…`
+
+List the letters in a player-character's `Mail/` folder.
+
+**Response**: `200 OK` with the character's mailbox letters.
+
+---
+
+### Brahma Console
+
+A character-less, memory-free generic-LLM surface (`chatType: 'brahma'`). It forms no memories and is never moderated by the Concierge. Reachable from a Salon as the `@Brahma` Carina answerer; see `lib/services/brahma-console/`.
+
+#### `GET /api/v1/brahma-console`
+
+List the user's Brahma Console chats (most-recent first).
+
+#### `POST /api/v1/brahma-console`
+
+Create a new Brahma Console chat. Body: `{ connectionProfileId? }` (defaults to the user's default profile). Requires at least one connection profile to exist.
+
+**Response**: `201 Created` with the new chat.
+
+#### `GET /api/v1/brahma-console/[id]`
+
+Get chat details.
+
+#### `PATCH /api/v1/brahma-console/[id]`
+
+Rename the chat. With `?action=set-model`, switch the model and continue the same chat. (There is no `update-context` action — the console is not page-aware.)
+
+#### `DELETE /api/v1/brahma-console/[id]`
+
+Delete the chat.
+
+#### `POST /api/v1/brahma-console/[id]/messages`
+
+Send a message; returns an SSE stream. Body: `{ content }`.
+
+#### `GET /api/v1/brahma-console/[id]/messages`
+
+Load the chat's messages.
+
+---
+
 ### Chat Announcements
 
 Ad-hoc announcement messages — system or character bubbles inserted into the chat via the Salon's "Insert Announcement" composer.
@@ -3332,7 +3395,26 @@ Create a mount point. The body is validated: `basePath` is required for `filesys
 
 #### `GET /api/v1/mount-points/[id]`
 
-Get a single mount point with computed `embeddedChunkCount`.
+Get a single mount point with computed `embeddedChunkCount` and a derived `capabilities` block.
+
+The `capabilities` object is computed server-side (`deriveMountCapabilities`, `lib/mount-index/capabilities.ts`) from the mount's `mountType` + `conversionStatus` + `enabled` + `scanStatus` — it is **not persisted**. A file-manager UI should gate which verbs it offers off this block rather than re-deriving the rules client-side. A mount is "quiescent" when `enabled` and not mid-conversion; all mutating flags require quiescence, and `canConvert` additionally requires no scan in progress.
+
+```json
+{
+  "mountPoint": {
+    "...": "…DocMountPoint fields…",
+    "embeddedChunkCount": 137,
+    "capabilities": {
+      "canWrite": true,
+      "canDelete": true,
+      "canCreateFolder": true,
+      "canMoveIn": true,
+      "canMoveOut": true,
+      "canConvert": true
+    }
+  }
+}
+```
 
 #### `PATCH /api/v1/mount-points/[id]`
 
@@ -3414,6 +3496,61 @@ List indexed files plus the folder structure for a mount point.
 
 For filesystem/obsidian mounts the folder list is augmented with on-disk directories (so empty folders show up too). For database-backed mounts it comes from `doc_mount_folders`.
 
+#### `GET /api/v1/mount-points/[id]/files/[...path]`
+
+Read a single file's content. This is the canonical per-file read for the CLI and the Scriptorium file browser/editor; it resolves text documents, database blobs, and on-disk files uniformly.
+
+**Query Parameters**:
+- `encoding` — `utf-8` (default for text-like files) or `base64` (default for binary). Any file can be read as `base64`.
+- `offset`, `limit` — line window (UTF-8 reads only), mirroring `doc_read_file`.
+- `raw=1` (or `Accept: application/octet-stream`) — stream the raw bytes instead of a JSON envelope (used as an `<img>`/download source). Response headers include `Content-Type`, `Content-Length`, and `X-File-Sha256`.
+
+**Response** (JSON envelope): `200 OK`
+
+```json
+{
+  "mountPointId": "mp-uuid",
+  "relativePath": "notes/intro.md",
+  "encoding": "utf-8",
+  "content": "# Intro\n…",
+  "mtime": 1737000000000,
+  "sha256": "…",
+  "sizeBytes": 1234,
+  "mimeType": "text/markdown; charset=utf-8",
+  "fileType": "markdown",
+  "totalLines": 42,
+  "truncated": false
+}
+```
+
+#### `PUT /api/v1/mount-points/[id]/files/[...path]`
+
+Write (create or overwrite) a single file. Routes through the canonical ingest pipeline (`storeMountFile`): native text lands in `doc_mount_documents`, binary in `doc_mount_blobs` (with image→WebP transcode and PDF/DOCX text extraction) on database mounts, or on disk for filesystem mounts.
+
+**Request Body** (JSON):
+
+```json
+{ "content": "…", "encoding": "utf-8", "expected_mtime": 1737000000000, "force": false }
+```
+
+`encoding` is `utf-8` or `base64` (base64 lets you write any binary file as JSON). `expected_mtime` enables optimistic concurrency — a mismatch returns `409 Conflict` (code `CONFLICT`) so an editor can prompt to reload. Alternatively send `multipart/form-data` with a `file` field (plus optional `expected_mtime`/`force`) for large binaries.
+
+**Response**: `200 OK` — `{ mountPointId, relativePath, kind, fileType, sha256, sizeBytes, mimeType, mtime }`.
+
+#### `DELETE /api/v1/mount-points/[id]/files/[...path]`
+
+Delete a single file. `200 OK` with `{ deleted, mountPointId, path }`, or `404` when the path doesn't exist.
+
+#### `PATCH /api/v1/mount-points/[id]/files/[...path]`
+
+Update file metadata: `rename` (same-mount move) and/or `description` (binary blobs only).
+
+**Request Body** (at least one field required):
+
+```json
+{ "rename": "notes/renamed.md", "description": "Cover art" }
+```
+
 #### `POST /api/v1/mount-points/[id]/folders`
 
 Create a folder inside a mount point. The path is normalised and validated to prevent traversal or invalid filesystem segments.
@@ -3439,7 +3576,7 @@ List blob metadata (no bytes) for a mount point.
 
 #### `POST /api/v1/mount-points/[id]/blobs`
 
-Upload a blob via `multipart/form-data`. Image bitmaps are transcoded to WebP via `sharp`; WebP, SVG, and other MIME types are stored as-is. PDF and DOCX uploads have their text extracted into `doc_mount_blobs.extractedText` and are chunked for embedding so they become searchable.
+Upload a blob via `multipart/form-data`. Thin adapter over the canonical `storeMountFile` ingest pipeline (`assetStorage: 'database'`, so blob bytes stay in the mount-index DB even for filesystem mounts — keeping persisted `<img>` URLs resolvable). Image bitmaps are transcoded to WebP via `sharp`; WebP, SVG, and other MIME types are stored as-is. PDF and DOCX uploads have their text extracted into `doc_mount_blobs.extractedText` and are chunked for embedding so they become searchable. For new clients prefer the canonical `PUT .../files/[...path]` item route above.
 
 **Form fields**:
 - `file` (required) — the binary
@@ -3469,6 +3606,20 @@ Update the blob's `description`.
 #### `DELETE /api/v1/mount-points/[id]/blobs/[...path]`
 
 Delete the blob. If no blob is found at that path, the endpoint falls back to deleting the matching text document (and its chunks and `doc_mount_files` row).
+
+#### File & folder operations (action dispatch)
+
+Cross-mount and folder operations live on the `[id]` action-dispatch route (they take a destination mount or are mount-scoped, so they don't fit a single item path). All share the error-code → HTTP mapping in `lib/mount-index/file-op-status.ts` (404 not-found, 409 `DEST_EXISTS`/`CONFLICT`/`NOT_EMPTY`, 400 `INVALID_PATH`/`UNSUPPORTED`, 500 `VERIFY_FAILED`).
+
+- `POST /api/v1/mount-points/[id]?action=write-file` — multipart `file`/`path`/`force` write (legacy; prefer `PUT .../files/[...path]`).
+- `POST /api/v1/mount-points/[id]?action=delete-file` — JSON `{ path }`.
+- `POST /api/v1/mount-points/[id]?action=move-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Cross-mount move (rename / byte-copy / hard-link strategy chosen automatically). Returns `{ strategy, sourceSha256, destSha256, sizeBytes, ... }`.
+- `POST /api/v1/mount-points/[id]?action=copy-file` — JSON `{ sourcePath, destMountPointId, destPath, force? }`. Copies; hard-links when possible unless `force` forces a byte copy.
+- `POST /api/v1/mount-points/[id]?action=link-file` — JSON `{ sourcePath, destMountPointId, destPath }`. Creates a **true hard link** (db→db link row or POSIX `fs.link`); never byte-copies. Cross-storage or cross-device links return `400 UNSUPPORTED`. Never overwrites (`409 DEST_EXISTS`).
+- `POST /api/v1/mount-points/[id]?action=delete-folder` — JSON `{ path }`. Empty folders only (`409 NOT_EMPTY` otherwise).
+- `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
+
+> **Mount-point files vs. the file library (`/api/v1/files`).** These mount-point endpoints address content by **(mount, relative path)** and are the one surface for Scriptorium file CRUD. `/api/v1/files` is a separate **library** layer that addresses by **file id** and carries domain metadata the mount index has no columns for (category, generation prompt/model, `linkedTo` associations, tags, image dimensions, thumbnails, avatar back-references). Its uploads already persist bytes into mount stores via the storage bridges (which now funnel through `storeMountFile`), and `GET /api/v1/files/[id]` plus `/api/v1/files/proxy/[...key]` remain the stable, persisted read URLs for library assets. Use the mount-point routes for raw file content; use `/api/v1/files` for the library/metadata layer.
 
 ---
 
@@ -4215,7 +4366,27 @@ Resume a paused job.
 
 #### `GET /api/v1/system/tools?action=tasks-queue`
 
-Get tasks queue status.
+Get tasks queue status. The response includes `maxConcurrentJobs` — the current global background-job concurrency cap.
+
+#### `GET /api/v1/system/tools?action=job-concurrency`
+
+Get the global background-job concurrency cap (how many jobs of any type the dispatcher runs at once).
+
+**Response:**
+```json
+{ "success": true, "concurrency": 4 }
+```
+
+#### `POST /api/v1/system/tools?action=job-concurrency`
+
+Set the global background-job concurrency cap. Applies within ~2 s without a restart.
+
+**Body:**
+```json
+{ "concurrency": 8 }
+```
+
+`concurrency` is an integer in the range 1–32. Returns `{ "success": true, "concurrency": 8 }`.
 
 ---
 
@@ -4315,7 +4486,8 @@ The full list lives in `lib/tools/*-tool.ts`. Highlights:
 | `whisper` | Send a private message to a specific character | Multi-character chats |
 | `read_conversation` | Read prior conversation history with filters | Always available |
 | `upsert_annotation` / `delete_annotation` | Manage conversation annotations | Always available |
-| `create_wardrobe_item` / `update_outfit_item` | Aurora wardrobe edits | Character context |
+| `wardrobe_list` / `wardrobe_read` / `wardrobe_wear` / `wardrobe_take_off` | Browse/inspect/wear/remove wardrobe items (own + project + Quilltap General) | `canDressThemselves` |
+| `wardrobe_create` / `wardrobe_update` / `wardrobe_archive` | Author/edit/retire wardrobe items (own items only for edit/archive) | `canCreateOutfits` |
 | `submit_final_response` | Agent-mode wrap-up | Agent mode only |
 | `request_full_context` | Request full context expansion | Context compression enabled |
 

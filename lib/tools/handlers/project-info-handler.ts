@@ -55,7 +55,7 @@ async function executeGetInfo(
 
   // Get project
   const project = await repos.projects.findById(context.projectId)
-  if (!project || project.userId !== context.userId) {
+  if (!project) {
     return null
   }
 
@@ -143,7 +143,7 @@ async function executeGetInstructions(
   const repos = getRepositories()
 
   const project = await repos.projects.findById(context.projectId)
-  if (!project || project.userId !== context.userId) {
+  if (!project) {
     return null
   }
 

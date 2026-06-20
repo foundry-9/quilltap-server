@@ -2,7 +2,10 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { Icon } from '@/components/ui/icon'
 import { CharacterPickerPanel, NewChatForm, useNewChat } from '@/components/new-chat'
 
 interface ChatSettingsResponse {
@@ -19,7 +22,10 @@ export default function NewChatPage() {
   const characterIdParam = searchParams.get('characterId') || undefined
   const autonomousParam = searchParams.get('autonomous') === '1'
 
-  const { data: chatSettings } = useSWR<ChatSettingsResponse>('/api/v1/settings/chat')
+  const { data: chatSettings } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
+  })
   const autonomousHint = chatSettings?.autonomousRoomSettings
     ? {
         visibilityDefault: chatSettings.autonomousRoomSettings.visibilityDefault,
@@ -94,19 +100,7 @@ export default function NewChatPage() {
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ backgroundColor: project.color || 'var(--muted)' }}
               >
-                <svg
-                  className="w-4 h-4 qt-text-secondary"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                  />
-                </svg>
+                <Icon name="folder" className="w-4 h-4 qt-text-secondary" />
               </div>
               <div>
                 <p className="text-sm qt-text-primary">Creating chat in project</p>

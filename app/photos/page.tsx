@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { showConfirmation } from '@/lib/alert';
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider';
 
 interface PhotoLinker {
   linkId: string;
@@ -75,6 +76,7 @@ export default function PhotosPage() {
   // load-more from the previous query can't clobber the new page.
   const fetchGenerationRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const bgStyle = useSubsystemBackgroundStyle('lantern');
 
   // Initial / on-search-change fetch.
   useEffect(() => {
@@ -197,7 +199,7 @@ export default function PhotosPage() {
   return (
     <div
       className="qt-page-container text-foreground"
-      style={{ '--story-background-url': 'url(/images/lantern.webp)' } as React.CSSProperties}
+      style={bgStyle}
     >
       <header className="flex flex-wrap items-end justify-between gap-6 border-b qt-border-default/60 pb-6">
         <div className="max-w-2xl space-y-2">

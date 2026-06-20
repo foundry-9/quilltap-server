@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc-open-document tool's input.
  */
 export const docOpenDocumentToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   path: z
     .string()
     .describe('Relative path to the file to open. Omit to create a new blank document.')
@@ -26,7 +30,7 @@ export const docOpenDocumentToolInputSchema = z.object({
     .optional(),
   mount_point: z
     .string()
-    .describe('Mount point name. Required when scope is "document_store".')
+    .describe('Mount point name. Required when scope is "document_store". The reserved value "self" addresses your own character vault.')
     .optional(),
   mode: z
     .enum(['split', 'focus'])
@@ -61,6 +65,8 @@ export function validateDocOpenDocumentInput(input: unknown): input is DocOpenDo
 export interface DocOpenDocumentOutput {
   success: boolean;
   filePath: string;
+  /** Canonical qtap:// URI for the opened document. */
+  uri?: string;
   scope: string;
   mountPoint?: string;
   displayTitle: string;

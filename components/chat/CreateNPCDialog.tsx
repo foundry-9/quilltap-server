@@ -13,8 +13,11 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { Icon } from '@/components/ui/icon'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 
 interface ConnectionProfile {
@@ -48,9 +51,11 @@ export default function CreateNPCDialog({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data: profilesData, isLoading } = useSWR<{ profiles: ConnectionProfile[] }>(
-    isOpen ? '/api/v1/connection-profiles' : null
-  )
+  const { data: profilesData, isLoading } = useQuery({
+    queryKey: queryKeys.connectionProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ConnectionProfile[] }>('/api/v1/connection-profiles', { signal }),
+    enabled: isOpen,
+  })
   const connectionProfiles = profilesData?.profiles || []
 
   // Auto-select first profile when data loads
@@ -169,9 +174,13 @@ export default function CreateNPCDialog({
         defaultConnectionProfileId: selectedConnectionProfileId,
       }
 
-      // Add optional fields
+      // Add optional fields. The server schema expects a `scenarios` array of
+      // { id?, title, content }, not a scalar `scenario` (Zod silently strips
+      // the unknown key), so wrap the single field in a one-element array.
       if (scenario.trim()) {
-        characterData.scenario = scenario.trim()
+        characterData.scenarios = [
+          { id: crypto.randomUUID(), title: 'Default', content: scenario.trim() },
+        ]
       }
 
       // Add system prompt if provided
@@ -188,17 +197,17 @@ export default function CreateNPCDialog({
         ]
       }
 
-      // Add physical description if provided
+      // Add physical description if provided. The server schema expects a
+      // singular `physicalDescription` object, not a plural `physicalDescriptions`
+      // array (Zod silently strips the unknown plural key), so send the object.
       if (physicalDescription.trim()) {
-        characterData.physicalDescriptions = [
-          {
-            id: crypto.randomUUID(),
-            name: 'Default',
-            fullDescription: physicalDescription.trim(),
-            createdAt: now,
-            updatedAt: now,
-          },
-        ]
+        characterData.physicalDescription = {
+          id: crypto.randomUUID(),
+          name: 'Default',
+          fullDescription: physicalDescription.trim(),
+          createdAt: now,
+          updatedAt: now,
+        }
       }
 
       const createResponse = await fetch('/api/v1/characters', {
@@ -270,9 +279,7 @@ export default function CreateNPCDialog({
             className="qt-button qt-button-ghost p-2"
             disabled={isCreating}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-6 h-6" />
           </button>
         </div>
 
@@ -414,9 +421,7 @@ export default function CreateNPCDialog({
                     disabled={isCreating}
                     className="qt-button qt-button-secondary"
                   >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
+                    <Icon name="image" className="w-4 h-4 mr-2" />
                     Choose Image
                   </button>
                   <input
@@ -429,9 +434,7 @@ export default function CreateNPCDialog({
                   />
                   {avatarFile ? (
                     <span className="text-sm qt-text-success flex items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Icon name="check" className="w-4 h-4" />
                       {avatarFile.name}
                     </span>
                   ) : (
@@ -467,9 +470,7 @@ export default function CreateNPCDialog({
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Icon name="plus" className="w-4 h-4" />
                 Create NPC
               </>
             )}

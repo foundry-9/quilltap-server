@@ -56,6 +56,10 @@ export const PhysicalDescriptionSchema = z.object({
   id: UUIDSchema,
   name: z.string().min(1),
   usageContext: z.string().max(200).nullable().optional(),
+  // Tight head-and-shoulders portrait prompt — face/hair/expression/neckline
+  // only, never below-shoulder anatomy. Preferred source for avatar generation
+  // (avatars are a head-and-shoulders crop); see lib/wardrobe/avatar-prompt.ts.
+  headAndShouldersPrompt: z.string().max(500).nullable().optional(),
   shortPrompt: z.string().max(350).nullable().optional(),
   mediumPrompt: z.string().max(500).nullable().optional(),
   longPrompt: z.string().max(750).nullable().optional(),
@@ -203,6 +207,16 @@ export const CharacterSchema = z.object({
    * before their next turn.
    */
   coreWhisperEnabled: z.boolean().nullable().optional(),
+
+  /**
+   * Carina (inline LLM queries) — when true, this character can be invoked as
+   * an "answerer" via `@Name:` / `@Name?` markup or the `ask_carina` tool in any
+   * chat, producing a minimal isolated reference answer (identity only, no chat
+   * history, no memory) without joining the conversation. NULL/false = not an
+   * answerer. The character need not be a participant in the chat that invokes
+   * them.
+   */
+  canBeCarina: z.boolean().nullable().optional(),
 
   // Relationships
   partnerLinks: z.array(z.object({

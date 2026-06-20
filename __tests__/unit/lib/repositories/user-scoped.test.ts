@@ -647,36 +647,36 @@ describe('User-Scoped Repositories', () => {
   });
 
   describe('UserScopedProjectsRepository', () => {
-    it('findByCharacterId filters by user', async () => {
-      const ownProject = { id: 'proj-1', userId: TEST_USER_ID } as Project;
-      const otherProject = { id: 'proj-2', userId: TEST_USER_ID_2 } as Project;
-      mockFactoryRepos.projects.findByCharacterId.mockResolvedValue([ownProject, otherProject]);
-      
+    // Projects are global to the instance now (the project-store cutover dropped
+    // userId). The wrapper is a thin pass-through with no per-user filtering.
+    it('findByCharacterId returns all matching projects (no user filter)', async () => {
+      const projA = { id: 'proj-1' } as Project;
+      const projB = { id: 'proj-2' } as Project;
+      mockFactoryRepos.projects.findByCharacterId.mockResolvedValue([projA, projB]);
+
       const repos = userScoped.getUserRepositories(TEST_USER_ID);
       const result = await repos.projects.findByCharacterId(TEST_CHAR_ID);
-      
-      expect(result).toEqual([ownProject]);
+
+      expect(result).toEqual([projA, projB]);
     });
 
-    it('addToRoster checks ownership', async () => {
-      const project = { id: 'proj-1', userId: TEST_USER_ID } as Project;
-      mockFactoryRepos.projects.findById.mockResolvedValue(project);
+    it('addToRoster delegates to the base repository', async () => {
+      const project = { id: 'proj-1' } as Project;
       mockFactoryRepos.projects.addToRoster.mockResolvedValue(project);
-      
+
       const repos = userScoped.getUserRepositories(TEST_USER_ID);
       const result = await repos.projects.addToRoster('proj-1', TEST_CHAR_ID);
-      
+
       expect(result).toEqual(project);
+      expect(mockFactoryRepos.projects.addToRoster).toHaveBeenCalledWith('proj-1', TEST_CHAR_ID);
     });
 
-    it('canCharacterParticipate checks ownership', async () => {
-      const project = { id: 'proj-1', userId: TEST_USER_ID } as Project;
-      mockFactoryRepos.projects.findById.mockResolvedValue(project);
+    it('canCharacterParticipate delegates to the base repository', async () => {
       mockFactoryRepos.projects.canCharacterParticipate.mockResolvedValue(true);
-      
+
       const repos = userScoped.getUserRepositories(TEST_USER_ID);
       const result = await repos.projects.canCharacterParticipate('proj-1', TEST_CHAR_ID);
-      
+
       expect(result).toBe(true);
     });
   });

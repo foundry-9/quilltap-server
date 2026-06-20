@@ -80,7 +80,12 @@ const PRETTY_LABELS: Record<string, string> = {
 
   // 4.6 character vault cutover
   'cutover-characters-to-vault-v1': "Settling every character into their vault for keeps",
+  // 4.7 project store cutover
+  'cutover-projects-to-store-v1': 'Folding each project into its own document store for good',
   'drop-character-scenario-column-v1': 'Sweeping out a disused scenario drawer',
+  // Groups
+  'create-groups-table-v1': 'Laying out the ledger for your circles of characters',
+  'create-group-join-tables-v1': 'Stitching characters and stores into their groups',
 
   // Per-character fields
   'add-default-image-profile-field-v1': 'Adding default image profile to characters',
@@ -138,6 +143,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-autonomous-run-paused-accum-v1': 'Tallying the salon’s quiet interludes',
   'add-autonomous-budget-cache-mode-v1': 'Reckoning which tokens the salon’s purse shall count',
   'add-autonomous-run-milestones-v1': 'Teaching the Host to call the hour as the salon winds down',
+  'add-carina-flag-v1': 'Preparing the reference desk…',
+  'add-carina-message-meta-v1': "Filing the reference desk's correspondence…",
   'add-spoken-this-cycle-field-v1': 'Tallying who has held forth in this rotation',
   'add-auto-housekeeping-settings-field-v1': 'Adding auto-housekeeping settings to chats',
   'add-auto-lock-settings-field-v1': 'Adding auto-lock settings to chats',
@@ -183,6 +190,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'migrate-outfit-presets-to-composites-v1': 'Folding outfit presets into composite items',
   'convert-equipped-outfit-to-arrays-v1': 'Converting equipped-outfit slots to arrays',
   'drop-outfit-presets-table-v1': 'Retiring the outfit-presets table',
+  'drop-wardrobe-items-table-v1': 'Clearing out the old wardrobe ledger',
 
   // Files + storage
   'fix-missing-storage-keys-v1': 'Mending missing storage keys',
@@ -229,6 +237,10 @@ const PRETTY_LABELS: Record<string, string> = {
   // Templates + dangerous content
   'add-narration-delimiters-field-v1': 'Adding narration delimiters to templates',
   'migrate-plugin-templates-to-native-v1': 'Moving plugin templates into native templates',
+  'rp-delimiter-kinds-v1': 'Sorting your formatting marks into their proper kinds',
+  'add-console-connection-profile-field-v1': "Wiring the Brahma Console's dial to its chosen engine…",
+  'add-connection-profile-unique-name-index-v1': 'Ensuring each connection profile answers to but a single name…',
+  'add-doc-mount-file-policy-flags-v1': 'Noting which manuscripts wish to remain unread, unwritten, or unindexed…',
   'migrate-extraction-knobs-to-instance-settings-v1': 'Moving extraction knobs into instance settings',
 
   // Misc / fixes

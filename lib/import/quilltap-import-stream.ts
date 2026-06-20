@@ -29,6 +29,7 @@ import type {
   ExportedDocumentStoreBlob,
   ExportedProjectDocMountLink,
   ExportedProject,
+  ExportedGroup,
   ExportedRoleplayTemplate,
   SanitizedConnectionProfile,
   SanitizedImageProfile,
@@ -64,6 +65,7 @@ export async function assembleExportFromStream(
   const embeddingProfiles: SanitizedEmbeddingProfile[] = [];
   const roleplayTemplates: ExportedRoleplayTemplate[] = [];
   const projects: ExportedProject[] = [];
+  const groups: ExportedGroup[] = [];
   const memories: Memory[] = [];
 
   const charactersById = new Map<string, ExportedCharacter>();
@@ -143,6 +145,10 @@ export async function assembleExportFromStream(
 
       case 'project':
         projects.push((record as { data: ExportedProject }).data);
+        break;
+
+      case 'group':
+        groups.push((record as { data: ExportedGroup }).data);
         break;
 
       case 'character': {
@@ -343,6 +349,7 @@ export async function assembleExportFromStream(
     embeddingProfiles,
     roleplayTemplates,
     projects,
+    groups,
     characters,
     chats,
     memories,
@@ -374,6 +381,7 @@ interface CollectedArrays {
   embeddingProfiles: SanitizedEmbeddingProfile[];
   roleplayTemplates: ExportedRoleplayTemplate[];
   projects: ExportedProject[];
+  groups: ExportedGroup[];
   characters: ExportedCharacter[];
   chats: ExportedChat[];
   memories: Memory[];
@@ -415,6 +423,8 @@ function buildExportDataForType(
       return { tags: c.tags };
     case 'projects':
       return { projects: c.projects };
+    case 'groups':
+      return { groups: c.groups };
     case 'document-stores':
       return {
         mountPoints: c.mountPoints,

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useClickOutside } from '@/hooks/useClickOutside'
+import { Icon } from '@/components/ui/icon'
 
 // Model warning types (matching server-side types)
 export interface ModelWarning {
@@ -217,21 +218,12 @@ export function ModelSelector({
           type="button"
           onClick={() => setIsOpen(!isOpen)}
           disabled={disabled}
-          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-accent rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 qt-hover-accent rounded disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <svg
+          <Icon
+            name="arrow-down"
             className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 14l-7 7m0 0l-7-7m7 7V3"
-            />
-          </svg>
+          />
         </button>
       </div>
 
@@ -244,7 +236,7 @@ export function ModelSelector({
                   <button
                     type="button"
                     onClick={() => handleSelect(model)}
-                    className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors ${
+                    className={`w-full text-left px-3 py-2 qt-hover-accent transition-colors ${
                       value === model
                         ? 'bg-primary text-primary-foreground'
                         : 'text-foreground'

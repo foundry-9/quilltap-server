@@ -794,6 +794,12 @@
     background: var(--qt-input-bg);
     color: var(--qt-input-fg);
     border: 1px solid var(--qt-input-border);
+    /* Share the typeface used for rendered user messages
+       (.qt-chat-message-user .qt-chat-message-content) so what you type matches
+       what you'll read back. In the default theme --qt-chat-user-font resolves to
+       --font-sans (a no-op); themes that give user messages a distinct font
+       (e.g. Madman's Box → Mulish) get a matching composer instead of the body sans. */
+    font-family: var(--qt-chat-user-font);
   }
 
   .qt-chat-composer-input:focus,
@@ -1447,8 +1453,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-dialogue {
-    color: var(--qt-rp-dialogue-color);
-    background: var(--qt-rp-dialogue-bg);
+    --qt-rp-fg: var(--qt-rp-dialogue-color);
+    --qt-rp-bg: var(--qt-rp-dialogue-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
   }
 
   /**
@@ -1457,8 +1465,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-narration {
-    color: var(--qt-rp-narration-color);
-    background: var(--qt-rp-narration-bg);
+    --qt-rp-fg: var(--qt-rp-narration-color);
+    --qt-rp-bg: var(--qt-rp-narration-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
     font-style: var(--qt-rp-narration-style);
     padding: var(--qt-rp-narration-padding);
     border-radius: var(--qt-rp-narration-radius);
@@ -1471,8 +1481,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-inner-monologue {
-    color: var(--qt-rp-inner-monologue-color);
-    background: var(--qt-rp-inner-monologue-bg);
+    --qt-rp-fg: var(--qt-rp-inner-monologue-color);
+    --qt-rp-bg: var(--qt-rp-inner-monologue-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
     font-style: var(--qt-rp-inner-monologue-style);
     padding: var(--qt-rp-inner-monologue-padding);
     border-radius: var(--qt-rp-inner-monologue-radius);
@@ -1485,8 +1497,10 @@
    * Note: Must override Tailwind prose styles, hence .qt-chat-message-content context
    */
   .qt-chat-message-content .qt-chat-ooc {
-    color: var(--qt-rp-ooc-color);
-    background: var(--qt-rp-ooc-bg);
+    --qt-rp-fg: var(--qt-rp-ooc-color);
+    --qt-rp-bg: var(--qt-rp-ooc-bg);
+    color: var(--qt-rp-fg);
+    background: var(--qt-rp-bg);
     font-family: var(--qt-rp-ooc-font);
     padding: var(--qt-rp-ooc-padding);
     border-radius: var(--qt-rp-ooc-radius);
@@ -2123,14 +2137,16 @@
     background: var(--qt-chat-attachment-overlay);
   }
 
-  .qt-chat-attachment-overlay svg {
+  .qt-chat-attachment-overlay svg,
+  .qt-chat-attachment-overlay .qt-icon {
     @apply w-6 h-6 text-white;
     opacity: 0;
     transition: opacity 150ms ease;
     filter: drop-shadow(0 0 8px rgb(0 0 0 / 0.45));
   }
 
-  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay svg {
+  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay svg,
+  .qt-chat-attachment-button:hover .qt-chat-attachment-overlay .qt-icon {
     opacity: 1;
   }
 
@@ -2210,7 +2226,8 @@
     background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
   }
 
-  .qt-chat-message-action-icon svg {
+  .qt-chat-message-action-icon svg,
+  .qt-chat-message-action-icon .qt-icon {
     @apply w-4 h-4;
   }
 

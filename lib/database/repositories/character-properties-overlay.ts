@@ -92,6 +92,7 @@ export {
   type CharacterVaultDescriptor,
   CHARACTER_VAULT_DESCRIPTORS,
   MANAGED_FIELDS,
+  CharacterVaultUnavailableError,
 } from './vault-overlay/schema';
 
 export {
@@ -117,7 +118,6 @@ export {
 export {
   type WardrobeOverlayOptions,
   getOverlaidWardrobeItems,
-  syncCharacterVaultWardrobe,
   projectVaultWardrobe,
 } from './vault-overlay/wardrobe-sync';
 

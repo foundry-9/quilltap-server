@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
+import { useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import {
   CharacterSystemPrompt,
   PromptTemplate,
@@ -73,9 +75,11 @@ export function useSystemPrompts(
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  const { data: promptsData, isLoading: loading, mutate: mutatePrompts } = useSWR<{ prompts: CharacterSystemPrompt[] }>(
-    `/api/v1/characters/${characterId}/prompts`
-  )
+  const { data: promptsData, isLoading: loading, refetch: mutatePrompts } = useQuery({
+    queryKey: queryKeys.characters.prompts(characterId),
+    queryFn: ({ signal }) =>
+      apiFetch<{ prompts: CharacterSystemPrompt[] }>(`/api/v1/characters/${characterId}/prompts`, { signal }),
+  })
   const prompts = promptsData?.prompts ?? []
 
   const [templates, setTemplates] = useState<PromptTemplate[]>([])

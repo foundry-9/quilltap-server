@@ -73,8 +73,6 @@ import {
 import {
   buildConnectionProfileChangeContent,
   buildConnectionProfileChangeOpaqueContent,
-  buildProjectContextContent,
-  buildProjectContextOpaqueContent,
   buildGeneralContextContent,
   buildGeneralContextOpaqueContent,
   buildCombinedContextContent,
@@ -99,6 +97,14 @@ import {
   buildUploadOpaqueContent,
   buildSummaryContent,
   buildSummaryOpaqueContent,
+  buildWriteContent,
+  buildWriteOpaqueContent,
+  buildMoveContent,
+  buildMoveOpaqueContent,
+  buildCopyContent,
+  buildCopyOpaqueContent,
+  buildBlobWriteContent,
+  buildBlobWriteOpaqueContent,
 } from '@/lib/services/librarian-notifications/writer'
 import { buildDangerContent, buildDangerOpaqueContent } from '@/lib/services/concierge-notifications/writer'
 import type { Character } from '@/lib/schemas/character.types'
@@ -267,10 +273,10 @@ describe('Prospero opaque builders', () => {
       .toBe("Beatrice's current response model is now unassigned; previous model was old.")
   })
 
-  it('project context', () => {
+  it('project context (combined builder, project only)', () => {
     const project = { name: 'Foggy Tale', description: 'A novel.', instructions: null, documentStores: [] }
-    expect(buildProjectContextContent(project)).toContain('Prospero opens his ledger')
-    const opaque = buildProjectContextOpaqueContent(project)
+    expect(buildCombinedContextContent(project, null)).toContain('Prospero opens his ledger')
+    const opaque = buildCombinedContextOpaqueContent(project, null)
     expect(opaque).toContain('Foggy Tale')
     expect(opaque).toContain('A novel.')
     expectNoPersonaNames(opaque)
@@ -442,6 +448,100 @@ describe('Librarian opaque builders', () => {
     expect(opaque).toContain('It was a foggy night.')
     expectNoPersonaNames(opaque)
   })
+
+  const writeBase = {
+    chatId: 'c-1',
+    displayTitle: 'Notes.md',
+    uri: 'qtap://self/Notes.md',
+    scope: 'document_store' as const,
+    mountPoint: 'self',
+    origin: { kind: 'by-character' as const, characterName: 'Beatrice' },
+  }
+
+  it('write — created reports the new contents and the qtap URI', () => {
+    const params = { ...writeBase, change: { kind: 'created' as const, body: '# Title\n\nFresh prose.' } }
+    const persona = buildWriteContent(params)
+    expect(persona).toContain('The Librarian has set down a new volume')
+    expect(persona).toContain('qtap://self/Notes.md')
+    expect(persona).toContain('Fresh prose.')
+    const opaque = buildWriteOpaqueContent(params)
+    expect(opaque).toContain('Document created: "Notes.md"')
+    expect(opaque).toContain('Fresh prose.')
+    expect(opaque).toContain('qtap://self/Notes.md')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('write — edited embeds the diff and the qtap URI', () => {
+    const diff = '--- a/Notes.md\n+++ b/Notes.md\n@@ -1 +1 @@\n-old\n+new'
+    const params = { ...writeBase, change: { kind: 'edited' as const, diff } }
+    const persona = buildWriteContent(params)
+    expect(persona).toContain('The Librarian has filed fresh alterations')
+    expect(persona).toContain('+new')
+    const opaque = buildWriteOpaqueContent(params)
+    expect(opaque).toContain('Document edited: "Notes.md"')
+    expect(opaque).toContain('+new')
+    expect(opaque).toContain('qtap://self/Notes.md')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('move — names old/new addresses for files and folders', () => {
+    const params = {
+      chatId: 'c-1',
+      oldDisplayTitle: 'old.md',
+      newDisplayTitle: 'new.md',
+      oldUri: 'qtap://self/old.md',
+      newUri: 'qtap://self/sub/new.md',
+      scope: 'document_store' as const,
+      mountPoint: 'self',
+      origin: { kind: 'by-character' as const, characterName: 'Beatrice' },
+      isFolder: false,
+    }
+    expect(buildMoveContent(params)).toContain('The Librarian has relocated')
+    const opaque = buildMoveOpaqueContent(params)
+    expect(opaque).toContain('File moved')
+    expect(opaque).toContain('qtap://self/old.md')
+    expect(opaque).toContain('qtap://self/sub/new.md')
+    expectNoPersonaNames(opaque)
+    expect(buildMoveOpaqueContent({ ...params, isFolder: true })).toContain('Folder moved')
+  })
+
+  it('copy — names source/dest stores and URIs', () => {
+    const params = {
+      chatId: 'c-1',
+      sourceDisplayTitle: 'a.md',
+      destDisplayTitle: 'a.md',
+      sourceMountPoint: 'Library',
+      destMountPoint: 'Archive',
+      sourceUri: 'qtap://Library/a.md',
+      destUri: 'qtap://Archive/a.md',
+      origin: { kind: 'by-character' as const, characterName: 'Beatrice' },
+    }
+    expect(buildCopyContent(params)).toContain('The Librarian has transcribed a copy')
+    const opaque = buildCopyOpaqueContent(params)
+    expect(opaque).toContain('File copied')
+    expect(opaque).toContain('qtap://Library/a.md')
+    expect(opaque).toContain('qtap://Archive/a.md')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('blob write — describes the asset with mime, size, and URI', () => {
+    const params = {
+      chatId: 'c-1',
+      displayTitle: 'sketch.webp',
+      uri: 'qtap://self/photos/sketch.webp',
+      mountPoint: 'self',
+      mimeType: 'image/webp',
+      sizeBytes: 4096,
+      description: 'A pencil sketch.',
+      origin: { kind: 'by-character' as const, characterName: 'Beatrice' },
+    }
+    expect(buildBlobWriteContent(params)).toContain('The Librarian has affixed the illustration')
+    const opaque = buildBlobWriteOpaqueContent(params)
+    expect(opaque).toContain('Image added: "sketch.webp"')
+    expect(opaque).toContain('qtap://self/photos/sketch.webp')
+    expect(opaque).toContain('A pencil sketch.')
+    expectNoPersonaNames(opaque)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -506,9 +606,34 @@ describe('Concierge opaque builder', () => {
     expect(narrative).toContain('Sexual/NSFW content')
     expect(narrative).toContain('0.65')
     expect(narrative).toContain('cheap-LLM')
+    // Below threshold: the classifier flagged it directly, not the arithmetic.
+    expect(narrative).toContain('direct verdict')
+    expect(narrative).toContain('shy of the present threshold')
+    expect(narrative).not.toContain('registering 0.65 against')
 
     const opaque = buildDangerOpaqueContent(details)
     expect(opaque).toContain('cheap-LLM fallback')
+    expect(opaque).toContain('Flagged directly by')
+    expect(opaque).toContain('(not reached)')
+    expectNoPersonaNames(opaque)
+  })
+
+  it('crossing the threshold keeps the arithmetic phrasing, not the direct-verdict phrasing', () => {
+    const details = {
+      score: 0.92,
+      threshold: 0.7,
+      categories: [{ category: 'violence', score: 0.92, label: '' }],
+      source: 'moderation' as const,
+      providerName: 'OPENAI',
+    }
+
+    const narrative = buildDangerContent(details)
+    expect(narrative).toContain('registering 0.92 against the present threshold of 0.70')
+    expect(narrative).not.toContain('direct verdict')
+
+    const opaque = buildDangerOpaqueContent(details)
+    expect(opaque).toContain('Overall score 0.92 against threshold 0.70')
+    expect(opaque).not.toContain('Flagged directly by')
     expectNoPersonaNames(opaque)
   })
 })

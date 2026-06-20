@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { Terminal } from '@/components/terminal/Terminal'
 import { useTerminalSession } from '@/hooks/useTerminalSession'
+import { Icon } from '@/components/ui/icon'
 import type { TerminalMode } from '../hooks/useTerminalMode'
 
 interface TerminalPaneProps {
@@ -67,13 +68,11 @@ export function TerminalPane({
             title={mode === 'focus' ? 'Restore split layout' : 'Maximize terminal'}
             aria-label={mode === 'focus' ? 'Restore split layout' : 'Maximize terminal'}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {mode === 'focus' ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V5H5m14 0h-4v4M5 15v4h4m6 0h4v-4" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4h4M16 4h4v4M4 16v4h4m12-4v4h-4" />
-              )}
-            </svg>
+            {mode === 'focus' ? (
+              <Icon name="compress" className="w-4 h-4" />
+            ) : (
+              <Icon name="expand" className="w-4 h-4" />
+            )}
           </button>
 
           <button
@@ -83,9 +82,7 @@ export function TerminalPane({
             title="Close pane (terminal stays alive)"
             aria-label="Close terminal pane"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
-            </svg>
+            <Icon name="minus" className="w-4 h-4" />
           </button>
 
           <button
@@ -95,9 +92,7 @@ export function TerminalPane({
             title={confirmKill ? 'Click again to confirm: kill terminal and close pane' : 'Kill terminal and close pane'}
             aria-label="Kill terminal and close pane"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-            </svg>
+            <Icon name="close" className="w-4 h-4" />
           </button>
         </div>
       </div>

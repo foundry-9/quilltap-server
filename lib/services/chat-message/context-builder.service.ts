@@ -449,7 +449,7 @@ export function normalizeWhisperRoles<
  */
 export async function buildMessageContext(
   options: BuildMessageContextOptions,
-  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null }>,
+  existingMessages: Array<{ type: string; role?: string; content?: string; opaqueContent?: string | null; id?: string; thoughtSignature?: string | null; participantId?: string | null; targetParticipantIds?: string[] | null; createdAt?: string; attachments?: string[] | null; systemSender?: string | null; systemKind?: string | null }>,
   attachmentsToSend: unknown[]
 ): Promise<MessageContextResult> {
   const {
@@ -480,9 +480,15 @@ export async function buildMessageContext(
   // inlined into the new user message body — past whispers piling up across
   // turns would just bloat the context window with stale recall. This filter
   // applies regardless of system transparency.
-  const cmpbStrippedCount = existingMessages.filter(m => m.systemSender === 'commonplaceBook').length
+  //
+  // EXCEPTION: the `relevant-conversations` kind (posted on each summary fold)
+  // is NOT recomputed per turn and intentionally persists across turns, so it
+  // is kept here and reaches the LLM like any other persistent Staff whisper.
+  const isStrippableCmpb = (m: { systemSender?: string | null; systemKind?: string | null }) =>
+    m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations'
+  const cmpbStrippedCount = existingMessages.filter(isStrippableCmpb).length
   const messagesWithoutCmpb = cmpbStrippedCount > 0
-    ? existingMessages.filter(m => m.systemSender !== 'commonplaceBook')
+    ? existingMessages.filter(m => !isStrippableCmpb(m))
     : existingMessages
   if (cmpbStrippedCount > 0) {
   }
@@ -737,14 +743,21 @@ export async function buildMessageContext(
     }
   })
 
-  // In multi-character chats, anchor the model's response to the correct
-  // character identity. The [Name] prefix is stripped by
-  // stripCharacterNamePrefix() downstream.
-  //
-  // Anthropic 4.6+ rejects requests that end with an assistant message, and
-  // older Claude models follow a system instruction reliably enough that we
-  // use the same path for every Anthropic model rather than maintain a
-  // per-model allowlist.
+  // In multi-character chats, anchor each reply to the responding character and
+  // forbid it from writing anyone else's turn. The two providers take different
+  // routes because Anthropic 4.6+ rejects requests that end with an assistant
+  // message (so we can't prefill it with a "[Name]" turn-opener there):
+  //   - Non-Anthropic: prefill an assistant "[Name]" message. The model
+  //     structurally continues only that character's line; the leading tag is
+  //     stripped downstream by stripCharacterNamePrefix().
+  //   - Anthropic: append a system instruction. We deliberately do NOT tell it
+  //     to emit a "[Name]" tag — that both contradicts the always-on Identity
+  //     Reminder ("do not prefix with your name") and teaches weaker models the
+  //     very screenplay format ("[Name] …") they then run away with, writing
+  //     the whole cast's turns. Instead we anchor identity in prose and forbid
+  //     foreign speaker tags outright. finalizeMessageResponse() truncates a
+  //     response at the first foreign "[Name]"/"Name:" tag as a structural
+  //     backstop regardless of provider.
   if (isMultiCharacter) {
     if (connectionProfile.provider === 'ANTHROPIC') {
       const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
@@ -752,7 +765,7 @@ export async function buildMessageContext(
         formattedMessages[systemIdx] = {
           ...formattedMessages[systemIdx],
           content: formattedMessages[systemIdx].content +
-            `\n\nIMPORTANT: You are ${character.name}. Always begin your response with [${character.name}] to identify yourself.`,
+            `\n\nIMPORTANT — this is a multi-character scene. Respond as ${character.name} and ONLY ${character.name}: write only ${character.name}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${character.name}). Output only ${character.name}'s contribution.`,
         }
       }
     } else {

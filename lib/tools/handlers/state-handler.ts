@@ -240,10 +240,8 @@ export async function executeStateTool(
     const projectId = context.projectId || chat.projectId;
     let project = null;
     if (projectId) {
+      // Projects are global to the instance now — no per-user ownership.
       project = await repos.projects.findById(projectId);
-      if (project && project.userId !== context.userId) {
-        project = null; // Don't use project if not owned by user
-      }
     }
 
     // Get current states

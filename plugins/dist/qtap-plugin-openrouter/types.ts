@@ -25,5 +25,6 @@ export type {
   ModelInfo,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
+  ImageOrientationSupport,
   ProviderOptionsSchema,
 } from '@quilltap/plugin-types';

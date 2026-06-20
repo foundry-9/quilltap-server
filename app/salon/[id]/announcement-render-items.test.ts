@@ -89,6 +89,24 @@ describe('buildRenderItems', () => {
     expect(ids(items[2])).toEqual([c.id])
   })
 
+  it('renders a Suparṇā mail-delivery whisper expanded (standalone), splitting a surrounding group', () => {
+    const a = ann('host', 'add')
+    const mail = ann('suparna', 'mail-delivery')
+    const c = ann('lantern', 'background')
+
+    // Not in the expanded set, yet it must NOT collapse into a chip group.
+    const items = buildRenderItems([a, mail, c], none)
+
+    expect(items.map(i => i.kind)).toEqual([
+      'announcement-group',
+      'message',
+      'announcement-group',
+    ])
+    expect(ids(items[0])).toEqual([a.id])
+    expect(ids(items[1])).toEqual([mail.id]) // expanded by default → standalone row
+    expect(ids(items[2])).toEqual([c.id])
+  })
+
   it('emits a one-member group for a lone collapsed announcement', () => {
     const user = msg({ role: 'USER', content: 'hi' })
     const a = ann('commonplaceBook', 'memory-recap')

@@ -33,13 +33,23 @@ export type OutfitSlotName = keyof OutfitSlotValues
  * Pass `titleOnly: true` for image-generation pipelines — wardrobe item
  * `description` is human prose (style commentary, narrative voice) that
  * bloats image prompts and confuses cheap LLMs into echoing it verbatim.
+ *
+ * In the `titleOnly` (image) path, an item's optional `imagePrompt` is
+ * preferred over its `title` when present and non-blank. `imagePrompt` is a
+ * short plain-text visual cue authored specifically for a diffusion model
+ * (e.g. a literal description of a rank glyph), letting the picture carry a
+ * cue the bare title can't convey while the title stays human-readable.
+ * It has no effect on the non-`titleOnly` (prose) path.
  */
 export function decorateOutfitItems(
-  items: ReadonlyArray<{ title: string; description?: string | null }>,
+  items: ReadonlyArray<{ title: string; description?: string | null; imagePrompt?: string | null }>,
   options: { titleOnly?: boolean } = {},
 ): string[] {
   if (options.titleOnly) {
-    return items.map(i => i.title)
+    return items.map(i => {
+      const cue = i.imagePrompt?.trim()
+      return cue && cue.length > 0 ? cue : i.title
+    })
   }
   return items.map(i => (i.description ? `${i.title} (${i.description})` : i.title))
 }

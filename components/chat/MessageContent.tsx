@@ -2,13 +2,27 @@
 
 import { useMemo, useState, useCallback, ReactNode } from 'react'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import type { Components } from 'react-markdown'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
+import {
+  type Segment,
+  type CompiledRule,
+  DEFAULT_RENDERING_PATTERNS,
+  DEFAULT_DIALOGUE_DETECTION,
+  compileRenderingPatterns,
+  tokenizeInline,
+  lineMatchFor,
+  wrapBlockMatchFor,
+  isDialogueParagraph,
+  escapeMarkdownInBrackets,
+} from '@/lib/chat/roleplay-rendering'
+import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
+import { QtapDocLink } from './QtapDocLink'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -129,196 +143,38 @@ interface MessageContentProps {
   blobMountPointId?: string
 }
 
-// Internal compiled pattern type
-interface CompiledPattern {
-  regex: RegExp
-  className: string
-}
-
 /**
- * Default rendering patterns used when template doesn't specify any.
- * Includes common patterns from both Standard and Quilltap-style formatting.
+ * Map neutral segments (from the shared tokenizer) to React nodes: plain runs
+ * stay strings, styled runs become keyed <span>s.
  */
-const DEFAULT_RENDERING_PATTERNS: RenderingPattern[] = [
-  // OOC: ((comments)) - double parentheses
-  { pattern: '\\(\\([^)]+\\)\\)', className: 'qt-chat-ooc' },
-  // OOC: // comment - line prefix style
-  { pattern: '^// .+$', className: 'qt-chat-ooc', flags: 'm' },
-  // Dialogue: "speech" - straight and curly quotes
-  { pattern: '[""][^""]+[""]', className: 'qt-chat-dialogue' },
-  // Narration: *actions* - single asterisks (not bold **)
-  { pattern: '(?<!\\*)\\*[^*]+\\*(?!\\*)', className: 'qt-chat-narration' },
-  // Narration: [actions] - square brackets (not links)
-  { pattern: '\\[[^\\]]+\\](?!\\()', className: 'qt-chat-narration' },
-  // Internal monologue: {thoughts} - excludes {{template}} variables
-  { pattern: '(?<!\\{)\\{[^{}]+\\}(?!\\})', className: 'qt-chat-inner-monologue' },
-]
-
-/**
- * Default dialogue detection for paragraph-level styling.
- * Handles straight and curly quotes.
- */
-const DEFAULT_DIALOGUE_DETECTION: DialogueDetection = {
-  openingChars: ['"', '"'],
-  closingChars: ['"', '"'],
-  className: 'qt-chat-dialogue',
-}
-
-/**
- * Compile string patterns to RegExp objects
- */
-function compilePatterns(patterns: RenderingPattern[]): CompiledPattern[] {
-  return patterns.map(p => ({
-    regex: new RegExp(p.pattern, p.flags || ''),
-    className: p.className,
-  }))
-}
-
-/**
- * Escape markdown syntax characters inside roleplay brackets to prevent
- * ReactMarkdown from breaking up the segments before we can style them.
- * This handles cases like [narration with *emphasis* inside]
- *
- * IMPORTANT: This function preserves fenced code blocks (``` ... ```) unchanged
- * to prevent corrupting code content with escape sequences.
- */
-function escapeMarkdownInBrackets(content: string, patterns: RenderingPattern[]): string {
-  // Characters that trigger markdown parsing
-  const markdownChars = /([*_~`])/g
-
-  // Check if patterns include bracket-style narration [...]
-  const hasBracketNarration = patterns.some(p => p.pattern.includes('\\['))
-  // Check if patterns include brace-style monologue {...}
-  const hasBraceMonologue = patterns.some(p => p.pattern.includes('\\{'))
-  // Check if patterns include single-asterisk narration *...*
-  const hasAsteriskNarration = patterns.some(p =>
-    p.pattern.includes('\\*') && p.className === 'qt-chat-narration'
+function segmentsToReactNodes(segments: Segment[]): ReactNode[] {
+  return segments.map((seg, i) =>
+    seg.className
+      ? <span key={i} className={seg.className}>{seg.text}</span>
+      : seg.text
   )
-
-  // If no relevant patterns, return content unchanged
-  if (!hasBracketNarration && !hasBraceMonologue && !hasAsteriskNarration) {
-    return content
-  }
-
-  // Split content by fenced code blocks to preserve them unchanged
-  // Match ``` optionally followed by language, then content, then closing ```
-  const codeBlockRegex = /(```[\s\S]*?```)/g
-  const parts = content.split(codeBlockRegex)
-
-  // Process only non-code-block parts
-  const processedParts = parts.map((part, index) => {
-    // Odd indices are code blocks (captured groups from split)
-    if (index % 2 === 1) {
-      return part // Return code blocks unchanged
-    }
-
-    let result = part
-
-    // Escape inside [...] if bracket narration is in patterns
-    if (hasBracketNarration) {
-      result = result.replace(/\[([^\]]+)\](?!\()/g, (match, inner) => {
-        // Escape markdown characters with backslash
-        const escaped = inner.replace(markdownChars, '\\$1')
-        return `[${escaped}]`
-      })
-    }
-
-    // Escape inside {...} if brace monologue is in patterns
-    // Excludes {{template}} variables using lookbehind/lookahead
-    if (hasBraceMonologue) {
-      result = result.replace(/(?<!\{)\{([^{}]+)\}(?!\})/g, (match, inner) => {
-        const escaped = inner.replace(markdownChars, '\\$1')
-        return `{${escaped}}`
-      })
-    }
-
-    // Escape inside *...* if single asterisks are used for narration
-    // Be careful not to double-escape or break bold **...**
-    if (hasAsteriskNarration) {
-      // Match single asterisk pairs that aren't bold
-      result = result.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (match, inner) => {
-        // Only escape if there are nested markdown chars (unlikely but safe)
-        const escaped = inner.replace(/([_~`])/g, '\\$1')
-        return `*${escaped}*`
-      })
-    }
-
-    return result
-  })
-
-  return processedParts.join('')
 }
 
 /**
- * Process roleplay syntax in a string and return React elements
- * Applies patterns based on the compiled pattern list
+ * Recursively process children to apply inline roleplay styling to text nodes.
+ * The match-walk itself lives in the shared core (tokenizeInline); this is the
+ * thin React adapter over its Segment[] output.
  */
-function processRoleplayText(text: string, compiledPatterns: CompiledPattern[]): ReactNode[] {
-  const result: ReactNode[] = []
-  let remaining = text
-  let key = 0
-
-  while (remaining.length > 0) {
-    let earliestMatch: { index: number; length: number; className: string; text: string } | null = null
-
-    // Find the earliest match among all patterns
-    for (const pattern of compiledPatterns) {
-      const match = remaining.match(pattern.regex)
-      if (match && match.index !== undefined) {
-        if (!earliestMatch || match.index < earliestMatch.index) {
-          earliestMatch = {
-            index: match.index,
-            length: match[0].length,
-            className: pattern.className,
-            text: match[0],
-          }
-        }
-      }
-    }
-
-    if (earliestMatch) {
-      // Add text before the match
-      if (earliestMatch.index > 0) {
-        result.push(remaining.substring(0, earliestMatch.index))
-      }
-
-      // Add the styled span
-      result.push(
-        <span key={key++} className={earliestMatch.className}>
-          {earliestMatch.text}
-        </span>
-      )
-
-      // Continue with remaining text
-      remaining = remaining.substring(earliestMatch.index + earliestMatch.length)
-    } else {
-      // No more matches, add remaining text
-      result.push(remaining)
-      break
-    }
-  }
-
-  return result
-}
-
-/**
- * Recursively process children to apply roleplay styling to text nodes
- */
-function processChildren(children: ReactNode, compiledPatterns: CompiledPattern[]): ReactNode {
+function processChildren(children: ReactNode, compiledRules: CompiledRule[]): ReactNode {
   if (typeof children === 'string') {
-    const processed = processRoleplayText(children, compiledPatterns)
-    return processed.length === 1 && typeof processed[0] === 'string'
-      ? processed[0]
-      : <>{processed}</>
+    const segments = tokenizeInline(children, compiledRules)
+    return segments.length === 1 && !segments[0].className
+      ? segments[0].text
+      : <>{segmentsToReactNodes(segments)}</>
   }
 
   if (Array.isArray(children)) {
     return children.map((child, i) => {
       if (typeof child === 'string') {
-        const processed = processRoleplayText(child, compiledPatterns)
-        return processed.length === 1 && typeof processed[0] === 'string'
-          ? processed[0]
-          : <span key={i}>{processed}</span>
+        const segments = tokenizeInline(child, compiledRules)
+        return segments.length === 1 && !segments[0].className
+          ? segments[0].text
+          : <span key={i}>{segmentsToReactNodes(segments)}</span>
       }
       return child
     })
@@ -350,19 +206,117 @@ function extractTextContent(children: ReactNode): string {
 }
 
 /**
- * Check if text content represents dialogue based on configured detection
- * Uses the openingChars and closingChars from DialogueDetection config
+ * Remove the leading `prefix` (a line-prefix marker or `[TAG]`) from the start of
+ * the children, consuming it from the leading plain-text node(s) only. Inline
+ * formatting in the body survives because we never descend into element nodes —
+ * if the prefix doesn't lead the text as a clean string, we stop and leave the
+ * rest intact. Used when a line-scoped delimiter opts into hiding.
  */
-function isDialogueParagraph(text: string, detection: DialogueDetection): boolean {
-  const trimmed = text.trim()
-  if (trimmed.length < 2) return false
+function stripLeadingPrefix(children: ReactNode, prefix: string): ReactNode {
+  let remaining = prefix.length
+  if (remaining <= 0) return children
 
-  const firstChar = trimmed[0]
-  const lastChar = trimmed[trimmed.length - 1]
+  const consume = (node: ReactNode): ReactNode => {
+    if (remaining <= 0) return node
+    if (typeof node === 'string') {
+      if (remaining >= node.length) {
+        remaining -= node.length
+        return ''
+      }
+      const out = node.slice(remaining)
+      remaining = 0
+      return out
+    }
+    // Prefix doesn't cleanly lead the text as plain string — stop stripping.
+    remaining = 0
+    return node
+  }
 
-  return detection.openingChars.includes(firstChar) && detection.closingChars.includes(lastChar)
+  if (Array.isArray(children)) {
+    return children.map((child) => consume(child))
+  }
+  return consume(children)
 }
 
+/**
+ * Remove the trailing `suffix` (a wrap delimiter's closing marker) from the end of
+ * the children, consuming it from the trailing plain-text node(s) only. Inline
+ * formatting in the body survives because we never descend into element nodes —
+ * if the suffix doesn't trail the text as a clean string, we stop and leave the
+ * rest intact. The leading-prefix counterpart is {@link stripLeadingPrefix}.
+ */
+function stripTrailingSuffix(children: ReactNode, suffix: string): ReactNode {
+  let remaining = suffix.length
+  if (remaining <= 0) return children
+
+  const consume = (node: ReactNode): ReactNode => {
+    if (remaining <= 0) return node
+    if (typeof node === 'string') {
+      if (remaining >= node.length) {
+        remaining -= node.length
+        return ''
+      }
+      const out = node.slice(0, node.length - remaining)
+      remaining = 0
+      return out
+    }
+    // Suffix doesn't cleanly trail the text as plain string — stop stripping.
+    remaining = 0
+    return node
+  }
+
+  if (Array.isArray(children)) {
+    const result = [...children]
+    for (let i = result.length - 1; i >= 0 && remaining > 0; i--) {
+      result[i] = consume(result[i])
+    }
+    return result
+  }
+  return consume(children)
+}
+
+/**
+ * Shared block handling. Two block-level styling paths, checked in order:
+ *
+ *  1. Whole-block hidden WRAP (e.g. a paragraph that is entirely `+narration+`):
+ *     strip both delimiters and wrap the remaining children — markdown nodes and
+ *     all — in an inline styled `<span>`. This is what lets markdown *inside* a
+ *     hidden-delimiter wrap (`+a *b* c+`) render: the markdown parser already
+ *     produced the `<em>` node, and styling the wrapper keeps it, where the inline
+ *     string tokenizer could not span across the node. The class goes on a span,
+ *     never the block — the chat classes are `display: inline`.
+ *  2. Whole-line LINE rule (`// ooc`, `[TAG] …`): the class lands on the block
+ *     element; the leading marker is stripped when the rule hides delimiters.
+ *
+ * Otherwise the children are passed through unchanged for inline styling.
+ */
+function renderLineBlock(
+  children: ReactNode,
+  compiledRules: CompiledRule[],
+): { className: string | undefined; content: ReactNode } {
+  const textContent = extractTextContent(children)
+
+  const wrapBlock = wrapBlockMatchFor(textContent, compiledRules)
+  if (wrapBlock) {
+    const stripped = stripTrailingSuffix(
+      stripLeadingPrefix(children, wrapBlock.prefix),
+      wrapBlock.suffix,
+    )
+    return {
+      className: undefined,
+      content: (
+        <span className={wrapBlock.className}>{processChildren(stripped, compiledRules)}</span>
+      ),
+    }
+  }
+
+  const lineMatch = lineMatchFor(textContent, compiledRules)
+  const effective =
+    lineMatch?.hideDelimiters && lineMatch.prefix
+      ? stripLeadingPrefix(children, lineMatch.prefix)
+      : children
+  return { className: lineMatch?.className, content: processChildren(effective, compiledRules) }
+}
 
 export default function MessageContent({
   content,
@@ -380,8 +334,8 @@ export default function MessageContent({
   const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION
 
   // Compile patterns once for efficient matching
-  const compiledPatterns = useMemo(
-    () => compilePatterns(patterns),
+  const compiledRules = useMemo(
+    () => compileRenderingPatterns(patterns),
     [patterns]
   )
 
@@ -418,53 +372,64 @@ export default function MessageContent({
         </code>
       )
     },
-    // Paragraph - CSS handles spacing; only custom behavior is dialogue detection
-    // and roleplay pattern processing on text nodes.
+    // Paragraph - CSS handles spacing; custom behavior is dialogue detection,
+    // whole-line (line-scoped) styling, and inline roleplay pattern processing.
     p({ children }) {
       const textContent = extractTextContent(children)
       const isDialogue = isDialogueParagraph(textContent, dialogueConfig)
-      const dialogueClass = isDialogue ? dialogueConfig.className : undefined
-      return <p className={dialogueClass}>{processChildren(children, compiledPatterns)}</p>
+      const { className: lineClass, content } = renderLineBlock(children, compiledRules)
+      const cls = [isDialogue ? dialogueConfig.className : undefined, lineClass]
+        .filter(Boolean)
+        .join(' ') || undefined
+      return <p className={cls}>{content}</p>
     },
-    // Headings - CSS handles sizing, weight, and spacing; only custom behavior
-    // is roleplay pattern processing on text nodes.
+    // Headings - CSS handles sizing, weight, and spacing; custom behavior is
+    // whole-line styling and inline roleplay pattern processing on text nodes.
     h1({ children }) {
-      return <h1>{processChildren(children, compiledPatterns)}</h1>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h1 className={className}>{content}</h1>
     },
     h2({ children }) {
-      return <h2>{processChildren(children, compiledPatterns)}</h2>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h2 className={className}>{content}</h2>
     },
     h3({ children }) {
-      return <h3>{processChildren(children, compiledPatterns)}</h3>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h3 className={className}>{content}</h3>
     },
     h4({ children }) {
-      return <h4>{processChildren(children, compiledPatterns)}</h4>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h4 className={className}>{content}</h4>
     },
     h5({ children }) {
-      return <h5>{processChildren(children, compiledPatterns)}</h5>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h5 className={className}>{content}</h5>
     },
     h6({ children }) {
-      return <h6>{processChildren(children, compiledPatterns)}</h6>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <h6 className={className}>{content}</h6>
     },
-    // List items - CSS handles spacing; roleplay patterns processed on text nodes.
-    // ul/ol have no custom behavior, so they are intentionally omitted here —
-    // react-markdown renders plain <ul>/<ol> and CSS handles all styling.
+    // List items - CSS handles spacing; whole-line styling + inline patterns on
+    // text nodes. ul/ol have no custom behavior, so they are intentionally
+    // omitted here — react-markdown renders plain <ul>/<ol> and CSS styles them.
     li({ children }) {
-      return <li>{processChildren(children, compiledPatterns)}</li>
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <li className={className}>{content}</li>
     },
-    // Blockquote - CSS handles styling; roleplay patterns processed on text nodes.
+    // Blockquote - CSS handles styling; whole-line styling + inline patterns.
     blockquote({ children }) {
-      return (
-        <blockquote>
-          {processChildren(children, compiledPatterns)}
-        </blockquote>
-      )
+      const { className, content } = renderLineBlock(children, compiledRules)
+      return <blockquote className={className}>{content}</blockquote>
     },
-    // Links — internal app routes use the Next.js router (required for the
-    // Electron shell, which can't honour `target="_blank"`). External links
-    // still open in a new tab. CSS (qt-link, scoped chat overrides) handles
-    // appearance.
+    // Links — `qtap://` document URIs become in-app Document-Mode links
+    // (never web URLs). Internal app routes use the Next.js router (required
+    // for the Electron shell, which can't honour `target="_blank"`). External
+    // links still open in a new tab. CSS (qt-link, scoped chat overrides)
+    // handles appearance.
     a({ href, children }) {
+      if (isQtapUri(href)) {
+        return <QtapDocLink href={href}>{children}</QtapDocLink>
+      }
       if (isInternalHref(href)) {
         return (
           <Link href={href} className="qt-link">
@@ -512,7 +477,7 @@ export default function MessageContent({
       }
       return <img src={resolvedSrc} alt={alt || ''} title={title} {...props} />
     },
-  }), [compiledPatterns, dialogueConfig, blobMountPointId])
+  }), [compiledRules, dialogueConfig, blobMountPointId])
 
   return (
     <>
@@ -524,6 +489,11 @@ export default function MessageContent({
           // collapsed to a space the way CommonMark does by default. Blank-line
           // paragraph separation still works as before.
           remarkPlugins={[remarkGfm, remarkBreaks]}
+          // react-markdown's default URL sanitizer only allows http(s)/mailto/
+          // etc., so it would strip `qtap://` hrefs before they reach `a()`.
+          // Preserve qtap:// URIs (rendered as in-app Document-Mode links by
+          // QtapDocLink) and defer everything else to the default transform.
+          urlTransform={(url) => (isQtapUri(url) ? url : defaultUrlTransform(url))}
           components={components}
         >
           {processedContent}

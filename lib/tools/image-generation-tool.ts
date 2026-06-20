@@ -38,10 +38,14 @@ export const imageGenerationToolInputSchema = z.object({
     .max(1000)
     .describe('Optional description of what to avoid in the image. Example: "blurry, low quality, watermark"')
     .optional(),
+  orientation: z
+    .enum(['portrait', 'landscape', 'square'])
+    .describe('PREFERRED way to control image shape. The system maps this onto whatever each provider supports (a concrete size, an aspect ratio, or prompt wording), so it works everywhere. "portrait" = taller than wide, "landscape" = wider than tall, "square" = 1:1. Use this instead of `size`/`aspectRatio` unless you have a specific reason not to.')
+    .optional(),
   size: z
     .enum(['1024x1024', '1792x1024', '1024x1792'])
     .default('1024x1024')
-    .describe('Image dimensions. Use 1024x1024 for square, 1792x1024 for landscape, 1024x1792 for portrait.')
+    .describe('Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Most providers ignore it. Prefer `orientation`.')
     .optional(),
   style: z
     .enum(['vivid', 'natural'])
@@ -55,7 +59,7 @@ export const imageGenerationToolInputSchema = z.object({
     .optional(),
   aspectRatio: z
     .enum(['1:1', '3:4', '4:3', '9:16', '16:9'])
-    .describe('Aspect ratio for image generation. Only used for providers that support aspect ratios (e.g., Google Imagen). Examples: 1:1 (square), 16:9 (landscape), 9:16 (portrait).')
+    .describe('Advanced, provider-dependent: an exact aspect ratio honoured only by aspect-ratio providers (e.g. Google, Grok, OpenRouter). Prefer `orientation`.')
     .optional(),
   count: z
     .number()
@@ -122,41 +126,4 @@ export function validateImageGenerationInput(
   input: unknown
 ): input is ImageGenerationToolInput {
   return imageGenerationToolInputSchema.safeParse(input).success;
-}
-
-/**
- * Helper to get provider-specific allowed values
- */
-export function getProviderConstraints(provider: string) {
-  switch (provider) {
-    case 'OPENAI':
-      return {
-        sizes: ['1024x1024', '1792x1024', '1024x1792'],
-        styles: ['vivid', 'natural'],
-        qualities: ['standard', 'hd'],
-        aspectRatios: undefined, // OpenAI uses sizes, not aspect ratios
-        maxImages: 10,
-      };
-
-    case 'GROK':
-      return {
-        sizes: undefined, // Grok doesn't support custom sizes
-        styles: undefined,
-        qualities: undefined,
-        aspectRatios: undefined,
-        maxImages: 10,
-      };
-
-    case 'GOOGLE_IMAGEN':
-      return {
-        sizes: undefined, // Google uses aspect ratios
-        styles: undefined,
-        qualities: undefined,
-        aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
-        maxImages: 10,
-      };
-
-    default:
-      return null;
-  }
 }

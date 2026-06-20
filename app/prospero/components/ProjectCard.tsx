@@ -8,6 +8,7 @@
 
 import Link from 'next/link'
 import type { Project } from '../types'
+import { Icon } from '@/components/ui/icon'
 
 interface ProjectCardProps {
   project: Project
@@ -15,27 +16,6 @@ interface ProjectCardProps {
   onDelete: () => void
 }
 
-/**
- * Folder icon for projects without custom icons
- */
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    </svg>
-  )
-}
-
-/**
- * Trash icon for delete button
- */
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  )
-}
 
 export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
   return (
@@ -49,7 +29,7 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
             className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
             style={{ backgroundColor: project.color || 'var(--muted)' }}
           >
-            {project.icon || <FolderIcon className="w-5 h-5 qt-text-secondary" />}
+            {project.icon || <Icon name="folder" className="w-5 h-5 qt-text-secondary" />}
           </div>
           <div>
             <h2 className="text-xl font-semibold text-foreground">{project.name}</h2>
@@ -76,7 +56,7 @@ export function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
           className="qt-button-destructive qt-shadow-sm"
           title="Delete project"
         >
-          <TrashIcon className="w-5 h-5" />
+          <Icon name="trash" className="w-5 h-5" />
         </button>
       </div>
     </div>

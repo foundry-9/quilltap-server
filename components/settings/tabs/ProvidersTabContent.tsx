@@ -9,6 +9,7 @@ import ConnectionProfilesTab from '@/components/settings/connection-profiles-tab
 import { CheapLLMSettings } from '@/components/settings/chat-settings/CheapLLMSettings'
 import { CapabilitiesReportCard } from '@/components/tools/capabilities-report-card'
 import { useSettingsSection } from './useSettingsSection'
+import { Icon } from '@/components/ui/icon'
 
 export function ProvidersTabContent() {
   const info = useSubsystemInfo('forge')
@@ -39,9 +40,7 @@ export function ProvidersTabContent() {
                 Re-run the guided setup to configure providers, API keys, models, and profiles all in one go.
               </p>
             </div>
-            <svg className="w-5 h-5 qt-text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <Icon name="chevron-right" className="w-5 h-5 qt-text-muted flex-shrink-0" />
           </div>
         </Link>
 

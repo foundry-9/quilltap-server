@@ -103,9 +103,14 @@ npx quilltap db log <id> [--field request|response|both]    # Full LLM request/r
 ### Low-level (still supported)
 
 ```bash
+# The db command opens the database READ-ONLY by default. Add --write to make changes;
+# --write claims the instance lock for the duration and refuses if a server/another
+# instance holds it (no override). --repl is read-only unless combined with --write.
 npx quilltap db --tables                           # List tables in active DB
-npx quilltap db "SELECT COUNT(*) FROM characters;" # Run arbitrary SQL
-npx quilltap db --repl                             # Interactive REPL (.cols, .find shortcuts)
+npx quilltap db "SELECT COUNT(*) FROM characters;" # Run arbitrary SQL (read-only)
+npx quilltap db --repl                             # Interactive REPL, read-only (.cols, .find shortcuts)
+npx quilltap db --write "UPDATE characters SET title = 'rival' WHERE id = '...';"  # Lock-gated write
+npx quilltap db --repl --write                     # Interactive REPL, read-write
 npx quilltap db --count chat_messages              # Row count
 
 # LLM logs database
@@ -127,6 +132,10 @@ npx quilltap db --lock-status
 npx quilltap db --lock-clean
 npx quilltap db --lock-override
 ```
+
+### Querying via the Brahma `run_sql` tool
+
+The **Brahma Console** can also query these databases from inside a running instance, via the read-only `run_sql` tool. It picks one of the three databases per call (`main` / `llm-logs` / `mount-index`), runs a single read-only statement against the server's already-open, decrypted handle, and returns rows as JSON. It is read-only (writes and schema changes are rejected at the tool layer), so it never needs `--write` and never claims the instance lock. The same schema in this document is the contract it queries against; no schema change is involved. See [brahma-sql-access](features/complete/brahma-sql-access.md) for the tool contract, guard layers, and the SQL prompt the model is given.
 
 ---
 
@@ -194,6 +203,17 @@ unconditional).
 access-control application state, not character content, and is therefore
 not vault-mirrored.
 
+Because the vault is the sole source of truth post-cutover, the read overlay
+fails loudly rather than returning a hollow character (there is no DB column
+left to fall back to), mirroring the project/group stores: a vault-linked
+character whose `properties.json` keystone is missing/unreadable causes
+`findById` to throw `CharacterVaultUnavailableError` (mapped to a 503 by the
+route handler) and list reads (`findAll`/`findByIds`) to drop the offending
+row. Existence-only callers (delete, ownership pre-checks, cascade delete) read
+`findByIdRaw`, which never applies the overlay, so a broken vault stays
+deletable/repairable; the startup backfill repopulates a linked-but-empty vault
+from the raw row.
+
 ```sql
 CREATE TABLE "characters" (
   "id" TEXT PRIMARY KEY,
@@ -223,7 +243,8 @@ CREATE TABLE "characters" (
   "canCreateOutfits" INTEGER DEFAULT NULL,
   "characterDocumentMountPointId" TEXT DEFAULT NULL,
   "systemTransparency" INTEGER DEFAULT NULL,  -- when 1 (true), this character may inspect "the Staff" — the chat-level toggles for self_inventory, Staff messages (Lantern/Aurora/Librarian/Prospero/Host), and character vaults still apply. When NULL or 0 (false), the character cannot see Staff messages, the self_inventory tool is withheld, and all character vaults (own + peers) are hidden from doc_* tools — a hard override on top of chat/project settings. Default NULL (opaque).
-  "coreWhisperEnabled" INTEGER DEFAULT NULL   -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
+  "coreWhisperEnabled" INTEGER DEFAULT NULL,  -- per-character override of the global coreWhisper.enabled setting (Aurora's Core whisper). NULL = inherit from global. Resolution: chat → character → global.
+  "canBeCarina" INTEGER DEFAULT NULL          -- Carina (inline LLM queries): when 1 (true), this character can answer @Name queries / ask_carina calls as an isolated reference answer (identity only, no history, no memory). NULL/0 = not an answerer. Added by add-carina-flag-v1.
 );
 
 CREATE INDEX "idx_characters_createdAt" ON "characters" ("createdAt" DESC);
@@ -246,7 +267,7 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | exampleDialogues | `example-dialogues.md` |
 | pronouns, aliases, title, firstMessage, talkativeness | `properties.json` |
 | physicalDescription.fullDescription | `physical-description.md` |
-| physicalDescription.{short,medium,long,complete}Prompt | `physical-prompts.json` |
+| physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt | `physical-prompts.json` |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
 | scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record) |
 
@@ -255,29 +276,44 @@ Reads go through `applyDocumentStoreOverlay()` in
 `applyDocumentStoreWriteOverlay()`. The repository's `*Raw` helpers bypass
 the overlay (used by exports and the migration's populator).
 
-### wardrobe_items — LEGACY/DEPRECATED in 4.6 (vault-first cutover)
+### wardrobe_items — DROPPED in 4.7 (`drop-wardrobe-items-table-v1`)
 
-As of 4.6 the wardrobe is **vault-first**: this table is no longer the
-write target and is slated for removal. Wardrobe items now live as
-`Wardrobe/*.md` frontmatter files:
+The wardrobe became **vault-first** in 4.6; in 4.7 the legacy DB mirror and its
+sync-back machinery were removed and the table itself was dropped by
+`drop-wardrobe-items-table-v1`. The migration snapshots all rows to
+`<dataDir>/backup/pre-drop-wardrobe-items.json` before the drop, and its
+`shouldRun` is gated behind **both** population flags in `instance_settings`
+(`wardrobe_folder_migrated_v1` and `shared_wardrobe_moved_to_general_v1`) so the
+table can never be dropped before the one-time vault-population startup tasks
+have completed (a two-startup sequence: migrations run before startup tasks, so
+the flags are set on one startup and the table is dropped on the next).
+
+Wardrobe items now live exclusively as `Wardrobe/*.md` frontmatter files in the
+document store:
 
 - **Character-owned items** live in each character's document vault under
   `Wardrobe/*.md` (the vault linked via
   `characters.characterDocumentMountPointId`).
 - **Shared archetypes** (formerly `wardrobe_items` rows with
-  `characterId = NULL`) live in the singleton **"Quilltap General"** mount
-  under a `Wardrobe/` folder. A one-time startup task
-  (`lib/startup/move-shared-wardrobe-to-general.ts`) relocates the existing
-  shared archetypes there and drops their DB rows — it runs as a startup task
-  rather than a migration because migrations execute before the mount-index
-  database is initialized and so can't write vault documents.
+  `characterId = NULL`) live in the singleton **"Quilltap General"** mount under
+  a `Wardrobe/` folder. A one-time startup task
+  (`lib/startup/move-shared-wardrobe-to-general.ts`) relocated the existing
+  shared archetypes there before the table was dropped.
+- **Project stores** may shadow shared archetypes under their own `Wardrobe/`
+  folders (project tier wins over Quilltap General on id collision).
 
-Reads/writes flow through the vault overlay (`buildWardrobeItemFile` in
-`lib/mount-index/character-vault.ts`; `parseWardrobeItemFile` in
-`lib/database/repositories/vault-overlay/parsers.ts`). The schema below
-documents the historical table only.
+Reads flow through the vault overlay (`getOverlaidWardrobeItems` /
+`WardrobeRepository`); writes go through the vault-first writers
+(`createVaultWardrobeItem` / `updateVaultWardrobeItem` / `deleteVaultWardrobeItem`
+in `lib/database/repositories/vault-overlay/wardrobe-writes.ts`, which re-project
+the `Wardrobe/` folder via `projectVaultWardrobe`). File shape is produced by
+`buildWardrobeItemFile` (`lib/mount-index/character-vault.ts`) and parsed by
+`parseWardrobeItemFile` (`lib/database/repositories/vault-overlay/parsers.ts`).
+
+The historical table shape (for reference; no longer present):
 
 ```sql
+-- DROPPED in 4.7 by drop-wardrobe-items-table-v1
 CREATE TABLE "wardrobe_items" (
   "id" TEXT PRIMARY KEY,
   "characterId" TEXT,
@@ -297,7 +333,7 @@ CREATE TABLE "wardrobe_items" (
 CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 ```
 
-`componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by `WardrobeRepository`.
+`componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by the vault writers (`wardrobe-writes.ts`).
 
 #### Wardrobe/*.md frontmatter
 
@@ -312,6 +348,7 @@ emitted only when set; vault path lookups are case-insensitive.
 | types | list | Coverage slots this item designates: any of `top`, `bottom`, `footwear`, `accessories`. For composites this **may be a superset** of the components' slot union (so a composite can designate slots beyond the garments it actually contains, in order to clear them). |
 | componentItems | list (composites only) | Component refs as slugs or UUIDs; resolved to canonical UUIDs in a second pass. Omitted for leaf items. |
 | appropriateness | string | Context tags ("casual", "formal", "intimate", etc.). |
+| imagePrompt | string | Optional plain-text cue fed to image-generation pipelines (avatar + Lantern scene) **in place of** the title; falls back to the title when absent/blank. Authored for a diffusion model (e.g. a literal description of a rank glyph), unlike the human-prose `description` body, which is stripped from image prompts. Emitted only when set. |
 | default | bool | `true` when the item is part of the character's default outfit. Legacy `isDefault: true` is also honored on read. |
 | replace | bool | **Composites only**, emitted only when `true`. When `true`, equipping the composite first clears every slot it designates (`types`) and then places only its own components; when `false`/absent, equipping is **additive** — components layer onto whatever already occupies those slots without clearing. Leaf items always replace their own slots and ignore the flag. |
 | archived / archivedAt | bool / string (ISO 8601) | `archived: true` marks the item archived; `archivedAt` records when (falls back to the document's `updatedAt`). |
@@ -428,8 +465,9 @@ CREATE TABLE "chats" (
   "characterAvatars" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { imageId, generatedAt, afterMessageCount } } where imageId is a vault link id (post-photos-Phase-3); pre-cutover values were legacy files.id and are translated by the migration.
   "avatarGenerationEnabled" INTEGER DEFAULT NULL,
   "alertCharactersOfLanternImages" INTEGER DEFAULT NULL,
-  "chatType" TEXT DEFAULT 'salon',
+  "chatType" TEXT DEFAULT 'salon',                  -- 'salon' | 'help' | 'autonomous' | 'brahma'
   "helpPageUrl" TEXT DEFAULT NULL,
+  "consoleConnectionProfileId" TEXT DEFAULT NULL,   -- Brahma Console (chatType='brahma') active model; NULL on other chats
   "scenarioText" TEXT DEFAULT NULL,
   "documentMode" TEXT DEFAULT 'normal',
   "dividerPosition" INTEGER DEFAULT 45,
@@ -634,7 +672,8 @@ CREATE TABLE "chat_messages" (
   "pendingExternalPromptFull" TEXT DEFAULT NULL,
   "opaqueContent" TEXT DEFAULT NULL,
   "reasoningContent" TEXT DEFAULT NULL,
-  "reasoningSegments" TEXT DEFAULT NULL
+  "reasoningSegments" TEXT DEFAULT NULL,
+  "carinaMeta" TEXT DEFAULT NULL              -- Carina (inline LLM queries): JSON { answererId, question } on systemSender='carina' messages. Drives answerer-avatar resolution + "prior Carina exchanges" continuity. NULL on every non-Carina message. Added by add-carina-message-meta-v1.
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -748,39 +787,76 @@ CREATE TABLE "connection_profiles" (
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);
 CREATE INDEX "idx_connection_profiles_provider" ON "connection_profiles" ("provider");
 CREATE INDEX "idx_connection_profiles_userId" ON "connection_profiles" ("userId");
+
+-- Profile names are unique per user, case-insensitive and whitespace-trimmed.
+-- The expression mirrors normalizeProfileName() in lib/llm/connection-profile-names.ts.
+-- Added by add-connection-profile-unique-name-index-v1 (which de-dups first).
+CREATE UNIQUE INDEX "idx_connection_profiles_userId_name" ON "connection_profiles" ("userId", lower(trim("name")));
 ```
 
 ### projects
 
+As of the project-store cutover (`cutover-projects-to-store-v1`), the `projects`
+row is slim: only `id`, `name`, `officialMountPointId`, and the timestamps are
+columns. Everything else lives in the project's **official document store**
+(the mount point `officialMountPointId` points at) as top-level files:
+
+| Former column(s) | Store file | Format |
+| --- | --- | --- |
+| `description` | `description.md` | Markdown body |
+| `instructions` | `instructions.md` | Markdown body |
+| `state` | `state.json` | the JSON object |
+| `allowAnyCharacter`, `characterRoster`, `color`, `icon`, `defaultDisabledTools`, `defaultDisabledToolGroups`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAlertCharactersOfLanternImages`, `storyBackgroundsEnabled`, `staticBackgroundImageId`, `storyBackgroundImageId`, `backgroundDisplayMode` | `properties.json` | one flat JSON object |
+
+The repository (`projects.repository.ts`) overlays these files on read
+(`applyProjectStoreOverlay`) and routes them back to the store on write, so the
+hydrated `Project` object is unchanged for callers. `userId` was dropped
+entirely — projects are global to the instance (single-user-per-instance).
+
 ```sql
 CREATE TABLE "projects" (
   "id" TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
-  "description" TEXT,
-  "instructions" TEXT,
-  "allowAnyCharacter" INTEGER DEFAULT 0,
-  "characterRoster" TEXT DEFAULT '[]',
-  "color" TEXT,
-  "icon" TEXT,
+  "officialMountPointId" TEXT DEFAULT NULL,
   "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL,
-  "defaultDisabledTools" TEXT DEFAULT '[]',
-  "defaultDisabledToolGroups" TEXT DEFAULT '[]',
-  "state" TEXT DEFAULT '{}',
-  "defaultAgentModeEnabled" INTEGER DEFAULT NULL,
-  "defaultAvatarGenerationEnabled" INTEGER DEFAULT NULL,
-  "defaultImageProfileId" TEXT DEFAULT NULL,
-  "defaultAlertCharactersOfLanternImages" INTEGER DEFAULT NULL,
-  "storyBackgroundsEnabled" INTEGER DEFAULT NULL,
-  "staticBackgroundImageId" TEXT DEFAULT NULL,
-  "storyBackgroundImageId" TEXT DEFAULT NULL,
-  "backgroundDisplayMode" TEXT DEFAULT 'theme',
-  "officialMountPointId" TEXT DEFAULT NULL
+  "updatedAt" TEXT NOT NULL
 );
 
 CREATE INDEX "idx_projects_createdAt" ON "projects" ("createdAt" DESC);
-CREATE INDEX "idx_projects_userId" ON "projects" ("userId");
+```
+
+### groups
+
+A **Group** is a cross-section of *characters* (parallel to how a Project is a
+cross-section of files/chats). Like `projects`, the `groups` row is slim: only
+`id`, `name`, `officialMountPointId`, and the timestamps are columns. Everything
+else lives in the group's **official document store** (the mount point
+`officialMountPointId` points at) as top-level files:
+
+| Hydrated field(s) | Store file | Format |
+| --- | --- | --- |
+| `description` | `description.md` | Markdown body |
+| `instructions` | `instructions.md` | Markdown body |
+| `state` | `state.json` | the JSON object |
+| `color`, `icon` | `properties.json` | one flat JSON object |
+
+The repository (`groups.repository.ts`) overlays these files on read
+(`applyGroupStoreOverlay`) and routes them back to the store on write, so the
+hydrated `Group` object is unchanged for callers. The official store also holds a
+`Scenarios/` folder and a `Knowledge/` folder. Group membership and *additional
+linked* stores live in the mount-index database (`group_character_members` and
+`group_doc_mount_links`).
+
+```sql
+CREATE TABLE "groups" (
+  "id" TEXT PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "officialMountPointId" TEXT DEFAULT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE INDEX "idx_groups_name" ON "groups" ("name");
 ```
 
 ### files
@@ -793,6 +869,10 @@ CREATE TABLE "files" (
   "originalFilename" TEXT NOT NULL,
   "mimeType" TEXT NOT NULL,
   "size" INTEGER NOT NULL,
+  -- width/height are the ACTUAL stored-raster dimensions, measured from the
+  -- bytes after WebP conversion (convertToWebP), not the requested size. For
+  -- generated images this matters because providers often return a different
+  -- shape than asked; null when not a raster image (e.g. SVG) or unmeasured.
   "width" INTEGER,
   "height" INTEGER,
   "isPlainText" INTEGER,
@@ -957,6 +1037,20 @@ CREATE TABLE "roleplay_templates" (
 CREATE INDEX "idx_roleplay_templates_createdAt" ON "roleplay_templates" ("createdAt" DESC);
 CREATE INDEX "idx_roleplay_templates_userId" ON "roleplay_templates" ("userId");
 ```
+
+> **`delimiters` JSON shape (since `rp-delimiter-kinds-v1`):** each entry is a
+> discriminated union on `kind`: `{ kind: 'wrap', name, buttonName, delimiters, style }`
+> (string or `[open, close]`), `{ kind: 'linePrefix', name, buttonName, marker, style }`,
+> or `{ kind: 'tagPrefix', name, buttonName, open, close, tokenPattern?, style }`. Legacy
+> entries with no `kind` are read as `wrap`. Every kind also accepts two optional fields:
+> `hideDelimiter` (boolean — strip the delimiter/prefix from rendered output) and
+> `addOns` (`{ bold, italic, reverse, underline: 'none'|'single'|'double', border:
+> 'none'|'solid'|'dashed', font: ''|'sans'|'serif'|'mono'|'display'|'script' }`). Both are
+> absent on legacy/built-in entries (treated as off). `renderingPatterns` entries may carry
+> an optional `scope: 'inline' | 'line'` (absent ⇒ `inline`) and an optional `hideDelimiters`
+> boolean (the renderer then emits the pattern's `rpBody` capture group instead of the full
+> match); add-ons are baked into the pattern's `className`. `linePrefix`/`tagPrefix` rules are
+> `line`-scoped (the class lands on the whole block, not an inline span).
 
 ### tags
 
@@ -1180,8 +1274,10 @@ CREATE TABLE "instance_settings" (
 Known keys (others may be present from migrations / startup hooks):
 - `highest_app_version` — startup version guard (string).
 - `wardrobe_folder_migrated_v1`, `wardrobe_json_refreshed_v1` — one-shot startup migration flags ("true").
-- `memoryExtractionConcurrency` (4.4+) — integer 1–32. Per-instance MEMORY_EXTRACTION job concurrency cap. Read by `lib/background-jobs/processor.ts` at startup; updated by `POST /api/v1/memories?action=extraction-concurrency`.
+- `maxConcurrentJobs` (4.7+) — integer 1–32, default 4. Global cap on how many background jobs of any type the dispatcher runs at once. Read fresh each claim cycle by `lib/background-jobs/host/job-dispatcher.ts` (`getMaxConcurrentJobs`), so a change applies within ~2 s without a restart; updated by `POST /api/v1/system/tools?action=job-concurrency` (surfaced as the "Simultaneous Labours" slider in the Tasks Queue card). Accessors in `lib/instance-settings/index.ts`.
+- `memoryExtractionConcurrency` (4.4+) — integer 1–32. **DEPRECATED in 4.7**: the dispatcher unified to the global `maxConcurrentJobs` cap above; this key is no longer read at runtime (the `/api/v1/memories?action=extraction-concurrency` route still persists it for the `memory-diff` CLI). Was a per-instance MEMORY_EXTRACTION concurrency cap.
 - `memoryExtractionLimits` (4.4+) — JSON: `{enabled, maxPerHour, softStartFraction, softFloor}`. Per-instance memory extraction rate limits. Read by `lib/background-jobs/handlers/memory-extraction.ts` and the dry-run extraction route; updated by `POST /api/v1/memories?action=extraction-limits-config`. Migrated from `chat_settings.memoryExtractionLimits` for SINGLE_USER_ID by `migrate-extraction-knobs-to-instance-settings-v1`.
+- `memoryRecall` (4.7+) — JSON: `{scopePolicy: 'down-weight' | 'exclude', expandRelated: boolean}`. Per-instance Commonplace Book recall relevance settings. `scopePolicy` controls what happens to a `scope: narrow` memory whose `projectId` differs from the current chat's project (cross-project leakage): `down-weight` (default) applies a strong recall penalty, `exclude` filters it out entirely. `expandRelated` (default `false`, added in Phase 2) is the opt-in related-memory one-hop expansion toggle: when on, recall pulls each top hit's strongly-linked related memories in as extra candidates (capped at 3 per hit, 10 total), scores them against the same query embedding, and re-ranks the union. Read on the per-turn recall path (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`) via `getMemoryRecallSettings`; updated by `POST /api/v1/memories?action=recall-config`. No column on `chat_settings` (it is column-per-field; this knob lives instance-wide instead, like `memoryExtractionLimits`). Schema: `MemoryRecallSettingsSchema` in `lib/schemas/settings.types.ts`.
 - `lanternBackgroundsMountPointId` (4.3+) — UUID of the global "Lantern Backgrounds" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/lantern-store-bridge.ts`; written by `provision-lantern-backgrounds-mount-v1`. Used to land story-background job output and generic `generate_image` tool output when no project context is available.
 - `userUploadsMountPointId` (4.4+) — UUID of the global "Quilltap Uploads" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/user-uploads-bridge.ts`; written by `provision-user-uploads-mount-v1`. Used for every project-less file write: chat attachments, paste/drag-drop images, the Files-tab uploader, capabilities-report exports, and backup-restore replay of project-less files. Replaces the legacy `<filesDir>/_general/` namespace as the catch-all destination.
 - `generalMountPointId` (4.4+) — UUID of the global "Quilltap General" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/mount-index/general-scenarios.ts`; written by `provision-general-mount-v1`. Houses the instance-wide `Scenarios/` folder offered alongside project- and character-specific scenarios in every non-help New Chat dialog. Managed via `/api/v1/scenarios` and the `/scenarios` page.
@@ -1374,6 +1470,9 @@ CREATE TABLE IF NOT EXISTS "doc_mount_file_links" (
   "extractionStatus" TEXT NOT NULL DEFAULT 'none',
   "extractionError" TEXT,
   "chunkCount" INTEGER NOT NULL DEFAULT 0,
+  "allowEmbed" INTEGER NOT NULL DEFAULT 1,
+  "allowCharacterRead" INTEGER NOT NULL DEFAULT 1,
+  "allowCharacterWrite" INTEGER NOT NULL DEFAULT 1,
   "lastModified" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
@@ -1389,6 +1488,8 @@ CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mountPointId"
 One row per visible location of a file (i.e. the hard link). Multiple link rows may point at the same `doc_mount_files` row, meaning the same bytes appear at multiple `(mountPointId, relativePath)` tuples. Per-consumer extraction state (conversion lifecycle, extracted text, chunk count) lives here so two consumers hard-linking the same content can re-extract or re-caption independently.
 
 The UNIQUE index on `(mountPointId, relativePath)` enforces "one file per location" — what used to be advisory in app code. Deleting a link via `DocMountFileLinksRepository.deleteWithGC` cascades to chunks (FK), and if it was the last link for its file the file row gets dropped (cascading to documents/blobs). `sweepOrphanedFiles()` is the defense-in-depth GC for writers that bypass the helper.
+
+The three `allow*` columns are the per-document policy, derived from a markdown document's YAML frontmatter at index time (positive sense: `1` == permissive == the frontmatter default of `true`). `allowEmbed` (frontmatter `embed`) gates inclusion in the embedding pipeline — `0` skips embedding and NULLs any existing chunk vectors. `allowCharacterRead` (`character_read`) gates whether LLM characters may read/list/grep/RAG the document — `0` makes it invisible to them (the human operator is unaffected). `allowCharacterWrite` (`character_write`) gates character-initiated mutation. `character_read` is the master gate: the coercion in `lib/doc-edit/document-policy.ts` forces `allowEmbed` and `allowCharacterWrite` to `0` whenever `allowCharacterRead` is `0`, so the stored columns are the *effective* policy (a row with `allowCharacterRead = 0, allowEmbed = 1` should never be written by the normal path). Non-markdown links keep the permissive defaults (no frontmatter to parse). The columns are re-derived on every reindex, so editing the frontmatter (operator or on-disk) is the control surface. See `lib/doc-edit/document-policy.ts` and the `add-doc-mount-file-policy-flags-v1` migration.
 
 ### doc_mount_chunks
 
@@ -1422,6 +1523,55 @@ CREATE TABLE IF NOT EXISTS "project_doc_mount_links" (
 ```
 
 Note: `projectId` references the `projects` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+### group_doc_mount_links
+
+A group's *additional linked* stores (the official store is recorded on the
+`groups` row as `officialMountPointId`, not here). Direct analogue of
+`project_doc_mount_links`.
+
+```sql
+CREATE TABLE IF NOT EXISTS "group_doc_mount_links" (
+  "id" TEXT PRIMARY KEY,
+  "groupId" TEXT NOT NULL,
+  "mountPointId" TEXT NOT NULL REFERENCES "doc_mount_points"("id"),
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+-- UNIQUE(groupId, mountPointId) prevents duplicate links and serves
+-- groupId-prefix lookups (so no separate groupId index is kept).
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_doc_mount_links_group_mount"
+  ON "group_doc_mount_links" ("groupId", "mountPointId");
+CREATE INDEX IF NOT EXISTS "idx_group_doc_mount_links_mountPointId"
+  ON "group_doc_mount_links" ("mountPointId");
+```
+
+Note: `groupId` references the `groups` table in the main database. Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
+
+### group_character_members
+
+Many-to-many membership between characters and groups. `findByCharacterId` is the
+hot path for per-responding-character tier resolution, so `characterId` is
+indexed.
+
+```sql
+CREATE TABLE IF NOT EXISTS "group_character_members" (
+  "id" TEXT PRIMARY KEY,
+  "groupId" TEXT NOT NULL,
+  "characterId" TEXT NOT NULL,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+-- characterId is the hot path for per-responding-character tier resolution.
+CREATE INDEX IF NOT EXISTS "idx_group_character_members_characterId"
+  ON "group_character_members" ("characterId");
+-- UNIQUE(groupId, characterId) prevents duplicate memberships and serves
+-- groupId-prefix lookups (so no separate groupId index is kept).
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_group_character_members_group_char"
+  ON "group_character_members" ("groupId", "characterId");
+```
+
+Note: both `groupId` and `characterId` reference tables in the main database (`groups`, `characters`). Cross-database foreign keys are not enforced by SQLite; referential integrity is maintained at the application layer.
 
 ### doc_mount_documents
 

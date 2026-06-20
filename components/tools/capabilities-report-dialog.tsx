@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Icon } from '@/components/ui/icon'
 
 interface CapabilitiesReportDialogProps {
   isOpen: boolean
@@ -70,19 +71,7 @@ export function CapabilitiesReportDialog({
                 className="p-1 hover:qt-bg-muted rounded transition-colors"
                 aria-label="Close"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
+                <Icon name="close" className="w-5 h-5" />
               </button>
             </div>
             <p className="qt-dialog-description qt-text-small">
@@ -187,19 +176,7 @@ export function CapabilitiesReportDialog({
               download={filename}
               className="qt-button qt-button-secondary"
             >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
+              <Icon name="download" className="w-4 h-4" />
               Download
             </a>
             <button onClick={onClose} className="qt-button qt-button-primary">

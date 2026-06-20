@@ -47,6 +47,7 @@ export interface CharacterPhysicalDescription {
   id: string
   name?: string | null
   usageContext?: string | null
+  headAndShouldersPrompt?: string | null
   shortPrompt?: string | null
   mediumPrompt?: string | null
   longPrompt?: string | null
@@ -74,6 +75,7 @@ export interface Character {
   defaultConnectionProfileId?: string
   controlledBy?: 'llm' | 'user'
   isFavorite?: boolean
+  canBeCarina?: boolean | null
   npc?: boolean
   defaultAgentModeEnabled?: boolean | null
   defaultHelpToolsEnabled?: boolean | null
@@ -97,4 +99,29 @@ export interface TemplateCounts {
   charCount: number
   userCount: number
   fieldCounts: Record<string, { char: number; user: number }>
+}
+
+/** Aggregate per-character counts shown in the header card. */
+export interface CharacterStats {
+  memories: number
+  conversations: number
+  wardrobeItems: number
+  photos: number
+  scenarios: number
+  knowledge: number
+  /** Files in the vault `Core/` packet folder. */
+  core: number
+  /** Canonical managed vault files present (the numerator of `N/total`). */
+  characterFiles: number
+  /** Total canonical managed vault files expected (the denominator). */
+  characterFilesTotal: number
+}
+
+/** Lightweight group descriptor for the header badges (color + emoji). */
+export interface GroupBadge {
+  id: string
+  name: string
+  description?: string | null
+  color?: string | null
+  icon?: string | null
 }

@@ -29,7 +29,7 @@ import FileDeleteConfirmation from './FileDeleteConfirmation'
 import OrphanCleanupModal from './OrphanCleanupModal'
 import { useProjectFileUpload } from './useProjectFileUpload'
 import { useMountPointBlobUpload } from './useMountPointBlobUpload'
-import { buildMountBlobUrl, encodeMountBlobPath } from './mountBlobUrl'
+import { buildMountBlobUrl, buildMountFileItemUrl } from './mountBlobUrl'
 import { FileInfo, FolderInfo, SortState, sortFiles } from './types'
 import { pickPrimaryProjectStore } from '@/lib/mount-index/project-store-naming'
 
@@ -464,7 +464,7 @@ export default function FileBrowser({
 
       if (isMountMode && target?.mountPointId && target?.relativePath) {
         const res = await fetch(
-          `/api/v1/mount-points/${target.mountPointId}/blobs/${encodeMountBlobPath(target.relativePath)}`,
+          buildMountFileItemUrl(target.mountPointId, target.relativePath),
           { method: 'DELETE' }
         )
         if (!res.ok) {

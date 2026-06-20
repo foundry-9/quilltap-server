@@ -11,6 +11,7 @@ import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { genderNounFromPronouns } from '@/lib/characters/pronoun-gender';
 
 interface BuildPromptOptions {
   /**
@@ -18,7 +19,23 @@ interface BuildPromptOptions {
    * appended — the prompt relies on physical descriptions alone.
    */
   equippedSlots?: EquippedSlots | null;
+  /**
+   * Project document stores in scope, so equipped items that live in a project
+   * store (not just the character vault or Quilltap General) resolve. Omit when
+   * there is no project context (two-tier fallback).
+   */
+  projectMountPointIds?: string[];
+  /**
+   * Resolved Aurora character aesthetic (from `aurora-aesthetics.md`,
+   * project-over-global). Avatars have no LLM rewrite step, so this is
+   * prepended as a short capped art-direction preamble. The Ariel Clause
+   * (`depiction-guidelines.md`) does NOT apply to avatars.
+   */
+  characterAesthetic?: string | null;
 }
+
+/** Cap for the avatar aesthetic preamble — a long doc can't blow the budget. */
+const AVATAR_AESTHETIC_MAX_CHARS = 600;
 
 interface BuildPromptResult {
   /** Final portrait prompt suitable for an image-generation provider. */
@@ -40,6 +57,7 @@ export async function buildCharacterAvatarPrompt(
   options: BuildPromptOptions = {},
 ): Promise<BuildPromptResult> {
   const { equippedSlots } = options;
+  const projectMountPointIds = options.projectMountPointIds;
 
   const leafCounts = { top: 0, bottom: 0, footwear: 0, accessories: 0 };
 
@@ -48,7 +66,12 @@ export async function buildCharacterAvatarPrompt(
   let physicalText = '';
   const desc = character.physicalDescription;
   if (desc) {
+    // Avatars are a head-and-shoulders crop, so prefer the dedicated
+    // head-and-shoulders prompt (face/hair/expression/neckline only). It avoids
+    // sending below-the-crop anatomy that image-provider moderation rejects.
+    // Fall back through the full-body variants when it isn't set yet.
     physicalText = (
+      desc.headAndShouldersPrompt ||
       desc.mediumPrompt ||
       desc.shortPrompt ||
       desc.longPrompt ||
@@ -65,7 +88,9 @@ export async function buildCharacterAvatarPrompt(
     // sitting in slots.bottom whose types include "top" still bubbles up into
     // the rendered top. We then `omit` bottom/footwear at render time so the
     // image generator doesn't paste shoes/pants onto a cropped torso.
-    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots);
+    const resolved = await resolveEquippedOutfitForCharacter(repos, character.id, equippedSlots, {
+      projectMountPointIds,
+    });
 
     outfitText = describeOutfit({
       top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
@@ -83,7 +108,13 @@ export async function buildCharacterAvatarPrompt(
   const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
   let prompt = '';
   if (hasAppearance) {
-    const intro = `Solo portrait of a single person: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
+    // Anchor the figure's apparent sex from the character's pronouns. Without
+    // it, a gender-neutral physical description plus an outfit cue (e.g. a
+    // "men's" shirt) can make the generator render the wrong sex. `they`/
+    // neopronouns/unset → no anchor, leaving "person" so we never force a
+    // binary presentation onto a character who hasn't declared one.
+    const subjectNoun = genderNounFromPronouns(character.pronouns) ?? 'person';
+    const intro = `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
     const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
     // Strip any trailing terminal punctuation off the physical description so
     // we don't end up with "background.." once we re-append a period.
@@ -95,6 +126,17 @@ export async function buildCharacterAvatarPrompt(
     prompt = physBlock
       ? `${intro} ${physBlock}${outfitBlock}${outro}`
       : `${intro}${outfitBlock}${outro}`;
+
+    // Prepend the Aurora character aesthetic as a capped art-direction preamble.
+    // No LLM compresses this path, so cap it so a long doc can't dominate the
+    // provider's prompt budget.
+    const aesthetic = options.characterAesthetic?.trim();
+    if (aesthetic) {
+      const capped = aesthetic.length > AVATAR_AESTHETIC_MAX_CHARS
+        ? aesthetic.slice(0, AVATAR_AESTHETIC_MAX_CHARS)
+        : aesthetic;
+      prompt = `Art direction (apply this overall style): ${capped}\n\n${prompt}`;
+    }
   }
 
   return { prompt, hasAppearance, leafCounts };

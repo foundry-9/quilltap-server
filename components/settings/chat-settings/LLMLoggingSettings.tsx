@@ -28,7 +28,7 @@ export function LLMLoggingSettingsComponent({
     >
       <div className="space-y-3">
         {/* Enable logging toggle */}
-        <label className="flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors">
+        <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
           <input
             type="checkbox"
             checked={loggingSettings.enabled}
@@ -45,7 +45,7 @@ export function LLMLoggingSettingsComponent({
         </label>
 
         {/* Verbose mode toggle */}
-        <label className={`flex items-start gap-3 p-4 border qt-border-default rounded hover:bg-accent cursor-pointer transition-colors ${!loggingSettings.enabled ? 'opacity-50' : ''}`}>
+        <label className={`flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors ${!loggingSettings.enabled ? 'opacity-50' : ''}`}>
           <input
             type="checkbox"
             checked={loggingSettings.verboseMode}

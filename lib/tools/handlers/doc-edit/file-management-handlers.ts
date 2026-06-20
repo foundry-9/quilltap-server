@@ -16,6 +16,7 @@ import {
   writeFileWithMtimeCheck,
   isTextFile,
   reindexSingleFile,
+  parseQtapUri,
   type DocEditScope,
   type ResolvedPath,
 } from '@/lib/doc-edit';
@@ -39,14 +40,22 @@ import {
   postLibrarianDeleteAnnouncement,
   postLibrarianFolderCreatedAnnouncement,
   postLibrarianFolderDeletedAnnouncement,
-  type LibrarianActorOrigin,
+  postLibrarianMoveAnnouncement,
+  postLibrarianCopyAnnouncement,
+  documentHiddenFromCharacters,
 } from '@/lib/services/librarian-notifications/writer';
 import {
   logger,
   type DocEditToolContext,
+  applyQtapUriToInput,
   buildReadResolutionContext,
   buildWriteResolutionContext,
+  resolveActorOrigin,
   triggerReindexIfNeeded,
+  uriForResolvedPath,
+  assertCharacterMayRead,
+  assertCharacterMayWrite,
+  assertFolderHasNoWriteProtectedDescendants,
 } from './shared';
 
 /**
@@ -132,15 +141,32 @@ async function syncChatDocumentsAfterFolderMove(
 // --- doc_move_file ---
 
 export async function handleMoveFile(
-  input: DocMoveFileInput,
+  rawInput: DocMoveFileInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocMoveFileOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` (or `uri`) for the source is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
 
   // Resolve source path
   const writeContext = await buildWriteResolutionContext(input, context);
   const resolvedSource = await resolveDocEditPath(scope, input.path, writeContext);
   const resolvedDest = await resolveDocEditPath(scope, input.new_path, writeContext);
+
+  // A move removes the source path — gate it by character_write. The
+  // destination is gated too in case it would overwrite a protected file
+  // (assertCharacterMayWrite is a no-op when the destination doesn't exist yet).
+  await assertCharacterMayWrite(resolvedSource, context);
+  await assertCharacterMayWrite(resolvedDest, context);
+
+  // Capture the source's read-policy before the move relocates its link, so a
+  // character_read:false document isn't announced to characters (operator path).
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolvedSource.mountPointId,
+    resolvedSource.relativePath,
+  );
 
   // Database-backed mount: route move through the database-store module.
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
@@ -164,9 +190,22 @@ export async function handleMoveFile(
       to: input.new_path,
       scope,
     });
+    const movedUri = await uriForResolvedPath(resolvedDest, context);
+    await postLibrarianMoveAnnouncement({
+      chatId: context.chatId,
+      oldDisplayTitle: path.basename(input.path),
+      newDisplayTitle: path.basename(input.new_path),
+      oldUri: await uriForResolvedPath(resolvedSource, context),
+      newUri: movedUri,
+      scope: scope as 'project' | 'document_store' | 'general',
+      mountPoint: input.mount_point,
+      origin: await resolveActorOrigin(context),
+      isFolder: false,
+      hiddenFromCharacters,
+    });
     return {
       success: true,
-      result: { success: true, old_path: input.path, new_path: input.new_path },
+      result: { success: true, old_path: input.path, new_path: input.new_path, uri: movedUri },
       formattedText: `Moved: ${input.path} → ${input.new_path}`,
     };
   }
@@ -215,10 +254,25 @@ export async function handleMoveFile(
       });
   }
 
+  const movedUri = await uriForResolvedPath(resolvedDest, context);
+  await postLibrarianMoveAnnouncement({
+    chatId: context.chatId,
+    oldDisplayTitle: path.basename(input.path),
+    newDisplayTitle: path.basename(input.new_path),
+    oldUri: await uriForResolvedPath(resolvedSource, context),
+    newUri: movedUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    isFolder: false,
+    hiddenFromCharacters,
+  });
+
   const result: DocMoveFileOutput = {
     success: true,
     old_path: input.path,
     new_path: input.new_path,
+    uri: movedUri,
   };
 
   return {
@@ -275,11 +329,40 @@ async function resolveCopyDestination(
 }
 
 export async function handleCopyFile(
-  input: DocCopyFileInput,
+  rawInput: DocCopyFileInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocCopyFileOutput; error?: string; formattedText?: string }> {
+  // A qtap:// source_uri/dest_uri supersedes the mount_point/path pair. Copy is
+  // a document-store-only operation, so reject project/general scopes.
+  let sourceMountPoint = rawInput.source_mount_point;
+  let sourcePath = rawInput.source_path;
+  let destMountPoint = rawInput.dest_mount_point;
+  let destPath = rawInput.dest_path;
+  if (rawInput.source_uri) {
+    const p = parseQtapUri(rawInput.source_uri);
+    if (p.scope !== 'document_store') {
+      return { success: false, error: 'doc_copy_file addresses document stores only; source_uri must name a store (or "self").' };
+    }
+    sourceMountPoint = p.mountPoint;
+    sourcePath = p.path;
+  }
+  if (rawInput.dest_uri) {
+    const p = parseQtapUri(rawInput.dest_uri);
+    if (p.scope !== 'document_store') {
+      return { success: false, error: 'doc_copy_file addresses document stores only; dest_uri must name a store (or "self").' };
+    }
+    destMountPoint = p.mountPoint;
+    destPath = p.path;
+  }
+  if (!sourceMountPoint || typeof sourcePath !== 'string') {
+    return { success: false, error: 'Provide source_uri, or both source_mount_point and source_path.' };
+  }
+  if (!destMountPoint || typeof destPath !== 'string') {
+    return { success: false, error: 'Provide dest_uri, or both dest_mount_point and dest_path.' };
+  }
+
   // Text-only guard, to mirror doc_write_file / doc_read_file semantics.
-  if (!isTextFile(input.source_path)) {
+  if (!isTextFile(sourcePath)) {
     return {
       success: false,
       error: `doc_copy_file supports text files only. For binary assets (images, PDFs, etc.), use the blob family of tools.`,
@@ -289,19 +372,21 @@ export async function handleCopyFile(
   // Resolve source (read context — peer vaults may be readable in shared chats)
   // and destination (write context — peer vaults are never writable).
   const readContext = await buildReadResolutionContext(
-    { mount_point: input.source_mount_point },
+    { mount_point: sourceMountPoint },
     context
   );
   const writeContext = await buildWriteResolutionContext(
-    { mount_point: input.dest_mount_point },
+    { mount_point: destMountPoint },
     context
   );
 
-  const resolvedSource = await resolveDocEditPath('document_store', input.source_path, readContext);
+  const resolvedSource = await resolveDocEditPath('document_store', sourcePath, readContext);
+  // You can't copy what you can't read — gate the source by character_read.
+  await assertCharacterMayRead(resolvedSource, context);
 
   // Initial destination resolve is against the raw dest_path; we re-resolve
   // below once we know whether to append the source basename.
-  const destRelInput = input.dest_path ?? '';
+  const destRelInput = destPath ?? '';
   const initialDestRel = destRelInput.trim() === '' || destRelInput.trim() === '/' ? '.' : destRelInput;
   const initialResolvedDest = await resolveDocEditPath('document_store', initialDestRel, writeContext);
 
@@ -318,29 +403,31 @@ export async function handleCopyFile(
     };
   }
 
-  const sourceBasename = path.posix.basename(input.source_path.split(path.sep).join('/'));
+  const sourceBasename = path.posix.basename(sourcePath.split(path.sep).join('/'));
   const finalDestRel = await resolveCopyDestination(initialResolvedDest, destRelInput, sourceBasename);
 
   // Re-resolve with the final relative path so downstream existence checks,
   // reindex, and write all see the true destination.
   const resolvedDest = await resolveDocEditPath('document_store', finalDestRel, writeContext);
+  // Gate the destination by character_write (no-op when it doesn't exist yet).
+  await assertCharacterMayWrite(resolvedDest, context);
 
   // Verify source exists and is a file (not a folder).
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
     if (!(await databaseDocumentExists(resolvedSource.mountPointId, resolvedSource.relativePath))) {
       if (await databaseFolderExists(resolvedSource.mountPointId, resolvedSource.relativePath)) {
-        return { success: false, error: `Source path is a folder, not a file: ${input.source_path}.` };
+        return { success: false, error: `Source path is a folder, not a file: ${sourcePath}.` };
       }
-      return { success: false, error: `Source file not found: ${input.source_path}` };
+      return { success: false, error: `Source file not found: ${sourcePath}` };
     }
   } else {
     try {
       const stat = await fs.stat(resolvedSource.absolutePath);
       if (!stat.isFile()) {
-        return { success: false, error: `Source path is not a file: ${input.source_path}` };
+        return { success: false, error: `Source path is not a file: ${sourcePath}` };
       }
     } catch {
-      return { success: false, error: `Source file not found: ${input.source_path}` };
+      return { success: false, error: `Source file not found: ${sourcePath}` };
     }
   }
 
@@ -385,7 +472,7 @@ export async function handleCopyFile(
 
   logger.info('Copied document', {
     source_mount_point: resolvedSource.mountPointName,
-    source_path: input.source_path,
+    source_path: sourcePath,
     dest_mount_point: resolvedDest.mountPointName,
     dest_path: finalDestRel,
     bytes: content.length,
@@ -393,48 +480,61 @@ export async function handleCopyFile(
 
   await triggerReindexIfNeeded(resolvedDest);
 
+  const copiedUri = await uriForResolvedPath(resolvedDest, context);
+  await postLibrarianCopyAnnouncement({
+    chatId: context.chatId,
+    sourceDisplayTitle: sourceBasename,
+    destDisplayTitle: path.posix.basename(finalDestRel),
+    sourceMountPoint: resolvedSource.mountPointName ?? sourceMountPoint,
+    destMountPoint: resolvedDest.mountPointName ?? destMountPoint,
+    sourceUri: await uriForResolvedPath(resolvedSource, context),
+    destUri: copiedUri,
+    origin: await resolveActorOrigin(context),
+    // Gate by the source's read-policy: a character_read:false source must not
+    // be named in an announcement to characters (operator path).
+    hiddenFromCharacters: await documentHiddenFromCharacters(
+      resolvedSource.mountPointId,
+      resolvedSource.relativePath,
+    ),
+  });
+
   const result: DocCopyFileOutput = {
     success: true,
-    source_mount_point: resolvedSource.mountPointName ?? input.source_mount_point,
-    source_path: input.source_path,
-    dest_mount_point: resolvedDest.mountPointName ?? input.dest_mount_point,
+    source_mount_point: resolvedSource.mountPointName ?? sourceMountPoint,
+    source_path: sourcePath,
+    dest_mount_point: resolvedDest.mountPointName ?? destMountPoint,
     dest_path: finalDestRel,
+    uri: copiedUri,
     mtime,
   };
 
   return {
     success: true,
     result,
-    formattedText: `Copied: ${resolvedSource.mountPointName ?? input.source_mount_point}:${input.source_path} → ${resolvedDest.mountPointName ?? input.dest_mount_point}:${finalDestRel}`,
+    formattedText: `Copied: ${resolvedSource.mountPointName ?? sourceMountPoint}:${sourcePath} → ${resolvedDest.mountPointName ?? destMountPoint}:${finalDestRel}`,
   };
 }
 
 // --- doc_delete_file ---
 
-/**
- * Resolve the LibrarianActorOrigin for a tool call. Characters are preferred;
- * if the context has no characterId or the lookup fails, falls back to user
- * attribution — matches the pattern in handleOpenDocument.
- */
-async function resolveActorOrigin(context: DocEditToolContext): Promise<LibrarianActorOrigin> {
-  if (!context.characterId) return { kind: 'by-user' };
-  try {
-    const repos = getRepositories();
-    const character = await repos.characters.findById(context.characterId);
-    if (character?.name) {
-      return { kind: 'by-character', characterName: character.name };
-    }
-  } catch (error) {
-  }
-  return { kind: 'by-user' };
-}
-
 export async function handleDeleteFile(
-  input: DocDeleteFileInput,
+  rawInput: DocDeleteFileInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocDeleteFileOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  await assertCharacterMayWrite(resolved, context);
+
+  // Capture the read-policy before the delete removes the link row, so a
+  // character_read:false document isn't announced to characters (operator path).
+  const hiddenFromCharacters = await documentHiddenFromCharacters(
+    resolved.mountPointId,
+    resolved.relativePath,
+  );
 
   // Database-backed mount: route delete through the database-store module.
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -446,6 +546,7 @@ export async function handleDeleteFile(
       return { success: false, error: `File not found: ${input.path}` };
     }
     logger.info('Deleted database document', { path: input.path, scope });
+    const deletedUri = await uriForResolvedPath(resolved, context);
     await postLibrarianDeleteAnnouncement({
       chatId: context.chatId,
       displayTitle: path.basename(input.path),
@@ -453,10 +554,11 @@ export async function handleDeleteFile(
       scope: scope as 'project' | 'document_store' | 'general',
       mountPoint: input.mount_point,
       origin: await resolveActorOrigin(context),
+      hiddenFromCharacters,
     });
     return {
       success: true,
-      result: { success: true, path: input.path },
+      result: { success: true, path: input.path, uri: deletedUri },
       formattedText: `Deleted file: ${input.path}`,
     };
   }
@@ -486,11 +588,13 @@ export async function handleDeleteFile(
     scope: scope as 'project' | 'document_store' | 'general',
     mountPoint: input.mount_point,
     origin: await resolveActorOrigin(context),
+    hiddenFromCharacters,
   });
 
   const result: DocDeleteFileOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
   };
 
   return {
@@ -503,9 +607,13 @@ export async function handleDeleteFile(
 // --- doc_create_folder ---
 
 export async function handleCreateFolder(
-  input: DocCreateFolderInput,
+  rawInput: DocCreateFolderInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocCreateFolderOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
 
@@ -523,7 +631,7 @@ export async function handleCreateFolder(
       });
       return {
         success: true,
-        result: { success: true, path: input.path },
+        result: { success: true, path: input.path, uri: await uriForResolvedPath(resolved, context) },
         formattedText: `Created folder: ${input.path}`,
       };
     } catch (error) {
@@ -551,6 +659,7 @@ export async function handleCreateFolder(
   const result: DocCreateFolderOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
   };
 
   return {
@@ -563,11 +672,17 @@ export async function handleCreateFolder(
 // --- doc_delete_folder ---
 
 export async function handleDeleteFolder(
-  input: DocDeleteFolderInput,
+  rawInput: DocDeleteFolderInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocDeleteFolderOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` or a `uri` is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
+  // A character may not delete a folder that holds a protected document.
+  await assertFolderHasNoWriteProtectedDescendants(resolved, context);
 
   // Database-backed mount: delete explicit folder rows
   if (resolved.mountType === 'database' && resolved.mountPointId) {
@@ -583,7 +698,7 @@ export async function handleDeleteFolder(
       });
       return {
         success: true,
-        result: { success: true, path: input.path },
+        result: { success: true, path: input.path, uri: await uriForResolvedPath(resolved, context) },
         formattedText: `Deleted folder: ${input.path}`,
       };
     } catch (error) {
@@ -643,6 +758,7 @@ export async function handleDeleteFolder(
   const result: DocDeleteFolderOutput = {
     success: true,
     path: input.path,
+    uri: await uriForResolvedPath(resolved, context),
   };
 
   return {
@@ -655,15 +771,23 @@ export async function handleDeleteFolder(
 // --- doc_move_folder ---
 
 export async function handleMoveFolder(
-  input: DocMoveFolderInput,
+  rawInput: DocMoveFolderInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: DocMoveFolderOutput; error?: string; formattedText?: string }> {
+  const input = applyQtapUriToInput(rawInput);
+  if (typeof input.path !== 'string') {
+    return { success: false, error: 'A `path` (or `uri`) for the source folder is required.' };
+  }
   const scope = (input.scope || 'document_store') as DocEditScope;
 
   // Resolve source path
   const writeContext = await buildWriteResolutionContext(input, context);
   const resolvedSource = await resolveDocEditPath(scope, input.path, writeContext);
   const resolvedDest = await resolveDocEditPath(scope, input.new_path, writeContext);
+
+  // Moving a folder relocates everything under it — a character may not move a
+  // folder that holds a protected document.
+  await assertFolderHasNoWriteProtectedDescendants(resolvedSource, context);
 
   // Database-backed mount: route move through the database-store module
   if (resolvedSource.mountType === 'database' && resolvedSource.mountPointId) {
@@ -679,9 +803,21 @@ export async function handleMoveFolder(
         to: input.new_path,
         scope,
       });
+      const movedFolderUri = await uriForResolvedPath(resolvedDest, context);
+      await postLibrarianMoveAnnouncement({
+        chatId: context.chatId,
+        oldDisplayTitle: path.basename(input.path),
+        newDisplayTitle: path.basename(input.new_path),
+        oldUri: await uriForResolvedPath(resolvedSource, context),
+        newUri: movedFolderUri,
+        scope: scope as 'project' | 'document_store' | 'general',
+        mountPoint: input.mount_point,
+        origin: await resolveActorOrigin(context),
+        isFolder: true,
+      });
       return {
         success: true,
-        result: { success: true, old_path: input.path, new_path: input.new_path },
+        result: { success: true, old_path: input.path, new_path: input.new_path, uri: movedFolderUri },
         formattedText: `Moved folder: ${input.path} → ${input.new_path}`,
       };
     } catch (error) {
@@ -728,10 +864,24 @@ export async function handleMoveFolder(
     scope,
   });
 
+  const movedFolderUri = await uriForResolvedPath(resolvedDest, context);
+  await postLibrarianMoveAnnouncement({
+    chatId: context.chatId,
+    oldDisplayTitle: path.basename(input.path),
+    newDisplayTitle: path.basename(input.new_path),
+    oldUri: await uriForResolvedPath(resolvedSource, context),
+    newUri: movedFolderUri,
+    scope: scope as 'project' | 'document_store' | 'general',
+    mountPoint: input.mount_point,
+    origin: await resolveActorOrigin(context),
+    isFolder: true,
+  });
+
   const result: DocMoveFolderOutput = {
     success: true,
     old_path: input.path,
     new_path: input.new_path,
+    uri: movedFolderUri,
   };
 
   return {

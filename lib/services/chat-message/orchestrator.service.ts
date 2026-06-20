@@ -31,6 +31,7 @@ import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
   postProsperoContextAnnouncement,
+  postProsperoGroupContextWhisper,
 } from '@/lib/services/prospero-notifications/writer'
 import { postLibrarianUploadAnnouncement } from '@/lib/services/librarian-notifications/writer'
 import {
@@ -46,6 +47,7 @@ import {
   encodeErrorEvent,
   encodeStatusEvent,
   encodeTurnStartEvent,
+  encodeCarinaAnswerEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -90,6 +92,7 @@ import {
   type RngToolCall,
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
+import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
 import {
   finalizeMessageResponse,
 } from './message-finalizer.service'
@@ -496,6 +499,27 @@ async function processMessage(
         existingMessages.push(posted)
       }
     }
+
+    // Group stores are gated by membership and the vault is personal, so they
+    // ride as a targeted whisper to the responding character (not the public
+    // announcement above). Refreshed on the same cadence for the character
+    // about to take the floor. Fails soft.
+    try {
+      const groupWhisper = await postProsperoGroupContextWhisper({
+        chatId,
+        targetParticipantId: characterParticipant.id,
+        characterId: character.id,
+      })
+      if (groupWhisper) {
+        existingMessages.push(groupWhisper)
+      }
+    } catch (error) {
+      logger.warn('[Orchestrator] Failed to post Prospero group-context whisper', {
+        chatId,
+        characterId: character.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   // Status: processing files
@@ -649,6 +673,42 @@ async function processMessage(
     }
   }
 
+  // ============================================================================
+  // Carina (inline LLM queries) — user-message path
+  // ============================================================================
+  // If the user addressed an answerer with @Name: / @Name?, fire the isolated
+  // reference call. Like the RNG auto-detect above, this is a SIDE-EFFECT: the
+  // normal responding participant still takes its turn ("both fire"). The answer
+  // (or a Prospero error) is posted now and surfaced to the client by the
+  // post-turn fetchChat() refresh; it carries systemSender:'carina', so it is
+  // excluded from memory extraction automatically.
+  if (!isContinueMode && content) {
+    await runCarinaMarkupQuery({
+      userId,
+      chatId,
+      text: content,
+      askerParticipantId: userParticipantId ?? null,
+      // The human operator typed this markup — they can reach any character,
+      // regardless of whether their persona is itself a Carina answerer.
+      operatorInitiated: true,
+      logLabels: { detected: 'user message', failed: 'user-message' },
+      // Emit a "Consulting …" status before the query runs.
+      onConsulting: (characterName) => safeEnqueue(controller, encodeStatusEvent(encoder, {
+        stage: 'gathering',
+        message: `Consulting ${characterName}...`,
+        characterName: character.name,
+        characterId: character.id,
+      })),
+      // Surface the answer to the Salon the instant it returns — before the
+      // first character even starts responding — rather than at end-of-turn.
+      onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+      // Splice a PUBLIC answer into this turn's in-memory context so the first
+      // character to respond in the same cycle hears it (parallels the
+      // RNG-result push above; the DB copy already covers later turns).
+      onPublicAnswer: (msg) => existingMessages.push(msg),
+    })
+  }
+
   // Build final user message content
   const finalUserMessageContent = isContinueMode
     ? undefined
@@ -715,6 +775,24 @@ async function processMessage(
   // whole tool-build step in that case.
   const isEffectiveCourier = streamingState.effectiveProfile.transport === 'courier'
 
+  // Carina (inline LLM queries): offer the ask_carina tool when at least one
+  // answerer (a character with canBeCarina) exists, OR when the acting character
+  // is `systemTransparency` — such a character can reach the Brahma Console
+  // pseudocharacter as a Carina answerer, so it must be offered the tool even
+  // with no other answerer present. Uses the overlay-free raw read — canBeCarina
+  // is a DB column, not a vault field — to keep this per-turn check cheap.
+  let askCarinaEnabled = false
+  try {
+    const rawCharacters = await repos.characters.findAllRaw()
+    const anyCanBeCarina = rawCharacters.some(c => c.canBeCarina === true)
+    askCarinaEnabled = anyCanBeCarina || characterIsTransparent
+  } catch (carinaProbeError) {
+    logger.warn('Failed to probe for Carina answerers; ask_carina tool withheld', {
+      chatId,
+      error: carinaProbeError instanceof Error ? carinaProbeError.message : String(carinaProbeError),
+    })
+  }
+
   let tools: unknown[] = []
   let modelSupportsNativeTools = false
   let useNativeWebSearch = false
@@ -733,9 +811,10 @@ async function processMessage(
       agentMode.enabled, // agentModeEnabled - enables submit_final_response tool
       isMultiCharacter, // isMultiCharacter - enables whisper tool
       helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
-      canDressThemselves, // canDressThemselves - enables list_wardrobe and update_outfit_item
-      canCreateOutfits, // canCreateOutfits - enables create_wardrobe_item
-      documentEditingEnabled // documentEditingEnabled - enables doc_* editing tools
+      canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off
+      canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
+      documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
+      askCarinaEnabled // askCarinaEnabled - enables ask_carina tool when an answerer exists
     )
     tools = builtTools.tools
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools
@@ -826,6 +905,20 @@ async function processMessage(
   // Async Pre-Compression + Proactive Memory Recall (run in parallel)
   // ============================================================================
 
+  // Characters present in the room this turn: the responding character plus
+  // every other character participant (participantCharacters is keyed by
+  // characterId; it is empty in single-character chats). Threaded into the
+  // proactive recall path so memories ABOUT a present character get the
+  // participant-aware boost (item 4). The dynamic-head fallback computes the
+  // same set itself from the participant list it already holds.
+  const presentAboutCharacterIds = Array.from(
+    new Set(
+      [character.id, ...participantCharacters.keys()].filter(
+        (id): id is string => typeof id === 'string' && id.length > 0,
+      ),
+    ),
+  )
+
   const { cachedCompressionResponse, preSearchedMemories, stopKeepAlive } = await runPreContextPreCompute({
     chatId,
     userId,
@@ -833,6 +926,7 @@ async function processMessage(
     character,
     characterParticipant,
     isMultiCharacter,
+    presentAboutCharacterIds,
     isContinueMode,
     content,
     existingMessages,
@@ -952,6 +1046,11 @@ async function processMessage(
       recap: builtContext.debugMemoryRecap,
     },
   )
+  // Let a character's `ask_carina` tool call surface its answer to the Salon
+  // live (same `carinaAnswer` SSE event the user-markup path uses above). The
+  // toolContext threads down into the native/text tool loops.
+  toolContext.emitCarinaAnswer = (msg) =>
+    safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg))
 
   // ============================================================================
   // Tool Change Notification

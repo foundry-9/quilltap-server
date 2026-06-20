@@ -16,6 +16,7 @@
 
 import { useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
+import { Icon } from '@/components/ui/icon'
 import { ProviderModelBadge } from '@/components/ui/ProviderModelBadge'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
 import type { TurnOrderStatus } from '@/lib/chat/turn-manager'
@@ -305,16 +306,12 @@ export function ParticipantCard({
             {/* Status overlay icon — visible even when sidebar is collapsed */}
             {participantStatus === 'silent' && (
               <div className="qt-participant-status-overlay qt-participant-status-overlay-silent" title="Silent">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
+                <Icon name="ban" className="w-3 h-3" />
               </div>
             )}
             {participantStatus === 'absent' && (
               <div className="qt-participant-status-overlay qt-participant-status-overlay-absent" title="Absent">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                </svg>
+                <Icon name="log-out" className="w-3 h-3" />
               </div>
             )}
           </div>
@@ -331,10 +328,7 @@ export function ParticipantCard({
                   title={`Regenerate avatar for ${name}`}
                   aria-label={`Regenerate avatar for ${name}`}
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                  </svg>
+                  <Icon name="camera" className="w-3.5 h-3.5" />
                 </button>
               )}
               {isCharacter && participant.character?.id && wardrobeDialog && (
@@ -348,10 +342,7 @@ export function ParticipantCard({
                   title={`Open ${name}'s wardrobe`}
                   aria-label={`Open ${name}'s wardrobe`}
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 9V7.5a2 2 0 1 1 2 2" />
-                    <path d="M12 9L3 16h18L12 9z" />
-                  </svg>
+                  <Icon name="wardrobe" className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -410,11 +401,18 @@ export function ParticipantCard({
               >
                 <option value="">Select a provider...</option>
                 <option value={USER_IMPERSONATION_VALUE}>User (you type)</option>
-                {connectionProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.modelName || profile.name}
-                  </option>
-                ))}
+                {connectionProfiles.map((profile) => {
+                  const model = profile.modelName?.trim()
+                  const label =
+                    model && model !== profile.name
+                      ? `${profile.name} — ${model}`
+                      : profile.name
+                  return (
+                    <option key={profile.id} value={profile.id}>
+                      {label || model}
+                    </option>
+                  )
+                })}
               </select>
             </div>
           ) : (
@@ -462,9 +460,7 @@ export function ParticipantCard({
                   title="Rebuild system prompt from latest character data"
                   aria-label={`Rebuild system prompt for ${name}`}
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                  <Icon name="refresh" className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -520,9 +516,7 @@ export function ParticipantCard({
             title="Stop generating"
             aria-label="Stop generating"
           >
-            <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="1" />
-            </svg>
+            <Icon name="stop" className="w-3.5 h-3.5 mr-1" />
             Stop
           </button>
         ) : isUserParticipant && onSkip ? (
@@ -596,9 +590,7 @@ export function ParticipantCard({
             className="qt-button qt-button-destructive qt-button-sm py-1.5 px-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title={`Remove ${name} from chat`}
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Icon name="close" className="w-3.5 h-3.5" />
           </button>
         )}
 
@@ -624,13 +616,9 @@ export function ParticipantCard({
             title={isImpersonating ? `Stop speaking as ${name}` : `Speak as ${name}`}
           >
             {isImpersonating ? (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              <Icon name="log-out" className="w-3.5 h-3.5" />
             ) : (
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              <Icon name="user" className="w-3.5 h-3.5" />
             )}
           </button>
         )}
@@ -643,9 +631,7 @@ export function ParticipantCard({
             title={`Whisper to ${name}`}
             aria-label={`Whisper to ${name}`}
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+            <Icon name="chat" className="w-3.5 h-3.5" />
           </button>
         )}
 

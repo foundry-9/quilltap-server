@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { Icon } from '@/components/ui/icon'
 
 interface RestoreItemSelectorProps {
   selectedFile: File | null
@@ -25,19 +26,7 @@ export function RestoreItemSelector({
           className="border-2 border-dashed qt-border-default rounded-lg p-6 text-center cursor-pointer hover:border-input transition-colors"
           onClick={() => fileInputRef.current?.click()}
         >
-          <svg
-            className="w-12 h-12 mx-auto qt-text-secondary mb-2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
+          <Icon name="plus" className="w-12 h-12 mx-auto qt-text-secondary mb-2" />
           <p className="qt-text-small">
             Click to select or drag and drop a backup file
           </p>

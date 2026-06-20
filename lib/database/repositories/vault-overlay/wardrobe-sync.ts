@@ -1,8 +1,10 @@
 /**
- * Wardrobe read overlay + write-back sync. The vault `Wardrobe/` folder is
- * authoritative on read, so every wardrobe mutation must re-project the DB
- * state back out to `Wardrobe/*.md`. Per-character chaining serializes
- * concurrent syncs so they can't each read a stale DB snapshot.
+ * Wardrobe read overlay + vault projection. The vault `Wardrobe/` folder is
+ * the sole source of truth for a character's wardrobe items: reads come from
+ * it, and the per-write vault writers (plus the one-time startup refresh)
+ * project the authoritative item list back out to `Wardrobe/*.md`. There is no
+ * DB mirror any more — the `wardrobe_items` table is retired, so there is no
+ * sync-back machinery promoting vault items into DB rows.
  *
  * @module database/repositories/vault-overlay/wardrobe-sync
  */
@@ -36,11 +38,12 @@ export interface WardrobeOverlayOptions {
 }
 
 /**
- * Overlay a wardrobe-items list read. When the character has a linked
- * vault, the vault's `Wardrobe/*.md` files (or the legacy wardrobe.json on
- * a not-yet-migrated vault) are the source of truth; the caller's DB
- * loader is skipped. Otherwise the DB loader runs and its result is
- * returned.
+ * Read a character's wardrobe items from the authoritative vault `Wardrobe/`
+ * folder. Every character has a linked vault after the wardrobe cutover, so a
+ * missing vault (or an unreadable wardrobe folder) is a misconfiguration, not a
+ * reason to read a DB row — there is no DB row. We log it and return an empty
+ * list rather than throwing, so the equip/chat/UI read paths that call this
+ * directly degrade gracefully instead of failing mid-request.
  *
  * Items parsed from the vault have their `characterId` coerced to the lookup
  * ID — a wardrobe file scoped to one character's vault always belongs to that
@@ -49,19 +52,32 @@ export interface WardrobeOverlayOptions {
  */
 export async function getOverlaidWardrobeItems(
   characterId: string,
-  loadDbItems: () => Promise<WardrobeItem[]>,
   options: WardrobeOverlayOptions = {},
 ): Promise<WardrobeItem[]> {
   const repos = getRepositories();
   const character = await repos.characters.findByIdRaw(characterId);
-  if (!character || !hasLinkedVault(character)) {
-    return loadDbItems();
+  if (!character) {
+    logger.debug('getOverlaidWardrobeItems: character not found; returning empty wardrobe', {
+      characterId,
+    });
+    return [];
+  }
+  if (!hasLinkedVault(character)) {
+    logger.error(
+      'getOverlaidWardrobeItems: character has no linked vault; wardrobe lives only in the vault, returning empty list',
+      { characterId },
+    );
+    return [];
   }
 
   const mountPointId = character.characterDocumentMountPointId as string;
   const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
   if (!vault) {
-    return loadDbItems();
+    logger.error(
+      'getOverlaidWardrobeItems: character vault wardrobe is unreadable; returning empty list',
+      { characterId, mountPointId },
+    );
+    return [];
   }
 
   let items: WardrobeItem[] = vault.items.map((item) => ({
@@ -79,148 +95,16 @@ export async function getOverlaidWardrobeItems(
 }
 
 /**
- * Per-character write chain. The overlay treats the vault Wardrobe/ folder
- * as authoritative on read, so each mutation of wardrobe items must project
- * the new DB state back out into `Wardrobe/*.md`. Composite items emit
- * their `componentItems:` slug arrays in the same projection. Chaining per
- * characterId prevents two concurrent sync calls from each reading a stale
- * DB snapshot and writing files that lose one of the changes.
- */
-const wardrobeSyncChains = new Map<string, Promise<void>>();
-
-/**
- * After a wardrobe-item write, re-project the character's DB state into the
- * vault's Wardrobe/ folder. No-ops for archetype rows (characterId null),
- * missing characters, and characters that aren't overlay candidates (flag
- * off or no linked vault).
- *
- * Failures are logged but not propagated — the DB write is already committed,
- * and the next successful sync (or the startup refresh) will reconcile. We'd
- * rather report success and leave a warning in the log than throw and leave
- * the caller to retry into a duplicate DB row.
- *
- * `excludeIds` is a tombstone set of wardrobe-item ids that should not be
- * promoted from vault to DB during the ingestion phase. The delete path uses
- * this so the vault file for the just-deleted row is treated as unmanaged
- * and swept by the projection step. Without it, the ingestion would
- * re-promote the file (preserving the same id), and the delete would be a
- * no-op for vault-overlay characters.
- */
-export async function syncCharacterVaultWardrobe(
-  characterId: string | null | undefined,
-  excludeIds?: ReadonlySet<string>,
-): Promise<void> {
-  if (!characterId) return;
-
-  const prev = wardrobeSyncChains.get(characterId) ?? Promise.resolve();
-  const next = prev
-    .catch(() => {})
-    .then(() => performVaultWardrobeSync(characterId, excludeIds));
-  wardrobeSyncChains.set(characterId, next);
-  try {
-    await next;
-  } finally {
-    if (wardrobeSyncChains.get(characterId) === next) {
-      wardrobeSyncChains.delete(characterId);
-    }
-  }
-}
-
-async function performVaultWardrobeSync(
-  characterId: string,
-  excludeIds?: ReadonlySet<string>,
-): Promise<void> {
-  const repos = getRepositories();
-  const character = await repos.characters.findByIdRaw(characterId);
-  if (!character || !hasLinkedVault(character)) return;
-
-  const mountPointId = character.characterDocumentMountPointId as string;
-
-  try {
-    // Promote any vault-only wardrobe items into the DB before projecting
-    // back out. The projection sweep deletes any Wardrobe/ file not
-    // represented in the DB-derived list, so vault-only files (created by
-    // hand or via Document Mode, with no DB row) would get wiped on every
-    // sync without this step.
-    await ingestVaultOnlyWardrobeIntoDb(mountPointId, characterId, excludeIds);
-
-    const items = await repos.wardrobe.findByCharacterIdRaw(characterId);
-
-    await projectVaultWardrobe(mountPointId, characterId, items);
-  } catch (err) {
-    logger.error('Failed to sync wardrobe folder from DB; vault is now stale', {
-      characterId,
-      mountPointId,
-      error: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-  }
-}
-
-/**
- * Read the character's vault wardrobe folder and copy any items that aren't
- * yet in the DB into the DB, preserving their ids and timestamps. The
- * downstream projection sees them as managed rows and leaves their files in
- * place; without this step it would delete them as unmanaged.
- *
- * Items whose id is in `excludeIds` are skipped (and *not* promoted), so the
- * subsequent projection sweep treats their vault files as unmanaged and
- * deletes them. The delete path uses this to make a wardrobe-item delete
- * actually delete on vault-overlay characters.
- *
- * Failures on individual items are logged but don't abort the rest of the
- * ingestion or the sync — losing one item to a validation error is better
- * than rolling back and clobbering the whole vault on the projection step.
- */
-async function ingestVaultOnlyWardrobeIntoDb(
-  mountPointId: string,
-  characterId: string,
-  excludeIds?: ReadonlySet<string>,
-): Promise<void> {
-  const repos = getRepositories();
-  const vault = await readCharacterVaultWardrobe(mountPointId, characterId);
-  if (!vault) return;
-
-  if (vault.items.length > 0) {
-    const dbItems = await repos.wardrobe.findByCharacterIdRaw(characterId, true);
-    const dbItemIds = new Set(dbItems.map((i) => i.id));
-    for (const item of vault.items) {
-      if (dbItemIds.has(item.id)) continue;
-      if (excludeIds?.has(item.id)) {
-        continue;
-      }
-      try {
-        await repos.wardrobe.createFromVault(item);
-        logger.info('Promoted vault-only wardrobe item into DB before sync', {
-          characterId,
-          mountPointId,
-          itemId: item.id,
-          title: item.title,
-        });
-      } catch (err) {
-        logger.warn('Failed to promote vault-only wardrobe item into DB; will be deleted by projection', {
-          characterId,
-          mountPointId,
-          itemId: item.id,
-          title: item.title,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-  }
-}
-
-/**
  * Project an authoritative wardrobe-item list into the vault's `Wardrobe/`
  * folder, deleting any stale legacy `wardrobe.json` so the new format is the
  * single source on disk. Composite items emit their `componentItems:` slug
- * arrays via the slug map built here. Shared between the per-write sync
- * chain, the full-character writer, and the startup migration so they all
+ * arrays via the slug map built here. Shared between the per-write vault
+ * writers (`wardrobe-writes.ts`) and the one-time startup refresh so they all
  * produce the same on-disk shape.
  *
  * The retired `Outfits/` folder is intentionally not touched — pre-rework
  * preset files left on disk are removed by a separate database-side
- * migration, not by every wardrobe sync.
+ * migration, not by every wardrobe write.
  */
 export async function projectVaultWardrobe(
   mountPointId: string,

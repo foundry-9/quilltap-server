@@ -4,8 +4,13 @@
  * When a database-backed document store holds a pdf/docx file, its bytes live
  * in doc_mount_blobs (not doc_mount_documents) and its plain-text representation
  * lives in doc_mount_blobs.extractedText. reindexSingleFile must chunk that
- * extracted text and mirror sha256/size from the blob — not the text — so the
- * doc_mount_files row stays aligned with the source-of-truth bytes.
+ * extracted text — but, crucially, it must NOT re-create the file row via
+ * linkFilesystemFile. That helper keys a file row by (sha256, source) and forks
+ * a fresh, content-less row when none matches, repointing the link to it and
+ * severing the document from its doc_mount_documents / doc_mount_blobs content
+ * (the "lists but won't open" orphan). For database-backed stores the file row +
+ * link already exist (written by the content writer), so reindex only refreshes
+ * chunk metadata on the existing link in place.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
@@ -53,6 +58,7 @@ const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory')
 import { reindexSingleFile } from '@/lib/doc-edit/reindex-file';
 
 const MOUNT_ID = 'mount-xyz';
+const EXISTING_LINK_ID = 'link-existing';
 
 interface Repos {
   docMountPoints: { findById: jest.Mock };
@@ -66,6 +72,7 @@ interface Repos {
   docMountFileLinks: {
     findByMountPointAndPath: jest.Mock;
     linkFilesystemFile: jest.Mock;
+    update: jest.Mock;
   };
   docMountChunks: {
     deleteByFileId: jest.Mock;
@@ -94,12 +101,19 @@ function createRepos(): Repos {
       update: jest.fn().mockResolvedValue(undefined),
     },
     docMountFileLinks: {
-      findByMountPointAndPath: jest.fn().mockResolvedValue(null),
+      // The content writer (linkDocumentContent / linkBlobContent) always creates
+      // the link before reindex runs, so the link lookup resolves by default.
+      findByMountPointAndPath: jest.fn().mockResolvedValue({
+        id: EXISTING_LINK_ID,
+        fileId: 'file-existing',
+        mountPointId: MOUNT_ID,
+      }),
       linkFilesystemFile: jest.fn().mockImplementation(async (input) => ({
         id: 'link-mock',
         fileId: 'file-mock',
         ...input,
       })),
+      update: jest.fn().mockResolvedValue(undefined),
     },
     docMountChunks: {
       deleteByFileId: jest.fn().mockResolvedValue(undefined),
@@ -118,7 +132,7 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
     getRepositoriesMock.mockReturnValue(repos);
   });
 
-  it('chunks extractedText from doc_mount_blobs when no document row exists', async () => {
+  it('chunks extractedText from doc_mount_blobs and refreshes the existing link in place', async () => {
     const blob = {
       id: 'blob-1',
       mountPointId: MOUNT_ID,
@@ -134,30 +148,29 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
 
     await reindexSingleFile(MOUNT_ID, 'docs/report.pdf', '');
 
-    // The new high-level helper handles file + link in one shot. The
-    // assertion shifts from `docMountFiles.create` to
-    // `docMountFileLinks.linkFilesystemFile` (which is what reindex-file
-    // calls after the content/link split).
-    expect(repos.docMountFileLinks.linkFilesystemFile).toHaveBeenCalledWith(
+    // Regression guard: reindex must NOT re-create the file row for a
+    // database-backed store — that is what orphaned the document from its
+    // content row ("lists but won't open").
+    expect(repos.docMountFileLinks.linkFilesystemFile).not.toHaveBeenCalled();
+
+    // Chunk metadata is refreshed on the existing link in place.
+    expect(repos.docMountChunks.deleteByLinkId).toHaveBeenCalledWith(EXISTING_LINK_ID);
+    expect(repos.docMountFileLinks.update).toHaveBeenCalledWith(
+      EXISTING_LINK_ID,
       expect.objectContaining({
-        mountPointId: MOUNT_ID,
-        relativePath: 'docs/report.pdf',
-        fileType: 'pdf',
-        sha256: blob.sha256,
-        fileSizeBytes: blob.sizeBytes,
-        source: 'database',
         conversionStatus: 'converted',
         plainTextLength: blob.extractedText.length,
         chunkCount: 1,
+        lastModified: blob.updatedAt,
       })
     );
 
-    // Chunks were written for the extracted text, keyed by the link id.
+    // Chunks were written for the extracted text, keyed by the existing link id.
     expect(repos.docMountChunks.bulkInsert).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
           mountPointId: MOUNT_ID,
-          linkId: 'link-mock',
+          linkId: EXISTING_LINK_ID,
           content: 'Hello chunk',
         }),
       ])
@@ -179,7 +192,27 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
     await reindexSingleFile(MOUNT_ID, 'binaries/mystery.bin', '');
 
     expect(repos.docMountFileLinks.linkFilesystemFile).not.toHaveBeenCalled();
-    expect(repos.docMountFiles.update).not.toHaveBeenCalled();
+    expect(repos.docMountFileLinks.update).not.toHaveBeenCalled();
+    expect(repos.docMountChunks.bulkInsert).not.toHaveBeenCalled();
+  });
+
+  it('skips reindex (and never forks a file row) when the link is missing', async () => {
+    // No link yet — reindex must bail rather than fabricate a content-less
+    // file row, which is exactly the orphan this branch guards against.
+    repos.docMountFileLinks.findByMountPointAndPath.mockResolvedValue(null);
+    repos.docMountDocuments.findByMountPointAndPath.mockResolvedValue({
+      id: 'doc-9',
+      mountPointId: MOUNT_ID,
+      relativePath: 'orphan.md',
+      content: 'content with no link',
+      contentSha256: 'a'.repeat(64),
+      lastModified: '2026-04-18T00:00:00.000Z',
+    });
+
+    await reindexSingleFile(MOUNT_ID, 'orphan.md', '');
+
+    expect(repos.docMountFileLinks.linkFilesystemFile).not.toHaveBeenCalled();
+    expect(repos.docMountFileLinks.update).not.toHaveBeenCalled();
     expect(repos.docMountChunks.bulkInsert).not.toHaveBeenCalled();
   });
 
@@ -205,9 +238,12 @@ describe('reindexSingleFile (blob extractedText branch)', () => {
     await reindexSingleFile(MOUNT_ID, 'notes.md', '');
 
     expect(repos.docMountBlobs.findByMountPointAndPath).not.toHaveBeenCalled();
-    expect(repos.docMountFileLinks.linkFilesystemFile).toHaveBeenCalledWith(
+    expect(repos.docMountFileLinks.linkFilesystemFile).not.toHaveBeenCalled();
+    expect(repos.docMountFileLinks.update).toHaveBeenCalledWith(
+      EXISTING_LINK_ID,
       expect.objectContaining({
-        sha256: 'e'.repeat(64),
+        plainTextLength: 'native text content'.length,
+        chunkCount: 1,
       })
     );
   });

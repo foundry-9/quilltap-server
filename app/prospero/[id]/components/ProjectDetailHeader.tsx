@@ -8,6 +8,7 @@
 
 import Link from 'next/link'
 import type { Project, EditForm } from '../types'
+import { Icon } from '@/components/ui/icon'
 
 interface ProjectDetailHeaderProps {
   project: Project
@@ -19,21 +20,6 @@ interface ProjectDetailHeaderProps {
   onSave: () => void
 }
 
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-    </svg>
-  )
-}
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-    </svg>
-  )
-}
 
 export function ProjectDetailHeader({
   project,
@@ -54,7 +40,7 @@ export function ProjectDetailHeader({
           className="w-12 h-12 rounded-lg flex items-center justify-center text-xl"
           style={{ backgroundColor: project.color || 'var(--muted)' }}
         >
-          {project.icon || <FolderIcon className="w-6 h-6 qt-text-secondary" />}
+          {project.icon || <Icon name="folder" className="w-6 h-6 qt-text-secondary" />}
         </div>
         <div>
           {isEditing ? (
@@ -85,7 +71,7 @@ export function ProjectDetailHeader({
           href={`/salon/new?projectId=${project.id}`}
           className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground shadow hover:qt-bg-success/90"
         >
-          <PlusIcon className="w-4 h-4" />
+          <Icon name="plus" className="w-4 h-4" />
           New Chat
         </Link>
         {isEditing ? (

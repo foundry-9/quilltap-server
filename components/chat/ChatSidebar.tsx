@@ -13,7 +13,10 @@
  */
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
@@ -356,9 +359,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             title="Collapse chat sidebar"
             aria-label="Collapse chat sidebar"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <Icon name="chevron-right" className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -512,9 +513,7 @@ function CollapsedStrip({
         title="Expand chat sidebar"
         aria-label="Expand chat sidebar"
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
+        <Icon name="chevron-left" className="w-5 h-5" />
       </button>
 
       {onTogglePause && (
@@ -525,13 +524,9 @@ function CollapsedStrip({
           aria-label={isPaused ? 'Resume auto-responses' : 'Pause auto-responses'}
         >
           {isPaused ? (
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+            <Icon name="play" className="w-5 h-5" />
           ) : (
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-            </svg>
+            <Icon name="pause" className="w-5 h-5" />
           )}
         </button>
       )}
@@ -580,16 +575,12 @@ function CollapsedStrip({
                 />
                 {participantStatus === 'silent' && (
                   <div className="qt-participant-status-overlay qt-participant-status-overlay-silent">
-                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
+                    <Icon name="ban" className="w-2.5 h-2.5" />
                   </div>
                 )}
                 {participantStatus === 'absent' && (
                   <div className="qt-participant-status-overlay qt-participant-status-overlay-absent">
-                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-                    </svg>
+                    <Icon name="log-out" className="w-2.5 h-2.5" />
                   </div>
                 )}
               </div>
@@ -656,16 +647,12 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
         >
           {p.isPaused ? (
             <>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
+              <Icon name="play" className="w-4 h-4" />
               <span>Resume</span>
             </>
           ) : (
             <>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-              </svg>
+              <Icon name="pause" className="w-4 h-4" />
               <span>Pause</span>
             </>
           )}
@@ -675,9 +662,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
       <div className="qt-chat-sidebar-cards mt-3">
         {p.sortedParticipants.length === 0 && (
           <div className="qt-empty-state py-8">
-            <svg className="qt-empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+            <Icon name="users" className="qt-empty-state-icon" />
             <p className="qt-empty-state-title">No participants</p>
             <p className="qt-empty-state-description">Add a character to get started</p>
           </div>
@@ -740,9 +725,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
             onClick={p.onAddCharacter}
             className="w-full py-2 px-4 text-sm font-medium rounded-lg border border-dashed qt-border-default qt-text-secondary hover:qt-bg-surface-alt hover:qt-text transition-colors flex items-center justify-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Icon name="plus" className="w-4 h-4" />
             Add Character
           </button>
         </div>
@@ -817,15 +800,21 @@ function ChatSection({
     }
   }, [sectionOpen, hasEverOpened])
 
-  const { data: templatesData } = useSWR<RoleplayTemplate[]>(
-    hasEverOpened ? '/api/v1/roleplay-templates' : null
-  )
-  const { data: imageProfilesData } = useSWR<{ profiles: ImageProfile[] }>(
-    hasEverOpened ? '/api/v1/image-profiles' : null
-  )
-  const { data: apiKeysData } = useSWR<{ apiKeys: ApiKey[] }>(
-    hasEverOpened ? '/api/v1/api-keys' : null
-  )
+  const { data: templatesData } = useQuery({
+    queryKey: queryKeys.roleplayTemplates.all,
+    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
+    enabled: hasEverOpened,
+  })
+  const { data: imageProfilesData } = useQuery({
+    queryKey: queryKeys.imageProfiles.all,
+    queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
+    enabled: hasEverOpened,
+  })
+  const { data: apiKeysData } = useQuery({
+    queryKey: queryKeys.apiKeys.all,
+    queryFn: ({ signal }) => apiFetch<{ apiKeys: ApiKey[] }>('/api/v1/api-keys', { signal }),
+    enabled: hasEverOpened,
+  })
 
   const roleplayTemplates = templatesData ?? []
   const imageProfiles = imageProfilesData?.profiles ?? []
@@ -991,9 +980,7 @@ function ChatSection({
           className={`qt-tool-palette-badge ${agentModeEnabled ? 'qt-tool-palette-badge-on' : 'qt-tool-palette-badge-off'}`}
           title={agentModeEnabled ? 'Disable agent mode' : 'Enable agent mode'}
         >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
+          <Icon name="monitor" className="w-3.5 h-3.5" />
           <span>{agentModeEnabled ? 'Agent On' : 'Agent Off'}</span>
         </button>
       )}
@@ -1024,9 +1011,7 @@ function ChatSection({
           className="qt-tool-palette-button"
           title={projectName ? `In project: ${projectName}` : 'Assign to project'}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-          </svg>
+          <Icon name="folder" className="w-4 h-4" />
           <span>{projectName ? `Project: ${projectName}` : 'Project'}</span>
         </button>
       )}
@@ -1090,10 +1075,7 @@ function ChatSection({
           className="qt-tool-palette-button"
           title="Configure LLM tools"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+          <Icon name="settings" className="w-4 h-4" />
           <span>Tools…</span>
         </button>
       )}
@@ -1106,9 +1088,7 @@ function ChatSection({
           className="qt-tool-palette-button"
           title="Run a tool manually"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
-          </svg>
+          <Icon name="wrench" className="w-4 h-4" />
           <span>Run Tool…</span>
         </button>
       )}
@@ -1121,9 +1101,7 @@ function ChatSection({
           className="qt-tool-palette-button"
           title="Regenerate story background image"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+          <Icon name="image" className="w-4 h-4" />
           <span>Regenerate Background</span>
         </button>
       )}
@@ -1328,10 +1306,7 @@ function OrganizeSection({
           className="qt-tool-palette-button"
           title="Edit this enclave’s schedule, budget, and visibility"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
+          <Icon name="settings" className="w-4 h-4" />
           <span>Edit Enclave</span>
         </button>
       )}
@@ -1343,9 +1318,7 @@ function OrganizeSection({
           className="qt-tool-palette-button"
           title="Rename chat"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
+          <Icon name="pencil" className="w-4 h-4" />
           <span>Rename</span>
         </button>
       )}
@@ -1357,9 +1330,7 @@ function OrganizeSection({
           className="qt-tool-palette-button"
           title="View/edit chat state"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-          </svg>
+          <Icon name="database" className="w-4 h-4" />
           <span>State…</span>
         </button>
       )}
@@ -1371,9 +1342,7 @@ function OrganizeSection({
           className="qt-tool-palette-button"
           title="Continue this conversation in a new chat with a different scenario or project"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-          </svg>
+          <Icon name="arrow-right" className="w-4 h-4" />
           <span>Continue Elsewhere</span>
         </button>
       )}
@@ -1384,9 +1353,7 @@ function OrganizeSection({
         className="qt-tool-palette-button"
         title="Export chat"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
+        <Icon name="download" className="w-4 h-4" />
         <span>Export</span>
       </button>
 
@@ -1397,9 +1364,7 @@ function OrganizeSection({
           className="qt-tool-palette-button"
           title="View gallery"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+          <Icon name="image" className="w-4 h-4" />
           <span>Gallery ({chatPhotoCount})</span>
         </button>
       )}
@@ -1435,9 +1400,7 @@ function EditContentSection({
           className="qt-tool-palette-button"
           title="Search and replace in chat"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Icon name="search" className="w-4 h-4" />
           <span>Replace</span>
         </button>
       )}
@@ -1449,9 +1412,7 @@ function EditContentSection({
           className="qt-tool-palette-button"
           title="Bulk re-attribute messages between characters"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
+          <Icon name="swap" className="w-4 h-4" />
           <span>Bulk Replace</span>
         </button>
       )}
@@ -1463,9 +1424,7 @@ function EditContentSection({
           className="qt-tool-palette-button"
           title="Re-extract memories"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <Icon name="refresh" className="w-4 h-4" />
           <span>Re-extract Memories</span>
         </button>
       )}
@@ -1477,9 +1436,7 @@ function EditContentSection({
           className="qt-tool-palette-button qt-tool-palette-button-danger"
           title="Delete chat memories"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
+          <Icon name="trash" className="w-4 h-4" />
           <span>Delete Memories ({chatMemoryCount})</span>
         </button>
       )}

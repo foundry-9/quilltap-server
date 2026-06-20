@@ -31,15 +31,21 @@ const mockEnqueueEmbeddingGenerate = enqueueEmbeddingGenerate as jest.MockedFunc
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeChunk(id: string, hasEmbedding: boolean) {
+function makeChunk(id: string, hasEmbedding: boolean, linkId = 'link-1') {
   return {
     id,
     mountPointId: 'mp-1',
     fileId: 'file-1',
+    linkId,
     chunkIndex: 0,
     content: 'Some content.',
     embedding: hasEmbedding ? [0.1, 0.2, 0.3] : null,
   }
+}
+
+/** A link row with just the fields the scheduler reads. */
+function makeLink(id: string, allowEmbed: boolean) {
+  return { id, allowEmbed }
 }
 
 function makeRepos(
@@ -47,11 +53,16 @@ function makeRepos(
   profiles: { id: string; name: string; isDefault: boolean }[] = [
     { id: 'profile-1', name: 'Default', isDefault: true },
   ],
-  users: { id: string }[] = [{ id: 'user-1' }]
+  users: { id: string }[] = [{ id: 'user-1' }],
+  links: ReturnType<typeof makeLink>[] = []
 ) {
   return {
     docMountChunks: {
       findByMountPointId: jest.fn().mockResolvedValue(chunks),
+      clearEmbeddingsByLinkId: jest.fn().mockResolvedValue(0),
+    },
+    docMountFileLinks: {
+      findByMountPointId: jest.fn().mockResolvedValue(links),
     },
     embeddingProfiles: {
       findAll: jest.fn().mockResolvedValue(profiles),
@@ -220,5 +231,70 @@ describe('enqueueEmbeddingJobsForMountPoint', () => {
     // One succeeded
     expect(count).toBe(1)
     expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledTimes(2)
+  })
+
+  // -------------------------------------------------------------------------
+  // Per-document `embed:false` policy (allowEmbed === false on the link row)
+  // -------------------------------------------------------------------------
+
+  it('does not enqueue chunks whose link is embed:false', async () => {
+    const repos = makeRepos(
+      [
+        makeChunk('blocked-1', false, 'link-blocked'),
+        makeChunk('blocked-2', false, 'link-blocked'),
+      ],
+      undefined,
+      undefined,
+      [makeLink('link-blocked', false)]
+    )
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+    const count = await enqueueEmbeddingJobsForMountPoint('mp-1')
+
+    expect(count).toBe(0)
+    expect(mockEnqueueEmbeddingGenerate).not.toHaveBeenCalled()
+  })
+
+  it('erases existing embeddings for an embed:false link', async () => {
+    const repos = makeRepos(
+      [makeChunk('embedded-1', true, 'link-blocked')],
+      undefined,
+      undefined,
+      [makeLink('link-blocked', false)]
+    )
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+    await enqueueEmbeddingJobsForMountPoint('mp-1')
+
+    expect(repos.docMountChunks.clearEmbeddingsByLinkId).toHaveBeenCalledWith('link-blocked')
+  })
+
+  it('enqueues allowed-link chunks while skipping blocked-link chunks (mixed)', async () => {
+    const repos = makeRepos(
+      [
+        makeChunk('ok-1', false, 'link-ok'),
+        makeChunk('blocked-1', false, 'link-blocked'),
+        makeChunk('ok-2', false, 'link-ok'),
+      ],
+      undefined,
+      undefined,
+      [makeLink('link-ok', true), makeLink('link-blocked', false)]
+    )
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+    const count = await enqueueEmbeddingJobsForMountPoint('mp-1')
+
+    expect(count).toBe(2)
+    expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledTimes(2)
+    expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ entityId: 'ok-1' })
+    )
+    expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ entityId: 'ok-2' })
+    )
+    // The blocked link's vectors are scrubbed even though its chunks weren't enqueued.
+    expect(repos.docMountChunks.clearEmbeddingsByLinkId).toHaveBeenCalledWith('link-blocked')
   })
 })

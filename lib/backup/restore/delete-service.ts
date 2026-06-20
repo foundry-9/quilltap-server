@@ -67,6 +67,8 @@ async function clearFormat3Entities(): Promise<void> {
     'doc_mount_files',
     'doc_mount_folders',
     'project_doc_mount_links',
+    'group_doc_mount_links',
+    'group_character_members',
     'doc_mount_points',
   ];
   for (const table of mountTables) {
@@ -92,7 +94,7 @@ export async function deleteUserData(userId: string): Promise<void> {
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, llmLogs, chatSettings, folders, wardrobeItems] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, llmLogs, chatSettings, folders, wardrobeItems] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -104,6 +106,7 @@ export async function deleteUserData(userId: string): Promise<void> {
       globalRepos.promptTemplates.findByUserId(userId),
       globalRepos.roleplayTemplates.findByUserId(userId),
       repos.projects.findAll(),
+      repos.groups.findAll(),
       repos.llmLogs.findAll(10000), // High limit to get all user logs
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
@@ -121,7 +124,7 @@ export async function deleteUserData(userId: string): Promise<void> {
   // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([
     ...characters.map((c) => repos.characters.delete(c.id)),
-    ...chats.map((c) => repos.chats.delete(c.id)),
+    ...chats.map((c) => repos.chats.delete(c.id, { syncVaults: false })),
     ...tags.map((t) => repos.tags.delete(t.id)),
     ...connectionProfiles.map((cp) => repos.connections.delete(cp.id)),
     ...imageProfiles.map((ip) => repos.imageProfiles.delete(ip.id)),
@@ -129,6 +132,10 @@ export async function deleteUserData(userId: string): Promise<void> {
     ...promptTemplates.map((pt) => globalRepos.promptTemplates.delete(pt.id)),
     ...roleplayTemplates.map((rt) => globalRepos.roleplayTemplates.delete(rt.id)),
     ...projects.map((p) => repos.projects.delete(p.id)),
+    // Group slim rows. Membership + additional-store links are cleared in bulk
+    // by clearFormat3Entities (group_character_members / group_doc_mount_links);
+    // the official store mount points go with doc_mount_points there too.
+    ...groups.map((g) => repos.groups.delete(g.id)),
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
@@ -169,6 +176,7 @@ export async function deleteUserData(userId: string): Promise<void> {
       promptTemplates: promptTemplates.length,
       roleplayTemplates: roleplayTemplates.length,
       projects: projects.length,
+      groups: groups.length,
       llmLogs: llmLogs.length,
       chatSettings: chatSettings ? 1 : 0,
       folders: folders.length,

@@ -94,4 +94,32 @@ describe('buildCharacterAvatarPrompt', () => {
     expect(prompt).toMatch(/three-quarter view\.\n\n- \*\*/)
     expect(prompt).toMatch(/\n\nCharacter portrait, detailed/)
   })
+
+  it('prefers headAndShouldersPrompt over mediumPrompt when both are set', async () => {
+    const char: Character = {
+      ...baseCharacter,
+      physicalDescription: {
+        id: 'pd-1',
+        headAndShouldersPrompt: 'Head-and-shoulders crop: warm smile, jet-black wavy hair, open collar.',
+        mediumPrompt: 'Full body, hourglass figure, full breasts, narrow waist, curved hips.',
+      },
+    } as unknown as Character
+    const { prompt } = await buildCharacterAvatarPrompt(repos, char, {})
+    expect(prompt).toMatch(/Head-and-shoulders crop: warm smile/)
+    // The full-body medium prompt (with below-crop anatomy) must NOT be used.
+    expect(prompt).not.toMatch(/hourglass figure/)
+  })
+
+  it('falls back to mediumPrompt when headAndShouldersPrompt is empty', async () => {
+    const char: Character = {
+      ...baseCharacter,
+      physicalDescription: {
+        id: 'pd-1',
+        headAndShouldersPrompt: '',
+        mediumPrompt: 'Portrait of a middle-aged man with fair skin and short, spiky gray hair.',
+      },
+    } as unknown as Character
+    const { prompt } = await buildCharacterAvatarPrompt(repos, char, {})
+    expect(prompt).toMatch(/Portrait of a middle-aged man/)
+  })
 })

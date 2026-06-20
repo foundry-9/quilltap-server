@@ -14,7 +14,7 @@
  * @module plugins/provider-registry
  */
 
-import type { TextProviderPlugin, TextProvider, ImageProvider, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, MessageFormatSupport, CheapModelConfig, ToolFormatType, EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
+import type { TextProviderPlugin, TextProvider, ImageProvider, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, ImageGenerationModelInfo, MessageFormatSupport, CheapModelConfig, ToolFormatType, EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 
 // Backward-compatible alias used throughout this file
 type LLMProviderPlugin = TextProviderPlugin;
@@ -223,6 +223,30 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
 
     if (plugin.getImageProviderConstraints && typeof plugin.getImageProviderConstraints === 'function') {
       return plugin.getImageProviderConstraints();
+    }
+
+    return null;
+  }
+
+  /**
+   * Get the statically-declared image generation models for a provider.
+   *
+   * Synchronous (reads the plugin's in-process declaration; no network), so it
+   * is safe to call from the forked background-job child. Returns null when the
+   * provider is unknown, lacks image generation, or does not declare models.
+   */
+  getImageGenerationModels(name: string): ImageGenerationModelInfo[] | null {
+    const plugin = this.getProvider(name);
+    if (!plugin) {
+      return null;
+    }
+
+    if (!plugin.capabilities.imageGeneration) {
+      return null;
+    }
+
+    if (plugin.getImageGenerationModels && typeof plugin.getImageGenerationModels === 'function') {
+      return plugin.getImageGenerationModels();
     }
 
     return null;
@@ -468,6 +492,13 @@ export function getProvidersWithAttachmentSupport(): LLMProviderPlugin[] {
  */
 export function getImageProviderConstraints(name: string): ImageProviderConstraints | null {
   return providerRegistry.getImageProviderConstraints(name);
+}
+
+/**
+ * Get the statically-declared image generation models for a provider.
+ */
+export function getImageGenerationModels(name: string): ImageGenerationModelInfo[] | null {
+  return providerRegistry.getImageGenerationModels(name);
 }
 
 /**

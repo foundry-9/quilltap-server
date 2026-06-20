@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import type { LexicalEditor } from 'lexical'
 import { FORMAT_TEXT_COMMAND, $getSelection, $isRangeSelection, $createTextNode, $createParagraphNode, $getRoot } from 'lexical'
 import { $isCodeNode, $createCodeNode } from '@lexical/code'
@@ -12,10 +13,12 @@ import {
   delimiterToPrefixSuffix,
   type MarkdownFormatConfig,
 } from '@/lib/chat/annotations'
+import { toggleWrap, toggleLinePrefix, insertTagPrefix } from '@/lib/chat/text-transforms'
 import {
   INSERT_HEADING_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
   INSERT_ORDERED_LIST_COMMAND,
+  APPLY_DELIMITER_COMMAND,
 } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
 import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
 
@@ -133,26 +136,12 @@ export default function FormattingToolbar({
   /** Toggle wrap/unwrap of prefix+suffix around the current selection in the textarea */
   const sourceToggleWrap = useCallback(
     (textarea: HTMLTextAreaElement, prefix: string, suffix: string) => {
-      const { selectionStart: start, selectionEnd: end, value } = textarea
-      const selected = value.slice(start, end)
-
-      if (selected) {
-        // Toggle: unwrap if already wrapped, wrap if not
-        if (selected.startsWith(prefix) && selected.endsWith(suffix)) {
-          const inner = selected.slice(prefix.length, selected.length - suffix.length)
-          const newValue = value.slice(0, start) + inner + value.slice(end)
-          sourceApply(textarea, newValue, start + inner.length)
-        } else {
-          const wrapped = `${prefix}${selected}${suffix}`
-          const newValue = value.slice(0, start) + wrapped + value.slice(end)
-          sourceApply(textarea, newValue, start + wrapped.length)
-        }
-      } else {
-        // No selection: insert with cursor between
-        const inserted = `${prefix}${suffix}`
-        const newValue = value.slice(0, start) + inserted + value.slice(end)
-        sourceApply(textarea, newValue, start + prefix.length)
-      }
+      const { value, cursor } = toggleWrap(
+        { value: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd },
+        prefix,
+        suffix,
+      )
+      sourceApply(textarea, value, cursor)
     },
     [sourceApply],
   )
@@ -318,53 +307,34 @@ export default function FormattingToolbar({
     e.preventDefault()
   }, [])
 
-  // Handle delimiter button click — wrap/unwrap selection, or insert at cursor
+  // Handle delimiter button click. Both editing surfaces route through the same
+  // pure transforms (lib/chat/text-transforms): source mode applies the result
+  // to the textarea; rich-text mode dispatches APPLY_DELIMITER_COMMAND, whose
+  // handler runs the very same transforms inside the Lexical editor.
   const handleDelimiterClick = useCallback(
     (delimiter: TemplateDelimiter) => {
-      const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
-
-      // Source mode: use textarea manipulation
+      // Source mode: apply the matching transform to the textarea by kind.
       if (showSource && sourceTextareaRef?.current) {
-        sourceToggleWrap(sourceTextareaRef.current, prefix, suffix)
+        const textarea = sourceTextareaRef.current
+        const state = { value: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd }
+        let result
+        if (delimiter.kind === 'linePrefix') {
+          result = toggleLinePrefix(state, delimiter.marker)
+        } else if (delimiter.kind === 'tagPrefix') {
+          result = insertTagPrefix(state, delimiter.open, delimiter.close)
+        } else {
+          const { prefix, suffix } = delimiterToPrefixSuffix(delimiter)
+          result = toggleWrap(state, prefix, suffix)
+        }
+        sourceApply(textarea, result.value, result.cursor)
         return
       }
 
-      // Rich text mode
-      editor.update(() => {
-        const selection = $getSelection()
-        if (!$isRangeSelection(selection)) return
-
-        const selectedText = selection.getTextContent()
-        if (selectedText) {
-          if (selectedText.startsWith(prefix) && selectedText.endsWith(suffix)) {
-            const inner = selectedText.slice(prefix.length, selectedText.length - suffix.length)
-            selection.insertRawText(inner)
-          } else {
-            selection.insertRawText(`${prefix}${selectedText}${suffix}`)
-          }
-        } else {
-          selection.insertRawText(`${prefix}${suffix}`)
-          const updatedSelection = $getSelection()
-          if ($isRangeSelection(updatedSelection)) {
-            const nodes = updatedSelection.getNodes()
-            if (nodes.length > 0) {
-              const lastNode = nodes[nodes.length - 1]
-              if (lastNode.getType() === 'text') {
-                const cursorPos = lastNode.getTextContentSize() - suffix.length
-                updatedSelection.setTextNodeRange(
-                  lastNode as import('lexical').TextNode,
-                  cursorPos,
-                  lastNode as import('lexical').TextNode,
-                  cursorPos,
-                )
-              }
-            }
-          }
-        }
-      })
+      // Rich text mode: a single dispatch; the command handler dispatches by kind.
+      editor.dispatchCommand(APPLY_DELIMITER_COMMAND, delimiter)
       editor.focus()
     },
-    [editor, showSource, sourceTextareaRef, sourceToggleWrap]
+    [editor, showSource, sourceTextareaRef, sourceApply]
   )
 
   // Build the narration button from delimiters, and filter out any template
@@ -381,6 +351,7 @@ export default function FormattingToolbar({
     const narSuffix = Array.isArray(narrationDelimiters) ? narrationDelimiters[1] : narrationDelimiters
 
     const btn: TemplateDelimiter = {
+      kind: 'wrap',
       name: 'Narration',
       buttonName: 'Nar',
       delimiters: narrationDelimiters,
@@ -469,14 +440,10 @@ export default function FormattingToolbar({
             >
               {showSource ? (
                 // Rich text icon when source mode is active
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
+                <Icon name="pencil" className="w-4 h-4" />
               ) : (
                 // Code/source icon when in rich text mode
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-                </svg>
+                <Icon name="code" className="w-4 h-4" />
               )}
             </button>
           </div>

@@ -224,6 +224,51 @@ describe('handleEmbeddingGenerate — MOUNT_CHUNK entity type', () => {
     )
   })
 
+  it('skips an empty/whitespace MOUNT_CHUNK without calling the provider or retrying', async () => {
+    const chunk = { id: 'chunk-empty', mountPointId: 'mp-1', content: '   \n  \t ' }
+    const repos = makeRepos({}, { findById: jest.fn().mockResolvedValue(chunk) })
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+    // Empty input is deterministically unembeddable (and triggers NaN on some
+    // models) — it must be marked failed and skipped, never sent to the
+    // provider and never rethrown (which would retry to DEAD).
+    await expect(
+      handleEmbeddingGenerate(makeJob('MOUNT_CHUNK', 'chunk-empty'))
+    ).resolves.toBeUndefined()
+
+    expect(mockGenerateEmbeddingForUser).not.toHaveBeenCalled()
+    expect(repos.embeddingStatus.markAsFailed).toHaveBeenCalledWith(
+      'MOUNT_CHUNK',
+      'chunk-empty',
+      'profile-1',
+      expect.stringContaining('Empty input')
+    )
+    expect(repos.docMountChunks.updateEmbedding).not.toHaveBeenCalled()
+  })
+
+  it('marks failed but does NOT rethrow on a deterministic (NaN) error for MOUNT_CHUNK', async () => {
+    const chunk = { id: 'chunk-1', mountPointId: 'mp-1', content: 'Some content.' }
+    const repos = makeRepos({}, { findById: jest.fn().mockResolvedValue(chunk) })
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+
+    // A NaN/over-context error will recur on every retry, so it must be marked
+    // failed and dropped — not rethrown (which would retry it to DEAD).
+    mockGenerateEmbeddingForUser.mockRejectedValue(
+      new Error('Ollama embedding failed: failed to encode response: json: unsupported value: NaN')
+    )
+
+    await expect(
+      handleEmbeddingGenerate(makeJob('MOUNT_CHUNK', 'chunk-1'))
+    ).resolves.toBeUndefined()
+    expect(repos.embeddingStatus.markAsFailed).toHaveBeenCalledWith(
+      'MOUNT_CHUNK',
+      'chunk-1',
+      'profile-1',
+      expect.stringContaining('NaN')
+    )
+    expect(repos.docMountChunks.updateEmbedding).not.toHaveBeenCalled()
+  })
+
   it('marks status as failed and rethrows when embedding generation fails for MOUNT_CHUNK', async () => {
     const chunk = { id: 'chunk-1', mountPointId: 'mp-1', content: 'Some content.' }
     const repos = makeRepos({}, { findById: jest.fn().mockResolvedValue(chunk) })

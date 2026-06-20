@@ -62,7 +62,12 @@ import {
   parseMountIndexBackupFilename,
 } from '../../lib/database/backends/sqlite/physical-backup';
 import { ensureCharacterVault } from '../../lib/mount-index/character-vault';
-import { writeCharacterVaultManagedFields } from '../../lib/database/repositories/character-properties-overlay';
+import {
+  writeCharacterVaultManagedFields,
+  projectVaultWardrobe,
+} from '../../lib/database/repositories/character-properties-overlay';
+import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
+import { loadMountIndexConfig } from '../../lib/database/config';
 import { getRepositories } from '../../lib/repositories/factory';
 import { writeDatabaseDocument } from '../../lib/mount-index/database-store';
 import type { Character } from '../../lib/schemas/character.types';
@@ -361,6 +366,13 @@ export const cutoverCharactersToVaultMigration: Migration = {
     'add-character-document-mount-point-field-v1',
     'add-read-properties-from-document-store-field-v1',
     'migrate-clothing-records-to-wardrobe-v1',
+    // The cutover writes each character's vault files, which insert
+    // `doc_mount_file_links` rows referencing the allowEmbed /
+    // allowCharacterRead / allowCharacterWrite columns. Those columns are
+    // added by the policy-flags migration, so it MUST run first — otherwise
+    // every vault write throws "table doc_mount_file_links has no column
+    // named allowEmbed". (Same dependency the projects cutover declares.)
+    'add-doc-mount-file-policy-flags-v1',
   ],
 
   async shouldRun(): Promise<boolean> {
@@ -380,6 +392,35 @@ export const cutoverCharactersToVaultMigration: Migration = {
     try {
       logger.info('Ensuring physical backups exist before per-character work', ctx);
       await ensureBackupsExist(ctx);
+
+      // Open the mount-index DB connection explicitly. `ensureCharacterVault`'s
+      // first DB touch is `docMountPoints.create` — a mount-index repository
+      // that reads its connection from a process-global singleton and never
+      // triggers the lazy main-DB `connect()` that would populate it. That
+      // singleton is normally established either by the app backend's
+      // `connect()` (which runs *after* migrations) or, in a warm dev process,
+      // by a prior boot left over in `globalThis`. On a genuinely cold boot —
+      // e.g. an instance restarted after a long dormancy, where the projects
+      // cutover (which opens this itself) already applied in an earlier run —
+      // nothing has opened it yet, so every vault write throws "Mount index
+      // database not initialized". Open it here first; the app's later
+      // `connect()` reuses this same connection.
+      const mountIndexDb = getMountIndexSQLiteClient(loadMountIndexConfig());
+      if (!mountIndexDb) {
+        const message =
+          'Refusing to migrate — the mount-index database could not be opened, so character ' +
+          'vaults are unreachable. Aborting before any destructive work.';
+        logger.error(message, ctx);
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: 0,
+          message,
+          error: 'mount index unavailable',
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      }
 
       const db = getSQLiteDatabase();
       const rawCount = (db.prepare('SELECT COUNT(*) AS n FROM characters').get() as { n: number }).n;
@@ -433,6 +474,34 @@ export const cutoverCharactersToVaultMigration: Migration = {
           itemsAffected: outcomes.filter(o => o.action !== 'blocked').length,
           message,
           error: 'characters blocked from cutover',
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Final guard before destructive work: every character MUST now carry a
+      // persisted vault link. `ensureCharacterVault` verifies its own link
+      // write, but re-confirm against the DB here so a link that was lost for
+      // any reason (e.g. a row write that vanished mid cloud-materialization)
+      // blocks the column drop rather than hollowing the character — the legacy
+      // content columns are about to disappear, and a null link would leave
+      // nothing pointing at the vault that holds the content.
+      const linkRows = db
+        .prepare('SELECT id, name, characterDocumentMountPointId AS mp FROM characters')
+        .all() as Array<{ id: string; name: string; mp: string | null }>;
+      const unlinked = linkRows.filter(r => !r.mp);
+      if (unlinked.length > 0) {
+        const list = unlinked.map(r => `${r.name} (${r.id.slice(0, 8)})`).join('; ');
+        const message =
+          `Refusing to drop columns — ${unlinked.length} character(s) have no persisted ` +
+          `vault link after cutover: ${list}. Aborting before destructive work.`;
+        logger.error(message, ctx);
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: 0,
+          message,
+          error: 'characters missing vault link',
           durationMs: Date.now() - startTime,
           timestamp: new Date().toISOString(),
         };
@@ -522,10 +591,11 @@ async function processOneCharacter(character: Character): Promise<CharacterOutco
   // "DB row is authoritative; push it into the vault wholesale".
   try {
     const wardrobeItems = await getRepositories().wardrobe.findByCharacterIdRaw(character.id);
-    await writeCharacterVaultManagedFields(mountPointId, {
-      character,
-      wardrobeItems,
-    });
+    await writeCharacterVaultManagedFields(mountPointId, { character });
+    // Wardrobe is projected separately now that the full-character writer no
+    // longer handles it. The raw DB rows are still the source here (the table
+    // exists when this cutover runs) and project into the vault's Wardrobe/ folder.
+    await projectVaultWardrobe(mountPointId, character.id, wardrobeItems);
     outcome.action = 'populated';
   } catch (err) {
     outcome.action = 'blocked';

@@ -6,6 +6,7 @@ import { BrandName } from '@/components/ui/brand-name'
 import { PluginConfigModal } from './plugins/PluginConfigModal'
 import { UpgradeConfirmModal, type PluginUpgrade } from './plugins/UpgradeConfirmModal'
 import { SettingsCard, SettingsCardBadge } from '@/components/ui/SettingsCard'
+import { Icon } from '@/components/ui/icon'
 
 type PluginSource = 'included' | 'npm' | 'git' | 'manual' | 'bundled' | 'site'
 type ActiveTab = 'installed' | 'upgrades' | 'browse'
@@ -119,20 +120,7 @@ function SettingsButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="qt-button-ghost qt-button-sm flex items-center gap-1"
     >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-        />
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-        />
-      </svg>
+      <Icon name="settings" className="w-4 h-4" />
       Settings
     </button>
   )
@@ -575,19 +563,7 @@ export default function PluginsTab() {
 
           {plugins.length === 0 ? (
             <div className="qt-card p-8 text-center">
-              <svg
-                className="mx-auto h-12 w-12 qt-text-secondary/50"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-              </svg>
+              <Icon name="files" className="mx-auto h-12 w-12 qt-text-secondary/50" />
               <h3 className="mt-4 text-lg text-primary">
                 No Plugins Found
               </h3>
@@ -683,9 +659,7 @@ export default function PluginsTab() {
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
+                  <Icon name="refresh" className="w-4 h-4" />
                   Check for Updates
                 </>
               )}
@@ -702,19 +676,7 @@ export default function PluginsTab() {
           {/* Breaking changes warning banner */}
           {availableUpgrades.some(u => !u.isNonBreaking) && (
             <div className="qt-alert-warning flex items-start gap-3">
-              <svg
-                className="w-5 h-5 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
+              <Icon name="alert-triangle" className="w-5 h-5 flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="qt-text-label">
                   Breaking Changes Available
@@ -736,19 +698,7 @@ export default function PluginsTab() {
             </div>
           ) : availableUpgrades.length === 0 ? (
             <div className="qt-card p-8 text-center">
-              <svg
-                className="mx-auto h-12 w-12 qt-text-success"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <Icon name="check-circle" className="mx-auto h-12 w-12 qt-text-success" />
               <h3 className="mt-4 text-lg text-primary">
                 All Plugins Up to Date
               </h3>
@@ -787,9 +737,7 @@ export default function PluginsTab() {
                     {/* Version transition */}
                     <div className="flex items-center gap-2 mt-2">
                       <span className="qt-badge-secondary font-mono text-xs">v{upgrade.currentVersion}</span>
-                      <svg className="w-4 h-4 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                      </svg>
+                      <Icon name="arrow-right" className="w-4 h-4 qt-text-secondary" />
                       <span className={`font-mono text-xs ${upgrade.isNonBreaking ? 'qt-badge-success' : 'qt-badge-warning'}`}>
                         v{upgrade.latestVersion}
                       </span>
@@ -810,9 +758,7 @@ export default function PluginsTab() {
                           className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
                         >
                           Repository
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
+                          <Icon name="external-link" className="w-3 h-3" />
                         </a>
                       )}
                       {upgrade.changelogUrl && (
@@ -823,9 +769,7 @@ export default function PluginsTab() {
                           className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
                         >
                           Changelog
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
+                          <Icon name="external-link" className="w-3 h-3" />
                         </a>
                       )}
                       <a
@@ -835,9 +779,7 @@ export default function PluginsTab() {
                         className="qt-text-secondary hover:text-foreground inline-flex items-center gap-1"
                       >
                         npm
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
+                        <Icon name="external-link" className="w-3 h-3" />
                       </a>
                     </div>
                   </SettingsCard>
@@ -898,19 +840,7 @@ export default function PluginsTab() {
           <div className="qt-card-grid-auto">
             {searchResults.length === 0 && !searching && (
               <div className="qt-card p-8 text-center">
-                <svg
-                  className="mx-auto h-12 w-12 qt-text-secondary/50"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
+                <Icon name="search" className="mx-auto h-12 w-12 qt-text-secondary/50" />
                 <h3 className="mt-4 text-lg text-primary">
                   Search for Plugins
                 </h3>
@@ -972,19 +902,7 @@ export default function PluginsTab() {
       {/* Refresh Note */}
       <div className="qt-alert-warning">
         <div className="flex items-start gap-3">
-          <svg
-            className="w-5 h-5 flex-shrink-0 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
+          <Icon name="info" className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
             <h4 className="qt-text-label">
               Note about plugin changes

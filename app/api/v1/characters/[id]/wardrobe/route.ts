@@ -15,6 +15,8 @@ import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 const createWardrobeItemSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().nullable().optional(),
+  /** Plain-text image-generation cue; preferred over title in image prompts. */
+  imagePrompt: z.string().nullable().optional(),
   types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),
@@ -59,6 +61,7 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
       characterId: id,
       title: validatedData.title,
       description: validatedData.description ?? null,
+      imagePrompt: validatedData.imagePrompt ?? null,
       types: validatedData.types,
       componentItemIds: validatedData.componentItemIds ?? [],
       appropriateness: validatedData.appropriateness ?? null,

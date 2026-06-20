@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Icon } from '@/components/ui/icon'
 import type { WizardState, WizardAction, ProviderInfo } from '../useProviderWizardState'
 import { fetchProviders } from '../wizard-api'
 
@@ -133,17 +134,7 @@ export function ProviderSelectionStep({ state, dispatch }: ProviderSelectionStep
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{provider.displayName}</span>
                     {isSelected && (
-                      <svg
-                        className="w-5 h-5 text-[var(--qt-color-primary)]"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
+                      <Icon name="check" className="w-5 h-5 text-[var(--qt-color-primary)]" />
                     )}
                   </div>
                   <p className="qt-text-muted qt-text-small mt-1">{provider.description}</p>

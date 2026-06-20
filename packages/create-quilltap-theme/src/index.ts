@@ -169,6 +169,26 @@ async function scaffoldBundle(config: ThemeConfig): Promise<void> {
   );
   success('Created fonts/');
 
+  // Create icons directory placeholder
+  const iconsDir = path.join(destPath, 'icons');
+  fs.mkdirSync(iconsDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(iconsDir, '.gitkeep'),
+    [
+      '# Place icon override assets here (.svg or .webp) and map them in theme.json:',
+      '#',
+      '#   "icons": {',
+      '#     "settings": "icons/settings.svg",   // .svg keeps currentColor tinting',
+      '#     "brand": "icons/brand.webp"          // .webp bakes in its own color',
+      '#   }',
+      '#',
+      '# Icon names must match Quilltap\'s built-in icon names. Unmatched names are ignored.',
+      '',
+    ].join('\n'),
+    'utf-8'
+  );
+  success('Created icons/');
+
   // Print next steps
   heading('Done! Next steps:');
 

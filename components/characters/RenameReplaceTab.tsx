@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showAlert } from '@/lib/alert'
 
@@ -255,9 +256,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
             onClick={addAdditionalReplacement}
             className="px-3 py-1.5 text-sm qt-button-primary flex items-center gap-1"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Icon name="plus" className="w-4 h-4" />
             Add
           </button>
         </div>
@@ -315,9 +314,7 @@ export function RenameReplaceTab({ characterId, characterName, onRenameComplete 
                     className="p-1 qt-text-destructive hover:qt-text-destructive/80"
                     title="Remove"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <Icon name="close" className="w-4 h-4" />
                   </button>
                 </div>
               </div>

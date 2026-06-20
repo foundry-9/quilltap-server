@@ -286,6 +286,11 @@ export function parseWardrobeItemFile(
       ? (parsed.data.appropriateness as string)
       : null;
 
+  const imagePrompt =
+    typeof parsed.data?.imagePrompt === 'string' && parsed.data.imagePrompt.length > 0
+      ? (parsed.data.imagePrompt as string)
+      : null;
+
   const isDefault =
     parsed.data?.default === true || parsed.data?.isDefault === true;
 
@@ -331,6 +336,7 @@ export function parseWardrobeItemFile(
     characterId,
     title: title.slice(0, 200),
     description,
+    imagePrompt,
     types,
     appropriateness,
     isDefault,

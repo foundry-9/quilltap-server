@@ -6,7 +6,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
+import { stripCharacterNamePrefix, truncateAtForeignSpeaker, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
@@ -24,7 +24,7 @@ import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
-import { encodeDoneEvent } from './streaming.service'
+import { encodeDoneEvent, encodeCarinaAnswerEvent, safeEnqueue } from './streaming.service'
 import {
   triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
@@ -33,6 +33,7 @@ import {
 } from './memory-trigger.service'
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
+import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -84,17 +85,56 @@ export async function finalizeMessageResponse({
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
   const { dangerSettings, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
-  const cleanedResponse = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
+  const leadingStripped = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
+
+  // Anti-hijack safeguard (defense-in-depth with the system-prompt anti-
+  // impersonation guidance + multi-char anchor): if the model began writing
+  // ANOTHER participant's turn — a line opening with "[Name]" / "Name:" for a
+  // known other character — cut the response there so one LLM can never carry
+  // another character's lines into the transcript. Model-agnostic, runs for
+  // every provider. Only fires in multi-character chats (single-char has no
+  // foreign roster). If the very FIRST line is a foreign tag, truncation would
+  // empty the message — keep the leading-stripped text instead (and warn) so we
+  // never persist an empty bubble or break next-speaker selection.
+  const foreignSpeakerNames: string[] = []
+  if (isMultiCharacter) {
+    for (const c of participantCharacters.values()) {
+      if (c.id === character.id) continue
+      if (c.name) foreignSpeakerNames.push(c.name)
+      if (Array.isArray(c.aliases)) foreignSpeakerNames.push(...c.aliases)
+    }
+  }
+  let cleanedResponse = leadingStripped
+  if (foreignSpeakerNames.length > 0) {
+    const { text: truncated, truncatedAt } = truncateAtForeignSpeaker(leadingStripped, foreignSpeakerNames)
+    if (truncatedAt !== null && truncated.trim().length > 0) {
+      cleanedResponse = truncated
+      logger.warn('Truncated response at a foreign speaker tag (anti-hijack)', {
+        chatId,
+        characterName: character.name,
+        truncatedAt,
+        removedChars: leadingStripped.length - truncated.length,
+      })
+    } else if (truncatedAt !== null) {
+      logger.warn('Response opened with a foreign speaker tag; left intact to avoid an empty message', {
+        chatId,
+        characterName: character.name,
+      })
+    }
+  }
 
   // Re-base captured tool-call prose anchors from streamed-response coordinates
-  // into final stored-content coordinates. The only position-shifting transform
-  // is stripCharacterNamePrefix, which only ever removes a leading prefix
-  // (cleanedResponse is a suffix of normalizedResponse), so a single delta
-  // covers every offset. If normalizeContentBlockFormat rewrote the body (rare
-  // content-block extraction), offsets no longer map — drop them and the tool
-  // blocks fall back to bottom-of-bubble rendering.
+  // into final stored-content coordinates. The position-shifting transforms are
+  // the leading-prefix strip (always a leading-only removal) and, in rare
+  // hijack cases, the foreign-speaker tail truncation. `leadingStripDelta`
+  // captures ONLY the leading shift; the clamp to `cleanedResponse.length`
+  // below absorbs any tail truncation (anchors that fell into the cut-off tail
+  // were in hijacked content and collapse harmlessly to the end). If
+  // normalizeContentBlockFormat rewrote the body (rare content-block
+  // extraction), offsets no longer map — drop them and the tool blocks fall
+  // back to bottom-of-bubble rendering.
   const normalizeRewroteBody = normalizedResponse !== fullResponse
-  const leadingStripDelta = normalizedResponse.length - cleanedResponse.length
+  const leadingStripDelta = normalizedResponse.length - leadingStripped.length
   let rebasedAnchorCount = 0
   for (const tm of toolMessages) {
     if (typeof tm.anchorOffset !== 'number') continue
@@ -265,6 +305,28 @@ export async function finalizeMessageResponse({
         })
       }
     }
+  }
+
+  // ============================================================================
+  // Carina (inline LLM queries) — assistant-markup path
+  // ============================================================================
+  // If the character wrote @Name: / @Name? in their response, fire the isolated
+  // reference call. Mirrors the RNG-in-response block above: it runs AFTER the
+  // assistant message is saved (so the answer is ordered after it) and BEFORE
+  // the done event below (so the client's post-turn fetchChat() includes it).
+  // The asker is this character's participant; the answer carries
+  // systemSender:'carina' and is excluded from memory extraction automatically.
+  if (cleanedResponse) {
+    await runCarinaMarkupQuery({
+      userId,
+      chatId,
+      text: cleanedResponse,
+      askerParticipantId: characterParticipant.id,
+      logLabels: { detected: 'assistant response', failed: 'assistant-markup' },
+      // Surface the answer live (before this turn's done event) so the Salon
+      // renders the card immediately rather than at the post-turn refresh.
+      onPosted: (msg) => safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg)),
+    })
   }
 
   await repos.chats.update(chatId, { updatedAt: new Date().toISOString() })

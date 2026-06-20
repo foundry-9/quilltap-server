@@ -11,6 +11,10 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
  * Zod schema for the doc_grep tool's input.
  */
 export const docGrepToolInputSchema = z.object({
+  uri: z
+    .string()
+    .describe('A qtap:// URI addressing the target, e.g. "qtap://self/Notes/today.md". When provided, it supersedes scope/mount_point/path.')
+    .optional(),
   query: z.string().describe('Search string or regex pattern to find.'),
   path: z
     .string()
@@ -18,7 +22,7 @@ export const docGrepToolInputSchema = z.object({
     .optional(),
   mount_point: z
     .string()
-    .describe('Optional: restrict search to a specific mount point. Without this, searches all mounted points.')
+    .describe('Optional: restrict search to a specific mount point (name or ID). Pass "self" to search only your own character vault. Without this, searches all mounted points.')
     .optional(),
   is_regex: z
     .boolean()
@@ -76,6 +80,8 @@ export const docGrepToolDefinition = {
 export interface DocGrepMatch {
   path: string;
   mount_point?: string;
+  /** Canonical qtap:// URI for the matched file (document-store matches only). */
+  uri?: string;
   line_number: number;
   match: string;
   context_before?: string[];

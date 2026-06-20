@@ -22,7 +22,8 @@ jest.mock('@/lib/database/repositories/character-properties-overlay', () => ({
 
 import { readVaultTextFile } from '@/lib/database/repositories/character-properties-overlay'
 import {
-  renderCanonBlock,
+  renderSelfCanonBlock,
+  renderOtherCanonBlock,
   loadCanonForSelf,
   loadCanonForObserverAboutSubject,
   NO_CANON_FALLBACK,
@@ -30,85 +31,143 @@ import {
 
 const mockReadVaultTextFile = readVaultTextFile as jest.MockedFunction<typeof readVaultTextFile>
 
-describe('renderCanonBlock', () => {
-  it('emits the heading with the body when body is present', () => {
-    const out = renderCanonBlock({
+describe('renderSelfCanonBlock', () => {
+  it('emits all four fields, labelled, manifesto-first', () => {
+    const out = renderSelfCanonBlock({
       characterId: 'c1',
       characterName: 'Friday',
-      body: 'Friday is the operator of this instance.',
-      source: 'identity',
+      manifesto: 'I serve the Estate.',
+      personality: 'Dry, precise, loyal.',
+      description: 'Speaks in clipped sentences.',
+      identity: 'Operator of the Estate.',
     })
-    expect(out).toBe('ALREADY ESTABLISHED about Friday\nFriday is the operator of this instance.')
+    expect(out).toBe(
+      'ALREADY ESTABLISHED about Friday\n' +
+        '[MANIFESTO] I serve the Estate.\n' +
+        '[PERSONALITY] Dry, precise, loyal.\n' +
+        '[DESCRIPTION] Speaks in clipped sentences.\n' +
+        '[IDENTITY] Operator of the Estate.',
+    )
   })
 
-  it('substitutes the fallback line when body is null', () => {
-    const out = renderCanonBlock({
+  it('omits empty fields but preserves order of the present ones', () => {
+    const out = renderSelfCanonBlock({
       characterId: 'c1',
       characterName: 'Friday',
+      manifesto: 'I serve the Estate.',
+      personality: null,
+      description: '   ',
+      identity: 'Operator of the Estate.',
+    })
+    expect(out).toBe(
+      'ALREADY ESTABLISHED about Friday\n' +
+        '[MANIFESTO] I serve the Estate.\n' +
+        '[IDENTITY] Operator of the Estate.',
+    )
+  })
+
+  it('trims each field before emitting', () => {
+    const out = renderSelfCanonBlock({
+      characterId: 'c1',
+      characterName: 'Friday',
+      manifesto: '\n\n  I serve.  \n',
+      personality: null,
+      description: null,
+      identity: null,
+    })
+    expect(out).toBe('ALREADY ESTABLISHED about Friday\n[MANIFESTO] I serve.')
+  })
+
+  it('substitutes the fallback line when every field is empty', () => {
+    const out = renderSelfCanonBlock({
+      characterId: 'c1',
+      characterName: 'Friday',
+      manifesto: null,
+      personality: '',
+      description: '   \n  ',
+      identity: null,
+    })
+    expect(out).toBe(`ALREADY ESTABLISHED about Friday\n${NO_CANON_FALLBACK}`)
+  })
+})
+
+describe('renderOtherCanonBlock', () => {
+  it('emits the raw body (no field label) when the source is the vault', () => {
+    const out = renderOtherCanonBlock({
+      characterId: 'charlie',
+      characterName: 'Charlie',
+      body: 'Charlie is wary of strangers.',
+      source: 'vault',
+    })
+    expect(out).toBe('ALREADY ESTABLISHED about Charlie\nCharlie is wary of strangers.')
+  })
+
+  it('labels the identity fallback', () => {
+    const out = renderOtherCanonBlock({
+      characterId: 'charlie',
+      characterName: 'Charlie',
+      body: 'The estate principal.',
+      source: 'identity',
+    })
+    expect(out).toBe('ALREADY ESTABLISHED about Charlie\n[IDENTITY] The estate principal.')
+  })
+
+  it('labels the description fallback', () => {
+    const out = renderOtherCanonBlock({
+      characterId: 'charlie',
+      characterName: 'Charlie',
+      body: 'Gestures broadly when excited.',
+      source: 'description',
+    })
+    expect(out).toBe('ALREADY ESTABLISHED about Charlie\n[DESCRIPTION] Gestures broadly when excited.')
+  })
+
+  it('substitutes the fallback line when nothing is on file', () => {
+    const out = renderOtherCanonBlock({
+      characterId: 'charlie',
+      characterName: 'Charlie',
       body: null,
       source: 'none',
     })
-    expect(out).toBe(`ALREADY ESTABLISHED about Friday\n${NO_CANON_FALLBACK}`)
-  })
-
-  it('substitutes the fallback line when body is whitespace-only', () => {
-    const out = renderCanonBlock({
-      characterId: 'c1',
-      characterName: 'Friday',
-      body: '   \n  \t\n  ',
-      source: 'identity',
-    })
-    expect(out).toBe(`ALREADY ESTABLISHED about Friday\n${NO_CANON_FALLBACK}`)
-  })
-
-  it('trims the body before emitting', () => {
-    const out = renderCanonBlock({
-      characterId: 'c1',
-      characterName: 'Friday',
-      body: '\n\n  Friday is the operator.  \n\n',
-      source: 'identity',
-    })
-    expect(out).toBe('ALREADY ESTABLISHED about Friday\nFriday is the operator.')
+    expect(out).toBe(`ALREADY ESTABLISHED about Charlie\n${NO_CANON_FALLBACK}`)
   })
 })
 
 describe('loadCanonForSelf', () => {
-  it('returns the identity verbatim when present', () => {
+  it('threads every vantage-point field through, no vault lookup', () => {
+    mockReadVaultTextFile.mockClear()
     const result = loadCanonForSelf({
       id: 'c1',
       name: 'Friday',
-      identity: 'Operator of the Estate.',
+      manifesto: 'I serve.',
+      personality: 'Dry.',
+      description: 'Clipped.',
+      identity: 'Operator.',
     })
     expect(result).toEqual({
       characterId: 'c1',
       characterName: 'Friday',
-      body: 'Operator of the Estate.',
-      source: 'identity',
+      manifesto: 'I serve.',
+      personality: 'Dry.',
+      description: 'Clipped.',
+      identity: 'Operator.',
     })
-  })
-
-  it('returns source=none when identity is null', () => {
-    const result = loadCanonForSelf({ id: 'c1', name: 'Friday', identity: null })
-    expect(result.source).toBe('none')
-    expect(result.body).toBeNull()
-  })
-
-  it('returns source=none when identity is empty', () => {
-    const result = loadCanonForSelf({ id: 'c1', name: 'Friday', identity: '' })
-    expect(result.source).toBe('none')
-    expect(result.body).toBeNull()
-  })
-
-  it('returns source=none when identity is whitespace-only', () => {
-    const result = loadCanonForSelf({ id: 'c1', name: 'Friday', identity: '  \n\t  ' })
-    expect(result.source).toBe('none')
-    expect(result.body).toBeNull()
-  })
-
-  it('does not consult the vault', async () => {
-    mockReadVaultTextFile.mockClear()
-    loadCanonForSelf({ id: 'c1', name: 'Friday', identity: 'x' })
     expect(mockReadVaultTextFile).not.toHaveBeenCalled()
+  })
+
+  it('preserves null fields', () => {
+    const result = loadCanonForSelf({
+      id: 'c1',
+      name: 'Friday',
+      manifesto: null,
+      personality: null,
+      description: null,
+      identity: null,
+    })
+    expect(result.manifesto).toBeNull()
+    expect(result.personality).toBeNull()
+    expect(result.description).toBeNull()
+    expect(result.identity).toBeNull()
   })
 })
 
@@ -121,7 +180,7 @@ describe('loadCanonForObserverAboutSubject', () => {
     mockReadVaultTextFile.mockResolvedValueOnce('Charlie is wary of strangers.')
     const result = await loadCanonForObserverAboutSubject(
       { characterId: 'amy', mountPointId: 'mp-amy' },
-      { id: 'charlie', name: 'Charlie', identity: 'Generic identity.' },
+      { id: 'charlie', name: 'Charlie', identity: 'Generic identity.', description: 'Generic description.' },
     )
     expect(mockReadVaultTextFile).toHaveBeenCalledWith('mp-amy', 'Others/Charlie.md', 'amy')
     expect(result).toEqual({
@@ -136,7 +195,7 @@ describe('loadCanonForObserverAboutSubject', () => {
     mockReadVaultTextFile.mockResolvedValueOnce(null)
     await loadCanonForObserverAboutSubject(
       { characterId: 'amy', mountPointId: 'mp-amy' },
-      { id: 'b', name: 'Mr/Mrs "Smith":?<>', identity: null },
+      { id: 'b', name: 'Mr/Mrs "Smith":?<>', identity: null, description: null },
     )
     expect(mockReadVaultTextFile).toHaveBeenCalledWith('mp-amy', 'Others/Mr_Mrs _Smith_____.md', 'amy')
   })
@@ -145,7 +204,7 @@ describe('loadCanonForObserverAboutSubject', () => {
     mockReadVaultTextFile.mockResolvedValueOnce(null)
     const result = await loadCanonForObserverAboutSubject(
       { characterId: 'amy', mountPointId: 'mp-amy' },
-      { id: 'charlie', name: 'Charlie', identity: 'The estate principal.' },
+      { id: 'charlie', name: 'Charlie', identity: 'The estate principal.', description: 'A big man.' },
     )
     expect(result).toEqual({
       characterId: 'charlie',
@@ -155,21 +214,35 @@ describe('loadCanonForObserverAboutSubject', () => {
     })
   })
 
-  it('falls back to identity when vault returns empty string', async () => {
-    mockReadVaultTextFile.mockResolvedValueOnce('   \n  ')
-    const result = await loadCanonForObserverAboutSubject(
-      { characterId: 'amy', mountPointId: 'mp-amy' },
-      { id: 'charlie', name: 'Charlie', identity: 'The estate principal.' },
-    )
-    expect(result.source).toBe('identity')
-    expect(result.body).toBe('The estate principal.')
-  })
-
-  it('returns source=none when both vault and identity are absent', async () => {
+  it('falls back to description ONLY when identity is empty', async () => {
     mockReadVaultTextFile.mockResolvedValueOnce(null)
     const result = await loadCanonForObserverAboutSubject(
       { characterId: 'amy', mountPointId: 'mp-amy' },
-      { id: 'charlie', name: 'Charlie', identity: null },
+      { id: 'charlie', name: 'Charlie', identity: '   ', description: 'Gestures broadly when excited.' },
+    )
+    expect(result).toEqual({
+      characterId: 'charlie',
+      characterName: 'Charlie',
+      body: 'Gestures broadly when excited.',
+      source: 'description',
+    })
+  })
+
+  it('prefers identity over description when both are present', async () => {
+    mockReadVaultTextFile.mockResolvedValueOnce(null)
+    const result = await loadCanonForObserverAboutSubject(
+      { characterId: 'amy', mountPointId: 'mp-amy' },
+      { id: 'charlie', name: 'Charlie', identity: 'The principal.', description: 'A big man.' },
+    )
+    expect(result.source).toBe('identity')
+    expect(result.body).toBe('The principal.')
+  })
+
+  it('returns source=none when vault, identity, and description are all absent', async () => {
+    mockReadVaultTextFile.mockResolvedValueOnce(null)
+    const result = await loadCanonForObserverAboutSubject(
+      { characterId: 'amy', mountPointId: 'mp-amy' },
+      { id: 'charlie', name: 'Charlie', identity: null, description: null },
     )
     expect(result.source).toBe('none')
     expect(result.body).toBeNull()
@@ -178,7 +251,7 @@ describe('loadCanonForObserverAboutSubject', () => {
   it('skips the vault lookup entirely when observer has no mountPointId', async () => {
     const result = await loadCanonForObserverAboutSubject(
       { characterId: 'amy', mountPointId: null },
-      { id: 'charlie', name: 'Charlie', identity: 'The estate principal.' },
+      { id: 'charlie', name: 'Charlie', identity: 'The estate principal.', description: null },
     )
     expect(mockReadVaultTextFile).not.toHaveBeenCalled()
     expect(result.source).toBe('identity')

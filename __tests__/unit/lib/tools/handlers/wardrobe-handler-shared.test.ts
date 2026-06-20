@@ -75,7 +75,7 @@ describe('wardrobe-handler-shared', () => {
   })
 
   it('renders a composite equipped to all four slots with components loaded from the wardrobe (Friday regression)', async () => {
-    // This mirrors what Friday hit: wardrobe_set_outfit puts a composite ID
+    // This mirrors what Friday hit: wardrobe_wear puts a composite ID
     // in all four equipped slots, and the prior implementation only fetched
     // by equipped IDs, so child items vanished and the summary read
     // "completely naked and unadorned".

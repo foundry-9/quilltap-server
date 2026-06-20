@@ -16,6 +16,8 @@ import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 const updateWardrobeItemSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
+  /** Plain-text image-generation cue; preferred over title in image prompts. */
+  imagePrompt: z.string().nullable().optional(),
   types: z.array(WardrobeItemTypeEnum).min(1).optional(),
   appropriateness: z.string().nullable().optional(),
   isDefault: z.boolean().optional(),

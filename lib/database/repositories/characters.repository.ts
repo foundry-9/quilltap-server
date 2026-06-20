@@ -14,7 +14,6 @@ import {
   applyDocumentStoreOverlay,
   applyDocumentStoreOverlayOne,
   applyDocumentStoreWriteOverlay,
-  syncCharacterVaultWardrobe,
   MANAGED_FIELDS,
 } from './character-properties-overlay';
 import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
@@ -268,19 +267,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Re-project a character's wardrobe items into its vault `Wardrobe/` folder.
-   *
-   * Called by import paths that create wardrobe items AFTER the character
-   * itself (so the wardrobe rows didn't exist when `create()` ran its initial
-   * projection). Idempotent — safe to call even when the vault is already in
-   * sync. Equivalent to `repos.wardrobe.create()`'s post-write side effect,
-   * but explicitly invoked so importers don't have to know about it.
-   */
-  async syncWardrobeToVault(characterId: string): Promise<void> {
-    await syncCharacterVaultWardrobe(characterId);
-  }
-
-  /**
    * Update a character.
    *
    * Managed content fields (identity, description, manifesto, personality,
@@ -508,6 +494,16 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    */
   async setControlledBy(characterId: string, controlledBy: 'llm' | 'user'): Promise<Character | null> {
     return this.update(characterId, { controlledBy });
+  }
+
+  /**
+   * Set Carina (inline @-query answerer) eligibility for a character
+   * @param characterId The character ID
+   * @param canBeCarina Whether this character may answer inline @-queries
+   * @returns Promise<Character | null> The updated character if found, null otherwise
+   */
+  async setCanBeCarina(characterId: string, canBeCarina: boolean): Promise<Character | null> {
+    return this.update(characterId, { canBeCarina });
   }
 
   // ============================================================================

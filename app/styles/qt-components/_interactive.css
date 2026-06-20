@@ -230,6 +230,25 @@
   }
 
   /**
+   * qtap:// document link. Active links combine with .qt-link and carry a small
+   * document affordance (📄) so they read as in-app document references rather
+   * than web links. The inert variant — shown while existence is pending, or
+   * when the target is missing/inaccessible — renders as plain muted text and
+   * is not interactive.
+   */
+  .qt-qtap-doc::before {
+    content: "📄\00a0";
+    font-size: 0.9em;
+    opacity: 0.8;
+  }
+
+  .qt-qtap-doc--inert {
+    color: inherit;
+    text-decoration: none;
+    cursor: default;
+  }
+
+  /**
    * Subtle link - less emphasis
    */
   .qt-link-subtle {

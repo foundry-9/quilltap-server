@@ -18,6 +18,30 @@ export async function register() {
   // Only run in Node.js runtime (not Edge Runtime)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     // ================================================================
+    // PHASE -1: Pre-materialize cloud-evicted data files
+    // ================================================================
+    // Instances stored in a cloud-synced folder (iCloud Drive, etc.) can have
+    // their database files evicted to dataless placeholders. Opening one before
+    // the provider rehydrates it yields "file is not a database" / partial reads
+    // that wedge startup. Force the top-level data/ files to download BEFORE
+    // anything — even the .dbkey below — reads them. Best-effort and bounded:
+    // it never throws and a stalled download trips a stall guard rather than
+    // hanging the boot. The logger isn't imported yet, so failures go to the
+    // console; the existing retry-next-restart path is the backstop.
+    if (process.env.SKIP_ENV_VALIDATION !== 'true' &&
+        process.env.NEXT_PHASE !== 'phase-production-build') {
+      try {
+        const { materializeDataDirFiles } = await import('./lib/startup/materialize-cloud-files');
+        await materializeDataDirFiles();
+      } catch (err) {
+        console.warn(
+          '[startup] cloud-file pre-materialization failed (continuing):',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
+    // ================================================================
     // PHASE -0.5a: Database Key Provisioning (before env validation)
     // ================================================================
     // Must run before logger/env imports since those now allow optional pepper.
@@ -565,9 +589,17 @@ export async function register() {
       // thousands, depending on character count and prompt/scenario
       // density) don't stall the event loop during startup. New vaults
       // will be picked up on the next mount-point scan pass.
+      // Promises for the two fire-and-forget background backfills below. They
+      // finish well after the server is `isReady`, so the UI startup gate
+      // holds the progress screen until both settle (see markBackgroundSettled
+      // after Phase 4). Default to resolved so an import failure can't wedge
+      // the gate.
+      let vaultBackfillSettled: Promise<unknown> = Promise.resolve();
+      let mountScanSettled: Promise<unknown> = Promise.resolve();
+
       try {
         const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
-        backfillCharacterVaults()
+        vaultBackfillSettled = backfillCharacterVaults()
           .then(async () => {
             // Chained after backfill so newly created vaults (already in the
             // new shape) aren't visited a second time for no reason.
@@ -593,6 +625,17 @@ export async function register() {
               './lib/startup/move-shared-wardrobe-to-general'
             );
             await moveSharedWardrobeToGeneral();
+
+            // One-time scan that enqueues a head-and-shoulders portrait-prompt
+            // backfill job for every character that has appearance text but no
+            // `headAndShouldersPrompt` yet (avatars prefer that variant). Jobs
+            // are enqueued (never run inline) so a large library can't block
+            // startup; gated by an instance_settings flag. Runs last so every
+            // character already has a vault to write the result back into.
+            const { enqueueHeadShouldersBackfill } = await import(
+              './lib/startup/enqueue-headshoulders-backfill'
+            );
+            await enqueueHeadShouldersBackfill();
           })
           .catch((backfillError) => {
             logger.warn('Error during character vault backfill or physical-file migration', {
@@ -615,7 +658,7 @@ export async function register() {
       // and processed by the background job processor after Phase 3.5.
       try {
         const { scanAllMountPoints } = await import('./lib/mount-index/scan-runner');
-        scanAllMountPoints().catch((scanError) => {
+        mountScanSettled = scanAllMountPoints().catch((scanError) => {
           logger.warn('Document mount point scan failed', {
             context: 'instrumentation.register',
             error: scanError instanceof Error ? scanError.message : String(scanError),
@@ -625,6 +668,27 @@ export async function register() {
         logger.warn('Error initializing document mount point scanner, continuing startup', {
           context: 'instrumentation.register',
           error: mountScanError instanceof Error ? mountScanError.message : String(mountScanError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.4a: Project Store Backfill
+      // ================================================================
+      // For every project, ensure its official document store is populated
+      // with the four overlay files (description.md / instructions.md /
+      // state.json / properties.json). The project-store read overlay reads
+      // from these files with no DB-column fallback, so they must exist before
+      // any overlay read. The cutover migration populates them authoritatively
+      // (pre-Phase 3); this is the self-heal for imports and any project a
+      // blocked migration left storeless while its columns still exist.
+      // Synchronous so files exist before the first request hits.
+      try {
+        const { backfillProjectStores } = await import('./lib/startup/backfill-project-stores');
+        await backfillProjectStores();
+      } catch (backfillError) {
+        logger.warn('Error during project store backfill, continuing startup', {
+          context: 'instrumentation.register',
+          error: backfillError instanceof Error ? backfillError.message : String(backfillError),
         });
       }
 
@@ -643,6 +707,36 @@ export async function register() {
         await ensureProjectScenariosForAllProjects();
       } catch (ensureError) {
         logger.warn('Error ensuring project scenario infrastructure, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
+      // ================================================================
+      // PHASE 3.4b: Group store backfill + scenario/knowledge infrastructure
+      // ================================================================
+      // Groups mirror projects: each group's official store holds
+      // description.md / properties.json / state.json plus Scenarios/ and
+      // Knowledge/ folders. Backfill populates store files for any group whose
+      // store is missing them (imports / a blocked migration), then ensure the
+      // official store pointer and the two folders exist. Both idempotent and
+      // synchronous so stores are visible before the first request hits.
+      try {
+        const { backfillGroupStores } = await import('./lib/startup/backfill-group-stores');
+        await backfillGroupStores();
+      } catch (backfillError) {
+        logger.warn('Error during group store backfill, continuing startup', {
+          context: 'instrumentation.register',
+          error: backfillError instanceof Error ? backfillError.message : String(backfillError),
+        });
+      }
+      try {
+        const { ensureGroupScenariosForAllGroups } = await import(
+          './lib/startup/ensure-group-scenarios'
+        );
+        await ensureGroupScenariosForAllGroups();
+      } catch (ensureError) {
+        logger.warn('Error ensuring group scenario infrastructure, continuing startup', {
           context: 'instrumentation.register',
           error: ensureError instanceof Error ? ensureError.message : String(ensureError),
         });
@@ -672,6 +766,9 @@ export async function register() {
 
         const { scheduleHousekeeping } = await import('./lib/background-jobs/scheduled-housekeeping');
         scheduleHousekeeping();
+
+        const { scheduleMaintenance } = await import('./lib/background-jobs/scheduled-maintenance');
+        scheduleMaintenance();
 
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
@@ -716,6 +813,32 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.6: Reconcile half-rendered / un-embedded conversations
+      // ================================================================
+      // Self-heal for the Scriptorium pipeline: re-enqueue a CONVERSATION_RENDER
+      // for any chat with real messages but no rendered Markdown, or with
+      // interchange chunks that were never embedded (e.g. the embedder was down
+      // when the turn fired). Fire-and-forget so a backlog can't delay
+      // readiness; a no-op on a healthy instance. Runs every boot because the
+      // gap recurs. Enqueued here, after the job processor is available.
+      try {
+        const { reconcileConversationRendering } = await import(
+          './lib/startup/reconcile-conversation-rendering'
+        );
+        reconcileConversationRendering().catch((reconcileError) => {
+          logger.warn('Conversation render reconciliation failed', {
+            context: 'instrumentation.register',
+            error: reconcileError instanceof Error ? reconcileError.message : String(reconcileError),
+          });
+        });
+      } catch (reconcileImportError) {
+        logger.warn('Failed to import conversation render reconciliation module', {
+          context: 'instrumentation.register',
+          error: reconcileImportError instanceof Error ? reconcileImportError.message : String(reconcileImportError),
+        });
+      }
+
+      // ================================================================
       // PHASE 4: Mark startup complete
       // ================================================================
       startupState.setPhase('complete');
@@ -725,6 +848,27 @@ export async function register() {
       logger.info('All services initialized successfully', {
         context: 'instrumentation.register',
         migrationsComplete: startupState.areMigrationsComplete(),
+      });
+
+      // ================================================================
+      // PHASE 4.5: Track background settling (UI gate only)
+      // ================================================================
+      // The server is `isReady` and serving now, but the Phase 3.2 vault
+      // backfill chain and Phase 3.3 mount scan are still running. Until they
+      // settle, server-rendered pages (the home dashboard especially) can read
+      // empty/partial data and look like total data loss. Flip a UI-only
+      // `backgroundSettled` flag once both finish so the startup gate can hold
+      // the progress screen until then and refresh server-rendered content on
+      // release. Bounded by a cap so a hung job can't wedge the gate forever;
+      // this never gates request handling (that's `isReady`).
+      const SETTLE_CAP_MS = 5 * 60_000;
+      void Promise.race([
+        Promise.allSettled([vaultBackfillSettled, mountScanSettled]),
+        new Promise((resolve) => setTimeout(resolve, SETTLE_CAP_MS)),
+      ]).then(() => {
+        if (!startupState.isBackgroundSettled()) {
+          startupState.markBackgroundSettled();
+        }
       });
     } catch (error) {
       logger.error('Fatal error initializing services', {

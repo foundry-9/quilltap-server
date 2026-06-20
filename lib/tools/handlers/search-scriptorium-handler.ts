@@ -10,12 +10,18 @@ import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
+import { buildDocStoreUriResolver } from '@/lib/doc-edit/uri-producers'
 import {
   LITERAL_BOOST_CHARACTER,
+  LITERAL_BOOST_GROUP,
   LITERAL_BOOST_PROJECT,
   LITERAL_BOOST_GLOBAL,
 } from '@/lib/embedding/literal-boost'
-import { getGeneralMountPointId } from '@/lib/instance-settings'
+import {
+  resolveTieredMountPool,
+  flattenTierPool,
+  type TieredMountPool,
+} from '@/lib/mount-index/tiered-mount-pool'
 import { getRepositories } from '@/lib/repositories/factory'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
@@ -32,9 +38,16 @@ const logger = createServiceLogger('SearchScriptoriumHandler')
  */
 export interface SearchScriptoriumToolContext {
   userId: string
-  characterId: string
+  /** Acting character — absent on the operator surface (Brahma Console). */
+  characterId?: string
   embeddingProfileId?: string
   projectId?: string
+  /**
+   * Operator surface (Brahma Console): character-less, memory-free. When set,
+   * memory search is forced off, documents/knowledge reach every enabled store,
+   * and conversations are searched operator-wide (all the user's chats).
+   */
+  operatorSurface?: boolean
 }
 
 /**
@@ -69,125 +82,116 @@ export async function executeSearchScriptoriumTool(
       minImportance = 0,
     } = input
 
-    const searchMemories = sources.includes('memories')
+    // Operator surface (Brahma Console): no character, no memories. Memory
+    // search is forced off here defensively even if a caller somehow requests
+    // it — the console never reads anyone's commonplace book.
+    const operatorWide = !!context.operatorSurface
+    const searchMemories = sources.includes('memories') && !operatorWide && !!context.characterId
     const searchConversations = sources.includes('conversations')
     const searchDocuments = sources.includes('documents')
     const searchKnowledge = sources.includes('knowledge')
 
     const results: SearchScriptoriumResult[] = []
 
-    // Resolve the three mount-point pools up front so both the `documents`
-    // and `knowledge` branches can pick from the same set, scoped by `scope`:
-    //   - characterMountPointId: the responding character's own vault (only
-    //     when the character belongs to the calling user — character-vault
-    //     access is the one ownership-gated path)
-    //   - projectMountPointIds: every store linked to the chat's project
-    //   - globalMountPointId: the Quilltap General singleton (may be null
-    //     during the pre-provisioning window)
-    // Mount IDs are deduped so the same store never enters a pool twice.
-    let characterMountPointId: string | null = null
-    let projectMountPointIds: string[] = []
-    let globalMountPointId: string | null = null
+    // Resolver for emitting a canonical qtap:// URI per document/knowledge hit
+    // (self-vault → qtap://self/…, else the store name with UUID fallback).
+    // Built once so per-row tagging stays synchronous.
+    const docUriResolver = await buildDocStoreUriResolver(context.characterId)
+
+    // Resolve the tri-tier mount pool up front so both the `documents` and
+    // `knowledge` branches pick from the same deduped set, scoped by `scope`.
+    // Character-vault access is ownership-gated (the one path that checks the
+    // character belongs to the calling user); project/global tiers and the
+    // pre-provisioning global-null tolerance all live in the shared helper.
+    let pool: TieredMountPool = {
+      characterMountPointId: null,
+      participantMountPointIds: [],
+      groupMountPointIds: [],
+      projectMountPointIds: [],
+      globalMountPointId: null,
+    }
     let ownsCharacter = false
+    // Operator surface: every enabled store is in scope (no character/project
+    // tiers to resolve). Mirrors the doc path resolver's operator override.
+    let operatorStoreIds: string[] = []
 
     if (searchDocuments || searchKnowledge) {
-      const repos = getRepositories()
-      try {
-        const character = await repos.characters.findById(context.characterId)
-        ownsCharacter = !!character && character.userId === context.userId
-        if (ownsCharacter) {
-          characterMountPointId = character?.characterDocumentMountPointId ?? null
-        }
-      } catch (error) {
-        logger.warn('Mount pool resolution: character lookup failed', {
-          context: 'search-scriptorium-handler',
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-
-      if (context.projectId) {
-        try {
-          const links = await repos.projectDocMountLinks.findByProjectId(context.projectId)
-          projectMountPointIds = links.map(l => l.mountPointId)
-        } catch (error) {
-          logger.warn('Mount pool resolution: project mount lookup failed', {
-            context: 'search-scriptorium-handler',
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
-
-      try {
-        globalMountPointId = await getGeneralMountPointId()
-      } catch {
-        /* general mount not provisioned yet */
-      }
-
-      // Dedup: a vault shouldn't enter the pool through more than one tier.
-      if (characterMountPointId) {
-        projectMountPointIds = projectMountPointIds.filter(id => id !== characterMountPointId)
-        if (globalMountPointId === characterMountPointId) globalMountPointId = null
-      }
-      if (globalMountPointId) {
-        projectMountPointIds = projectMountPointIds.filter(id => id !== globalMountPointId)
-      }
-    }
-
-    // Pool for the `documents` source — every store the LLM can see, narrowed
-    // by `scope`. `all` is the union; `project` is project-linked stores only;
-    // `character` is the character's own vault only.
-    const buildDocumentsPool = (): string[] => {
-      const pool = new Set<string>()
-      if (scope === 'character') {
-        if (characterMountPointId) pool.add(characterMountPointId)
-      } else if (scope === 'project') {
-        for (const id of projectMountPointIds) pool.add(id)
+      if (operatorWide) {
+        const repos = getRepositories()
+        const enabled = await repos.docMountPoints.findEnabled()
+        operatorStoreIds = enabled.map((mp) => mp.id)
       } else {
-        if (characterMountPointId) pool.add(characterMountPointId)
-        for (const id of projectMountPointIds) pool.add(id)
-        if (globalMountPointId) pool.add(globalMountPointId)
+        pool = await resolveTieredMountPool(
+          {
+            userId: context.userId,
+            characterId: context.characterId,
+            projectId: context.projectId,
+          },
+          { requireOwnership: true },
+        )
+        // With ownership gating, a character vault is present only when the
+        // calling user owns the character — mirror that for the tier filter below.
+        ownsCharacter = !!pool.characterMountPointId
       }
-      return [...pool]
     }
 
-    // Tiers for the `knowledge` source — same three pools, each constrained
-    // to `Knowledge/` paths, with tier-specific literal-phrase boosts so a
-    // hit in the closer voice outranks the same hit in the wider pool.
+    // Pool for the `documents` source. On the operator surface this is every
+    // enabled store; otherwise every store the LLM can see, narrowed by `scope`
+    // (`all` is the union; `project` is project-linked stores; `character` is
+    // the character's own vault only).
+    const buildDocumentsPool = (): string[] =>
+      operatorWide ? operatorStoreIds : flattenTierPool(pool, { scope })
+
+    // Tiers for the `knowledge` source — same pools, each constrained to
+    // `Knowledge/` paths, with tier-specific literal-phrase boosts so a hit in
+    // the closer voice outranks the same hit in the wider pool. The `group` tier
+    // is the responding character's group stores (per-character, never the chat).
     const buildKnowledgeTiers = (): Array<{
-      tier: 'character' | 'project' | 'global'
+      tier: 'character' | 'group' | 'project' | 'global'
       mountPointIds: string[]
       boost: number
     }> => {
+      // Operator surface: a single all-stores tier (labelled 'global').
+      if (operatorWide) {
+        return operatorStoreIds.length > 0
+          ? [{ tier: 'global', mountPointIds: operatorStoreIds, boost: LITERAL_BOOST_GLOBAL }]
+          : []
+      }
       const tiers: Array<{
-        tier: 'character' | 'project' | 'global'
+        tier: 'character' | 'group' | 'project' | 'global'
         mountPointIds: string[]
         boost: number
       }> = []
       const wantCharacter = scope === 'all' || scope === 'character'
+      const wantGroup = scope === 'all' || scope === 'group'
       const wantProject = scope === 'all' || scope === 'project'
       const wantGlobal = scope === 'all'
-      if (wantCharacter && characterMountPointId) {
-        tiers.push({ tier: 'character', mountPointIds: [characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      if (wantCharacter && pool.characterMountPointId) {
+        tiers.push({ tier: 'character', mountPointIds: [pool.characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
       }
-      if (wantProject && projectMountPointIds.length > 0) {
-        tiers.push({ tier: 'project', mountPointIds: projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
+      if (wantGroup && pool.groupMountPointIds.length > 0) {
+        tiers.push({ tier: 'group', mountPointIds: pool.groupMountPointIds, boost: LITERAL_BOOST_GROUP })
       }
-      if (wantGlobal && globalMountPointId) {
-        tiers.push({ tier: 'global', mountPointIds: [globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
+      if (wantProject && pool.projectMountPointIds.length > 0) {
+        tiers.push({ tier: 'project', mountPointIds: pool.projectMountPointIds, boost: LITERAL_BOOST_PROJECT })
+      }
+      if (wantGlobal && pool.globalMountPointId) {
+        tiers.push({ tier: 'global', mountPointIds: [pool.globalMountPointId], boost: LITERAL_BOOST_GLOBAL })
       }
       return tiers
     }
 
-    // Search memories if requested
-    if (searchMemories) {
+    // Search memories if requested (never on the operator surface — see above)
+    if (searchMemories && context.characterId) {
+      const characterId = context.characterId
       try {
         // Verify character exists and belongs to user
         const repos = getRepositories()
-        const character = await repos.characters.findById(context.characterId)
+        const character = await repos.characters.findById(characterId)
 
         if (character && character.userId === context.userId) {
           const memoryResults = await searchMemoriesSemantic(
-            context.characterId,
+            characterId,
             query,
             {
               userId: context.userId,
@@ -235,7 +239,10 @@ export async function executeSearchScriptoriumTool(
         const conversationResults = await searchConversationChunks(
           embeddingResult.embedding,
           {
+            // Character surface scopes to the character's chats; the operator
+            // surface (no characterId) scopes operator-wide via userId.
             characterId: context.characterId,
+            userId: context.userId,
             limit,
             minScore: 0.3,
             query,
@@ -349,6 +356,7 @@ export async function executeSearchScriptoriumTool(
                       mountPointName: kr.mountPointName,
                       fileName: kr.fileName,
                       filePath: kr.relativePath,
+                      uri: docUriResolver.uriForMount(kr.mountPointName, kr.mountPointId, kr.relativePath),
                       chunkIndex: kr.chunkIndex,
                       headingContext: kr.headingContext ?? undefined,
                       knowledgeTier: tier,
@@ -390,6 +398,7 @@ export async function executeSearchScriptoriumTool(
           mountPointName: dr.mountPointName,
           fileName: dr.fileName,
           filePath: dr.relativePath,
+          uri: docUriResolver.uriForMount(dr.mountPointName, dr.mountPointId, dr.relativePath),
           chunkIndex: dr.chunkIndex,
           headingContext: dr.headingContext ?? undefined,
         },
@@ -411,6 +420,7 @@ export async function executeSearchScriptoriumTool(
       documentSources: limitedResults.filter(r => r.sourceType === 'document').length,
       knowledgeSources: limitedResults.filter(r => r.sourceType === 'knowledge').length,
       knowledgeCharacter: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'character').length,
+      knowledgeGroup: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'group').length,
       knowledgeProject: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'project').length,
       knowledgeGlobal: limitedResults.filter(r => r.sourceType === 'knowledge' && r.metadata.knowledgeTier === 'global').length,
     })

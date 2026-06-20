@@ -11,3 +11,4 @@ export { handleListFiles, handleAddFile, handleRemoveFile } from './files';
 export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleGetBackground } from './background';
 export { handleUpdateToolSettings } from './tools';
+export { handleGetAesthetic, handlePutAesthetic } from './aesthetic';

@@ -29,15 +29,17 @@ export {
   extractMemorySearchKeywords,
   summarizeMemoryRecap,
 } from './memory-tasks'
-export type { OtherSubjectInput } from './memory-tasks'
+export type { OtherSubjectInput, OrientingContext } from './memory-tasks'
 
 // Canon block loader (used by the memory orchestrator to feed extractor prompts)
 export {
-  renderCanonBlock,
+  renderSelfCanonBlock,
+  renderOtherCanonBlock,
   loadCanonForSelf,
   loadCanonForObserverAboutSubject,
   NO_CANON_FALLBACK,
   type CanonSource,
+  type SelfCanon,
 } from './canon'
 
 // Chat tasks

@@ -1,9 +1,13 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import useSWR from 'swr'
-import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA } from '../types'
-import type { TemplateDelimiter } from '@/lib/schemas/template.types'
+import { useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { RoleplayTemplate, TemplateFormData, DelimiterFormEntry, INITIAL_FORM_DATA, EMPTY_ADD_ONS } from '../types'
+import type { TemplateDelimiter, DelimiterAddOns } from '@/lib/schemas/template.types'
+import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
+import { generateFormattingPromptHint } from '@/lib/chat/template-prompt-hint'
 
 export interface UseRoleplayTemplatesReturn {
   // Data
@@ -41,33 +45,107 @@ export interface UseRoleplayTemplatesReturn {
   handleSave: () => Promise<void>
   handleDelete: (templateId: string) => Promise<void>
   handleCopyAsNew: (template: RoleplayTemplate) => void
+
+  // Draft a kind-aware formatting paragraph from the current delimiters and
+  // append it to the editable systemPrompt.
+  appendFormattingHint: () => void
 }
 
-/** Convert a TemplateDelimiter to form entry */
+/** Convert a TemplateDelimiter (any kind) to a form entry. */
 function delimiterToFormEntry(d: TemplateDelimiter): DelimiterFormEntry {
-  const isPair = Array.isArray(d.delimiters)
-  return {
+  const base = {
     name: d.name,
     buttonName: d.buttonName,
+    style: d.style,
+    // Sensible defaults for the fields not used by this kind.
+    delimiterMode: 'single' as const,
+    delimiterOpen: '',
+    delimiterClose: '',
+    marker: '',
+    tagOpen: '[',
+    tagClose: ']',
+    tokenPattern: DEFAULT_TAG_TOKEN_PATTERN,
+    hideDelimiter: d.hideDelimiter ?? false,
+    addOns: { ...EMPTY_ADD_ONS, ...(d.addOns ?? {}) },
+  }
+
+  if (d.kind === 'linePrefix') {
+    return { ...base, kind: 'linePrefix', marker: d.marker }
+  }
+  if (d.kind === 'tagPrefix') {
+    return {
+      ...base,
+      kind: 'tagPrefix',
+      delimiterMode: 'pair',
+      tagOpen: d.open,
+      tagClose: d.close,
+      tokenPattern: d.tokenPattern || DEFAULT_TAG_TOKEN_PATTERN,
+    }
+  }
+
+  // wrap
+  const isPair = Array.isArray(d.delimiters)
+  return {
+    ...base,
+    kind: 'wrap',
     delimiterMode: isPair ? 'pair' : 'single',
     delimiterOpen: isPair ? (d.delimiters as [string, string])[0] : (d.delimiters as string),
     delimiterClose: isPair ? (d.delimiters as [string, string])[1] : (d.delimiters as string),
-    style: d.style,
   }
 }
 
-/** Convert form entries back to TemplateDelimiter array */
+/** True if any add-on is non-default (so it's worth persisting). */
+function hasAnyAddOn(a: DelimiterAddOns): boolean {
+  return a.bold || a.italic || a.reverse || a.underline !== 'none' || a.border !== 'none' || a.font !== ''
+}
+
+/**
+ * The hide/add-on decorations for a form entry, omitted when at their defaults so
+ * simple delimiters stay lean in storage and exports.
+ */
+function decorationsFor(e: DelimiterFormEntry): { hideDelimiter?: boolean; addOns?: DelimiterAddOns } {
+  return {
+    ...(e.hideDelimiter ? { hideDelimiter: true } : {}),
+    ...(hasAnyAddOn(e.addOns) ? { addOns: e.addOns } : {}),
+  }
+}
+
+/** Convert form entries back to a TemplateDelimiter array, filtering empties. */
 function formEntriesToDelimiters(entries: DelimiterFormEntry[]): TemplateDelimiter[] {
   return entries
     .filter(e => e.name.trim() && e.buttonName.trim())
-    .map(e => ({
-      name: e.name.trim(),
-      buttonName: e.buttonName.trim(),
-      delimiters: e.delimiterMode === 'pair'
-        ? [e.delimiterOpen, e.delimiterClose] as [string, string]
-        : e.delimiterOpen,
-      style: e.style.trim() || 'qt-chat-narration',
-    }))
+    .map((e): TemplateDelimiter => {
+      const name = e.name.trim()
+      const buttonName = e.buttonName.trim()
+      const style = e.style.trim() || 'qt-chat-narration'
+      const deco = decorationsFor(e)
+
+      if (e.kind === 'linePrefix') {
+        return { kind: 'linePrefix', name, buttonName, marker: e.marker, style, ...deco }
+      }
+      if (e.kind === 'tagPrefix') {
+        return {
+          kind: 'tagPrefix',
+          name,
+          buttonName,
+          open: e.tagOpen,
+          close: e.tagClose,
+          tokenPattern: e.tokenPattern.trim() || undefined,
+          style,
+          ...deco,
+        }
+      }
+      return {
+        kind: 'wrap',
+        name,
+        buttonName,
+        delimiters: e.delimiterMode === 'pair'
+          ? [e.delimiterOpen, e.delimiterClose] as [string, string]
+          : e.delimiterOpen,
+        style,
+        ...deco,
+      }
+    })
 }
 
 export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
@@ -87,13 +165,16 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  // Fetch templates and settings via SWR
-  const { data: templatesData, isLoading: loading, mutate: mutateTemplates } = useSWR<RoleplayTemplate[]>(
-    '/api/v1/roleplay-templates'
-  )
-  const { data: chatSettingsData } = useSWR<{ defaultRoleplayTemplateId?: string | null }>(
-    '/api/v1/settings/chat'
-  )
+  // Fetch templates and settings via TanStack Query
+  const { data: templatesData, isLoading: loading, refetch: mutateTemplates } = useQuery({
+    queryKey: queryKeys.roleplayTemplates.all,
+    queryFn: ({ signal }) => apiFetch<RoleplayTemplate[]>('/api/v1/roleplay-templates', { signal }),
+  })
+  const { data: chatSettingsData } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) =>
+      apiFetch<{ defaultRoleplayTemplateId?: string | null }>('/api/v1/settings/chat', { signal }),
+  })
 
   const templates = templatesData ?? []
   const defaultTemplateId = chatSettingsData?.defaultRoleplayTemplateId ?? null
@@ -252,6 +333,18 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     }
   }
 
+  const appendFormattingHint = useCallback(() => {
+    setFormData(prev => {
+      const narration: string | [string, string] = prev.narrationDelimiterMode === 'pair'
+        ? [prev.narrationOpen, prev.narrationClose]
+        : prev.narrationOpen
+      const hint = generateFormattingPromptHint(formEntriesToDelimiters(prev.delimiters), narration)
+      if (!hint) return prev
+      const separator = prev.systemPrompt.trim() ? '\n\n' : ''
+      return { ...prev, systemPrompt: prev.systemPrompt + separator + hint }
+    })
+  }, [])
+
   const handleCopyAsNew = (template: RoleplayTemplate) => {
     setEditingTemplate(null)
     const delimiters = template.narrationDelimiters
@@ -293,5 +386,6 @@ export function useRoleplayTemplates(): UseRoleplayTemplatesReturn {
     handleSave,
     handleDelete,
     handleCopyAsNew,
+    appendFormattingHint,
   }
 }

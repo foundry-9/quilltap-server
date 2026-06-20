@@ -464,6 +464,50 @@ describe('memory-injector: metadata tag on delivered memories', () => {
     expect(r.content).not.toContain('relevance')
   })
 
+  it('formatInterCharacterMemoriesForContext merges the relevance half with a relevance tag', () => {
+    const iris = '00000000-0000-0000-0000-000000000c02'
+    const importanceMem = memory('imp-1', 'iris likes tea', 'Iris always takes tea at four', {
+      importance: 0.9,
+      aboutCharacterId: iris,
+    })
+    const relevanceMem = memory('rel-1', 'iris fears storms', 'Iris flinches at thunder', {
+      importance: 0.6,
+      aboutCharacterId: iris,
+    })
+    const r = formatInterCharacterMemoriesForContext(
+      [importanceMem],
+      new Map([[iris, 'Iris']]),
+      2000,
+      provider,
+      [searchResult(relevanceMem, 0.91)],
+    )
+    // Both halves present, relevance entry carries its score.
+    expect(r.content).toContain('Iris always takes tea at four')
+    expect(r.content).toContain('Iris flinches at thunder')
+    expect(r.content).toContain('relevance 0.91')
+    expect(r.memoriesUsed).toBe(2)
+  })
+
+  it('formatInterCharacterMemoriesForContext dedups a memory in both halves, keeping the relevance copy', () => {
+    const iris = '00000000-0000-0000-0000-000000000c02'
+    const shared = memory('dup-1', 'iris keeps the ledger', 'Iris guards the ledger closely', {
+      importance: 0.8,
+      aboutCharacterId: iris,
+    })
+    const r = formatInterCharacterMemoriesForContext(
+      [shared],
+      new Map([[iris, 'Iris']]),
+      2000,
+      provider,
+      [searchResult(shared, 0.88)],
+    )
+    // Rendered exactly once, and with its relevance score (relevance copy wins).
+    expect(r.memoriesUsed).toBe(1)
+    expect(r.content).toContain('relevance 0.88')
+    const occurrences = (r.content.match(/Iris guards the ledger closely/g) || []).length
+    expect(occurrences).toBe(1)
+  })
+
   it('formatFrozenMemoryArchive appends importance and keywords only (no weight, no relevance, byte-stable)', () => {
     const m = memory('a-id', 'frozen anchor entry', undefined, {
       importance: 0.81,

@@ -17,6 +17,7 @@ import {
   DeconvertToFilesystemDialog,
 } from './components'
 import type { DocumentStore, CreateDocumentStoreData, UpdateDocumentStoreData } from './types'
+import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
 export default function DocumentStoresPage() {
   const {
@@ -38,6 +39,7 @@ export default function DocumentStoresPage() {
   const [convertStoreTarget, setConvertStoreTarget] = useState<DocumentStore | null>(null)
   const [deconvertStoreTarget, setDeconvertStoreTarget] = useState<DocumentStore | null>(null)
   const [scanningIds, setScanningIds] = useState<Set<string>>(new Set())
+  const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
   useEffect(() => {
     fetchStores()
@@ -107,7 +109,7 @@ export default function DocumentStoresPage() {
   }
 
   return (
-    <div className="qt-page-container text-foreground" style={{ '--story-background-url': 'url(/images/scriptorium.webp)' } as React.CSSProperties}>
+    <div className="qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <div>
           <h1 className="qt-page-title">The Scriptorium</h1>

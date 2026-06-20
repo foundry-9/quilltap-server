@@ -42,6 +42,14 @@ The profiles list shows:
 - **Default Badge** — Marks if this is the default "cheap" profile
 - **Actions** — Buttons to edit, test, or delete
 
+## A Note on Names
+
+Each profile must answer to a name all its own. Quilltap will not abide two profiles bearing the same name — and it is not fooled by a stray capital letter or a hopeful trailing space, for "Claude Fast" and "  claude fast  " are, to its eye, one and the same fellow. Should you attempt to christen a new profile with a name already spoken for, you will be turned away at the door until you choose another.
+
+This insistence is no mere fastidiousness. When you assign a model to a character at the table in the Salon, the dropdown now lists your profiles **by name** — with the underlying model whispered alongside, thus: *Opus 4.7 Adaptive — claude-opus-4-8*. This is precisely so that two profiles sharing a provider and a model, yet differing in their settings, may be told apart at a glance. A name worth its salt must therefore be unique, lest the distinction collapse into confusion.
+
+Should an import or a restoration arrive bearing a name already taken, Quilltap will quietly append a numeral — *Claude Fast (2)* — rather than turn the guest away.
+
 ## Creating a New Connection Profile
 
 ### Step 1: Prepare Your API Key
@@ -59,7 +67,7 @@ Before creating a connection profile, you need an API key:
 2. A form appears with these fields:
 
    **Basic Information:**
-   - **Profile Name** — Give this configuration a name (e.g., "GPT-4 Production", "Claude Fast")
+   - **Profile Name** — Give this configuration a name (e.g., "GPT-4 Production", "Claude Fast"). It must be unique — see [A Note on Names](#a-note-on-names) above. (Leave it blank and Quilltap will suggest one for you, suffixing a numeral should the obvious choice already be taken.)
    - **Provider** — Select the AI provider (OpenAI, Anthropic, Google, etc.)
 
    **Connection Settings:**

@@ -13,7 +13,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { renderWithQuery as render } from '../../../helpers/renderWithQuery'
 import React from 'react'
 import { WelcomeSection } from '@/components/homepage/WelcomeSection'
 import { QuickActionsRow } from '@/components/homepage/QuickActionsRow'
@@ -759,8 +760,11 @@ describe('ProjectItem', () => {
     const { container } = render(
       <ProjectItem project={createMockProject({ color: '#ff0000' })} />
     )
-    const svg = container.querySelector('svg')
-    expect(svg).toHaveAttribute('fill', '#ff0000')
+    // The folder is now a themeable <Icon> (a masked <span>); the project color
+    // is applied as `currentColor` via inline style so the mask paints in it.
+    const folderIcon = container.querySelector('[data-icon="folder"]')
+    expect(folderIcon).toBeInTheDocument()
+    expect(folderIcon).toHaveStyle({ color: '#ff0000' })
   })
 
   it('applies hover styling', () => {
@@ -773,8 +777,8 @@ describe('ProjectItem', () => {
 
   it('renders folder icon', () => {
     const { container } = render(<ProjectItem project={createMockProject()} />)
-    const svg = container.querySelector('svg')
-    expect(svg).toBeInTheDocument()
+    const folderIcon = container.querySelector('[data-icon="folder"]')
+    expect(folderIcon).toBeInTheDocument()
   })
 
   it('renders icon container with correct classes', () => {
@@ -971,8 +975,8 @@ describe('CharacterCard', () => {
     const character = createMockCharacter()
     render(<CharacterCard character={character} />)
     const chatButton = screen.getByRole('button', { name: /Chat/i })
-    const svg = chatButton.querySelector('svg')
-    expect(svg).toBeInTheDocument()
+    const chatIcon = chatButton.querySelector('[data-icon="chat"]')
+    expect(chatIcon).toBeInTheDocument()
   })
 
   it('has accessible title on chat button', () => {

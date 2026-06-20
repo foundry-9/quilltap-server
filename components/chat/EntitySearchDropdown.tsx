@@ -1,6 +1,7 @@
 'use client'
 
 import { RefObject } from 'react'
+import { Icon } from '@/components/ui/icon'
 import { EntityOption } from './useEntitySearch'
 
 interface EntitySearchDropdownProps {
@@ -32,9 +33,7 @@ export function EntitySearchDropdown({
         disabled={disabled}
       >
         <span>Other Characters...</span>
-        <svg className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <Icon name="chevron-down" className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isDropdownOpen && (
@@ -53,7 +52,7 @@ export function EntitySearchDropdown({
               <button
                 key={entity.id}
                 onClick={() => onEntitySelect(entity)}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2"
+                className="w-full px-3 py-2 text-left text-sm qt-hover-accent flex items-center gap-2"
               >
                 <span className={`px-1.5 py-0.5 text-xs rounded ${
                   entity.type === 'character'

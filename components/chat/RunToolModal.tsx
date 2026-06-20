@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
+import { Icon } from '@/components/ui/icon'
 import JsonSchemaForm from '@/components/chat/JsonSchemaForm'
 import { showErrorToast } from '@/lib/toast'
 import type { AvailableTool } from '@/app/api/v1/tools/route'
@@ -261,9 +262,7 @@ export default function RunToolModal({
         <div className="space-y-3">
           {/* Search bar */}
           <div className="relative">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 qt-text-secondary" />
             <input
               type="text"
               value={searchQuery}

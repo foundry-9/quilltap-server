@@ -4,11 +4,14 @@
  * Image Generation Card
  *
  * Card displaying avatar generation, default image profile, and story background
- * settings for a project.
+ * settings for a project. Spans the full grid width because it hosts the Lexical
+ * aesthetic editors, which need room rather than a cramped single column.
  */
 
 import type { Project, BackgroundDisplayMode } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
+import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
+import { Icon } from '@/components/ui/icon'
 
 interface ImageProfile {
   id: string
@@ -28,13 +31,6 @@ interface ImageGenerationCardProps {
   onToggle: () => void
 }
 
-function ImageIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-  )
-}
 
 export function ImageGenerationCard({
   project,
@@ -47,14 +43,14 @@ export function ImageGenerationCard({
   onToggle,
 }: ImageGenerationCardProps) {
   return (
-    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
+    <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden col-span-full">
       {/* Header - always visible */}
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <ImageIcon className="w-5 h-5 qt-text-primary" />
+          <Icon name="image" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Image Generation</h3>
             <p className="qt-text-small qt-text-secondary">
@@ -153,6 +149,28 @@ export function ImageGenerationCard({
               {project.backgroundDisplayMode === 'static' && 'Uses a manually uploaded background image.'}
               {(!project.backgroundDisplayMode || project.backgroundDisplayMode === 'theme') && 'No background image, uses your theme colors.'}
             </p>
+          </div>
+
+          {/* Default Aesthetics — project override of the global house style. */}
+          <div className="p-3 rounded-lg qt-border qt-bg-surface space-y-6">
+            <div>
+              <h4 className="qt-label text-foreground mb-1">Default Aesthetics</h4>
+              <p className="qt-text-xs qt-text-secondary">
+                Override the global house style for images in this project. Leave a field empty to inherit the global default.
+              </p>
+            </div>
+            <AestheticEditorField
+              label="Default Image Aesthetic"
+              description="Overall look for scenes and backgrounds in this project."
+              loadUrl={`/api/v1/projects/${project.id}?action=aesthetic&kind=lantern`}
+              namespace={`ProjectImageAesthetic-${project.id}`}
+            />
+            <AestheticEditorField
+              label="Default Character Aesthetic"
+              description="How people and outfits are depicted in this project's images."
+              loadUrl={`/api/v1/projects/${project.id}?action=aesthetic&kind=aurora`}
+              namespace={`ProjectCharacterAesthetic-${project.id}`}
+            />
           </div>
         </div>
       )}

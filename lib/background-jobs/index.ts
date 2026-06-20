@@ -63,3 +63,12 @@ export {
   isDangerScanSchedulerRunning,
   runScheduledDangerScan,
 } from './scheduled-danger-scan';
+
+// Scheduled retention & cleanup maintenance
+export {
+  scheduleMaintenance,
+  stopMaintenanceScheduler,
+  isMaintenanceSchedulerRunning,
+  runScheduledMaintenance,
+  type MaintenanceSweepSummary,
+} from './scheduled-maintenance';

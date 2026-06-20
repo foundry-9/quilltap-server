@@ -6,16 +6,15 @@
  */
 
 import { logger } from '@/lib/logger';
-import { WardrobeItem, WardrobeItemSchema, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { WardrobeItem, WardrobeItemSchema } from '@/lib/schemas/wardrobe.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { getOverlaidWardrobeItems, syncCharacterVaultWardrobe } from './character-properties-overlay';
+import { getOverlaidWardrobeItems } from './character-properties-overlay';
 import {
   createVaultWardrobeItem,
   updateVaultWardrobeItem,
   deleteVaultWardrobeItem,
 } from './vault-overlay/wardrobe-writes';
 import { TypedQueryFilter } from '../interfaces';
-import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
 
 /**
  * Wardrobe Repository
@@ -28,38 +27,16 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find multiple wardrobe items by their IDs in a single query
-   * @param ids Array of wardrobe item IDs
-   * @returns Promise<WardrobeItem[]> Array of found items (may be shorter than input if some IDs don't exist)
-   */
-  async findByIds(ids: string[]): Promise<WardrobeItem[]> {
-    if (ids.length === 0) {
-      return [];
-    }
-
-    return this.safeQuery(
-      () => this.findByFilter({ id: { $in: ids } } as TypedQueryFilter<WardrobeItem>),
-      'Error finding wardrobe items by IDs',
-      { idCount: ids.length }
-    );
-  }
-
-  /**
-   * Find all wardrobe items belonging to a specific character. Sources items
-   * from the character's vault `Wardrobe/*.md` files when present, falling
-   * back to DB rows.
+   * Find all wardrobe items belonging to a specific character. Items are
+   * sourced solely from the character's vault `Wardrobe/*.md` files — there is
+   * no DB mirror.
    *
    * @param characterId The character ID
    * @param includeArchived When false (default), excludes items where archivedAt is not null
    */
   async findByCharacterId(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () =>
-        getOverlaidWardrobeItems(
-          characterId,
-          () => this.findByCharacterIdRaw(characterId, includeArchived),
-          { includeArchived },
-        ),
+      () => getOverlaidWardrobeItems(characterId, { includeArchived }),
       'Error finding wardrobe items by character ID',
       { characterId, includeArchived }
     );
@@ -67,8 +44,11 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
 
   /**
    * Raw DB-only variant of `findByCharacterId` that bypasses the document-store
-   * overlay. Used by the vault populator (to avoid reading the file it's about
-   * to write) and by export paths that need the canonical DB rows.
+   * overlay. Retained only for the one-time vault populator
+   * (`refresh-vault-wardrobe`) and the historical `cutover-characters-to-vault`
+   * migration, which read DB rows to avoid the file they're about to write.
+   * Both run only while the `wardrobe_items` table still exists; this method is
+   * slated for removal once that table is dropped.
    */
   async findByCharacterIdRaw(characterId: string, includeArchived = false): Promise<WardrobeItem[]> {
     return this.safeQuery(
@@ -85,23 +65,24 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find a single wardrobe item wearable by a character. Honours the
-   * document-store overlay so vault-only items (which have no DB row) resolve,
-   * and falls back to a raw lookup so shared archetype items (characterId
-   * null) remain reachable. Includes archived items because callers in the
-   * equip path need an item's `types` even if it's been archived after the
-   * chat last loaded.
+   * Find a single wardrobe item wearable by a character. Resolves against the
+   * character's own vault wardrobe first, then the shared archetype tiers
+   * (Quilltap General + any project stores). Includes archived items because
+   * callers in the equip path need an item's `types` even if it's been archived
+   * after the chat last loaded.
    */
-  async findByIdForCharacter(characterId: string, id: string): Promise<WardrobeItem | null> {
+  async findByIdForCharacter(
+    characterId: string,
+    id: string,
+    opts?: { projectMountPointIds?: string[] },
+  ): Promise<WardrobeItem | null> {
     return this.safeQuery(
       async () => {
         const items = await this.findByCharacterId(characterId, true);
         const owned = items.find((item) => item.id === id);
         if (owned) return owned;
-        const archetype = await this.findArchetypeById(id);
+        const archetype = await this.findArchetypeById(id, opts);
         if (archetype) return archetype;
-        const raw = await this._findById(id);
-        if (raw && raw.characterId == null) return raw;
         return null;
       },
       'Error finding wardrobe item by character + id',
@@ -114,25 +95,23 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
    * document-store overlay and includes archetype items (characterId null)
    * for any IDs not found in the character's own wardrobe.
    */
-  async findByIdsForCharacter(characterId: string, ids: string[]): Promise<WardrobeItem[]> {
+  async findByIdsForCharacter(
+    characterId: string,
+    ids: string[],
+    opts?: { projectMountPointIds?: string[] },
+  ): Promise<WardrobeItem[]> {
     if (ids.length === 0) return [];
     return this.safeQuery(
       async () => {
         const items = await this.findByCharacterId(characterId, true);
         const found = new Map(items.filter((i) => ids.includes(i.id)).map((i) => [i.id, i]));
-        let missing = ids.filter((id) => !found.has(id));
+        const missing = ids.filter((id) => !found.has(id));
         if (missing.length > 0) {
-          // Shared archetypes live in Quilltap General; seed any missing ids from there.
-          const archetypes = await this.findArchetypes(true);
+          // Shared items live in Quilltap General + any project stores; seed any
+          // missing ids from the merged tier set.
+          const archetypes = await this.findArchetypes(true, opts);
           for (const a of archetypes) {
             if (missing.includes(a.id)) found.set(a.id, a);
-          }
-          missing = missing.filter((id) => !found.has(id));
-        }
-        if (missing.length > 0) {
-          const raw = await this.findByFilter({ id: { $in: missing } } as TypedQueryFilter<WardrobeItem>);
-          for (const item of raw) {
-            if (item.characterId == null) found.set(item.id, item);
           }
         }
         return Array.from(found.values());
@@ -143,59 +122,62 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find wardrobe items for a character that include a specific type/slot.
-   * Since types is stored as a JSON array, we fetch by characterId then filter in JS.
-   * Honours the document-store overlay via `findByCharacterId`.
-   */
-  async findByCharacterIdAndTypes(characterId: string, type: WardrobeItemType): Promise<WardrobeItem[]> {
-    return this.safeQuery(
-      async () => {
-        const items = await this.findByCharacterId(characterId);
-        return items.filter((item) => item.types.includes(type));
-      },
-      'Error finding wardrobe items by character ID and type',
-      { characterId, type }
-    );
-  }
-
-  /**
-   * Find default wardrobe items for a character. Honours the document-store
-   * overlay.
+   * Find default wardrobe items for a character. Sourced solely from the vault.
    */
   async findDefaultsForCharacter(characterId: string): Promise<WardrobeItem[]> {
     return this.safeQuery(
-      () =>
-        getOverlaidWardrobeItems(
-          characterId,
-          () =>
-            this.findByFilter({
-              characterId,
-              isDefault: true,
-            } as TypedQueryFilter<WardrobeItem>),
-          { defaultsOnly: true },
-        ),
+      () => getOverlaidWardrobeItems(characterId, { defaultsOnly: true }),
       'Error finding default wardrobe items for character',
       { characterId }
     );
   }
 
   /**
-   * Find archetype wardrobe items (characterId is null, shared across characters)
+   * Find archetype/shared wardrobe items (characterId is null). Tri-tier: reads
+   * Quilltap General plus every project store passed in `opts.projectMountPointIds`.
+   * Project items override Quilltap General items on id collision (precedence
+   * character > project > general; the character tier is handled by callers via
+   * `findByCharacterId`).
+   *
    * @param includeArchived When false (default), excludes items where archivedAt is not null
+   * @param opts.projectMountPointIds Project document stores to fold into the shared pool
    */
-  async findArchetypes(includeArchived = false): Promise<WardrobeItem[]> {
+  async findArchetypes(
+    includeArchived = false,
+    opts?: { projectMountPointIds?: string[] },
+  ): Promise<WardrobeItem[]> {
     return this.safeQuery(
       async () => {
-        // Vault-first: shared archetypes live in Quilltap General/Wardrobe.
+        // Shared archetypes live in Quilltap General/Wardrobe, optionally
+        // shadowed by project stores. There is no DB tier any more — an
+        // unprovisioned General simply yields no archetypes (a startup-ordering
+        // issue to surface, not a row to read).
         const { readGeneralWardrobe } = await import('@/lib/mount-index/general-wardrobe');
         const general = await readGeneralWardrobe(includeArchived);
-        if (general.length > 0) return general;
-        // Fallback to DB rows (pre-migration instances, or General unprovisioned).
-        const items = await this.findByFilter(this.createNullableFilter('characterId', null));
-        if (includeArchived) {
-          return items;
+
+        const projectMountPointIds = opts?.projectMountPointIds ?? [];
+        if (projectMountPointIds.length === 0) {
+          return general;
         }
-        return items.filter((item) => !item.archivedAt);
+
+        // Merge the project tier over the general tier — project items win on
+        // id collision so a project can shadow a household archetype.
+        const { readProjectWardrobe } = await import('@/lib/mount-index/project-wardrobe');
+        const byId = new Map<string, WardrobeItem>();
+        for (const item of general) byId.set(item.id, item);
+        for (const mountPointId of projectMountPointIds) {
+          try {
+            const projectItems = await readProjectWardrobe(mountPointId, includeArchived);
+            for (const item of projectItems) byId.set(item.id, item);
+          } catch (error) {
+            logger.warn('Failed to read project wardrobe tier; skipping', {
+              mountPointId,
+              context: 'wardrobe',
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        return Array.from(byId.values());
       },
       'Error finding archetype wardrobe items',
       { includeArchived }
@@ -203,17 +185,18 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Find a single shared archetype by id. Reads Quilltap General/Wardrobe
-   * first, falling back to a raw DB lookup for pre-migration instances.
+   * Find a single shared archetype by id. Reads Quilltap General/Wardrobe (and
+   * any project stores in `opts.projectMountPointIds`); returns null if the id
+   * isn't present in any tier.
    */
-  async findArchetypeById(id: string): Promise<WardrobeItem | null> {
+  async findArchetypeById(
+    id: string,
+    opts?: { projectMountPointIds?: string[] },
+  ): Promise<WardrobeItem | null> {
     return this.safeQuery(
       async () => {
-        const archetypes = await this.findArchetypes(true);
-        const found = archetypes.find((a) => a.id === id);
-        if (found) return found;
-        const raw = await this._findById(id);
-        return raw && raw.characterId == null ? raw : null;
+        const archetypes = await this.findArchetypes(true, opts);
+        return archetypes.find((a) => a.id === id) ?? null;
       },
       'Error finding archetype wardrobe item by id',
       { wardrobeItemId: id }
@@ -243,39 +226,6 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
       logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
     }
     return item;
-  }
-
-  /**
-   * Reject a save that would introduce a cycle through `componentItemIds`.
-   * Looks at the would-be id (passed in or freshly minted) plus its proposed
-   * components and walks the existing graph for the character's items + shared
-   * archetypes. Throws on any cycle found.
-   */
-  private async assertNoComponentCycles(
-    selfId: string,
-    componentItemIds: readonly string[],
-    characterId: string | null,
-  ): Promise<void> {
-    if (componentItemIds.length === 0) return;
-
-    const peers = characterId
-      ? await this.findByCharacterId(characterId, true)
-      : await this.findArchetypes(true);
-    const itemsById = new Map(peers.map((i) => [i.id, i]));
-    const cycles = detectComponentCycles(selfId, componentItemIds, itemsById);
-
-    if (cycles.length > 0) {
-      const message = `Wardrobe item ${selfId} would create a component cycle: ${cycles
-        .map((c) => c.join(' → '))
-        .join('; ')}`;
-      logger.warn('[Wardrobe] Rejected save — component cycle detected', {
-        context: 'wardrobe',
-        wardrobeItemId: selfId,
-        componentItemIds: [...componentItemIds],
-        cycles,
-      });
-      throw new Error(message);
-    }
   }
 
   /**
@@ -318,69 +268,23 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           return vault.value;
         }
 
-        // Fallback — no vault mount resolved (e.g. Quilltap General not yet
-        // provisioned on a freshly-cloned instance). Legacy DB row + sync-out.
-        await this.assertNoComponentCycles(
-          candidateId,
-          data.componentItemIds ?? [],
-          data.characterId ?? null,
-        );
-        const item = await this._create(data, { ...options, id: candidateId });
-        logger.info('Wardrobe item created (DB fallback)', {
-          wardrobeItemId: item.id,
-          characterId: data.characterId ?? null,
-          title: data.title,
+        // No vault mount resolved. Wardrobe lives exclusively in the document
+        // store ("Character Vault" / Quilltap General) — there is no DB mirror,
+        // and we must never write a wardrobe item as a SQL row. If we land here,
+        // the General mount isn't provisioned yet — surface that rather than
+        // silently creating an authoritative item the vault doesn't know about.
+        logger.error('Wardrobe create has no resolvable vault mount; refusing SQL fallback', {
+          wardrobeItemId: newItem.id,
+          characterId: newItem.characterId,
+          title: newItem.title,
         });
-        await syncCharacterVaultWardrobe(item.characterId);
-        return item;
+        throw new Error(
+          'Cannot create wardrobe item: no Character Vault or Quilltap General mount is available. ' +
+            'Wardrobe items are stored exclusively in the document store.',
+        );
       },
       'Error creating wardrobe item',
       { characterId: data.characterId ?? null, title: data.title }
-    );
-  }
-
-  /**
-   * Insert a wardrobe item that originated from a character's vault, preserving
-   * its stable id and timestamps. Bypasses `syncCharacterVaultWardrobe` so the
-   * sync chain itself can promote vault-only items into the DB without
-   * recursing back into another sync.
-   *
-   * Why: the projection sweep in `projectArrayIntoVaultFolder` deletes any
-   * `Wardrobe/*.md` file not represented in the DB-derived list. Vault-only
-   * items (created by hand or via Document Mode, never written to the DB) get
-   * wiped out on the next sync. Promoting them to DB rows ahead of the
-   * projection makes the sweep see them as "managed" and leave them alone.
-   */
-  async createFromVault(item: WardrobeItem): Promise<WardrobeItem> {
-    return this.safeQuery(
-      async () => {
-        await this.assertNoComponentCycles(
-          item.id,
-          item.componentItemIds ?? [],
-          item.characterId ?? null,
-        );
-        return this._create(
-          {
-            characterId: item.characterId ?? null,
-            title: item.title,
-            description: item.description ?? null,
-            types: item.types,
-            componentItemIds: item.componentItemIds ?? [],
-            appropriateness: item.appropriateness ?? null,
-            isDefault: item.isDefault,
-            replace: item.replace ?? false,
-            migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
-            archivedAt: item.archivedAt ?? null,
-          } as Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>,
-          {
-            id: item.id,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-          },
-        );
-      },
-      'Error ingesting vault-only wardrobe item into DB',
-      { wardrobeItemId: item.id, characterId: item.characterId ?? null, title: item.title },
     );
   }
 
@@ -390,7 +294,8 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
    * `ownerCharacterId` (the owning character, or `null` for a shared archetype)
    * locates the vault mount. Callers that know it — the wardrobe routes — should
    * pass it; without it we derive a best-effort hint from the patch or a
-   * (possibly stale) DB row, which only works for pre-cutover items.
+   * (possibly stale) DB row. Wardrobe items live solely in the vault, so an
+   * unresolvable mount is an error, not a reason to fall back to a DB row.
    */
   async update(
     id: string,
@@ -406,15 +311,12 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
         delete updateData.createdAt;
         delete updateData.updatedAt;
 
-        // Resolve the owning character for mount resolution.
+        // Resolve the owning character for mount resolution. The wardrobe routes
+        // pass it explicitly; otherwise we can only derive it from a characterId
+        // in the patch. There is no DB row to consult — wardrobe lives in the vault.
         let hint: string | null | undefined = ownerCharacterId;
-        if (hint === undefined) {
-          if ('characterId' in updateData) {
-            hint = updateData.characterId ?? null;
-          } else {
-            const existing = await this._findById(id);
-            hint = existing ? existing.characterId ?? null : undefined;
-          }
+        if (hint === undefined && 'characterId' in updateData) {
+          hint = updateData.characterId ?? null;
         }
 
         if (hint !== undefined) {
@@ -427,18 +329,16 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           }
         }
 
-        // Fallback — legacy DB update + sync-out.
-        if (updateData.componentItemIds !== undefined) {
-          const existing = await this._findById(id);
-          const characterId = updateData.characterId ?? existing?.characterId ?? null;
-          await this.assertNoComponentCycles(id, updateData.componentItemIds, characterId);
-        }
-        const item = await this._update(id, updateData);
-        if (item) {
-          logger.info('Wardrobe item updated (DB fallback)', { wardrobeItemId: id });
-          await syncCharacterVaultWardrobe(item.characterId);
-        }
-        return item;
+        // Wardrobe items live exclusively in the document store. An unresolved
+        // mount (no owner hint, or an unprovisioned store) means there is nothing
+        // to update — surface it rather than writing a DB row.
+        logger.error('Wardrobe update has no resolvable vault mount; refusing DB fallback', {
+          wardrobeItemId: id,
+        });
+        throw new Error(
+          'Cannot update wardrobe item: no Character Vault or Quilltap General mount is available. ' +
+            'Wardrobe items are stored exclusively in the document store.',
+        );
       },
       'Error updating wardrobe item',
       { wardrobeItemId: id }
@@ -449,18 +349,13 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
    * Delete a wardrobe item.
    *
    * `ownerCharacterId` (or `null` for a shared archetype) locates the vault
-   * mount; the wardrobe routes pass it. Without it we derive a best-effort hint
-   * from a (possibly stale) DB row.
+   * mount; the wardrobe routes pass it. Wardrobe items live solely in the vault,
+   * so an unresolvable mount is an error, not a reason to touch a DB row.
    */
   async delete(id: string, ownerCharacterId?: string | null): Promise<boolean> {
     return this.safeQuery(
       async () => {
-        let hint: string | null | undefined = ownerCharacterId;
-        let existing: WardrobeItem | null = null;
-        if (hint === undefined) {
-          existing = await this._findById(id);
-          hint = existing ? existing.characterId ?? null : undefined;
-        }
+        const hint: string | null | undefined = ownerCharacterId;
 
         if (hint !== undefined) {
           const vault = await deleteVaultWardrobeItem(id, hint);
@@ -472,17 +367,16 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
           }
         }
 
-        // Fallback — legacy DB delete + sync-out (tombstone the id so the
-        // sync's ingestion step doesn't re-promote the still-on-disk file).
-        if (!existing) existing = await this._findById(id);
-        const result = await this._delete(id);
-        if (result) {
-          logger.info('Wardrobe item deleted (DB fallback)', { wardrobeItemId: id });
-          if (existing?.characterId) {
-            await syncCharacterVaultWardrobe(existing.characterId, new Set([id]));
-          }
-        }
-        return result;
+        // Wardrobe items live exclusively in the document store. An unresolved
+        // mount means there is nothing to delete — surface it rather than
+        // touching a DB row.
+        logger.error('Wardrobe delete has no resolvable vault mount; refusing DB fallback', {
+          wardrobeItemId: id,
+        });
+        throw new Error(
+          'Cannot delete wardrobe item: no Character Vault or Quilltap General mount is available. ' +
+            'Wardrobe items are stored exclusively in the document store.',
+        );
       },
       'Error deleting wardrobe item',
       { wardrobeItemId: id }

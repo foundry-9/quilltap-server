@@ -6,7 +6,10 @@
  */
 
 import { useState, useCallback } from 'react';
-import useSWR from 'swr';
+import { Icon } from '@/components/ui/icon';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/query/fetcher';
+import { queryKeys } from '@/lib/query/keys';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
@@ -39,16 +42,18 @@ interface ImageGalleryProps {
 export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, className = '' }: ImageGalleryProps) {
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set());
 
-  // Build query string for SWR
-  const queryParams = new URLSearchParams();
-  if (tagType) queryParams.append('tagType', tagType);
-  if (tagId) queryParams.append('tagId', tagId);
-  const queryString = queryParams.toString();
-
-  // Fetch images via SWR
-  const { data: imageData, isLoading: loading, error: loadError, mutate: mutateImages } = useSWR<{ data: ImageData[] }>(
-    `/api/v1/images${queryString ? '?' + queryString : ''}`
-  );
+  // Fetch images via TanStack Query. The URL is built inside the queryFn from
+  // tagType/tagId so the key (which encodes both) is the source of cache identity.
+  const { data: imageData, isLoading: loading, error: loadError, refetch: mutateImages } = useQuery({
+    queryKey: queryKeys.images.list({ tagType: tagType ?? null, tagId: tagId ?? null }),
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (tagType) params.append('tagType', tagType);
+      if (tagId) params.append('tagId', tagId);
+      const qs = params.toString();
+      return apiFetch<{ data: ImageData[] }>(`/api/v1/images${qs ? '?' + qs : ''}`, { signal });
+    },
+  });
 
   const images = imageData?.data ?? [];
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'Failed to load images') : null;
@@ -164,13 +169,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                 title="Delete image"
                 aria-label="Delete image"
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
+                <Icon name="trash" className="w-5 h-5" />
               </button>
             </div>
           )}
@@ -178,13 +177,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           {/* Selected indicator */}
           {selectedImageId === image.id && !missingImages.has(image.id) && (
             <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              <Icon name="check" className="w-4 h-4" />
             </div>
           )}
         </div>

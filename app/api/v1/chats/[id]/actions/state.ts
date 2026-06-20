@@ -45,12 +45,22 @@ export async function handleGetState(
 
     const chatState = (chat.state || {}) as Record<string, unknown>;
 
-    // Get project state if chat belongs to a project
+    // Get project state if chat belongs to a project. Project state is a
+    // secondary enrichment here — if the project's document store is unavailable,
+    // degrade to empty project state rather than failing the chat's own state read.
     let projectState: Record<string, unknown> = {};
     if (chat.projectId) {
-      const project = await repos.projects.findById(chat.projectId);
-      if (project && project.userId === user.id) {
-        projectState = (project.state || {}) as Record<string, unknown>;
+      try {
+        const project = await repos.projects.findById(chat.projectId);
+        if (project) {
+          projectState = (project.state || {}) as Record<string, unknown>;
+        }
+      } catch (projectError) {
+        logger.warn('[Chats v1] Could not load project state for merge; using chat state only', {
+          chatId,
+          projectId: chat.projectId,
+          error: projectError instanceof Error ? projectError.message : String(projectError),
+        });
       }
     }
 

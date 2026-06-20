@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import useSWR from 'swr'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { logger } from '@/lib/logger'
 
 const log = logger.child({ component: 'AutoLockSettingsCard' })
@@ -24,8 +26,14 @@ export function AutoLockSettingsCard() {
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
 
-  const { data: unlockData } = useSWR<{ hasUserPassphrase: boolean }>('/api/v1/system/unlock')
-  const { data: settingsData } = useSWR<{ autoLockSettings?: AutoLockConfig }>('/api/v1/settings/chat')
+  const { data: unlockData } = useQuery({
+    queryKey: queryKeys.system.unlock,
+    queryFn: ({ signal }) => apiFetch<{ hasUserPassphrase: boolean }>('/api/v1/system/unlock', { signal }),
+  })
+  const { data: settingsData } = useQuery({
+    queryKey: queryKeys.settings.chat,
+    queryFn: ({ signal }) => apiFetch<{ autoLockSettings?: AutoLockConfig }>('/api/v1/settings/chat', { signal }),
+  })
 
   useEffect(() => {
     if (unlockData) {

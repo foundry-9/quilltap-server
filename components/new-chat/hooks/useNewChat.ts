@@ -1,12 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type {
   Character,
   ConnectionProfile,
   GeneralScenarioOption,
+  GroupScenarioOption,
   ImageProfile,
   NewChatFormState,
   Project,
@@ -68,6 +69,8 @@ interface UseNewChatReturn {
   projectScenarios: ProjectScenarioOption[]
   /** General scenarios from `/api/v1/scenarios`; fetched for every non-help chat. */
   generalScenarios: GeneralScenarioOption[]
+  /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
+  groupScenarios: GroupScenarioOption[]
   /** Every project the user owns, for the in-form picker. */
   availableProjects: ProjectListEntry[]
   /** Currently chosen project ID, or null for "no project (general)". */
@@ -83,12 +86,13 @@ interface UseNewChatReturn {
 }
 
 const INITIAL_STATE: NewChatFormState = {
-  selectedUserCharacterId: '',
   imageProfileId: '',
   scenario: '',
   scenarioId: null,
   projectScenarioPath: null,
   generalScenarioPath: null,
+  groupScenarioPath: null,
+  groupScenarioGroupId: null,
   timestampConfig: null,
   avatarGenerationEnabled: false,
   outfitSelections: [],
@@ -139,6 +143,7 @@ export function useNewChat({
   const [project, setProject] = useState<Project | null>(null)
   const [projectScenarios, setProjectScenarios] = useState<ProjectScenarioOption[]>([])
   const [generalScenarios, setGeneralScenarios] = useState<GeneralScenarioOption[]>([])
+  const [groupScenarios, setGroupScenarios] = useState<GroupScenarioOption[]>([])
   const [availableProjects, setAvailableProjects] = useState<ProjectListEntry[]>([])
 
   // selectedProjectId is the live picker value. It seeds from the `projectId`
@@ -165,6 +170,14 @@ export function useNewChat({
   // churn when the parent passes a fresh array reference each render.
   const initialSelectedKey = (initialSelectedCharacterIds || []).join(',')
 
+  // Memoise selected LLM character IDs to determine when to refetch group scenarios
+  const selectedLlmCharacterIds = useMemo(() => {
+    return selectedCharacters
+      .filter((sc) => sc.controlledBy === 'llm')
+      .map((sc) => sc.character.id)
+  }, [selectedCharacters])
+  const selectedLlmCharacterIdsKey = selectedLlmCharacterIds.join(',')
+
   useEffect(() => {
     let cancelled = false
 
@@ -186,6 +199,12 @@ export function useNewChat({
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}`))
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}?action=default-partner`))
         }
+        // Fetch group scenarios when LLM characters are selected
+        if (selectedLlmCharacterIds.length > 0) {
+          requests.push(
+            fetch(`/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`)
+          )
+        }
 
         const responses = await Promise.all(requests)
         if (cancelled) return
@@ -201,16 +220,22 @@ export function useNewChat({
         const projectScenariosRes = selectedProjectId ? responses[idx++] : null
         const seedCharacterRes = initialCharacterId ? responses[idx++] : null
         const seedPartnerRes = initialCharacterId ? responses[idx++] : null
+        const groupScenariosRes = selectedLlmCharacterIds.length > 0 ? responses[idx++] : null
 
         let loadedCharacters: Character[] = []
         let loadedUserChars: UserControlledCharacter[] = []
+        // Full unfiltered roster, retained so the seeding paths below can resolve
+        // a user/partner character whose default may be either 'llm' (flipped to
+        // user in a source chat) or 'user' — neither sub-list alone is enough.
+        let allCharacters: Character[] = []
         if (charsRes.ok) {
           const data = await charsRes.json()
           const all: Character[] = data.characters || []
+          allCharacters = all
           loadedCharacters = all.filter((c) => c.controlledBy !== 'user')
-          loadedUserChars = all
-            .filter((c) => c.controlledBy === 'user')
-            .map((c) => ({ id: c.id, name: c.name, title: c.title ?? null }))
+          // Keep the full Character so the "Play As" dropdown can pull a
+          // default-user character into the cast without a second fetch.
+          loadedUserChars = all.filter((c) => c.controlledBy === 'user')
         }
         let loadedProfiles: ConnectionProfile[] = []
         if (profilesRes.ok) {
@@ -279,6 +304,32 @@ export function useNewChat({
           })
         }
 
+        let loadedGroupScenarios: GroupScenarioOption[] = []
+        if (groupScenariosRes && groupScenariosRes.ok) {
+          const data = await groupScenariosRes.json()
+          const groupScenariosByGroup = data.groupScenarios || []
+          // Flatten the grouped scenarios into a single array with groupId/groupName metadata
+          for (const group of groupScenariosByGroup) {
+            const scenarios = group.scenarios || []
+            for (const s of scenarios) {
+              loadedGroupScenarios.push({
+                groupId: group.groupId,
+                groupName: group.groupName,
+                path: s.path,
+                filename: s.filename,
+                name: s.name,
+                ...(s.description !== undefined && { description: s.description }),
+                isDefault: s.isDefault,
+                body: s.body,
+              })
+            }
+          }
+        } else if (groupScenariosRes && !groupScenariosRes.ok) {
+          console.warn('[useNewChat] Failed to load group scenarios', {
+            status: groupScenariosRes.status,
+          })
+        }
+
         let seededChar: Character | null = null
         if (seedCharacterRes && seedCharacterRes.ok) {
           const { character } = await seedCharacterRes.json()
@@ -320,6 +371,7 @@ export function useNewChat({
         setProject(loadedProject)
         setProjectScenarios(loadedProjectScenarios)
         setGeneralScenarios(loadedGeneralScenarios)
+        setGroupScenarios(loadedGroupScenarios)
         setAvailableProjects(loadedAvailableProjects)
 
         // Project default wins over general default for pre-selection. When a
@@ -357,12 +409,27 @@ export function useNewChat({
               controlledBy: 'llm',
             })
           }
+          // Seed the source chat's user-controlled participant as an in-place
+          // user entry — the single source of truth for "who I play as". Skip in
+          // autonomous mode (no user) and when already present. The character may
+          // be a default-LLM one flipped to user in the source chat, so resolve
+          // it from the full roster rather than either filtered sub-list.
+          if (initialUserCharacterId && !initialAutonomous) {
+            const userChar = allCharacters.find((c) => c.id === initialUserCharacterId)
+            if (userChar && !seededSelected.some((sc) => sc.character.id === userChar.id)) {
+              seededSelected.push({
+                character: userChar,
+                connectionProfileId: '',
+                selectedSystemPromptId: null,
+                controlledBy: 'user',
+              })
+            }
+          }
           if (seededSelected.length > 0) {
             setSelectedCharacters(seededSelected)
           }
           setState((prev) => ({
             ...prev,
-            selectedUserCharacterId: initialUserCharacterId ?? prev.selectedUserCharacterId,
             timestampConfig: initialTimestampConfig ?? prev.timestampConfig,
             // Continuation mode intentionally does NOT pre-fill scenario:
             // the whole point is to pick a new one.
@@ -388,14 +455,31 @@ export function useNewChat({
           const defaultPromptId = char.defaultSystemPromptId
             ? char.systemPrompts?.find((p) => p.id === char.defaultSystemPromptId)?.id
             : char.systemPrompts?.find((p) => p.isDefault)?.id ?? char.systemPrompts?.[0]?.id
-          setSelectedCharacters([
+          const seededSelected: SelectedCharacter[] = [
             {
               character: char,
               connectionProfileId,
               selectedSystemPromptId: defaultPromptId ?? null,
               controlledBy: 'llm',
             },
-          ])
+          ]
+          // Seed the character's default partner as an in-place user persona.
+          // Skip in autonomous mode (no user). The partner is a default-user
+          // character, absent from `loadedCharacters` — resolve it from the full
+          // roster.
+          const partnerId = seededPartnerId || char.defaultPartnerId || ''
+          if (partnerId && !initialAutonomous) {
+            const partner = allCharacters.find((c) => c.id === partnerId)
+            if (partner && partner.id !== char.id) {
+              seededSelected.push({
+                character: partner,
+                connectionProfileId: '',
+                selectedSystemPromptId: null,
+                controlledBy: 'user',
+              })
+            }
+          }
+          setSelectedCharacters(seededSelected)
 
           // Scenario default: project default wins over character default.
           // The character default still rides on `state.scenarioId` so the form
@@ -403,7 +487,6 @@ export function useNewChat({
           // General default fills in only when no project default exists.
           setState((prev) => ({
             ...prev,
-            selectedUserCharacterId: seededPartnerId || char.defaultPartnerId || '',
             timestampConfig: char.defaultTimestampConfig ?? null,
             scenarioId: char.defaultScenarioId ?? null,
             projectScenarioPath: projectDefaultScenarioPath,
@@ -467,7 +550,9 @@ export function useNewChat({
     }
     // The continuation seed depends on the joined character-ID list (serialised
     // as initialSelectedKey above) so a fresh array reference from the parent
-    // doesn't churn the fetch. Other initial-* options are scalars.
+    // doesn't churn the fetch. Other initial-* options are scalars. The group
+    // scenarios fetch depends on selectedLlmCharacterIdsKey so it refetches when
+    // the selected LLM character roster changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     initialCharacterId,
@@ -477,6 +562,7 @@ export function useNewChat({
     initialUserCharacterId,
     initialImageProfileId,
     initialAvatarGenerationEnabled,
+    selectedLlmCharacterIdsKey,
   ])
 
   // When exactly one LLM character is selected (and it wasn't seeded), propagate their defaults.
@@ -494,7 +580,6 @@ export function useNewChat({
       const char = llmCharacters[0].character
       setState((prev) => ({
         ...prev,
-        selectedUserCharacterId: char.defaultPartnerId || prev.selectedUserCharacterId,
         timestampConfig: char.defaultTimestampConfig ?? prev.timestampConfig,
         scenarioId: char.defaultScenarioId ?? prev.scenarioId,
         imageProfileId:
@@ -502,8 +587,39 @@ export function useNewChat({
           char.defaultImageProfileId ||
           prev.imageProfileId,
       }))
+
+      // Seed the character's default partner as an in-place user persona, the
+      // way the Play-As dropdown would. Skip in autonomous mode, when a user
+      // entry already exists, or when the partner is already in the cast. The
+      // partner is a default-user character — resolve it from the user roster.
+      // Loop-safe: adding a non-LLM entry leaves the LLM-id key unchanged, so
+      // this effect early-returns on the re-run.
+      const partnerId = char.defaultPartnerId
+      if (partnerId && !state.autonomous.enabled) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- loop-safe: the partner is a non-LLM entry, so the LLM-id key above is unchanged on the re-run and this effect early-returns; the inner updater is additionally idempotent (no-ops once a user entry exists)
+        setSelectedCharacters((prev) => {
+          if (prev.some((sc) => sc.controlledBy === 'user')) return prev
+          if (prev.some((sc) => sc.character.id === partnerId)) return prev
+          const partner = userControlledCharacters.find((c) => c.id === partnerId)
+          if (!partner) return prev
+          return [
+            ...prev,
+            {
+              character: partner,
+              connectionProfileId: '',
+              selectedSystemPromptId: null,
+              controlledBy: 'user',
+            },
+          ]
+        })
+      }
     }
-  }, [selectedCharacters, project?.defaultImageProfileId])
+  }, [
+    selectedCharacters,
+    project?.defaultImageProfileId,
+    state.autonomous.enabled,
+    userControlledCharacters,
+  ])
 
   const handleCreateChat = async (): Promise<{ chatId: string } | null> => {
     if (selectedCharacters.length === 0) {
@@ -558,15 +674,6 @@ export function useNewChat({
         controlledBy: sc.controlledBy,
       }))
 
-      // Autonomous rooms have no user character; suppress the Play-As entry.
-      if (!isAutonomous && state.selectedUserCharacterId) {
-        participants.push({
-          type: 'CHARACTER' as const,
-          characterId: state.selectedUserCharacterId,
-          controlledBy: 'user' as const,
-        })
-      }
-
       const requestBody: Record<string, unknown> = {
         title: generateTitle(selectedCharacters),
         participants,
@@ -576,13 +683,22 @@ export function useNewChat({
         requestBody.imageProfileId = state.imageProfileId
       }
 
-      // Scenario precedence: custom text > character scenarioId > projectScenarioPath > generalScenarioPath.
+      // Free-text scenario notes — sent independently of any preset. The server
+      // appends them beneath the chosen preset body, or treats them as the whole
+      // scenario when no preset is selected.
       if (state.scenario) {
         requestBody.scenario = state.scenario
-      } else if (state.scenarioId) {
+      }
+
+      // Preset selection (mutually exclusive among the four sources):
+      // character scenarioId > projectScenarioPath > groupScenarioPath > generalScenarioPath.
+      if (state.scenarioId) {
         requestBody.scenarioId = state.scenarioId
       } else if (state.projectScenarioPath) {
         requestBody.projectScenarioPath = state.projectScenarioPath
+      } else if (state.groupScenarioPath) {
+        requestBody.groupScenarioPath = state.groupScenarioPath
+        requestBody.groupScenarioGroupId = state.groupScenarioGroupId
       } else if (state.generalScenarioPath) {
         requestBody.generalScenarioPath = state.generalScenarioPath
       }
@@ -679,6 +795,7 @@ export function useNewChat({
     project,
     projectScenarios,
     generalScenarios,
+    groupScenarios,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,

@@ -23,6 +23,7 @@ jest.mock('@/lib/logging/create-logger', () => ({
 jest.mock('@/lib/llm/message-formatter', () => ({
   normalizeContentBlockFormat: jest.fn((text: string) => text.replace(/^BLOCK:/, '')),
   stripCharacterNamePrefix: jest.fn((text: string) => text.replace(/^Alice:\s*/, '')),
+  truncateAtForeignSpeaker: jest.fn((text: string) => ({ text, truncatedAt: null })),
 }))
 
 jest.mock('@/lib/services/chat-message/tool-execution.service', () => ({

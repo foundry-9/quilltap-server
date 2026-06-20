@@ -25,10 +25,43 @@ const logger = createServiceLogger('MountIndex:EmbeddingScheduler');
 export async function enqueueEmbeddingJobsForMountPoint(mountPointId: string): Promise<number> {
   const repos = getRepositories();
 
-  // Find chunks without embeddings for this mount point
+  // Per-document `embed:false` policy is the single steady-state enforcement
+  // point for embeddings: this scheduler both (a) skips enqueueing for blocked
+  // links and (b) erases any vectors a blocked link still carries (e.g. the
+  // flag flipped after the doc was already embedded). Build the allow map and
+  // the blocked-link set up front from the link rows.
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  const allowEmbedByLink = new Map<string, boolean>();
+  const blockedLinkIds: string[] = [];
+  for (const link of links) {
+    allowEmbedByLink.set(link.id, link.allowEmbed);
+    if (!link.allowEmbed) blockedLinkIds.push(link.id);
+  }
+
+  // Erase lingering embeddings for blocked links (NULL, don't delete — chunk
+  // text survives and re-embedding is possible if the flag flips back). The
+  // repository invalidates the mount-chunk cache for any link it actually
+  // clears, so freshly-NULLed vectors don't linger in memory.
+  for (const linkId of blockedLinkIds) {
+    try {
+      await repos.docMountChunks.clearEmbeddingsByLinkId(linkId);
+    } catch (error) {
+      logger.warn('Failed to clear embeddings for embed:false link', {
+        mountPointId,
+        linkId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // Find chunks without embeddings for this mount point, skipping any whose
+  // link is `embed:false` (a link absent from the map — e.g. a chunk whose link
+  // row was just deleted — defaults to allowed, preserving prior behaviour).
   const allChunks = await repos.docMountChunks.findByMountPointId(mountPointId);
   const unembeddedChunks = allChunks.filter(
-    chunk => !chunk.embedding || chunk.embedding.length === 0
+    chunk =>
+      (!chunk.embedding || chunk.embedding.length === 0) &&
+      allowEmbedByLink.get(chunk.linkId) !== false
   );
 
   if (unembeddedChunks.length === 0) {

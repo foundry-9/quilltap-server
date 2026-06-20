@@ -16,6 +16,10 @@ Treat `Core/` as a small, deliberate, self-curated drawer: covenantal axioms, ab
 
 You may write to `Core/` yourself from the Scriptorium, and your character may write to their own `Core/` using `doc_write_file` against their own vault. The contents are theirs to revise as they grow.
 
+## Shared grounding from a Group's `Core/`
+
+If a character belongs to one or more [Groups](/aurora), each Group's store may carry its own `Core/` folder as well. Those files are gathered up alongside the character's own and offered in the very same whisper — set *after* the character's personal Core and marked plainly with the Group's name, as `[Shared — {the Group's name}]`, so the character can tell at a glance which grounding is theirs alone and which the circle holds in common. A character with no personal `Core/` still receives a whisper when any of their Groups supply one. The same discipline applies here: a few crisp documents serve the club better than a sprawling pile.
+
 ## What Aurora's whisper looks like
 
 When the moment arrives, the salon will display a small announcement from Aurora — her avatar, her brief stage direction, the verbatim two-paragraph preamble, and then every file in the character's `Core/` folder rendered in deterministic order by filename. The whisper is private: it is addressed only to the character about to speak, and other participants do not see it. On the LLM side, the character receives the same material in a plain second-person form, ending with an explicit advisory that the contents are *offered, not imposed* — if the scene honestly calls for silence, grief, confusion, or change, the character should ask whether such-and-such still comes from them rather than perform a recognised self-shape.

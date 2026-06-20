@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { Icon } from '@/components/ui/icon'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
@@ -197,9 +198,7 @@ export function HelpTopicReader({
     return (
       <div className="flex flex-col h-full">
         <button type="button" onClick={onBack} className="qt-help-guide-back">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
+          <Icon name="arrow-left" className="w-4 h-4" />
           {categoryLabel}
         </button>
         <div className="flex-1 flex items-center justify-center qt-text-secondary text-sm">
@@ -213,9 +212,7 @@ export function HelpTopicReader({
     return (
       <div className="flex flex-col h-full">
         <button type="button" onClick={onBack} className="qt-help-guide-back">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
+          <Icon name="arrow-left" className="w-4 h-4" />
           {categoryLabel}
         </button>
         <div className="flex-1 flex items-center justify-center qt-text-destructive text-sm">
@@ -228,9 +225,7 @@ export function HelpTopicReader({
   return (
     <div className="flex flex-col h-full">
       <button type="button" onClick={onBack} className="qt-help-guide-back">
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M19 12H5M12 19l-7-7 7-7" />
-        </svg>
+        <Icon name="arrow-left" className="w-4 h-4" />
         {categoryLabel}
       </button>
       <div ref={readerRef} className="qt-help-guide-reader">

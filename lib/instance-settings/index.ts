@@ -18,20 +18,33 @@
 
 import { rawQuery } from '@/lib/database/manager';
 import { logger } from '@/lib/logger';
-import { MemoryExtractionLimitsSchema, type MemoryExtractionLimits } from '@/lib/schemas/settings.types';
+import {
+  MemoryExtractionLimitsSchema,
+  type MemoryExtractionLimits,
+  MemoryRecallSettingsSchema,
+  type MemoryRecallSettings,
+} from '@/lib/schemas/settings.types';
 
+const KEY_MAX_CONCURRENT_JOBS = 'maxConcurrentJobs';
 const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
+const KEY_MEMORY_RECALL = 'memoryRecall';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
+const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
 
+const DEFAULT_MAX_CONCURRENT_JOBS = 4;
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
 const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
   enabled: false,
   maxPerHour: 20,
   softStartFraction: 0.7,
   softFloor: 0.7,
+};
+const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
+  scopePolicy: 'down-weight',
+  expandRelated: false,
 };
 
 async function readSetting(key: string): Promise<string | null> {
@@ -56,6 +69,29 @@ async function writeSetting(key: string, value: string): Promise<void> {
       'ON CONFLICT("key") DO UPDATE SET "value" = excluded."value"',
     [key, value],
   );
+}
+
+/**
+ * Read the per-instance global background-job concurrency cap — the maximum
+ * number of jobs of any type the dispatcher runs at once. Returns the
+ * documented default (4) when the setting hasn't been written yet; clamped to
+ * the supported 1–32 range. The dispatcher re-reads this each claim cycle, so a
+ * change takes effect within ~2 s without a restart.
+ */
+export async function getMaxConcurrentJobs(): Promise<number> {
+  const raw = await readSetting(KEY_MAX_CONCURRENT_JOBS);
+  if (raw === null) return DEFAULT_MAX_CONCURRENT_JOBS;
+  const parsed = Math.floor(Number(raw));
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MAX_CONCURRENT_JOBS;
+  return Math.max(1, Math.min(32, parsed));
+}
+
+export async function setMaxConcurrentJobs(value: number): Promise<void> {
+  if (!Number.isFinite(value)) {
+    throw new Error('Concurrency must be a finite number');
+  }
+  const clamped = Math.max(1, Math.min(32, Math.floor(value)));
+  await writeSetting(KEY_MAX_CONCURRENT_JOBS, String(clamped));
 }
 
 /**
@@ -103,6 +139,31 @@ export async function setMemoryExtractionLimits(value: MemoryExtractionLimits): 
 }
 
 /**
+ * Read the per-instance Commonplace Book recall settings (cross-project scope
+ * policy). Returns the documented default (`down-weight`) when the setting
+ * hasn't been written yet. Read on the per-turn recall path
+ * (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`).
+ */
+export async function getMemoryRecallSettings(): Promise<MemoryRecallSettings> {
+  const raw = await readSetting(KEY_MEMORY_RECALL);
+  if (raw === null) return DEFAULT_MEMORY_RECALL_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw);
+    return MemoryRecallSettingsSchema.parse(parsed);
+  } catch (error) {
+    logger.warn('[InstanceSettings] memoryRecall failed to parse — using defaults', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_MEMORY_RECALL_SETTINGS;
+  }
+}
+
+export async function setMemoryRecallSettings(value: MemoryRecallSettings): Promise<void> {
+  const validated = MemoryRecallSettingsSchema.parse(value);
+  await writeSetting(KEY_MEMORY_RECALL, JSON.stringify(validated));
+}
+
+/**
  * Read the Lantern Backgrounds mount-point id. The provisioning migration
  * writes this on first boot; runtime callers (the Lantern bridge) read it
  * to find where to land generated story backgrounds when no project context
@@ -135,6 +196,37 @@ export async function getGeneralMountPointId(): Promise<string | null> {
 }
 
 
+/**
+ * Read the timestamp of the last completed scheduled maintenance pass, as a
+ * `Date`, or `null` if it has never run (or the stored value is unparseable).
+ * Note this marks when a pass *finished*, not that every sweep within it
+ * succeeded: the scheduler records it at the end of the pass even when an
+ * individual sweep failed (failures are isolated and swallowed), so a transient
+ * error in one sweep doesn't force a full re-run on the next dev restart.
+ *
+ * The maintenance scheduler (`lib/background-jobs/scheduled-maintenance.ts`)
+ * has no job rows to peek at — unlike the memory-housekeeping scheduler, which
+ * short-circuits its startup tick via `backgroundJobs.findRecentByType`. So it
+ * persists this timestamp here instead and reads it back at boot to decide
+ * whether to skip the dev-restart-friendly startup tick. Instance-scoped and
+ * internal: not user-facing, not part of any `.qtap`/SillyTavern export.
+ */
+export async function getLastMaintenanceSweepAt(): Promise<Date | null> {
+  const raw = await readSetting(KEY_LAST_MAINTENANCE_SWEEP_AT);
+  if (raw === null) return null;
+  const ts = new Date(raw);
+  return Number.isNaN(ts.getTime()) ? null : ts;
+}
+
+/**
+ * Record the timestamp of a completed scheduled maintenance pass (ISO 8601).
+ * Written at the end of the pass regardless of whether individual sweeps
+ * failed — it tracks "last attempted pass," not "last fully-successful pass."
+ */
+export async function setLastMaintenanceSweepAt(when: Date = new Date()): Promise<void> {
+  await writeSetting(KEY_LAST_MAINTENANCE_SWEEP_AT, when.toISOString());
+}
+
 // Re-export the schema for callers that want to validate independently.
-export { MemoryExtractionLimitsSchema };
-export type { MemoryExtractionLimits };
+export { MemoryExtractionLimitsSchema, MemoryRecallSettingsSchema };
+export type { MemoryExtractionLimits, MemoryRecallSettings };

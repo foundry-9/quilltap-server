@@ -48,6 +48,7 @@ export const ENTITY_TYPE_LABELS: Record<ExportEntityType, string> = {
   'embedding-profiles': 'Embedding Profiles',
   tags: 'Tags',
   projects: 'Projects',
+  groups: 'Groups',
   'document-stores': 'Document Stores',
 }
 

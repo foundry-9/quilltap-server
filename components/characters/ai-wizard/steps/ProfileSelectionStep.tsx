@@ -6,6 +6,7 @@
  * Step 1: Select the primary LLM connection profile for generation.
  */
 
+import { Icon } from '@/components/ui/icon'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 
 interface ProfileSelectionStepProps {
@@ -128,9 +129,7 @@ export function ProfileSelectionStep({
 
       <div className="p-4 rounded-lg border qt-border-default qt-bg-muted/20">
         <h4 className="font-medium text-foreground mb-2 flex items-center gap-2">
-          <svg className="w-4 h-4 qt-text-info" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          <Icon name="info" className="w-4 h-4 qt-text-info" />
           Tip
         </h4>
         <p className="text-sm qt-text-secondary">

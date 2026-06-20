@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { LoadingState } from '@/components/ui/LoadingState'
 import { ErrorAlert } from '@/components/ui/ErrorAlert'
 import { ProfileList } from './ProfileList'
@@ -9,6 +9,7 @@ import { useConnectionProfiles } from './hooks/useConnectionProfiles'
 import { useProfileForm } from './hooks/useProfileForm'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { normalizeProfileName } from '@/lib/llm/connection-profile-names'
 import type { ConnectionProfile } from './types'
 
 /**
@@ -107,6 +108,18 @@ export default function ConnectionProfilesTab() {
     [handleDelete]
   )
 
+  // Normalized names already in use, excluding the profile being edited — feeds
+  // the modal's inline duplicate-name validation and unique auto-name suggestion.
+  const takenNames = useMemo(
+    () =>
+      new Set(
+        profiles
+          .filter((p) => p.id !== editingProfile?.id)
+          .map((p) => normalizeProfileName(p.name))
+      ),
+    [profiles, editingProfile]
+  )
+
   const handleAutoConfigureCard = useCallback(async (profileId: string) => {
     setAutoConfiguringId(profileId)
     try {
@@ -177,6 +190,7 @@ export default function ConnectionProfilesTab() {
         profile={editingProfile}
         apiKeys={apiKeys}
         providers={providers}
+        takenNames={takenNames}
         form={{
           formData: form.formData,
           setField: form.setField,

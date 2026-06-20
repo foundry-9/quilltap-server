@@ -6,7 +6,7 @@
  * Manages outfit state for characters in a chat session.
  * Fetches equipped outfit slots from the server, resolves item details
  * from each character's wardrobe, and provides equip primitives that
- * mirror the `wardrobe_set_outfit` LLM tool surface.
+ * mirror the `wardrobe_wear`/`wardrobe_take_off` LLM tools surface.
  *
  * Each slot is an array of wardrobe item IDs (multi-item slots support
  * layering: t-shirt + sweater). Composite items appear as a single ID

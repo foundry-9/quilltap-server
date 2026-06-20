@@ -1,6 +1,7 @@
 'use client'
 
 // Note: Character and Persona imports were removed - this component doesn't use entity types
+import { Icon } from '@/components/ui/icon'
 
 interface ImageActionsProps {
   handleDownload: () => void
@@ -33,14 +34,7 @@ export function ImageActions({
           className="absolute left-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10"
           title="Previous image (Left Arrow)"
         >
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
+          <Icon name="chevron-left" className="w-8 h-8" />
         </button>
       )}
 
@@ -53,14 +47,7 @@ export function ImageActions({
           className="absolute right-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10"
           title="Next image (Right Arrow)"
         >
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
+          <Icon name="chevron-right" className="w-8 h-8" />
         </button>
       )}
 
@@ -75,14 +62,7 @@ export function ImageActions({
           className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Download"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-            />
-          </svg>
+          <Icon name="download" className="w-6 h-6" />
         </button>
         {/* Copy to clipboard button */}
         <button
@@ -93,9 +73,7 @@ export function ImageActions({
           className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Copy to clipboard"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
+          <Icon name="copy" className="w-6 h-6" />
         </button>
         {/* Save to my gallery button */}
         {handleSaveToGallery && (
@@ -108,9 +86,7 @@ export function ImageActions({
             className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors disabled:opacity-50"
             title={savingToGallery ? 'Saving…' : 'Save to my gallery'}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-            </svg>
+            <Icon name="bookmark" className="w-6 h-6" />
           </button>
         )}
         {/* Close button */}
@@ -122,9 +98,7 @@ export function ImageActions({
           className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors"
           title="Close (Escape)"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <Icon name="close" className="w-6 h-6" />
         </button>
       </div>
     </>

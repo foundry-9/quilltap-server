@@ -38,6 +38,9 @@ export const BackgroundJobTypeEnum = z.enum([
   'WARDROBE_OUTFIT_ANNOUNCEMENT', // Debounced Aurora announcement of outfit changes
   'AUTONOMOUS_ROOM_TURN', // One turn of an autonomous (character-to-character) room run
   'AUTONOMOUS_ROOM_SCHEDULE_TICK', // Singleton scan: find autonomous rooms due to run per their cron + freshness window
+  'CARINA_MEMORY_EXTRACTION', // Form SELF memories for a Carina answerer from a single posted reference Q&A
+  'CHARACTER_HEADSHOULDERS_BACKFILL', // Generate a head-and-shoulders portrait prompt for a character that lacks one
+  'REGENERATE_CONVERSATION_SUMMARIES', // Backfill: re-mirror every summarized chat's summary into its participant character vaults
 ]);
 export type BackgroundJobType = z.infer<typeof BackgroundJobTypeEnum>;
 

@@ -5,6 +5,7 @@ import { useChatSettingsContext } from '@/components/settings/chat-settings/Chat
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import ImageProfilesTab from '@/components/settings/image-profiles-tab'
 import { StoryBackgroundsSettings } from '@/components/settings/chat-settings/StoryBackgroundsSettings'
+import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
 import { useSettingsSection } from './useSettingsSection'
 
 export function ImagesTabContent() {
@@ -46,6 +47,23 @@ export function ImagesTabContent() {
           ) : (
             <div className="qt-alert-error">Failed to load settings</div>
           )}
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Default Aesthetics" description="Free-form house style woven into every avatar, story background, and ad-hoc image. Projects can override these per file." sectionId="default-aesthetics" forceOpen={activeSection === 'default-aesthetics'}>
+          <div className="space-y-6">
+            <AestheticEditorField
+              label="Default Image Aesthetic"
+              description="The overall look for scenes and backgrounds (medium, era, palette, rendering). Feeds story backgrounds and ad-hoc images."
+              loadUrl="/api/v1/system/image-aesthetics?kind=lantern"
+              namespace="DefaultImageAesthetic"
+            />
+            <AestheticEditorField
+              label="Default Character Aesthetic"
+              description="How people and their outfits are depicted. Feeds avatars, plus the figures rendered in story backgrounds and ad-hoc images."
+              loadUrl="/api/v1/system/image-aesthetics?kind=aurora"
+              namespace="DefaultCharacterAesthetic"
+            />
+          </div>
         </CollapsibleCard>
       </div>
     </div>

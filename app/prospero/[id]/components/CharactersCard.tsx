@@ -14,7 +14,7 @@ import Avatar from '@/components/ui/Avatar'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import type { Project } from '../types'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
-import { CloseIcon } from '@/components/ui/icons'
+import { Icon } from '@/components/ui/icon'
 
 interface CharactersCardProps {
   project: Project
@@ -22,14 +22,6 @@ interface CharactersCardProps {
   onToggleAllowAnyCharacter: () => void
   expanded: boolean
   onToggle: () => void
-}
-
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  )
 }
 
 export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCharacter, expanded, onToggle }: CharactersCardProps) {
@@ -54,7 +46,7 @@ export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCha
         className="w-full flex items-center justify-between p-4 hover:qt-bg-muted transition-colors"
       >
         <div className="flex items-center gap-3">
-          <UsersIcon className="w-5 h-5 qt-text-primary" />
+          <Icon name="characters" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Characters</h3>
             <p className="qt-text-small qt-text-secondary">
@@ -119,7 +111,7 @@ export function CharactersCard({ project, onRemoveCharacter, onToggleAllowAnyCha
                       className="absolute top-1 right-1 p-1 rounded-full opacity-0 group-hover:opacity-100 qt-text-secondary hover:qt-text-destructive hover:qt-bg-destructive/10 transition-all"
                       title="Remove from roster"
                     >
-                      <CloseIcon className="w-3.5 h-3.5" />
+                      <Icon name="close" className="w-3.5 h-3.5" />
                     </button>
 
                     <Link

@@ -22,8 +22,71 @@ import {
   writeDatabaseDocument,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
+import {
+  resolveTieredMountPool,
+  flattenTierPool,
+} from '@/lib/mount-index/tiered-mount-pool';
 
 const logger = createServiceLogger('DocEdit:PathResolver');
+
+/**
+ * Reserved `mount_point` token meaning "the acting character's own vault."
+ * The database already knows which store is a character's vault via
+ * `characters.characterDocumentMountPointId`, so a character can address its own
+ * vault with this stable literal instead of the vault's (renameable, possibly
+ * colliding) name or an opaque UUID. Only resolves when a `characterId` is in
+ * the resolution context; operator / non-character contexts fall through to
+ * normal name/id matching, leaving any store literally named "self" reachable
+ * there. Exported so tool handlers can hand characters the exact same literal.
+ */
+export const SELF_VAULT_TOKEN = 'self';
+
+/**
+ * Resolve the acting character's own vault mount-point ID via the DB link
+ * (`characters.characterDocumentMountPointId`). Returns null when there is no
+ * character context, the character has no vault, or the lookup fails. Uses the
+ * overlay-free raw read because we only need the pointer and it must survive a
+ * broken vault overlay. Shared by the path resolver and the list/grep/blob tool
+ * handlers so the reserved self-token names the same store everywhere.
+ */
+export async function resolveSelfVaultMountPointId(
+  characterId: string | undefined | null
+): Promise<string | null> {
+  if (!characterId) return null;
+  try {
+    const repos = getRepositories();
+    const acting = await repos.characters.findByIdRaw(characterId);
+    return acting?.characterDocumentMountPointId ?? null;
+  } catch (error) {
+    logger.warn('Failed to resolve self-vault mount point id', {
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * Translate a caller-supplied `mount_point` reference into the literal that
+ * should be matched against accessible stores. The reserved self-token
+ * (case-insensitive) becomes the acting character's own vault mount-point ID;
+ * every other value passes through unchanged. Returns the original reference
+ * when there is no character context or the character has no vault, so a store
+ * literally named "self" still resolves by name elsewhere. This mirrors the
+ * path resolver's self-token handling for the tools that match a mount point by
+ * name/ID rather than calling `resolveDocEditPath` (doc_list_files, doc_grep,
+ * the blob family).
+ */
+export async function resolveMountPointRef(
+  mountPointRef: string,
+  characterId: string | undefined | null
+): Promise<string> {
+  if (characterId && mountPointRef.toLowerCase() === SELF_VAULT_TOKEN) {
+    const ownVaultId = await resolveSelfVaultMountPointId(characterId);
+    if (ownVaultId) return ownVaultId;
+  }
+  return mountPointRef;
+}
 
 export type DocEditScope = 'document_store' | 'project' | 'general';
 
@@ -228,12 +291,11 @@ function describeCharacters(context: PathResolutionContext): string {
 async function collectAccessibleMountPointIds(
   context: PathResolutionContext
 ): Promise<string[]> {
-  const repos = getRepositories();
-  const ids = new Set<string>();
-
   // Operator "look everywhere" override: every enabled store is reachable.
   // Restricted to human-operator UI document actions (see PathResolutionContext).
   if (context.operatorOverride) {
+    const repos = getRepositories();
+    const ids = new Set<string>();
     const enabled = await repos.docMountPoints.findEnabled();
     for (const mp of enabled) ids.add(mp.id);
     logger.debug('Path resolver: operator override — all enabled stores accessible', {
@@ -242,40 +304,22 @@ async function collectAccessibleMountPointIds(
     return Array.from(ids);
   }
 
-  if (context.projectId) {
-    const projectLinks = await repos.projectDocMountLinks.findByProjectId(context.projectId);
-    for (const link of projectLinks) {
-      ids.add(link.mountPointId);
-    }
-  }
-
-  const characterIds = new Set<string>();
-  if (context.characterId) characterIds.add(context.characterId);
-  if (context.characterIds) {
-    for (const id of context.characterIds) characterIds.add(id);
-  }
-
-  for (const characterId of characterIds) {
-    const character = await repos.characters.findById(characterId);
-    if (character?.characterDocumentMountPointId) {
-      ids.add(character.characterDocumentMountPointId);
-    }
-  }
-
-  // Quilltap General is always accessible to every character. Lazy-imported
-  // to keep the path resolver free of an instance-settings dependency at load
-  // time.
-  try {
-    const { getGeneralMountPointId } = await import('@/lib/instance-settings');
-    const generalMountPointId = await getGeneralMountPointId();
-    if (generalMountPointId) ids.add(generalMountPointId);
-  } catch (error) {
-    logger.warn('Failed to look up Quilltap General mount; continuing without it', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  return Array.from(ids);
+  // Standard access set: the responding character's vault, every chat
+  // participant's vault, every project-linked store, and Quilltap General.
+  // Resolved through the shared tiered-mount-pool helper so the dedup and
+  // graceful global-null behaviour stay consistent with knowledge/search/
+  // wardrobe. No ownership gate here — the document path resolver grants the
+  // LLM access to its own + participant vaults by chat membership, not user
+  // ownership.
+  const pool = await resolveTieredMountPool(
+    {
+      characterId: context.characterId,
+      characterIds: context.characterIds,
+      projectId: context.projectId,
+    },
+    { includeParticipants: true },
+  );
+  return flattenTierPool(pool, { includeParticipants: true });
 }
 
 /**
@@ -294,7 +338,9 @@ async function resolveDocumentStorePath(
   }
 
   const hasCharacterContext = Boolean(context.characterId) || (context.characterIds?.length ?? 0) > 0;
-  if (!context.projectId && !hasCharacterContext) {
+  // The operator "look everywhere" override carries its own accessible set
+  // (every enabled store) and so needs neither a project nor a character.
+  if (!context.operatorOverride && !context.projectId && !hasCharacterContext) {
     logger.warn('document_store scope requires projectId or characterId in context');
     throw new PathResolutionError(
       'Project ID or character ID is required for document_store scope',
@@ -312,14 +358,37 @@ async function resolveDocumentStorePath(
     );
   }
 
-  // Try to find mount point by name first (case-insensitive), then by ID
   let mountPoint = null;
   const needle = context.mountPoint.toLowerCase();
-  for (const id of accessibleIds) {
-    const mp = await repos.docMountPoints.findById(id);
-    if (mp && mp.name.toLowerCase() === needle) {
-      mountPoint = mp;
-      break;
+
+  // Reserved self-token: address the acting character's OWN vault directly via
+  // the DB link, rather than its name (see SELF_VAULT_TOKEN). Only a character
+  // acting as itself can use it; without a characterId we fall through to normal
+  // resolution so a store literally named "self" stays reachable elsewhere.
+  if (context.characterId && needle === SELF_VAULT_TOKEN) {
+    const ownVaultId = await resolveSelfVaultMountPointId(context.characterId);
+    if (ownVaultId && accessibleIds.includes(ownVaultId)) {
+      mountPoint = await repos.docMountPoints.findById(ownVaultId);
+    }
+    if (!mountPoint) {
+      logger.warn('Self-token resolution failed: no accessible vault for character', {
+        characterId: context.characterId,
+      });
+      throw new PathResolutionError(
+        `No personal vault is available to address as "${SELF_VAULT_TOKEN}"`,
+        'NOT_FOUND'
+      );
+    }
+  }
+
+  // Try to find mount point by name first (case-insensitive), then by ID
+  if (!mountPoint) {
+    for (const id of accessibleIds) {
+      const mp = await repos.docMountPoints.findById(id);
+      if (mp && mp.name.toLowerCase() === needle) {
+        mountPoint = mp;
+        break;
+      }
     }
   }
 

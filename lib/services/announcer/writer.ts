@@ -26,7 +26,8 @@ export type StaffSender =
   | 'prospero'
   | 'host'
   | 'commonplaceBook'
-  | 'ariel';
+  | 'ariel'
+  | 'suparna';
 
 export type AnnouncerSender =
   | { kind: 'staff'; staffId: StaffSender }

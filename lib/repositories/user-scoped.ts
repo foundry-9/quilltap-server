@@ -22,6 +22,9 @@ import {
   MemoriesRepository,
   FilesRepository,
   ProjectsRepository,
+  GroupsRepository,
+  GroupCharacterMembersRepository,
+  GroupDocMountLinksRepository,
   LLMLogsRepository,
   type CreateOptions,
 } from '@/lib/database/repositories';
@@ -38,6 +41,7 @@ import type {
   ApiKey,
   ChatEvent,
   Project,
+  Group,
   LLMLog,
 } from '@/lib/schemas/types';
 
@@ -169,6 +173,12 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
   async findByCharacterId(characterId: string): Promise<ChatMetadata[]> {
     const chats = await this.baseRepo.findByCharacterId(characterId);
     return this.filterByUser(chats);
+  }
+
+  async delete(id: string, options?: { syncVaults?: boolean }): Promise<boolean> {
+    const chat = await this.findById(id);
+    if (!chat) return false;
+    return this.baseRepo.delete(id, options);
   }
 
   async getMessages(chatId: string): Promise<ChatEvent[]> {
@@ -309,42 +319,100 @@ class UserScopedMemoriesRepository {
 }
 
 /**
- * User-scoped Projects Repository
+ * Projects Repository (global).
+ *
+ * Projects are no longer user-scoped — they belong to the instance, not a user
+ * (the project-store cutover dropped `userId`). This wrapper is therefore a
+ * thin pass-through to the base repository with no user filtering. It keeps the
+ * `(userId, baseRepo)` constructor only so the container assembly stays
+ * uniform; the userId is intentionally ignored.
  */
-class UserScopedProjectsRepository extends UserScopedRepository<Project, ProjectsRepository> {
-  async findByCharacterId(characterId: string): Promise<Project[]> {
-    const projects = await this.baseRepo.findByCharacterId(characterId);
-    return this.filterByUser(projects);
+class UserScopedProjectsRepository {
+  constructor(_userId: string, private readonly baseRepo: ProjectsRepository) {}
+
+  findAll(): Promise<Project[]> {
+    return this.baseRepo.findAll();
   }
 
-  async addToRoster(projectId: string, characterId: string): Promise<Project | null> {
-    const project = await this.findById(projectId);
-    if (!project) return null;
+  findById(id: string): Promise<Project | null> {
+    return this.baseRepo.findById(id);
+  }
+
+  findByIds(ids: string[]): Promise<Project[]> {
+    return this.baseRepo.findByIds(ids);
+  }
+
+  create(
+    data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions,
+  ): Promise<Project> {
+    return this.baseRepo.create(data, options);
+  }
+
+  update(id: string, data: Partial<Project>): Promise<Project | null> {
+    return this.baseRepo.update(id, data);
+  }
+
+  delete(id: string): Promise<boolean> {
+    return this.baseRepo.delete(id);
+  }
+
+  findByCharacterId(characterId: string): Promise<Project[]> {
+    return this.baseRepo.findByCharacterId(characterId);
+  }
+
+  addToRoster(projectId: string, characterId: string): Promise<Project | null> {
     return this.baseRepo.addToRoster(projectId, characterId);
   }
 
-  async addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
-    const project = await this.findById(projectId);
-    if (!project) return null;
+  addManyToRoster(projectId: string, characterIds: string[]): Promise<Project | null> {
     return this.baseRepo.addManyToRoster(projectId, characterIds);
   }
 
-  async removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
-    const project = await this.findById(projectId);
-    if (!project) return null;
+  removeFromRoster(projectId: string, characterId: string): Promise<Project | null> {
     return this.baseRepo.removeFromRoster(projectId, characterId);
   }
 
-  async canCharacterParticipate(projectId: string, characterId: string): Promise<boolean> {
-    const project = await this.findById(projectId);
-    if (!project) return false;
+  canCharacterParticipate(projectId: string, characterId: string): Promise<boolean> {
     return this.baseRepo.canCharacterParticipate(projectId, characterId);
   }
 
-  async setAllowAnyCharacter(projectId: string, allowAnyCharacter: boolean): Promise<Project | null> {
-    const project = await this.findById(projectId);
-    if (!project) return null;
+  setAllowAnyCharacter(projectId: string, allowAnyCharacter: boolean): Promise<Project | null> {
     return this.baseRepo.setAllowAnyCharacter(projectId, allowAnyCharacter);
+  }
+}
+
+/**
+ * User-scoped Groups Repository
+ */
+class UserScopedGroupsRepository {
+  constructor(_userId: string, private readonly baseRepo: GroupsRepository) {}
+
+  findAll(): Promise<Group[]> {
+    return this.baseRepo.findAll();
+  }
+
+  findById(id: string): Promise<Group | null> {
+    return this.baseRepo.findById(id);
+  }
+
+  findByIds(ids: string[]): Promise<Group[]> {
+    return this.baseRepo.findByIds(ids);
+  }
+
+  create(
+    data: Omit<Group, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: CreateOptions,
+  ): Promise<Group> {
+    return this.baseRepo.create(data, options);
+  }
+
+  update(id: string, data: Partial<Group>): Promise<Group | null> {
+    return this.baseRepo.update(id, data);
+  }
+
+  delete(id: string): Promise<boolean> {
+    return this.baseRepo.delete(id);
   }
 }
 
@@ -474,6 +542,12 @@ export interface UserScopedRepositoryContainer {
   images: UserScopedFilesRepository;
   /** Projects repository - only returns user's projects */
   projects: UserScopedProjectsRepository;
+  /** Groups repository - only returns user's groups */
+  groups: UserScopedGroupsRepository;
+  /** Group character members repository (mount index) */
+  groupCharacterMembers: GroupCharacterMembersRepository;
+  /** Group document mount links repository (mount index) */
+  groupDocMountLinks: GroupDocMountLinksRepository;
   /** LLM logs repository - only returns user's LLM logs */
   llmLogs: UserScopedLLMLogsRepository;
 }
@@ -523,6 +597,7 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
   const files = new UserScopedFilesRepository(userId, baseRepos.files);
   const memories = new UserScopedMemoriesRepository(userId, baseRepos.memories, characters);
   const projects = new UserScopedProjectsRepository(userId, baseRepos.projects);
+  const groups = new UserScopedGroupsRepository(userId, baseRepos.groups);
   const llmLogs = new UserScopedLLMLogsRepository(userId, baseRepos.llmLogs);
 
   const container: UserScopedRepositoryContainer = {
@@ -537,6 +612,9 @@ export function getUserRepositories(userId: string): UserScopedRepositoryContain
     files,
     images: files, // Alias for backwards compatibility
     projects,
+    groups,
+    groupCharacterMembers: baseRepos.groupCharacterMembers,
+    groupDocMountLinks: baseRepos.groupDocMountLinks,
     llmLogs,
   };
 
