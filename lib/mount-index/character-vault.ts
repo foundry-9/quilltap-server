@@ -33,13 +33,73 @@ const logger = createServiceLogger('MountIndex:CharacterVault');
 
 export interface EnsureCharacterVaultResult {
   mountPointId: string;
-  /** True if this call created the vault; false if the character already had one. */
+  /** True if this call created the vault; false if the character already had one (or we adopted an existing one). */
   created: boolean;
+  /** True if we adopted a pre-existing populated same-name vault rather than creating one. */
+  adopted?: boolean;
+}
+
+/**
+ * Files `writeCharacterVaultManagedFields` writes unconditionally (empty string
+ * when the field is blank), so a successfully-populated vault always has all of
+ * them. Used to decide whether an existing same-name vault is safe to adopt.
+ * Mirrors `REQUIRED_VAULT_SINGLE_FILES` in the cutover migration; the physical-*
+ * pair is intentionally absent (the writer skips it when there is no physical
+ * description, so requiring it would wrongly reject sparse characters).
+ */
+const REQUIRED_VAULT_FILES = [
+  'properties.json',
+  'identity.md',
+  'description.md',
+  'manifesto.md',
+  'personality.md',
+  'example-dialogues.md',
+] as const;
+
+/** True if the given mount point holds every file a populated vault must have. */
+async function vaultHasRequiredFiles(mountPointId: string): Promise<boolean> {
+  const repos = getRepositories();
+  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
+  const present = new Set(links.map((l) => l.relativePath.toLowerCase()));
+  return REQUIRED_VAULT_FILES.every((f) => present.has(f));
+}
+
+/**
+ * Write `characterDocumentMountPointId` onto the character row and CONFIRM it
+ * stuck by re-reading the raw row.
+ *
+ * The write goes through `repos.characters.update`, which can return without
+ * persisting if the main DB is unwritable at that instant — most notably while
+ * a cloud-synced DB file is still materializing (the partial-download window
+ * that yields "file is not a database"). When that happened during the 4.6
+ * character cutover, the vault content (a separate mount-index DB) landed fine
+ * but the link write silently vanished, and the migration dropped the legacy
+ * content columns anyway — leaving every character hollow. Verifying here turns
+ * that silent "linked but not linked" state into a loud throw the caller can
+ * block on instead of destroying columns out from under good vault content.
+ */
+async function linkCharacterToVault(characterId: string, mountPointId: string): Promise<void> {
+  const repos = getRepositories();
+  await repos.characters.update(characterId, { characterDocumentMountPointId: mountPointId });
+  const reread = await repos.characters.findByIdRaw(characterId);
+  if (!reread || reread.characterDocumentMountPointId !== mountPointId) {
+    throw new Error(
+      `Failed to persist characterDocumentMountPointId for ${characterId}: wrote ` +
+        `${mountPointId} but re-read ${reread?.characterDocumentMountPointId ?? 'null'}. ` +
+        `The character row write did not stick (database mid-materialization?).`,
+    );
+  }
 }
 
 /**
  * Ensure the given character has a linked database-backed character vault.
  * Creates, scaffolds, populates, and links if missing. Idempotent.
+ *
+ * If the character has no link but a populated same-name vault already exists
+ * (e.g. a prior run created and populated the vault but its link write was lost
+ * mid cloud-materialization), that vault is ADOPTED rather than duplicated —
+ * critical post-cutover, where the legacy content columns are gone, so creating
+ * a fresh vault here would populate it with empty files and orphan the good one.
  */
 export async function ensureCharacterVault(
   character: Character,
@@ -50,6 +110,34 @@ export async function ensureCharacterVault(
 
   const repos = getRepositories();
   const vaultName = `${character.name} Character Vault`;
+
+  // Adopt an existing populated same-name character vault before creating one.
+  const sameName = (await repos.docMountPoints.findByName(vaultName)).filter(
+    (mp) => mp.storeType === 'character',
+  );
+  const populated: string[] = [];
+  for (const mp of sameName) {
+    if (await vaultHasRequiredFiles(mp.id)) populated.push(mp.id);
+  }
+  if (populated.length === 1) {
+    await linkCharacterToVault(character.id, populated[0]);
+    logger.warn('Adopted an existing populated character vault for an unlinked character', {
+      characterId: character.id,
+      mountPointId: populated[0],
+      name: vaultName,
+    });
+    return { mountPointId: populated[0], created: false, adopted: true };
+  }
+  if (populated.length > 1) {
+    // Ambiguous — don't guess which one holds the real content. Fall through to
+    // create a fresh vault and leave the existing ones for an operator to
+    // reconcile, but log loudly so the duplication surfaces.
+    logger.error('Multiple populated same-name character vaults; cannot auto-adopt, creating fresh', {
+      characterId: character.id,
+      name: vaultName,
+      candidateMountPointIds: populated,
+    });
+  }
 
   const mountPoint = await repos.docMountPoints.create({
     name: vaultName,
@@ -76,9 +164,7 @@ export async function ensureCharacterVault(
   // wardrobe-writes path; a brand-new vault has no wardrobe yet.
   await writeCharacterVaultManagedFields(mountPoint.id, { character });
 
-  await repos.characters.update(character.id, {
-    characterDocumentMountPointId: mountPoint.id,
-  });
+  await linkCharacterToVault(character.id, mountPoint.id);
 
   logger.info('Character vault created, populated, and linked', {
     characterId: character.id,

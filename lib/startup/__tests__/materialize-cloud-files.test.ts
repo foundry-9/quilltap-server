@@ -54,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('materializeDataDirFiles', () => {
-  it('detects a dataless file (size > 0, blocks === 0) and streams it in', async () => {
+  it('detects a fully-dataless file (size > 0, blocks === 0) and streams it in', async () => {
     mockedFs.readdirSync.mockReturnValue([fileEntry('quilltap.db')] as never);
     mockedFs.statSync.mockReturnValue(stat(200_000_000, 0));
     mockedFs.createReadStream.mockReturnValue(streamThatCompletes() as never);
@@ -65,7 +65,22 @@ describe('materializeDataDirFiles', () => {
     expect(summary).toMatchObject({ checked: 1, downloaded: 1, failed: 0 });
   });
 
-  it('leaves a fully-local file (blocks > 0) untouched', async () => {
+  it('detects a PARTIALLY-materialized file (blocks > 0 but blocks*512 < size) and streams it in', async () => {
+    // 200 MB file with only ~51 MB of blocks faulted in — the header is local
+    // (so blocks !== 0) but the tail is still in the cloud. This is the case
+    // that slipped through the old blocks===0 check and wedged a cold boot.
+    mockedFs.readdirSync.mockReturnValue([fileEntry('quilltap.db')] as never);
+    mockedFs.statSync.mockReturnValue(stat(200_000_000, 100_000));
+    mockedFs.createReadStream.mockReturnValue(streamThatCompletes() as never);
+
+    const summary = await materializeDataDirFiles();
+
+    expect(mockedFs.createReadStream).toHaveBeenCalledWith('/fake/data/quilltap.db', expect.anything());
+    expect(summary).toMatchObject({ checked: 1, downloaded: 1, failed: 0 });
+  });
+
+  it('leaves a fully-resident file (blocks*512 >= size) untouched', async () => {
+    // Allocation rounds up, so a resident file has at least size/512 blocks.
     mockedFs.readdirSync.mockReturnValue([fileEntry('quilltap.db')] as never);
     mockedFs.statSync.mockReturnValue(stat(200_000_000, 394_096));
 

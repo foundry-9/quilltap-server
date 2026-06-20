@@ -14,12 +14,19 @@
  * through the provider, so a streaming read to nowhere is all it takes.
  *
  * Design notes:
- * - DETECTION is the only platform-specific seam (see {@link isDatalessStat}).
- *   On macOS a dataless file reports a real `size` but `blocks === 0` (no local
- *   extents are allocated until the bytes arrive); this mirrors the SF_DATALESS
- *   file flag without spawning `stat`/`find` (whose output we'd have to parse
- *   out of space-laden iCloud paths). Windows placeholders use reparse-point
- *   attributes instead and will get their own branch.
+ * - DETECTION is the only platform-specific seam (see {@link isNotFullyMaterialized}).
+ *   On macOS, an evicted or still-downloading file allocates fewer 512-byte
+ *   blocks than its `size` demands — a fully-dataless placeholder reports
+ *   `blocks === 0`, and a PARTIALLY-materialized file reports `blocks > 0` but
+ *   `blocks * 512 < size`. Both must be faulted in: SQLite opening a file whose
+ *   tail pages haven't arrived yet fails with "file is not a database" just the
+ *   same as opening a fully-dataless one. We therefore flag any file whose
+ *   allocated bytes fall short of its size, which mirrors SF_DATALESS for the
+ *   fully-evicted case and additionally catches the partial case (the one that
+ *   slipped through and wedged a cold boot on iCloud — see CHANGELOG). This
+ *   needs no subprocess (whose output we'd have to parse out of space-laden
+ *   iCloud paths). Windows placeholders use reparse-point attributes instead
+ *   and will get their own branch.
  * - The STREAMING READ, the per-chunk STALL timer, and the progress reporting
  *   are platform-agnostic and shared.
  * - The stall guard is per-chunk, NOT per-file: the timer resets every time a
@@ -56,18 +63,31 @@ export interface MaterializeSummary {
   failedNames: string[];
 }
 
+/** Block size that `fs.Stats.blocks` is denominated in (POSIX `st_blocks`). */
+const STAT_BLOCK_BYTES = 512;
+
 /**
- * macOS dataless heuristic: a real file (`size > 0`) with no allocated blocks
- * has not been materialized locally. Mirrors the SF_DATALESS flag. Zero-byte
- * files are never flagged — there is nothing to download.
+ * macOS not-fully-materialized heuristic: a real file (`size > 0`) whose
+ * locally-allocated blocks hold fewer bytes than its `size` has not finished
+ * downloading. This covers two cloud states with one test:
+ *   - fully-evicted placeholder → `blocks === 0` (mirrors the SF_DATALESS flag)
+ *   - partially-materialized     → `blocks > 0` but `blocks * 512 < size`
+ *
+ * The partial case is the one that bit a cold boot on iCloud: the header pages
+ * were resident so detection-by-`blocks === 0` passed it over, but the tail was
+ * still in the æther, so SQLite opened it and got "file is not a database".
+ *
+ * A fully-resident file always reports `blocks * 512 >= size` (allocation
+ * rounds UP to the block/cluster size), so this never flags a healthy file.
+ * Zero-byte files are never flagged — there is nothing to download.
  */
-function isDatalessStat(stat: fs.Stats): boolean {
-  return stat.size > 0 && stat.blocks === 0;
+function isNotFullyMaterialized(stat: fs.Stats): boolean {
+  return stat.size > 0 && stat.blocks * STAT_BLOCK_BYTES < stat.size;
 }
 
 /**
  * Find the top-level `data/` files (no subdirectories — `backups/` is left
- * alone) that are currently dataless placeholders and need downloading.
+ * alone) that are not fully materialized locally and need downloading.
  */
 function findDatalessTopLevelFiles(
   dataDir: string,
@@ -89,7 +109,7 @@ function findDatalessTopLevelFiles(
     } catch {
       continue;
     }
-    if (isDatalessStat(stat)) {
+    if (isNotFullyMaterialized(stat)) {
       out.push({ name: entry.name, full, size: stat.size });
     }
   }

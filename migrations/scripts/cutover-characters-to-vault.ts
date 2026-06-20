@@ -479,6 +479,34 @@ export const cutoverCharactersToVaultMigration: Migration = {
         };
       }
 
+      // Final guard before destructive work: every character MUST now carry a
+      // persisted vault link. `ensureCharacterVault` verifies its own link
+      // write, but re-confirm against the DB here so a link that was lost for
+      // any reason (e.g. a row write that vanished mid cloud-materialization)
+      // blocks the column drop rather than hollowing the character — the legacy
+      // content columns are about to disappear, and a null link would leave
+      // nothing pointing at the vault that holds the content.
+      const linkRows = db
+        .prepare('SELECT id, name, characterDocumentMountPointId AS mp FROM characters')
+        .all() as Array<{ id: string; name: string; mp: string | null }>;
+      const unlinked = linkRows.filter(r => !r.mp);
+      if (unlinked.length > 0) {
+        const list = unlinked.map(r => `${r.name} (${r.id.slice(0, 8)})`).join('; ');
+        const message =
+          `Refusing to drop columns — ${unlinked.length} character(s) have no persisted ` +
+          `vault link after cutover: ${list}. Aborting before destructive work.`;
+        logger.error(message, ctx);
+        return {
+          id: MIGRATION_ID,
+          success: false,
+          itemsAffected: 0,
+          message,
+          error: 'characters missing vault link',
+          durationMs: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+        };
+      }
+
       // Schema mutations: one transaction, drop in order. (Reuses `db` opened
       // above for the raw character read.)
       const existingCols = new Set(getSQLiteTableColumns('characters').map(c => c.name));

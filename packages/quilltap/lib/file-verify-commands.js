@@ -28,11 +28,18 @@ const READ_CHUNK_BYTES = 8 * 1024 * 1024;
 
 // ---------- detection (platform seam) ----------
 
-// macOS dataless heuristic: a real file (size > 0) with no allocated blocks has
-// not been materialized locally (mirrors the SF_DATALESS flag). Zero-byte files
-// are never flagged. Other platforms fall through as a no-op for now.
+const STAT_BLOCK_BYTES = 512;
+
+// macOS not-fully-materialized heuristic: a real file (size > 0) whose locally
+// allocated blocks hold fewer bytes than its size has not finished downloading.
+// Covers both the fully-evicted placeholder (blocks === 0, mirrors SF_DATALESS)
+// and the partially-materialized file (blocks > 0 but blocks*512 < size) — the
+// latter still fails SQLite open with "file is not a database". A fully-resident
+// file always reports blocks*512 >= size (allocation rounds up), so this never
+// flags a healthy file. Zero-byte files are never flagged. Other platforms fall
+// through as a no-op for now.
 function isDatalessStat(stat) {
-  return stat.size > 0 && stat.blocks === 0;
+  return stat.size > 0 && stat.blocks * STAT_BLOCK_BYTES < stat.size;
 }
 
 function listTopLevelFiles(dataDir) {
