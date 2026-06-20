@@ -58,6 +58,17 @@ interface StartupStateData {
   phase: StartupPhase;
   migrationsComplete: boolean;
   isReady: boolean;
+  /**
+   * True once the fire-and-forget post-startup backfills (character vault
+   * backfill chain + mount-index scan) have settled. These finish well after
+   * the server is `isReady` and serving, so server-rendered pages — the home
+   * dashboard especially — can read empty/partial data mid-settle and look
+   * like total data loss. This is a UI-only signal: the startup gate holds the
+   * progress screen until it flips, then refreshes server-rendered content. It
+   * deliberately does NOT gate request handling (that's `isReady`'s job), so a
+   * long mount scan never 503s the API.
+   */
+  backgroundSettled: boolean;
   startTime: number;
   readyTime: number | null;
   error: string | null;
@@ -100,6 +111,7 @@ function getGlobalState(): StartupStateData {
       phase: 'pending',
       migrationsComplete: false,
       isReady: false,
+      backgroundSettled: false,
       startTime: Date.now(),
       readyTime: null,
       error: null,
@@ -220,6 +232,29 @@ export const startupState = {
    */
   isReady(): boolean {
     return getGlobalState().isReady;
+  },
+
+  /**
+   * Mark the post-startup background backfills (character vault backfill +
+   * mount-index scan) as settled. Idempotent. UI-only — see the field doc on
+   * `backgroundSettled`; this never affects request gating.
+   */
+  markBackgroundSettled(): void {
+    const state = getGlobalState();
+    if (state.backgroundSettled) {
+      return;
+    }
+    state.backgroundSettled = true;
+    logger.info('Background settling complete — startup gate may release', {
+      context: 'startup-state.markBackgroundSettled',
+    });
+  },
+
+  /**
+   * Whether the post-startup background backfills have settled.
+   */
+  isBackgroundSettled(): boolean {
+    return getGlobalState().backgroundSettled;
   },
 
   /**
@@ -470,6 +505,7 @@ export const startupState = {
       phase: 'pending',
       migrationsComplete: false,
       isReady: false,
+      backgroundSettled: false,
       startTime: Date.now(),
       readyTime: null,
       error: null,

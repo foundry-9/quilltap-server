@@ -4,6 +4,10 @@
 
 ### 4.7-dev
 
+#### Fix: Home dashboard briefly showed empty data right after startup
+
+On the first page load after a heavy startup (e.g. a large migration backlog), the home dashboard could render "Welcome back, there!" with no chats, projects, or characters — then a reload showed everything. The home page is a server component whose data is fetched once at render time; the server reports `complete` and starts serving before the fire-and-forget post-startup backfills (character vault backfill chain and mount-index scan) finish, so that first render read empty or partial data. The startup gate released at `complete` and revealed that stale empty render, and the existing query-cache invalidation only refreshes client-fetched data, not server-rendered pages. Added a UI-only `backgroundSettled` signal (separate from `isReady`, so request handling is never delayed): instrumentation flips it once both backfills settle (bounded by a 5-minute cap). The startup progress screen now holds — showing "Settling everything into place" with live backfill/scan progress — until settled. Because a soft `router.refresh()` does not reliably re-run server components in this case, the layout instead does one full document reload on release (keeping the progress screen up across it so the empty render never flashes); the reloaded page sees the data settled and renders it. Steady-state boots are unaffected — the flag flips near-instantly, so they never hold and never reload.
+
 #### Fix: Character vault cutover migration failed on a cold boot
 
 On an instance that cold-booted with `cutover-characters-to-vault-v1` still pending — typically one restarted after a long dormancy — startup aborted and the migration refused to drop the legacy columns. Two separate ordering gaps were involved, both already fixed for the sibling `cutover-projects-to-store-v1` but never carried over to the character cutover:

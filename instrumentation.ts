@@ -589,9 +589,17 @@ export async function register() {
       // thousands, depending on character count and prompt/scenario
       // density) don't stall the event loop during startup. New vaults
       // will be picked up on the next mount-point scan pass.
+      // Promises for the two fire-and-forget background backfills below. They
+      // finish well after the server is `isReady`, so the UI startup gate
+      // holds the progress screen until both settle (see markBackgroundSettled
+      // after Phase 4). Default to resolved so an import failure can't wedge
+      // the gate.
+      let vaultBackfillSettled: Promise<unknown> = Promise.resolve();
+      let mountScanSettled: Promise<unknown> = Promise.resolve();
+
       try {
         const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
-        backfillCharacterVaults()
+        vaultBackfillSettled = backfillCharacterVaults()
           .then(async () => {
             // Chained after backfill so newly created vaults (already in the
             // new shape) aren't visited a second time for no reason.
@@ -650,7 +658,7 @@ export async function register() {
       // and processed by the background job processor after Phase 3.5.
       try {
         const { scanAllMountPoints } = await import('./lib/mount-index/scan-runner');
-        scanAllMountPoints().catch((scanError) => {
+        mountScanSettled = scanAllMountPoints().catch((scanError) => {
           logger.warn('Document mount point scan failed', {
             context: 'instrumentation.register',
             error: scanError instanceof Error ? scanError.message : String(scanError),
@@ -840,6 +848,27 @@ export async function register() {
       logger.info('All services initialized successfully', {
         context: 'instrumentation.register',
         migrationsComplete: startupState.areMigrationsComplete(),
+      });
+
+      // ================================================================
+      // PHASE 4.5: Track background settling (UI gate only)
+      // ================================================================
+      // The server is `isReady` and serving now, but the Phase 3.2 vault
+      // backfill chain and Phase 3.3 mount scan are still running. Until they
+      // settle, server-rendered pages (the home dashboard especially) can read
+      // empty/partial data and look like total data loss. Flip a UI-only
+      // `backgroundSettled` flag once both finish so the startup gate can hold
+      // the progress screen until then and refresh server-rendered content on
+      // release. Bounded by a cap so a hung job can't wedge the gate forever;
+      // this never gates request handling (that's `isReady`).
+      const SETTLE_CAP_MS = 5 * 60_000;
+      void Promise.race([
+        Promise.allSettled([vaultBackfillSettled, mountScanSettled]),
+        new Promise((resolve) => setTimeout(resolve, SETTLE_CAP_MS)),
+      ]).then(() => {
+        if (!startupState.isBackgroundSettled()) {
+          startupState.markBackgroundSettled();
+        }
       });
     } catch (error) {
       logger.error('Fatal error initializing services', {

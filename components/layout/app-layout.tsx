@@ -9,6 +9,7 @@
  * @module components/layout/app-layout
  */
 
+import { useEffect, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import { useSession } from '@/components/providers/session-provider'
 import { SidebarProvider } from '@/components/providers/sidebar-provider'
@@ -35,12 +36,37 @@ interface AppLayoutProps {
 function AppLayoutInner({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const { data: session, status } = useSession()
-  const startupPhase = useStartupPhase()
+  const { phase: startupPhase, settled: startupSettled, everSettling } = useStartupPhase()
 
   // Don't render layout on auth, setup, or unlock pages
   const isAuthPage = pathname?.startsWith('/auth')
   const isSetupPage = pathname?.startsWith('/setup')
   const isUnlockPage = pathname === '/unlock'
+
+  // The app is displayable once we've polled and the background backfills have
+  // settled — or startup failed (errors surface in-app, not via this gate).
+  // We hold past `complete` because the server starts serving before the vault
+  // backfill / mount rescan finish, and server-rendered pages read empty data
+  // in that window (the home dashboard then looks like total data loss).
+  const startupResolved =
+    startupPhase != null && (startupSettled || startupPhase === 'failed')
+
+  // If the gate actually had to hold during settling, the page underneath was
+  // server-rendered with the empty/partial data available mid-settle. A soft
+  // router.refresh() does NOT reliably re-run those server components, but a
+  // full document reload does (it's exactly what a manual reload does). So once
+  // settled we reload once, keeping the progress screen up across it so the
+  // empty render never flashes. One-shot: the reloaded page sees `settled`
+  // already true (never held), so it neither holds nor reloads again.
+  const reloadingAfterSettle =
+    everSettling && startupResolved && startupPhase !== 'failed'
+  const reloadStartedRef = useRef(false)
+  useEffect(() => {
+    if (reloadingAfterSettle && !reloadStartedRef.current) {
+      reloadStartedRef.current = true
+      window.location.reload()
+    }
+  }, [reloadingAfterSettle])
 
   // Setup and unlock pages bypass session check entirely (pepper may not be resolved yet)
   if (isSetupPage || isUnlockPage) {
@@ -53,14 +79,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     )
   }
 
-  // Show the startup-progress screen while session resolves OR the server
-  // hasn't reached the `complete` phase yet. The startup-status poll covers
-  // the gap where session.status flips to authenticated but reconciliation /
-  // vault backfill / mount rescan are still running and their endpoints
-  // would 500 if the app tried to fetch from them.
-  const startupNotComplete =
-    startupPhase != null && startupPhase !== 'complete'
-  if (status === 'loading' || startupNotComplete) {
+  // Show the startup-progress screen while the session resolves, while the
+  // server hasn't settled its background work yet, OR while the post-settle
+  // reload is in flight (so the empty mid-settle render never flashes).
+  const startupNotResolved = startupPhase != null && !startupResolved
+  if (status === 'loading' || startupNotResolved || reloadingAfterSettle) {
     return <StartupProgress />
   }
 
