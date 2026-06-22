@@ -95,16 +95,77 @@ export function WardrobeControlDialog() {
   )
 }
 
+/**
+ * WardrobeView — the Wardrobe as a left-rail workspace tab. Browse/edit only
+ * (no `chatId`, so no "wearing now" column). The chat-scoped path keeps the
+ * dialog (which can change what a character is actively wearing). Singleton.
+ */
+export function WardrobeView({ characterId }: { characterId?: string }) {
+  return (
+    <WardrobeControlDialogInner
+      asTab
+      initialCharacterId={characterId ?? null}
+      chatId={null}
+      onClose={() => {}}
+    />
+  )
+}
+
 interface InnerProps {
   initialCharacterId: string | null
   chatId: string | null
   onClose: () => void
+  /** Render bare for a workspace tab instead of inside the floating modal. */
+  asTab?: boolean
+}
+
+/**
+ * Renders the wardrobe body inside the floating `BaseModal` (dialog) or bare in
+ * a scrollable container (workspace tab). Keeps the wardrobe logic in one place.
+ */
+function WardrobeShell({
+  asTab,
+  onClose,
+  footer,
+  closeOnClickOutside,
+  closeOnEscape,
+  children,
+}: {
+  asTab?: boolean
+  onClose: () => void
+  footer: React.ReactNode
+  closeOnClickOutside: boolean
+  closeOnEscape: boolean
+  children: React.ReactNode
+}) {
+  if (asTab) {
+    return (
+      <div className="qt-wardrobe-tab flex flex-col h-full min-h-0 overflow-y-auto p-4">
+        {children}
+      </div>
+    )
+  }
+  return (
+    <BaseModal
+      isOpen
+      onClose={onClose}
+      title="Wardrobe"
+      maxWidth="4xl"
+      showCloseButton
+      closeOnClickOutside={closeOnClickOutside}
+      closeOnEscape={closeOnEscape}
+      footer={footer}
+    >
+      {children}
+    </BaseModal>
+  )
 }
 
 function WardrobeControlDialogInner({
   initialCharacterId,
   chatId,
   onClose,
+  asTab = false,
 }: InnerProps) {
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(initialCharacterId)
@@ -800,12 +861,9 @@ function WardrobeControlDialogInner({
 
   return (
     <>
-      <BaseModal
-        isOpen
+      <WardrobeShell
+        asTab={asTab}
         onClose={requestClose}
-        title="Wardrobe"
-        maxWidth="4xl"
-        showCloseButton
         closeOnClickOutside={!editorOpen && !confirming}
         closeOnEscape={!editorOpen && !confirming}
         footer={
@@ -1124,7 +1182,7 @@ function WardrobeControlDialogInner({
             </section>
           )}
         </div>
-      </BaseModal>
+      </WardrobeShell>
 
       {/* Import-from-image modal — stacked on top of the dialog */}
       {importFromImageOpen && selectedCharacterId && (

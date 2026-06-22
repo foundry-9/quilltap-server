@@ -135,4 +135,8 @@ export const queryKeys = {
     entity: (apiUrl: string) => ['brahma-console', 'entity', apiUrl] as const,
     pastChats: ['brahma-console', 'past-chats'] as const,
   },
+  home: {
+    /** Home dashboard payload for the workspace home tab. */
+    all: ['home'] as const,
+  },
 } as const

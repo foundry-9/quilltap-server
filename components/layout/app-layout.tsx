@@ -25,6 +25,8 @@ import { PageToolbar } from './page-toolbar'
 import FooterWrapper from '@/components/footer-wrapper'
 import { StartupProgress, useStartupPhase } from '@/components/loading/StartupProgress'
 import { useDictionaryFeed } from '@/lib/spellcheck/useDictionaryFeed'
+import { WorkspaceProviders } from '@/components/workspace/WorkspaceProviders'
+import { isWorkspaceTabsEnabled } from '@/lib/config/feature-flags'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -98,23 +100,35 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     )
   }
 
+  // Rail + content. When the tabbed workspace is enabled, the workspace store
+  // and registries live HERE (in the root layout, which never unmounts across
+  // navigation) so the shared left rail and the content both read one store and
+  // in-app navigation is pure openTab with full keep-alive.
+  const railAndContent = (
+    <div className="qt-app-layout">
+      <LeftSidebar />
+      <div className="qt-app-main">
+        <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <PageToolbar />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {children}
+          </div>
+        </main>
+        <FooterWrapper />
+      </div>
+    </div>
+  )
+
   return (
     <HelpChatProvider>
       <BrahmaConsoleProvider>
         <WardrobeDialogProvider>
           <DictionaryFeedMount />
-          <div className="qt-app-layout">
-            <LeftSidebar />
-            <div className="qt-app-main">
-              <main className="flex flex-col flex-1 min-h-0 overflow-hidden">
-                <PageToolbar />
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  {children}
-                </div>
-              </main>
-              <FooterWrapper />
-            </div>
-          </div>
+          {isWorkspaceTabsEnabled() ? (
+            <WorkspaceProviders>{railAndContent}</WorkspaceProviders>
+          ) : (
+            railAndContent
+          )}
           <HelpChatDialog />
           <BrahmaConsoleDialog />
           <WardrobeControlDialog />
