@@ -21,10 +21,18 @@ import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
 })
+
+// Lazy so the list bundle doesn't pull in the character detail (chat modal,
+// optimizer, editors) until a character is actually opened in place.
+const CharacterDetailView = dynamic(
+  () => import('./[id]/view/CharacterDetailView').then((m) => m.CharacterDetailView),
+  { ssr: false, loading: () => <p className="qt-text-muted p-8 text-center">Loading character…</p> }
+)
 
 interface Character {
   id: string
@@ -67,6 +75,11 @@ export function AuroraView() {
   const router = useRouter()
   const { groups, fetchGroups, deleteGroup, createGroup } = useGroups()
   const bgStyle = useSubsystemBackgroundStyle('aurora')
+  // In a workspace tab, drilling into a character renders in place (keep-alive)
+  // instead of navigating to /aurora/[id]/view. (Group detail still routes.)
+  const inTab = useWorkspaceTabId() != null
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
+  const [openChatForSelected, setOpenChatForSelected] = useState(false)
 
   // Fetch groups on mount
   useEffect(() => {
@@ -221,7 +234,12 @@ export function AuroraView() {
     if (target.closest('button') || target.closest('a')) {
       return
     }
-    router.push(`/aurora/${characterId}/view`)
+    if (inTab) {
+      setOpenChatForSelected(false)
+      setSelectedCharacterId(characterId)
+    } else {
+      router.push(`/aurora/${characterId}/view`)
+    }
   }
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -293,6 +311,21 @@ export function AuroraView() {
     } finally {
       setResetBuiltinsInProgress(false)
     }
+  }
+
+  // Workspace tab, drilled into a character: render its detail in place (the
+  // detail view manages its own loading, so this precedes the list-loading gate).
+  if (inTab && selectedCharacterId) {
+    return (
+      <CharacterDetailView
+        characterId={selectedCharacterId}
+        onBack={() => {
+          setSelectedCharacterId(null)
+          setOpenChatForSelected(false)
+        }}
+        openChatOnMount={openChatForSelected}
+      />
+    )
   }
 
   if (loading) {
@@ -453,6 +486,11 @@ export function AuroraView() {
               <div className="qt-entity-card-actions character-card-actions">
                 <Link
                   href={`/aurora/${character.id}/view?action=chat`}
+                  onClick={inTab ? (e) => {
+                    e.preventDefault()
+                    setOpenChatForSelected(true)
+                    setSelectedCharacterId(character.id)
+                  } : undefined}
                   className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-success-foreground qt-shadow-sm transition hover:qt-bg-success/90"
                   title="Start a chat with this character"
                 >

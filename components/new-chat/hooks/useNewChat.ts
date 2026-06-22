@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type {
   Character,
@@ -132,7 +132,7 @@ export function useNewChat({
   initialTimestampConfig,
   initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
-  const router = useRouter()
+  const navigate = useWorkspaceNavigate()
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
@@ -769,10 +769,12 @@ export function useNewChat({
       const data = await res.json()
       if (isAutonomous) {
         showSuccessToast('Autonomous room created!')
-        router.push('/settings?tab=chat&section=autonomous-rooms')
+        navigate('/settings?tab=chat&section=autonomous-rooms')
       } else {
         showSuccessToast(continuationFromChatId ? 'Conversation continued in a new chat!' : 'Chat created!')
-        router.push(`/salon/${data.chat.id}`)
+        // In the workspace this opens (or focuses) the new chat as a tab in place
+        // — no route navigation, so a chat streaming in the other pane survives.
+        navigate(`/salon/${data.chat.id}`)
       }
       return { chatId: data.chat.id }
     } catch (err) {

@@ -18,6 +18,15 @@ import {
 } from './components'
 import type { DocumentStore, CreateDocumentStoreData, UpdateDocumentStoreData } from './types'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import dynamic from 'next/dynamic'
+
+// Lazy so the list bundle doesn't pull in the detail (and its file-manager deps)
+// until a store is actually opened in place.
+const DocumentStoreDetailView = dynamic(
+  () => import('./[id]/DocumentStoreDetailView').then((m) => m.DocumentStoreDetailView),
+  { ssr: false, loading: () => <p className="qt-section-title p-6">Loading document store…</p> }
+)
 
 export function ScriptoriumView() {
   const {
@@ -39,6 +48,11 @@ export function ScriptoriumView() {
   const [convertStoreTarget, setConvertStoreTarget] = useState<DocumentStore | null>(null)
   const [deconvertStoreTarget, setDeconvertStoreTarget] = useState<DocumentStore | null>(null)
   const [scanningIds, setScanningIds] = useState<Set<string>>(new Set())
+  // Inside a workspace tab, drilling into a store renders in place (keep-alive)
+  // rather than navigating to /scriptorium/[id]. Outside the workspace the grid
+  // routes as before.
+  const inTab = useWorkspaceTabId() != null
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null)
   const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
   useEffect(() => {
@@ -108,6 +122,16 @@ export function ScriptoriumView() {
     )
   }
 
+  // Workspace tab, drilled into a store: render its detail in place.
+  if (inTab && selectedStoreId) {
+    return (
+      <DocumentStoreDetailView
+        storeId={selectedStoreId}
+        onBack={() => setSelectedStoreId(null)}
+      />
+    )
+  }
+
   return (
     <div className="qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
@@ -132,6 +156,7 @@ export function ScriptoriumView() {
         onScanClick={handleScan}
         onConvertClick={setConvertStoreTarget}
         onDeconvertClick={setDeconvertStoreTarget}
+        onOpenStore={inTab ? setSelectedStoreId : undefined}
       />
 
       <CreateDocumentStoreDialog

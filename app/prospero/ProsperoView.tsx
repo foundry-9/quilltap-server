@@ -10,11 +10,23 @@ import { useEffect, useState } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import dynamic from 'next/dynamic'
+
+// Lazy so the list bundle doesn't pull in the detail (and its Lexical editors)
+// until a project is actually opened in place.
+const ProjectDetailView = dynamic(
+  () => import('./[id]/ProjectDetailView').then((m) => m.ProjectDetailView),
+  { ssr: false, loading: () => <p className="qt-section-title p-6">Loading project…</p> }
+)
 
 export function ProsperoView() {
   const { projects, loading, error, fetchProjects, createProject, deleteProject } = useProjects()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
+  // In a workspace tab, drilling into a project renders in place (keep-alive).
+  const inTab = useWorkspaceTabId() != null
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const bgStyle = useSubsystemBackgroundStyle('prospero')
 
   useEffect(() => {
@@ -53,6 +65,16 @@ export function ProsperoView() {
     )
   }
 
+  // Workspace tab, drilled into a project: render its detail in place.
+  if (inTab && selectedProjectId) {
+    return (
+      <ProjectDetailView
+        projectId={selectedProjectId}
+        onBack={() => setSelectedProjectId(null)}
+      />
+    )
+  }
+
   return (
     <div className="qt-page-container text-foreground" style={bgStyle}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
@@ -69,6 +91,7 @@ export function ProsperoView() {
         projects={projects}
         onCreateClick={() => setCreateDialogOpen(true)}
         onDeleteClick={setDeleteProjectId}
+        onOpenProject={inTab ? setSelectedProjectId : undefined}
       />
 
       <CreateProjectDialog
