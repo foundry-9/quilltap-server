@@ -24,13 +24,18 @@ import {
 import { TabToolbarRegistryProvider } from '@/components/workspace/tab-toolbar'
 import { WorkspacePortalRegistryProvider } from '@/components/workspace/workspace-tab-context'
 import { WorkspaceBackdropProvider } from '@/components/workspace/workspace-backdrop'
+import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
 
 export function WorkspaceProviders({ children }: { children: ReactNode }) {
   return (
     <WorkspaceProvider>
       <TabToolbarRegistryProvider>
         <WorkspacePortalRegistryProvider>
-          <WorkspaceBackdropProvider>{children}</WorkspaceBackdropProvider>
+          <WorkspaceBackdropProvider>
+            {/* Keep every in-app link keep-alive-safe while in the workspace. */}
+            <WorkspaceLinkInterceptor />
+            {children}
+          </WorkspaceBackdropProvider>
         </WorkspacePortalRegistryProvider>
       </TabToolbarRegistryProvider>
     </WorkspaceProvider>

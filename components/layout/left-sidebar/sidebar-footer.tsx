@@ -21,6 +21,7 @@ import { NavUserMenuQuickHideContent, QuickHideIcon } from '@/components/dashboa
 import { useHelpChatOptional } from '@/components/providers/help-chat-provider'
 import { useBrahmaConsoleOptional } from '@/components/providers/brahma-console-provider'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { Icon } from '@/components/ui/icon'
 
 // Match a UUID immediately following /salon/. If the user is reading a chat,
@@ -100,6 +101,10 @@ export function SidebarFooter() {
   const brahmaConsole = useBrahmaConsoleOptional()
   const wardrobeDialog = useWardrobeDialogOptional()
   const pathname = usePathname()
+  // Inside the workspace, the Brahma Console and the rail Wardrobe open as
+  // their own tabs (per spec) rather than dialogs. Elsewhere they stay dialogs.
+  const workspace = useWorkspaceOptional()
+  const inWorkspace = Boolean(workspace) && pathname === '/workspace'
   const [openPopout, setOpenPopout] = useState<PopoutMenu>(null)
   const themesRef = useRef<HTMLDivElement>(null)
   const quickHideRef = useRef<HTMLDivElement>(null)
@@ -160,7 +165,10 @@ export function SidebarFooter() {
         {brahmaConsole && (
           <button
             type="button"
-            onClick={brahmaConsole.openConsole}
+            onClick={() => {
+              if (inWorkspace) workspace!.openTab('brahma')
+              else brahmaConsole.openConsole()
+            }}
             disabled={!brahmaConsole.isEligible}
             className={`qt-left-sidebar-item justify-center px-0 ${!brahmaConsole.isEligible ? 'opacity-40 cursor-not-allowed' : ''}`}
             title={brahmaConsole.isEligible ? 'Brahma Console' : 'Brahma Console (requires a connection profile)'}
@@ -172,6 +180,12 @@ export function SidebarFooter() {
           <button
             type="button"
             onClick={async () => {
+              // In the workspace the rail Wardrobe is a browse/edit tab (no chat
+              // scope — that path is the in-chat participant card's dialog).
+              if (inWorkspace) {
+                workspace!.openTab('wardrobe')
+                return
+              }
               const chatMatch = pathname?.match(SALON_CHAT_PATH_RE)
               if (!chatMatch) {
                 wardrobeDialog.open()
