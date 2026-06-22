@@ -313,6 +313,13 @@
   --qt-tab-group-gap: 0.25rem;
 
   /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     The original slate-blue primary is this theme's signature; the workspace
+     accent follows it for the active tab, divider, and split drop-zone.
+     ========================================================================== */
+  --qt-workspace-accent: var(--color-primary);
+
+  /* ==========================================================================
      OVERLAY VARIABLES
      ========================================================================== */
   --qt-overlay-bg: hsl(220 20% 8% / 0.88);

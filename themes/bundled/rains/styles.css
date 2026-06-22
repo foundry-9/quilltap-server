@@ -594,6 +594,10 @@
   --qt-tab-active-border: var(--stroke-soft);
   --qt-tab-divider-color: var(--stroke-soft);
 
+  /* Workspace Variables (the tabbed workspace — see _workspace.css).
+     Rain-washed brand blue on the active tab, divider, and drop-zone. */
+  --qt-workspace-accent: hsl(var(--accent-brand));
+
   /* Roleplay Annotation Variables */
   /* Roleplay-template palette (qt-roleplay-1..4) — deep blue / teal / violet / amber */
   --qt-roleplay-1-bg: hsl(210 45% 42%);

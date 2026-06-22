@@ -396,6 +396,15 @@
   --qt-tab-group-gap: 0.25rem;
 
   /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     The cabin's live readouts run cool phosphor cyan, never the warm amber
+     primary. One --qt-workspace-accent re-tints the active tab's border/bar/
+     fill, the pane divider on hover, and the split drop-zone to match.
+     ========================================================================== */
+  --qt-workspace-accent: var(--rotor-cyan);
+  --qt-workspace-tab-active-fg: var(--rotor-cyan-bright);
+
+  /* ==========================================================================
      OVERLAY VARIABLES
      ========================================================================== */
   --qt-overlay-bg: hsl(28 36% 5% / 0.92);

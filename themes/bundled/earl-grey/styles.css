@@ -564,6 +564,12 @@
   --qt-tab-active-border: transparent;
   --qt-tab-divider-color: transparent;
 
+  /* Workspace Variables (the tabbed workspace — see _workspace.css).
+     The workspace strip keeps its own filled chrome (not the flat page tabs);
+     one --qt-workspace-accent tints the active tab, divider, and drop-zone the
+     house blue. */
+  --qt-workspace-accent: hsl(var(--accent-secondary-100));
+
   /* Roleplay Annotation Variables */
   /* Roleplay-template palette (qt-roleplay-1..4) — muted slate / mauve / sage / dusty rose */
   --qt-roleplay-1-bg: hsl(215 30% 42%);

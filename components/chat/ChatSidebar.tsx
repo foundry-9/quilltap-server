@@ -37,6 +37,14 @@ const MAX_WIDTH = 560
 const MIN_CHAT_WIDTH = 360
 /** Keyboard nudge step (px). */
 const WIDTH_KEY_STEP = 16
+/**
+ * Below this container width (px), an inline expanded sidebar would starve the
+ * chat (sidebar ~MIN_WIDTH + chat MIN_CHAT_WIDTH). In a narrow pane the sidebar
+ * therefore defaults to the mini strip and expands as a click-away overlay
+ * instead of squeezing the chat. In a wide/full pane it behaves exactly as
+ * before. See `docs/developer/features/tabbed-workspace.md`.
+ */
+const NARROW_PANE_WIDTH = 640
 
 type SectionId = 'participants' | 'chat' | 'visibility' | 'organize' | 'edit' | null
 
@@ -82,6 +90,42 @@ function getInitialWidth(): number {
   const stored = localStorage.getItem(WIDTH_STORAGE_KEY)
   const parsed = stored !== null ? parseInt(stored, 10) : NaN
   return Number.isFinite(parsed) ? clampWidth(parsed) : DEFAULT_WIDTH
+}
+
+/**
+ * Track the sidebar container's width by observing the parent element (the
+ * `.qt-chat-layout`, which both the expanded panel and the collapsed strip
+ * share as a parent). Returns a callback ref to attach to whichever root is
+ * rendered; the observer persists across collapse/expand toggles because the
+ * parent is the same. Falls back to a one-shot measurement where ResizeObserver
+ * is unavailable (SSR / jsdom).
+ */
+function useContainerWidth(): { rootRef: (node: HTMLElement | null) => void; width: number | null } {
+  const [width, setWidth] = useState<number | null>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
+  const observedParentRef = useRef<HTMLElement | null>(null)
+
+  const rootRef = useCallback((node: HTMLElement | null) => {
+    if (!node) return
+    const parent = node.parentElement
+    if (!parent || parent === observedParentRef.current) return
+    observedParentRef.current = parent
+    if (typeof ResizeObserver === 'undefined') {
+      setWidth(parent.getBoundingClientRect().width || null)
+      return
+    }
+    observerRef.current?.disconnect()
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) setWidth(entry.contentRect.width)
+    })
+    ro.observe(parent)
+    observerRef.current = ro
+    setWidth(parent.getBoundingClientRect().width)
+  }, [])
+
+  useEffect(() => () => observerRef.current?.disconnect(), [])
+
+  return { rootRef, width }
 }
 
 export interface ChatSidebarProps {
@@ -193,6 +237,22 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
 
+  // Narrow-pane awareness: in a narrow split pane the expanded sidebar would
+  // starve the chat, so it defaults to the mini strip and expands as a
+  // click-away overlay instead. Wide/full panes are unaffected.
+  const { rootRef: measureRootRef, width: containerWidth } = useContainerWidth()
+  const [narrowOpen, setNarrowOpen] = useState(false)
+  const isNarrow = containerWidth != null && containerWidth < NARROW_PANE_WIDTH
+
+  // Merge the measurement ref onto the expanded root (which already owns sidebarRef).
+  const setExpandedRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      sidebarRef.current = node
+      measureRootRef(node)
+    },
+    [measureRootRef]
+  )
+
   const persistWidth = useCallback((next: number) => {
     localStorage.setItem(WIDTH_STORAGE_KEY, String(next))
   }, [])
@@ -299,12 +359,43 @@ export function ChatSidebar(props: ChatSidebarProps) {
     return participants.filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user' && p.id !== userParticipantId).length
   }, [participants, userParticipantId])
 
+  // Leaving narrow mode drops any transient overlay state. Adjusting state during
+  // render (React's sanctioned pattern) instead of in an effect avoids a wasted
+  // commit and the cascading-render lint.
+  if (!isNarrow && narrowOpen) setNarrowOpen(false)
+
+  const effectiveCollapsed = isNarrow ? !narrowOpen : isCollapsed
+  const isOverlay = isNarrow && narrowOpen
+
+  // Overlay: a click outside the panel, or Escape, collapses it to the strip.
+  useEffect(() => {
+    if (!isOverlay) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) setNarrowOpen(false)
+    }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNarrowOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isOverlay])
+
+  // In a narrow pane, expand/collapse drive the transient overlay instead of the
+  // persisted wide-pane preference.
+  const handleStripExpand = isNarrow ? () => setNarrowOpen(true) : expandSidebar
+  const handleExpandedCollapse = isNarrow ? () => setNarrowOpen(false) : toggleCollapsed
+
   const baseClasses: string[] = []
   if (className) baseClasses.push(className)
 
-  if (isCollapsed) {
+  if (effectiveCollapsed) {
     return (
       <CollapsedStrip
+        rootRef={measureRootRef}
         baseClasses={baseClasses}
         sortedParticipants={sortedParticipants}
         turnOrderMap={turnOrderMap}
@@ -314,8 +405,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
         isGenerating={isGenerating}
         isPaused={isPaused}
         onTogglePause={onTogglePause}
-        toggleCollapsed={toggleCollapsed}
-        expandSidebar={expandSidebar}
+        toggleCollapsed={handleStripExpand}
+        expandSidebar={handleStripExpand}
       />
     )
   }
@@ -327,8 +418,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
   return (
     <div
-      ref={sidebarRef}
-      className={['qt-chat-sidebar', ...baseClasses].join(' ')}
+      ref={setExpandedRoot}
+      className={['qt-chat-sidebar', ...(isOverlay ? ['qt-chat-sidebar-overlay'] : []), ...baseClasses].join(' ')}
       style={{ width }}
     >
       <div
@@ -354,7 +445,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
         <div className="flex items-center justify-between">
           <h3 className="qt-chat-sidebar-heading">Chat</h3>
           <button
-            onClick={toggleCollapsed}
+            onClick={handleExpandedCollapse}
             className="qt-chat-sidebar-toggle"
             title="Collapse chat sidebar"
             aria-label="Collapse chat sidebar"
@@ -479,6 +570,7 @@ export default ChatSidebar
 // =================================================================
 
 interface CollapsedStripProps {
+  rootRef?: (node: HTMLElement | null) => void
   baseClasses: string[]
   sortedParticipants: ParticipantData[]
   turnOrderMap: Map<string, TurnOrderEntry>
@@ -493,6 +585,7 @@ interface CollapsedStripProps {
 }
 
 function CollapsedStrip({
+  rootRef,
   baseClasses,
   sortedParticipants,
   turnOrderMap,
@@ -506,7 +599,7 @@ function CollapsedStrip({
   expandSidebar,
 }: CollapsedStripProps) {
   return (
-    <div className={['qt-chat-sidebar-collapsed', ...baseClasses].join(' ')}>
+    <div ref={rootRef} className={['qt-chat-sidebar-collapsed', ...baseClasses].join(' ')}>
       <button
         onClick={toggleCollapsed}
         className="qt-chat-sidebar-toggle"

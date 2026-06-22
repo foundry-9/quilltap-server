@@ -380,6 +380,13 @@
   --qt-tab-group-gap: 0.25rem;
 
   /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     Gilded chrome: one --qt-workspace-accent gilds the active tab's border/bar/
+     fill, the pane divider on hover, and the split drop-zone.
+     ========================================================================== */
+  --qt-workspace-accent: var(--deco-gold);
+
+  /* ==========================================================================
      OVERLAY VARIABLES
      ========================================================================== */
   --qt-overlay-bg: hsl(222 47% 7% / 0.9);

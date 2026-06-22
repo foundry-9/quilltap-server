@@ -44,6 +44,38 @@ consult a character's dossier on the right.
 Your arrangement — which tabs are open, in which pane, in what order, and how the
 split is set — is remembered between visits.
 
+## A few turns of the wrist (keyboard shortcuts)
+
+For those who prefer to keep their hands upon the keys, the workspace answers to a
+small set of commands. Each is held with **Ctrl + Alt** (or **⌘ + Alt** on a Mac),
+so as never to tread upon your browser's own bindings — and each politely stands
+aside while you are typing in a field:
+
+- **Ctrl/⌘ + Alt + → / ←** — step to the next or previous tab in the pane you last
+  touched (it wraps neatly around the ends).
+- **Ctrl/⌘ + Alt + 1 … 9** — leap straight to the first, second, ninth tab.
+- **Ctrl/⌘ + Alt + W** — close the tab presently in view.
+- **Ctrl/⌘ + Alt + \\** — throw the room into two panes (sending the current tab to
+  the right), or, if already divided, gather it back into one.
+
+Should a great many tabs crowd a single strip, it scrolls of its own accord to
+keep the one you are reading in plain sight.
+
+## The Chat Sidebar in close quarters
+
+When a conversation is squeezed into a narrow pane, its sidebar grows considerate:
+rather than crowding the talk, it tucks itself away to a slim ribbon of avatars and,
+when you call it forth, **floats over** the conversation as an overlay. A click
+anywhere outside it — or a tap of **Escape** — sends it back to its ribbon. Give the
+pane room to breathe and the sidebar returns to its ordinary, settled manners.
+
+## A word on dress (themes)
+
+Every bundled theme wears the workspace in its own colours — the Madman's Box runs
+its tabs and dividers in cool phosphor cyan, the Great Estate in gold leaf, and so
+on — so the active tab, the pane divider, and the drop-zones always look of a piece
+with the rest of the establishment.
+
 ## Conversations and their companions
 
 A conversation may summon two companions, each of which opens as its **own tab**

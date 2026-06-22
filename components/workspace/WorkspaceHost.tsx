@@ -22,6 +22,7 @@ import { TabView } from './TabView'
 import { WorkspaceDivider } from './WorkspaceDivider'
 import { PaneToolbar } from './tab-toolbar'
 import { WorkspaceBackdrop } from './workspace-backdrop'
+import { useWorkspaceShortcuts } from './useWorkspaceShortcuts'
 
 /** Divider column thickness (px). */
 const DIVIDER_PX = 8
@@ -29,6 +30,7 @@ const DIVIDER_PX = 8
 export function WorkspaceHost() {
   const { state, setActive, closeTab, moveTab, splitTo, setFocusedPane, setSplitRatio } =
     useWorkspace()
+  useWorkspaceShortcuts()
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
 
@@ -126,6 +128,26 @@ export function WorkspaceHost() {
             }}
           >
             <TabView tab={tab} active={mounted} />
+          </div>
+        )
+      })}
+
+      {/* ---- Empty-pane affordance (defensive: the reducer keeps a home tab, but
+              guard any transient state where a pane has no resolvable view) ---- */}
+      {(['left', 'right'] as PaneId[]).map((p) => {
+        const ps = p === 'left' ? state.panes.left : state.panes.right
+        if (!ps) return null
+        const hasView = ps.activeTabId != null && state.tabs[ps.activeTabId] != null
+        if (hasView) return null
+        return (
+          <div
+            key={`empty-${p}`}
+            className="qt-workspace-empty"
+            style={{ gridColumn: p === 'left' ? 1 : 3, gridRow: 2 }}
+          >
+            <p className="qt-workspace-empty-hint">
+              This half of the desk is clear. Drag a tab across, or summon one from the rail.
+            </p>
           </div>
         )
       })}

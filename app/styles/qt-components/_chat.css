@@ -2275,6 +2275,23 @@
   }
 
   /**
+   * Narrow-pane overlay: in a split/narrow pane the expanded sidebar floats over
+   * the chat (anchored to the relatively-positioned .qt-chat-layout) instead of
+   * squeezing it. A click outside, or Escape, collapses it back to the mini
+   * strip (handled in ChatSidebar). Wide/full panes never use this.
+   */
+  .qt-chat-sidebar.qt-chat-sidebar-overlay {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    max-width: 100%;
+    box-shadow: var(--qt-chat-sidebar-overlay-shadow,
+      -8px 0 24px -8px color-mix(in srgb, var(--color-foreground) 30%, transparent));
+  }
+
+  /**
    * Drag handle on the inner (left) edge of the expanded sidebar.
    * Transparent until hovered/active so it doesn't read as a second border.
    * Visuals mirror .qt-doc-divider / .qt-doc-divider-grip.

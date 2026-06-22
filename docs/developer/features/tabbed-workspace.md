@@ -556,8 +556,8 @@ overflow handling for many tabs, and persistence-validation edge cases.
 - [x] Phase 2: per-tab page toolbar (`TabToolbarProvider`).
 - [x] Phase 3: multi-tab, two-pane split, drag, resizable divider, close, last-tab-reset.
 - [x] Phase 4: Terminal & Document as chat-linked tabs; retire `SplitLayout` for them (workspace branch only — legacy route still uses it).
-- [~] Phase 5: Brahma tab + Wardrobe rail-tab done (keep chat-scoped dialog); Help stays a modal. Chat Sidebar narrow-pane auto-collapse deferred to Phase 8 (needs visual iteration).
+- [x] Phase 5: Brahma tab + Wardrobe rail-tab done (keep chat-scoped dialog); Help stays a modal. Chat Sidebar narrow-pane overlay done in Phase 8.
 - [~] Phase 6: old-route redirects done (flag-gated); landing cutover + flag flip left for review.
-- [ ] Phase 7: `qt-*` classes/tokens (reuse `qt-tab*`/`qt-doc-divider*`); stylebook + theme-storybook; update create-quilltap-theme if needed; **per-theme styling for all six bundled themes**; verify each renders the split.
-- [ ] Phase 8: shortcuts, overflow, polish.
+- [x] Phase 7: single `--qt-workspace-accent` master token drives the active tab / divider / drop-zone; all six bundled themes set their own accent (teal/gold/blue/slate); the hard-coded Madman's Box override moved into the theme bundle; `@quilltap/theme-storybook` Workspace story + supporting CSS added; `create-quilltap-theme` bundle template documents the hook; bundled-theme + tooling versions bumped.
+- [x] Phase 8: Ctrl/Cmd+Alt keyboard shortcuts (next/prev/jump/close/split, inert while typing); active-tab scroll-into-view for overflow; defensive empty-pane affordance; Chat Sidebar narrow-pane click-away overlay.
 - [x] Docs: CHANGELOG, help (help/tabbed-workspace.md), update-documentation. (User-facing voice pass ongoing.)

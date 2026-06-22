@@ -377,6 +377,13 @@
   --qt-tab-group-gap: 0.25rem;
 
   /* ==========================================================================
+     WORKSPACE VARIABLES (the tabbed workspace — see _workspace.css)
+     Estate gold leaf: one --qt-workspace-accent gilds the active tab's border/
+     bar/fill, the pane divider on hover, and the split drop-zone.
+     ========================================================================== */
+  --qt-workspace-accent: var(--estate-gold);
+
+  /* ==========================================================================
      OVERLAY VARIABLES
      ========================================================================== */
   --qt-overlay-bg: hsl(20 28% 5% / 0.9);

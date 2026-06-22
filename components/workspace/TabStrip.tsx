@@ -8,6 +8,7 @@
  * @module components/workspace/TabStrip
  */
 
+import { useEffect, useRef } from 'react'
 import { Icon, type IconName } from '@/components/ui/icon'
 import type { PaneId, PaneState, WorkspaceTab } from '@/lib/workspace/types'
 
@@ -37,6 +38,16 @@ export function TabStrip({
 }: TabStripProps) {
   const dragging = draggingId != null
 
+  // Overflow: keep the active tab visible when the strip scrolls horizontally
+  // (many tabs in a narrow pane). `block: 'nearest'` avoids vertical page jumps.
+  const activeTabRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    // jsdom has no scrollIntoView; guard so tests (and any non-DOM host) are safe.
+    if (typeof activeTabRef.current?.scrollIntoView === 'function') {
+      activeTabRef.current.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+    }
+  }, [paneState.activeTabId])
+
   return (
     <div
       className="qt-tab-strip"
@@ -60,6 +71,7 @@ export function TabStrip({
         return (
           <div
             key={id}
+            ref={isActive ? activeTabRef : undefined}
             role="tab"
             aria-selected={isActive}
             draggable

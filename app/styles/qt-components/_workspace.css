@@ -5,7 +5,17 @@
  * toolbar), the resizable divider, drag/drop affordances, and the split
  * drop-zone. Builds on the existing `.qt-tab` family (_interactive.css) and the
  * `qt-panel` tokens (_surfaces.css). New `--qt-workspace-*` hooks are exposed so
- * the Phase 7 theming pass can give each bundled theme its own take.
+ * each bundled theme can give the workspace its own take.
+ *
+ * **Theming hook:** every accented surface (active tab, divider, drop-zone)
+ * derives from a single master token `--qt-workspace-accent`, consumed as
+ * `var(--qt-workspace-accent, var(--color-primary))`. A theme re-tints the
+ * whole workspace by setting that ONE token at its `[data-theme="…"]` root
+ * (e.g. Madman's Box points it at cyan). It is intentionally never declared on
+ * `.qt-workspace` itself — doing so would shadow the theme's ancestor value;
+ * the per-consumer `var(…, fallback)` is the app default. Finer control is still
+ * available through the individual `--qt-workspace-tab-*` / `-divider-*` /
+ * `-drop-zone-*` hooks.
  *
  * See `docs/developer/features/tabbed-workspace.md`.
  */
@@ -110,6 +120,22 @@
     position: relative;
   }
 
+  /* Empty-pane affordance: shown when a pane has no resolvable active view. */
+  .qt-workspace-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .qt-workspace-empty-hint {
+    max-width: 24rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
   /* ==========================================================================
      TAB STRIP  (extends the .qt-tab family)
      ========================================================================== */
@@ -125,12 +151,13 @@
     /* Re-tokenize the .qt-tab family for the workspace strip only (Settings /
        EntityTabs keep their own values). Uses the theme's --color-* vars (+
        color-mix for alpha) — the same convention the base qt-tab tokens use.
-       Each is a --qt-workspace-tab-* hook for the per-theme pass.
+       Each is a --qt-workspace-tab-* hook for fine per-theme control.
 
-       The active tab leans on --color-primary (a vivid accent in every theme):
-       an accent border + top bar + tinted fill + bold text, so it reads as
-       clearly selected. Inactive tabs are present but recessed — a faint border
-       and dimmed, lighter-weight text. */
+       The active tab leans on the master --qt-workspace-accent (a vivid accent
+       in every theme, defaulting to --color-primary): an accent border + top
+       bar + tinted fill + bold text, so it reads as clearly selected. Inactive
+       tabs are present but recessed — a faint border and dimmed, lighter-weight
+       text. A theme re-tints all of this by setting --qt-workspace-accent once. */
     --qt-tab-bg: var(--qt-workspace-tab-bg,
       color-mix(in srgb, var(--color-muted) 86%, var(--color-foreground) 8%));
     --qt-tab-fg: var(--qt-workspace-tab-fg,
@@ -141,9 +168,10 @@
       color-mix(in srgb, var(--color-muted) 80%, var(--color-foreground) 12%));
     --qt-tab-hover-fg: var(--qt-workspace-tab-hover-fg, var(--color-foreground));
     --qt-tab-active-bg: var(--qt-workspace-tab-active-bg,
-      color-mix(in srgb, var(--color-primary) 24%, var(--color-card)));
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 24%, var(--color-card)));
     --qt-tab-active-fg: var(--qt-workspace-tab-active-fg, var(--color-foreground));
-    --qt-tab-active-border: var(--qt-workspace-tab-active-border, var(--color-primary));
+    --qt-tab-active-border: var(--qt-workspace-tab-active-border,
+      var(--qt-workspace-accent, var(--color-primary)));
   }
 
   /* Thicker, opaque tabs; inactive carry a lighter weight than the active one. */
@@ -166,12 +194,9 @@
     box-shadow: 0 3px 0 0 var(--qt-tab-active-border) inset;
   }
 
-  /* Per-theme accent overrides (Phase 7 will move these into the theme bundles).
-     Madman's Box prefers a teal active accent over its amber primary. */
-  [data-theme='madmans-box'] .qt-tab-strip {
-    --qt-workspace-tab-active-border: hsl(180 66% 50%);
-    --qt-workspace-tab-active-bg: color-mix(in srgb, hsl(180 66% 50%) 22%, var(--color-card));
-  }
+  /* Per-theme accents (e.g. Madman's Box's cyan over its amber primary) now live
+     in each bundle's styles.css as a single `--qt-workspace-accent` override —
+     not here. */
 
   .qt-tab-dragging {
     opacity: 0.5;
@@ -253,7 +278,7 @@
   .qt-workspace-divider:hover,
   .qt-workspace-divider:focus-visible {
     background: var(--qt-workspace-divider-active-bg,
-      color-mix(in srgb, var(--color-primary) 60%, transparent));
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 60%, transparent));
     outline: none;
   }
 
@@ -280,9 +305,9 @@
     justify-content: center;
     z-index: 20;
     background: var(--qt-tab-drop-zone-bg,
-      color-mix(in srgb, var(--color-primary) 14%, transparent));
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 14%, transparent));
     border-left: 2px dashed var(--qt-tab-drop-zone-border,
-      color-mix(in srgb, var(--color-primary) 70%, transparent));
+      color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 70%, transparent));
   }
 
   .qt-tab-drop-zone-hint {

@@ -2428,6 +2428,134 @@
 }
 
 /* ==========================================================================
+   WORKSPACE  (tabbed two-pane shell — strip, divider, drop-zone)
+
+   Every accented surface derives from one hook, --qt-workspace-accent, which
+   falls back to --color-primary. Set it at your [data-theme="…"] root to
+   re-tint the active tab, the pane divider, and the split drop-zone in one
+   move. Finer control: the individual --qt-workspace-tab-* / -divider-* /
+   --qt-tab-drop-zone-* hooks below.
+   ========================================================================== */
+
+.qt-tab-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--qt-tab-group-gap, 0.25rem);
+  padding: 0.375rem 0.5rem 0;
+  overflow-x: auto;
+  background: var(--qt-workspace-chrome-bg, var(--qt-panel-bg, var(--color-card)));
+  border-bottom: 1px solid var(--qt-workspace-chrome-border, var(--color-border));
+
+  --qt-tab-bg: var(--qt-workspace-tab-bg,
+    color-mix(in srgb, var(--color-muted) 86%, var(--color-foreground) 8%));
+  --qt-tab-fg: var(--qt-workspace-tab-fg,
+    color-mix(in srgb, var(--color-foreground) 75%, transparent));
+  --qt-tab-border: var(--qt-workspace-tab-border,
+    color-mix(in srgb, var(--color-foreground) 34%, transparent));
+  --qt-tab-active-bg: var(--qt-workspace-tab-active-bg,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 24%, var(--color-card)));
+  --qt-tab-active-fg: var(--qt-workspace-tab-active-fg, var(--color-foreground));
+  --qt-tab-active-border: var(--qt-workspace-tab-active-border,
+    var(--qt-workspace-accent, var(--color-primary)));
+}
+
+.qt-tab-strip .qt-tab {
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  border-width: var(--qt-workspace-tab-border-width, 2px);
+  border-bottom-width: 0;
+  border-style: solid;
+  border-color: var(--qt-tab-border);
+  font-weight: 500;
+}
+
+.qt-tab-strip .qt-tab-active {
+  font-weight: 700;
+  border-color: var(--qt-tab-active-border);
+  box-shadow: 0 3px 0 0 var(--qt-tab-active-border) inset;
+}
+
+.qt-tab-label {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qt-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-left: 0.125rem;
+  border-radius: 0.25rem;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.qt-tab-close:hover {
+  opacity: 1;
+  background: var(--qt-tab-close-hover-bg,
+    color-mix(in srgb, var(--color-muted-foreground) 22%, transparent));
+}
+
+.qt-tab-close-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.qt-workspace-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  background: var(--qt-workspace-divider-bg, var(--color-border));
+  transition: background 0.15s ease;
+}
+
+.qt-workspace-divider:hover,
+.qt-workspace-divider:focus-visible {
+  background: var(--qt-workspace-divider-active-bg,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 60%, transparent));
+  outline: none;
+}
+
+.qt-workspace-divider-grip {
+  width: 2px;
+  height: 2rem;
+  border-radius: 9999px;
+  background: var(--qt-workspace-divider-grip,
+    color-mix(in srgb, var(--color-muted-foreground) 60%, transparent));
+}
+
+.qt-tab-drop-zone {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 42%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--qt-tab-drop-zone-bg,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 14%, transparent));
+  border-left: 2px dashed var(--qt-tab-drop-zone-border,
+    color-mix(in srgb, var(--qt-workspace-accent, var(--color-primary)) 70%, transparent));
+}
+
+.qt-tab-drop-zone-hint {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+  background: var(--color-background);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-foreground) 15%, transparent);
+}
+
+/* ==========================================================================
    DIALOG OVERLAY
    ========================================================================== */
 
