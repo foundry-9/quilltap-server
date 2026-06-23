@@ -35,9 +35,15 @@
     background: var(--qt-workspace-bg, var(--color-background));
   }
 
-  /* Panes/chrome/divider sit above the single backdrop (z-index 0). */
+  /* Chrome + divider sit above the single backdrop (z-index 0). The content
+     pane is deliberately NOT given a z-index: it keeps `position: relative`
+     (its own rule below) so it still paints above the backdrop in DOM order,
+     but stays out of a stacking context — otherwise a `fixed` dialog rendered
+     inside a pane (e.g. a Salon's New Chat modal) would be trapped in that
+     pane's context and the other pane would paint over its far half. Without a
+     pane stacking context, such overlays escape to the workspace root and
+     hover over the whole thing, as dialogs must. */
   .qt-workspace-pane-chrome,
-  .qt-tab-pane,
   .qt-workspace-divider-cell {
     position: relative;
     z-index: 1;

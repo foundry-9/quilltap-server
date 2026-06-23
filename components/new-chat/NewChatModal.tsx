@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NewChatForm } from './NewChatForm'
 import { CharacterPickerPanel } from './CharacterPickerPanel'
 import { useNewChat } from './hooks'
@@ -134,7 +135,7 @@ export function NewChatModal({
 
   const widthClass = pickerExpanded ? 'md:max-w-5xl' : 'md:max-w-3xl'
 
-  return (
+  const modalContent = (
     <div className="new-chat-modal fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div
         className={`w-full max-w-md ${widthClass} rounded-2xl border qt-border-default qt-bg-card p-6 qt-shadow-lg max-h-[90vh] flex flex-col`}
@@ -245,4 +246,12 @@ export function NewChatModal({
       </div>
     </div>
   )
+
+  // Render at the document root so the dialog hovers over the WHOLE workspace.
+  // Inside a split pane, a `fixed` overlay is otherwise trapped in that pane's
+  // stacking context (`.qt-tab-pane` z-index) and the other pane paints over its
+  // far half. The portal preserves React context, so useNewChat/useWorkspaceNavigate
+  // (and theming) still work.
+  if (typeof document === 'undefined') return null
+  return createPortal(modalContent, document.body)
 }
