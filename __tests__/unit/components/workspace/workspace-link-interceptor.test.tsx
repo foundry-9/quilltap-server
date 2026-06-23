@@ -12,6 +12,11 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/workspace',
 }))
 
+const mockOpenNewChat = jest.fn()
+jest.mock('@/components/providers/new-chat-provider', () => ({
+  useNewChatModalOptional: () => ({ open: mockOpenNewChat }),
+}))
+
 import { render, screen, fireEvent } from '@testing-library/react'
 import { WorkspaceProvider, useWorkspace } from '@/components/providers/workspace-provider'
 import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
@@ -39,12 +44,18 @@ function setup() {
           onClick prevents jsdom's unimplemented-navigation noise. */}
       <a href="/aurora/new" data-testid="newchar" onClick={(e) => e.preventDefault()}>New character</a>
       <a href="https://example.com" data-testid="ext" onClick={(e) => e.preventDefault()}>External</a>
+      <a href="/salon/new" data-testid="newchat">New chat</a>
+      <a href="/salon/new?projectId=p1" data-testid="newchat-proj">New chat in project</a>
+      <a href="/salon/new?autonomous=1" data-testid="newroom" onClick={(e) => e.preventDefault()}>New room</a>
     </WorkspaceProvider>
   )
 }
 
 describe('WorkspaceLinkInterceptor', () => {
-  beforeEach(() => window.localStorage.clear())
+  beforeEach(() => {
+    window.localStorage.clear()
+    mockOpenNewChat.mockClear()
+  })
 
   it('opens a tab-equivalent link in place instead of navigating', () => {
     setup()
@@ -68,5 +79,21 @@ describe('WorkspaceLinkInterceptor', () => {
     fireEvent.click(screen.getByTestId('newchar'))
     fireEvent.click(screen.getByTestId('ext'))
     expect(screen.getByTestId('kinds').textContent).toBe(before)
+  })
+
+  it('opens the new-chat modal in place for /salon/new (no tab created)', () => {
+    setup()
+    fireEvent.click(screen.getByTestId('newchat'))
+    expect(mockOpenNewChat).toHaveBeenCalledWith({ projectId: undefined, characterId: undefined })
+    fireEvent.click(screen.getByTestId('newchat-proj'))
+    expect(mockOpenNewChat).toHaveBeenLastCalledWith({ projectId: 'p1', characterId: undefined })
+    // No salon tab should have been created by these.
+    expect(countKind('salon')).toBe(0)
+  })
+
+  it('routes autonomous-room creation normally (no modal)', () => {
+    setup()
+    fireEvent.click(screen.getByTestId('newroom'))
+    expect(mockOpenNewChat).not.toHaveBeenCalled()
   })
 })

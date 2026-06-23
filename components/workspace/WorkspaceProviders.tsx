@@ -25,6 +25,7 @@ import { TabToolbarRegistryProvider } from '@/components/workspace/tab-toolbar'
 import { WorkspacePortalRegistryProvider } from '@/components/workspace/workspace-tab-context'
 import { WorkspaceBackdropProvider } from '@/components/workspace/workspace-backdrop'
 import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
+import { NewChatProvider } from '@/components/providers/new-chat-provider'
 
 export function WorkspaceProviders({ children }: { children: ReactNode }) {
   return (
@@ -32,9 +33,14 @@ export function WorkspaceProviders({ children }: { children: ReactNode }) {
       <TabToolbarRegistryProvider>
         <WorkspacePortalRegistryProvider>
           <WorkspaceBackdropProvider>
-            {/* Keep every in-app link keep-alive-safe while in the workspace. */}
-            <WorkspaceLinkInterceptor />
-            {children}
+            {/* NewChatProvider is inside WorkspaceProvider so its modal's
+                useWorkspaceNavigate opens a tab in place; the interceptor (a
+                child) opens it for /salon/new links. */}
+            <NewChatProvider>
+              {/* Keep every in-app link keep-alive-safe while in the workspace. */}
+              <WorkspaceLinkInterceptor />
+              {children}
+            </NewChatProvider>
           </WorkspaceBackdropProvider>
         </WorkspacePortalRegistryProvider>
       </TabToolbarRegistryProvider>

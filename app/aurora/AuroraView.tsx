@@ -34,6 +34,11 @@ const CharacterDetailView = dynamic(
   { ssr: false, loading: () => <p className="qt-text-muted p-8 text-center">Loading character…</p> }
 )
 
+const GroupDetailView = dynamic(
+  () => import('./groups/[id]/GroupDetailView').then((m) => m.GroupDetailView),
+  { ssr: false, loading: () => <p className="qt-text-muted p-8 text-center">Loading group…</p> }
+)
+
 interface Character {
   id: string
   name: string
@@ -80,6 +85,7 @@ export function AuroraView() {
   const inTab = useWorkspaceTabId() != null
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [openChatForSelected, setOpenChatForSelected] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
 
   // Fetch groups on mount
   useEffect(() => {
@@ -253,8 +259,9 @@ export function AuroraView() {
         setCreateGroupDialogOpen(false)
         setNewGroupName('')
         setNewGroupDescription('')
-        // Navigate to the new group
-        router.push(`/aurora/groups/${newGroup.id}`)
+        // Open the new group — in place if we're a workspace tab, else navigate.
+        if (inTab) setSelectedGroupId(newGroup.id)
+        else router.push(`/aurora/groups/${newGroup.id}`)
       }
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to create group')
@@ -313,8 +320,8 @@ export function AuroraView() {
     }
   }
 
-  // Workspace tab, drilled into a character: render its detail in place (the
-  // detail view manages its own loading, so this precedes the list-loading gate).
+  // Workspace tab, drilled into a character or group: render its detail in place
+  // (the detail views manage their own loading, so this precedes the list gate).
   if (inTab && selectedCharacterId) {
     return (
       <CharacterDetailView
@@ -324,6 +331,20 @@ export function AuroraView() {
           setOpenChatForSelected(false)
         }}
         openChatOnMount={openChatForSelected}
+      />
+    )
+  }
+
+  if (inTab && selectedGroupId) {
+    return (
+      <GroupDetailView
+        groupId={selectedGroupId}
+        onBack={() => {
+          setSelectedGroupId(null)
+          // Reflect any name/color/member edits in the list (a route visit would
+          // have refetched on remount).
+          void fetchGroups()
+        }}
       />
     )
   }
@@ -393,6 +414,7 @@ export function AuroraView() {
           groups={groups}
           onCreateClick={() => setCreateGroupDialogOpen(true)}
           onDeleteClick={handleDeleteGroup}
+          onOpenGroup={inTab ? setSelectedGroupId : undefined}
         />
       </div>
 

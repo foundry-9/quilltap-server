@@ -51,9 +51,11 @@ export function NewChatModal({
 }: NewChatModalProps) {
   const isContinuation = Boolean(continuationFromChatId)
 
-  // In continuation mode, default the character picker open so the user can
-  // see (and remove or augment) the carried-over cast without an extra click.
-  const [pickerExpanded, setPickerExpanded] = useState(isContinuation)
+  // Default the character picker open in continuation mode (so the carried-over
+  // cast is visible) and in the seedless "Start a chat" mode (no character to
+  // start from, so the user must pick at least one). A seeded single-character
+  // start keeps it collapsed.
+  const [pickerExpanded, setPickerExpanded] = useState(isContinuation || !characterId)
 
   // Continuation mode: per-character per-slot summary of what was equipped at
   // the end of the source chat. Threaded through NewChatForm to OutfitSelector
@@ -143,7 +145,9 @@ export function NewChatModal({
               ? 'Continue Conversation Elsewhere'
               : selectedCharacters.length > 1
                 ? `Start Chat (${selectedCharacters.length} characters)`
-                : `Start Chat with ${characterName}`}
+                : characterName
+                  ? `Start Chat with ${characterName}`
+                  : 'Start Chat'}
           </h3>
           <button
             type="button"

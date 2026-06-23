@@ -34,12 +34,14 @@
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
 import { parseHrefToIntent } from '@/lib/navigation/route-to-intent'
 
 export function WorkspaceLinkInterceptor() {
   const ws = useWorkspaceOptional()
   const pathname = usePathname()
   const openTab = ws?.openTab
+  const openNewChat = useNewChatModalOptional()?.open
 
   useEffect(() => {
     if (!openTab || pathname !== '/workspace') return
@@ -58,6 +60,22 @@ export function WorkspaceLinkInterceptor() {
 
       const href = anchor.getAttribute('href') || ''
       if (!href.startsWith('/')) return // external / hash / relative
+
+      // /salon/new → open the new-chat modal in place rather than routing to the
+      // full-page form (which would leave the workspace). Autonomous-room
+      // creation has no modal flow yet, so it routes normally.
+      const [path, queryStr] = href.split('?')
+      if (path === '/salon/new') {
+        const q = new URLSearchParams(queryStr ?? '')
+        if (q.get('autonomous') === '1' || !openNewChat) return
+        e.preventDefault()
+        openNewChat({
+          projectId: q.get('projectId') ?? undefined,
+          characterId: q.get('characterId') ?? undefined,
+        })
+        return
+      }
+
       const intent = parseHrefToIntent(href)
       if (!intent) return // no tab equivalent → navigate normally
 
@@ -69,7 +87,7 @@ export function WorkspaceLinkInterceptor() {
 
     document.addEventListener('click', onClick, true) // capture
     return () => document.removeEventListener('click', onClick, true)
-  }, [openTab, pathname])
+  }, [openTab, openNewChat, pathname])
 
   return null
 }
