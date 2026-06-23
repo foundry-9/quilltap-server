@@ -35,6 +35,12 @@ const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
   'scenarios',
   'brahma',
   'wardrobe',
+  'profile',
+  'about',
+  'generate-image',
+  'character-new',
+  'character-edit',
+  'settings-wizard',
 ])
 
 const CHAT_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(['salon', 'terminal', 'document'])
@@ -65,9 +71,13 @@ export function WorkspaceIntent() {
       if (CHAT_KINDS.has(kind)) payload = chatId ? { chatId } : undefined
       else if (kind === 'settings') payload = { tab, section }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
+      else if (kind === 'character-edit') payload = characterId ? { characterId, tab } : undefined
 
-      // Chat-bound kinds need a chatId; skip if missing.
-      if (!(CHAT_KINDS.has(kind) && !chatId)) {
+      // Chat-bound kinds need a chatId and the character editor needs a
+      // characterId; skip opening when the required id is missing.
+      const missingChatId = CHAT_KINDS.has(kind) && !chatId
+      const missingCharacterId = kind === 'character-edit' && !characterId
+      if (!missingChatId && !missingCharacterId) {
         openTab(kind, payload)
       }
     }

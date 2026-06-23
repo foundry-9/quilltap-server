@@ -1,7 +1,7 @@
 # Feature: The Tabbed Workspace
 
 - **Target release:** 4.8.0
-- **Status:** Proposed / ready to implement
+- **Status:** Shipped — Phases 0–8 complete; flag on by default as of 4.8-dev (`NEXT_PUBLIC_WORKSPACE_TABS=0` to opt out)
 - **Decision record:** [ADR-0001: Tabbed workspace routing model](../decisions/ADR-0001-tabbed-workspace-routing.md)
 
 ## Summary
@@ -484,9 +484,17 @@ keep the chat-scoped Wardrobe **dialog** path (with `chatId`) intact. Add the
 pane-width-aware auto-collapse/overlay to the Chat Sidebar. **Help is untouched
 — it stays a modal.**
 
-**Phase 6 — Redirects + cutover.**
-Point the old UI routes at `/workspace` with open-tab intent; make `/workspace`
-the post-login landing surface; flip the feature flag on. Update help docs.
+**Phase 6 — Redirects + cutover. (Done.)**
+The old UI routes redirect to `/workspace` with an open-tab intent, the workspace
+store lives app-level in `AppLayout`, and `/workspace` is the post-login landing
+surface. The `WORKSPACE_TABS_ENABLED` flag now **defaults on** (set
+`NEXT_PUBLIC_WORKSPACE_TABS=0` to opt out). Every route with a tab equivalent —
+including the later editor/creator surfaces (character edit/new, image
+generation, profile, about, the provider wizard) — redirects via
+`redirectToWorkspaceTab(...)`, and `WorkspaceIntent` opens the matching tab.
+Bare detail URLs (a specific character/project/store) intentionally render
+standalone: they have no tab kind (they drill down in place inside their parent
+tab).
 
 **Phase 7 — Theming pass (`qt-*` + all six bundled themes).**
 Finalize the `qt-*` classes/tokens (reusing `qt-tab*` and `qt-doc-divider*`
@@ -557,7 +565,7 @@ overflow handling for many tabs, and persistence-validation edge cases.
 - [x] Phase 3: multi-tab, two-pane split, drag, resizable divider, close, last-tab-reset.
 - [x] Phase 4: Terminal & Document as chat-linked tabs; retire `SplitLayout` for them (workspace branch only — legacy route still uses it).
 - [x] Phase 5: Brahma tab + Wardrobe rail-tab done (keep chat-scoped dialog); Help stays a modal. Chat Sidebar narrow-pane overlay done in Phase 8.
-- [~] Phase 6: old-route redirects done (flag-gated); landing cutover + flag flip left for review.
+- [x] Phase 6: old-route redirects + app-level store + post-login landing; flag flipped on by default (`NEXT_PUBLIC_WORKSPACE_TABS=0` to opt out); every tab-equivalent route (including the editor/creator surfaces) redirects and `WorkspaceIntent` opens the matching tab.
 - [x] Phase 7: single `--qt-workspace-accent` master token drives the active tab / divider / drop-zone; all six bundled themes set their own accent (teal/gold/blue/slate); the hard-coded Madman's Box override moved into the theme bundle; `@quilltap/theme-storybook` Workspace story + supporting CSS added; `create-quilltap-theme` bundle template documents the hook; bundled-theme + tooling versions bumped.
 - [x] Phase 8: Ctrl/Cmd+Alt keyboard shortcuts (next/prev/jump/close/split, inert while typing); active-tab scroll-into-view for overflow; defensive empty-pane affordance; Chat Sidebar narrow-pane click-away overlay.
 - [x] Docs: CHANGELOG, help (help/tabbed-workspace.md), update-documentation. (User-facing voice pass ongoing.)

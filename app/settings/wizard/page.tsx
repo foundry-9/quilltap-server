@@ -1,11 +1,13 @@
-'use client'
+/**
+ * Provider Setup Wizard Route — thin wrapper around {@link SettingsWizardView}.
+ * When the tabbed workspace is enabled, redirects into it; otherwise renders the
+ * view. See `docs/developer/features/tabbed-workspace.md`.
+ */
 
 import { SettingsWizardView } from './SettingsWizardView'
+import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
 
-/**
- * Settings re-entry point for the provider setup wizard — thin route wrapper
- * around {@link SettingsWizardView} so the workspace can render it as a tab.
- */
 export default function SettingsWizardPage() {
+  redirectToWorkspaceTab('settings-wizard')
   return <SettingsWizardView />
 }

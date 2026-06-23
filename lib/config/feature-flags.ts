@@ -9,15 +9,17 @@
  */
 
 /**
- * The tabbed workspace (`/workspace`). While `false`, the workspace route still
- * renders for development, but the old per-surface routes keep working and the
- * post-login landing stays the legacy home dashboard. Phase 6 flips this on to
- * wire redirects + landing into the workspace.
+ * The tabbed workspace (`/workspace`). Phase 6 cutover: this is now ON by
+ * default — the workspace is the post-login landing surface, the workspace store
+ * lives app-level (in `AppLayout`), and the legacy per-surface routes redirect
+ * into it carrying a `?open=` intent. The old routes still render their views
+ * when reached with the workspace disabled.
  *
- * Override at build/run time with `NEXT_PUBLIC_WORKSPACE_TABS=1`.
+ * Opt back out at build/run time with `NEXT_PUBLIC_WORKSPACE_TABS=0` (everything
+ * then renders via the old per-surface routes, exactly as before the cutover).
  */
 export const WORKSPACE_TABS_ENABLED: boolean =
-  process.env.NEXT_PUBLIC_WORKSPACE_TABS === '1'
+  process.env.NEXT_PUBLIC_WORKSPACE_TABS !== '0'
 
 export function isWorkspaceTabsEnabled(): boolean {
   return WORKSPACE_TABS_ENABLED
