@@ -44,8 +44,31 @@ describe('parseHrefToIntent', () => {
     expect(parseHrefToIntent('/aurora#x')).toEqual({ kind: 'aurora' })
   })
 
+  it('maps the standalone page surfaces', () => {
+    expect(parseHrefToIntent('/profile')).toEqual({ kind: 'profile' })
+    expect(parseHrefToIntent('/about')).toEqual({ kind: 'about' })
+    expect(parseHrefToIntent('/generate-image')).toEqual({ kind: 'generate-image' })
+    expect(parseHrefToIntent('/aurora/new')).toEqual({ kind: 'character-new' })
+    expect(parseHrefToIntent('/settings/wizard')).toEqual({ kind: 'settings-wizard' })
+  })
+
+  it('maps the character editor (aurora + legacy /characters paths) with its sub-tab', () => {
+    expect(parseHrefToIntent('/aurora/abc/edit')).toEqual({
+      kind: 'character-edit',
+      payload: { characterId: 'abc', tab: undefined },
+    })
+    expect(parseHrefToIntent('/characters/abc/edit?tab=system-prompts')).toEqual({
+      kind: 'character-edit',
+      payload: { characterId: 'abc', tab: 'system-prompts' },
+    })
+  })
+
+  it('does NOT map a bare character detail (it renders in-place in Aurora)', () => {
+    expect(parseHrefToIntent('/aurora/abc')).toBeNull()
+    expect(parseHrefToIntent('/aurora/abc/view')).toBeNull()
+  })
+
   it('returns null for unknown or external hrefs', () => {
-    expect(parseHrefToIntent('/profile')).toBeNull()
     expect(parseHrefToIntent('/unlock')).toBeNull()
     expect(parseHrefToIntent('https://example.com')).toBeNull()
     expect(parseHrefToIntent('')).toBeNull()

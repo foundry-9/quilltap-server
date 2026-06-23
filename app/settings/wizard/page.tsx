@@ -1,20 +1,11 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { ProviderWizard } from '@/components/setup-wizard/ProviderWizard'
+import { SettingsWizardView } from './SettingsWizardView'
 
 /**
- * Settings re-entry point for the provider setup wizard.
- * Accessible from Settings > AI Providers tab.
+ * Settings re-entry point for the provider setup wizard — thin route wrapper
+ * around {@link SettingsWizardView} so the workspace can render it as a tab.
  */
 export default function SettingsWizardPage() {
-  const router = useRouter()
-
-  return (
-    <ProviderWizard
-      mode="settings"
-      onComplete={() => router.push('/settings')}
-      onCancel={() => router.push('/settings')}
-    />
-  )
+  return <SettingsWizardView />
 }

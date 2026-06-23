@@ -31,10 +31,17 @@ import { TerminalView, DocumentView } from '@/components/workspace/TerminalDocum
 import { WorkspaceTabProvider } from '@/components/workspace/workspace-tab-context'
 import { BrahmaConsoleView } from '@/components/brahma-console/BrahmaConsoleView'
 import { WardrobeView } from '@/components/wardrobe/wardrobe-control-dialog'
+import { ProfileView } from '@/app/profile/ProfileView'
+import { AboutView } from '@/app/about/AboutView'
+import { GenerateImageView } from '@/app/generate-image/GenerateImageView'
+import { NewCharacterView } from '@/app/aurora/new/NewCharacterView'
+import { CharacterEditView } from '@/app/aurora/[id]/edit/CharacterEditView'
+import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
 import type {
   TerminalTabPayload,
   DocumentTabPayload,
   WardrobeTabPayload,
+  CharacterEditTabPayload,
 } from '@/lib/workspace/types'
 
 function renderView(tab: WorkspaceTab) {
@@ -67,6 +74,20 @@ function renderView(tab: WorkspaceTab) {
       return <BrahmaConsoleView />
     case 'wardrobe':
       return <WardrobeView characterId={(tab.payload as WardrobeTabPayload | undefined)?.characterId} />
+    case 'profile':
+      return <ProfileView />
+    case 'about':
+      return <AboutView />
+    case 'generate-image':
+      return <GenerateImageView />
+    case 'character-new':
+      return <NewCharacterView />
+    case 'character-edit': {
+      const payload = tab.payload as CharacterEditTabPayload
+      return <CharacterEditView characterId={payload.characterId} initialTab={payload.tab} />
+    }
+    case 'settings-wizard':
+      return <SettingsWizardView />
     default:
       return null
   }

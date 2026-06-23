@@ -85,7 +85,8 @@ function chatIdOf(payload: unknown): string {
 
 /**
  * De-dupe key for a tab. Salon/terminal/document tabs are keyed by their
- * (parent) chat id; every other kind is a singleton keyed by kind alone.
+ * (parent) chat id and character-edit by its character id (so each character
+ * gets its own editor tab); every other kind is a singleton keyed by kind alone.
  */
 export function tabIdentity(tab: { kind: TabKind; payload?: unknown }): string {
   switch (tab.kind) {
@@ -95,6 +96,8 @@ export function tabIdentity(tab: { kind: TabKind; payload?: unknown }): string {
       return `terminal:${chatIdOf(tab.payload)}`
     case 'document':
       return `document:${chatIdOf(tab.payload)}`
+    case 'character-edit':
+      return `character-edit:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
     default:
       return tab.kind
   }

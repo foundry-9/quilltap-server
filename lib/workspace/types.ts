@@ -32,6 +32,12 @@ export type TabKind =
   | 'scenarios'
   | 'brahma'
   | 'wardrobe' // payload: { characterId?: string } — RAIL-opened only; NO chatId
+  | 'profile' // the user's profile page
+  | 'about' // the About page
+  | 'generate-image' // standalone (chat-less) image generation
+  | 'character-new' // the create-a-character form
+  | 'character-edit' // payload: { characterId: string; tab?: string }
+  | 'settings-wizard' // the provider setup wizard, re-entered from Settings
 
 /** Kind-specific tab payloads. */
 export interface SalonTabPayload {
@@ -50,6 +56,11 @@ export interface SettingsTabPayload {
 }
 export interface WardrobeTabPayload {
   characterId?: string
+}
+export interface CharacterEditTabPayload {
+  characterId: string
+  /** Deep-link target sub-tab (e.g. `system-prompts`). */
+  tab?: string
 }
 
 export interface WorkspaceTab {

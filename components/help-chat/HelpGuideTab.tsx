@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useHelpChat } from '@/components/providers/help-chat-provider'
 import { HELP_CATEGORIES, EXCLUDED_DOCUMENTS, getCategoryForUrl } from '@/lib/help-guide/categories'
 import { HelpGuideSearch } from './HelpGuideSearch'
@@ -30,7 +30,8 @@ interface NavHistoryEntry {
 
 export function HelpGuideTab() {
   const { currentPageUrl } = useHelpChat()
-  const router = useRouter()
+  // Keep-alive-safe page navigation (opens tab-equivalent routes in place).
+  const navigate = useWorkspaceNavigate()
 
   // Document index from API
   const [documents, setDocuments] = useState<Map<string, DocumentInfo>>(new Map())
@@ -154,8 +155,8 @@ export function HelpGuideTab() {
   }, [activeDocId, activeCategoryLabel])
 
   const handleNavigatePage = useCallback((url: string) => {
-    router.push(url)
-  }, [router])
+    navigate(url)
+  }, [navigate])
 
   const handleOpenWelcomeDoc = useCallback((docId: string) => {
     const cat = HELP_CATEGORIES.find((c) => c.documents.includes(docId))

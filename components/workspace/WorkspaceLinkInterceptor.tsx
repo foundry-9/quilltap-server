@@ -63,15 +63,16 @@ export function WorkspaceLinkInterceptor() {
 
       // /salon/new → open the new-chat modal in place rather than routing to the
       // full-page form (which would leave the workspace). Autonomous-room
-      // creation has no modal flow yet, so it routes normally.
+      // creation (`?autonomous=1`) opens the same modal in autonomous mode.
       const [path, queryStr] = href.split('?')
       if (path === '/salon/new') {
+        if (!openNewChat) return
         const q = new URLSearchParams(queryStr ?? '')
-        if (q.get('autonomous') === '1' || !openNewChat) return
         e.preventDefault()
         openNewChat({
           projectId: q.get('projectId') ?? undefined,
           characterId: q.get('characterId') ?? undefined,
+          autonomous: q.get('autonomous') === '1',
         })
         return
       }

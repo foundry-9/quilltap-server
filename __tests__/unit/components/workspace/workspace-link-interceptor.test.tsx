@@ -40,9 +40,12 @@ function setup() {
       <Probe />
       <a href="/settings" data-testid="settings">Settings</a>
       <a href="/aurora" data-testid="aurora">Aurora</a>
-      {/* No tab equivalent → must NOT be intercepted (left to navigate). The
-          onClick prevents jsdom's unimplemented-navigation noise. */}
-      <a href="/aurora/new" data-testid="newchar" onClick={(e) => e.preventDefault()}>New character</a>
+      <a href="/aurora/new" data-testid="newchar">New character</a>
+      <a href="/characters/c1/edit?tab=system-prompts" data-testid="editchar">Edit character</a>
+      {/* No tab equivalent (a bare character detail renders in-place inside the
+          Aurora tab) → must NOT be intercepted. The onClick prevents jsdom's
+          unimplemented-navigation noise. */}
+      <a href="/aurora/c1/view" data-testid="nomap" onClick={(e) => e.preventDefault()}>Character detail</a>
       <a href="https://example.com" data-testid="ext" onClick={(e) => e.preventDefault()}>External</a>
       <a href="/salon/new" data-testid="newchat">New chat</a>
       <a href="/salon/new?projectId=p1" data-testid="newchat-proj">New chat in project</a>
@@ -73,10 +76,18 @@ describe('WorkspaceLinkInterceptor', () => {
     expect(countKind('settings')).toBe(1)
   })
 
+  it('opens the character creator and editor as tabs', () => {
+    setup()
+    fireEvent.click(screen.getByTestId('newchar'))
+    expect(countKind('character-new')).toBe(1)
+    fireEvent.click(screen.getByTestId('editchar'))
+    expect(countKind('character-edit')).toBe(1)
+  })
+
   it('leaves links with no tab equivalent (and external links) alone', () => {
     setup()
     const before = screen.getByTestId('kinds').textContent
-    fireEvent.click(screen.getByTestId('newchar'))
+    fireEvent.click(screen.getByTestId('nomap'))
     fireEvent.click(screen.getByTestId('ext'))
     expect(screen.getByTestId('kinds').textContent).toBe(before)
   })
@@ -84,16 +95,16 @@ describe('WorkspaceLinkInterceptor', () => {
   it('opens the new-chat modal in place for /salon/new (no tab created)', () => {
     setup()
     fireEvent.click(screen.getByTestId('newchat'))
-    expect(mockOpenNewChat).toHaveBeenCalledWith({ projectId: undefined, characterId: undefined })
+    expect(mockOpenNewChat).toHaveBeenCalledWith({ projectId: undefined, characterId: undefined, autonomous: false })
     fireEvent.click(screen.getByTestId('newchat-proj'))
-    expect(mockOpenNewChat).toHaveBeenLastCalledWith({ projectId: 'p1', characterId: undefined })
+    expect(mockOpenNewChat).toHaveBeenLastCalledWith({ projectId: 'p1', characterId: undefined, autonomous: false })
     // No salon tab should have been created by these.
     expect(countKind('salon')).toBe(0)
   })
 
-  it('routes autonomous-room creation normally (no modal)', () => {
+  it('opens the new-chat modal in autonomous mode for /salon/new?autonomous=1', () => {
     setup()
     fireEvent.click(screen.getByTestId('newroom'))
-    expect(mockOpenNewChat).not.toHaveBeenCalled()
+    expect(mockOpenNewChat).toHaveBeenCalledWith({ projectId: undefined, characterId: undefined, autonomous: true })
   })
 })

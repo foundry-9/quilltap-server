@@ -39,11 +39,34 @@ export function parseHrefToIntent(href: string): TabIntent | null {
     return { kind: 'salon', payload: { chatId: id } }
   }
 
+  // /aurora/<id>/edit (or legacy /characters/<id>/edit) — the character editor.
+  // Note: a bare /aurora/<id> (the character detail) has NO tab equivalent — it
+  // is rendered in-place inside the Aurora tab — so it intentionally falls
+  // through to `null` below.
+  const editMatch = path.match(/^\/(?:aurora|characters)\/([^/]+)\/edit$/)
+  if (editMatch) {
+    const sp = new URLSearchParams(query)
+    return {
+      kind: 'character-edit',
+      payload: { characterId: editMatch[1], tab: sp.get('tab') ?? undefined },
+    }
+  }
+
   switch (path) {
     case '/':
       return { kind: 'home' }
     case '/aurora':
       return { kind: 'aurora' }
+    case '/aurora/new':
+      return { kind: 'character-new' }
+    case '/profile':
+      return { kind: 'profile' }
+    case '/about':
+      return { kind: 'about' }
+    case '/generate-image':
+      return { kind: 'generate-image' }
+    case '/settings/wizard':
+      return { kind: 'settings-wizard' }
     case '/prospero':
       return { kind: 'prospero' }
     case '/scriptorium':
