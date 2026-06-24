@@ -1,21 +1,22 @@
 'use client'
 
 /**
- * SalonModePanes — routes the Salon's Document/Terminal "right pane" either to
- * the legacy in-chat {@link SplitLayout} (when rendered on the old `/salon/[id]`
+ * SalonModePanes — routes the Salon's Document/Terminal panes either to the
+ * legacy in-chat {@link SplitLayout} (when rendered on the old `/salon/[id]`
  * route) or to sibling workspace tabs (when rendered inside the tabbed
  * workspace).
  *
- * In the workspace branch, the chat fills its own tab and the Document/Terminal
- * panes are **portaled** into their child tabs' DOM hosts. The panes stay
- * children of the Salon view's React tree — so their hooks and the live PTY /
- * editor are never remounted — while appearing in their own (possibly
- * other-pane) tab. Opening a mode spawns its child tab; turning it off closes
- * the tab; closing the tab turns the mode off. See
+ * In the workspace branch the chat fills its own tab and each open document
+ * gets its own child tab — its editor pane is **portaled** into that tab's DOM
+ * host. The panes stay children of the Salon view's React tree (so their hooks
+ * and the live editors are never remounted) while appearing in their own
+ * (possibly other-pane) tabs. Opening a document spawns its child tab; closing
+ * the document closes the tab; closing the tab closes the document. The Terminal
+ * pane follows the same single-pane pattern. See
  * `docs/developer/features/tabbed-workspace.md`.
  *
- * The legacy branch is byte-for-byte the previous behavior, so the old route is
- * unaffected.
+ * The legacy branch is single-document: it shows the focused document only,
+ * matching the previous behavior so the old route is unaffected.
  *
  * @module app/salon/[id]/components/SalonModePanes
  */
@@ -30,6 +31,13 @@ import {
   portalKey,
 } from '@/components/workspace/workspace-tab-context'
 
+/** One open document's editor pane, ready to portal into its tab. */
+export interface DocumentPaneDescriptor {
+  docId: string
+  displayTitle: string
+  content: ReactNode
+}
+
 export interface SalonModePanesProps {
   parentChatId: string
   chatTitle?: string | null
@@ -40,13 +48,15 @@ export interface SalonModePanesProps {
   rightPaneVerticalSplit: number
   onRightPaneVerticalSplitChange: (position: number) => void
   chatContent: ReactNode
-  documentContent: ReactNode | null
+  /** One descriptor per open document (each gets its own tab + portal). */
+  documentPanes: DocumentPaneDescriptor[]
+  /** The focused document — the one the legacy single-pane route shows. */
+  focusedDocId: string | null
   terminalContent: ReactNode | null
-  /** Whether Document/Terminal mode is currently showing a pane. */
-  documentActive: boolean
+  /** Whether Terminal mode is currently showing a pane. */
   terminalActive: boolean
-  /** Turn the mode off for the chat (called when its child tab is closed). */
-  onCloseDocument: () => void
+  /** Close a specific document (called when its child tab is closed). */
+  onCloseDocument: (docId: string) => void
   onCloseTerminal: () => void
 }
 
@@ -60,9 +70,9 @@ export function SalonModePanes(props: SalonModePanesProps) {
     rightPaneVerticalSplit,
     onRightPaneVerticalSplitChange,
     chatContent,
-    documentContent,
+    documentPanes,
+    focusedDocId,
     terminalContent,
-    documentActive,
     terminalActive,
     onCloseDocument,
     onCloseTerminal,
@@ -74,33 +84,48 @@ export function SalonModePanes(props: SalonModePanesProps) {
   const registry = useWorkspacePortalRegistry()
   const inWorkspace = Boolean(ws && parentTabId && registry)
 
-  const docTabRef = useRef<string | null>(null)
+  // docId -> tabId for the document child tabs this view opened.
+  const docTabsRef = useRef<Map<string, string>>(new Map())
   const termTabRef = useRef<string | null>(null)
 
-  // Reconcile the Document child tab with document-mode state.
+  // Reconcile the Document child tabs with the open-document set.
   useEffect(() => {
     if (!inWorkspace || !ws || !parentTabId) return
     const tabs = ws.state.tabs
-    if (documentActive) {
-      const existing = docTabRef.current ? tabs[docTabRef.current] : undefined
-      if (!existing) {
-        if (docTabRef.current) {
-          // We had a tab and it's gone → the user closed it → turn mode off.
-          docTabRef.current = null
-          onCloseDocument()
-        } else {
-          docTabRef.current = ws.openTab(
-            'document',
-            { chatId: parentChatId },
-            { parentTabId, title: chatTitle ? `Document: ${chatTitle}` : 'Document' }
-          )
-        }
+    const map = docTabsRef.current
+    const openIds = new Set(documentPanes.map((p) => p.docId))
+
+    // 1. A tracked tab that no longer exists → the user closed it → close the doc.
+    for (const [docId, tabId] of [...map.entries()]) {
+      if (!tabs[tabId]) {
+        map.delete(docId)
+        if (openIds.has(docId)) onCloseDocument(docId)
       }
-    } else if (docTabRef.current) {
-      if (tabs[docTabRef.current]) ws.closeTab(docTabRef.current)
-      docTabRef.current = null
     }
-  }, [inWorkspace, ws, parentTabId, parentChatId, chatTitle, documentActive, onCloseDocument])
+
+    // 2. Open a tab for any document that doesn't have a live one.
+    for (const pane of documentPanes) {
+      const existingTabId = map.get(pane.docId)
+      if (existingTabId && tabs[existingTabId]) continue
+      const tabId = ws.openTab(
+        'document',
+        { chatId: parentChatId, chatDocumentId: pane.docId, displayTitle: pane.displayTitle },
+        {
+          parentTabId,
+          title: pane.displayTitle || (chatTitle ? `Document: ${chatTitle}` : 'Document'),
+        }
+      )
+      map.set(pane.docId, tabId)
+    }
+
+    // 3. Close tabs for documents that are no longer open.
+    for (const [docId, tabId] of [...map.entries()]) {
+      if (!openIds.has(docId)) {
+        if (tabs[tabId]) ws.closeTab(tabId)
+        map.delete(docId)
+      }
+    }
+  }, [inWorkspace, ws, parentTabId, parentChatId, chatTitle, documentPanes, onCloseDocument])
 
   // Reconcile the Terminal child tab with terminal-mode state.
   useEffect(() => {
@@ -127,6 +152,9 @@ export function SalonModePanes(props: SalonModePanesProps) {
   }, [inWorkspace, ws, parentTabId, parentChatId, chatTitle, terminalActive, onCloseTerminal])
 
   if (!inWorkspace || !registry) {
+    // Legacy single-pane route: show the focused document only.
+    const focusedPane =
+      documentPanes.find((p) => p.docId === focusedDocId) ?? documentPanes[0] ?? null
     return (
       <SplitLayout
         mode={mode}
@@ -135,13 +163,12 @@ export function SalonModePanes(props: SalonModePanesProps) {
         rightPaneVerticalSplit={rightPaneVerticalSplit}
         onRightPaneVerticalSplitChange={onRightPaneVerticalSplitChange}
         chatContent={chatContent}
-        documentContent={documentContent}
+        documentContent={focusedPane?.content ?? null}
         terminalContent={terminalContent}
       />
     )
   }
 
-  const docNode = registry.nodes[portalKey('document', parentChatId)] ?? null
   const termNode = registry.nodes[portalKey('terminal', parentChatId)] ?? null
 
   return (
@@ -149,9 +176,16 @@ export function SalonModePanes(props: SalonModePanesProps) {
       <div className="qt-doc-chat-pane" style={{ flex: 1, minWidth: 0 }}>
         {chatContent}
       </div>
-      {documentContent && docNode
-        ? createPortal(<div className="qt-salon-portaled-pane">{documentContent}</div>, docNode)
-        : null}
+      {documentPanes.map((pane) => {
+        const node = registry.nodes[portalKey('document', parentChatId, pane.docId)] ?? null
+        return node
+          ? createPortal(
+              <div className="qt-salon-portaled-pane">{pane.content}</div>,
+              node,
+              pane.docId
+            )
+          : null
+      })}
       {terminalContent && termNode
         ? createPortal(<div className="qt-salon-portaled-pane">{terminalContent}</div>, termNode)
         : null}

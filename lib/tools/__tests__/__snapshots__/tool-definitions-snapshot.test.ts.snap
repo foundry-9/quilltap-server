@@ -68,8 +68,25 @@ exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameter
 {
   "additionalProperties": false,
   "properties": {
+    "mount_point": {
+      "description": "Mount point of the target document (for document_store scope), matched alongside path when several documents are open.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Which open document to close, by file path. Optional when only one document is open; omit to close the most recently opened document.",
+      "type": "string",
+    },
     "reason": {
       "description": "Optional reason for closing the document. Shown to the user as a system note.",
+      "type": "string",
+    },
+    "scope": {
+      "description": "Scope of the target document, matched alongside path/mount_point when several documents are open.",
+      "enum": [
+        "project",
+        "document_store",
+        "general",
+      ],
       "type": "string",
     },
   },
@@ -246,6 +263,23 @@ exports[`tool definitions: derived OpenAI parameters docFocus: parameters snapsh
     "line": {
       "description": "Line number to scroll to. Used as fallback when string matching is not viable.",
       "type": "number",
+    },
+    "mount_point": {
+      "description": "Mount point of the target document (for document_store scope), matched alongside path when several documents are open.",
+      "type": "string",
+    },
+    "path": {
+      "description": "Which open document to focus, by file path. Optional when only one document is open; required to disambiguate when several are open. Omit to target the most recently opened document.",
+      "type": "string",
+    },
+    "scope": {
+      "description": "Scope of the target document, matched alongside path/mount_point when several documents are open.",
+      "enum": [
+        "project",
+        "document_store",
+        "general",
+      ],
+      "type": "string",
     },
   },
   "type": "object",

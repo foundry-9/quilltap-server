@@ -68,8 +68,10 @@ function renderView(tab: WorkspaceTab) {
       return <ScenariosView />
     case 'terminal':
       return <TerminalView chatId={(tab.payload as TerminalTabPayload).chatId} />
-    case 'document':
-      return <DocumentView chatId={(tab.payload as DocumentTabPayload).chatId} />
+    case 'document': {
+      const payload = tab.payload as DocumentTabPayload
+      return <DocumentView chatId={payload.chatId} chatDocumentId={payload.chatDocumentId} />
+    }
     case 'brahma':
       return <BrahmaConsoleView />
     case 'wardrobe':

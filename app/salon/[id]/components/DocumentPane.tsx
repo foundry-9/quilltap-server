@@ -40,6 +40,7 @@ import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
 import { showConfirmation } from '@/lib/alert'
+import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
 
 interface DocumentPaneProps {
@@ -235,6 +236,11 @@ export default function DocumentPane({
   onFocusCleared,
   onFocusProcessed,
 }: DocumentPaneProps) {
+  // In the tabbed workspace each document is already its own (maximizable) tab,
+  // so the split/focus toggle is redundant there; keep it only on the legacy
+  // single-pane `/salon/[id]` route (where this is null).
+  const inWorkspace = useWorkspaceTabId() != null
+
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [showSource, setShowSource] = useState(false)
   const [editTitle, setEditTitle] = useState(document.displayTitle)
@@ -404,19 +410,22 @@ export default function DocumentPane({
         )}
 
         <div className="flex items-center gap-1">
-          {/* Toggle focus/split */}
-          <button
-            type="button"
-            className="qt-doc-header-button"
-            onClick={onToggleFocusMode}
-            title={mode === 'focus' ? 'Show chat' : 'Maximize'}
-            aria-label={mode === 'focus' ? 'Show chat' : 'Maximize document'}
-          >
-            {mode === 'focus'
-              ? <Icon name="compress" className="w-4 h-4" />
-              : <Icon name="expand" className="w-4 h-4" />
-            }
-          </button>
+          {/* Toggle focus/split — legacy single-pane route only; in the
+              workspace the document is its own maximizable tab. */}
+          {!inWorkspace && (
+            <button
+              type="button"
+              className="qt-doc-header-button"
+              onClick={onToggleFocusMode}
+              title={mode === 'focus' ? 'Show chat' : 'Maximize'}
+              aria-label={mode === 'focus' ? 'Show chat' : 'Maximize document'}
+            >
+              {mode === 'focus'
+                ? <Icon name="compress" className="w-4 h-4" />
+                : <Icon name="expand" className="w-4 h-4" />
+              }
+            </button>
+          )}
 
           {/* Delete the underlying file */}
           <button

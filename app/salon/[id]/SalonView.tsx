@@ -59,12 +59,12 @@ import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import { SalonModePanes } from './components/SalonModePanes'
 import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
-import DocumentPane from './components/DocumentPane'
+import { DocumentPaneBinding } from './components/DocumentPaneBinding'
 import DocumentPickerModal from './components/DocumentPickerModal'
 import SaveImageDialog from './components/SaveImageDialog'
 import { TerminalPane } from './components/TerminalPane'
 import TerminalSessionPicker from './components/TerminalSessionPicker'
-import { useDocumentMode, type FocusRequest } from './hooks/useDocumentMode'
+import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { resolveDocumentExistsForChat } from './hooks/documentModeApi'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { QtapDocContext, type QtapDocOpener } from '@/components/chat/QtapDocContext'
@@ -471,9 +471,10 @@ export function SalonView({ chatId }: SalonViewProps) {
       ) {
         documentModeHook.reloadFromServer()
       }
-      // React to LLM focusing on document location
+      // React to LLM focusing on document location (the result carries the
+      // target document's identity so the correct pane scrolls).
       if (name === 'doc_focus' && success && result) {
-        documentModeHook.handleDocFocus(result as FocusRequest)
+        documentModeHook.handleDocFocus(result as DocFocusTarget)
       }
     },
   })
@@ -778,12 +779,12 @@ export function SalonView({ chatId }: SalonViewProps) {
   const wasGeneratingForDocRef = useRef(false)
   useEffect(() => {
     const isGenerating = sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending
-    if (wasGeneratingForDocRef.current && !isGenerating && documentModeHook.activeDocument) {
+    if (wasGeneratingForDocRef.current && !isGenerating && documentModeHook.documentActive) {
       documentModeHook.handleLLMEditEnd()
     }
     wasGeneratingForDocRef.current = isGenerating
   // eslint-disable-next-line react-hooks/exhaustive-deps -- handleLLMEditEnd is stable (useCallback)
-  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, documentModeHook.activeDocument])
+  }, [sseStreaming.streaming, sseStreaming.waitingForResponse, sseStreaming.sending, documentModeHook.documentActive])
 
   // Keyboard shortcut: Cmd+Shift+L / Ctrl+Shift+L to toggle inspector
   const llmLoggingEnabled = chatSettings?.llmLoggingSettings?.enabled !== false
@@ -1293,7 +1294,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           onDividerPositionChange={documentModeHook.setDividerPosition}
           rightPaneVerticalSplit={terminalModeHook.rightPaneVerticalSplit}
           onRightPaneVerticalSplitChange={terminalModeHook.setRightPaneVerticalSplit}
-          documentActive={documentModeHook.activeDocument != null}
+          focusedDocId={documentModeHook.focusedDocId}
           terminalActive={Boolean(terminalModeHook.activeTerminalSessionId && terminalModeHook.terminalMode !== 'normal')}
           onCloseDocument={documentModeHook.closeDocument}
           onCloseTerminal={terminalModeHook.hidePane}
@@ -1462,34 +1463,19 @@ export function SalonView({ chatId }: SalonViewProps) {
         />
             </>
           }
-          documentContent={
-            documentModeHook.activeDocument ? (
-              <DocumentPane
-                document={documentModeHook.activeDocument}
+          documentPanes={documentModeHook.openDocs.map((entry) => ({
+            docId: entry.document.id,
+            displayTitle: entry.document.displayTitle,
+            content: (
+              <DocumentPaneBinding
+                key={entry.document.id}
+                entry={entry}
                 mode={documentModeHook.documentMode}
-                isDirty={documentModeHook.isDirty}
-                isSaving={documentModeHook.isSaving}
-                isLLMEditing={documentModeHook.isLLMEditing}
-                contentVersion={documentModeHook.contentVersion}
                 roleplayTemplateId={chat?.roleplayTemplateId}
-                attentionTop={documentModeHook.attentionTop}
-                baselineContent={documentModeHook.baselineContent}
-                getScrollPosition={documentModeHook.getScrollPosition}
-                setScrollPosition={documentModeHook.setScrollPosition}
-                onContentChange={documentModeHook.handleContentChange}
-                onBlur={documentModeHook.flushSave}
-                onFlushSave={documentModeHook.flushSave}
-                onTitleChange={documentModeHook.renameDocument}
-                onToggleFocusMode={documentModeHook.toggleFocusMode}
-                onCloseDocument={documentModeHook.closeDocument}
-                onDeleteDocument={documentModeHook.deleteDocument}
-                focusRequest={documentModeHook.focusRequest}
-                onFocusResolved={documentModeHook.setAttentionTop}
-                onFocusCleared={() => documentModeHook.setAttentionTop(null)}
-                onFocusProcessed={documentModeHook.clearFocusRequest}
+                doc={documentModeHook}
               />
-            ) : null
-          }
+            ),
+          }))}
           terminalContent={
             terminalModeHook.activeTerminalSessionId && terminalModeHook.terminalMode !== 'normal' ? (
               <TerminalPane

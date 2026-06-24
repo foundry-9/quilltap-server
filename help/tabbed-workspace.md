@@ -78,14 +78,26 @@ with the rest of the establishment.
 
 ## Conversations and their companions
 
-A conversation may summon two companions, each of which opens as its **own tab**
+A conversation may summon companions, each of which opens as its **own tab**
 linked to the chat:
 
 - **The Terminal (Ariel)** — a live shell, should your work call for one.
-- **Document Mode (the Librarian)** — a full editor for a working document.
+- **Document Mode (the Librarian)** — a full editor for a working document. You
+  may keep **several documents open at once**, each in its own tab; the
+  **Open Document** button in the composer never goes into hiding, so you can
+  call up another volume whenever the work demands it. Each document keeps its
+  own place, its own unsaved changes, and saves itself quite independently of the
+  rest. Close a document's tab and that document alone is set down — its
+  companions read on undisturbed.
 
-Drag either to the opposite pane to set it beside the conversation it belongs to.
-Closing the conversation's tab dismisses its companions along with it.
+Drag any of them to the opposite pane to set it beside the conversation it
+belongs to. Closing the conversation's tab dismisses its companions along with
+it.
+
+When you reopen a conversation, every document you had open returns to its tab,
+just as you left it (save any whose file has since been spirited away). And
+should a character ask to draw your eye to a passage — by way of the Librarian's
+`doc_focus` — it knows precisely which of your open documents to point at.
 
 ## A note on the Help and the Wardrobe
 

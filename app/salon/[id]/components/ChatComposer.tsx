@@ -366,8 +366,9 @@ export function ChatComposer({
                 <Icon name="file" className="w-5 h-5" />
               </button>
 
-              {/* Document Mode toggle button */}
-              {onOpenDocumentClick && !isDocumentModeActive && (
+              {/* Open Document button — stays available even with documents
+                  already open, so the user can keep adding more. */}
+              {onOpenDocumentClick && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -375,7 +376,9 @@ export function ChatComposer({
                     onOpenDocumentClick()
                   }}
                   className="qt-chat-toolbar-button qt-doc-open-button"
-                  title={`Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
+                  title={isDocumentModeActive
+                    ? 'Open another document'
+                    : `Open document (${isMac ? 'Cmd' : 'Ctrl'}+Shift+D)`}
                 >
                   <Icon name="pencil" className="w-5 h-5" />
                 </button>

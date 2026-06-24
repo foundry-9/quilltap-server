@@ -22,7 +22,7 @@ export type TabKind =
   | 'home'
   | 'salon' // payload: { chatId: string }
   | 'terminal' // payload: { chatId: string; sessionId?: string } — child of a salon tab (Ariel)
-  | 'document' // payload: { chatId: string }                      — child of a salon tab (Librarian)
+  | 'document' // payload: { chatId: string; chatDocumentId: string } — child of a salon tab (Librarian)
   | 'aurora'
   | 'prospero'
   | 'scriptorium'
@@ -49,6 +49,11 @@ export interface TerminalTabPayload {
 }
 export interface DocumentTabPayload {
   chatId: string
+  /** Row id of the open chat_documents record this tab edits. Several document
+   * tabs may share a chatId — one per open document. */
+  chatDocumentId: string
+  /** Cached title for the tab label (the document's display title). */
+  displayTitle?: string
 }
 export interface SettingsTabPayload {
   tab?: string

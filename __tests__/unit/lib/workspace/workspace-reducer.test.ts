@@ -55,10 +55,13 @@ describe('createHomeTab', () => {
 })
 
 describe('tabIdentity', () => {
-  it('keys salon/terminal/document by chatId and others by kind', () => {
+  it('keys salon/terminal by chatId, document by chatId+documentId, and others by kind', () => {
     expect(tabIdentity({ kind: 'salon', payload: { chatId: 'c1' } })).toBe('salon:c1')
     expect(tabIdentity({ kind: 'terminal', payload: { chatId: 'c1' } })).toBe('terminal:c1')
-    expect(tabIdentity({ kind: 'document', payload: { chatId: 'c1' } })).toBe('document:c1')
+    // Documents are keyed by chat AND open-document id, so one chat can host
+    // several document tabs (one per open document).
+    expect(tabIdentity({ kind: 'document', payload: { chatId: 'c1', chatDocumentId: 'd1' } })).toBe('document:c1:d1')
+    expect(tabIdentity({ kind: 'document', payload: { chatId: 'c1', chatDocumentId: 'd2' } })).toBe('document:c1:d2')
     expect(tabIdentity({ kind: 'aurora' })).toBe('aurora')
     expect(tabIdentity({ kind: 'settings', payload: { tab: 'system' } })).toBe('settings')
   })

@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Multiple open documents in Document Mode
+
+In the tabbed workspace, a chat can now keep several documents open at once, each in its own tab.
+
+- The composer's "Open Document" button no longer disappears once a document is open — use it to open additional documents. Each open document gets its own workspace tab (a child of the Salon tab), tracks its own unsaved changes, and autosaves independently.
+- Reopening a chat restores every document that was open (skipping any whose file was deleted). The set of open documents is tracked server-side in `chat_documents` (multiple `isActive` rows per chat are now allowed; previously only one).
+- The split/focus "maximize" toggle is hidden inside the workspace (a document is already its own maximizable tab); it remains on the legacy `/salon/[id]` route.
+- LLM document tools target a specific open document: `doc_focus` and `doc_close_document` take an optional `path` (with `scope`/`mount_point`) to name which document to act on, defaulting to the most recently opened. `doc_focus` results carry the target document's identity so the correct pane scrolls.
+- The legacy single-pane `/salon/[id]` route still shows one document (the focused one).
+
 #### Groundwork: Tabbed workspace (Phase 0 scaffold)
 
 Started the tabbed workspace feature (a two-pane shell of kept-alive tabs; see `docs/developer/features/tabbed-workspace.md`). These early phases add no user-visible behavior.

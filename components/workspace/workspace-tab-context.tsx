@@ -63,9 +63,13 @@ export function WorkspacePortalRegistryProvider({ children }: { children: ReactN
   return <PortalRegistryContext.Provider value={value}>{children}</PortalRegistryContext.Provider>
 }
 
-/** Portal key for a chat-linked child pane (terminal/document). */
-export function portalKey(kind: 'terminal' | 'document', chatId: string): string {
-  return `${kind}:${chatId}`
+/**
+ * Portal key for a chat-linked child pane (terminal/document). Terminal is one
+ * per chat; documents are keyed additionally by the open document's row id so a
+ * chat can portal several document panes (one per open document) at once.
+ */
+export function portalKey(kind: 'terminal' | 'document', chatId: string, docId?: string): string {
+  return docId ? `${kind}:${chatId}:${docId}` : `${kind}:${chatId}`
 }
 
 /**

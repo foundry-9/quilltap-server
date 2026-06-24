@@ -536,6 +536,13 @@ CREATE INDEX "idx_chat_documents_chatId" ON "chat_documents" ("chatId");
 CREATE UNIQUE INDEX "idx_chat_documents_unique" ON "chat_documents" ("chatId", "filePath", "scope", "mountPoint");
 ```
 
+Tracks which documents are open in each chat's Document Mode. `isActive = 1`
+means the document is currently open; **several rows per chat may be active at
+once** — each open document surfaces as its own tab in the tabbed workspace
+(`chats.documentMode` is the coarse "any document open" flag). Inactive rows are
+retained as quick-reopen history. (Before 4.8 only one row per chat could be
+active.)
+
 ### terminal_sessions
 
 ```sql

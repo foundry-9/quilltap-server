@@ -82,7 +82,27 @@ const writeDocumentSchema = z.object({
 
 const renameDocumentSchema = z.object({
   newTitle: z.string().min(1),
+  /** Row id of the specific open document to rename. Omitted by the legacy
+   * single-pane route, which renames the earliest-opened active document. */
+  chatDocumentId: z.string().optional(),
 });
+
+/**
+ * Resolve the chat_documents row a per-document action targets: the named row
+ * (verified to belong to the chat) when `chatDocumentId` is given, otherwise the
+ * earliest-opened active document (legacy single-pane fallback).
+ */
+async function resolveTargetDocument(
+  repos: AuthenticatedContext['repos'],
+  chatId: string,
+  chatDocumentId: string | undefined,
+): Promise<ChatDocument | null> {
+  if (chatDocumentId) {
+    const doc = await repos.chatDocuments.findById(chatDocumentId);
+    return doc && doc.chatId === chatId ? doc : null;
+  }
+  return repos.chatDocuments.findActiveForChat(chatId);
+}
 
 function getProjectId(chat: unknown): string | undefined {
   return (chat as Record<string, unknown>).projectId as string | undefined;
@@ -565,7 +585,32 @@ export async function handleAccessibleStores(
 }
 
 /**
- * Get the active document for a chat
+ * Recompute a chat's coarse `documentMode` flag from how many documents remain
+ * open. With multiple documents allowed at once, the flag means "is Document
+ * Mode engaged" — `split` while any document is open, `normal` once the last
+ * one closes. The legacy single-pane route still reads this to decide whether to
+ * show a pane. A `focus`-mode chat keeps `focus` while documents remain open so
+ * the legacy route's full-width layout survives a sibling close.
+ */
+async function refreshDocumentMode(
+  repos: AuthenticatedContext['repos'],
+  chatId: string,
+): Promise<void> {
+  const open = await repos.chatDocuments.findOpenForChat(chatId);
+  if (open.length === 0) {
+    await repos.chats.update(chatId, { documentMode: 'normal' } as Record<string, unknown>);
+    return;
+  }
+  const chat = await repos.chats.findById(chatId);
+  const current = (chat as { documentMode?: string } | null)?.documentMode;
+  if (current !== 'split' && current !== 'focus') {
+    await repos.chats.update(chatId, { documentMode: 'split' } as Record<string, unknown>);
+  }
+}
+
+/**
+ * Get an active document for a chat (the earliest-opened). Retained for the
+ * legacy single-pane route; the workspace uses `open-documents` instead.
  */
 export async function handleActiveDocument(
   chatId: string,
@@ -589,6 +634,36 @@ export async function handleActiveDocument(
       error: error instanceof Error ? error.message : String(error),
     });
     return serverError('Failed to get active document');
+  }
+}
+
+/**
+ * List every open document for a chat (oldest-opened first). The tabbed
+ * workspace calls this on mount to restore one editor pane/tab per open
+ * document. Content is fetched separately per document via `read-document`.
+ */
+export async function handleOpenDocuments(
+  chatId: string,
+  { repos }: AuthenticatedContext
+): Promise<NextResponse> {
+  try {
+    const docs = await repos.chatDocuments.findOpenForChat(chatId);
+
+    return successResponse({
+      documents: docs.map(doc => ({
+        id: doc.id,
+        filePath: doc.filePath,
+        scope: doc.scope,
+        mountPoint: doc.mountPoint,
+        displayTitle: doc.displayTitle,
+      })),
+    });
+  } catch (error) {
+    logger.error('Failed to list open documents', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Failed to list open documents');
   }
 }
 
@@ -709,18 +784,33 @@ export async function handleOpenDocument(
   }
 }
 
+const closeDocumentSchema = z.object({
+  /** Row id of the specific open document to close. Omitted by the legacy
+   * single-pane route, which closes the earliest-opened active document. */
+  chatDocumentId: z.string().optional(),
+});
+
 /**
- * Close the document pane
+ * Close one open document pane. With multiple documents open, the caller names
+ * which one via `chatDocumentId`; the legacy single-pane route omits it and the
+ * earliest-opened document is closed. `documentMode` is recomputed from the
+ * remaining open set, so it only returns to `normal` once the last one closes.
  */
 export async function handleCloseDocument(
+  req: NextRequest,
   chatId: string,
   { repos }: AuthenticatedContext
 ): Promise<NextResponse> {
   try {
-    await repos.chatDocuments.closeDocument(chatId);
-    await repos.chats.update(chatId, {
-      documentMode: 'normal',
-    } as Record<string, unknown>);
+    const body = await req.json().catch(() => ({}));
+    const { chatDocumentId } = closeDocumentSchema.parse(body ?? {});
+
+    if (chatDocumentId) {
+      await repos.chatDocuments.closeDocumentById(chatId, chatDocumentId);
+    } else {
+      await repos.chatDocuments.closeDocument(chatId);
+    }
+    await refreshDocumentMode(repos, chatId);
 
     return successResponse({ success: true });
   } catch (error) {
@@ -947,7 +1037,7 @@ export async function handleRenameDocument(
   const data = renameDocumentSchema.parse(body);
 
   const { repos } = context;
-  const doc = await repos.chatDocuments.findActiveForChat(chatId);
+  const doc = await resolveTargetDocument(repos, chatId, data.chatDocumentId);
   if (!doc) {
     return badRequest('No active document to rename');
   }
@@ -1099,11 +1189,15 @@ export async function handleRenameDocument(
  * Librarian announces the removal so characters present know the file is gone.
  */
 export async function handleDeleteDocument(
+  req: NextRequest,
   chatId: string,
   context: AuthenticatedContext
 ): Promise<NextResponse> {
+  const body = await req.json().catch(() => ({}));
+  const { chatDocumentId } = closeDocumentSchema.parse(body ?? {});
+
   const { repos } = context;
-  const doc = await repos.chatDocuments.findActiveForChat(chatId);
+  const doc = await resolveTargetDocument(repos, chatId, chatDocumentId);
   if (!doc) {
     return badRequest('No active document to delete');
   }
@@ -1164,10 +1258,8 @@ export async function handleDeleteDocument(
     return serverError(`Failed to delete document: ${message}`);
   }
 
-  await repos.chatDocuments.closeDocument(chatId);
-  await repos.chats.update(chatId, {
-    documentMode: 'normal',
-  } as Record<string, unknown>);
+  await repos.chatDocuments.closeDocumentById(chatId, doc.id);
+  await refreshDocumentMode(repos, chatId);
 
   const displayTitle = doc.displayTitle || path.basename(doc.filePath);
 

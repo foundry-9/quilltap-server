@@ -124,6 +124,14 @@ export function pruneWorkspaceState(
       const chatId = (tab.payload as { chatId?: string } | undefined)?.chatId
       keep = Boolean(chatId) && isChatValid(chatId as string)
     }
+    // Document tabs are now keyed by an open document id; drop pre-multi-doc
+    // document tabs that lack one (the Salon re-opens proper per-document tabs
+    // from the server on mount). Whether the specific document is still open is
+    // reconciled by the Salon view, not here.
+    if (keep && tab.kind === 'document') {
+      const chatDocumentId = (tab.payload as { chatDocumentId?: string } | undefined)?.chatDocumentId
+      keep = Boolean(chatDocumentId)
+    }
     if (keep) surviving.add(tab.id)
   }
 

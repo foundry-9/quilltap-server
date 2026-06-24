@@ -20,10 +20,10 @@ import {
 } from '@/components/workspace/workspace-tab-context'
 import type { TerminalTabPayload, DocumentTabPayload } from '@/lib/workspace/types'
 
-function PortalHost({ kind, chatId }: { kind: 'terminal' | 'document'; chatId: string }) {
+function PortalHost({ kind, chatId, docId }: { kind: 'terminal' | 'document'; chatId: string; docId?: string }) {
   const registry = useWorkspacePortalRegistry()
   const setNode = registry?.setNode
-  const key = portalKey(kind, chatId)
+  const key = portalKey(kind, chatId, docId)
   const hasSource = registry ? registry.nodes[key] != null : false
 
   // Stable ref callback: an inline arrow changes identity every render, which
@@ -53,6 +53,6 @@ export function TerminalView({ chatId }: TerminalTabPayload) {
   return <PortalHost kind="terminal" chatId={chatId} />
 }
 
-export function DocumentView({ chatId }: DocumentTabPayload) {
-  return <PortalHost kind="document" chatId={chatId} />
+export function DocumentView({ chatId, chatDocumentId }: DocumentTabPayload) {
+  return <PortalHost kind="document" chatId={chatId} docId={chatDocumentId} />
 }
