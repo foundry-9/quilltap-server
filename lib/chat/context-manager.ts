@@ -18,6 +18,7 @@ import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
+import { recentlyWhisperedIdSet, appendRecallTurn } from '@/lib/memory/recall-history'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -406,6 +407,44 @@ export function calculateContextBudget(
     recentMessagesBudget: allocation.recentMessages,
     responseReserve: allocation.responseReserve,
   }
+}
+
+/** Max characters of recent-window prose used as the memory-search query. */
+const RECENT_WINDOW_QUERY_MAX_CHARS = 600
+
+/**
+ * Build a sentence-shaped memory-search query from the recent conversation.
+ *
+ * Embedding a single one-line message ("ok, go on") or the last message alone
+ * produces a near-useless query. Instead concatenate the tail of the
+ * conversation — the last assistant turn and the last couple of user turns — as
+ * prose, so the query represents *what this moment is about*. Cheap (no LLM) and
+ * strictly better than the single-message base. The most-recent text is kept
+ * when truncating (slice from the end).
+ */
+function buildRecentWindowQuery(
+  existingMessages: Array<{ role: string; content: string }>,
+  newUserMessage?: string,
+): string {
+  const parts: string[] = []
+  // Walk backward collecting up to 3 non-empty user/assistant turns, then emit
+  // them in chronological order so the prose reads naturally.
+  for (let i = existingMessages.length - 1; i >= 0 && parts.length < 3; i--) {
+    const m = existingMessages[i]
+    const role = m.role.toLowerCase()
+    if (role !== 'user' && role !== 'assistant') continue
+    const content = role === 'assistant' ? (stripToolArtifacts(m.content || '') ?? '') : (m.content || '')
+    const trimmed = content.trim()
+    if (trimmed.length === 0) continue
+    parts.unshift(trimmed)
+  }
+  if (newUserMessage && newUserMessage.trim().length > 0) {
+    parts.push(newUserMessage.trim())
+  }
+  const joined = parts.join('\n')
+  return joined.length > RECENT_WINDOW_QUERY_MAX_CHARS
+    ? joined.slice(-RECENT_WINDOW_QUERY_MAX_CHARS)
+    : joined
 }
 
 /**
@@ -958,15 +997,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   let memoriesIncluded = 0
   let debugMemories: DebugMemoryInfo[] = []
 
-  // In continue mode (no newUserMessage), use the last message content for memory search
-  // or skip memory search if there are no messages
-  const memorySearchQuery = newUserMessage ||
-    (existingMessages.length > 0 ? existingMessages[existingMessages.length - 1].content : '')
+  // Sentence-shaped recent-window query (item 3): the tail of the conversation
+  // as prose rather than a single one-line message, so the embedding represents
+  // what this moment is about. Works in continue mode too (no newUserMessage).
+  const memorySearchQuery = buildRecentWindowQuery(existingMessages, newUserMessage)
 
   const tMemoryStart = performance.now()
   let memoryPath: 'skipped' | 'pre-searched' | 'two-pool' = 'skipped'
   let frozenArchiveCount = 0
   let dynamicHeadCount = 0
+  // Memory IDs whispered in the dynamic head this turn — persisted to the recall
+  // history ring buffer (anti-repetition, item F4) after the build completes.
+  let whisperedMemoryIds: string[] = []
   if (!skipMemories && character.id) {
     try {
       // Phase 3a/3b: two-pool architecture.
@@ -1029,8 +1071,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               chat.id,
               character.id,
             )
-            if (distill.success && distill.result && distill.result.keywords.length > 0) {
-              distilledQuery = distill.result.keywords.join(' ')
+            if (distill.success && distill.result) {
+              // Prefer the natural-language paraphrase as the embedding query —
+              // a keyword bag throws away the sentence structure the embedding
+              // model is trained on and lands in a mushy region of the space.
+              // Fall back to the recent-window prose (already in distilledQuery)
+              // when the model omits a paraphrase.
+              if (distill.result.paraphrase) {
+                distilledQuery = distill.result.paraphrase
+              } else if (distill.result.keywords.length > 0) {
+                distilledQuery = distill.result.keywords.join(' ')
+              }
               turnContext = distill.result.context ?? null
               turnTemporal = distill.result.temporal ?? null
             }
@@ -1065,6 +1116,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           turnTemporal,
           presentAboutCharacterIds,
           expandRelated: recallSettings.expandRelated,
+          recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
         }
         const memoryResults = await searchMemoriesSemantic(
           character.id,
@@ -1087,6 +1139,35 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         maxEntries: DYNAMIC_HEAD_DEFAULT_SIZE,
       })
       dynamicHeadCount = headFormatted.memoriesUsed
+
+      // The IDs actually whispered this turn (those that cleared the head's
+      // token budget), recorded for anti-repetition (item F4).
+      whisperedMemoryIds = headFormatted.debugMemories
+        .map(d => d.memoryId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+
+      // Item F5 — structured per-turn ranking log for empirical tuning. One line
+      // per candidate (not just the selected ones) so the cosine floor and blend
+      // coefficients can be tuned against real chats. Cheap; left at debug level.
+      if (dynamicHeadResults.length > 0) {
+        const selectedIds = new Set(whisperedMemoryIds)
+        logger.debug('[ContextManager] Dynamic-head ranking', {
+          characterId: character.id,
+          chatId: chat.id,
+          query: memorySearchQuery.slice(0, 120),
+          candidates: dynamicHeadResults.map(r => ({
+            id: r.memory.id.slice(0, 8),
+            cosine: Number(r.score.toFixed(3)),
+            rawWeight: r.rawWeight !== undefined ? Number(r.rawWeight.toFixed(3)) : undefined,
+            effectiveWeight: r.effectiveWeight !== undefined ? Number(r.effectiveWeight.toFixed(3)) : undefined,
+            blendedBefore: r.recallAdjustment ? Number(r.recallAdjustment.blendedBefore.toFixed(3)) : undefined,
+            recallMultiplier: r.recallAdjustment?.multiplier,
+            recallFired: r.recallAdjustment?.fired,
+            blendedAfter: r.recallAdjustment ? Number(r.recallAdjustment.blendedAfter.toFixed(3)) : undefined,
+            selected: selectedIds.has(r.memory.id),
+          })),
+        })
+      }
 
       const sections: string[] = []
       if (archiveFormatted.content) sections.push(archiveFormatted.content)
@@ -1794,6 +1875,24 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             chatId: chat.id,
             targetKey: cacheTargetKey,
             error: getErrorMessage(cacheError),
+          })
+        }
+      }
+
+      // Record this turn's whispered memory IDs into the recall-history ring
+      // buffer so the next turn's recall can apply the anti-repetition penalty
+      // (item F4). Fire-and-forget — a write failure just means one un-penalized
+      // turn. Skipped when nothing was whispered (appendRecallTurn no-ops).
+      if (whisperedMemoryIds.length > 0) {
+        try {
+          const nextHistory = appendRecallTurn(chat.commonplaceRecallHistory, whisperedMemoryIds)
+          await getRepositories().chats.update(chat.id, {
+            commonplaceRecallHistory: nextHistory,
+          } as unknown as Partial<typeof chat>)
+        } catch (historyError) {
+          logger.warn('[CommonplaceWhisper] Failed to persist recall history', {
+            chatId: chat.id,
+            error: getErrorMessage(historyError),
           })
         }
       }

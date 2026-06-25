@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Commonplace Book recall is more on-topic
+
+Reworked the ranking math behind the per-turn "relevant memories" whisper so recall actually tracks what the scene is about, instead of resurfacing the same few high-importance memories every turn.
+
+- Relevance now leads the ranking. Candidates are scored `0.75·cosine + 0.25·rawWeight` (was `0.4·cosine + 0.6·effectiveWeight`), and the importance/recency term decays with age instead of being pinned to a permanent 70% floor. A stale "important" memory no longer outranks a genuinely on-topic one. The blend coefficients are centralized in `lib/memory/memory-weighting.ts` (`computeRankingBlend`) so all four ranking sites stay in sync. The 70% floor still governs housekeeping/protection — only retrieval ranking changed.
+- Added a real relevance floor. When nothing in memory clears a minimum cosine, the whisper now says nothing rather than emitting filler. The floor is provider-aware: a lower default for the local TF-IDF profile, a higher one for neural embedding profiles.
+- The per-turn search query is now sentence-shaped: a short recent-conversation window instead of a single one-line message, and when cheap-LLM distillation is on, a natural-language paraphrase of the moment instead of a bare keyword bag.
+- Added light anti-repetition: a memory whispered in the last few turns takes a bounded penalty so the same entry doesn't read as a stuck record. Tracked per chat in a new `chats.commonplaceRecallHistory` column (ephemeral; not exported).
+- A dimension-mismatch between the search profile and a character's stored index — which silently degrades recall to keyword text search — now logs a one-time actionable warning instead of failing over silently.
+
 #### Merge a conversation into another
 
 The Salon's Organize sidebar has a new "Merge In…" button — the inverse of "Continue Elsewhere." It folds another conversation's characters and summary into the current chat at the latest point, instead of forking forward into a new one.

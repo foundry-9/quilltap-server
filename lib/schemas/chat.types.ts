@@ -757,6 +757,17 @@ export const ChatMetadataSchema = z.object({
    */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
 
+  /**
+   * The Commonplace Book — recall anti-repetition ring buffer. JSON shape:
+   *   string[][]  — one inner array of whispered memory IDs per recent turn,
+   *   most recent last, capped to the last few turns. The recall path unions
+   *   these IDs into a "recently whispered" set and applies a bounded
+   *   penalty (see lib/memory/recall-tags.ts `recentlyWhispered`) so the same
+   *   memory doesn't get whispered turn after turn. Ephemeral per-chat UX
+   *   state — NOT part of .qtap export. Null until the first whisper.
+   */
+  commonplaceRecallHistory: JsonSchema.nullable().optional(),
+
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
   // Populated only when chatType === 'autonomous'; null/zero on other chats.
@@ -1048,6 +1059,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** The Commonplace Book — per-target scene-state emission cache. See ChatMetadataSchema for the contract. */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
+
+  /** The Commonplace Book — recall anti-repetition ring buffer (string[][]). See ChatMetadataSchema for the contract. */
+  commonplaceRecallHistory: JsonSchema.nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.

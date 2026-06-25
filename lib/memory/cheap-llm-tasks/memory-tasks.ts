@@ -591,8 +591,10 @@ temporal — one of: past | moment | present | future
 context — the single dominant subject, one of:
   philosophy | relationships | history | banter | mannerisms | trivia | information
 
+paraphrase — ONE natural-language sentence describing what the characters are currently focused on, written as prose (not a keyword list). This is used to search memories by meaning, so make it specific and self-contained. Example: "They are arguing about whether to trust the stranger who arrived at the inn last night."
+
 Respond with a JSON object (3-10 keywords):
-{"keywords": ["keyword1", "keyword phrase 2", "keyword3"], "temporal": "present", "context": "relationships"}
+{"keywords": ["keyword1", "keyword phrase 2", "keyword3"], "temporal": "present", "context": "relationships", "paraphrase": "A single sentence describing the current focus."}
 
 JSON only - no other text.`
 
@@ -893,6 +895,14 @@ export interface MemorySearchExtraction {
   keywords: string[]
   temporal?: TemporalTag
   context?: ContextTag
+  /**
+   * A single natural-language sentence describing what the characters are
+   * currently focused on. This — not the keyword bag — is what the recall path
+   * embeds: sentence-embedding models are trained on prose, so a sentence lands
+   * in a far more discriminating region of embedding space than `keywords.join`.
+   * Undefined when the model omits it (caller falls back to the prose query).
+   */
+  paraphrase?: string
 }
 
 /**
@@ -969,7 +979,13 @@ export async function extractMemorySearchKeywords(
         const temporal = TEMPORAL_VALUES.has(rawTemporal) ? (rawTemporal as TemporalTag) : undefined
         const context = CONTEXT_VALUES.has(rawContext) ? (rawContext as ContextTag) : undefined
 
-        return { keywords, temporal, context }
+        const rawParaphrase =
+          !Array.isArray(parsed) && typeof parsed?.paraphrase === 'string'
+            ? parsed.paraphrase.trim()
+            : ''
+        const paraphrase = rawParaphrase.length > 0 ? rawParaphrase : undefined
+
+        return { keywords, temporal, context, paraphrase }
       } catch {
         return { keywords: [] }
       }

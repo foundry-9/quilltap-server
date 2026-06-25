@@ -30,6 +30,7 @@ import {
 import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { RecallContext } from '@/lib/memory/recall-tags'
+import { recentlyWhisperedIdSet } from '@/lib/memory/recall-history'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
@@ -247,12 +248,15 @@ async function proactiveRecallTask(
     characterId: character.id,
   }))
 
-  const searchQuery = keywordResult.result.keywords.join(' ')
+  // Prefer the natural-language paraphrase as the embedding query (item 3); a
+  // keyword bag throws away the sentence structure the embedding model is
+  // trained on. Fall back to the keyword join when the model omits a paraphrase.
+  const searchQuery = keywordResult.result.paraphrase || keywordResult.result.keywords.join(' ')
   // Same per-turn recall context the dynamic head uses, so the proactive path
-  // gets identical scope gating, temporal down-weighting, context steering, and
-  // participant boost (see lib/memory/recall-tags.ts). chat.projectId is the
-  // rename-proof comparand; the turn's temporal/context guess and present-
-  // character set drive items 3–4.
+  // gets identical scope gating, temporal down-weighting, context steering,
+  // participant boost, and anti-repetition (see lib/memory/recall-tags.ts).
+  // chat.projectId is the rename-proof comparand; the turn's temporal/context
+  // guess and present-character set drive items 3–4.
   const recallSettings = await getMemoryRecallSettings()
   const recallContext: RecallContext = {
     currentProjectId: chat.projectId ?? null,
@@ -261,6 +265,7 @@ async function proactiveRecallTask(
     turnTemporal: keywordResult.result.temporal ?? null,
     presentAboutCharacterIds,
     expandRelated: recallSettings.expandRelated,
+    recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
   }
   try {
     const memoryResults = await searchMemoriesSemantic(

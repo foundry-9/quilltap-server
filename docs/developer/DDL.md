@@ -478,6 +478,7 @@ CREATE TABLE "chats" (
   "compiledIdentityStacks" TEXT DEFAULT NULL,
   "courierCheckpoints" TEXT DEFAULT NULL,
   "commonplaceSceneCache" TEXT DEFAULT NULL,
+  "commonplaceRecallHistory" TEXT DEFAULT NULL,
   -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
   -- (populated only when chatType = 'autonomous'; NULL on other chats)
   "budgetMaxTurns" INTEGER DEFAULT NULL,

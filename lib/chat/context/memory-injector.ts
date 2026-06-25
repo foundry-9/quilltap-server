@@ -100,15 +100,19 @@ export function formatMemoryMetadataTag(opts: {
  * Debug info for included memories
  */
 export interface DebugMemoryInfo {
+  /** The memory's id — lets callers track which entries were whispered (anti-repetition). */
+  memoryId?: string
   summary: string
   importance: number
   score: number
   effectiveWeight: number
+  /** No-floor ranking weight (importance × time decay) — the term the blend uses. */
+  rawWeight?: number
   /** Combined recall-context multiplier, when a recallContext drove the ranking. */
   recallMultiplier?: number
   /** Labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
   recallFired?: string[]
-  /** Blended `0.4·cosine + 0.6·weight` score before the recall multiplier. */
+  /** Ranking blend (RELEVANCE·cosine + PRIORITY·rawWeight) before the recall multiplier. */
   blendedBefore?: number
   /** Blended score after the recall multiplier (what the head ranks on). */
   blendedAfter?: number
@@ -559,7 +563,7 @@ export function formatDynamicMemoryHead(
   let currentTokens = estimateTokens(`${header}\n`, provider)
   let memoriesUsed = 0
 
-  for (const { memory, score, weight, recallAdjustment } of ranked) {
+  for (const { memory, score, weight, rawWeight, recallAdjustment } of ranked) {
     const summary = memory.summary?.trim() || memory.content?.trim() || ''
     if (!summary) continue
     const idTag = `[m_${memory.id.slice(0, 4)}]`
@@ -579,10 +583,12 @@ export function formatDynamicMemoryHead(
     currentTokens += candidateTokens
     memoriesUsed++
     debugMemories.push({
+      memoryId: memory.id,
       summary: memory.summary,
       importance: memory.importance,
       score,
       effectiveWeight: weight,
+      rawWeight,
       recallMultiplier: recallAdjustment?.multiplier,
       recallFired: recallAdjustment?.fired,
       blendedBefore: recallAdjustment?.blendedBefore,

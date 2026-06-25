@@ -24,7 +24,11 @@ import {
   deleteMemoryWithUnlink,
   deleteMemoriesWithUnlinkBatch,
 } from './memory-gate'
-import { calculateEffectiveWeight } from './memory-weighting'
+import {
+  calculateEffectiveWeight,
+  computeRankingBlend,
+  defaultMinCosineForProvider,
+} from './memory-weighting'
 import { combineRecallMultipliers, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
@@ -238,8 +242,13 @@ export interface SemanticSearchResult {
   score: number
   /** Whether embedding was used for search */
   usedEmbedding: boolean
-  /** Effective weight combining importance with time decay (0-1) */
+  /** Effective weight combining importance with time decay (0-1), floored for
+   * housekeeping protection. Used for diagnostics, NOT for ranking. */
   effectiveWeight?: number
+  /** No-floor ranking weight (baseImportance × time decay). This is what the
+   * retrieval blend uses so a stale "important" memory decays out of recall —
+   * see {@link computeRankingBlend}. */
+  rawWeight?: number
   /**
    * Recall-context adjustment record — present only when a `recallContext` was
    * supplied to `searchMemoriesSemantic`. Lets the injector show *why* a memory
@@ -605,6 +614,16 @@ export async function deleteMemoryWithVector(
 }
 
 /**
+ * One-time-per-key throttle for the embedding dimension-mismatch warning. When a
+ * character's stored vector index was built with a different embedding profile
+ * than the one now searching, vector search silently returns nothing and we fall
+ * back to text search — a badly degraded relevance path. We surface this loudly
+ * (warn level, actionable) but only once per (character, dimension pair) so it is
+ * not buried under per-turn spam. Keyed by `${characterId}:${stored}->${query}`.
+ */
+const dimensionMismatchWarned = new Set<string>()
+
+/**
  * Search memories using semantic similarity
  *
  * Falls back to text-based search if embedding is not available.
@@ -647,7 +666,11 @@ export async function searchMemoriesSemantic(
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
   const limit = options.limit || 20
-  const minScore = options.minScore || 0.0
+  // The relevance floor is resolved per embedding profile *after* the query is
+  // embedded (neural vs TF-IDF cosines distribute very differently). An explicit
+  // caller-supplied floor always wins; `undefined` → the provider default. Note
+  // we use `??` not `||` so an explicit `0` (caller wants no floor) is honored.
+  const explicitMinScore = options.minScore
 
   // Timing markers — left in at debug level so we can see which stage of a
   // semantic search is slow on big-corpus characters without having to
@@ -663,6 +686,12 @@ export async function searchMemoriesSemantic(
     )
     const tEmbed = performance.now()
 
+    // Relevance floor on the raw cosine, applied before the importance/recency
+    // blend so a low-cosine memory can't be smuggled into recall by its weight.
+    // Profile-aware: a single global floor would silently break either the
+    // neural or the TF-IDF scale.
+    const minScore = explicitMinScore ?? defaultMinCosineForProvider(embeddingResult.provider)
+
     const vectorStore = await getCharacterVectorStore(characterId)
     const storedDimensions = vectorStore.getDimensions()
 
@@ -671,14 +700,23 @@ export async function searchMemoriesSemantic(
     // return nothing. Fall back to text search immediately rather than silently
     // returning empty results.
     if (storedDimensions !== null && embeddingResult.embedding.length !== storedDimensions) {
-      logger.warn('[Memory] Embedding dimension mismatch — search profile produces different dimensions than stored index, falling back to text search', {
-        characterId,
-        query: query.substring(0, 100),
-        storedDimensions,
-        queryDimensions: embeddingResult.embedding.length,
-        userId: options.userId,
-        embeddingProfileId: options.embeddingProfileId ?? 'default',
-      })
+      const warnKey = `${characterId}:${storedDimensions}->${embeddingResult.embedding.length}`
+      if (!dimensionMismatchWarned.has(warnKey)) {
+        dimensionMismatchWarned.add(warnKey)
+        // Surfaced once per (character, dimension pair): this is a degraded
+        // relevance state, not a normal fallback. Memory recall is running on
+        // keyword text search, NOT embeddings — reindex this character's
+        // embeddings or switch back to the profile the index was built with.
+        logger.warn('[Memory] Embedding dimension mismatch — recall is degraded to TEXT search (embeddings ignored). Reindex this character or restore the matching embedding profile.', {
+          characterId,
+          query: query.substring(0, 100),
+          storedDimensions,
+          queryDimensions: embeddingResult.embedding.length,
+          userId: options.userId,
+          embeddingProfileId: options.embeddingProfileId ?? 'default',
+          provider: embeddingResult.provider,
+        })
+      }
       return searchMemoriesText(characterId, query, options)
     }
 
@@ -759,12 +797,13 @@ export async function searchMemoriesSemantic(
               containsLiteralPhrase(memory.summary, literalPhrase)
             : false
           const cosineScore = literalHit ? applyLiteralBoost(vr.score) : vr.score
-          const { effectiveWeight } = calculateEffectiveWeight(memory)
+          const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory)
           return {
             memory,
             score: cosineScore,
             usedEmbedding: true,
             effectiveWeight,
+            rawWeight,
           } as SemanticSearchResult
         })
         .filter((r): r is SemanticSearchResult => r !== null)
@@ -792,7 +831,7 @@ export async function searchMemoriesSemantic(
         const recallContext = options.recallContext
         const adjusted: SemanticSearchResult[] = []
         for (const r of results) {
-          const blendedBefore = r.score * 0.4 + (r.effectiveWeight ?? 0) * 0.6
+          const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
           const adj = combineRecallMultipliers(r.memory, recallContext)
           if (adj.exclude) {
             continue
@@ -828,8 +867,8 @@ export async function searchMemoriesSemantic(
         }
       } else {
         results.sort((a, b) => {
-          const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
-          const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
+          const finalScoreA = computeRankingBlend(a.score, a.rawWeight ?? 0)
+          const finalScoreB = computeRankingBlend(b.score, b.rawWeight ?? 0)
           return finalScoreB - finalScoreA
         })
       }
@@ -908,8 +947,8 @@ async function expandRelatedMemories(
     if (!memory.embedding || memory.embedding.length !== queryEmbedding.length) continue
 
     const cosineScore = cosineSimilarity(queryEmbedding, memory.embedding)
-    const { effectiveWeight } = calculateEffectiveWeight(memory)
-    const blendedBefore = cosineScore * 0.4 + (effectiveWeight ?? 0) * 0.6
+    const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory)
+    const blendedBefore = computeRankingBlend(cosineScore, rawWeight ?? 0)
     const adj = combineRecallMultipliers(memory, recallContext)
     if (adj.exclude) continue
     const blendedAfter = blendedBefore * adj.multiplier
@@ -918,6 +957,7 @@ async function expandRelatedMemories(
       score: cosineScore,
       usedEmbedding: true,
       effectiveWeight,
+      rawWeight,
       recallAdjustment: { multiplier: adj.multiplier, fired: [...adj.fired, 'related↗'], blendedBefore, blendedAfter },
     })
   }
@@ -1057,23 +1097,24 @@ async function searchMemoriesText(
     )
     score += 0.1 * (matchingKeywords.length / Math.max(memory.keywords.length, 1))
 
-    const { effectiveWeight } = calculateEffectiveWeight(memory)
+    const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory)
 
     return {
       memory,
       score: Math.min(score, 1.0),
       usedEmbedding: false,
       effectiveWeight,
+      rawWeight,
     }
   })
 
   // Filter out zero-score results (no words matched at all)
   const scoredResults = results.filter(r => r.score > 0)
 
-  // Combine text score with effective weight for final ranking
+  // Combine text score with the decaying ranking weight for final ordering.
   scoredResults.sort((a, b) => {
-    const finalScoreA = a.score * 0.4 + (a.effectiveWeight ?? 0) * 0.6
-    const finalScoreB = b.score * 0.4 + (b.effectiveWeight ?? 0) * 0.6
+    const finalScoreA = computeRankingBlend(a.score, a.rawWeight ?? 0)
+    const finalScoreB = computeRankingBlend(b.score, b.rawWeight ?? 0)
     return finalScoreB - finalScoreA
   })
 

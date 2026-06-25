@@ -241,6 +241,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-console-connection-profile-field-v1': "Wiring the Brahma Console's dial to its chosen engine…",
   'add-connection-profile-unique-name-index-v1': 'Ensuring each connection profile answers to but a single name…',
   'add-doc-mount-file-policy-flags-v1': 'Noting which manuscripts wish to remain unread, unwritten, or unindexed…',
+  'add-commonplace-recall-history-v1': 'Teaching the Commonplace Book not to repeat itself…',
   'migrate-extraction-knobs-to-instance-settings-v1': 'Moving extraction knobs into instance settings',
 
   // Misc / fixes

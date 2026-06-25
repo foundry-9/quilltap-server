@@ -41,6 +41,12 @@ It also keeps an eye on the company in the room. A memory concerning someone act
 
 And it takes a moment's measure of what the present exchange is *about* — whether the talk runs to philosophy, or scheming, or tender confession — and gives a corresponding nudge to memories cut from the same cloth. None of this asks anything of you; it is simply the Book paying closer attention.
 
+Above all, the Book now lets *pertinence* lead the way. A memory of towering importance but no bearing on the present talk is no longer permitted to shoulder its way to the front merely on account of its weight; the recollection that actually answers the moment takes precedence, and a grand old memory left untouched for a season is allowed, gracefully, to recede. The measure of a thing's importance still counts — it simply no longer drowns out the question of whether the thing is *relevant*.
+
+A happy consequence is that the Book has learned the art of holding its tongue. When it leafs through the shelves and finds that nothing truly speaks to the matter at hand, it now says so by saying nothing at all, rather than producing some only-vaguely-related entry to fill the silence. Better an honest blank than a confident irrelevance.
+
+And it keeps a short memory of its own recent remarks, so as not to repeat itself. A recollection it has pressed upon you these last few turns is gently set aside to let another have its say — never barred outright, for a thing that remains the single most pertinent memory will still win out, but no longer permitted to become that tiresome guest who tells the same anecdote at every turn of the conversation.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

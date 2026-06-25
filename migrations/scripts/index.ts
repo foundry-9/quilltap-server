@@ -346,6 +346,8 @@ import { addConsoleConnectionProfileFieldMigration } from './add-console-connect
 import { addConnectionProfileUniqueNameIndexMigration } from './add-connection-profile-unique-name-index';
 // Scriptorium per-document policy: allowEmbed / allowCharacterRead / allowCharacterWrite columns + frontmatter backfill
 import { addDocMountFilePolicyFlagsMigration } from './add-doc-mount-file-policy-flags';
+// Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
+import { addCommonplaceRecallHistoryMigration } from './add-commonplace-recall-history';
 
 /**
  * All available migrations.
@@ -688,6 +690,8 @@ export const migrations: Migration[] = [
   addConnectionProfileUniqueNameIndexMigration,
   // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
   addDocMountFilePolicyFlagsMigration,
+  // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
+  addCommonplaceRecallHistoryMigration,
 ];
 
 export {
@@ -1011,5 +1015,7 @@ export {
   addConnectionProfileUniqueNameIndexMigration,
   // Scriptorium per-document policy flags on doc_mount_file_links + frontmatter backfill
   addDocMountFilePolicyFlagsMigration,
+  // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
+  addCommonplaceRecallHistoryMigration,
 };
 

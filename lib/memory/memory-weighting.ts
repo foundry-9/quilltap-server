@@ -87,6 +87,58 @@ export function calculateEffectiveWeight(
 }
 
 /**
+ * Retrieval ranking blend.
+ *
+ * Every semantic/text retrieval path ranks candidates by a single blended key.
+ * Relevance (cosine) is the *primary* sort key; importance/recency is a decaying
+ * tie-breaker, NOT a floor. This is deliberately the no-floor `rawWeight`
+ * (importance × time decay) rather than `effectiveWeight` — the 0.70 importance
+ * floor in {@link DEFAULT_WEIGHTING_CONFIG} exists to protect important memories
+ * from *housekeeping deletion* and must not leak into retrieval ranking, where it
+ * gives high-importance memories a permanent score floor with zero topical match
+ * (they then get whispered every turn regardless of topic).
+ *
+ * Centralized here because these coefficients were previously inlined at four
+ * call sites in memory-service.ts and drifted out of view. All four call
+ * {@link computeRankingBlend}.
+ */
+export const RANKING_RELEVANCE_WEIGHT = 0.75
+export const RANKING_PRIORITY_WEIGHT = 0.25
+
+/**
+ * Blend a candidate's relevance (cosine, 0–1) with its decaying priority
+ * (`rawWeight` from {@link calculateEffectiveWeight}, no floor). Returns the
+ * ranking key; recall-tag and anti-repetition multipliers are applied to this
+ * value *afterward* (see lib/memory/recall-tags.ts).
+ */
+export function computeRankingBlend(cosine: number, rawWeight: number): number {
+  return RANKING_RELEVANCE_WEIGHT * cosine + RANKING_PRIORITY_WEIGHT * rawWeight
+}
+
+/**
+ * Default minimum *cosine* (raw relevance) for a memory to be eligible for
+ * recall, below which it is dropped before the blend. Two embedding scales
+ * coexist and distribute very differently, so the floor is provider-aware:
+ * neural API embeddings live in a compressed band (~0.25 unrelated, ~0.45–0.75
+ * related), while the built-in TF-IDF profile produces much sparser cosines.
+ * A single global floor would silently break one of them.
+ *
+ * Starting points — tune against real chats via the per-turn debug output
+ * before tightening.
+ */
+export const DEFAULT_MIN_COSINE_NEURAL = 0.30
+export const DEFAULT_MIN_COSINE_TFIDF = 0.10
+
+/**
+ * Resolve the default relevance floor for an embedding profile's provider.
+ * `BUILTIN` is the local TF-IDF provider; everything else is a neural API
+ * provider (OPENAI / OLLAMA / OPENROUTER).
+ */
+export function defaultMinCosineForProvider(provider: string | undefined | null): number {
+  return provider === 'BUILTIN' ? DEFAULT_MIN_COSINE_TFIDF : DEFAULT_MIN_COSINE_NEURAL
+}
+
+/**
  * Format a memory's age as a human-readable relative time label.
  * Used for temporal context in LLM memory injection.
  */

@@ -108,6 +108,13 @@ export interface RecallContext {
    * {@link RELATED_EXPANSION}.
    */
   expandRelated?: boolean
+  /**
+   * Memory IDs whispered in the last few turns of this chat. A memory in this
+   * set takes a bounded anti-repetition penalty ({@link RECALL_MULTIPLIERS}
+   * `recentlyWhispered`) so the same entry doesn't read as a stuck record.
+   * Empty/undefined → no penalty.
+   */
+  recentlyWhisperedIds?: ReadonlySet<string>
 }
 
 /**
@@ -134,6 +141,12 @@ export const RECALL_MULTIPLIERS = {
    * Boost, never a filter: absent people still get discussed.
    */
   participantPresent: 1.2,
+  /**
+   * Anti-repetition — the memory was whispered in one of the last few turns of
+   * this chat. A bounded penalty (never a hard exclude): a memory that is still
+   * the best match keeps winning, just not trivially turn after turn.
+   */
+  recentlyWhispered: 0.6,
 } as const
 
 /** Clamp on the *combined* multiplier so no single memory can explode the ranking. */
@@ -164,6 +177,7 @@ export interface CombinedRecallAdjustment {
 
 /** Minimal structural view of a memory this module needs (keeps it Memory-import-free). */
 interface MemoryTagView {
+  id?: string
   projectId?: string | null
   keywords?: readonly string[] | null
   aboutCharacterId?: string | null
@@ -299,10 +313,27 @@ export function participantMultiplier(
 }
 
 /**
+ * Anti-repetition — penalize a memory whispered in the last few turns of this
+ * chat so the same entry doesn't get whispered turn after turn. A bounded
+ * multiplier, never a hard exclude: a still-best match keeps winning, just not
+ * trivially. No recent-whisper set, or memory not in it → pass through.
+ */
+export function recentlyWhisperedMultiplier(
+  memory: MemoryTagView,
+  recentlyWhisperedIds: ReadonlySet<string> | null | undefined,
+): RecallMultiplier {
+  if (memory.id && recentlyWhisperedIds && recentlyWhisperedIds.has(memory.id)) {
+    return { multiplier: RECALL_MULTIPLIERS.recentlyWhispered, fired: ['repeat↓'] }
+  }
+  return { multiplier: 1, fired: [] }
+}
+
+/**
  * Combine every applicable recall multiplier for one memory into a single
  * clamped adjustment. Items 1 (scope+project) and 2 (temporal) read the memory's
  * own tags; items 3 (context steering) and 4 (participant boost) compare against
- * the turn-level signals on the {@link RecallContext}. The product is clamped to
+ * the turn-level signals on the {@link RecallContext}, and the anti-repetition
+ * penalty reads the recently-whispered set. The product is clamped to
  * {@link MULTIPLIER_CLAMP} so no single memory can dominate the ranking. A
  * cross-project narrow memory under the `exclude` policy short-circuits to
  * `{ exclude: true }`.
@@ -326,9 +357,14 @@ export function combineRecallMultipliers(
   const temporal = temporalMultiplier(tags)
   const context = contextMultiplier(tags, ctx.turnContext)
   const participant = participantMultiplier(memory, ctx.presentAboutCharacterIds)
+  const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds)
 
   const product =
-    scope.multiplier * temporal.multiplier * context.multiplier * participant.multiplier
+    scope.multiplier *
+    temporal.multiplier *
+    context.multiplier *
+    participant.multiplier *
+    recent.multiplier
   const clamped = Math.max(
     MULTIPLIER_CLAMP.min,
     Math.min(MULTIPLIER_CLAMP.max, product),
@@ -336,7 +372,7 @@ export function combineRecallMultipliers(
 
   return {
     multiplier: clamped,
-    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired],
+    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired],
     exclude: false,
   }
 }
