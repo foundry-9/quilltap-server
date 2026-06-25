@@ -6,7 +6,7 @@ API reference for Quilltap v4.3 and later.
 >
 > - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert actions, and per-project linking
 > - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
-> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
+> - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `merge`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
 > - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, and the `wardrobe_*` family (`wardrobe_list`/`wardrobe_read`/`wardrobe_wear`/`wardrobe_take_off`/`wardrobe_create`/`wardrobe_update`/`wardrobe_archive`). The unified search tool is now named `search` (was `search_memories`).
 > - **Retired tools** — `file_management` and the file-write-permission infrastructure are gone; many `project_info` actions were trimmed.
 > - **`systemSender` enum on messages** — `lantern`, `aurora`, `librarian`, `concierge`, `prospero`, `host`, `commonplaceBook`, `ariel`, `carina`, `suparna`. See `lib/schemas/chat.types.ts`.
@@ -1801,6 +1801,30 @@ Remove a participant from the chat.
   "participantId": "participant-uuid"
 }
 ```
+
+#### `POST /api/v1/chats/[id]?action=merge-conversation`
+
+Fold another conversation's characters and summary into **this** chat (the inverse of "Continue Elsewhere"). `[id]` is the merge target.
+
+**Request Body**:
+
+```json
+{
+  "sourceChatId": "source-chat-uuid",
+  "characterIds": ["char-uuid"],
+  "outfitSelections": [
+    { "characterId": "char-uuid", "mode": "previous_chat" }
+  ]
+}
+```
+
+**Notes**:
+
+- Adds the source chat's present characters that aren't already in the target as **LLM-controlled** participants (a source user-controlled character is converted to LLM-driven; the target keeps its own user character). Characters already present are excluded server-side.
+- `characterIds` is an optional allowlist gating exactly which source characters come across (still minus any already present). Omitted → every eligible source character merges. An explicit empty array returns `400` ("select at least one").
+- `outfitSelections` is optional and mirrors `add-participant`'s `outfitSelection` modes per character; omitted characters default to `previous_chat` (carry their worn outfit forward from the source chat).
+- Posts a Host recap (`systemKind: "merge-from"`) at the tail of the target carrying the source's summary and a link back, plus a back-link (`systemKind: "merge-to"`) in the source chat. Existing turns are **not** replayed and the target's turn state is untouched.
+- Returns `400` when `sourceChatId` equals `[id]` or when every source character is already present (no side effects in the latter case).
 
 #### `POST /api/v1/chats/[id]?action=bulk-reattribute`
 

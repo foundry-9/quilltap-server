@@ -909,6 +909,114 @@ export async function postHostContinuationToAnnouncement(
 }
 
 // ---------------------------------------------------------------------------
+// Merge announcements.
+//
+// When a second Salon conversation is folded *into* this one (the Organize
+// sidebar's "Merge In…"), the Host posts a public recap bubble at the tail of
+// the receiving chat — it links back to the source and carries the source
+// chat's rolling summary so both the operator and every character pick up the
+// newcomers' thread. A reciprocal back-link bubble is posted in the source
+// chat. Unlike a continuation (which replays the source tail into a fresh
+// chat), a merge does not replay turns — the recap stands in for the history.
+// Both are public — no targetParticipantIds.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_MERGE_FROM = 'merge-from';
+const HOST_KIND_MERGE_TO = 'merge-to';
+
+function buildMergeFromContent(
+  sourceChatId: string,
+  sourceTitle: string | null,
+  summaryText: string | null,
+): string {
+  const trimmedTitle = sourceTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  const trimmedSummary = summaryText?.trim() ?? '';
+  const lines = [
+    `The Host raises a hand for attention: the company of [${linkText}](/salon/${sourceChatId}) joins these proceedings, their thread woven into ours.`,
+    '',
+  ];
+  if (trimmedSummary.length > 0) {
+    lines.push('Where they left off:', '', trimmedSummary);
+  } else {
+    lines.push('Their earlier thread carries no recorded summary as yet — carry on regardless.');
+  }
+  return lines.join('\n');
+}
+
+function buildMergeFromOpaqueContent(
+  sourceChatId: string,
+  sourceTitle: string | null,
+  summaryText: string | null,
+): string {
+  const trimmedTitle = sourceTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  const trimmedSummary = summaryText?.trim() ?? '';
+  const lines = [
+    `The company of [${linkText}](/salon/${sourceChatId}) has been merged into this conversation. Where they left off:`,
+    '',
+  ];
+  if (trimmedSummary.length > 0) {
+    lines.push(trimmedSummary);
+  } else {
+    lines.push('(No recorded summary from that conversation yet.)');
+  }
+  return lines.join('\n');
+}
+
+function buildMergeToContent(targetChatId: string, targetTitle: string | null): string {
+  const trimmedTitle = targetTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  return `The Host clears their throat: this conversation's company and thread have been merged into [${linkText}](/salon/${targetChatId}). The proceedings continue there.`;
+}
+
+function buildMergeToOpaqueContent(targetChatId: string, targetTitle: string | null): string {
+  const trimmedTitle = targetTitle?.trim() ?? '';
+  const linkText = trimmedTitle.length > 0 ? `"${trimmedTitle}"` : 'another conversation';
+  return `This conversation's company and thread have been merged into [${linkText}](/salon/${targetChatId}). The proceedings continue there.`;
+}
+
+export interface HostMergeFromAnnouncement {
+  /** The receiving chat (where newcomers and their summary land). */
+  chatId: string;
+  sourceChatId: string;
+  sourceTitle?: string | null;
+  /** The source chat's rolling context summary, embedded as the recap. */
+  summaryText?: string | null;
+}
+
+export async function postHostMergeFromAnnouncement(
+  params: HostMergeFromAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildMergeFromContent(params.sourceChatId, params.sourceTitle ?? null, params.summaryText ?? null),
+    buildMergeFromOpaqueContent(params.sourceChatId, params.sourceTitle ?? null, params.summaryText ?? null),
+    HOST_KIND_MERGE_FROM,
+    null,
+  );
+}
+
+export interface HostMergeToAnnouncement {
+  /** The source chat (whose company/thread were merged away). */
+  chatId: string;
+  targetChatId: string;
+  targetTitle?: string | null;
+}
+
+export async function postHostMergeToAnnouncement(
+  params: HostMergeToAnnouncement,
+): Promise<MessageEvent | null> {
+  return postHostMessageWithTargets(
+    params.chatId,
+    buildMergeToContent(params.targetChatId, params.targetTitle ?? null),
+    buildMergeToOpaqueContent(params.targetChatId, params.targetTitle ?? null),
+    HOST_KIND_MERGE_TO,
+    null,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // "No user character attached" advisory whisper.
 //
 // The auto-memory pipeline emits this whisper the first time it encounters a

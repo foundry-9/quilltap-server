@@ -67,6 +67,26 @@ export const removeParticipantSchema = z.object({
   participantId: z.uuid(),
 });
 
+/**
+ * Merge another conversation's characters + summary into this chat. The source
+ * chat's present characters that aren't already here are added as LLM-driven
+ * participants; `outfitSelections` mirrors the new-chat/add-participant outfit
+ * options (defaulting to "Same as last conversation" per character when
+ * omitted). Validated server-side — the source chat is re-resolved, never
+ * trusted from the client.
+ */
+export const mergeConversationSchema = z.object({
+  sourceChatId: z.uuid(),
+  /**
+   * Optional allowlist of source character IDs to bring across. When provided,
+   * only these characters merge in (still minus any already present); when
+   * omitted, every eligible source character merges. Lets the operator gate the
+   * merge, not just rely on de-duplication.
+   */
+  characterIds: z.array(z.uuid()).optional(),
+  outfitSelections: z.array(OutfitSelectionSchema).optional(),
+});
+
 export const chatUpdateRequestSchema = z.object({
   chat: updateChatSchema.optional(),
   updateParticipant: updateParticipantSchema.optional(),

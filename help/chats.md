@@ -253,6 +253,23 @@ The original chat is not deleted; you may always return to it. But henceforth th
 
 A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
 
+### Merging a Conversation In
+
+Where *Continue Elsewhere* sends the present company onward to a fresh venue, its mirror-image — **Merge In…** — summons another gathering *here*, folding a second conversation's cast and its accumulated history into the one before you. Useful when two threads have wandered toward the same table and you would sooner they shared it.
+
+Open the **Chat Sidebar**, expand the **Organize** drawer, and press **Merge In…**. (The button keeps its peace inside autonomous rooms, which run by their own clockwork.) A roster of your recent conversations appears, each annotated with who was in attendance and when the talk last stirred. Choose one, and a confirming dialog presents the newcomers:
+
+1. A **guest list** — every character eligible to come across, each with a checkbox. All are ticked to begin with, but you are the doorman: untick anyone you would rather leave behind, and only the chosen few are admitted. (Anyone already present in *this* chat is quietly omitted from the list entirely, there being no sense in announcing a guest who is already seated.)
+2. For each admitted guest, the same wardrobe options as the new-chat dialog, defaulting to **Same as last conversation** so they arrive dressed as they were when last we saw them.
+
+Press **Merge In**, and Quilltap attends to the formalities:
+
+- Each newcomer joins as an LLM-driven participant. (Should the other conversation have had its own user-controlled character — its human's voice over there — that character is brought in under the LLM's hand, since *your* voice in this room is already spoken for.)
+- The Host posts a recap at the foot of the conversation, linking back to the source chat and carrying its summary, so the assembled company knows where the newcomers have been.
+- A matching notice is posted in the source chat, pointing forward to here.
+
+Unlike a change of venue, no old messages are replayed into the running conversation — the recap stands in for the history, and the proceedings carry on uninterrupted.
+
 ## Advanced Features
 
 ### Memory Integration

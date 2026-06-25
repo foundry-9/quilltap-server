@@ -198,6 +198,7 @@ export interface ChatSidebarProps {
   onRenameClick?: () => void
   onStateClick?: () => void
   onContinueChatClick?: () => void
+  onMergeConversationClick?: () => void
   chatPhotoCount?: number
   onGalleryClick?: () => void
   /** True when this chat is an autonomous room ("enclave") — gates the Edit Enclave control. */
@@ -524,6 +525,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             onRenameClick={props.onRenameClick}
             onStateClick={props.onStateClick}
             onContinueChatClick={props.onContinueChatClick}
+            onMergeConversationClick={props.onMergeConversationClick}
             chatPhotoCount={props.chatPhotoCount}
             onGalleryClick={props.onGalleryClick}
             isAutonomousRoom={props.isAutonomousRoom}
@@ -1370,6 +1372,7 @@ interface OrganizeSectionProps {
   onRenameClick?: () => void
   onStateClick?: () => void
   onContinueChatClick?: () => void
+  onMergeConversationClick?: () => void
   chatPhotoCount?: number
   onGalleryClick?: () => void
   isAutonomousRoom?: boolean
@@ -1381,6 +1384,7 @@ function OrganizeSection({
   onRenameClick,
   onStateClick,
   onContinueChatClick,
+  onMergeConversationClick,
   chatPhotoCount = 0,
   onGalleryClick,
   isAutonomousRoom = false,
@@ -1437,6 +1441,18 @@ function OrganizeSection({
         >
           <Icon name="arrow-right" className="w-4 h-4" />
           <span>Continue Elsewhere</span>
+        </button>
+      )}
+
+      {onMergeConversationClick && !isAutonomousRoom && (
+        <button
+          type="button"
+          onClick={onMergeConversationClick}
+          className="qt-tool-palette-button"
+          title="Merge another conversation's characters and summary into this one"
+        >
+          <Icon name="user-plus" className="w-4 h-4" />
+          <span>Merge In…</span>
         </button>
       )}
 

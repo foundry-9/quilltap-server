@@ -48,6 +48,7 @@ import {
   handleInsertAnnouncement,
   handleAnnouncementPreview,
   handleSendMail,
+  handleMergeConversation,
 } from '../actions';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 
@@ -92,6 +93,7 @@ const CHAT_POST_ACTIONS = [
   'announcement',
   'announcement-preview',
   'send-mail',
+  'merge-conversation',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -158,6 +160,7 @@ export async function handlePost(
     announcement: () => handleInsertAnnouncement(req, chatId, ctx),
     'announcement-preview': () => handleAnnouncementPreview(req, chatId, ctx),
     'send-mail': () => handleSendMail(req, chatId, chat, ctx),
+    'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
   };
 
   return actionHandlers[action]();

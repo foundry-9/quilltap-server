@@ -55,6 +55,7 @@ import {
 } from './components'
 import LLMInspectorPanel from '@/components/chat/LLMInspectorPanel'
 import { NewChatModal } from '@/components/new-chat/NewChatModal'
+import { MergeConversationModal } from '@/components/chat/MergeConversationModal'
 import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 import { WhisperDialog } from '@/components/chat/WhisperDialog'
 import { SalonModePanes } from './components/SalonModePanes'
@@ -1541,6 +1542,21 @@ export function SalonView({ chatId }: SalonViewProps) {
           />
         )}
 
+        {/* Merge In… — fold another conversation's characters and summary into
+            this one at the latest point. The inverse of Continue Elsewhere.
+            Mounted only while open so its state starts fresh each time. */}
+        {chat && modals.mergeConversationModalOpen && (
+          <MergeConversationModal
+            isOpen={modals.mergeConversationModalOpen}
+            onClose={modals.closeMergeConversation}
+            targetChatId={id}
+            existingCharacterIds={chat.participants
+              .filter((p) => p.type === 'CHARACTER' && p.character?.id)
+              .map((p) => p.character!.id)}
+            onMerged={fetchChat}
+          />
+        )}
+
         {/* Modals */}
         <ChatModals
           chatId={id}
@@ -1701,6 +1717,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           onRenameClick={modals.openRename}
           onStateClick={modals.openStateEditor}
           onContinueChatClick={modals.openContinueChat}
+          onMergeConversationClick={modals.openMergeConversation}
           chatPhotoCount={chatPhotoCount}
           onGalleryClick={modals.openGallery}
           isAutonomousRoom={chat?.chatType === 'autonomous'}

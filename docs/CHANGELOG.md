@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Merge a conversation into another
+
+The Salon's Organize sidebar has a new "Merge In…" button — the inverse of "Continue Elsewhere." It folds another conversation's characters and summary into the current chat at the latest point, instead of forking forward into a new one.
+
+- Pick a recent conversation from a list showing who was involved and when it was last active (the latest user/character message time). Autonomous rooms and the current chat are excluded; the button is hidden inside autonomous rooms.
+- A confirm dialog lists the incoming characters with a per-character "Who joins" checkbox (all on by default) so you can gate exactly who comes across — not just rely on de-duplication — plus the same starting-outfit options as the new-chat/continuation flow (defaulting to "Same as last conversation"). Characters already present in the current chat are excluded automatically.
+- On merge, each incoming character joins as an LLM-driven participant (the source's user-controlled character is brought in as LLM-driven; the current chat keeps its own user character). The Host posts a recap at the latest point linking back to the source chat and carrying its summary, plus a back-link bubble in the source chat. Existing turns are not replayed.
+- New API action: `POST /api/v1/chats/[id]?action=merge-conversation` with `{ sourceChatId, characterIds?, outfitSelections }` (`characterIds` is the optional allowlist of who to bring across).
+
 #### Multiple open documents in Document Mode
 
 In the tabbed workspace, a chat can now keep several documents open at once, each in its own tab.

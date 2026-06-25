@@ -47,6 +47,7 @@ export type { AccessibleStoreOption, AccessibleStoreKind, ProjectLibraryTarget }
 export { handleInsertAnnouncement } from './announcement';
 export { handleAnnouncementPreview } from './announcement-preview';
 export { handleSendMail } from './send-mail';
+export { handleMergeConversation } from './merge';
 export { handleGetMailbox } from './mailbox';
 export { handleGetPhotoAlbums } from './photo-albums';
 export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';
