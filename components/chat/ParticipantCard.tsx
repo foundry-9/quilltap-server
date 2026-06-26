@@ -389,8 +389,10 @@ export function ParticipantCard({
             </div>
           )}
 
-          {/* Connection profile dropdown for characters (not user-controlled) */}
-          {isCharacter && !isUserParticipant && connectionProfiles && onConnectionProfileChange ? (
+          {/* Connection profile dropdown for every character — including the
+              active "You" seat, so any participant can be flipped between
+              "User (you type)" and an LLM (and back) from one control. */}
+          {isCharacter && connectionProfiles && onConnectionProfileChange ? (
             <div className="mt-1">
               <select
                 value={connectionProfileValue}

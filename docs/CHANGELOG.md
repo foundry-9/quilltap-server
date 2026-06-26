@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Any participant can be switched between user-typed and an LLM
+
+The connection-profile dropdown now appears on every participant card in the Salon sidebar, including the seat you are currently typing as ("You"). Previously the active user seat showed only a "You" badge with no control, so you couldn't hand it off to an LLM without first switching your "Speaking As" selection to another character. The dropdown's "User (you type)" option still reclaims any LLM-driven character for manual control. Switching your only user-controlled seat to an LLM leaves an all-LLM chat (still supported; you can rejoin by impersonating). No data-model change — this was a UI gate; the `controlledBy` field and all turn/impersonation logic already supported the transition.
+
 #### Consistent message-send options across both send endpoints
 
 The two POST endpoints that drive the Salon — `/api/v1/messages?chatId=` (main composer) and `/api/v1/chats/[id]/messages` (whisper dialog) — now build their `handleSendMessage` options from one shared helper, so the forwarded payload fields can't drift apart.

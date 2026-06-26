@@ -126,7 +126,7 @@ Each character card includes a **connection profile dropdown** that lets you cha
 - **Dropdown selector** shows the current model (e.g., "gpt-4-turbo", "claude-3-opus")
 - **"User (you type)"** option switches the character to user control (impersonation)
 - **Change immediately** — selecting a different profile saves automatically
-- Only shown for CHARACTER participants, not personas
+- Present on **every** participant card — including the seat you are presently typing as. The card you've claimed as your own ("You") carries the very same dropdown, so any participant may be handed off to an LLM, and any LLM reclaimed for your own pen, all from the one control. Pass your own seat to a model and the room can carry on without you (you may still slip back in by impersonating); pick a model for a character and they answer for themselves once more.
 
 This makes switching models the fastest possible action — no need to open a settings modal.
 
