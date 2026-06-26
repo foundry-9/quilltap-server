@@ -84,6 +84,13 @@ export interface SendMessageOptions {
   continueMode?: boolean
   /** Specific participant to respond (for multi-character continue mode) */
   respondingParticipantId?: string
+  /**
+   * The user-controlled participant the human is "Speaking As" for this turn.
+   * When several characters are user-controlled, this decides who a typed
+   * message is attributed to (storage + LLM context). Falls back to the
+   * persisted `chat.activeTypingParticipantId`, then the first user participant.
+   */
+  speakingAsParticipantId?: string | null
   /** Pending tool results to be saved as TOOL messages before the user message */
   pendingToolResults?: PendingToolResultInput[]
   /** Target participant IDs for whisper messages (null = visible to all) */

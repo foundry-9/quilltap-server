@@ -92,6 +92,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
     const stream = await handleSendMessage(repos, chatId, user.id, {
       continueMode: true,
       respondingParticipantId: parsed.respondingParticipantId,
+      speakingAsParticipantId: parsed.speakingAsParticipantId,
     });
 
     return new NextResponse(stream, {
@@ -113,6 +114,7 @@ export const POST = createAuthenticatedHandler(async (req, { user, repos }) => {
       content: parsed.content,
       fileIds: parsed.fileIds,
       pendingToolResults: parsed.pendingToolResults,
+      speakingAsParticipantId: parsed.speakingAsParticipantId,
       continueMode: false,
     });
 

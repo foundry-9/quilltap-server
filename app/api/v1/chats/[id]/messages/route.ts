@@ -63,6 +63,9 @@ export const POST = createAuthenticatedParamsHandler<{ id: string }>(
         fileIds: parsed.fileIds,
         pendingToolResults: parsed.pendingToolResults,
         targetParticipantIds: parsed.targetParticipantIds,
+        // Honor "Speaking As" for whispers too (falls back to the persisted
+        // chat.activeTypingParticipantId, then the first user participant).
+        speakingAsParticipantId: parsed.speakingAsParticipantId,
         continueMode: false,
         browserUserAgent,
       });

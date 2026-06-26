@@ -11,8 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedParamsHandler, getActionParam } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError } from '@/lib/api/responses';
-import { createLLMProvider } from '@/lib/llm';
-import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoriesBySourceMessageWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
+import { regenerateMessageAsSwipe } from '@/lib/services/chat-message';
+import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -276,120 +276,41 @@ async function handleGenerateSwipe(
     return notFound('Message');
   }
 
-  // Only assistant messages can be swiped
+  // Only character-authored assistant messages can be regenerated. Staff/system
+  // messages share the ASSISTANT role but have no responder to regenerate from.
   if (result.message.role !== 'ASSISTANT') {
     return badRequest('Only assistant messages can be swiped');
   }
-
-  // Get connection profile from first active character participant
-  const characterParticipant = result.chat.participants.find(
-    (p: ChatParticipant) => p.type === 'CHARACTER' && p.isActive && p.connectionProfileId
-  );
-  if (!characterParticipant?.connectionProfileId) {
-    return notFound('Connection profile');
+  if (result.message.systemSender) {
+    return badRequest('Staff and system messages cannot be regenerated');
   }
 
-  const profile = await repos.connections.findById(characterParticipant.connectionProfileId);
-  if (!profile) {
-    return notFound('Connection profile');
+  try {
+    // Run the regeneration through the same context engine a normal turn uses,
+    // so the swipe gets the responder's real system prompt, multi-character
+    // attribution, and memory — and is attributed to the same participant.
+    const newSwipe = await regenerateMessageAsSwipe({
+      repos,
+      userId,
+      chat: result.chat,
+      targetMessage: result.message,
+      allMessages: result.allMessages.filter(
+        (m): m is MessageEvent => m.type === 'message'
+      ),
+      activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
+    });
+
+    return NextResponse.json({ message: newSwipe }, { status: 201 });
+  } catch (error) {
+    logger.error(
+      '[Messages API v1] Swipe generation failed',
+      { messageId, chatId: result.chat.id },
+      error instanceof Error ? error : undefined
+    );
+    return serverError(
+      error instanceof Error ? error.message : 'Failed to generate alternative response'
+    );
   }
-
-  // Create swipe group ID if this is the first swipe
-  const swipeGroupId = result.message.swipeGroupId || `swipe-${result.message.id}`;
-
-  // Update original message with swipe group ID if needed
-  if (!result.message.swipeGroupId) {
-    const msg = result.allMessages[result.messageIndex] as MessageEvent;
-    msg.swipeGroupId = swipeGroupId;
-    msg.swipeIndex = 0;
-  }
-
-  // Get the highest swipe index in this group
-  const existingSwipes = result.allMessages.filter(
-    (m): m is MessageEvent =>
-      m.type === 'message' && m.swipeGroupId === swipeGroupId
-  );
-  const maxSwipeIndex = existingSwipes.reduce(
-    (max, m) => Math.max(max, m.swipeIndex || 0),
-    0
-  );
-  const newSwipeIndex = maxSwipeIndex + 1;
-
-  // Get all messages before this one for context
-  const messageCreatedAt = new Date(result.message.createdAt).getTime();
-  const previousMessages = result.allMessages.filter(
-    (m): m is MessageEvent =>
-      m.type === 'message' && new Date(m.createdAt).getTime() < messageCreatedAt
-  );
-
-  // Build messages array for LLM
-  const llmMessages = previousMessages.map((m) => ({
-    role: m.role.toLowerCase() as 'system' | 'user' | 'assistant',
-    content: m.content,
-  }));
-
-  // Get LLM provider and generate new response
-  const provider = await createLLMProvider(profile.provider, profile.baseUrl || undefined);
-
-  let apiKey = '';
-  if (profile.apiKeyId) {
-    const apiKeyRecord = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId);
-    if (apiKeyRecord) {
-      apiKey = apiKeyRecord.key_value;
-    }
-  }
-
-  const params = profile.parameters as Record<string, unknown>;
-
-  const response = await provider.sendMessage(
-    {
-      messages: llmMessages,
-      model: profile.modelName,
-      temperature: params.temperature as number | undefined,
-      maxTokens: params.max_tokens as number | undefined,
-      topP: params.top_p as number | undefined,
-    },
-    apiKey
-  );
-
-  // Handle memory cleanup for the message being swiped
-  const chatSettings = await repos.chatSettings.findByUserId(userId);
-  const cascadeAction = chatSettings?.memoryCascadePreferences?.onSwipeRegenerate || 'DELETE_MEMORIES';
-
-  if (cascadeAction !== 'KEEP_MEMORIES') {
-    const memoryCount = await repos.memories.countBySourceMessageId(messageId);
-    if (memoryCount > 0) {
-      await deleteMemoriesBySourceMessageWithVectors(messageId);
-    }
-  }
-
-  // Create new swipe message
-  const newSwipe: MessageEvent = {
-    type: 'message',
-    id: crypto.randomUUID(),
-    role: 'ASSISTANT',
-    content: response.content,
-    swipeGroupId,
-    swipeIndex: newSwipeIndex,
-    tokenCount: response.usage.totalTokens,
-    rawResponse: response.raw as Record<string, unknown> | null | undefined,
-    attachments: [],
-    createdAt: result.message.createdAt, // Keep same timestamp as original
-  };
-
-  // Add new swipe to the chat messages
-  await repos.chats.addMessage(result.chat.id, newSwipe);
-
-  // Update chat's updatedAt timestamp
-  await repos.chats.update(result.chat.id, {});
-
-  logger.info('[Messages API v1] Swipe generated', {
-    messageId,
-    chatId: result.chat.id,
-    newSwipeIndex,
-  });
-
-  return NextResponse.json({ message: newSwipe }, { status: 201 });
 }
 
 async function handleSwitchSwipe(

@@ -281,6 +281,12 @@ export interface BuildContextOptions {
   existingMessages: Array<{ role: string; content: string; id?: string; thoughtSignature?: string | null }>
   /** New user message being sent (optional for continue mode) */
   newUserMessage?: string
+  /**
+   * The user-controlled participant the human is "Speaking As" for this turn.
+   * Labels the new user message with the chosen character's name in multi-
+   * character context; falls back to the first user-controlled participant.
+   */
+  activeUserParticipantId?: string | null
   /** Roleplay template for formatting instructions (prepended to system prompt) */
   roleplayTemplate?: { systemPrompt: string } | null
   /** Embedding profile ID for semantic search */
@@ -462,6 +468,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     chat,
     existingMessages,
     newUserMessage,
+    activeUserParticipantId,
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
@@ -1989,7 +1996,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   if (newUserMessage) {
     let newUserMsgName: string | undefined
     if (isMultiCharacter && allParticipants && participantCharacters) {
-      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters)
+      newUserMsgName = findUserParticipantName(allParticipants, participantCharacters, activeUserParticipantId)
     }
 
     const trailingContextSections: string[] = []

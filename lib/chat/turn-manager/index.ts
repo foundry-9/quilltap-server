@@ -43,6 +43,7 @@ export {
   isUsersTurn,
   getSelectionExplanation,
   findUserParticipant,
+  findActiveUserParticipant,
   findUserControlledParticipants,
   getActiveCharacterParticipants,
   getActiveLLMParticipants,

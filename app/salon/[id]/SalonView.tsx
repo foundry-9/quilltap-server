@@ -443,6 +443,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     isPaused,
     respondingParticipantId,
     setRespondingParticipantId,
+    activeTypingParticipantId: impersonation.activeTypingParticipantId,
     fetchChat,
     scrollOnUserMessage: () => scrollOnUserMessage(),
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
@@ -1748,6 +1749,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           targetName={whisperTarget.name}
           targetParticipantId={whisperTarget.participantId}
           chatId={id}
+          speakingAsParticipantId={impersonation.activeTypingParticipantId}
           onClose={() => setWhisperTarget(null)}
           onSent={async () => {
             setWhisperTarget(null)

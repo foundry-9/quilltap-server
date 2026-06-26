@@ -80,6 +80,34 @@ export function findUserParticipant(
 }
 
 /**
+ * Finds the user-controlled participant the human is currently speaking as.
+ *
+ * When a chat has more than one user-controlled character, the "Speaking As"
+ * selector (persisted as `chat.activeTypingParticipantId`, or supplied per-turn
+ * via the send payload) decides whose voice a typed message carries. This is the
+ * correct resolver for any path that attributes a human-authored message or names
+ * the human in LLM context — preferring the selected speaker and falling back to
+ * the first user-controlled participant when no valid selection exists.
+ *
+ * Prefer this over {@link findUserParticipant}, which always returns the first
+ * user-controlled participant and silently mis-attributes in multi-speaker chats.
+ */
+export function findActiveUserParticipant(
+  participants: ChatParticipantBase[],
+  activeTypingParticipantId?: string | null
+): ChatParticipantBase | null {
+  if (activeTypingParticipantId) {
+    const selected = participants.find(p =>
+      p.id === activeTypingParticipantId &&
+      isParticipantPresent(p.status) &&
+      p.controlledBy === 'user'
+    );
+    if (selected) return selected;
+  }
+  return findUserParticipant(participants);
+}
+
+/**
  * Gets all user-controlled participants (controlledBy === 'user').
  */
 export function findUserControlledParticipants(

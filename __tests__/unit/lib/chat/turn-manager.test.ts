@@ -12,6 +12,7 @@ import {
   getQueuePosition,
   getSelectionExplanation,
   findUserParticipant,
+  findActiveUserParticipant,
   getActiveCharacterParticipants,
   isMultiCharacterChat,
   computeSpokenThisCycleAfterMessage,
@@ -296,6 +297,42 @@ describe('turn manager state', () => {
     expect(findUserParticipant([char1, userChar])).toBe(userChar)
     expect(getActiveCharacterParticipants([char1, char2])).toEqual([char1])
     expect(isMultiCharacterChat([char1, makeCharacterParticipant('p3', 'char-3')])).toBe(true)
+  })
+})
+
+describe('findActiveUserParticipant (Speaking As)', () => {
+  const jackie = makeUserControlledParticipant('u-jackie', 'char-jackie', { displayOrder: 0 })
+  const abigail = makeCharacterParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+  const revenant = makeUserControlledParticipant('u-revenant', 'char-revenant', { displayOrder: 2 })
+  const participants = [jackie, abigail, revenant]
+
+  it('honors the active speaker when two characters are user-controlled', () => {
+    expect(findActiveUserParticipant(participants, 'u-revenant')).toBe(revenant)
+  })
+
+  it('falls back to the first user-controlled participant when no selection', () => {
+    expect(findActiveUserParticipant(participants, null)).toBe(jackie)
+    expect(findActiveUserParticipant(participants)).toBe(jackie)
+  })
+
+  it('falls back when the selected id is not a user-controlled participant', () => {
+    // Pointing at the LLM character (Abigail) is not a valid user speaker.
+    expect(findActiveUserParticipant(participants, 'p-abigail')).toBe(jackie)
+    // Unknown id also falls back.
+    expect(findActiveUserParticipant(participants, 'does-not-exist')).toBe(jackie)
+  })
+
+  it('ignores a selected speaker who is no longer present', () => {
+    const absentRevenant = makeUserControlledParticipant('u-revenant', 'char-revenant', {
+      displayOrder: 2,
+      status: 'absent',
+      isActive: false,
+    })
+    expect(findActiveUserParticipant([jackie, abigail, absentRevenant], 'u-revenant')).toBe(jackie)
+  })
+
+  it('returns null when there are no user-controlled participants', () => {
+    expect(findActiveUserParticipant([abigail], 'anything')).toBeNull()
   })
 })
 

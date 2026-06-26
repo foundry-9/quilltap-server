@@ -117,6 +117,8 @@ interface UseSSEStreamingParams {
   isPaused: boolean
   respondingParticipantId: string | null
   setRespondingParticipantId: (id: string | null) => void
+  /** The user-controlled participant the human is currently "Speaking As" (null = default) */
+  activeTypingParticipantId: string | null
   fetchChat: () => Promise<void>
   scrollOnUserMessage: () => void
   scrollOnStreamComplete: () => void
@@ -153,6 +155,7 @@ export function useSSEStreaming({
   isPaused,
   respondingParticipantId,
   setRespondingParticipantId,
+  activeTypingParticipantId,
   fetchChat,
   scrollOnUserMessage,
   scrollOnStreamComplete,
@@ -165,6 +168,12 @@ export function useSSEStreaming({
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  // Mirror the live "Speaking As" selection into a ref so the send/continue
+  // callbacks read the current value without re-creating on every selection.
+  const activeTypingParticipantIdRef = useRef(activeTypingParticipantId)
+  useEffect(() => {
+    activeTypingParticipantIdRef.current = activeTypingParticipantId
+  }, [activeTypingParticipantId])
   // Live cumulative reasoning ("thinking") for the in-progress turn. DISPLAY ONLY.
   const [streamingReasoning, setStreamingReasoning] = useState('')
   const [waitingForResponse, setWaitingForResponse] = useState(false)
@@ -571,6 +580,9 @@ export function useSSEStreaming({
       content: displayContent,
       createdAt: new Date().toISOString(),
       attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+      // Attribute the optimistic bubble to the active speaker so it renders with
+      // the chosen character's name/avatar immediately (not the default user).
+      participantId: activeTypingParticipantIdRef.current ?? undefined,
     }
     setMessages((prev) => [...prev, ...toolMessages, tempUserMessage])
     scrollOnUserMessage()
@@ -578,6 +590,7 @@ export function useSSEStreaming({
     const requestPayload = {
       content: userMessage || (attachedFiles.length > 0 ? 'Please look at the attached file(s).' : ''),
       fileIds,
+      speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
       pendingToolResults: toolResultsToSend.length > 0 ? toolResultsToSend.map(r => ({
         tool: r.tool,
         success: r.success,
@@ -802,6 +815,7 @@ export function useSSEStreaming({
         body: JSON.stringify({
           continueMode: true,
           respondingParticipantId: participantId,
+          speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
         }),
         signal,
       })

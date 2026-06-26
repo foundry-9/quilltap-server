@@ -224,6 +224,8 @@ You can impersonate multiple characters:
 2. Choose which one to type as before sending
 3. Click the character's name/avatar above the input to switch
 
+Whoever you've chosen above the input is the voice your next message carries: the message is filed under that character, shown with their name and avatar, and presented to the other characters as having come from them. Switch the selection and the very next line you send changes hands accordingly — no need to touch a character's card.
+
 ### Stopping Impersonation
 
 1. Click **Stop Impersonate** on the character's card

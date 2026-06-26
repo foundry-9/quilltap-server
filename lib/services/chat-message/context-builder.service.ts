@@ -50,6 +50,8 @@ export interface BuildMessageContextOptions {
   chatSettings: { cheapLLMSettings?: Record<string, unknown>; defaultTimestampConfig?: TimestampConfig | null; timezone?: string | null } | null
   toolInstructions?: string
   newUserMessage?: string
+  /** The user-controlled participant the human is "Speaking As" for this turn */
+  activeUserParticipantId?: string | null
   isContinueMode: boolean
   /** Context compression settings (if enabled) */
   contextCompressionSettings?: ContextCompressionSettings | null
@@ -465,6 +467,7 @@ export async function buildMessageContext(
     chatSettings,
     toolInstructions,
     newUserMessage,
+    activeUserParticipantId,
     contextCompressionSettings,
     cheapLLMSelection,
     bypassCompression,
@@ -590,6 +593,7 @@ export async function buildMessageContext(
     chat,
     existingMessages: conversationMessages,
     newUserMessage,
+    activeUserParticipantId,
     roleplayTemplate,
     embeddingProfileId: undefined, // always use default embedding profile
     skipMemories: false,

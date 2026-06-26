@@ -137,6 +137,8 @@ export const sendMessageSchema = z.object({
   pendingToolResults: z.array(pendingToolResultSchema).optional(),
   /** Target participant IDs for whisper messages */
   targetParticipantIds: z.array(z.string()).nullable().optional(),
+  /** The user-controlled participant the human is "Speaking As" for this message */
+  speakingAsParticipantId: z.uuid().nullable().optional(),
 }).superRefine((data, ctx) => {
   if (data.content.trim().length === 0 &&
       (!data.fileIds || data.fileIds.length === 0) &&
@@ -154,6 +156,8 @@ export const sendMessageSchema = z.object({
 export const continueMessageSchema = z.object({
   continueMode: z.literal(true),
   respondingParticipantId: z.uuid().optional(),
+  /** The user-controlled participant the human is "Speaking As" (for context/identity) */
+  speakingAsParticipantId: z.uuid().nullable().optional(),
 })
 
 /**
@@ -266,12 +270,18 @@ async function processMessage(
   const respondingId = options.respondingParticipantId
     || (options.targetParticipantIds?.length ? options.targetParticipantIds[0] : undefined)
 
+  // The human's "Speaking As" selection: an explicit per-turn override from the
+  // composer takes precedence over the persisted chat field (avoids a read-back
+  // race where the set-active-speaker write hasn't landed yet).
+  const speakingAsParticipantId = options.speakingAsParticipantId ?? chat.activeTypingParticipantId ?? null
+
   const participantResult = await resolveRespondingParticipant(
     repos,
     chat,
     userId,
     respondingId,
-    isContinueMode
+    isContinueMode,
+    speakingAsParticipantId
   )
 
   const {
@@ -320,7 +330,7 @@ async function processMessage(
 
   // Resolve user identity through fallback chain:
   // 1. User-controlled character in chat → 2. Sole user-controlled character → 3. User profile → 4. "User"
-  const resolvedIdentity = await resolveUserIdentity(repos, userId, chat)
+  const resolvedIdentity = await resolveUserIdentity(repos, userId, chat, speakingAsParticipantId)
   const userCharacter: { name: string; description: string } | null = {
     name: resolvedIdentity.name,
     description: resolvedIdentity.description,
@@ -962,6 +972,7 @@ async function processMessage(
       chatSettings: contextChatSettings,
       toolInstructions,
       newUserMessage: finalUserMessageContent,
+      activeUserParticipantId: speakingAsParticipantId,
       isContinueMode,
       // Context compression options
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,

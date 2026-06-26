@@ -8,7 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver'
 import {
-  findUserParticipant,
+  findActiveUserParticipant,
   isMultiCharacterChat,
   getActiveCharacterParticipants,
   selectNextSpeaker,
@@ -64,11 +64,14 @@ export async function resolveRespondingParticipant(
   chat: ChatMetadataBase,
   userId: string,
   requestedRespondingParticipantId?: string,
-  isContinueMode: boolean = false
+  isContinueMode: boolean = false,
+  activeUserParticipantId?: string | null
 ): Promise<ParticipantResolutionResult> {
 
-  // Get user participant (user-controlled character) for turn management
-  const userParticipant = findUserParticipant(chat.participants)
+  // Get user participant (user-controlled character) for turn management.
+  // Honor the human's "Speaking As" selection so typed messages are attributed
+  // to the chosen character, not merely the first user-controlled participant.
+  const userParticipant = findActiveUserParticipant(chat.participants, activeUserParticipantId)
   const userParticipantId = userParticipant?.id ?? null
 
   // Get character participant - use specified participant for continue mode, otherwise first active character

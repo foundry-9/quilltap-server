@@ -48,6 +48,12 @@ export {
   type FileProcessingResult,
 } from './context-builder.service'
 
+// Regenerate (swipe) — alternative-response generation through the context engine
+export {
+  regenerateMessageAsSwipe,
+  type RegenerateSwipeOptions,
+} from './regenerate-swipe.service'
+
 // Tool Execution
 export {
   processToolCalls,

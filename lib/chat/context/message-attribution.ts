@@ -263,15 +263,28 @@ export function attributeMessagesForCharacter(
 }
 
 /**
- * Find the user participant for message attribution in multi-character mode
- * Returns the first active user-controlled CHARACTER participant
+ * Find the user participant name for message attribution in multi-character mode.
+ *
+ * Prefers the participant the human is currently "Speaking As"
+ * (`activeTypingParticipantId`) so a freshly typed message is labelled with the
+ * chosen character's name; falls back to the first active user-controlled
+ * CHARACTER participant when no valid selection exists.
  */
 export function findUserParticipantName(
   allParticipants: ChatParticipantBase[],
-  participantCharacters: Map<string, Character>
+  participantCharacters: Map<string, Character>,
+  activeTypingParticipantId?: string | null
 ): string | undefined {
-  // Find a user-controlled CHARACTER participant
-  const userCharacterParticipant = allParticipants.find(p =>
+  // Prefer the actively-selected speaker, then fall back to the first
+  // user-controlled CHARACTER participant.
+  const selected = activeTypingParticipantId
+    ? allParticipants.find(p =>
+        p.id === activeTypingParticipantId &&
+        p.type === 'CHARACTER' && p.controlledBy === 'user' &&
+        isParticipantPresent(p.status) && p.characterId
+      )
+    : undefined
+  const userCharacterParticipant = selected ?? allParticipants.find(p =>
     p.type === 'CHARACTER' && p.controlledBy === 'user' && isParticipantPresent(p.status) && p.characterId
   )
   if (userCharacterParticipant?.characterId) {

@@ -134,6 +134,29 @@ describe('resolveRespondingParticipant — first-responder selection', () => {
       expect(result.characterParticipant.controlledBy).not.toBe('user')
     }
   })
+
+  it('attributes userParticipantId to the active speaker, not the first user-controlled participant', async () => {
+    // Two user-controlled characters (Jackie first, Revenant later) + one LLM.
+    const jackie = makeCharParticipant('u-jackie', 'char-jackie', { controlledBy: 'user', displayOrder: 0 })
+    const abigail = makeCharParticipant('p-abigail', 'char-abigail', { displayOrder: 1 })
+    const revenant = makeCharParticipant('u-revenant', 'char-revenant', { controlledBy: 'user', displayOrder: 2 })
+    const chat = buildChat([jackie, abigail, revenant])
+    const repos = buildRepos(new Map([
+      ['char-jackie', makeChar('char-jackie')],
+      ['char-abigail', makeChar('char-abigail')],
+      ['char-revenant', makeChar('char-revenant')],
+    ]))
+
+    // Speaking As Revenant → the saved user message is attributed to Revenant.
+    const speakingAsRevenant = await resolveRespondingParticipant(repos, chat, 'user-1', undefined, false, 'u-revenant')
+    expect(speakingAsRevenant.userParticipantId).toBe('u-revenant')
+    // Abigail still responds (the LLM character).
+    expect(speakingAsRevenant.characterParticipant.id).toBe('p-abigail')
+
+    // No selection → falls back to the first user-controlled participant (Jackie).
+    const noSelection = await resolveRespondingParticipant(repos, chat, 'user-1')
+    expect(noSelection.userParticipantId).toBe('u-jackie')
+  })
 })
 
 describe('getRoleplayTemplate — project/user default precedence', () => {
