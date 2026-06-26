@@ -34,11 +34,32 @@ const VISION_MODEL_PATTERNS = [/^glm-\d+(\.\d+)?v/i, /^glm-5v/i, /^autoglm-phone
 // Keys in LLMParams.profileParameters that are forwarded verbatim to the Z.AI
 // request body. Allow-listed so a misconfigured profile can't override model,
 // messages, stream, etc. See https://docs.z.ai — `thinking` toggles reasoning
-// on GLM-4.6V / GLM-4.5 family; `do_sample` disables sampling entirely.
-const Z_AI_PROFILE_PARAM_ALLOWLIST = ['thinking', 'do_sample'] as const;
+// on GLM-4.6V / GLM-4.5 family; `do_sample` disables sampling entirely;
+// `reasoning_effort` dials back thinking effort on glm-5.2-and-newer (gated
+// in applyProfileParameters — Z.AI only honors it on those models).
+const Z_AI_PROFILE_PARAM_ALLOWLIST = ['thinking', 'do_sample', 'reasoning_effort'] as const;
 
 function isVisionModel(model: string): boolean {
   return VISION_MODEL_PATTERNS.some((re) => re.test(model));
+}
+
+// reasoning_effort is a GLM-5.2-and-newer capability. Parse the
+// major[.minor] generation from the model id and compare against 5.2.
+// Accepts glm-5.2, glm-5.3, glm-6, glm-5.2-0626, etc.; rejects glm-5.1,
+// glm-5, glm-5-turbo, glm-4.x, and the glm-Nv vision family. Parsing the
+// numeric generation (rather than matching a fixed id) survives Z.AI
+// revisioning the id or shipping a newer generation without a code change.
+export function supportsReasoningEffort(model: string): boolean {
+  const m = /^glm-(\d+)(?:\.(\d+))?/i.exec(model.trim().toLowerCase());
+  if (!m) return false;
+  // Exclude the vision family (e.g. glm-5v-turbo): a 'v' immediately
+  // follows the major number with no decimal point.
+  if (/^glm-\d+v/i.test(model.trim())) return false;
+  const major = Number(m[1]);
+  const minor = m[2] !== undefined ? Number(m[2]) : 0;
+  if (major > 5) return true;          // glm-6+, glm-7, …
+  if (major < 5) return false;         // glm-4.x and below
+  return minor >= 2;                   // glm-5.2, glm-5.3, … (not 5.1, 5, 5-turbo)
 }
 
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
@@ -197,22 +218,43 @@ export class ZAIProvider implements TextProvider {
    */
   private applyProfileParameters(body: Record<string, unknown>, params: LLMParams): void {
     const profile = params.profileParameters;
-    if (!profile || typeof profile !== 'object') return;
-    for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
-      const value = (profile as Record<string, unknown>)[key];
-      if (value === undefined) continue;
-      // Empty string from the schema-driven profile editor means "omit the
-      // parameter and use the model default." Skip those.
-      if (typeof value === 'string' && value === '') continue;
-      // The schema-driven editor stores `thinking` as a flat string
-      // ("enabled" / "disabled"); Z.AI's wire shape is `{ type: ... }`
-      // (https://docs.z.ai/guides/llm/glm-4.6). Pre-existing profiles that
-      // already stored the object form continue to work unchanged.
-      if (key === 'thinking' && typeof value === 'string') {
-        body[key] = { type: value };
-        continue;
+    if (profile && typeof profile === 'object') {
+      for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
+        const value = (profile as Record<string, unknown>)[key];
+        if (value === undefined) continue;
+        // Empty string from the schema-driven profile editor means "omit the
+        // parameter and use the model default." Skip those.
+        if (typeof value === 'string' && value === '') continue;
+        // `reasoning_effort` is only honored by glm-5.2-and-newer; never
+        // forward it to a model that ignores it (or worse, errors on it).
+        if (key === 'reasoning_effort' && !supportsReasoningEffort(params.model)) {
+          continue;
+        }
+        // The schema-driven editor stores `thinking` as a flat string
+        // ("enabled" / "disabled"); Z.AI's wire shape is `{ type: ... }`
+        // (https://docs.z.ai/guides/llm/glm-4.6). Pre-existing profiles that
+        // already stored the object form continue to work unchanged.
+        if (key === 'thinking' && typeof value === 'string') {
+          body[key] = { type: value };
+          continue;
+        }
+        body[key] = value;
       }
-      body[key] = value;
+    }
+
+    // Default to `high` reasoning effort on glm-5.2-and-newer unless thinking
+    // is explicitly disabled and no explicit effort was set. GLM-5.2 thinks
+    // compulsorily — the `thinking` field defaults to enabled server-side, so
+    // a profile left at "(model default)" still thinks, and that is exactly
+    // the config that burns output tokens at the API's `max` default. We
+    // therefore apply `high` whenever thinking is NOT explicitly disabled
+    // (not only when it is explicitly enabled). Read `body.thinking` AFTER the
+    // loop above so we see the normalized `{ type }` shape.
+    if (supportsReasoningEffort(params.model) && body.reasoning_effort === undefined) {
+      const thinkingDisabled = (body.thinking as { type?: string } | undefined)?.type === 'disabled';
+      if (!thinkingDisabled) {
+        body.reasoning_effort = 'high';
+      }
     }
   }
 

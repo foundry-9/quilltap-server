@@ -10014,9 +10014,19 @@ var Z_AI_SUPPORTED_MIME_TYPES = [
   "image/webp"
 ];
 var VISION_MODEL_PATTERNS = [/^glm-\d+(\.\d+)?v/i, /^glm-5v/i, /^autoglm-phone/i];
-var Z_AI_PROFILE_PARAM_ALLOWLIST = ["thinking", "do_sample"];
+var Z_AI_PROFILE_PARAM_ALLOWLIST = ["thinking", "do_sample", "reasoning_effort"];
 function isVisionModel(model) {
   return VISION_MODEL_PATTERNS.some((re) => re.test(model));
+}
+function supportsReasoningEffort(model) {
+  const m = /^glm-(\d+)(?:\.(\d+))?/i.exec(model.trim().toLowerCase());
+  if (!m) return false;
+  if (/^glm-\d+v/i.test(model.trim())) return false;
+  const major = Number(m[1]);
+  const minor = m[2] !== void 0 ? Number(m[2]) : 0;
+  if (major > 5) return true;
+  if (major < 5) return false;
+  return minor >= 2;
 }
 var ZAIProvider = class {
   constructor() {
@@ -10142,16 +10152,26 @@ var ZAIProvider = class {
    */
   applyProfileParameters(body, params) {
     const profile = params.profileParameters;
-    if (!profile || typeof profile !== "object") return;
-    for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
-      const value = profile[key];
-      if (value === void 0) continue;
-      if (typeof value === "string" && value === "") continue;
-      if (key === "thinking" && typeof value === "string") {
-        body[key] = { type: value };
-        continue;
+    if (profile && typeof profile === "object") {
+      for (const key of Z_AI_PROFILE_PARAM_ALLOWLIST) {
+        const value = profile[key];
+        if (value === void 0) continue;
+        if (typeof value === "string" && value === "") continue;
+        if (key === "reasoning_effort" && !supportsReasoningEffort(params.model)) {
+          continue;
+        }
+        if (key === "thinking" && typeof value === "string") {
+          body[key] = { type: value };
+          continue;
+        }
+        body[key] = value;
       }
-      body[key] = value;
+    }
+    if (supportsReasoningEffort(params.model) && body.reasoning_effort === void 0) {
+      const thinkingDisabled = body.thinking?.type === "disabled";
+      if (!thinkingDisabled) {
+        body.reasoning_effort = "high";
+      }
     }
   }
   /**
@@ -10869,6 +10889,19 @@ var optionsSchema = {
             { value: "", label: "(model default)" },
             { value: "enabled", label: "Enabled" },
             { value: "disabled", label: "Disabled" }
+          ]
+        },
+        {
+          key: "reasoning_effort",
+          label: "Reasoning Effort",
+          type: "enum",
+          default: "",
+          helpText: "A dial for how hard glm-5.2 cogitates before it speaks (thinking must be lit; lesser models pay it no heed). Minimal all but silences the rumination; High and Max open the throttle \u2014 and mind that low and medium quietly fold up to High, xhigh up to Max. Leave it at (model default) and glm-5.2 still sets to High of its own accord, sparing you the API's spendthrift Max.",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "minimal", label: "Minimal" },
+            { value: "high", label: "High" },
+            { value: "max", label: "Max" }
           ]
         }
       ]

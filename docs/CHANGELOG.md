@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Z.AI plugin: Reasoning Effort option, glm-5.2 defaults to `high`
+
+Added a **Reasoning Effort** connection-profile option to the Z.AI (GLM) plugin, mapping to Z.AI's `reasoning_effort` request parameter. It only takes effect on glm-5.2 (and newer generations — glm-5.3, glm-6, revisioned ids like `glm-5.2-0626`); it is never sent to glm-5.1, glm-5, glm-5-turbo, the 4.x line, or vision models.
+
+- The editor exposes only the distinct levels — `(model default)`, Minimal, High, Max — because Z.AI's scale is coarse (low/medium fold up to high; xhigh folds to max).
+- **glm-5.2 now defaults to `high` effort instead of the API default `max`.** GLM-5.2 thinks compulsorily (thinking defaults to enabled server-side), so a profile left at "(model default)" was previously burning output tokens at the most expensive `max` setting. The plugin now sends `reasoning_effort: 'high'` whenever thinking is not explicitly disabled and no explicit effort is set, curbing runaway thinking-token usage out of the box. Choosing Disabled thinking, or an explicit effort, overrides the default.
+- Note: effort is not a hard token cap — reasoning still counts against `max_tokens`, and hitting the ceiling yields `finish_reason: "length"`. Pair a lower effort with a sane `max_tokens` for the robust fix.
+- Plugin `qtap-plugin-z-ai` bumped to 1.1.14.
+
 #### Any participant can be switched between user-typed and an LLM
 
 The connection-profile dropdown now appears on every participant card in the Salon sidebar, including the seat you are currently typing as ("You"). Previously the active user seat showed only a "You" badge with no control, so you couldn't hand it off to an LLM without first switching your "Speaking As" selection to another character. The dropdown's "User (you type)" option still reclaims any LLM-driven character for manual control. Switching your only user-controlled seat to an LLM leaves an all-LLM chat (still supported; you can rejoin by impersonating). No data-model change — this was a UI gate; the `controlledBy` field and all turn/impersonation logic already supported the transition.
