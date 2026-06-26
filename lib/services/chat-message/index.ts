@@ -28,6 +28,14 @@ export {
   continueMessageSchema,
 } from './orchestrator.service'
 
+// Request helpers (option-building + SSE response)
+export {
+  buildSendMessageOptions,
+  buildContinueMessageOptions,
+  sseStreamResponse,
+  type SendMessageRequestExtras,
+} from './request-helpers'
+
 // Participant Resolution
 export {
   resolveRespondingParticipant,
