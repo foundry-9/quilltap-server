@@ -67,7 +67,10 @@ the platform understands."
 ### Shape the contract as request/response + event-stream, not RPC-per-feature
 
 Mirror what you already have. Today's Next.js API is the action-dispatch pattern
-(`?action=favorite`) and the job IPC is `{ type, payload }` messages. Keep that
+(`?action=favorite`) and the job IPC is a small enumerated message set
+(`job` / `invalidate` / `shutdown` / `shutdown-ack` / `host-rpc` /
+`host-rpc-response` one way, `job-result` / `log` / `status` / `host-rpc` back —
+see `lib/background-jobs/ipc-types.ts`). Keep that
 instinct. A *small, enumerated* message surface is far easier to expose
 identically across three transports than hundreds of individually-typed RPC
 methods — and `uniffi` in particular is happiest with a contained set of
@@ -236,9 +239,20 @@ not one it presumes.
 
 ### Model an enclave run as a resumable state machine, not a loop
 
-Today an autonomous run is effectively a driven loop on an always-up server.
-Re-model it as a persisted state machine whose every transition is a single
-committed turn:
+Your current code is already partway here, which is encouraging: the
+autonomous-room work is split across `autonomous-run-start` (flip to `running`,
+enqueue the first turn), `autonomous-room-turn` (drive exactly one turn, then
+*self-re-enqueue* the next — note: not a wall-clock loop), `autonomous-room-
+schedule-tick` (cron-driven due-room scan), and `autonomous-room-announce`
+(lifecycle banners + the halfway/near-end/grace milestones). The turn handler is
+the sole `MAIN_PRIMARY_JOB_TYPES` member precisely because each turn is a
+non-idempotent committed unit. That self-re-enqueue-per-turn shape is already
+close to `step()`; the native version makes the seam explicit rather than
+implicit-in-the-queue.
+
+Today an autonomous run is effectively driven by per-turn self-re-enqueue on an
+always-up host. Re-model it as a persisted state machine whose every transition
+is a single committed turn:
 
 ```rust
 pub enum RunState {
