@@ -463,6 +463,10 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.messagesOps.updateMessage(chatId, messageId, updates);
   }
 
+  async findChatIdForMessage(messageId: string): Promise<string | null> {
+    return this.messagesOps.findChatIdForMessage(messageId);
+  }
+
   async getMessageCount(chatId: string): Promise<number> {
     return this.messagesOps.getMessageCount(chatId);
   }

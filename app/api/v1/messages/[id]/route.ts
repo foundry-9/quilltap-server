@@ -48,24 +48,35 @@ async function findMessageInUserChats(
   userId: string,
   messageId: string
 ): Promise<MessageSearchResult | null> {
-  const userChats = await repos.chats.findByUserId(userId);
-
-  for (const chat of userChats) {
-    const messages = await repos.chats.getMessages(chat.id);
-    const idx = messages.findIndex(
-      (m: ChatEvent): m is MessageEvent => m.type === 'message' && m.id === messageId
-    );
-    if (idx !== -1) {
-      return {
-        chat,
-        message: messages[idx] as MessageEvent,
-        allMessages: messages,
-        messageIndex: idx,
-      };
-    }
+  // Resolve the owning chat with a single indexed lookup on the message id,
+  // rather than loading and validating every message in every chat. Then load
+  // only that one chat's messages.
+  const chatId = await repos.chats.findChatIdForMessage(messageId);
+  if (!chatId) {
+    return null;
   }
 
-  return null;
+  const chat = await repos.chats.findById(chatId);
+  // Enforce the same per-user ownership the previous account-wide scan gave us:
+  // a message is only reachable through chats the requesting user owns.
+  if (!chat || chat.userId !== userId) {
+    return null;
+  }
+
+  const messages = await repos.chats.getMessages(chatId);
+  const idx = messages.findIndex(
+    (m: ChatEvent): m is MessageEvent => m.type === 'message' && m.id === messageId
+  );
+  if (idx === -1) {
+    return null;
+  }
+
+  return {
+    chat,
+    message: messages[idx] as MessageEvent,
+    allMessages: messages,
+    messageIndex: idx,
+  };
 }
 
 // =============================================================================
@@ -100,19 +111,12 @@ export const PUT = createAuthenticatedParamsHandler<{ id: string }>(
       return notFound('Message');
     }
 
-    // Update the message content
-    const updatedMessage: MessageEvent = {
-      ...result.message,
-      content,
-    };
-
-    // Update the message in the array
-    result.allMessages[result.messageIndex] = updatedMessage;
-
-    // Rewrite all messages
-    await repos.chats.clearMessages(result.chat.id);
-    for (const msg of result.allMessages) {
-      await repos.chats.addMessage(result.chat.id, msg);
+    // Update only the edited row. (The old path deleted every message in the
+    // chat and re-inserted them one by one, which was O(n²) and would silently
+    // drop any sibling message that failed validation.)
+    const updatedMessage = await repos.chats.updateMessage(result.chat.id, messageId, { content });
+    if (!updatedMessage) {
+      return notFound('Message');
     }
 
     // Update chat's updatedAt timestamp
@@ -181,25 +185,11 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string }>(
         }
       }
 
-      // Filter out the deleted message(s)
-      let filteredMessages: ChatEvent[];
-      if (result.message.swipeGroupId) {
-        filteredMessages = result.allMessages.filter(
-          (m) =>
-            m.type !== 'message' ||
-            (m as MessageEvent).swipeGroupId !== result.message.swipeGroupId
-        );
-      } else {
-        filteredMessages = result.allMessages.filter(
-          (m) => m.type !== 'message' || m.id !== messageId
-        );
-      }
-
-      // Rewrite all messages without the deleted one(s)
-      await repos.chats.clearMessages(result.chat.id);
-      for (const msg of filteredMessages) {
-        await repos.chats.addMessage(result.chat.id, msg);
-      }
+      // Delete only the targeted message(s) by id, leaving every other row —
+      // including any unrelated corrupted message — untouched. (The old path
+      // cleared the whole chat and re-inserted the survivors, which silently
+      // dropped any sibling message that failed validation on reload.)
+      await repos.chats.deleteMessagesByIds(result.chat.id, messageIdsToDelete);
 
       // Update chat's updatedAt timestamp
       await repos.chats.update(result.chat.id, {});
@@ -386,19 +376,12 @@ async function handleReattributeAction(
     }
   }
 
-  // Update the message's participantId
-  const updatedMessage: MessageEvent = {
-    ...result.message,
+  // Update only the re-attributed row's participantId.
+  const updatedMessage = await repos.chats.updateMessage(result.chat.id, messageId, {
     participantId: newParticipantId,
-  };
-
-  // Update the message in the array
-  result.allMessages[result.messageIndex] = updatedMessage;
-
-  // Rewrite all messages
-  await repos.chats.clearMessages(result.chat.id);
-  for (const msg of result.allMessages) {
-    await repos.chats.addMessage(result.chat.id, msg);
+  });
+  if (!updatedMessage) {
+    return notFound('Message');
   }
 
   // Update chat's updatedAt timestamp

@@ -182,6 +182,27 @@ export class ChatMessagesOps {
   }
 
   /**
+   * Resolve which chat a message belongs to via a direct indexed lookup on the
+   * message id — without loading, scanning, or validating any other chat. Used
+   * by the per-message API endpoints so locating a message is O(1) instead of
+   * loading and Zod-validating every message in every chat in the account.
+   *
+   * SQLite backend only (the real runtime). On the legacy embedded-array
+   * backend messages aren't individually queryable, so this returns null and
+   * callers fall through to "not found".
+   */
+  async findChatIdForMessage(messageId: string): Promise<string | null> {
+    return safeQuery(async () => {
+      if (!this.ctx.isSQLiteBackend()) {
+        return null;
+      }
+      const messagesCollection = await this.ctx.getMessagesCollection();
+      const row = await messagesCollection.findOne({ id: messageId } as QueryFilter);
+      return row ? ((row as { chatId?: string }).chatId ?? null) : null;
+    }, 'Failed to resolve chat for message', { messageId }, null);
+  }
+
+  /**
    * Add a message to a chat
    */
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {

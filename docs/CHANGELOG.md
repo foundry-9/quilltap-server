@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: editing/deleting a message no longer scans the whole account
+
+The per-message endpoints (`PUT`/`DELETE`/`POST ?action=reattribute` on `/api/v1/messages/[id]`) located a message by loading and re-validating **every message in every chat** the user owns, then saved by deleting all of the target chat's messages and re-inserting them one at a time. On a large instance (hundreds of chats, tens of thousands of messages) backed by a slow or network-mounted database, a single edit could take many seconds, time out, or fail with a bare "Failed to update message" and nothing useful logged.
+
+- Messages are now located with a single indexed lookup on the message id (`chats.findChatIdForMessage`) plus an ownership check, instead of an account-wide scan.
+- Edit and re-attribute now update the one affected row via `updateMessage`; delete removes only the targeted ids via `deleteMessagesByIds`.
+- This also fixes a latent data-loss bug: the old clear-and-rewrite path rebuilt the chat from the *validated* message set, so editing or deleting any message in a chat that contained a separately-corrupted message would silently drop the corrupted row.
+- Salon UI: after a successful edit the message now shows the new text immediately. The save handler read `content` off the top level of the `{ message: … }` response (always `undefined`), so the edited bubble blanked until a full reload; it now reads `message.content` (falling back to the submitted text) and maps over the current message list instead of a stale closure.
+
 #### Docs: refresh BACKGROUND_JOBS_CHILD.md to match current handlers
 
 Brought `docs/developer/BACKGROUND_JOBS_CHILD.md` back in line with the code after the 4.6 autonomous-room work and the configurable-concurrency change. Handler count corrected from 18 to 24; added audit rows for `autonomous-room-turn`, `autonomous-run-start`, `autonomous-room-schedule-tick`, `autonomous-room-announce`, and `regenerate-conversation-summaries`; renamed the `wardrobe-announcement` row. Documented the `shutdown-ack` IPC message and the three added host-RPC methods (`writeConversationSummaryToVaults`, `removeConversationSummariesFromVaults`, `startScheduledAutonomousRun`). Corrected the concurrency section: the global cap is read live from the `maxConcurrentJobs` instance setting (4 is only the fallback default), not a fixed value. Docs only — no code change.
