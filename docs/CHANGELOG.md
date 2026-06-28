@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Dev: export autonomous-room budget functions for the Rust port harness
+
+Exported `checkBudget`, `computeBudgetProgress`, and their result/binding types (`BudgetCheckResult`, `BudgetVerdict`, `BudgetExhausted`, `MilestoneBinding`) from `lib/background-jobs/handlers/autonomous-room-turn.ts`. The quilltap-v5 differential port harness imports the real budget-math functions to check the Rust port for equivalence. The exports carry `@port-oracle-export` comments so a dead-code or unused-export sweep won't strip them — they have no importer within this repo. No behavior change.
+
 #### Fix: editing/deleting a message no longer scans the whole account
 
 The per-message endpoints (`PUT`/`DELETE`/`POST ?action=reattribute` on `/api/v1/messages/[id]`) located a message by loading and re-validating **every message in every chat** the user owns, then saved by deleting all of the target chat's messages and re-inserting them one at a time. On a large instance (hundreds of chats, tens of thousands of messages) backed by a slow or network-mounted database, a single edit could take many seconds, time out, or fail with a bare "Failed to update message" and nothing useful logged.

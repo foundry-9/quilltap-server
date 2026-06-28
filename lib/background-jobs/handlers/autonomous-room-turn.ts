@@ -48,17 +48,24 @@ import {
 
 const HANDLER = 'background-jobs.autonomous-room-turn';
 
-interface BudgetVerdict {
+// @port-oracle-export — exported only because it appears in the signature of
+// the oracle-exported `checkBudget` (below): a private name in an exported
+// function's return type breaks `tsc --declaration`. The export exists to keep
+// the quilltap-v5 differential port harness wiring valid; do NOT strip it as an
+// "unused export" just because nothing in THIS repo imports it by name.
+export interface BudgetVerdict {
   exhausted: false;
 }
 
-interface BudgetExhausted {
+// @port-oracle-export — see note on BudgetVerdict above.
+export interface BudgetExhausted {
   exhausted: true;
   nextState: 'budgetExhausted' | 'paused';
   reason: string;
 }
 
-type BudgetCheckResult = BudgetVerdict | BudgetExhausted;
+// @port-oracle-export — see note on BudgetVerdict above.
+export type BudgetCheckResult = BudgetVerdict | BudgetExhausted;
 
 /**
  * Compute the ISO timestamp of the most recent instance-local midnight.
@@ -76,8 +83,14 @@ function lastLocalMidnightIso(now: number): string {
  * Pre-turn budget verdict. Reads the per-row chat caps directly; for the
  * daily user-token cap, the caller passes in the summed usage since
  * instance-local midnight (read off llm_logs).
+ *
+ * @port-oracle-export — exported solely for the quilltap-v5 differential port
+ * harness (quilltap-v5/harness/oracle/cases/enclave-budget.ts), which imports
+ * the REAL function to check the Rust port against. Has no other importer in
+ * this repo; do NOT delete the `export` as unused — it would break the
+ * equivalence test guarding the budget-math port.
  */
-function checkBudget(
+export function checkBudget(
   chat: ChatMetadataBase,
   now: number,
   options: {
@@ -134,7 +147,12 @@ const GRACE_CONTENT =
 const GRACE_OPAQUE =
   'This conversation has reached its budget limit. You have one final turn to speak before it ends — say what most needs saying and bring the present scene to a graceful close.';
 
-type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
+// @port-oracle-export — exported only because it appears in the return-type
+// signature of the oracle-exported `computeBudgetProgress` (a private name there
+// breaks `tsc --declaration`). It is also used internally, so a cleanup may be
+// tempted to drop just the `export` keyword — don't: that re-breaks the
+// declaration emit the port harness depends on. See @port-oracle-export above.
+export type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
 
 /**
  * How far the current run has progressed toward its *binding* budget — the cap
@@ -151,8 +169,14 @@ type MilestoneBinding = 'time' | 'turns' | 'tokens' | 'daily';
  *
  * On a tie the per-run caps win (they are considered first), so an "ending"
  * nudge is preferred over a "pausing" one when both are equally close.
+ *
+ * @port-oracle-export — exported solely for the quilltap-v5 differential port
+ * harness (quilltap-v5/harness/oracle/cases/enclave-budget.ts), which imports
+ * the REAL function to check the Rust port against. Has no other importer in
+ * this repo; do NOT delete the `export` as unused — it would break the
+ * equivalence test guarding the budget-math port.
  */
-function computeBudgetProgress(
+export function computeBudgetProgress(
   chat: Pick<
     ChatMetadataBase,
     'budgetMaxTurns' | 'budgetMaxTokens' | 'budgetMaxWallClockMs' | 'runStartedAt' | 'runPausedAccumMs'
