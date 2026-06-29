@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: tag-prefix / line-prefix roleplay chips no longer collapse paragraphs
+
+A roleplay template whose lines are tagged with a speaker prefix (e.g. `[WIFE] …`, the "Covenant RP" template) rendered every paragraph as one continuous run with no blank-line separation. The line-scoped `tagPrefix`/`linePrefix` rules apply a roleplay chip class (`qt-roleplay-1`, `qt-chat-ooc`, etc.) directly to the block element (`<p>`/`<li>`/heading) by design, but the shared chip geometry forced `display: inline` — written assuming those classes only ever land on inline narration spans. On a block that collapsed all the paragraphs into a single inline run, erasing the paragraph breaks.
+
+- Block-level elements carrying a roleplay chip class now keep normal block flow (`display: block`; list items keep `display: list-item`), so paragraph breaks survive. Inline narration/dialogue/monologue spans are unchanged.
+- Fixed in both chip families: `qt-roleplay-1..4` / semantic chips (`app/styles/qt-components/_roleplay.css`) and the legacy `qt-chat-narration` / `qt-chat-ooc` / `qt-chat-inner-monologue` classes (`app/styles/qt-components/_chat.css`).
+- CSS-only; affects both the client renderer (`MessageContent.tsx`) and the server pre-renderer (`markdown-renderer.service.ts`) uniformly, since both land the line class on the block element.
+
 #### Dev: export autonomous-room budget functions for the Rust port harness
 
 Exported `checkBudget`, `computeBudgetProgress`, and their result/binding types (`BudgetCheckResult`, `BudgetVerdict`, `BudgetExhausted`, `MilestoneBinding`) from `lib/background-jobs/handlers/autonomous-room-turn.ts`. The quilltap-v5 differential port harness imports the real budget-math functions to check the Rust port for equivalence. The exports carry `@port-oracle-export` comments so a dead-code or unused-export sweep won't strip them — they have no importer within this repo. No behavior change.

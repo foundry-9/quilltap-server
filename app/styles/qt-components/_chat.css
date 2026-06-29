@@ -1507,6 +1507,23 @@
     display: inline;
   }
 
+  /* Line-scoped rules (linePrefix / tagPrefix — e.g. a default `// OOC` line)
+     land one of these legacy chip classes on the BLOCK element itself. The
+     `display: inline` above is for inline narration spans; on a block it would
+     collapse every paragraph into one run and erase blank-line paragraph breaks.
+     Restore block flow when a chip lands on a block element. Mirrors the
+     qt-roleplay-* override in _roleplay.css. */
+  .qt-chat-message-content :is(p, blockquote, h1, h2, h3, h4, h5, h6):is(
+    .qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue
+  ) {
+    display: block;
+  }
+  .qt-chat-message-content li:is(
+    .qt-chat-narration, .qt-chat-ooc, .qt-chat-inner-monologue
+  ) {
+    display: list-item;
+  }
+
   /* ==========================================================================
      PARTICIPANT CARDS - Shared base styles
      ========================================================================== */
