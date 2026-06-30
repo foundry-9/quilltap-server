@@ -194,6 +194,7 @@ export async function handleSendMessage(
               neverPauseForUser: options.neverPauseForUser,
               suppressAutomaticImages: options.suppressAutomaticImages,
               singleTurn: options.singleTurn,
+              autonomousContextCap: options.autonomousContextCap,
             },
             controller,
             encoder
@@ -978,6 +979,9 @@ async function processMessage(
       contextCompressionSettings: compressionEnabled ? contextCompressionSettings : null,
       cheapLLMSelection,
       bypassCompression,
+      // Autonomous-room per-turn context cap (tokens). Clamps the model-derived
+      // budget so a token-budgeted room paces its run across multiple turns.
+      autonomousContextCap: options.autonomousContextCap,
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,

@@ -74,6 +74,12 @@ export interface BuildMessageContextOptions {
   uncensoredFallbackOptions?: UncensoredFallbackOptions
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
+  /**
+   * Autonomous-room per-turn context cap (tokens). When set, clamps the
+   * model-derived `maxAvailable` budget down to this value so a token-budgeted
+   * room paces its run across multiple turns. Undefined for everything else.
+   */
+  autonomousContextCap?: number
 }
 
 /**
@@ -629,6 +635,9 @@ export async function buildMessageContext(
     isContinueMode: options.isContinueMode,
     // Status callback for streaming events
     onStatusChange: options.onStatusChange,
+    // Autonomous-room per-turn context cap (tokens) — clamps the model-derived
+    // budget so a token-budgeted room paces its run across multiple turns.
+    autonomousContextCap: options.autonomousContextCap,
   })
 
   // Log context building results for debugging

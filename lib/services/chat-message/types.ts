@@ -130,6 +130,18 @@ export interface SendMessageOptions {
    * Set by `lib/background-jobs/handlers/autonomous-room-turn.ts`.
    */
   singleTurn?: boolean
+  /**
+   * Autonomous-room turn budget cap (tokens): the maximum context budget this
+   * turn may consume, derived from the room's per-run token budget sliced
+   * across the turns it should still span (`remaining / turnsLeft`). When set,
+   * the context-manager clamps its model-derived `maxAvailable` down to this
+   * value before computing the history/memory fold targets, so a token-budgeted
+   * room paces itself across a run instead of spending most of the budget on a
+   * single oversized turn. Undefined for non-autonomous turns and for rooms
+   * without a token budget (`budgetMaxTokens == null`) → unchanged behavior.
+   * Set by the autonomous-room turn handler.
+   */
+  autonomousContextCap?: number
 }
 
 /**

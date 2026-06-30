@@ -393,6 +393,22 @@ export interface BuildContextOptions {
 
   /** Optional callback to emit status events during context building phases */
   onStatusChange?: (stage: string, message: string) => void
+
+  // ============================================================================
+  // Autonomous-Room Per-Turn Budget Cap
+  // ============================================================================
+
+  /**
+   * Autonomous-room per-turn context cap (tokens). When set, the model-derived
+   * `maxAvailable` budget is clamped down to this value before the history and
+   * memory fold targets are computed, so a token-budgeted room paces its run
+   * across multiple turns instead of spending most of the per-run budget on one
+   * oversized turn. The caller (the autonomous-room turn handler) derives it as
+   * `remaining_run_budget / turns_left`, floored at a minimum viable context.
+   * Undefined for non-autonomous turns and rooms without a token budget →
+   * unchanged behavior.
+   */
+  autonomousContextCap?: number
 }
 
 /**
@@ -733,6 +749,22 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const budgetInfo = connectionProfile
     ? calculateMaxAvailable(provider, modelName, connectionProfile)
     : null
+
+  // Autonomous-room pacing: clamp the model-derived context budget down to this
+  // turn's slice of the per-run token budget (`remaining / turns_left`, computed
+  // by the turn handler). This shrinks the whole pie — the compression trigger,
+  // the history fold, and the memory budget all derive from `maxAvailable` — so
+  // the room spreads its run across multiple turns rather than letting a model
+  // with a huge context window spend most of the per-run budget on one turn.
+  // Only ever shrinks (guarded by `<`); undefined leaves behavior unchanged.
+  if (budgetInfo && options.autonomousContextCap != null
+      && options.autonomousContextCap < budgetInfo.maxAvailable) {
+    logger.info('[ContextManager] Autonomous per-turn budget cap applied', {
+      modelMaxAvailable: budgetInfo.maxAvailable,
+      autonomousContextCap: options.autonomousContextCap,
+    })
+    budgetInfo.maxAvailable = options.autonomousContextCap
+  }
 
   // Estimate total conversation tokens for budget check
   const tTokenCountStart = performance.now()

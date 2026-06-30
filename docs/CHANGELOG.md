@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: token-budgeted autonomous rooms now pace their run across turns
+
+A `chatType: 'autonomous'` room with a per-run token budget (`budgetMaxTokens`) used to spend most of that budget on a single turn. Context compaction sized each turn against the *model's* context window (often very large), so one turn could carry ~200k+ tokens of history — nearly the whole run budget — and the run exhausted after a turn or two. The per-run budget was resetting to zero correctly at run start; the problem was that nothing connected that budget to how much context each turn was allowed to build.
+
+- The autonomous turn handler now derives a per-turn context cap from the run budget — `remaining_run_budget / turns_left` — and passes it down through the message pipeline. The context manager clamps its model-derived `maxAvailable` to that cap before computing the history and memory fold targets, so the whole context budget shrinks proportionally and the run spreads across multiple turns.
+- `turns_left` reuses `budgetMaxTurns` when the room also sets a turn budget (the two budgets cooperate); otherwise it targets a default of 6 turns per run. The cap is floored at 16k tokens so a nearly-spent run still ships a usable final turn instead of a starved one.
+- No effect on regular Salon chats, regenerate/swipe, or autonomous rooms without a token budget — the cap is only set for token-budgeted autonomous turns.
+- New helper `computeAutonomousContextCap` (`lib/background-jobs/handlers/autonomous-room-turn.ts`), threaded via `SendMessageOptions.autonomousContextCap` → `buildMessageContext` → `buildContext`. Covered by new unit tests.
+
 #### Fix: tag-prefix / line-prefix roleplay chips no longer collapse paragraphs
 
 A roleplay template whose lines are tagged with a speaker prefix (e.g. `[WIFE] …`, the "Covenant RP" template) rendered every paragraph as one continuous run with no blank-line separation. The line-scoped `tagPrefix`/`linePrefix` rules apply a roleplay chip class (`qt-roleplay-1`, `qt-chat-ooc`, etc.) directly to the block element (`<p>`/`<li>`/heading) by design, but the shared chip geometry forced `display: inline` — written assuming those classes only ever land on inline narration spans. On a block that collapsed all the paragraphs into a single inline run, erasing the paragraph breaks.
