@@ -392,10 +392,12 @@ export class AnthropicProvider implements TextProvider {
     // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
     // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
     // 400s on those models; they require adaptive thinking instead, which has
-    // no token budget to set.
+    // no token budget to set. These models also default thinking.display to
+    // "omitted" (empty thinking text) — request "summarized" explicitly so
+    // Quilltap's reasoningContent capture keeps working.
     if (thinkingEnabled) {
       requestParams.thinking = samplingParamsRejected
-        ? { type: 'adaptive' }
+        ? { type: 'adaptive', display: 'summarized' }
         : { type: 'enabled', budget_tokens: thinkingBudget }
     }
 
@@ -581,10 +583,12 @@ export class AnthropicProvider implements TextProvider {
     // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
     // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
     // 400s on those models; they require adaptive thinking instead, which has
-    // no token budget to set.
+    // no token budget to set. These models also default thinking.display to
+    // "omitted" (empty thinking text) — request "summarized" explicitly so
+    // Quilltap's reasoningContent capture keeps working.
     if (streamThinkingEnabled) {
       requestParams.thinking = streamSamplingParamsRejected
-        ? { type: 'adaptive' }
+        ? { type: 'adaptive', display: 'summarized' }
         : { type: 'enabled', budget_tokens: streamThinkingBudget }
     }
 

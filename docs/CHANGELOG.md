@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Fix: thinking output silently empty on claude-sonnet-5 (and Opus 4.7+/Fable/Mythos)
+
+After fixing the two 400 errors below, extended thinking on Sonnet 5 stopped showing up in the Salon at all — no error, just nothing. Adaptive thinking on this model family defaults `thinking.display` to `"omitted"`: the response still includes thinking blocks, but their text comes back empty unless the request explicitly asks for `display: "summarized"`.
+
+- `qtap-plugin-anthropic` now sends `thinking: {type: 'adaptive', display: 'summarized'}` for the new-generation model family, in both `sendMessage` and `streamMessage`, so `reasoningContent` capture works again. Older models (fixed-budget thinking) are unaffected.
+
 #### Fix: claude-sonnet-5 (and Opus 4.7+/Fable/Mythos) chats failed with two separate 400s
 
 Selecting `claude-sonnet-5` as a chat's model failed every message with a 400 from Anthropic. Two breaking API changes on the new model generation, both unhandled by the provider plugin:

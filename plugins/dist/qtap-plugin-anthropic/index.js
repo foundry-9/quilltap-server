@@ -15924,7 +15924,7 @@ var AnthropicProvider = class _AnthropicProvider {
       max_tokens: effectiveMaxTokens
     };
     if (thinkingEnabled) {
-      requestParams.thinking = samplingParamsRejected ? { type: "adaptive" } : { type: "enabled", budget_tokens: thinkingBudget };
+      requestParams.thinking = samplingParamsRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: thinkingBudget };
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -16035,7 +16035,7 @@ var AnthropicProvider = class _AnthropicProvider {
       stream: true
     };
     if (streamThinkingEnabled) {
-      requestParams.thinking = streamSamplingParamsRejected ? { type: "adaptive" } : { type: "enabled", budget_tokens: streamThinkingBudget };
+      requestParams.thinking = streamSamplingParamsRejected ? { type: "adaptive", display: "summarized" } : { type: "enabled", budget_tokens: streamThinkingBudget };
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
