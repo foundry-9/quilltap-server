@@ -15676,11 +15676,29 @@ var ANTHROPIC_SUPPORTED_MIME_TYPES = [
   "application/pdf",
   "text/plain"
 ];
-var AnthropicProvider = class {
+var AnthropicProvider = class _AnthropicProvider {
   constructor() {
     this.supportsFileAttachments = true;
     this.supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES;
     this.supportsWebSearch = false;
+  }
+  static {
+    // Claude Sonnet 5, the Opus 4.7+ family, and Fable/Mythos models remove
+    // temperature/top_p/top_k entirely — sending either returns
+    // "`temperature` is deprecated for this model" (400), independent of
+    // whether extended thinking is enabled. Matched by prefix since these are
+    // stable aliases (no dated snapshots).
+    this.SAMPLING_PARAMS_REJECTED_MODELS = [
+      /^claude-sonnet-5(-|$)/,
+      /^claude-opus-4-7(-|$)/,
+      /^claude-opus-4-8(-|$)/,
+      /^claude-fable-5(-|$)/,
+      /^claude-mythos-5(-|$)/,
+      /^claude-mythos-preview(-|$)/
+    ];
+  }
+  modelRejectsSamplingParams(model) {
+    return _AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS.some((re) => re.test(model));
   }
   /**
    * Helper to build cache_control object with optional TTL
@@ -15890,6 +15908,7 @@ var AnthropicProvider = class {
     const rawThinkingBudget = profileParams?.thinkingBudget;
     const thinkingBudget = typeof rawThinkingBudget === "number" && rawThinkingBudget >= 1024 ? rawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
     const thinkingEnabled = thinkingBudget > 0;
+    const samplingParamsRejected = this.modelRejectsSamplingParams(params.model);
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -15905,7 +15924,7 @@ var AnthropicProvider = class {
       max_tokens: effectiveMaxTokens
     };
     if (thinkingEnabled) {
-      requestParams.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+      requestParams.thinking = samplingParamsRejected ? { type: "adaptive" } : { type: "enabled", budget_tokens: thinkingBudget };
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -15928,7 +15947,7 @@ var AnthropicProvider = class {
         }));
       }
     }
-    if (!thinkingEnabled) {
+    if (!thinkingEnabled && !samplingParamsRejected) {
       if (params.temperature !== void 0) {
         requestParams.temperature = params.temperature;
       } else if (params.topP !== void 0) {
@@ -15999,6 +16018,7 @@ var AnthropicProvider = class {
     const streamRawThinkingBudget = profileParams?.thinkingBudget;
     const streamThinkingBudget = typeof streamRawThinkingBudget === "number" && streamRawThinkingBudget >= 1024 ? streamRawThinkingBudget : profileParams?.extendedThinking === true ? 4096 : 0;
     const streamThinkingEnabled = streamThinkingBudget > 0;
+    const streamSamplingParamsRejected = this.modelRejectsSamplingParams(params.model);
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
       cachingEnabled ? { enableCaching: true, strategy: cacheStrategy, ttl: cacheTTL } : void 0
@@ -16015,7 +16035,7 @@ var AnthropicProvider = class {
       stream: true
     };
     if (streamThinkingEnabled) {
-      requestParams.thinking = { type: "enabled", budget_tokens: streamThinkingBudget };
+      requestParams.thinking = streamSamplingParamsRejected ? { type: "adaptive" } : { type: "enabled", budget_tokens: streamThinkingBudget };
     }
     if (systemMessages.length > 0) {
       if (cachingEnabled) {
@@ -16038,7 +16058,7 @@ var AnthropicProvider = class {
         }));
       }
     }
-    if (!streamThinkingEnabled) {
+    if (!streamThinkingEnabled && !streamSamplingParamsRejected) {
       if (params.temperature !== void 0) {
         requestParams.temperature = params.temperature;
       } else if (params.topP !== void 0) {

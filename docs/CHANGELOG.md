@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: claude-sonnet-5 (and Opus 4.7+/Fable/Mythos) chats failed with two separate 400s
+
+Selecting `claude-sonnet-5` as a chat's model failed every message with a 400 from Anthropic. Two breaking API changes on the new model generation, both unhandled by the provider plugin:
+
+- `` `temperature` is deprecated for this model `` — the plugin always sent a `temperature` (or `top_p`) value unless extended thinking was enabled, but Sonnet 5, Opus 4.7+, and Fable/Mythos reject sampling parameters (`temperature`/`top_p`/`top_k`) outright, independent of thinking.
+- `` "thinking.type.enabled" is not supported for this model `` (hit after turning on extended thinking) — the plugin always sent fixed-budget thinking (`{type: 'enabled', budget_tokens}`), but the same model family removed it; they require `{type: 'adaptive'}` instead, which has no token budget to set.
+
+`qtap-plugin-anthropic` now detects the new-generation model family (Sonnet 5, Opus 4.7, Opus 4.8, Fable 5, Mythos 5, Mythos Preview) by ID prefix and, for those models, omits `temperature`/`top_p` entirely and switches extended thinking to `{type: 'adaptive'}` — in both `sendMessage` and `streamMessage`. Bumped `qtap-plugin-anthropic` to 1.0.45 and rebuilt.
+
 #### Fix: token-budgeted autonomous rooms now pace their run across turns
 
 A `chatType: 'autonomous'` room with a per-run token budget (`budgetMaxTokens`) used to spend most of that budget on a single turn. Context compaction sized each turn against the *model's* context window (often very large), so one turn could carry ~200k+ tokens of history — nearly the whole run budget — and the run exhausted after a turn or two. The per-run budget was resetting to zero correctly at run start; the problem was that nothing connected that budget to how much context each turn was allowed to build.

@@ -62,6 +62,24 @@ export class AnthropicProvider implements TextProvider {
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
   readonly supportsWebSearch = false
 
+  // Claude Sonnet 5, the Opus 4.7+ family, and Fable/Mythos models remove
+  // temperature/top_p/top_k entirely — sending either returns
+  // "`temperature` is deprecated for this model" (400), independent of
+  // whether extended thinking is enabled. Matched by prefix since these are
+  // stable aliases (no dated snapshots).
+  private static readonly SAMPLING_PARAMS_REJECTED_MODELS = [
+    /^claude-sonnet-5(-|$)/,
+    /^claude-opus-4-7(-|$)/,
+    /^claude-opus-4-8(-|$)/,
+    /^claude-fable-5(-|$)/,
+    /^claude-mythos-5(-|$)/,
+    /^claude-mythos-preview(-|$)/,
+  ]
+
+  private modelRejectsSamplingParams(model: string): boolean {
+    return AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS.some(re => re.test(model))
+  }
+
   /**
    * Helper to build cache_control object with optional TTL
    * TTL is only included if it's '1h' since '5m' is the default
@@ -342,6 +360,11 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const thinkingEnabled = thinkingBudget > 0
 
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
+    // and sampling params (temperature/top_p/top_k) — computed once and used
+    // for both decisions below.
+    const samplingParamsRejected = this.modelRejectsSamplingParams(params.model)
+
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
@@ -366,9 +389,14 @@ export class AnthropicProvider implements TextProvider {
       max_tokens: effectiveMaxTokens,
     }
 
-    // Enable extended thinking if requested.
+    // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
+    // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
+    // 400s on those models; they require adaptive thinking instead, which has
+    // no token budget to set.
     if (thinkingEnabled) {
-      requestParams.thinking = { type: 'enabled', budget_tokens: thinkingBudget }
+      requestParams.thinking = samplingParamsRejected
+        ? { type: 'adaptive' }
+        : { type: 'enabled', budget_tokens: thinkingBudget }
     }
 
     // Handle system messages with optional cache control.
@@ -408,7 +436,9 @@ export class AnthropicProvider implements TextProvider {
 
     // Anthropic API requires either temperature OR top_p, not both.
     // Extended thinking forbids temperature and top_p — omit them entirely.
-    if (!thinkingEnabled) {
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject sampling params outright,
+    // even with thinking disabled — omit for those models too.
+    if (!thinkingEnabled && !samplingParamsRejected) {
       if (params.temperature !== undefined) {
         requestParams.temperature = params.temperature
       } else if (params.topP !== undefined) {
@@ -520,6 +550,11 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const streamThinkingEnabled = streamThinkingBudget > 0
 
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
+    // and sampling params (temperature/top_p/top_k) — computed once and used
+    // for both decisions below.
+    const streamSamplingParamsRejected = this.modelRejectsSamplingParams(params.model)
+
     // Format messages with optional cache control
     const { messages, attachmentResults } = this.formatMessagesWithAttachments(
       params.messages,
@@ -543,9 +578,14 @@ export class AnthropicProvider implements TextProvider {
       stream: true,
     }
 
-    // Enable extended thinking if requested.
+    // Enable extended thinking if requested. Sonnet 5 / Opus 4.7+ / Fable /
+    // Mythos removed fixed-budget thinking entirely — "thinking.type.enabled"
+    // 400s on those models; they require adaptive thinking instead, which has
+    // no token budget to set.
     if (streamThinkingEnabled) {
-      requestParams.thinking = { type: 'enabled', budget_tokens: streamThinkingBudget }
+      requestParams.thinking = streamSamplingParamsRejected
+        ? { type: 'adaptive' }
+        : { type: 'enabled', budget_tokens: streamThinkingBudget }
     }
 
     // Handle system messages with optional cache control. Mirrors the
@@ -574,7 +614,9 @@ export class AnthropicProvider implements TextProvider {
     }
 
     // Extended thinking forbids temperature and top_p — omit them when enabled.
-    if (!streamThinkingEnabled) {
+    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject sampling params outright,
+    // even with thinking disabled — omit for those models too.
+    if (!streamThinkingEnabled && !streamSamplingParamsRejected) {
       if (params.temperature !== undefined) {
         requestParams.temperature = params.temperature
       } else if (params.topP !== undefined) {
