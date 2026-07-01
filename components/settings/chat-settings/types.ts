@@ -98,6 +98,8 @@ export interface ChatSettings {
   coreWhisper?: CoreWhisperSettings
   /** Thinking / reasoning display — global defaults. DISPLAY ONLY. */
   thinkingDisplay?: ThinkingDisplaySettings
+  /** Answer confirmation — global default for the Salon consistency check. */
+  answerConfirmationSettings?: AnswerConfirmationSettings
   createdAt: string
   updatedAt: string
 }
@@ -117,6 +119,20 @@ export interface ThinkingDisplaySettings {
 export const DEFAULT_THINKING_DISPLAY_SETTINGS: ThinkingDisplaySettings = {
   defaultVisible: true,
   defaultCollapsed: true,
+}
+
+/**
+ * Answer confirmation — global default for the Salon consistency check that
+ * vets a character's tool-using reply against what it recalled and looked up.
+ * Off by default; a per-project or per-chat override can flip it on.
+ */
+export interface AnswerConfirmationSettings {
+  /** Whether the consistency check runs by default (global). */
+  enabled?: boolean
+}
+
+export const DEFAULT_ANSWER_CONFIRMATION_SETTINGS: AnswerConfirmationSettings = {
+  enabled: false,
 }
 
 /**

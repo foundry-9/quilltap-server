@@ -368,6 +368,20 @@ export const ThinkingDisplaySettingsSchema = z.object({
 
 export type ThinkingDisplaySettings = z.infer<typeof ThinkingDisplaySettingsSchema>;
 
+/**
+ * Answer confirmation — global defaults for the Salon consistency check that
+ * vets a character's tool-using reply against what it was told (Commonplace
+ * Book whisper) and looked up (read tools) this turn. Off by default; a
+ * per-project or per-chat override can flip it on. See
+ * `isAnswerConfirmationActive`.
+ */
+export const AnswerConfirmationSettingsSchema = z.object({
+  /** Whether the consistency check runs by default (global). Default: false. */
+  enabled: z.boolean().default(false),
+});
+
+export type AnswerConfirmationSettings = z.infer<typeof AnswerConfirmationSettingsSchema>;
+
 // ============================================================================
 // STORY BACKGROUNDS SETTINGS
 // ============================================================================
@@ -498,6 +512,10 @@ export const ChatSettingsSchema = z.object({
   thinkingDisplay: ThinkingDisplaySettingsSchema.default({
     defaultVisible: true,
     defaultCollapsed: true,
+  }),
+  /** Answer confirmation — global default for the Salon consistency check (off by default) */
+  answerConfirmationSettings: AnswerConfirmationSettingsSchema.default({
+    enabled: false,
   }),
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings: StoryBackgroundsSettingsSchema.default({

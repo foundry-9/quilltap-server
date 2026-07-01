@@ -250,6 +250,9 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               defaultVisible: true,
               defaultCollapsed: true,
             },
+            answerConfirmationSettings: {
+              enabled: false,
+            },
             defaultRoleplayTemplateId,
             ...data,
           };

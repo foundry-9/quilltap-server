@@ -87,6 +87,15 @@ interface SSEEvent {
   // fetchChat(). Inserted optimistically and deduped by id; the end-of-turn
   // refresh reconciles it to the authoritative copy.
   carinaAnswer?: Message
+  // Answer confirmation: the resolved state for a just-streamed message. On a
+  // re-affirmation rewrite, `content` carries the replacement bubble text.
+  confirmationResult?: {
+    messageId: string
+    confirmed: boolean | null
+    revised: boolean
+    notes: string | null
+    content?: string
+  }
 }
 
 /**
@@ -242,6 +251,26 @@ export function useSSEStreaming({
     setStreamingReasoning('')
   }, [])
 
+  // Patch a message in place with its resolved answer-confirmation state. On a
+  // re-affirmation rewrite (`content` present) the optimistic bubble text is
+  // replaced with the corrected reply — a deliberate, visible transparency swap.
+  const applyConfirmationResult = useCallback((result: {
+    messageId: string
+    confirmed: boolean | null
+    revised: boolean
+    notes: string | null
+    content?: string
+  }) => {
+    setMessages(prev => prev.map(m => m.id === result.messageId ? {
+      ...m,
+      confirmed: result.confirmed,
+      confirmationChecked: true,
+      confirmationRevised: result.revised,
+      confirmationNotes: result.notes,
+      ...(typeof result.content === 'string' ? { content: result.content } : {}),
+    } : m))
+  }, [setMessages])
+
   // Cancel any pending rAF on unmount to avoid setting state after teardown.
   useEffect(() => {
     return () => {
@@ -350,6 +379,8 @@ export function useSSEStreaming({
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
       /** Called when a Carina reference answer is surfaced mid-turn */
       onCarinaAnswer?: (message: Message) => void
+      /** Called when an answer-confirmation result resolves for a message */
+      onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
       /** Called for intermediate done events during a chain (not the final one) */
       onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
       onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
@@ -432,6 +463,13 @@ export function useSSEStreaming({
         // flow immediately rather than waiting for the post-turn fetchChat().
         if (data.carinaAnswer && opts.onCarinaAnswer) {
           opts.onCarinaAnswer(data.carinaAnswer)
+        }
+
+        // Handle an answer-confirmation result — update the badge and, on a
+        // revision, swap in the corrected bubble text (a deliberate, visible
+        // transparency swap).
+        if (data.confirmationResult && opts.onConfirmationResult) {
+          opts.onConfirmationResult(data.confirmationResult)
         }
 
         // Handle completion
@@ -634,6 +672,7 @@ export function useSSEStreaming({
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
+        onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
           if (data.emptyResponse) {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
@@ -772,7 +811,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -836,6 +875,7 @@ export function useSSEStreaming({
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
+        onConfirmationResult: applyConfirmationResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
 
@@ -926,7 +966,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

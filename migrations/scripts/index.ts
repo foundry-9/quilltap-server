@@ -326,6 +326,7 @@ import { addAutonomousRunPausedAccumMigration } from './add-autonomous-run-pause
 import { dropCharacterScenarioColumnMigration } from './drop-character-scenario-column';
 // Thinking display: reasoningContent + reasoningSegments columns on chat_messages
 import { addChatMessageReasoningColumnsMigration } from './add-chat-message-reasoning-columns';
+import { addAnswerConfirmationColumnsMigration } from './add-answer-confirmation-columns';
 // Thinking display: showThinking column on chats + thinkingDisplay column on chat_settings
 import { addThinkingDisplayFieldsMigration } from './add-thinking-display-fields';
 // Add autoScrollOnResponseComplete column to chat_settings (Salon auto-scroll toggle)
@@ -672,6 +673,8 @@ export const migrations: Migration[] = [
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Answer confirmation: confirmed/notes/revised/original columns on chat_messages + answerConfirmationOverride on chats
+  addAnswerConfirmationColumnsMigration,
   // Carina (inline LLM queries): canBeCarina answerer flag on characters
   addCarinaFlagMigration,
   // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
@@ -997,6 +1000,8 @@ export {
   addAutonomousBudgetCacheModeMigration,
   // 4.6 private character rooms: runMilestonesAnnounced column on chats (per-run pacing-nudge bitmask)
   addAutonomousRunMilestonesMigration,
+  // Answer confirmation: confirmed/notes/revised/original columns on chat_messages + answerConfirmationOverride on chats
+  addAnswerConfirmationColumnsMigration,
   // Carina (inline LLM queries): canBeCarina answerer flag on characters
   addCarinaFlagMigration,
   // Carina (inline LLM queries): carinaMeta provenance column on chat_messages

@@ -43,6 +43,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     handleSave,
     handleToggleAllowAnyCharacter,
     handleSaveAgentMode,
+    handleSaveAnswerConfirmationOverride,
     handleSaveAvatarGeneration,
     handleSaveDefaultImageProfile,
     handleSaveDefaultRoleplayTemplate,
@@ -176,6 +177,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
         <ModelBehaviorCard
           project={project}
           onAgentModeChange={handleSaveAgentMode}
+          onAnswerConfirmationOverrideChange={handleSaveAnswerConfirmationOverride}
           onDefaultRoleplayTemplateChange={handleSaveDefaultRoleplayTemplate}
           expanded={cardState.modelBehavior}
           onToggle={() => toggleCard('modelBehavior')}

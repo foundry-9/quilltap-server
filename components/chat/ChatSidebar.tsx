@@ -193,6 +193,9 @@ export interface ChatSidebarProps {
   // Thinking visibility — per-chat override (tri-state). null = inherit global. DISPLAY ONLY.
   showThinking?: boolean | null
   onSetShowThinking?: (value: boolean | null) => void
+  // Answer confirmation — per-chat override (tri-state). null = inherit project/global.
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
+  onSetAnswerConfirmationOverride?: (value: 'ON' | 'OFF' | null) => void
 
   // --- Organize section ---
   onRenameClick?: () => void
@@ -496,7 +499,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
-        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetShowThinking) && (
+        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetShowThinking || props.onSetAnswerConfirmationOverride) && (
           <CollapsibleCard
             title="Visibility"
             {...openController('visibility')}
@@ -512,6 +515,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
               onSetCoreWhisperInterval={props.onSetCoreWhisperInterval}
               showThinking={props.showThinking}
               onSetShowThinking={props.onSetShowThinking}
+              answerConfirmationOverride={props.answerConfirmationOverride}
+              onSetAnswerConfirmationOverride={props.onSetAnswerConfirmationOverride}
             />
           </CollapsibleCard>
         )}
@@ -1219,6 +1224,8 @@ interface VisibilitySectionProps {
   onSetCoreWhisperInterval?: (value: number | null) => void
   showThinking?: boolean | null
   onSetShowThinking?: (value: boolean | null) => void
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
+  onSetAnswerConfirmationOverride?: (value: 'ON' | 'OFF' | null) => void
 }
 
 const CORE_WHISPER_INTERVAL_OPTIONS = [
@@ -1246,6 +1253,8 @@ function VisibilitySection({
   onSetCoreWhisperInterval,
   showThinking,
   onSetShowThinking,
+  answerConfirmationOverride,
+  onSetAnswerConfirmationOverride,
 }: VisibilitySectionProps) {
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-visibility flex flex-col gap-3">
@@ -1355,6 +1364,27 @@ function VisibilitySection({
               <option value="inherit">Inherit</option>
               <option value="on">Show</option>
               <option value="off">Hide</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {onSetAnswerConfirmationOverride && (
+        <div className="flex flex-col gap-2 pt-2 border-t qt-border-default">
+          <div className="flex items-center justify-between gap-2">
+            <span className="qt-text-secondary text-xs">Answer Confirmation</span>
+            <select
+              value={answerConfirmationOverride ?? 'inherit'}
+              onChange={(e) => {
+                const v = e.target.value
+                onSetAnswerConfirmationOverride(v === 'ON' ? 'ON' : v === 'OFF' ? 'OFF' : null)
+              }}
+              className="qt-select qt-select-sm"
+              title="Vet this chat's looked-up answers against what the character actually knew. Inherit defers to the project, then the global default."
+            >
+              <option value="inherit">Inherit</option>
+              <option value="ON">On</option>
+              <option value="OFF">Off</option>
             </select>
           </div>
         </div>

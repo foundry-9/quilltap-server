@@ -57,6 +57,8 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'resolve-character-appearances': 'APPEARANCE_RESOLUTION',
     'sanitize-appearance': 'APPEARANCE_RESOLUTION',
     'scene-state-tracking': 'SCENE_STATE_TRACKING',
+    'answer-confirmation': 'ANSWER_CONFIRMATION',
+    'answer-reaffirmation': 'ANSWER_CONFIRMATION',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }
@@ -122,7 +124,7 @@ async function sendToProvider(
   // Check if we already know this profile doesn't support custom temperature
   if (profilesWithoutCustomTemp.has(profileKey)) {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
+      { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey, profileParameters: selection.profileParameters },
       apiKey
     )
     logCall(response)
@@ -132,7 +134,7 @@ async function sendToProvider(
   // Try with lower temperature for more consistent outputs
   try {
     const response: LLMResponse = await provider.sendMessage(
-      { messages, model: selection.modelName, temperature: 0.3, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
+      { messages, model: selection.modelName, temperature: 0.3, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey, profileParameters: selection.profileParameters },
       apiKey
     )
     logCall(response, 0.3)
@@ -144,7 +146,7 @@ async function sendToProvider(
       profilesWithoutCustomTemp.add(profileKey)
 
       const response: LLMResponse = await provider.sendMessage(
-        { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey },
+        { messages, model: selection.modelName, maxTokens: effectiveMaxTokens, strictMaxTokens, cacheKey, profileParameters: selection.profileParameters },
         apiKey
       )
       logCall(response)
@@ -194,6 +196,9 @@ function shouldAttemptUncensoredFallback(
     baseUrl: uncensoredProfile.baseUrl || undefined,
     connectionProfileId: uncensoredProfile.id,
     isLocal: false,
+    profileParameters: uncensoredProfile.parameters && typeof uncensoredProfile.parameters === 'object'
+      ? (uncensoredProfile.parameters as Record<string, unknown>)
+      : undefined,
   }
 }
 

@@ -65,6 +65,8 @@ export function useChatControls({
   const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
   // Per-chat thinking visibility override (tri-state: null = inherit global). DISPLAY ONLY.
   const [showThinking, setShowThinking] = useState<boolean | null>(null)
+  // Per-chat answer-confirmation override (tri-state: null = inherit project/global).
+  const [answerConfirmationOverride, setAnswerConfirmationOverride] = useState<'ON' | 'OFF' | null>(null)
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -127,6 +129,13 @@ export function useChatControls({
       setShowThinking(chat.showThinking ?? null)
     }
   }, [chat?.showThinking])
+  // Initialize answerConfirmationOverride from chat data (tri-state: null = inherit)
+  useEffect(() => {
+    if (chat?.answerConfirmationOverride !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setAnswerConfirmationOverride(chat.answerConfirmationOverride ?? null)
+    }
+  }, [chat?.answerConfirmationOverride])
 
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
@@ -283,6 +292,29 @@ export function useChatControls({
       showErrorToast('Could not update Thinking visibility')
     }
   }, [chatId, showThinking])
+
+  // Per-chat answer-confirmation override. Tri-state: null = inherit (project
+  // then global), 'ON'/'OFF' = explicit.
+  const handleSetAnswerConfirmationOverride = useCallback(async (value: 'ON' | 'OFF' | null) => {
+    const previous = answerConfirmationOverride
+    setAnswerConfirmationOverride(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { answerConfirmationOverride: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist answerConfirmationOverride', response.status)
+        setAnswerConfirmationOverride(previous)
+        showErrorToast('Could not update Answer Confirmation')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting answerConfirmationOverride', error)
+      setAnswerConfirmationOverride(previous)
+      showErrorToast('Could not update Answer Confirmation')
+    }
+  }, [chatId, answerConfirmationOverride])
 
   // Toggle document editing mode and persist to database
   const handleToggleDocumentEditingMode = useCallback(async () => {
@@ -600,6 +632,8 @@ export function useChatControls({
     handleSetCoreWhisperInterval,
     showThinking,
     handleSetShowThinking,
+    answerConfirmationOverride,
+    handleSetAnswerConfirmationOverride,
     connectionProfiles,
     userStoppedStreamRef,
     setPauseState,

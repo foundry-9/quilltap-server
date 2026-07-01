@@ -597,6 +597,12 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   if (prev.message.reasoningContent !== next.message.reasoningContent) return false
   if ((prev.message.reasoningSegments?.length ?? 0) !== (next.message.reasoningSegments?.length ?? 0)) return false
 
+  // Answer-confirmation state (badge)
+  if (prev.message.confirmed !== next.message.confirmed) return false
+  if (prev.message.confirmationChecked !== next.message.confirmationChecked) return false
+  if (prev.message.confirmationRevised !== next.message.confirmationRevised) return false
+  if (prev.message.confirmationNotes !== next.message.confirmationNotes) return false
+
   // Props are equal, skip re-render
   return true
 })

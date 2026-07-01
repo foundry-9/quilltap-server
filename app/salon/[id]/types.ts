@@ -90,6 +90,19 @@ export interface Message {
    * `anchorOffset`, `content`, and a `seq` shared with tool anchors so
    * same-offset items render in true emission order. */
   reasoningSegments?: Array<{ anchorOffset: number; content: string; seq: number }> | null
+  /** Answer-confirmation verdict: true = consistent/revised, false = affirmed a
+   *  flagged answer, null = could not verify / not applicable, undefined = the
+   *  check did not run (feature off / nothing to check). */
+  confirmed?: boolean | null
+  /** True when a check actually ran — distinguishes a reloaded "unverified"
+   *  (confirmed comes back undefined from SQL NULL) from "never checked". */
+  confirmationChecked?: boolean | null
+  /** Whether the shown content is a re-affirmation rewrite of the original. */
+  confirmationRevised?: boolean | null
+  /** The cheap-LLM discrepancy explanation, surfaced on the badge hover. */
+  confirmationNotes?: string | null
+  /** The pre-revision text, retained for the logs when confirmationRevised. */
+  confirmationOriginalContent?: string | null
 }
 
 export interface CharacterData {
@@ -214,6 +227,8 @@ export interface Chat {
   coreWhisperInterval?: number | null
   /** Per-chat override for showing reasoning models' thinking (null = inherit global `thinkingDisplay.defaultVisible`; true = show; false = hide). DISPLAY ONLY. */
   showThinking?: boolean | null
+  /** Per-chat answer-confirmation override (null = inherit project/global; 'ON'/'OFF' = explicit). */
+  answerConfirmationOverride?: 'ON' | 'OFF' | null
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */

@@ -1714,6 +1714,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           onSetCoreWhisperInterval={chatControls.handleSetCoreWhisperInterval}
           showThinking={chatControls.showThinking}
           onSetShowThinking={chatControls.handleSetShowThinking}
+          answerConfirmationOverride={chatControls.answerConfirmationOverride}
+          onSetAnswerConfirmationOverride={chatControls.handleSetAnswerConfirmationOverride}
           // Organize section
           onRenameClick={modals.openRename}
           onStateClick={modals.openStateEditor}

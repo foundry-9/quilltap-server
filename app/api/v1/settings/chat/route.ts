@@ -10,7 +10,7 @@ import { createAuthenticatedHandler, type AuthenticatedContext } from '@/lib/api
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -44,6 +44,7 @@ async function updateChatSettings(
   autonomousRoomSettings?: unknown,
   thinkingDisplay?: unknown,
   autoScrollOnResponseComplete?: boolean,
+  answerConfirmationSettings?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -242,6 +243,11 @@ async function updateChatSettings(
     }
     updateData.thinkingDisplay = thinkingDisplay
   }
+  if (typeof answerConfirmationSettings !== 'undefined') {
+    // Answer confirmation global default. Zod governs the persisted shape.
+    const validated = AnswerConfirmationSettingsSchema.parse(answerConfirmationSettings)
+    updateData.answerConfirmationSettings = validated
+  }
 
   return repos.chatSettings.updateForUser(userId, updateData)
 }
@@ -309,6 +315,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       autonomousRoomSettings,
       thinkingDisplay,
       autoScrollOnResponseComplete,
+      answerConfirmationSettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -338,6 +345,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       autonomousRoomSettings,
       thinkingDisplay,
       autoScrollOnResponseComplete,
+      answerConfirmationSettings,
     )
 
     return successResponse(chatSettings)

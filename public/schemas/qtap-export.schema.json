@@ -510,6 +510,10 @@
           "enum": ["OFF", null],
           "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
         },
+        "answerConfirmationOverride": {
+          "enum": ["ON", "OFF", null],
+          "description": "Per-chat answer-confirmation override. NULL = inherit (project override, then the global setting); 'ON'/'OFF' = force the Salon consistency check on/off for this chat."
+        },
 
         "chatType": {
           "enum": ["salon", "help", "autonomous", "brahma"],
@@ -668,6 +672,11 @@
             "required": ["anchorOffset", "content", "seq"]
           }
         },
+        "confirmed": { "type": ["boolean", "null"], "description": "Answer-confirmation verdict. true = the reply was consistent with what the character recalled/looked up this turn (or was successfully revised); false = the character stood by a flagged reply unchanged; null = the check could not run (error/timeout) or was not applicable (e.g. a user-driven turn). Absent when the feature was off / there was nothing to check." },
+        "confirmationChecked": { "type": ["boolean", "null"], "description": "True when a confirmation check actually ran. Distinguishes a persisted 'unverified' (confirmed null but checked) from 'never checked', since both store confirmed as SQL NULL." },
+        "confirmationRevised": { "type": ["boolean", "null"], "description": "Whether the shown `content` is a re-affirmation rewrite of the character's original reply." },
+        "confirmationNotes": { "type": ["string", "null"], "description": "The cheap-LLM discrepancy explanation surfaced on the confirmation badge hover; null when confirmed:true on the first pass or not applicable." },
+        "confirmationOriginalContent": { "type": ["string", "null"], "description": "The character's pre-revision text, retained for the logs when confirmationRevised is true; null otherwise." },
         "hostEvent": {
           "type": ["object", "null"],
           "description": "Structured payload on Host announcements (systemSender = 'host'). Two shapes share this field: (a) presence transitions — { participantId, toStatus } — for add / remove / status-change; (b) off-scene character introductions — { introducedCharacterIds } — stamped by the off-scene Host announcer so the context builder can detect already-introduced characters. All fields optional; one or the other is set per announcement.",
@@ -1102,6 +1111,7 @@
         "defaultDisabledTools": { "type": "array", "items": { "type": "string" } },
         "defaultDisabledToolGroups": { "type": "array", "items": { "type": "string" } },
         "defaultAgentModeEnabled": { "type": ["boolean", "null"] },
+        "answerConfirmationOverride": { "enum": ["ON", "OFF", null], "description": "Per-project answer-confirmation override for the project's chats. NULL = inherit the global setting; 'ON'/'OFF' = force the Salon consistency check on/off (a chat's own override still wins)." },
         "defaultAvatarGenerationEnabled": { "type": ["boolean", "null"] },
         "defaultImageProfileId": { "type": ["string", "null"] },
         "defaultRoleplayTemplateId": { "type": ["string", "null"] },

@@ -421,6 +421,14 @@ export async function handleGet(
             // render the collapsible thinking block on reload. Never re-fed to a model.
             reasoningContent: event.reasoningContent || null,
             reasoningSegments: event.reasoningSegments || null,
+            // Answer-confirmation verdict — drives the badge on reload. `confirmed`
+            // may be false/null (both meaningful), so preserve the tri-state
+            // explicitly instead of `|| null`; undefined = no check ran.
+            confirmed: event.confirmed ?? undefined,
+            confirmationChecked: event.confirmationChecked ?? undefined,
+            confirmationRevised: event.confirmationRevised ?? undefined,
+            confirmationNotes: event.confirmationNotes ?? null,
+            confirmationOriginalContent: event.confirmationOriginalContent ?? null,
           };
         })
     ).then((results) => results.filter(Boolean));

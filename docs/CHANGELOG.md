@@ -4,6 +4,28 @@
 
 ### 4.8-dev
 
+#### Fix: cheap-LLM tasks now forward provider parameters (e.g. DeepSeek thinking mode)
+
+Cheap-LLM tasks (memory extraction, summaries, titles, answer confirmation, etc.) built a minimal request in `sendToProvider` and never forwarded the selected profile's provider-specific parameters. So a profile set to DeepSeek **Thinking Mode = Disabled** still reasoned: DeepSeek fell back to its model default (reasoning on for `deepseek-v4-flash`), which spent the whole completion budget thinking and returned empty content — surfacing as failed/blank cheap-LLM results (e.g. answer-confirmation checks resolving to "Unvetted").
+
+- `CheapLLMSelection` now carries `profileParameters`, populated from the chosen profile at every selection site (user-defined, global default, cheap-flagged, Ollama, and the uncensored/re-affirmation paths).
+- `sendToProvider` forwards `profileParameters` on every `provider.sendMessage` call, so `thinking` / `reasoning_effort` (and other allowlisted provider extras) take effect. The task pipeline still controls temperature and max-tokens at the top level; providers only apply their allowlisted extras, so this doesn't override the cheap-task sampling settings.
+
+#### Feature: answer confirmation (Salon consistency check + re-affirmation)
+
+Before a character's tool-using Salon reply is saved, an optional cheap-LLM consistency check compares the reply against what the character was told this turn (its last Commonplace Book whisper) and what it looked up (in-scope read-tool results: `search`, `read_conversation`, and the `doc_*` content-read family). The check only runs when there is something to check — a whisper and/or an in-scope read-tool result.
+
+- Consistent → the reply is saved with `confirmed: true`.
+- Inconsistent → the character's own model is shown the discrepancies and asked to stand by the reply (`confirmed: false`) or rewrite it. A rewrite is saved as the shown reply (`confirmed: true`, `confirmationRevised: true`); the original text is kept in `confirmationOriginalContent` for the logs.
+- Check errored/timed out, or the turn was user-driven (impersonation) → `confirmed: null` (could-not-verify).
+- Feature off / nothing to check → no confirmation fields written.
+
+The Salon status bar shows `Confirming…` during the check and `Requesting affirmation of questionable results…` during the re-affirmation. Each checked message carries a small badge (Vouched / Amended / Stood by / Unvetted) that reveals the discrepancy notes on hover. The first reply streams live and is replaced in place if the re-affirmation rewrites it (a deliberate, visible transparency swap).
+
+- Gate: global default OFF, with per-project and per-chat overrides. A project set to ON enables its chats automatically; a chat's own override always wins. Global toggle in Settings → Chat; per-project toggle in the Prospero project's Model Behavior card; per-chat toggle in the Salon sidebar's Visibility section.
+- New columns: `chat_messages.{confirmed, confirmationChecked, confirmationRevised, confirmationNotes, confirmationOriginalContent}`, `chats.answerConfirmationOverride`, `chat_settings.answerConfirmationSettings` (migration `add-answer-confirmation-columns-v2`). Per-project override rides in the project's `properties.json`. All fields ride in `.qtap` exports.
+- Scope: normal Salon chats only — not help chats, the Brahma Console, or Carina calls. Silent turns are skipped. The re-affirmation runs at most once (no loop). The regenerate/swipe path is not yet covered.
+
 #### Fix: the workspace header now tracks the active (focused) tab
 
 The contextual header (Salon project link, character avatars, chat title, cost summary) did not update when switching tabs: with several chat tabs kept alive at once, all of them wrote to the single global header and the last one to mount won, so the header showed stale content and never changed on tab activation. Switching to a non-Salon tab left the previous Salon header in place.

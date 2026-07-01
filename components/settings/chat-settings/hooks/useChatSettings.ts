@@ -31,6 +31,8 @@ import {
   AutonomousRoomSettings,
   ThinkingDisplaySettings,
   DEFAULT_THINKING_DISPLAY_SETTINGS,
+  AnswerConfirmationSettings,
+  DEFAULT_ANSWER_CONFIRMATION_SETTINGS,
 } from '../types'
 
 interface UseChatSettingsReturn {
@@ -66,6 +68,7 @@ interface UseChatSettingsReturn {
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
   handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
+  handleAnswerConfirmationUpdate: (updates: Partial<AnswerConfirmationSettings>) => Promise<void>
 }
 
 export function useChatSettings(): UseChatSettingsReturn {
@@ -699,6 +702,40 @@ export function useChatSettings(): UseChatSettingsReturn {
     [settings, mutateSettings, showSuccess]
   )
 
+  const handleAnswerConfirmationUpdate = useCallback(
+    async (updates: Partial<AnswerConfirmationSettings>) => {
+      if (!settings) return
+
+      const merged: AnswerConfirmationSettings = {
+        ...DEFAULT_ANSWER_CONFIRMATION_SETTINGS,
+        ...(settings.answerConfirmationSettings ?? {}),
+        ...updates,
+      }
+
+      try {
+        setSaving(true)
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answerConfirmationSettings: merged }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update answer-confirmation settings')
+        }
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update answer-confirmation settings', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
   /**
    * Update agent mode default enabled setting
    */
@@ -960,5 +997,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
+    handleAnswerConfirmationUpdate,
   }
 }

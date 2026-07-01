@@ -54,6 +54,15 @@ export const ChatMessageRowSchema = z.object({
   renderedHtml: z.string().nullable().optional(),
   // Danger content flags from gatekeeper classification
   dangerFlags: z.array(DangerFlagSchema).nullable().optional(),  // JSON array
+  // Answer-confirmation results. Plain booleans so the schema translator
+  // classifies them as boolean columns (INTEGER 0/1 in SQLite, hydrated back to
+  // true/false on read — they don't start with 'is' so the naming fallback
+  // wouldn't catch them).
+  confirmed: z.boolean().nullable().optional(),
+  confirmationChecked: z.boolean().nullable().optional(),
+  confirmationRevised: z.boolean().nullable().optional(),
+  confirmationNotes: z.string().nullable().optional(),
+  confirmationOriginalContent: z.string().nullable().optional(),
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
   systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant

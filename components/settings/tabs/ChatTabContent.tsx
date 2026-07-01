@@ -14,6 +14,7 @@ import { ImageDescriptionSettings } from '@/components/settings/chat-settings/Im
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
+import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
 import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { AutonomousRoomSettingsComponent } from '@/components/settings/chat-settings/AutonomousRoomSettings'
 import { AutonomousRoomsCard } from '@/components/tools/autonomous-rooms-card'
@@ -45,6 +46,7 @@ export function ChatTabContent() {
     handleCheapLLMUpdate,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
+    handleAnswerConfirmationUpdate,
   } = useChatSettingsContext()
 
   if (loading) {
@@ -153,6 +155,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onUpdate={handleThinkingDisplayUpdate}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Answer Confirmation" description="Vet looked-up answers against what the character actually knew this turn" sectionId="answer-confirmation" forceOpen={activeSection === 'answer-confirmation'}>
+          <AnswerConfirmationSettings
+            settings={settings}
+            saving={saving}
+            onUpdate={handleAnswerConfirmationUpdate}
           />
         </CollapsibleCard>
 

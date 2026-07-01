@@ -193,6 +193,27 @@ export const MessageEventSchema = z.object({
   provider: z.string().nullable().optional(),
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName: z.string().nullable().optional(),
+  /**
+   * Answer-confirmation result. true = consistent (or successfully revised),
+   * false = character affirmed a flagged answer unchanged, null = the check
+   * could not run (error/timeout) or was not applicable (e.g. a user-driven
+   * turn, where the system cannot vouch for out-of-band sourcing). undefined =
+   * the feature was off / there was nothing to check (no field written).
+   */
+  confirmed: z.boolean().nullable().optional(),
+  /** Whether a confirmation check actually ran for this message. Distinguishes a
+   *  persisted "unverified" (`confirmed:null`, but checked) from "never checked"
+   *  (no fields) — both of which store as SQL NULL for `confirmed`, so the
+   *  boolean here is what survives a reload to keep the "Unvetted" badge. */
+  confirmationChecked: z.boolean().nullable().optional(),
+  /** Whether the shown `content` is a re-affirmation rewrite of the original. */
+  confirmationRevised: z.boolean().nullable().optional(),
+  /** The cheap-LLM discrepancy explanation (what looked inconsistent). Surfaced
+   *  on the badge hover; null when confirmed:true on the first pass or not applicable. */
+  confirmationNotes: z.string().nullable().optional(),
+  /** The character's original pre-revision text, retained for the logs when
+   *  `confirmationRevised` is true. Null otherwise. */
+  confirmationOriginalContent: z.string().nullable().optional(),
   /** Target participant IDs for whisper messages (null = public message, array = private to sender and targets) */
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),
   /** Whether this message was generated while the character was in silent mode */
@@ -685,6 +706,14 @@ export const ChatMetadataSchema = z.object({
    */
   conciergeOverride: z.enum(['OFF']).nullable().optional(),
 
+  /**
+   * Per-chat answer-confirmation override. NULL means inherit (from the chat's
+   * project override, then the global setting). 'ON' forces the consistency
+   * check on for this chat; 'OFF' forces it off. See
+   * `isAnswerConfirmationActive`.
+   */
+  answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
+
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
 
@@ -1010,6 +1039,14 @@ export const ChatMetadataBaseSchema = z.object({
    * who flip this on accept the risk of provider refusals.
    */
   conciergeOverride: z.enum(['OFF']).nullable().optional(),
+
+  /**
+   * Per-chat answer-confirmation override. NULL means inherit (from the chat's
+   * project override, then the global setting). 'ON' forces the consistency
+   * check on for this chat; 'OFF' forces it off. See
+   * `isAnswerConfirmationActive`.
+   */
+  answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),

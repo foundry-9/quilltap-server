@@ -714,6 +714,26 @@ export function encodeCarinaAnswerEvent(
 }
 
 /**
+ * Emitted once the answer-confirmation check resolves for a just-streamed
+ * message. Carries the confirmation state for the badge, and — only when the
+ * re-affirmation rewrote the reply — the replacement `content` so the client
+ * can swap the optimistic bubble text in place. The visible swap is a
+ * deliberate transparency feature, not a glitch to hide.
+ */
+export function encodeConfirmationResultEvent(
+  encoder: TextEncoder,
+  result: {
+    messageId: string
+    confirmed: boolean | null
+    revised: boolean
+    notes: string | null
+    content?: string
+  }
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ confirmationResult: result })}\n\n`)
+}
+
+/**
  * Safely enqueue data to a stream controller
  * Returns true if successful, false if the controller is already closed
  */
