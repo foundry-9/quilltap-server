@@ -17,6 +17,7 @@ import {
   MIN_SPLIT_RATIO,
   type PaneId,
   type PaneState,
+  type TabKind,
   type WorkspaceState,
   type WorkspaceTab,
 } from './types'
@@ -34,6 +35,11 @@ export function workspaceStorageKey(instanceId?: string | null): string {
   return instanceId ? `${WORKSPACE_STORAGE_KEY_BASE}.${instanceId}` : WORKSPACE_STORAGE_KEY_BASE
 }
 
+// Must list every `TabKind`. The `satisfies` clause rejects typos/removed kinds,
+// and the exhaustiveness assertion below rejects a `TabKind` added to the type
+// but forgotten here — either would otherwise let a valid persisted tab fail
+// validation. (Deserialization is resilient to unknown kinds regardless: an
+// unlisted kind now drops only its own tab, never the whole saved layout.)
 const TAB_KINDS = [
   'home',
   'salon',
@@ -48,8 +54,19 @@ const TAB_KINDS = [
   'scenarios',
   'brahma',
   'wardrobe',
+  'profile',
+  'about',
+  'generate-image',
+  'character-new',
+  'character-edit',
   'character-view',
-] as const
+  'settings-wizard',
+] as const satisfies readonly TabKind[]
+
+// Compile-time exhaustiveness: errors if any `TabKind` is missing above.
+type _MissingTabKinds = Exclude<TabKind, (typeof TAB_KINDS)[number]>
+const _assertAllTabKindsListed: _MissingTabKinds extends never ? true : never = true
+void _assertAllTabKindsListed
 
 const WorkspaceTabSchema = z.object({
   id: z.string().min(1),
@@ -65,8 +82,13 @@ const PaneStateSchema = z.object({
   activeTabId: z.string().nullable(),
 })
 
+// The outer shape is validated strictly, but `tabs` is validated leniently here
+// (each entry re-checked individually below) so a single malformed or
+// unknown-kind tab drops only itself rather than failing the whole parse and
+// discarding the user's entire saved layout. Dangling pane references left by a
+// dropped tab are cleaned up by {@link pruneWorkspaceState}.
 const WorkspaceStateSchema = z.object({
-  tabs: z.record(z.string(), WorkspaceTabSchema),
+  tabs: z.record(z.string(), z.unknown()),
   panes: z.object({
     left: PaneStateSchema,
     right: PaneStateSchema.nullable(),
@@ -79,14 +101,30 @@ export function serializeWorkspaceState(state: WorkspaceState): string {
   return JSON.stringify(state)
 }
 
-/** Parse + shape-validate. Returns `null` on malformed/incompatible payloads. */
+/**
+ * Parse + shape-validate. Returns `null` only when the top-level structure is
+ * malformed; individual tabs that fail validation (e.g. an unknown `kind` from a
+ * newer or older build) are dropped rather than discarding the whole state.
+ */
 export function deserializeWorkspaceState(raw: string | null | undefined): WorkspaceState | null {
   if (!raw) return null
   try {
     const parsed: unknown = JSON.parse(raw)
     const result = WorkspaceStateSchema.safeParse(parsed)
     if (!result.success) return null
-    return result.data as WorkspaceState
+
+    const tabs: Record<string, WorkspaceTab> = {}
+    for (const [id, rawTab] of Object.entries(result.data.tabs)) {
+      const tab = WorkspaceTabSchema.safeParse(rawTab)
+      if (tab.success) tabs[id] = tab.data as WorkspaceTab
+    }
+
+    return {
+      tabs,
+      panes: result.data.panes,
+      focusedPane: result.data.focusedPane,
+      splitRatio: result.data.splitRatio,
+    } as WorkspaceState
   } catch {
     return null
   }

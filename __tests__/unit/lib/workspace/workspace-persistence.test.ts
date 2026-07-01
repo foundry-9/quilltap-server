@@ -15,7 +15,7 @@ import {
   workspaceReducer,
   createInitialState,
 } from '@/lib/workspace/workspace-reducer'
-import type { WorkspaceState } from '@/lib/workspace/types'
+import type { TabKind, WorkspaceState } from '@/lib/workspace/types'
 
 function build(): WorkspaceState {
   // home + salon(c1) in left; salon(c2) + terminal(c2) in right.
@@ -67,6 +67,53 @@ describe('serialize/deserialize', () => {
     expect(
       deserializeWorkspaceState(JSON.stringify({ ...build(), focusedPane: 'middle' }))
     ).toBeNull()
+  })
+
+  it('drops only an unknown-kind tab, keeping the rest of the layout', () => {
+    // A future/older build could persist a tab kind this build does not know.
+    // It must not nuke the whole saved workspace — only that tab is dropped.
+    const s = build()
+    const withBogus = {
+      ...s,
+      tabs: {
+        ...s.tabs,
+        bogus: { id: 'bogus', kind: 'from-the-future', title: 'Mystery' },
+      },
+      panes: {
+        ...s.panes,
+        left: { ...s.panes.left, order: [...s.panes.left.order, 'bogus'] },
+      },
+    }
+    const restored = deserializeWorkspaceState(JSON.stringify(withBogus))
+    expect(restored).not.toBeNull()
+    expect(restored!.tabs.bogus).toBeUndefined()
+    // Every known tab survives.
+    for (const id of Object.keys(s.tabs)) {
+      expect(restored!.tabs[id]).toEqual(s.tabs[id])
+    }
+  })
+
+  it('round-trips every TabKind (TAB_KINDS stays complete)', () => {
+    const kinds: TabKind[] = [
+      'home', 'salon', 'terminal', 'document', 'aurora', 'prospero',
+      'scriptorium', 'settings', 'files', 'photos', 'scenarios', 'brahma',
+      'wardrobe', 'profile', 'about', 'generate-image', 'character-new',
+      'character-edit', 'character-view', 'settings-wizard',
+    ]
+    const tabs: WorkspaceState['tabs'] = {}
+    for (const kind of kinds) {
+      const id = `t_${kind}`
+      tabs[id] = { id, kind, title: kind }
+    }
+    const state: WorkspaceState = {
+      tabs,
+      panes: { left: { order: Object.keys(tabs), activeTabId: Object.keys(tabs)[0] }, right: null },
+      focusedPane: 'left',
+      splitRatio: 0.5,
+    }
+    const restored = deserializeWorkspaceState(serializeWorkspaceState(state))
+    expect(restored).toEqual(state)
+    expect(Object.keys(restored!.tabs)).toHaveLength(kinds.length)
   })
 })
 

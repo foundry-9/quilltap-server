@@ -4,6 +4,13 @@
 
 ### 4.8-dev
 
+#### Fix: an unknown tab kind no longer discards the entire saved workspace layout
+
+The persisted workspace validator rejected the whole saved state if any single tab had a `kind` not in its allow-list, silently wiping the user's tab layout on reload. The allow-list was also missing several real tab kinds (`profile`, `about`, `generate-image`, `character-new`, `character-edit`, `settings-wizard`), so having any of those open at reload triggered the wipe.
+
+- The allow-list (`TAB_KINDS` in `lib/workspace/workspace-persistence.ts`) now covers every `TabKind`, guarded by a compile-time exhaustiveness check so a future kind can't be forgotten.
+- Deserialization is now resilient: a malformed or unknown-kind tab drops only itself (dangling pane references are cleaned up by the existing prune step) instead of failing the whole parse. Layouts from a newer/older build survive a reload with just the unrecognized tabs removed.
+
 #### Fix: clicking a character name in the Salon header now opens a workspace tab
 
 Clicking a character's name in the Salon conversation header navigated the whole browser to the full-page character view, tearing down the workspace (and any streaming conversation) instead of opening the detail view as a tab.
