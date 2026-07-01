@@ -42,9 +42,12 @@ export interface CharacterDetailViewProps {
   /** Open the new-chat modal as soon as the character loads (the `?action=chat`
       entry point). */
   openChatOnMount?: boolean
+  /** Sub-tab to select initially (e.g. `conversations`). Used when rendered as a
+      workspace tab, where the `?tab=` URL param is unavailable. */
+  initialTab?: string
 }
 
-export function CharacterDetailView({ characterId: id, onBack, openChatOnMount = false }: CharacterDetailViewProps) {
+export function CharacterDetailView({ characterId: id, onBack, openChatOnMount = false, initialTab }: CharacterDetailViewProps) {
   const { style } = useAvatarDisplay()
   const wardrobeDialog = useWardrobeDialogOptional()
   const { shouldHideByIds, hiddenTagIds } = useQuickHide()
@@ -349,7 +352,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
         />
 
         {/* Tabbed Content */}
-        <EntityTabs tabs={CHARACTER_TABS} defaultTab="details">
+        <EntityTabs tabs={CHARACTER_TABS} defaultTab={initialTab ?? 'details'}>
           {renderTabContent}
         </EntityTabs>
       </div>

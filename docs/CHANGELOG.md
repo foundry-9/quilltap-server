@@ -4,6 +4,13 @@
 
 ### 4.8-dev
 
+#### Fix: clicking a character name in the Salon header now opens a workspace tab
+
+Clicking a character's name in the Salon conversation header navigated the whole browser to the full-page character view, tearing down the workspace (and any streaming conversation) instead of opening the detail view as a tab.
+
+- `/aurora/<id>/view` (and legacy `/characters/<id>/view`) now maps to a new `character-view` workspace tab kind, so the workspace link interceptor opens it in place rather than routing away. The tab is keyed by character id (each character gets its own detail tab) and persists across reloads. Its "back" action closes the tab.
+- `CharacterDetailView` accepts an `initialTab` so the header's `?tab=conversations` deep-link still selects the Conversations sub-tab when opened as a tab (where the URL param isn't available).
+
 #### Fix: thinking output silently empty on claude-sonnet-5 (and Opus 4.7+/Fable/Mythos)
 
 After fixing the two 400 errors below, extended thinking on Sonnet 5 stopped showing up in the Salon at all — no error, just nothing. Adaptive thinking on this model family defaults `thinking.display` to `"omitted"`: the response still includes thinking blocks, but their text comes back empty unless the request explicitly asks for `display: "summarized"`.

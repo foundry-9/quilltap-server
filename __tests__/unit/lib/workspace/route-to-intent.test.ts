@@ -65,7 +65,17 @@ describe('parseHrefToIntent', () => {
 
   it('does NOT map a bare character detail (it renders in-place in Aurora)', () => {
     expect(parseHrefToIntent('/aurora/abc')).toBeNull()
-    expect(parseHrefToIntent('/aurora/abc/view')).toBeNull()
+  })
+
+  it('maps the character detail view (aurora + legacy /characters paths) with its sub-tab', () => {
+    expect(parseHrefToIntent('/aurora/abc/view')).toEqual({
+      kind: 'character-view',
+      payload: { characterId: 'abc', tab: undefined },
+    })
+    expect(parseHrefToIntent('/characters/abc/view?tab=conversations')).toEqual({
+      kind: 'character-view',
+      payload: { characterId: 'abc', tab: 'conversations' },
+    })
   })
 
   it('returns null for unknown or external hrefs', () => {

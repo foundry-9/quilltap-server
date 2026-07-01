@@ -37,6 +37,7 @@ export type TabKind =
   | 'generate-image' // standalone (chat-less) image generation
   | 'character-new' // the create-a-character form
   | 'character-edit' // payload: { characterId: string; tab?: string }
+  | 'character-view' // payload: { characterId: string; tab?: string } — the read-only character detail page
   | 'settings-wizard' // the provider setup wizard, re-entered from Settings
 
 /** Kind-specific tab payloads. */
@@ -65,6 +66,11 @@ export interface WardrobeTabPayload {
 export interface CharacterEditTabPayload {
   characterId: string
   /** Deep-link target sub-tab (e.g. `system-prompts`). */
+  tab?: string
+}
+export interface CharacterViewTabPayload {
+  characterId: string
+  /** Deep-link target sub-tab (e.g. `conversations`). */
   tab?: string
 }
 

@@ -48,6 +48,7 @@ const TAB_KINDS = [
   'scenarios',
   'brahma',
   'wardrobe',
+  'character-view',
 ] as const
 
 const WorkspaceTabSchema = z.object({

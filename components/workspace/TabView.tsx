@@ -36,13 +36,32 @@ import { AboutView } from '@/app/about/AboutView'
 import { GenerateImageView } from '@/app/generate-image/GenerateImageView'
 import { NewCharacterView } from '@/app/aurora/new/NewCharacterView'
 import { CharacterEditView } from '@/app/aurora/[id]/edit/CharacterEditView'
+import { CharacterDetailView } from '@/app/aurora/[id]/view/CharacterDetailView'
+import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
 import type {
   TerminalTabPayload,
   DocumentTabPayload,
   WardrobeTabPayload,
   CharacterEditTabPayload,
+  CharacterViewTabPayload,
 } from '@/lib/workspace/types'
+
+/**
+ * The read-only character detail as a workspace tab. Its "back" action closes
+ * the tab (returning focus to the kept-alive tab it was opened from) rather than
+ * navigating, keeping the workspace mounted.
+ */
+function CharacterViewTab({ characterId, initialTab }: { characterId: string; initialTab?: string }) {
+  const closeSelf = useCloseSelfTab()
+  return (
+    <CharacterDetailView
+      characterId={characterId}
+      initialTab={initialTab}
+      onBack={() => { closeSelf() }}
+    />
+  )
+}
 
 function renderView(tab: WorkspaceTab) {
   switch (tab.kind) {
@@ -87,6 +106,10 @@ function renderView(tab: WorkspaceTab) {
     case 'character-edit': {
       const payload = tab.payload as CharacterEditTabPayload
       return <CharacterEditView characterId={payload.characterId} initialTab={payload.tab} />
+    }
+    case 'character-view': {
+      const payload = tab.payload as CharacterViewTabPayload
+      return <CharacterViewTab characterId={payload.characterId} initialTab={payload.tab} />
     }
     case 'settings-wizard':
       return <SettingsWizardView />

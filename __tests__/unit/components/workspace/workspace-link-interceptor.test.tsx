@@ -45,7 +45,8 @@ function setup() {
       {/* No tab equivalent (a bare character detail renders in-place inside the
           Aurora tab) → must NOT be intercepted. The onClick prevents jsdom's
           unimplemented-navigation noise. */}
-      <a href="/aurora/c1/view" data-testid="nomap" onClick={(e) => e.preventDefault()}>Character detail</a>
+      <a href="/aurora/c1/view" data-testid="viewchar">Character detail</a>
+      <a href="/aurora/c1" data-testid="nomap" onClick={(e) => e.preventDefault()}>Bare character detail</a>
       <a href="https://example.com" data-testid="ext" onClick={(e) => e.preventDefault()}>External</a>
       <a href="/salon/new" data-testid="newchat">New chat</a>
       <a href="/salon/new?projectId=p1" data-testid="newchat-proj">New chat in project</a>
@@ -82,6 +83,8 @@ describe('WorkspaceLinkInterceptor', () => {
     expect(countKind('character-new')).toBe(1)
     fireEvent.click(screen.getByTestId('editchar'))
     expect(countKind('character-edit')).toBe(1)
+    fireEvent.click(screen.getByTestId('viewchar'))
+    expect(countKind('character-view')).toBe(1)
   })
 
   it('leaves links with no tab equivalent (and external links) alone', () => {

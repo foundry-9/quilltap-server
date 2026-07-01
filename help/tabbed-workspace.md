@@ -32,6 +32,9 @@ consult a character's dossier on the right.
 - **Start or open a conversation** and it takes up residence in its own Salon
   tab, streaming away undisturbed even as you wander to other tabs and back. Your
   draft text and your place in the scrollback are kept faithfully.
+- **Call up a character's dossier** by clicking their name in a conversation's
+  header; their detail view opens in its own tab (each character keeps their own)
+  rather than sweeping you away from the room you were in.
 - **Reorder tabs** by dragging them along their strip.
 - **Move a tab between panes** by dragging it onto the other pane's strip.
 - **Split the workspace** by dragging a tab onto the centre of an undivided

@@ -41,6 +41,7 @@ export const DEFAULT_TAB_META: Record<TabKind, TabMeta> = {
   'generate-image': { title: 'Generate Image', icon: 'image' },
   'character-new': { title: 'New Character', icon: 'user-plus' },
   'character-edit': { title: 'Edit Character', icon: 'pencil' },
+  'character-view': { title: 'Character', icon: 'characters' },
   'settings-wizard': { title: 'Provider Setup', icon: 'wand' },
 }
 

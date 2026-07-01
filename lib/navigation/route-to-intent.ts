@@ -40,15 +40,27 @@ export function parseHrefToIntent(href: string): TabIntent | null {
   }
 
   // /aurora/<id>/edit (or legacy /characters/<id>/edit) — the character editor.
-  // Note: a bare /aurora/<id> (the character detail) has NO tab equivalent — it
-  // is rendered in-place inside the Aurora tab — so it intentionally falls
-  // through to `null` below.
+  // Note: a bare /aurora/<id> (which redirects to /view) has NO tab equivalent —
+  // when linked to it renders in-place inside the Aurora tab — so it
+  // intentionally falls through to `null` below.
   const editMatch = path.match(/^\/(?:aurora|characters)\/([^/]+)\/edit$/)
   if (editMatch) {
     const sp = new URLSearchParams(query)
     return {
       kind: 'character-edit',
       payload: { characterId: editMatch[1], tab: sp.get('tab') ?? undefined },
+    }
+  }
+
+  // /aurora/<id>/view (or legacy /characters/<id>/view) — the read-only character
+  // detail page, opened as its own tab (e.g. from the Salon header) so it never
+  // navigates away from the workspace.
+  const viewMatch = path.match(/^\/(?:aurora|characters)\/([^/]+)\/view$/)
+  if (viewMatch) {
+    const sp = new URLSearchParams(query)
+    return {
+      kind: 'character-view',
+      payload: { characterId: viewMatch[1], tab: sp.get('tab') ?? undefined },
     }
   }
 

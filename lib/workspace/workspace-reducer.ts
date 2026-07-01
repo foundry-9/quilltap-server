@@ -89,8 +89,8 @@ function chatDocumentIdOf(payload: unknown): string {
 
 /**
  * De-dupe key for a tab. Salon/terminal tabs are keyed by their (parent) chat
- * id and character-edit by its character id (so each character gets its own
- * editor tab). Document tabs are keyed by chat id **and** the open document's
+ * id and character-edit/character-view by its character id (so each character
+ * gets its own editor and detail tab). Document tabs are keyed by chat id **and** the open document's
  * row id, so a single chat can have several document tabs open at once (one per
  * document). Every other kind is a singleton keyed by kind alone.
  */
@@ -104,6 +104,8 @@ export function tabIdentity(tab: { kind: TabKind; payload?: unknown }): string {
       return `document:${chatIdOf(tab.payload)}:${chatDocumentIdOf(tab.payload)}`
     case 'character-edit':
       return `character-edit:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
+    case 'character-view':
+      return `character-view:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
     default:
       return tab.kind
   }
