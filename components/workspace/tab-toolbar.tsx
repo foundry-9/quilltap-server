@@ -12,8 +12,9 @@
  * content keyed by tab id. {@link TabToolbarProvider} wraps each mounted tab's
  * view and supplies the *same* `PageToolbarContext` — so `usePageToolbar()`
  * inside the view resolves to the per-tab provider and writes into the registry
- * with no change to the call site. {@link PaneToolbar} renders a pane's active
- * tab's content out of the registry.
+ * with no change to the call site. {@link WorkspaceToolbarBridge} then surfaces
+ * the *focused* pane's active tab's content into the single global page toolbar,
+ * so the header always reflects whichever tab currently has focus.
  *
  * @module components/workspace/tab-toolbar
  */
@@ -29,8 +30,10 @@ import {
 } from 'react'
 import {
   PageToolbarContext,
+  usePageToolbar,
   type PageToolbarContextValue,
 } from '@/components/providers/page-toolbar-provider'
+import { useWorkspace } from '@/components/providers/workspace-provider'
 
 type ToolbarSide = 'left' | 'right'
 interface ToolbarSlots {
@@ -48,8 +51,8 @@ const TabToolbarRegistryContext = createContext<TabToolbarRegistryValue | null>(
 
 /**
  * Holds the per-tab toolbar content. Rendered once by the workspace host, above
- * the pane/tab tree. Panes read it via {@link PaneToolbar}; tab views write to
- * it via {@link TabToolbarProvider}.
+ * the pane/tab tree. Tab views write to it via {@link TabToolbarProvider}; the
+ * {@link WorkspaceToolbarBridge} reads the focused tab's slot back out.
  */
 export function TabToolbarRegistryProvider({ children }: { children: ReactNode }) {
   const [toolbars, setToolbars] = useState<Record<string, ToolbarSlots>>({})
@@ -137,23 +140,32 @@ export function TabToolbarProvider({
 }
 
 /**
- * Reads the toolbar content a given (active) tab injected and renders its left
- * and right slots. The shared chrome (search bar, global badges, width toggle)
- * lives in the workspace top chrome, not here, so a split shows that chrome once
- * while each pane carries its own surface's contextual controls.
+ * Renderless bridge: pushes the **focused** pane's active tab's injected toolbar
+ * content into the single global page toolbar. The header therefore regenerates
+ * whenever the active tab changes (activate a different Salon → its header) or
+ * pane focus moves in a split (focus a non-Salon pane → the header clears,
+ * because that tab injected nothing). Mounted once inside the workspace, above
+ * the tab tree, so its own `usePageToolbar()` resolves to the *global* provider
+ * rather than any per-tab {@link TabToolbarProvider}.
  */
-export function PaneToolbar({ activeTabId }: { activeTabId: string | null }) {
+export function WorkspaceToolbarBridge() {
   const { toolbars } = useTabToolbarRegistry()
+  const { state } = useWorkspace()
+  const { setLeftContent, setRightContent } = usePageToolbar()
+
+  const activeTabId = state.panes[state.focusedPane]?.activeTabId ?? null
   const slots = activeTabId ? toolbars[activeTabId] : null
   const left = slots?.left ?? null
   const right = slots?.right ?? null
 
-  if (!left && !right) return null
+  useEffect(() => {
+    setLeftContent(left)
+    setRightContent(right)
+    return () => {
+      setLeftContent(null)
+      setRightContent(null)
+    }
+  }, [left, right, setLeftContent, setRightContent])
 
-  return (
-    <div className="qt-pane-toolbar">
-      <div className="qt-pane-toolbar-left">{left}</div>
-      <div className="qt-pane-toolbar-right">{right}</div>
-    </div>
-  )
+  return null
 }

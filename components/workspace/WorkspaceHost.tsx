@@ -20,7 +20,6 @@ import { DEFAULT_SPLIT_RATIO, type PaneId } from '@/lib/workspace/types'
 import { TabStrip } from './TabStrip'
 import { TabView } from './TabView'
 import { WorkspaceDivider } from './WorkspaceDivider'
-import { PaneToolbar } from './tab-toolbar'
 import { WorkspaceBackdrop } from './workspace-backdrop'
 import { useWorkspaceShortcuts } from './useWorkspaceShortcuts'
 
@@ -74,7 +73,6 @@ export function WorkspaceHost() {
           onClose={closeTab}
           onMove={moveIntoLeft}
         />
-        <PaneToolbar activeTabId={state.panes.left.activeTabId} />
       </div>
 
       {/* ---- Divider + right pane chrome (only when split) ---- */}
@@ -100,7 +98,6 @@ export function WorkspaceHost() {
               onClose={closeTab}
               onMove={moveIntoRight}
             />
-            <PaneToolbar activeTabId={state.panes.right.activeTabId} />
           </div>
         </>
       )}

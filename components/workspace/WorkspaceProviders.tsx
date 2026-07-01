@@ -21,7 +21,7 @@ import {
   WorkspaceProvider,
   useWorkspaceOptional,
 } from '@/components/providers/workspace-provider'
-import { TabToolbarRegistryProvider } from '@/components/workspace/tab-toolbar'
+import { TabToolbarRegistryProvider, WorkspaceToolbarBridge } from '@/components/workspace/tab-toolbar'
 import { WorkspacePortalRegistryProvider } from '@/components/workspace/workspace-tab-context'
 import { WorkspaceBackdropProvider } from '@/components/workspace/workspace-backdrop'
 import { WorkspaceLinkInterceptor } from '@/components/workspace/WorkspaceLinkInterceptor'
@@ -39,6 +39,10 @@ export function WorkspaceProviders({ children }: { children: ReactNode }) {
             <NewChatProvider>
               {/* Keep every in-app link keep-alive-safe while in the workspace. */}
               <WorkspaceLinkInterceptor />
+              {/* Surface the focused tab's contextual toolbar into the global
+                  header (mounted above the tab tree, so it targets the global
+                  page toolbar, not a per-tab one). */}
+              <WorkspaceToolbarBridge />
               {children}
             </NewChatProvider>
           </WorkspaceBackdropProvider>

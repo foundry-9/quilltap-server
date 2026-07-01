@@ -240,28 +240,6 @@
   }
 
   /* ==========================================================================
-     PANE CONTEXTUAL TOOLBAR  (per-tab injected content)
-     ========================================================================== */
-
-  .qt-pane-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    min-height: 2rem;
-    padding: 0.25rem 0.75rem;
-    border-top: 1px solid var(--qt-workspace-chrome-border, var(--color-border));
-  }
-
-  .qt-pane-toolbar-left,
-  .qt-pane-toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-width: 0;
-  }
-
-  /* ==========================================================================
      RESIZABLE DIVIDER  (mirrors the qt-doc-divider spirit)
      ========================================================================== */
 

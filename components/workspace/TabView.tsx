@@ -29,6 +29,7 @@ import { PhotosView } from '@/app/photos/PhotosView'
 import { ScenariosView } from '@/app/scenarios/ScenariosView'
 import { TerminalView, DocumentView } from '@/components/workspace/TerminalDocumentViews'
 import { WorkspaceTabProvider } from '@/components/workspace/workspace-tab-context'
+import { TabToolbarProvider } from '@/components/workspace/tab-toolbar'
 import { BrahmaConsoleView } from '@/components/brahma-console/BrahmaConsoleView'
 import { WardrobeView } from '@/components/wardrobe/wardrobe-control-dialog'
 import { ProfileView } from '@/app/profile/ProfileView'
@@ -128,5 +129,9 @@ export function TabView({ tab, active }: { tab: WorkspaceTab; active: boolean })
   }
 
   if (!everActive) return null
-  return <WorkspaceTabProvider tabId={tab.id}>{renderView(tab)}</WorkspaceTabProvider>
+  return (
+    <WorkspaceTabProvider tabId={tab.id}>
+      <TabToolbarProvider tabId={tab.id}>{renderView(tab)}</TabToolbarProvider>
+    </WorkspaceTabProvider>
+  )
 }

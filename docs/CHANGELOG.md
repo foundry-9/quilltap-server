@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: the workspace header now tracks the active (focused) tab
+
+The contextual header (Salon project link, character avatars, chat title, cost summary) did not update when switching tabs: with several chat tabs kept alive at once, all of them wrote to the single global header and the last one to mount won, so the header showed stale content and never changed on tab activation. Switching to a non-Salon tab left the previous Salon header in place.
+
+- Each tab's injected toolbar content is now isolated in a per-tab registry (`TabToolbarProvider` wraps every mounted tab view), so kept-alive tabs no longer clobber each other.
+- A new `WorkspaceToolbarBridge` surfaces the *focused* pane's active tab's content into the single global header. Activating a different tab regenerates the header; a tab that injects nothing (e.g. Home) clears it; in a split, the header follows whichever pane has focus.
+- Removed the never-wired per-pane `PaneToolbar` (and its dead `.qt-pane-toolbar` styles) that this replaces.
+
 #### Fix: an unknown tab kind no longer discards the entire saved workspace layout
 
 The persisted workspace validator rejected the whole saved state if any single tab had a `kind` not in its allow-list, silently wiping the user's tab layout on reload. The allow-list was also missing several real tab kinds (`profile`, `about`, `generate-image`, `character-new`, `character-edit`, `settings-wizard`), so having any of those open at reload triggered the wipe.
