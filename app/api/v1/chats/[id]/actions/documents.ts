@@ -20,9 +20,11 @@ import {
   readFileWithMtime,
   writeFileWithMtimeCheck,
   reindexSingleFile,
+  isTextFile,
   type DocEditScope,
 } from '@/lib/doc-edit';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
+import { mimeForExtension } from '@/lib/mount-index/path-utils';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import {
   moveDatabaseDocument,
@@ -197,6 +199,35 @@ async function resolvedPathExists(
     if (code === 'ENOENT') return false;
     throw error;
   }
+}
+
+async function classifyResolvedTarget(
+  repos: AuthenticatedContext['repos'],
+  resolved: Awaited<ReturnType<typeof resolveDocEditPath>>,
+): Promise<'document' | 'image' | 'other'> {
+  if (isTextFile(resolved.relativePath)) {
+    return 'document'
+  }
+
+  const extensionMime = mimeForExtension(resolved.relativePath)
+  if (extensionMime.startsWith('image/')) {
+    return 'image'
+  }
+
+  if (resolved.mountType === 'database' && resolved.mountPointId) {
+    const link = await repos.docMountFileLinks.findByMountPointAndPath(
+      resolved.mountPointId,
+      resolved.relativePath,
+    )
+    if (link?.fileType === 'blob') {
+      const blob = await repos.docMountBlobs.findByFileId(link.fileId)
+      if (blob?.storedMimeType?.startsWith('image/')) {
+        return 'image'
+      }
+    }
+  }
+
+  return 'other'
 }
 
 /**
@@ -925,7 +956,8 @@ export async function handleResolveDocument(
     });
 
     const exists = await resolvedPathExists(resolved);
-    return successResponse({ exists });
+    const kind = exists ? await classifyResolvedTarget(context.repos, resolved) : 'other'
+    return successResponse({ exists, kind });
   } catch (error) {
     logger.debug('resolve-document: path not resolvable; treating as non-existent', {
       chatId,
@@ -934,7 +966,7 @@ export async function handleResolveDocument(
       mountPoint: data.mountPoint,
       error: getErrorMessage(error),
     });
-    return successResponse({ exists: false });
+    return successResponse({ exists: false, kind: 'other' });
   }
 }
 

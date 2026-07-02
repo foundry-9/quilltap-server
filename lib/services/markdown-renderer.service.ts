@@ -33,6 +33,7 @@ import {
   segmentsToHtml,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering';
+import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify';
 import { logger } from '@/lib/logger';
 
 // Re-export the shared escape helper so existing importers keep working.
@@ -270,9 +271,14 @@ export async function renderMarkdownToHtml(
     // Step 3: Escape markdown inside roleplay brackets
     const escapedContent = escapeMarkdownInBrackets(trimmedContent, patterns);
 
+    // Step 3.5: Upgrade any surfaced bare qtap:// URI to markdown-link form.
+    // This keeps server pre-rendered HTML aligned with the client renderer,
+    // so Librarian/Lantern/Aurora announcement bodies stay clickable.
+    const linkifiedContent = linkifyBareQtapUris(escapedContent);
+
     // Step 4: Convert markdown to HTML
     const processor = getProcessor();
-    const file = await processor.process(escapedContent);
+    const file = await processor.process(linkifiedContent);
     let html = String(file);
 
     // Step 5: Wrap whole-block hidden-delimiter wraps in a styled span. Runs

@@ -18,6 +18,7 @@ import { HelpChatProvider } from '@/components/providers/help-chat-provider'
 import { HelpChatDialog } from '@/components/help-chat/HelpChatDialog'
 import { BrahmaConsoleProvider } from '@/components/providers/brahma-console-provider'
 import { BrahmaConsoleDialog } from '@/components/brahma-console/BrahmaConsoleDialog'
+import { QtapLinkProvider } from '@/components/providers/qtap-link-provider'
 import { WardrobeDialogProvider } from '@/components/providers/wardrobe-dialog-provider'
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
 import { LeftSidebar } from './left-sidebar'
@@ -125,9 +126,11 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <WardrobeDialogProvider>
           <DictionaryFeedMount />
           {isWorkspaceTabsEnabled() ? (
-            <WorkspaceProviders>{railAndContent}</WorkspaceProviders>
+            <WorkspaceProviders>
+              <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
+            </WorkspaceProviders>
           ) : (
-            railAndContent
+            <QtapLinkProvider>{railAndContent}</QtapLinkProvider>
           )}
           <HelpChatDialog />
           <BrahmaConsoleDialog />

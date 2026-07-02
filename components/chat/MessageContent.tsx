@@ -21,8 +21,9 @@ import {
   isDialogueParagraph,
   escapeMarkdownInBrackets,
 } from '@/lib/chat/roleplay-rendering'
+import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
-import { QtapDocLink } from './QtapDocLink'
+import { QtapLink } from '@/components/qtap/QtapLink'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -341,9 +342,10 @@ export default function MessageContent({
 
   // Pre-process content: trim leading/trailing whitespace (a leading tab triggers
   // markdown's indented code block rule, rendering the whole message as preformatted),
-  // then escape markdown inside roleplay brackets
+  // then escape markdown inside roleplay brackets and autolink any surfaced
+  // bare qtap:// URI so announcement bodies become clickable.
   const processedContent = useMemo(
-    () => escapeMarkdownInBrackets(content.trim(), patterns),
+    () => linkifyBareQtapUris(escapeMarkdownInBrackets(content.trim(), patterns)),
     [content, patterns]
   )
 
@@ -428,7 +430,7 @@ export default function MessageContent({
     // handles appearance.
     a({ href, children }) {
       if (isQtapUri(href)) {
-        return <QtapDocLink href={href}>{children}</QtapDocLink>
+        return <QtapLink href={href}>{children}</QtapLink>
       }
       if (isInternalHref(href)) {
         return (

@@ -28,6 +28,7 @@ interface ReadDocumentResponse {
 
 interface ResolveDocumentResponse {
   exists: boolean
+  kind: 'document' | 'image' | 'other'
 }
 
 interface OpenDocumentResponse {

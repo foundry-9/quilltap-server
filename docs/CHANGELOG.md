@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: surfaced `qtap://` URLs now open reliably across chat content and announcements
+
+`qtap://` links are now clickable and interactive wherever chat markdown/text surfaces them, including staff announcements (Librarian, Lantern, Aurora, etc.).
+
+- Added shared `qtap://` link handling that resolves target type and opens text documents in Document Mode, images in the fullscreen image viewer, and shows a warning toast for unsupported file types.
+- Added linkification of bare `qtap://` literals in chat-rendered markdown/text (not only pre-marked markdown links), with inline/fenced code excluded.
+- Fixed a no-op click path where `open-document` returned `200` server-side but the UI did not surface/focus the opened document; the client now reconciles and focuses the opened document row/tab immediately.
+- Replaced the qtap link emoji prefix with the built-in themeable icon system (`Icon name="file"`).
+
 #### Fix: unit tests no longer load native SQLite bindings
 
 Stabilized the Jest split between unit and integration coverage so native SQLite/SQLCipher bindings are only loaded by integration tests.

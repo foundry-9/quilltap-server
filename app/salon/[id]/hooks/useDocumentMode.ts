@@ -715,6 +715,27 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     }
   }, [])
 
+  // External qtap:// opens (from non-Salon surfaces) resolve through the API;
+  // when they land, reconcile this chat's open-document set and focus the new
+  // row so the pane appears immediately without a manual reload.
+  useEffect(() => {
+    const onQtapDocumentOpened = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId?: string; chatDocumentId?: string }>).detail
+      if (!detail || detail.chatId !== chatId) return
+
+      void reconcileOpenDocuments().then(() => {
+        if (detail.chatDocumentId) {
+          setFocusedDocId(detail.chatDocumentId)
+        }
+      })
+    }
+
+    window.addEventListener('qtap-document-opened', onQtapDocumentOpened as EventListener)
+    return () => {
+      window.removeEventListener('qtap-document-opened', onQtapDocumentOpened as EventListener)
+    }
+  }, [chatId, reconcileOpenDocuments])
+
   const focusedDocument =
     openDocs.find(e => e.document.id === focusedDocId)?.document ?? openDocs[0]?.document ?? null
 
