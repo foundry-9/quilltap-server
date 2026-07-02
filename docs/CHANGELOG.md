@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: non-Salon footer now uses the header background and stays opaque on Home
+
+Updated the shared app footer styling so non-Salon pages render the footer with the same background treatment as the page toolbar/header, and pinned its stacking context above fixed homepage background overlays. This prevents the Home page background image layer from visually bleeding through the footer in themes that use transparent main containers.
+
 #### Feature: wardrobe item move/copy across General, projects, groups, and users
 
 Added `Move` and `Copy` actions to the wardrobe row menu in the Wardrobe dialog.
