@@ -832,6 +832,7 @@
   .qt-lexical-contenteditable [contenteditable] {
     outline: none;
     min-height: 1.5em;
+    background: var(--color-background);
   }
 
   /**
@@ -1900,6 +1901,7 @@
     @apply overflow-y-auto;
     position: relative;
     padding: 1rem 1.5rem;
+    background: var(--color-background);
   }
 
   /**

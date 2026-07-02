@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: Lexical editors now render with solid (non-transparent) backgrounds
+
+Applied an explicit opaque background to shared Lexical editing surfaces so editor panes no longer show transparency in any theme.
+
+- Chat composer Lexical contenteditable now paints an explicit base background.
+- Document Mode's Lexical editor area now paints an explicit base background.
+- Source-mode textareas used alongside Lexical editors (Document Mode and reusable markdown Lexical editor) now use the same opaque base background.
+
 #### Fix: non-Salon footer now uses the header background and stays opaque on Home
 
 Updated the shared app footer styling so non-Salon pages render the footer with the same background treatment as the page toolbar/header, and pinned its stacking context above fixed homepage background overlays. This prevents the Home page background image layer from visually bleeding through the footer in themes that use transparent main containers.

@@ -423,7 +423,7 @@ export function ChatComposer({
               onImagePaste={onImagePaste}
               documentEditingMode={documentEditingMode}
               disabled={sending || !hasActiveCharacters}
-              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : "Type a message..."}
+              placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : ""}
             />
           </div>
 

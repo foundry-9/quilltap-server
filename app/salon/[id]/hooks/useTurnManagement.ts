@@ -203,7 +203,6 @@ export function useTurnManagement(
 
     if (nextSpeakerId && nextSpeakerId !== userParticipantId) {
       if (nextSpeakerControlledBy === 'user') {
-        showInfoToast("It's a user-controlled character's turn. Type a message as them.")
         return
       }
       triggerContinueMode(nextSpeakerId)

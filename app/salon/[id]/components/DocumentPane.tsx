@@ -475,7 +475,7 @@ export default function DocumentPane({
                 onChange={(e) => onContentChange(e.target.value)}
                 disabled={isLLMEditing}
                 spellCheck={false}
-                style={{ lineHeight: '1.6', minHeight: '100%' }}
+                style={{ lineHeight: '1.6', minHeight: '100%', backgroundColor: 'var(--color-background)' }}
               />
             </div>
           ) : (
@@ -519,7 +519,7 @@ export default function DocumentPane({
             onChange={(e) => onContentChange(e.target.value)}
             disabled={isLLMEditing}
             spellCheck={false}
-            style={{ lineHeight: '1.6', minHeight: '100%' }}
+            style={{ lineHeight: '1.6', minHeight: '100%', backgroundColor: 'var(--color-background)' }}
           />
         </div>
       )}

@@ -759,7 +759,7 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('should show info toast when next speaker is user-controlled', async () => {
+    it('should not auto-continue when next speaker is user-controlled', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         json: async () => createMockTurnResponse({
@@ -788,9 +788,7 @@ describe('useTurnManagement', () => {
         await result.current.handleContinue()
       })
 
-      expect(mockShowInfoToast).toHaveBeenCalledWith(
-        "It's a user-controlled character's turn. Type a message as them."
-      )
+      expect(mockShowInfoToast).not.toHaveBeenCalled()
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
