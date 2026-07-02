@@ -41,6 +41,8 @@ import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import DocumentChangeTracker from './DocumentChangeTracker'
 import DocumentFocusPlugin from './DocumentFocusPlugin'
 import { showConfirmation } from '@/lib/alert'
+import { formatQtapUri } from '@/lib/doc-edit/qtap-uri'
+import { showSuccessToast } from '@/lib/toast'
 import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
 import type { ActiveDocument, DocumentMode, FocusRequest } from '../hooks/useDocumentMode'
 
@@ -371,6 +373,7 @@ export default function DocumentPane({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [showSource, setShowSource] = useState(false)
   const [editTitle, setEditTitle] = useState(document.displayTitle)
+  const [uriCopied, setUriCopied] = useState(false)
   // Gutter state — populated by DocumentChangeTracker plugin
   const [changedLines, setChangedLines] = useState<Set<number>>(new Set())
   const [linePositions, setLinePositions] = useState<LinePosition[]>([])
@@ -379,6 +382,7 @@ export default function DocumentPane({
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isMarkdown = useMemo(() => isMarkdownFile(document.filePath), [document.filePath])
   const extractedContent = useMemo(() => {
@@ -410,6 +414,20 @@ export default function DocumentPane({
     () => countWords(isMarkdown ? currentBodyContent : document.content),
     [isMarkdown, currentBodyContent, document.content],
   )
+  const documentUri = useMemo(() => {
+    if (document.scope === 'project' || document.scope === 'general') {
+      return formatQtapUri({
+        scope: document.scope,
+        path: document.filePath,
+      })
+    }
+
+    return formatQtapUri({
+      scope: 'document_store',
+      mountPoint: document.mountPoint?.trim() || 'self',
+      path: document.filePath,
+    })
+  }, [document.scope, document.mountPoint, document.filePath])
 
   // Stable callbacks for DocumentChangeTracker — avoid re-registering the update listener
   const handleChangedLines = useCallback((lines: Set<number>) => {
@@ -501,6 +519,9 @@ export default function DocumentPane({
       if (scrollThrottleRef.current) {
         clearTimeout(scrollThrottleRef.current)
       }
+      if (copyResetRef.current) {
+        clearTimeout(copyResetRef.current)
+      }
     }
   }, [])
 
@@ -524,6 +545,23 @@ export default function DocumentPane({
     if (!confirmed) return
     onDeleteDocument()
   }, [document.displayTitle, onDeleteDocument])
+
+  const handleCopyUri = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(documentUri)
+      setUriCopied(true)
+      showSuccessToast('Document URL copied')
+      if (copyResetRef.current) {
+        clearTimeout(copyResetRef.current)
+      }
+      copyResetRef.current = setTimeout(() => {
+        setUriCopied(false)
+      }, 1200)
+    } catch (error) {
+      console.error('[DocumentPane] Failed to copy document URI', error)
+      setUriCopied(false)
+    }
+  }, [documentUri])
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -612,6 +650,20 @@ export default function DocumentPane({
             <Icon name="close" className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      <div className="qt-doc-uri-row">
+        <span className="qt-doc-uri-label">URL</span>
+        <span className="qt-doc-uri-value" title={documentUri}>{documentUri}</span>
+        <button
+          type="button"
+          className="qt-doc-uri-copy-button"
+          onClick={handleCopyUri}
+          title={uriCopied ? 'Copied' : 'Copy URL'}
+          aria-label={uriCopied ? 'Copied URL' : 'Copy URL'}
+        >
+          <Icon name="copy" className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {isMarkdown ? (

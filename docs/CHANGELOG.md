@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Feature: Document Mode now shows and copies each document's qtap URL
+
+In Salon Document Mode, the header area now includes a short URL line between the title/actions row and the editor toolbar. It shows the current `qtap://` URI for the open document and updates automatically when the document is renamed.
+
+- Added a compact `qtap://` URL row under the document header controls.
+- Added a copy icon button that writes the current URL to the clipboard.
+- Added a green success toast when URL copy succeeds.
+
 #### Feature: Document Mode rich Markdown now shows YAML frontmatter as metadata
 
 In Salon Document Mode, Markdown files with YAML frontmatter now render that frontmatter as a read-only "Document Info" key/value table in rich mode instead of showing raw `---` delimiters and YAML lines inside the editor surface.
