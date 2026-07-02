@@ -25,6 +25,7 @@ const config: Config = {
   ],
   testMatch: [
     '**/__tests__/integration/**/*.test.{js,jsx,ts,tsx}',
+    '**/__tests__/unit/**/*.integration.test.{js,jsx,ts,tsx}',
   ],
   testPathIgnorePatterns: [
     '/node_modules/',

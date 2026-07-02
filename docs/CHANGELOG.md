@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: unit tests no longer load native SQLite bindings
+
+Stabilized the Jest split between unit and integration coverage so native SQLite/SQLCipher bindings are only loaded by integration tests.
+
+- Unit Jest now mocks both module specifiers: `better-sqlite3` and `better-sqlite3-multiple-ciphers`.
+- Native-binding suites were reclassified to `*.integration.test.*` and excluded from unit discovery.
+- Integration Jest now includes those reclassified suites explicitly.
+
 #### Feature: Document Mode now shows and copies each document's qtap URL
 
 In Salon Document Mode, the header area now includes a short URL line between the title/actions row and the editor toolbar. It shows the current `qtap://` URI for the open document and updates automatically when the document is renamed.

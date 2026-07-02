@@ -31,6 +31,7 @@ const config: Config = {
     '^openid-client$': '<rootDir>/__mocks__/openid-client.ts',
     '^@openrouter/sdk$': '<rootDir>/__mocks__/@openrouter/sdk.ts',
     '^better-sqlite3$': '<rootDir>/__mocks__/better-sqlite3.ts',
+    '^better-sqlite3-multiple-ciphers$': '<rootDir>/__mocks__/better-sqlite3.ts',
 
     '^openai$': '<rootDir>/__mocks__/openai.ts',
     '^@anthropic-ai/sdk$': '<rootDir>/__mocks__/@anthropic-ai/sdk.ts',
@@ -59,6 +60,7 @@ const config: Config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
+    String.raw`\.integration\.test\.[jt]sx?$`,
     // Claude Code agent worktrees are full repo checkouts; their duplicated
     // test files must not be picked up (and their packages/plugins would
     // collide in the Haste map — see modulePathIgnorePatterns below).
