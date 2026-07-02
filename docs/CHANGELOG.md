@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Fix: Lexical markdown editors no longer auto-escape markdown punctuation on export/save
+
+Lexical markdown export paths were writing escaped punctuation (for example `\*`, `\_`, `\~`, and `\``) even when the author intended normal markdown delimiters. This changed bytes in saved drafts/documents and in imperative markdown reads.
+
+- The shared Lexical markdown bridge now strips those export-time escapes by default.
+- Applies to asterisks, underscores, backticks, and tildes.
+- Covers Document Mode, markdown-form editors that use the shared bridge, and chat-composer markdown export paths (including draft persistence and imperative `getMarkdown()` reads).
+
 #### Fix: forward profile provider parameters (e.g. DeepSeek thinking mode) uniformly
 
 Extended the previous fix so *every* text-LLM call in `lib/` — cheap-LLM and direct — forwards its selected profile's provider parameters on `sendMessage` / `streamMessage`. Previously, several utility flows built minimal requests and silently dropped `thinking` / `reasoning_effort` from the chosen profile, causing reasoning models to burn their token budget on hidden reasoning and return empty content.

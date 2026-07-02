@@ -100,22 +100,54 @@ interface MarkdownBridgePluginProps {
    * single `*` is not a formatting tag.
    */
   preserveAsterisks?: boolean
+  /**
+   * When true, strip Lexical's automatic `\_` escapes on export so literal
+   * underscores survive as `_` rather than `\_`.
+   */
+  preserveUnderscores?: boolean
+  /**
+   * When true, strip Lexical's automatic `\`` escapes on export so literal
+   * backticks survive as `` ` `` rather than `\``.
+   */
+  preserveBackticks?: boolean
+  /**
+   * When true, strip Lexical's automatic `\~` escapes on export so literal
+   * tildes survive as `~` rather than `\~`.
+   */
+  preserveTildes?: boolean
 }
 
+const DEFAULT_PRESERVED_MARKDOWN_CHARS = ['*', '_', '`', '~'] as const
+
 /**
- * Strip Lexical's `\*` escapes from exported markdown. Only `\*` is touched;
- * `\_`, `` \` ``, `\~` stay escaped because those characters *are* active
- * formatting tags in our transformer set.
+ * Strip Lexical's automatic markdown escapes for the selected characters.
+ *
+ * This runs on export only, so editor behavior is unchanged while typing. The
+ * goal is byte-fidelity for plain punctuation in Document Mode writes.
  */
-function stripAsteriskEscapes(markdown: string): string {
-  return markdown.replace(/\\\*/g, '*')
+export function stripMarkdownEscapes(markdown: string, chars: string[]): string {
+  const filtered = Array.from(new Set(chars.filter((char) => char.length === 1 && char !== '\\')))
+  if (filtered.length === 0) return markdown
+
+  const escapedClass = filtered
+    .map((char) => char.replace(/[\\\]\^-]/g, '\\$&'))
+    .join('')
+
+  return markdown.replace(new RegExp(`\\\\([${escapedClass}])`, 'g'), '$1')
+}
+
+function normalizeExportMarkdown(markdown: string, chars: string[]): string {
+  return chars.length > 0 ? stripMarkdownEscapes(markdown, chars) : markdown
 }
 
 export function MarkdownBridgePlugin({
   input,
   setInput,
   initialMarkdown,
-  preserveAsterisks = false,
+  preserveAsterisks = true,
+  preserveUnderscores = true,
+  preserveBackticks = true,
+  preserveTildes = true,
 }: MarkdownBridgePluginProps) {
   const [editor] = useLexicalComposerContext()
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -149,7 +181,13 @@ export function MarkdownBridgePlugin({
 
       editorState.read(() => {
         const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
-        const markdown = preserveAsterisks ? stripAsteriskEscapes(raw) : raw
+        const preserveChars = [
+          ...(preserveAsterisks ? ['*'] : []),
+          ...(preserveUnderscores ? ['_'] : []),
+          ...(preserveBackticks ? ['`'] : []),
+          ...(preserveTildes ? ['~'] : []),
+        ]
+        const markdown = normalizeExportMarkdown(raw, preserveChars)
 
         // Debounce parent state updates (16ms, ~1 frame)
         if (debounceTimerRef.current) {
@@ -161,7 +199,7 @@ export function MarkdownBridgePlugin({
         }, 16)
       })
     })
-  }, [editor, setInput, preserveAsterisks])
+  }, [editor, setInput, preserveAsterisks, preserveUnderscores, preserveBackticks, preserveTildes])
 
   // Detect when parent clears input (e.g., after submission) and clear editor.
   // We know it's an external clear when input becomes '' but we didn't send ''
@@ -206,7 +244,8 @@ export function useMarkdownBridge() {
   const getMarkdown = useCallback((): string => {
     let markdown = ''
     editor.getEditorState().read(() => {
-      markdown = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+      const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+      markdown = normalizeExportMarkdown(raw, [...DEFAULT_PRESERVED_MARKDOWN_CHARS])
     })
     return markdown
   }, [editor])

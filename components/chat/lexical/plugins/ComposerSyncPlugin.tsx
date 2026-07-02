@@ -36,7 +36,9 @@ import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
 } from '@lexical/markdown'
-import { COMPOSER_TRANSFORMERS } from './MarkdownBridgePlugin'
+import { COMPOSER_TRANSFORMERS, stripMarkdownEscapes } from './MarkdownBridgePlugin'
+
+const PRESERVED_EXPORT_CHARS = ['*', '_', '`', '~']
 
 interface ComposerSyncPluginProps {
   /**
@@ -118,7 +120,8 @@ export function ComposerSyncPlugin({
         draftTimerRef.current = setTimeout(() => {
           let markdown = ''
           editor.getEditorState().read(() => {
-            markdown = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+            const raw = $convertToMarkdownString(COMPOSER_TRANSFORMERS, undefined, true)
+            markdown = stripMarkdownEscapes(raw, PRESERVED_EXPORT_CHARS)
           })
           onPersistDraft(markdown)
         }, DRAFT_DEBOUNCE_MS)

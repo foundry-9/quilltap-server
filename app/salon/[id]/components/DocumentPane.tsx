@@ -156,6 +156,9 @@ function DocumentEditorPlugins({
         setInput={onContentChange}
         initialMarkdown={content}
         preserveAsterisks
+        preserveUnderscores
+        preserveBackticks
+        preserveTildes
       />
       <FormattingCommandPlugin />
       <TextReplacementPlugin />
