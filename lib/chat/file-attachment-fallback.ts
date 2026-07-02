@@ -250,6 +250,11 @@ async function describeImageWithProfile(
     if (topP !== undefined) {
       messageParams.topP = topP
     }
+    // Forward the profile's provider params (e.g. DeepSeek thinking mode) so a
+    // "reasoning off" setting on the image-description profile takes effect.
+    if (modelParams && typeof modelParams === 'object') {
+      messageParams.profileParameters = modelParams
+    }
 
     // Send message to vision-capable LLM asking for description
     const response = await provider.sendMessage(messageParams, apiKeyValue || '')

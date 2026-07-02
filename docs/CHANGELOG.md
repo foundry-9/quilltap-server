@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: forward profile provider parameters (e.g. DeepSeek thinking mode) uniformly
+
+Extended the previous fix so *every* text-LLM call in `lib/` — cheap-LLM and direct — forwards its selected profile's provider parameters on `sendMessage` / `streamMessage`. Previously, several utility flows built minimal requests and silently dropped `thinking` / `reasoning_effort` from the chosen profile, causing reasoning models to burn their token budget on hidden reasoning and return empty content.
+
+- `profileParams(profile)` is now a shared exported helper in `lib/llm/cheap-llm.ts`.
+- Fixed direct-call paths: Concierge gatekeeper (danger classification), image-description fallback, wardrobe image analysis, character-voiced announcer, auto-configure (both the analysis call and its cheap-LLM JSON cleanup), character wizard (all field generation + physical descriptions + wardrobe items + vision), character optimizer, AI import, external-prompt generator, initial greeting.
+- Outfit-appropriateness chooser (`chooseLLMOutfit`) was already routed through the shared harness and picks up the fix automatically.
+- Main chat / regenerate / swipe path was already forwarding these — unchanged.
+
 #### Fix: cheap-LLM tasks now forward provider parameters (e.g. DeepSeek thinking mode)
 
 Cheap-LLM tasks (memory extraction, summaries, titles, answer confirmation, etc.) built a minimal request in `sendToProvider` and never forwarded the selected profile's provider-specific parameters. So a profile set to DeepSeek **Thinking Mode = Disabled** still reasoned: DeepSeek fell back to its model default (reasoning on for `deepseek-v4-flash`), which spent the whole completion budget thinking and returned empty content — surfacing as failed/blank cheap-LLM results (e.g. answer-confirmation checks resolving to "Unvetted").

@@ -49,6 +49,11 @@ function buildSelection(profile: ConnectionProfile): CheapLLMSelection {
     baseUrl: profile.baseUrl || undefined,
     connectionProfileId: profile.id,
     isLocal: profile.provider === 'OLLAMA',
+    // Forward the profile's provider params (e.g. DeepSeek thinking mode) so
+    // per-model settings take effect for this utility call too.
+    profileParameters: profile.parameters && typeof profile.parameters === 'object'
+      ? (profile.parameters as Record<string, unknown>)
+      : undefined,
   }
 }
 

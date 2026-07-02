@@ -384,6 +384,10 @@ export async function classifyContent(
         model: cheapLLMSelection.modelName,
         temperature: 0.1, // Low temperature for consistent classification
         maxTokens: 500,
+        // Forward the cheap profile's provider params (e.g. DeepSeek thinking
+        // mode) so a "reasoning off" setting takes effect and the classifier
+        // doesn't burn its budget thinking and return empty content.
+        profileParameters: cheapLLMSelection.profileParameters,
       },
       apiKey
     )

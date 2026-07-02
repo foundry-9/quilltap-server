@@ -70,8 +70,15 @@ export interface CheapLLMSelection {
   profileParameters?: Record<string, unknown>
 }
 
-/** Extract a profile's parameters as a plain record for forwarding. */
-function profileParams(profile: ConnectionProfile): Record<string, unknown> | undefined {
+/**
+ * Extract a connection profile's provider parameters (e.g. DeepSeek `thinking`
+ * / `reasoning_effort`) as a plain record for forwarding as
+ * `LLMParams.profileParameters`. Shared by every path that builds a provider
+ * call from a profile — the cheap-LLM selection sites here and the direct
+ * utility calls (auto-configure, wizards, optimizer, greeting, …) — so a
+ * profile's "reasoning off" setting takes effect uniformly.
+ */
+export function profileParams(profile: ConnectionProfile): Record<string, unknown> | undefined {
   const params = profile.parameters
   return params && typeof params === 'object' ? (params as Record<string, unknown>) : undefined
 }

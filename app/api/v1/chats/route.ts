@@ -668,6 +668,11 @@ async function autoGenerateFirstMessage(
     temperature: extractNumber(parameters.temperature),
     maxTokens: extractNumber(parameters.maxTokens),
     topP: extractNumber(parameters.topP),
+    // Forward the character's profile parameters so per-model settings like
+    // DeepSeek thinking mode take effect on the greeting too.
+    profileParameters: connectionProfile.parameters && typeof connectionProfile.parameters === 'object'
+      ? (connectionProfile.parameters as Record<string, unknown>)
+      : undefined,
   };
 
   // Track whether any attempt hit a content filter so we can try the Concierge fallback

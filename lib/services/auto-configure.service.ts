@@ -17,7 +17,7 @@ import { executeWebSearchTool, formatWebSearchResults } from '@/lib/tools/handle
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
 import { parseLLMJson } from '@/lib/services/ai-import.service'
-import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, profileParams } from '@/lib/llm/cheap-llm'
 import { MODEL_CLASSES, isValidModelClassName } from '@/lib/llm/model-classes'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -209,7 +209,7 @@ async function cleanupWithCheapLLM(
   ]
 
   const cleanupResponse = await cheapProvider.sendMessage(
-    { messages: cleanupMessages, model: cheapSelection.modelName, temperature: 0.1, maxTokens: 500 },
+    { messages: cleanupMessages, model: cheapSelection.modelName, temperature: 0.1, maxTokens: 500, profileParameters: cheapSelection.profileParameters },
     cheapApiKey
   )
 
@@ -249,7 +249,7 @@ async function analyzeWithProfile(
   const llmProvider = await createLLMProvider(profile.provider, profile.baseUrl ?? undefined)
 
   const response = await llmProvider.sendMessage(
-    { messages, model: profile.modelName, temperature: 0.2, maxTokens: 1000 },
+    { messages, model: profile.modelName, temperature: 0.2, maxTokens: 1000, profileParameters: profileParams(profile) },
     apiKey
   )
 
