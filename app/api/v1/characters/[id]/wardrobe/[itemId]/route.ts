@@ -93,7 +93,7 @@ export const DELETE = createAuthenticatedParamsHandler<{ id: string; itemId: str
         return notFound('Character');
       }
 
-      const existing = await repos.wardrobe.findById(itemId);
+      const existing = await repos.wardrobe.findByIdForCharacter(id, itemId);
       if (!existing || existing.characterId !== id) {
         return notFound('Wardrobe item');
       }

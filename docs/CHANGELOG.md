@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: character wardrobe item deletion always failed with "not found"
+
+The character-scoped wardrobe DELETE route still checked item existence against the `wardrobe_items` SQL table, which was emptied when wardrobe storage moved to the vault. Every delete attempt failed with "Wardrobe item not found" even though the item was still listed (list/GET/PUT already read the vault correctly). The existence check now uses the same vault-aware lookup as GET/PUT.
+
 #### Fix: Lexical markdown editors no longer auto-escape markdown punctuation on export/save
 
 Lexical markdown export paths were writing escaped punctuation (for example `\*`, `\_`, `\~`, and `\``) even when the author intended normal markdown delimiters. This changed bytes in saved drafts/documents and in imperative markdown reads.
