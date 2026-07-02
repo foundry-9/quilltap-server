@@ -44,6 +44,7 @@ import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
+import { WardrobeTransferDialog } from './WardrobeTransferDialog'
 
 interface CharacterSummary {
   id: string
@@ -64,6 +65,7 @@ const SLOT_FILTERS: SlotFilter[] = ['all', 'top', 'bottom', 'footwear', 'accesso
 type ItemKind = 'items' | 'outfits'
 type RightTab = 'live' | 'builder'
 type EditorIntent = 'create-single' | 'create-bundle'
+type TransferIntent = 'move' | 'copy'
 
 /** Deep array equality on the four EquippedSlots arrays, in order. */
 function equippedSlotsEqual(a: EquippedSlots, b: EquippedSlots): boolean {
@@ -172,6 +174,8 @@ function WardrobeControlDialogInner({
   const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
     useCharacterWardrobeItems(selectedCharacterId, { chatId })
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null)
+  const [transferringItem, setTransferringItem] = useState<WardrobeItem | null>(null)
+  const [transferIntent, setTransferIntent] = useState<TransferIntent | null>(null)
   /** null = no editor open; 'create-single' / 'create-bundle' = new item in that mode */
   const [creatingNew, setCreatingNew] = useState<EditorIntent | null>(null)
   /** Pre-populated component ids when Save-as-outfit opens the editor in bundle mode. */
@@ -834,7 +838,9 @@ function WardrobeControlDialogInner({
   // While the editor or import modal is up, don't let a click inside them
   // (rendered as siblings) close the outer dialog via BaseModal's
   // click-outside handler.
-  const editorOpen = Boolean(editingItem || creatingNew || importFromImageOpen)
+  const editorOpen = Boolean(
+    editingItem || creatingNew || importFromImageOpen || (transferringItem && transferIntent),
+  )
 
   // Close Reset menu on outside click + Escape
   useEffect(() => {
@@ -987,6 +993,14 @@ function WardrobeControlDialogInner({
                     onToggleDefault={handleToggleDefault}
                     onEdit={(it) => setEditingItem(it)}
                     onDuplicate={handleDuplicate}
+                    onMove={(it) => {
+                      setTransferringItem(it)
+                      setTransferIntent('move')
+                    }}
+                    onCopy={(it) => {
+                      setTransferringItem(it)
+                      setTransferIntent('copy')
+                    }}
                     onDelete={handleDelete}
                     onEquip={rowEquip}
                     onAddToSlot={rowAddToSlot}
@@ -1222,6 +1236,29 @@ function WardrobeControlDialogInner({
             setEditingItem(null)
             setCreatingNew(null)
             setCreateBundleComponents([])
+            await reloadItems()
+            if (isInChat) {
+              outfit.invalidateWardrobe(selectedCharacterId)
+              await outfit.refreshOutfit()
+            }
+          }}
+        />
+      )}
+
+      {transferringItem && transferIntent && selectedCharacterId && (
+        <WardrobeTransferDialog
+          isOpen
+          mode={transferIntent}
+          item={transferringItem}
+          sourceCharacterId={selectedCharacterId}
+          sourceProjectId={dialogProjectId}
+          onClose={() => {
+            setTransferringItem(null)
+            setTransferIntent(null)
+          }}
+          onTransferred={async () => {
+            setTransferringItem(null)
+            setTransferIntent(null)
             await reloadItems()
             if (isInChat) {
               outfit.invalidateWardrobe(selectedCharacterId)

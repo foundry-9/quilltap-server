@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Feature: wardrobe item move/copy across General, projects, groups, and users
+
+Added `Move` and `Copy` actions to the wardrobe row menu in the Wardrobe dialog.
+
+- `Move` and `Copy` now open a destination picker with General, all projects, all groups, and all users (character wardrobes).
+- `Copy` always generates a new wardrobe item UUID in the destination.
+- `Move` preserves the existing item UUID and removes the source item after a successful write.
+- Added a new transfer API at `/api/v1/wardrobe/transfers` for destination discovery and move/copy execution.
+- Fixed a 400 regression where project/group destinations were incorrectly rejected as `Invalid destination`.
+
 #### Fix: character wardrobe item deletion always failed with "not found"
 
 The character-scoped wardrobe DELETE route still checked item existence against the `wardrobe_items` SQL table, which was emptied when wardrobe storage moved to the vault. Every delete attempt failed with "Wardrobe item not found" even though the item was still listed (list/GET/PUT already read the vault correctly). The existence check now uses the same vault-aware lookup as GET/PUT.

@@ -49,7 +49,7 @@ For day-to-day fussing-about with what a character is wearing, there is a more d
 What the dialog allows you to do, with the directness of a valet pulling out the morning's tweeds:
 
 - **Pick any character** from a single dropdown at the top — the dialog needn't be tied to whoever is presently speaking in a chat.
-- **Browse the wardrobe** in full: filter by slot, mark items as **default** (a star toggle), edit them in place, **duplicate** them (the item's `⋮` menu mints an identical copy with "(copy)" appended to its name — handy for spinning a near-twin garment off an existing one; duplicating a composite outfit keeps the very same component pieces rather than cloning them anew), delete them, or compose new ones.
+- **Browse the wardrobe** in full: filter by slot, mark items as **default** (a star toggle), edit them in place, **duplicate** them (the item's `⋮` menu mints an identical copy with "(copy)" appended to its name — handy for spinning a near-twin garment off an existing one; duplicating a composite outfit keeps the very same component pieces rather than cloning them anew), **move** them, **copy** them, delete them, or compose new ones.
 - **Build composite items** — a "Rain Outfit" that bundles a raincoat, jeans, and boots; a "Nice Jewellery" set comprising earrings, locket, and ring. The editor's *Composes* panel lets you pick existing items as components; the system computes the slot coverage automatically and refuses to allow circular bundles.
 - When opened **inside a chat**, a second column appears with two tabs:
   - *Wearing now* — what this character is actually wearing in the chat. Each slot lists what is currently equipped as removable chips; a small **+** opens a picker, and choosing a garment **wears** it across *every* slot it covers — so a dress settles into both top and bottom, and a composite ensemble takes all the ground it claims, in a single gesture. Whether the new piece *layers* over what is already worn or *clears those slots first* is decided by the garment's own **replace** setting (see *The Replace Toggle* below); ordinary single garments layer, so use the **Clear** button to bare a slot before dressing it afresh when you mean to swap rather than pile on. Composite items are shown as a single chip with a "composite" note. Edits to this tab **stage** in the dialog and are committed all at once when you click **Done** (or close the dialog) — Aurora announces the change exactly once and the avatar regenerates exactly once, no matter how many slots you fussed with along the way. If your final state happens to match what the character was already wearing, nothing is committed and nothing is announced.
@@ -105,6 +105,15 @@ When you add a new garment from the Wardrobe dialog, an **"Add to"** selector at
 - **Shared — this project** — a [Project Wardrobe](project-wardrobe.md) item (offered only when you're in a chat that belongs to a project), wearable by every character in that project's chats.
 
 Shared items appear in the dialog's list tagged "· shared" and are wear-only there; manage household archetypes from any character's wardrobe and project items from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives.)
+
+When you use **Move** or **Copy** from an item's `⋮` menu, Quilltap opens a destination picker with:
+
+- **General** (Quilltap General)
+- **Projects** (all projects)
+- **Groups** (all groups)
+- **Users** (character vault wardrobes)
+
+**Copy** always generates a fresh wardrobe item ID at the destination. **Move** keeps the item's existing ID and removes it from the source after a successful write.
 
 ### Composite Items (Bundled Outfits)
 
