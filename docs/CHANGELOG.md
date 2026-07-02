@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Feature: Document Mode rich Markdown now shows YAML frontmatter as metadata
+
+In Salon Document Mode, Markdown files with YAML frontmatter now render that frontmatter as a read-only "Document Info" key/value table in rich mode instead of showing raw `---` delimiters and YAML lines inside the editor surface.
+
+- Rich mode now edits only the Markdown body content.
+- Source mode still shows and edits the full raw document bytes, including frontmatter.
+- Array-like frontmatter values render as individual chips for clearer scanning.
+- Frontmatter values render as plain text in the table (no Markdown formatting inside metadata values).
+
 #### Fix: Lexical editors now render with solid (non-transparent) backgrounds
 
 Applied an explicit opaque background to shared Lexical editing surfaces so editor panes no longer show transparency in any theme.

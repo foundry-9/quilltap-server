@@ -32,6 +32,7 @@ import { ListNode, ListItemNode } from '@lexical/list'
 import { LinkNode } from '@lexical/link'
 import { CodeNode, CodeHighlightNode } from '@lexical/code'
 import { TableNode, TableCellNode, TableRowNode } from '@lexical/table'
+import YAML from 'yaml'
 import { composerTheme } from '@/components/chat/lexical/theme'
 import { MarkdownBridgePlugin, COMPOSER_TRANSFORMERS } from '@/components/chat/lexical/plugins/MarkdownBridgePlugin'
 import { FormattingCommandPlugin } from '@/components/chat/lexical/plugins/FormattingCommandPlugin'
@@ -91,6 +92,129 @@ function isMarkdownFile(filePath: string): boolean {
   if (dot < 0) return false
   const ext = filePath.slice(dot).toLowerCase()
   return ext === '.md' || ext === '.markdown'
+}
+
+interface ExtractedFrontmatter {
+  rawBlock: string | null
+  body: string
+  data: Record<string, unknown>
+}
+
+function parseLooseFrontmatterData(yamlContent: string): Record<string, unknown> {
+  const data: Record<string, unknown> = {}
+  for (const line of yamlContent.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const colonIndex = trimmed.indexOf(':')
+    if (colonIndex === -1) continue
+
+    const key = trimmed.slice(0, colonIndex).trim()
+    const value = trimmed.slice(colonIndex + 1).trim()
+    if (!key) continue
+    data[key] = value || '\u2014'
+  }
+  return data
+}
+
+function extractFrontmatter(content: string): ExtractedFrontmatter {
+  const match = content.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
+  if (!match) {
+    return {
+      rawBlock: null,
+      body: content,
+      data: {},
+    }
+  }
+
+  const rawBlock = match[0]
+  const yamlContent = match[1]
+  const body = content.slice(rawBlock.length)
+
+  try {
+    const parsed = YAML.parse(yamlContent)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return {
+        rawBlock,
+        body,
+        data: parsed as Record<string, unknown>,
+      }
+    }
+  } catch {
+    // If YAML parsing fails, fall back to a line-based view so metadata still appears.
+  }
+
+  return {
+    rawBlock,
+    body,
+    data: parseLooseFrontmatterData(yamlContent),
+  }
+}
+
+function frontmatterValueToText(value: unknown): string {
+  if (value === null || value === undefined) return '\u2014'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function toChipValues(value: unknown): string[] | null {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => frontmatterValueToText(item).trim())
+      .filter(Boolean)
+  }
+
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null
+
+  const inlineItems = trimmed.slice(1, -1)
+    .split(',')
+    .map((item) => item.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean)
+
+  return inlineItems.length > 0 ? inlineItems : null
+}
+
+function FrontmatterTable({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data)
+  return (
+    <div className="qt-frontmatter">
+      <div className="qt-frontmatter-title">Document Info</div>
+      <table className="qt-frontmatter-table">
+        <tbody>
+          {entries.length > 0 ? entries.map(([key, value]) => {
+            const chipValues = toChipValues(value)
+            return (
+              <tr key={key}>
+                <th>{key}</th>
+                <td>
+                  {chipValues ? (
+                    <div className="qt-frontmatter-chip-list">
+                      {chipValues.map((chipValue, index) => (
+                        <span key={`${key}-${chipValue}-${index}`} className="qt-badge qt-badge-tag">{chipValue}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span>{frontmatterValueToText(value)}</span>
+                  )}
+                </td>
+              </tr>
+            )
+          }) : (
+            <tr>
+              <th>frontmatter</th>
+              <td>\u2014</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 /**
@@ -256,8 +380,36 @@ export default function DocumentPane({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const wordCount = useMemo(() => countWords(document.content), [document.content])
   const isMarkdown = useMemo(() => isMarkdownFile(document.filePath), [document.filePath])
+  const extractedContent = useMemo(() => {
+    if (!isMarkdown) {
+      return {
+        current: {
+          rawBlock: null,
+          body: document.content,
+          data: {},
+        },
+        baseline: {
+          rawBlock: null,
+          body: baselineContent,
+          data: {},
+        },
+      }
+    }
+
+    return {
+      current: extractFrontmatter(document.content),
+      baseline: extractFrontmatter(baselineContent),
+    }
+  }, [isMarkdown, document.content, baselineContent])
+  const currentFrontmatterRawBlock = extractedContent.current.rawBlock
+  const currentBodyContent = extractedContent.current.body
+  const baselineBodyContent = extractedContent.baseline.body
+  const hasFrontmatter = currentFrontmatterRawBlock !== null
+  const wordCount = useMemo(
+    () => countWords(isMarkdown ? currentBodyContent : document.content),
+    [isMarkdown, currentBodyContent, document.content],
+  )
 
   // Stable callbacks for DocumentChangeTracker — avoid re-registering the update listener
   const handleChangedLines = useCallback((lines: Set<number>) => {
@@ -308,6 +460,14 @@ export default function DocumentPane({
     if (showSource) onFlushSave()
     setShowSource((prev) => !prev)
   }, [showSource, onFlushSave])
+
+  const handleMarkdownBodyChange = useCallback((updatedBody: string) => {
+    if (!currentFrontmatterRawBlock) {
+      onContentChange(updatedBody)
+      return
+    }
+    onContentChange(`${currentFrontmatterRawBlock}${updatedBody}`)
+  }, [currentFrontmatterRawBlock, onContentChange])
 
   // Throttled scroll handler — saves position ~100ms after last scroll event
   const handleScroll = useCallback(() => {
@@ -487,11 +647,14 @@ export default function DocumentPane({
                 totalHeight={totalHeight}
               />
               <div className="flex-1">
+                {hasFrontmatter && (
+                  <FrontmatterTable data={extractedContent.current.data} />
+                )}
                 <DocumentEditorPlugins
-                  content={document.content}
-                  onContentChange={onContentChange}
+                  content={currentBodyContent}
+                  onContentChange={handleMarkdownBodyChange}
                   disabled={isLLMEditing}
-                  baselineContent={baselineContent}
+                  baselineContent={baselineBodyContent}
                   onChangedLines={handleChangedLines}
                   onLinePositions={handleLinePositions}
                   scrollContainerRef={scrollContainerRef}
