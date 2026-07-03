@@ -121,7 +121,10 @@ work is entirely between you and the page.
 
 Pick the same file twice and the workspace politely brings its existing tab
 forward rather than opening a second copy; standalone tabs are likewise
-remembered between visits, reopening their files just as you left them.
+remembered between visits, reopening their files just as you left them. Each
+volume you open this way is entered into the same roll of recent documents the
+dialog consults, so it stands ready for a quick reopening next time — whether
+from the rail or from within a conversation.
 
 ## A note on the Help and the Wardrobe
 

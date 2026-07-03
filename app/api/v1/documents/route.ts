@@ -37,7 +37,7 @@ import {
   DocumentMissingError,
 } from '@/lib/documents/operator-doc-actions';
 import { getErrorMessage } from '@/lib/error-utils';
-import { MAX_RECENT_DOCUMENTS } from '@/lib/chat-documents/constants';
+import { MAX_RECENT_DOCUMENTS, STANDALONE_CHAT_ID } from '@/lib/chat-documents/constants';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 
 // ============================================================================
@@ -166,12 +166,15 @@ async function handleRecentDocuments(
 
 /**
  * Open a document standalone: read an existing file, or create a blank
- * "Untitled Document.md" when no `filePath` is given. Nothing is tracked
- * server-side — the workspace tab's payload is the only record of the open.
+ * "Untitled Document.md" when no `filePath` is given. The open is recorded as a
+ * `chat_documents` row under the reserved {@link STANDALONE_CHAT_ID} sentinel so
+ * it joins the cross-chat recent-documents history the picker reads — the left
+ * rail's Document Mode has no conversation to attach the row to. No Librarian
+ * announcement is posted (there is no chat to notify).
  */
 async function handleOpenDocument(
   req: NextRequest,
-  { repos: _repos }: AuthenticatedContext,
+  { repos }: AuthenticatedContext,
 ): Promise<NextResponse> {
   const body = await req.json();
   const data = openDocumentSchema.parse(body);
@@ -184,6 +187,24 @@ async function handleOpenDocument(
       mountPoint: data.mountPoint,
       targetFolder: data.targetFolder,
     });
+
+    // Record the open in recent-documents history. Failing to track must not
+    // sink the open itself, so log and continue if the write throws.
+    try {
+      await repos.chatDocuments.openDocument(STANDALONE_CHAT_ID, {
+        filePath: opened.filePath,
+        scope: data.scope,
+        mountPoint: data.mountPoint ?? null,
+        displayTitle: opened.displayTitle,
+      });
+    } catch (trackError) {
+      logger.warn('Failed to record standalone document in recent history', {
+        filePath: opened.filePath,
+        scope: data.scope,
+        mountPoint: data.mountPoint,
+        error: getErrorMessage(trackError),
+      });
+    }
 
     logger.debug('Opened standalone document', {
       filePath: opened.filePath,

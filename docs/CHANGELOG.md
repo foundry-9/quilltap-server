@@ -4,9 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: standalone Document Mode now records recent documents
+
+Documents opened from the left sidebar's Document Mode (no chat) are now tracked in the recent-documents history, so they appear in the Open Document picker's recents like chat-opened documents do. Previously these opens recorded nothing, so they never showed up as recent.
+
+- Standalone opens now write a `chat_documents` row under a reserved sentinel `chatId` (`STANDALONE_CHAT_ID`), which the cross-chat recents query already reads. Reopening the same file reactivates and bumps its existing row. Tracking failures are logged and do not block the open.
+
 #### Feature: standalone Document Mode from the left sidebar
 
-The left sidebar now has a Document Mode button (file-plus icon, above Settings) that opens the Open Document dialog without a chat. Selected documents open as standalone workspace tabs with the full Document Mode editor — no chat_documents row, no Librarian announcements, and no conversation is notified of edits.
+The left sidebar now has a Document Mode button (file-plus icon, above Settings) that opens the Open Document dialog without a chat. Selected documents open as standalone workspace tabs with the full Document Mode editor — no Librarian announcements and no conversation is notified of edits. (Opens are recorded in recent-documents history under a sentinel chatId; see the 4.8-dev fix above.)
 
 - The picker in chat-less mode always "looks everywhere" (every enabled store; the toggle is hidden), hides the project-library shortcut, and lists recent documents across all chats (project-scoped recents are omitted since there is no project context to resolve them).
 - New `document-standalone` workspace tab kind. Reopening the same file focuses its existing tab; tabs persist across reloads and reopen their file. Blank documents update their tab payload once the server names them so reloads don't mint duplicates.
