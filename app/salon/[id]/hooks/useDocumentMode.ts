@@ -266,7 +266,11 @@ export function useDocumentMode({ chatId, chat, onLibrarianMessage }: UseDocumen
     const content = doc.content || ''
     contentRefs.current.set(doc.id, content)
     savedContentRefs.current.set(doc.id, content)
-    absorbNextRefs.current.set(doc.id, incrementVersion ? isMarkdownDocument(doc) : false)
+    // Empty content has nothing for Lexical to re-serialize, so its editor may
+    // never emit the post-remount change the absorb flag waits for — a lingering
+    // flag would then swallow the user's first real edit as the "saved"
+    // baseline (showing Saved without ever writing).
+    absorbNextRefs.current.set(doc.id, incrementVersion ? isMarkdownDocument(doc) && content !== '' : false)
 
     setOpenDocs(prev => {
       const buildEntry = (existing?: OpenDocEntry): OpenDocEntry => ({

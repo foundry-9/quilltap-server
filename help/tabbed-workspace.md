@@ -102,6 +102,27 @@ just as you left it (save any whose file has since been spirited away). And
 should a character ask to draw your eye to a passage — by way of the Librarian's
 `doc_focus` — it knows precisely which of your open documents to point at.
 
+## Document Mode without a conversation
+
+Not every manuscript wants an audience. The left rail carries a **Document
+Mode** button of its own (the little page with a plus sign, seated just above
+Settings), and pressing it opens the very same Open Document dialog you know
+from the composer — save that, having no conversation to defer to, it looks
+**everywhere** from the start: every character vault, every document store, the
+general library, and your recent documents across all conversations.
+
+Choose a volume — or a fresh blank page — and it opens as a **standalone
+document tab**, attached to no chat at all. The editor is the same in every
+particular: rich or source Markdown, autosave, rename by clicking the title,
+the little trash-can for dismissals. The one difference is discretion itself:
+with no conversation attached, **the Librarian makes no announcements and no
+character is told** of your openings, scribblings, renamings, or erasures. The
+work is entirely between you and the page.
+
+Pick the same file twice and the workspace politely brings its existing tab
+forward rather than opening a second copy; standalone tabs are likewise
+remembered between visits, reopening their files just as you left them.
+
 ## A note on the Help and the Wardrobe
 
 This Help remains a floating window, so it may follow you wherever you roam and

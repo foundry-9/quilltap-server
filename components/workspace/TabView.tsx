@@ -35,6 +35,7 @@ import { WardrobeView } from '@/components/wardrobe/wardrobe-control-dialog'
 import { ProfileView } from '@/app/profile/ProfileView'
 import { AboutView } from '@/app/about/AboutView'
 import { GenerateImageView } from '@/app/generate-image/GenerateImageView'
+import { StandaloneDocumentView } from '@/components/workspace/StandaloneDocumentView'
 import { NewCharacterView } from '@/app/aurora/new/NewCharacterView'
 import { CharacterEditView } from '@/app/aurora/[id]/edit/CharacterEditView'
 import { CharacterDetailView } from '@/app/aurora/[id]/view/CharacterDetailView'
@@ -43,6 +44,7 @@ import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
 import type {
   TerminalTabPayload,
   DocumentTabPayload,
+  DocumentStandaloneTabPayload,
   WardrobeTabPayload,
   CharacterEditTabPayload,
   CharacterViewTabPayload,
@@ -102,6 +104,8 @@ function renderView(tab: WorkspaceTab) {
       return <AboutView />
     case 'generate-image':
       return <GenerateImageView />
+    case 'document-standalone':
+      return <StandaloneDocumentView payload={tab.payload as DocumentStandaloneTabPayload} />
     case 'character-new':
       return <NewCharacterView />
     case 'character-edit': {

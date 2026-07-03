@@ -97,8 +97,8 @@ describe('serialize/deserialize', () => {
     const kinds: TabKind[] = [
       'home', 'salon', 'terminal', 'document', 'aurora', 'prospero',
       'scriptorium', 'settings', 'files', 'photos', 'scenarios', 'brahma',
-      'wardrobe', 'profile', 'about', 'generate-image', 'character-new',
-      'character-edit', 'character-view', 'settings-wizard',
+      'wardrobe', 'profile', 'about', 'generate-image', 'document-standalone',
+      'character-new', 'character-edit', 'character-view', 'settings-wizard',
     ]
     const tabs: WorkspaceState['tabs'] = {}
     for (const kind of kinds) {
@@ -159,6 +159,27 @@ describe('pruneWorkspaceState', () => {
     expect(Object.keys(pruned.tabs)).toEqual(['h2'])
     expect(pruned.panes.left.order).toEqual(['h2'])
     expect(pruned.panes.right).toBeNull()
+  })
+
+  it('keeps a standalone document tab with a resolved file, drops one without', () => {
+    let s = createInitialState('home')
+    s = workspaceReducer(s, {
+      type: 'OPEN_TAB',
+      id: 'ds1',
+      kind: 'document-standalone',
+      payload: { docKey: 'general::notes.md', scope: 'general', filePath: 'notes.md' },
+    })
+    s = workspaceReducer(s, {
+      type: 'OPEN_TAB',
+      id: 'ds2',
+      kind: 'document-standalone',
+      // A blank doc whose payload refresh never landed (no filePath yet) —
+      // reopening it would mint a fresh untitled document every reload.
+      payload: { docKey: 'uuid-blank', scope: 'general' },
+    })
+    const pruned = pruneWorkspaceState(s, {}, 'h2')
+    expect(pruned.tabs.ds1).toBeDefined()
+    expect(pruned.tabs.ds2).toBeUndefined()
   })
 
   it('repairs a dangling active reference and stray order ids', () => {

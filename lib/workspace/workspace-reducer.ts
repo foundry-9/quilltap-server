@@ -102,6 +102,8 @@ export function tabIdentity(tab: { kind: TabKind; payload?: unknown }): string {
       return `terminal:${chatIdOf(tab.payload)}`
     case 'document':
       return `document:${chatIdOf(tab.payload)}:${chatDocumentIdOf(tab.payload)}`
+    case 'document-standalone':
+      return `document-standalone:${(tab.payload as { docKey?: string } | undefined)?.docKey ?? ''}`
     case 'character-edit':
       return `character-edit:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
     case 'character-view':

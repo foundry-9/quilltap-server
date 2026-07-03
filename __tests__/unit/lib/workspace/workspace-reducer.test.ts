@@ -62,6 +62,9 @@ describe('tabIdentity', () => {
     // several document tabs (one per open document).
     expect(tabIdentity({ kind: 'document', payload: { chatId: 'c1', chatDocumentId: 'd1' } })).toBe('document:c1:d1')
     expect(tabIdentity({ kind: 'document', payload: { chatId: 'c1', chatDocumentId: 'd2' } })).toBe('document:c1:d2')
+    // Standalone documents are keyed by their client-minted docKey, which is
+    // file identity for existing files and a uuid for new blanks.
+    expect(tabIdentity({ kind: 'document-standalone', payload: { docKey: 'general::notes.md' } })).toBe('document-standalone:general::notes.md')
     expect(tabIdentity({ kind: 'aurora' })).toBe('aurora')
     expect(tabIdentity({ kind: 'settings', payload: { tab: 'system' } })).toBe('settings')
   })

@@ -57,6 +57,7 @@ const TAB_KINDS = [
   'profile',
   'about',
   'generate-image',
+  'document-standalone',
   'character-new',
   'character-edit',
   'character-view',
@@ -170,6 +171,13 @@ export function pruneWorkspaceState(
     if (keep && tab.kind === 'document') {
       const chatDocumentId = (tab.payload as { chatDocumentId?: string } | undefined)?.chatDocumentId
       keep = Boolean(chatDocumentId)
+    }
+    // Standalone document tabs need a resolved file to reopen. A payload still
+    // missing its filePath (a blank doc whose payload refresh never landed)
+    // would mint a fresh untitled document on every reload — drop it instead.
+    if (keep && tab.kind === 'document-standalone') {
+      const payload = tab.payload as { docKey?: string; filePath?: string } | undefined
+      keep = Boolean(payload?.docKey && payload?.filePath)
     }
     if (keep) surviving.add(tab.id)
   }

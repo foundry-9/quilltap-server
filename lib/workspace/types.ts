@@ -35,6 +35,7 @@ export type TabKind =
   | 'profile' // the user's profile page
   | 'about' // the About page
   | 'generate-image' // standalone (chat-less) image generation
+  | 'document-standalone' // standalone (chat-less) Document Mode editor — payload: DocumentStandaloneTabPayload
   | 'character-new' // the create-a-character form
   | 'character-edit' // payload: { characterId: string; tab?: string }
   | 'character-view' // payload: { characterId: string; tab?: string } — the read-only character detail page
@@ -56,6 +57,50 @@ export interface DocumentTabPayload {
   /** Cached title for the tab label (the document's display title). */
   displayTitle?: string
 }
+/**
+ * A chat-less Document Mode tab (opened from the left rail). The tab itself is
+ * the only record of the open — there is no chat_documents row and no chat to
+ * notify of edits.
+ */
+export interface DocumentStandaloneTabPayload {
+  /**
+   * Client-minted identity key. For existing files the opener derives it from
+   * the file's identity (scope/mount/path) so reopening the same file focuses
+   * the existing tab; for new blank documents it's a fresh uuid. Stable across
+   * renames (the payload's filePath updates, the key does not).
+   */
+  docKey: string
+  scope: 'document_store' | 'general'
+  mountPoint?: string | null
+  /**
+   * Unset while a brand-new blank document is being created; filled in via a
+   * payload refresh once the server names it, so a persisted tab reopens the
+   * real file.
+   */
+  filePath?: string
+  /** Folder (relative to scope root) for a new blank document. */
+  targetFolder?: string
+  /** Cached title for the tab label. */
+  displayTitle?: string
+}
+/**
+ * Identity key for a standalone document tab. Existing files key by identity
+ * (scope/mount/path) so reopening the same file focuses its existing tab; a
+ * new blank document (no filePath yet) gets a fresh uuid so several blanks can
+ * coexist.
+ */
+export function standaloneDocKey(
+  scope: DocumentStandaloneTabPayload['scope'],
+  mountPoint: string | null | undefined,
+  filePath: string | null | undefined,
+): string {
+  if (filePath) return `${scope}:${mountPoint ?? ''}:${filePath}`
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `doc-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
+}
+
 export interface SettingsTabPayload {
   tab?: string
   section?: string

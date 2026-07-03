@@ -30,6 +30,8 @@ Should you wish to rechristen a document, click the title at the top of the edit
 
 Should a volume have outlived its usefulness, the header also offers a small trash-can button beside Close. A single click, a polite request for confirmation, and the underlying file is removed — whether it resides on disk or in a database-backed vault — the document pane is closed, and the Librarian announces the deletion in the chat so present characters know the volume is gone from the shelves. The action is irreversible; do reserve it for files you truly mean to dismiss.
 
+Nor must a conversation always be in attendance: the left rail offers a **Document Mode** button of its own, which opens the same dialog and the same editor with no chat attached — and, having no audience, makes no announcements. The particulars are set out in [The Tabbed Workspace](tabbed-workspace.md).
+
 ### The Open Document picker
 
 When you summon a document in the Salon — by the toolbar's Open-Document button, or by **⌘⇧D / Ctrl+Shift+D** when no manuscript is yet at hand — a picker presents itself in two columns. Down the left run the dependable standbys: **New blank document**, the **Project library** (when the chat belongs to a project), and the **General library**, and beneath them a **Recent** accordion. That recent list leads with the volumes you have lately had open in this very chat and then, rather than forgetting everything the instant you wander off, continues with those you opened in other chats — so a manuscript you were lately tending is never more than a glance away. It holds the ten most recent in all.

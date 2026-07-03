@@ -19,7 +19,7 @@
 import { useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWorkspace } from '@/components/providers/workspace-provider'
-import type { TabKind } from '@/lib/workspace/types'
+import { standaloneDocKey, type DocumentStandaloneTabPayload, type TabKind } from '@/lib/workspace/types'
 
 const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
   'home',
@@ -38,6 +38,7 @@ const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
   'profile',
   'about',
   'generate-image',
+  'document-standalone',
   'character-new',
   'character-edit',
   'settings-wizard',
@@ -72,6 +73,21 @@ export function WorkspaceIntent() {
       else if (kind === 'settings') payload = { tab, section }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
       else if (kind === 'character-edit') payload = characterId ? { characterId, tab } : undefined
+      else if (kind === 'document-standalone') {
+        // Standalone Document Mode deep-link (the sidebar's legacy-shell path).
+        const scope: DocumentStandaloneTabPayload['scope'] =
+          searchParams.get('scope') === 'document_store' ? 'document_store' : 'general'
+        const filePath = searchParams.get('filePath') || undefined
+        const mountPoint = searchParams.get('mountPoint') || undefined
+        const targetFolder = searchParams.get('targetFolder') || undefined
+        payload = {
+          docKey: standaloneDocKey(scope, mountPoint ?? null, filePath),
+          scope,
+          mountPoint: mountPoint ?? null,
+          filePath,
+          targetFolder,
+        } satisfies DocumentStandaloneTabPayload
+      }
 
       // Chat-bound kinds need a chatId and the character editor needs a
       // characterId; skip opening when the required id is missing.

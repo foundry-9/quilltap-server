@@ -62,6 +62,7 @@ API reference for Quilltap v4.3 and later.
   - [Roleplay Templates](#roleplay-templates)
   - [Images](#images)
   - [Mount Points (Scriptorium)](#mount-points-scriptorium)
+  - [Documents (Standalone Document Mode)](#documents-standalone-document-mode)
   - [Terminals (Ariel)](#terminals-ariel)
   - [System Backup & Restore](#system-backup--restore)
   - [System Data Directory](#system-data-directory)
@@ -3644,6 +3645,20 @@ Cross-mount and folder operations live on the `[id]` action-dispatch route (they
 - `POST /api/v1/mount-points/[id]?action=move-folder` — JSON `{ fromPath, toPath }`. Moves the folder and everything under it (database rows or `fs.rename` + link-row reconciliation).
 
 > **Mount-point files vs. the file library (`/api/v1/files`).** These mount-point endpoints address content by **(mount, relative path)** and are the one surface for Scriptorium file CRUD. `/api/v1/files` is a separate **library** layer that addresses by **file id** and carries domain metadata the mount index has no columns for (category, generation prompt/model, `linkedTo` associations, tags, image dimensions, thumbnails, avatar back-references). Its uploads already persist bytes into mount stores via the storage bridges (which now funnel through `storeMountFile`), and `GET /api/v1/files/[id]` plus `/api/v1/files/proxy/[...key]` remain the stable, persisted read URLs for library assets. Use the mount-point routes for raw file content; use `/api/v1/files` for the library/metadata layer.
+
+---
+
+### Documents (Standalone Document Mode)
+
+Chat-less Document Mode operations for the left rail's standalone document tabs. These reuse the same shared core as the chat-scoped document actions (`lib/documents/operator-doc-actions.ts`) but create **no `chat_documents` rows and post no Librarian announcements** — no conversation is attached, so nothing is notified of edits. All actions resolve paths with the operator override (any enabled store is reachable). The `project` scope is not accepted here (no chat means no project context); project files are reachable through their project's official document store by mount name.
+
+- `GET /api/v1/documents?action=accessible-stores` — every enabled store (the picker's chat-less "look everywhere"). Returns `{ stores, projectLibrary: null }`; character vaults are labelled by their owning character.
+- `POST /api/v1/documents?action=recent-documents` — recently-opened documents across all chats (sourced from `chat_documents` history), deduped by file identity, `project`-scoped rows filtered out. Returns `{ documents }`.
+- `POST /api/v1/documents?action=open-document` — JSON `{ filePath?, title?, scope? ('document_store' | 'general', default 'general'), mountPoint?, targetFolder? }`. Reads an existing file, or (no `filePath`) creates a collision-safe "Untitled Document.md" in `targetFolder`. Returns `{ document: { filePath, scope, mountPoint, displayTitle }, content, mtime, isNew }`. `404` if a named file is missing.
+- `POST /api/v1/documents?action=read-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ content, mtime }`.
+- `POST /api/v1/documents?action=write-document` — JSON `{ filePath, scope?, mountPoint?, content, mtime? }`. Mtime-checked write (`409` on conflict); document-store writes schedule re-index + embedding + stats refresh. Returns `{ success, mtime }`.
+- `POST /api/v1/documents?action=rename-document` — JSON `{ filePath, scope?, mountPoint?, newTitle }`. Same basename semantics as the chat route (directory preserved, old extension inherited, separators rejected). `409` if the destination exists. Returns `{ document }`.
+- `POST /api/v1/documents?action=delete-document` — JSON `{ filePath, scope?, mountPoint? }`. Returns `{ success }`.
 
 ---
 
