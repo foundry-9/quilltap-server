@@ -187,6 +187,10 @@ class UserScopedChatsRepository extends UserScopedTaggableRepository<ChatMetadat
     return this.baseRepo.getMessages(chatId);
   }
 
+  async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
+    return this.baseRepo.getLastPlayedMessageAt(chatId);
+  }
+
   async addMessage(chatId: string, message: ChatEvent): Promise<ChatEvent> {
     const chat = await this.findById(chatId);
     if (!chat) throw new Error('Chat not found or access denied');

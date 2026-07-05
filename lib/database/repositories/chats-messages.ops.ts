@@ -382,6 +382,46 @@ export class ChatMessagesOps {
   }
 
   /**
+   * Timestamp of the most recent *played* message in a chat — one authored by a
+   * participant character or the human user: `type === 'message'` with NO
+   * `systemSender`. Personified-feature / Staff announcements (Lantern, Aurora,
+   * Host, Prospero, Carina, Concierge, Commonplace Book, Ariel, Suparṇā,
+   * Librarian) also persist as `type: 'message'` rows, but they carry a
+   * `systemSender`, so they are excluded — a Staff whisper into an otherwise
+   * quiet chat must not read as conversational activity.
+   *
+   * Returns the ISO `createdAt` of that message, or null when the chat has no
+   * played messages at all. Used by the stale-chat maintenance sweep to decide
+   * whether a chat has genuinely gone quiet.
+   */
+  async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
+    return safeQuery(async () => {
+      const messagesCollection = await this.ctx.getMessagesCollection();
+
+      if (this.ctx.isSQLiteBackend()) {
+        // Indexed single-row lookup — avoids loading and Zod-validating the
+        // whole transcript of every chat during the daily maintenance sweep.
+        const rows = await messagesCollection.find(
+          { chatId, type: 'message', systemSender: null } as QueryFilter,
+          { sort: { createdAt: -1 } as SortSpec, limit: 1 },
+        );
+        const createdAt = (rows[0] as { createdAt?: unknown } | undefined)?.createdAt;
+        return typeof createdAt === 'string' ? createdAt : null;
+      }
+
+      // Legacy embedded-array backend: scan the loaded messages for the newest
+      // participant-authored one (ISO-8601 strings compare lexicographically).
+      const messages = await this.getMessages(chatId);
+      let latest: string | null = null;
+      for (const m of messages) {
+        if (m.type !== 'message' || m.systemSender) continue;
+        if (latest === null || m.createdAt > latest) latest = m.createdAt;
+      }
+      return latest;
+    }, 'Failed to get last played message timestamp', { chatId }, null);
+  }
+
+  /**
    * Delete a specific set of messages from a chat by ID. Returns the number
    * of messages actually removed. Used by the per-character Librarian
    * summary pipeline to sweep prior summary whispers when a fresh one is

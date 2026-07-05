@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Fix: stale-chat image cleanup now ignores Staff announcements
+
+The daily maintenance sweep that collapses a stale chat's superseded story-background and avatar images decided "stale" from the chat's `lastMessageAt` (falling back to `updatedAt`). But personified-feature / Staff messages (Lantern, Aurora, Host, Prospero, Carina, Concierge, Commonplace Book, Ariel, Suparṇā, Librarian) persist as `type: 'message'` rows and also bump `lastMessageAt`, so a whisper into an otherwise-quiet chat (e.g. a Suparṇā mail-delivery announcement) reset the 30-day staleness clock and kept dead images around indefinitely. Staleness is now keyed off the last *played* message — one authored by a participant character or the human user — via the new `chats.getLastPlayedMessageAt(chatId)`, which excludes any message carrying a `systemSender`. It falls back to `updatedAt` only when a chat has no played messages at all. No backfill needed: the sweep recomputes staleness from live data on each run.
+
+- New repository method `getLastPlayedMessageAt` does an indexed single-row lookup (`type = 'message' AND systemSender IS NULL`, newest first) so the daily sweep doesn't load and validate every chat's full transcript.
+
 #### Fix: renaming a Document Mode file now updates the recent-documents list
 
 Renaming a file while editing it in Document Mode now keeps the recent-documents history in sync in both entry points. Previously, standalone Document Mode (opened from the left sidebar, no chat) renamed the file on disk but left its `chat_documents` tracking row pointing at the old path, so the renamed file showed the old name in the Open Document picker's recents and 404'd when reopened. The standalone rename handler now updates the tracking row. The Salon rename path, which already updated its own chat's row, additionally sweeps any other chats' (or the standalone) rows that still reference the old path, so the shared recent list stays consistent everywhere.

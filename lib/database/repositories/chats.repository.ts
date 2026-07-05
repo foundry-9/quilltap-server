@@ -471,6 +471,10 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.messagesOps.getMessageCount(chatId);
   }
 
+  async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
+    return this.messagesOps.getLastPlayedMessageAt(chatId);
+  }
+
   async clearMessages(chatId: string): Promise<boolean> {
     return this.messagesOps.clearMessages(chatId);
   }
