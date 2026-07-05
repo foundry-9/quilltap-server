@@ -902,6 +902,29 @@ export async function handleRenameDocument(
     displayTitle: newDisplayTitle,
   });
 
+  // Sweep any other chats' (or the standalone) recent-document rows still
+  // pointing at the old path so the shared recent list stays consistent. The
+  // row above is already at newFilePath, so it won't re-match here. Best-effort:
+  // the rename already succeeded on disk. Mirrors syncChatDocumentsAfterFileMove.
+  try {
+    await repos.chatDocuments.renameFilePathInStore(
+      doc.scope,
+      doc.mountPoint ?? null,
+      doc.filePath,
+      newFilePath,
+      newDisplayTitle,
+    );
+  } catch (trackError) {
+    logger.warn('Failed to sweep recent-document tracking after rename', {
+      chatId,
+      from: doc.filePath,
+      to: newFilePath,
+      scope: doc.scope,
+      mountPoint: doc.mountPoint,
+      error: getErrorMessage(trackError),
+    });
+  }
+
   const librarianMessage = await postLibrarianRenameAnnouncement({
     chatId,
     oldDisplayTitle,

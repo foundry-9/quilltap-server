@@ -390,6 +390,34 @@ async function handleRenameDocument(
     mountPoint: data.mountPoint,
   });
 
+  // Keep the recent-documents history pointing at the new name. Best-effort:
+  // the rename already succeeded on disk, so a tracking hiccup must not fail
+  // the request. Mirrors syncChatDocumentsAfterFileMove for doc_move_file.
+  try {
+    const updatedRows = await repos.chatDocuments.renameFilePathInStore(
+      data.scope,
+      data.mountPoint ?? null,
+      data.filePath,
+      newFilePath,
+      newDisplayTitle,
+    );
+    logger.debug('Updated recent-document tracking after standalone rename', {
+      from: data.filePath,
+      to: newFilePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint,
+      updatedRows,
+    });
+  } catch (trackError) {
+    logger.warn('Failed to update recent-document tracking after standalone rename', {
+      from: data.filePath,
+      to: newFilePath,
+      scope: data.scope,
+      mountPoint: data.mountPoint,
+      error: getErrorMessage(trackError),
+    });
+  }
+
   return successResponse({
     document: {
       filePath: newFilePath,

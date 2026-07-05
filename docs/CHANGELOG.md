@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Fix: renaming a Document Mode file now updates the recent-documents list
+
+Renaming a file while editing it in Document Mode now keeps the recent-documents history in sync in both entry points. Previously, standalone Document Mode (opened from the left sidebar, no chat) renamed the file on disk but left its `chat_documents` tracking row pointing at the old path, so the renamed file showed the old name in the Open Document picker's recents and 404'd when reopened. The standalone rename handler now updates the tracking row. The Salon rename path, which already updated its own chat's row, additionally sweeps any other chats' (or the standalone) rows that still reference the old path, so the shared recent list stays consistent everywhere.
+
+- Both paths reuse `chatDocuments.renameFilePathInStore(scope, mountPoint, oldPath, newPath, newDisplayTitle)` — the same chokepoint the `doc_move_file` tool uses. Updates are best-effort: the rename has already succeeded on disk, so a tracking failure is logged and never fails the request.
+
 #### Fix: run_sql handler tests no longer pick up the Jest SQLite mock in CI
 
 The `run-sql-handler` unit suite (a real-binding suite) broke in CI after `better-sqlite3-multiple-ciphers` was added to the unit Jest `moduleNameMapper`: its driver loader's bare `require('better-sqlite3-multiple-ciphers')` fallback started silently returning the mock, whose statements never report `readonly: true`, so the handler's fail-closed guard rejected every query (16 failures). The loader now prefers path-based requires (which bypass `moduleNameMapper`), probes each candidate with a prepared `SELECT 1` to confirm it is a real binding, and throws a clear error instead of silently running against the mock.
