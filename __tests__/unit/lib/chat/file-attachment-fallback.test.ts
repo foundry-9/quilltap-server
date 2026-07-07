@@ -13,6 +13,9 @@ jest.mock('@/lib/llm/connection-profile-utils', () => ({
 jest.mock('@/lib/llm/plugin-factory', () => ({
   createLLMProvider: jest.fn(),
 }))
+jest.mock('@/lib/services/llm-logging.service', () => ({
+  logLLMCall: jest.fn().mockResolvedValue(undefined),
+}))
 
 import {
   needsFallbackProcessing,
@@ -65,6 +68,9 @@ const mockRepos = {
     findApiKeyById: jest.fn(),
     findApiKeyByIdAndUserId: jest.fn(),
   },
+  files: {
+    findById: jest.fn(),
+  },
 }
 
 const mockFileAttachment: FileAttachment = {
@@ -83,6 +89,10 @@ describe('lib/chat/file-attachment-fallback', () => {
     mockRepos.connections.findByUserId.mockReset()
     mockRepos.connections.findApiKeyById.mockReset()
     mockRepos.connections.findApiKeyByIdAndUserId.mockReset()
+    mockRepos.files.findById.mockReset()
+    // Default: no persisted description, so tests exercise the vision path
+    // unless they opt into the reuse behaviour explicitly.
+    mockRepos.files.findById.mockResolvedValue(null)
     mockProfileSupportsMimeType.mockReset()
     mockCreateLLMProvider.mockReset()
   })
@@ -181,6 +191,64 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(result.type).toBe('image_description')
     expect(result.processingMetadata?.usedImageDescriptionLLM).toBe(true)
     expect(result.imageDescription).toContain('Beautiful scene description')
+  })
+
+  it('reuses a generated image\'s prompt as its description without any vision call', async () => {
+    mockRepos.files.findById.mockResolvedValue({
+      id: 'file-1',
+      generationPrompt: 'Solo portrait of Ariel: pale gold quill, dragonfly wings.',
+      description: 'Ariel — wardrobe portrait',
+    })
+    const sendMessage = jest.fn()
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    // No profile lookup, no vision call — the persisted prompt is authoritative.
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(mockRepos.chatSettings.findByUserId).not.toHaveBeenCalled()
+    expect(result.type).toBe('image_description')
+    expect(result.imageDescription).toContain('pale gold quill')
+    expect(result.processingMetadata?.reusedPersistedDescription).toBe(true)
+    expect(result.processingMetadata?.usedImageDescriptionLLM).toBe(false)
+  })
+
+  it('reuses a stored description for an already-described upload (no generation prompt)', async () => {
+    mockRepos.files.findById.mockResolvedValue({
+      id: 'file-1',
+      generationPrompt: null,
+      description: 'A copper kettle on a windowsill at sunset.',
+    })
+    const sendMessage = jest.fn()
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(result.type).toBe('image_description')
+    expect(result.imageDescription).toContain('copper kettle')
+    expect(result.processingMetadata?.reusedPersistedDescription).toBe(true)
+  })
+
+  it('falls through to the vision call when persisted-description lookup throws', async () => {
+    mockRepos.files.findById.mockRejectedValue(new Error('db unavailable'))
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: baseProfile.id })
+    mockRepos.connections.findById.mockResolvedValue(baseProfile)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'Beautiful scene description',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(result.type).toBe('image_description')
+    expect(result.processingMetadata?.reusedPersistedDescription).toBeUndefined()
   })
 
   it('flags suspicious LLM responses so the UI can warn the user', async () => {

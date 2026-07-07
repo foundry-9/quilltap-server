@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Fix: character replies no longer block for minutes describing a generated image
+
+When a character responds on a non-vision model (e.g. DeepSeek) and a recently generated image is in context — a fresh avatar, a story background, or a `generate_image` result — the orchestrator has to turn that image into text the model can read. It did this by sending the image to the configured vision profile on every turn, inline, with no caching. On the first turn after an avatar was generated this added minutes of latency: in one observed case a `glm-4.6v-flashx` description call blocked a reply for nearly three minutes while the actual response model needed only eleven seconds.
+
+Images Quilltap generated already carry the exact prompt that produced them (`FileEntry.generationPrompt` / `generationRevisedPrompt`), which is the most faithful description available. The fallback now reuses that persisted text (and a stored `description` for already-described uploads) and skips the vision call entirely. The vision model is only invoked for genuinely unknown images — user uploads that haven't been described yet. This takes the whole vision round-trip off the reply path for self-generated images.
+
+- The image-description fallback call is now recorded in `llm_logs` as an `IMAGE_DESCRIPTION` entry (it was previously invisible, so its latency and token use couldn't be diagnosed), runs under a 60-second hard timeout (a slow or degraded describer can no longer wedge a reply), and downsizes the image to the description provider's size limit before sending. All logging is best-effort and never blocks description generation.
+
+#### Fix: bare-topped character avatars crop at the collarbone instead of tripping image moderation
+
+A character with a bare upper body (e.g. an "Active Nudist" wardrobe) could not get an avatar generated on a SFW image provider: the head-and-shoulders prompt emitted "topless" wardrobe wording and cropped low enough to put a bare chest in frame, so the provider rejected it on content moderation. Avatar prompts for a bare-topped character now crop tighter — a close-up headshot at the collarbone with bare shoulders, chest and torso out of frame — and omit the "topless"/"naked" wording entirely (the same way lower-body slots are already omitted for portraits). Bare shoulders and neck are unremarkable to image providers; a bare chest is what gets refused, and the tighter framing keeps it out of the picture. Above-the-collar accessories are still described; clothed characters are unaffected.
+
 #### Improvement: Document Mode change diffs are now real, minimal unified diffs
 
 The diff shown when a Document Mode file is edited (the Librarian's save announcement in chat, and the diffs the `doc_*` edit tools attach to their notes) is now a proper git-style unified diff instead of a homegrown approximation. The old algorithm walked both versions with a fixed 3-line lookahead window, so any change that shifted or re-aligned content further than three lines apart was reported as a wholesale block of removals followed by a block of additions, and hunks carried no surrounding context — the result read nothing like an actual `diff`.

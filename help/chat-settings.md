@@ -213,6 +213,8 @@ Configure which service generates automatic descriptions for images in chats.
 - When an image is attached to a chat message, Quilltap automatically generates a description
 - The description helps the AI understand the image context
 - Descriptions are cached to save on API usage
+- For portraits and scenes conjured by the establishment's own hand — a character's avatar, a story backdrop, an image summoned by the tools — no describer is troubled at all: the very prompt that painted the picture is kept on file and read back verbatim, instantly and without charge. The vision profile is consulted only for pictures of unknown provenance, such as an image you upload yourself.
+- Should a describer prove sluggish, the consultation is abandoned after a minute so a single slow portrait can never hold your correspondent's reply hostage.
 
 **Prerequisites:**
 
