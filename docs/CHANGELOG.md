@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Feature: a status dialog while a new conversation is assembled ("The Green Room")
+
+Starting a fresh conversation — or continuing one elsewhere — fires a single blocking `POST /api/v1/chats` and then navigates into the Salon. That request quietly does a lot of slow work before it returns: resolving the cast, running a per-character LLM "choose what to wear" step, compiling identity stacks, backfilling continuation history, and seeding the opening scene. The wardrobe step is usually the longest part (one cheap-LLM call per character set to "have them choose"), and until now none of it was visible — the app just sat there.
+
+A blocking, non-dismissable status dialog now appears the moment creation begins. It shows a live status line, and for each character choosing an outfit via LLM it shows a "consulting the wardrobe for _Name_" panel that resolves into the decided four-slot outfit (top / bottom / footwear / accessories). A scrolling activity log runs beneath. The dialog can't be dismissed while creation runs; it closes on its own once the conversation is ready for input. Only on failure does it offer a Close button.
+
+- Progress travels on a side-channel so the create request keeps returning JSON as before. The client sends a correlation id (`progressId`) with the POST; the handler publishes milestones and wardrobe results to an in-memory bus (`lib/chat/creation-progress.ts`) keyed by that id; the dialog subscribes over SSE at `GET /api/v1/chats/creation-progress?id=…`. The bus buffers events per id and replays them on connect, so a subscriber that attaches a beat late loses nothing. Fully backward compatible: with no `progressId`, creation behaves exactly as before.
+- Scope: fresh starts and "Continue Elsewhere" only (both go through the create endpoint). Autonomous-room creation and per-message turns are unaffected — the per-turn window already narrates itself inline in the composer.
+
 #### Fix: character replies no longer block for minutes describing a generated image
 
 When a character responds on a non-vision model (e.g. DeepSeek) and a recently generated image is in context — a fresh avatar, a story background, or a `generate_image` result — the orchestrator has to turn that image into text the model can read. It did this by sending the image to the configured vision profile on every turn, inline, with no caching. On the first turn after an avatar was generated this added minutes of latency: in one observed case a `glm-4.6v-flashx` description call blocked a reply for nearly three minutes while the actual response model needed only eleven seconds.

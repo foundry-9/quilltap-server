@@ -35,6 +35,7 @@ import {
   buildCheapLLMConfig,
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
+import { createCreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -129,6 +130,14 @@ const createChatSchema = z.object({
    * The source chat must belong to the same user.
    */
   continuationFromChatId: z.uuid().optional(),
+  /**
+   * Client-generated correlation id for the chat-creation status dialog ("The
+   * Green Room"). When present, this handler publishes progress (setup
+   * milestones and per-character LLM wardrobe choices) to the in-memory bus
+   * keyed by this id; the dialog subscribes via
+   * `GET /api/v1/chats/creation-progress?id=…`. Absent → no progress channel.
+   */
+  progressId: z.uuid().optional(),
 
   // 4.6 Private Character Rooms — autonomous-room creation fields.
   // All only consulted when chatType === 'autonomous'.
@@ -892,6 +901,12 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   const validatedData = createChatSchema.parse(body);
   const isAutonomous = validatedData.chatType === 'autonomous';
 
+  // Status dialog ("The Green Room"): narrate the slow, blocking creation work
+  // to the client over a side-channel keyed by the client-supplied progressId.
+  // Inert when no progressId was sent.
+  const progress = createCreationProgressEmitter(validatedData.progressId);
+  progress.status('Assembling the cast…');
+
   // Permission-check the continuation source up front, before doing any
   // create work. The user-scoped repos.chats.findById returns null for chats
   // that don't belong to the current user, which is exactly the rejection
@@ -1156,7 +1171,9 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     scenarioText: resolvedScenario,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
+    progress,
   };
+  progress.status('Consulting the wardrobe…');
   try {
     if (validatedData.outfitSelections && validatedData.outfitSelections.length > 0) {
       // Apply explicit selections, then backfill defaults for any participants not covered
@@ -1200,6 +1217,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // so the per-turn buildSystemPrompt can hit the cache from the very first
   // user message. Failure to compile is non-fatal — buildSystemPrompt's
   // read-through fallback rebuilds fresh on miss.
+  progress.status('Committing everyone’s particulars to memory…');
   try {
     await compileAllIdentityStacks(chat);
   } catch (error) {
@@ -1214,6 +1232,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
     // turn-state replication + cross-link bubbles → scenario/staff
     // (Prospero, Host scenario, Host adds, Aurora outfits, avatar gen),
     // skipping the auto first message.
+    progress.status('Recalling the previous chapter…');
     await writeSystemPromptMessage(chat.id, chatContext, repos);
     try {
       await applyChatContinuation({
@@ -1256,6 +1275,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       { skipFirstMessage: true },
     );
   } else {
+    progress.status('Setting the opening scene…');
     await createInitialMessages(
       chat.id,
       chatContext,
@@ -1280,6 +1300,7 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
   // the user just configured the participants and budget; there's no separate
   // Start step. Cron-scheduled rooms wait for the scheduler instead.
   if (isAutonomous && !chat.scheduleCron) {
+    progress.status('Ringing up the room to begin…');
     try {
       const result = await startAutonomousRoomManually(chat.id, user.id);
       if (!result.ok) {
@@ -1296,6 +1317,9 @@ async function handleCreate(req: NextRequest, context: AuthenticatedContext) {
       }, error instanceof Error ? error : undefined);
     }
   }
+
+  progress.status('The players are ready.');
+  progress.finish();
 
   return NextResponse.json({ chat: { ...chat, participants: enrichedParticipants } }, { status: 201 });
 }

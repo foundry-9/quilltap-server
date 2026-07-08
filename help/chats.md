@@ -75,6 +75,14 @@ Chats associated with a specific project:
 
 Most characters have a **First Message** — an introductory message the character sends when you start a new chat. This sets the scene and establishes the character's voice.
 
+### The Green Room — a word on what happens while the curtain rises
+
+Between the moment you press **Start** and the moment the room is yours to speak in, a good deal of unseen bustle takes place behind the scenes — and it is not always instantaneous. The cast must be gathered, everyone's particulars committed to memory, the opening scene set, and — most time-consuming of all — any character you have asked to *choose their own attire* must repair to the wardrobe and settle on an outfit, each such decision being a small consultation that takes a moment or two.
+
+Rather than leave you drumming your fingers at a blank screen, Quilltap now raises a small status dialog — **The Green Room** — for the duration. It reports, in plain terms, what is presently afoot; and as each character finishes deciding, it displays their chosen ensemble across the four slots (**Top**, **Bottom**, **Footwear**, and **Accessories**), so you may see at a glance what everyone has elected to wear. A running log beneath keeps a tidy record of the proceedings.
+
+The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
+
 ### Taking a Character's Chair — "Play As"
 
 By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now offers *every* character you have added to the room — not merely those you keep on hand as personal personas — alongside any of your designated user-characters waiting in the wings.

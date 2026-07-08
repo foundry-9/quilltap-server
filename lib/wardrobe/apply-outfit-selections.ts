@@ -19,7 +19,7 @@
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import type { EquippedSlots, OutfitSelection } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots, OutfitSelection, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import {
   getCheapLLMProvider,
@@ -27,6 +27,11 @@ import {
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import type {
+  CreationProgressEmitter,
+  OutfitPreviewSlots,
+} from '@/lib/chat/creation-progress';
 
 type Repos = RepositoryContainer;
 
@@ -46,6 +51,37 @@ export interface OutfitSelectionContext {
    * newly-joined participant).
    */
   sourceChatId?: string | null;
+  /**
+   * Optional progress emitter for the chat-creation status dialog. Only the
+   * `llm_choose` mode narrates (it's the slow, LLM-backed path): it announces
+   * "consulting the wardrobe for <name>" before the call and publishes the
+   * decided four-slot outfit afterwards. Inert when absent.
+   */
+  progress?: CreationProgressEmitter;
+}
+
+/**
+ * Map a resolved outfit's per-slot leaf items into the lightweight preview DTO
+ * the status dialog renders (no full `WardrobeItem` payloads over the wire).
+ */
+function toOutfitPreviewSlots(leafItemsBySlot: {
+  top: WardrobeItem[];
+  bottom: WardrobeItem[];
+  footwear: WardrobeItem[];
+  accessories: WardrobeItem[];
+}): OutfitPreviewSlots {
+  const map = (items: WardrobeItem[]) =>
+    items.map((i) => ({
+      id: i.id,
+      title: i.title,
+      isComposite: (i.componentItemIds?.length ?? 0) > 0,
+    }));
+  return {
+    top: map(leafItemsBySlot.top),
+    bottom: map(leafItemsBySlot.bottom),
+    footwear: map(leafItemsBySlot.footwear),
+    accessories: map(leafItemsBySlot.accessories),
+  };
 }
 
 /**
@@ -175,6 +211,10 @@ export async function applyOutfitSelections(
 
       case 'llm_choose': {
         let applied = false;
+        // Track whether we announced a consult so the fallback path can still
+        // resolve the dialog's panel instead of leaving it spinning.
+        let consulted = false;
+        let consultedName = '';
 
         if (context) {
           try {
@@ -193,6 +233,12 @@ export async function applyOutfitSelections(
                   false, // ollamaAvailable
                 );
 
+                // Narrate the slow bit: the dialog shows "Consulting the
+                // wardrobe for <name>…" until the result lands.
+                consulted = true;
+                consultedName = character.name;
+                context.progress?.wardrobeStart(characterId, character.name);
+
                 const result = await chooseLLMOutfit(
                   character.name,
                   character.description || null,
@@ -209,6 +255,28 @@ export async function applyOutfitSelections(
                 if (result.success && result.result) {
                   await repos.chats.setEquippedOutfit(chatId, characterId, result.result);
                   applied = true;
+
+                  // Publish the decided four-slot outfit for the status dialog.
+                  if (context.progress) {
+                    try {
+                      const resolved = await resolveEquippedOutfitForCharacter(
+                        repos,
+                        characterId,
+                        result.result,
+                      );
+                      context.progress.wardrobeResult(
+                        characterId,
+                        character.name,
+                        toOutfitPreviewSlots(resolved.leafItemsBySlot),
+                      );
+                    } catch (resolveError) {
+                      logger.warn('[applyOutfitSelections] Failed to resolve outfit for progress preview', {
+                        chatId,
+                        characterId,
+                        error: getErrorMessage(resolveError, 'Unknown error'),
+                      });
+                    }
+                  }
                 } else {
                   logger.warn('[applyOutfitSelections] LLM outfit selection failed, falling back to defaults', {
                     chatId,
@@ -230,6 +298,29 @@ export async function applyOutfitSelections(
         if (!applied) {
           const slots = await resolveDefaultOutfit(characterId, repos);
           await repos.chats.setEquippedOutfit(chatId, characterId, slots);
+
+          // If we already told the dialog we were consulting this character,
+          // resolve their panel with the default we fell back to (and note it).
+          if (consulted && context?.progress) {
+            context.progress.log(
+              `${consultedName} settled on their usual attire.`,
+              'warn',
+            );
+            try {
+              const resolved = await resolveEquippedOutfitForCharacter(repos, characterId, slots);
+              context.progress.wardrobeResult(
+                characterId,
+                consultedName,
+                toOutfitPreviewSlots(resolved.leafItemsBySlot),
+              );
+            } catch (resolveError) {
+              logger.warn('[applyOutfitSelections] Failed to resolve fallback outfit for progress preview', {
+                chatId,
+                characterId,
+                error: getErrorMessage(resolveError, 'Unknown error'),
+              });
+            }
+          }
         }
         break;
       }

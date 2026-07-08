@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
+import { useCreationProgress } from '@/components/providers/creation-progress-provider'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type {
   Character,
@@ -133,6 +134,7 @@ export function useNewChat({
   initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
   const navigate = useWorkspaceNavigate()
+  const creationProgress = useCreationProgress()
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
@@ -659,6 +661,14 @@ export function useNewChat({
 
     setCreating(true)
 
+    // Correlation id for the "Green Room" status dialog. Only fresh/continued
+    // conversations get the dialog — autonomous rooms navigate to settings.
+    let progressId: string | undefined
+    if (!isAutonomous && creationProgress) {
+      progressId =
+        typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : undefined
+    }
+
     try {
       const participants: Array<{
         type: 'CHARACTER'
@@ -755,6 +765,13 @@ export function useNewChat({
         requestBody.budgetExcludeCacheHits = auto.budgetExcludeCacheHits
       }
 
+      if (progressId) {
+        requestBody.progressId = progressId
+        // Open the blocking status dialog and start streaming progress just as
+        // the create request goes out.
+        creationProgress?.begin(progressId)
+      }
+
       const res = await fetch('/api/v1/chats', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -776,11 +793,17 @@ export function useNewChat({
         // — no route navigation, so a chat streaming in the other pane survives.
         navigate(`/salon/${data.chat.id}`)
       }
+      // Creation succeeded and we've navigated — the conversation is ready, so
+      // dismiss the status dialog.
+      creationProgress?.complete()
       return { chatId: data.chat.id }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create chat'
       showErrorToast(msg)
       console.error('[useNewChat] Failed to create chat', { error: msg })
+      // Surface the failure in the status dialog (if it was opened) so it stops
+      // spinning and offers a Close button.
+      if (progressId) creationProgress?.fail(msg)
       return null
     } finally {
       setCreating(false)

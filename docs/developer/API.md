@@ -1636,6 +1636,8 @@ Create a new chat.
 
 **Note**: `userCharacterId` is optional - provide a user-controlled character ID to "play as" that character in the chat.
 
+**Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
+
 To create an autonomous room, include `chatType: "autonomous"` and autonomous-room fields:
 
 ```json
@@ -1675,6 +1677,22 @@ Import a SillyTavern chat (JSONL format).
   "triggerTitleGeneration": true,
   "createMemories": false
 }
+```
+
+#### `GET /api/v1/chats/creation-progress?id=<progressId>`
+
+Server-Sent Events stream for the chat-creation status dialog ("The Green Room"). The client opens this just before `POST /api/v1/chats` (carrying the same `progressId`) and relays each event to the blocking status dialog. The in-memory bus buffers events per id and replays the backlog on connect, so a subscriber that attaches a beat late loses nothing (including a terminal `done`/`error`, which closes the stream).
+
+Each SSE frame is `data: <json>\n\n` where the payload is one of:
+
+```
+{ "kind": "status", "message": "Consulting the wardrobe…", "ts": 0 }
+{ "kind": "log", "message": "…", "level": "info|warn|error", "ts": 0 }
+{ "kind": "wardrobe-start", "characterId": "…", "characterName": "…", "ts": 0 }
+{ "kind": "wardrobe-result", "characterId": "…", "characterName": "…",
+  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [] }, "ts": 0 }
+{ "kind": "done", "ts": 0 }
+{ "kind": "error", "message": "…", "ts": 0 }
 ```
 
 #### `GET /api/v1/chats/[id]`
