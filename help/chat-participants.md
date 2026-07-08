@@ -15,7 +15,7 @@ Each drawer attends to a different aspect of running the conversation:
 - **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
 - **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
 - **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
-- **Organize** — the chat as an object. Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
+- **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
 - **Edit Content** — the heavier instruments. Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
 
 Only one drawer stands open at a time, in the manner of a well-mannered campaign desk; opening another closes the previous. Participants is open by default whenever the sidebar is expanded.
@@ -469,6 +469,7 @@ Only present in chats with two or more characters. Two toggles:
 
 The chat as an object, rather than a conversation:
 
+- **Copy ID** — spirits the conversation's unique identifier onto the clipboard, ready to be pasted to the CLI or handed to a colleague; the button flashes a check-mark once the deed is done
 - **Rename** — give it a different title
 - **State…** — open the chat state editor; see [Chat State](chat-state.md)
 - **Continue Elsewhere** — fork this conversation into a new chat with a different scenario or project

@@ -88,7 +88,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
         accessories: [],
       },
       itemsById: new Map(),
-    } as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>)
+    } as unknown as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>)
 
     const progress = makeProgress()
     const { repos, setEquippedOutfit } = makeRepos()

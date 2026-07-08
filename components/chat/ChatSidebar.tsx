@@ -18,6 +18,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
+import { CopyChatIdButton } from './CopyChatIdButton'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -1437,6 +1438,8 @@ function OrganizeSection({
           <span>Edit Enclave</span>
         </button>
       )}
+
+      <CopyChatIdButton chatId={chatId} variant="palette" />
 
       {onRenameClick && (
         <button

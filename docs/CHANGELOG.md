@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Feature: copy a conversation's UUID from the header or the Organize drawer
+
+The header of a Salon chat now has a small copy button just after the conversation title that puts the chat's UUID on the clipboard, and the title itself is now a direct link to the conversation's Salon URL. The Chat Sidebar's Organize drawer has the same copy button at the top, before Rename. Both buttons flash a check-mark for a moment after copying. New shared component `components/chat/CopyChatIdButton.tsx` (inline icon variant for the header, full palette-button variant for the sidebar), built on the existing `useCopyToClipboard` hook.
+
 #### Feature: a status dialog while a new conversation is assembled ("The Green Room")
 
 Starting a fresh conversation — or continuing one elsewhere — fires a single blocking `POST /api/v1/chats` and then navigates into the Salon. That request quietly does a lot of slow work before it returns: resolving the cast, running a per-character LLM "choose what to wear" step, compiling identity stacks, backfilling continuation history, and seeding the opening scene. The wardrobe step is usually the longest part (one cheap-LLM call per character set to "have them choose"), and until now none of it was visible — the app just sat there.

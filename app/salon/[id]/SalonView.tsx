@@ -71,6 +71,7 @@ import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { QtapDocContext, type QtapDocOpener } from '@/components/chat/QtapDocContext'
 import type { QtapUriParts } from '@/lib/doc-edit/qtap-uri'
 import { Icon } from '@/components/ui/icon'
+import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
 
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
@@ -965,9 +966,14 @@ export function SalonView({ chatId }: SalonViewProps) {
               Flagged
             </span>
           ) : null}
-          <span className="qt-text-primary truncate" title={chat.title}>
+          <a
+            href={`/salon/${id}`}
+            className="qt-text-primary truncate hover:text-foreground transition-colors"
+            title={chat.title}
+          >
             {chat.title}
-          </span>
+          </a>
+          <CopyChatIdButton chatId={id} variant="inline" />
         </div>
       )
     } else {

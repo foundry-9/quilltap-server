@@ -115,7 +115,8 @@ Where you compose messages:
 
 Shows chat information and controls:
 
-- **Chat Title** — Auto-generated or custom name
+- **Chat Title** — Auto-generated or custom name; it doubles as a direct link back to this conversation's own Salon address, handy for pinning open in a fresh tab
+- **Copy ID** — a small button just past the title that whisks the conversation's unique identifier onto the clipboard, flashing a check-mark once the deed is done
 - **Character Info** — Who you're chatting with
 - **Action Menu** — Additional chat operations
 
