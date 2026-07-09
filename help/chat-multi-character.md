@@ -449,6 +449,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Turn Manager](chat-turn-manager.md) — Detailed turn management documentation
+- [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
 - [Chat Sidebar](chat-participants.md) — Full sidebar documentation, including the Chat / Visibility / Organize / Edit Content drawers
 - [Message Actions](chat-message-actions.md) — Editing and managing messages
 - [Characters](characters.md) — Creating and managing characters

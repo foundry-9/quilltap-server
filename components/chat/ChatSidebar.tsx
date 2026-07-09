@@ -191,6 +191,9 @@ export interface ChatSidebarProps {
   onSetCoreWhisperEnabled?: (value: boolean | null) => void
   coreWhisperInterval?: number | null
   onSetCoreWhisperInterval?: (value: number | null) => void
+  // "Nothing to add" turn-skipping — per-chat toggle. null = enabled (default); false = disabled.
+  turnSkippingEnabled?: boolean | null
+  onSetTurnSkippingEnabled?: (value: boolean | null) => void
   // Thinking visibility — per-chat override (tri-state). null = inherit global. DISPLAY ONLY.
   showThinking?: boolean | null
   onSetShowThinking?: (value: boolean | null) => void
@@ -500,7 +503,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
           />
         </CollapsibleCard>
 
-        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetShowThinking || props.onSetAnswerConfirmationOverride) && (
+        {(props.isMultiChar || props.onSetCoreWhisperEnabled || props.onSetCoreWhisperInterval || props.onSetTurnSkippingEnabled || props.onSetShowThinking || props.onSetAnswerConfirmationOverride) && (
           <CollapsibleCard
             title="Visibility"
             {...openController('visibility')}
@@ -514,6 +517,9 @@ export function ChatSidebar(props: ChatSidebarProps) {
               onSetCoreWhisperEnabled={props.onSetCoreWhisperEnabled}
               coreWhisperInterval={props.coreWhisperInterval}
               onSetCoreWhisperInterval={props.onSetCoreWhisperInterval}
+              turnSkippingEnabled={props.turnSkippingEnabled}
+              onSetTurnSkippingEnabled={props.onSetTurnSkippingEnabled}
+              isMultiChar={props.isMultiChar}
               showThinking={props.showThinking}
               onSetShowThinking={props.onSetShowThinking}
               answerConfirmationOverride={props.answerConfirmationOverride}
@@ -1223,6 +1229,9 @@ interface VisibilitySectionProps {
   onSetCoreWhisperEnabled?: (value: boolean | null) => void
   coreWhisperInterval?: number | null
   onSetCoreWhisperInterval?: (value: number | null) => void
+  turnSkippingEnabled?: boolean | null
+  onSetTurnSkippingEnabled?: (value: boolean | null) => void
+  isMultiChar?: boolean
   showThinking?: boolean | null
   onSetShowThinking?: (value: boolean | null) => void
   answerConfirmationOverride?: 'ON' | 'OFF' | null
@@ -1252,6 +1261,9 @@ function VisibilitySection({
   onSetCoreWhisperEnabled,
   coreWhisperInterval,
   onSetCoreWhisperInterval,
+  turnSkippingEnabled,
+  onSetTurnSkippingEnabled,
+  isMultiChar,
   showThinking,
   onSetShowThinking,
   answerConfirmationOverride,
@@ -1299,6 +1311,27 @@ function VisibilitySection({
             <span
               className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
                 allowCrossCharacterVaultReads ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
+      {onSetTurnSkippingEnabled && isMultiChar && (
+        <div className="flex items-center justify-between pt-2 border-t qt-border-default">
+          <span className="qt-text-secondary text-xs" title="When on, characters may pass a turn with a Host note when they have nothing to add, and the Skip button posts a Host note too. NULL/on is the default.">Turn Skipping</span>
+          <button
+            onClick={() => onSetTurnSkippingEnabled(turnSkippingEnabled === false ? true : false)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              turnSkippingEnabled !== false ? 'bg-primary' : 'qt-bg-muted'
+            }`}
+            role="switch"
+            aria-checked={turnSkippingEnabled !== false}
+            title={turnSkippingEnabled !== false ? 'Characters may pass their turn. Click to require everyone to speak.' : 'Every selected character must speak. Click to allow passing.'}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full qt-bg-toggle-knob transition-transform ${
+                turnSkippingEnabled !== false ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
           </button>

@@ -409,6 +409,48 @@ export interface BuildContextOptions {
    * unchanged behavior.
    */
   autonomousContextCap?: number
+
+  // ============================================================================
+  // "Nothing to add" turn-skipping
+  // ============================================================================
+
+  /**
+   * Per-turn ephemeral instruction control for turn-skipping. When
+   * `offerSkip` is true, a Turn note is appended to (or pushed after) the
+   * outgoing messages inviting the character to pass with the
+   * `[NOTHING TO ADD]` sentinel; `recentlyAddressed` adds a caution to answer
+   * rather than pass. Never persisted. Undefined / `offerSkip: false` → no note.
+   */
+  turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
+}
+
+/**
+ * Build the ephemeral "you may pass this turn" Turn note. Not persisted — it
+ * rides only in the outgoing LLM context for this single turn. The Host
+ * announcement text deliberately never contains the sentinel, so history can't
+ * teach the phrase; this note is the only place it appears.
+ */
+export function buildTurnSkipInstruction(
+  characterName: string,
+  recentlyAddressed: boolean,
+): string {
+  const base = `[Turn note from the Salon — not spoken by any character]
+You are not obliged to speak this turn. If — and only if — you genuinely have
+nothing substantive to add to the conversation right now, reply with exactly
+this single line and nothing else:
+
+[NOTHING TO ADD]
+
+The floor will then pass to someone else and the scene continues without you
+this turn. Do not use it to be coy or mysterious — a brief in-character
+remark is always better than an empty pass. If you have anything worth
+saying, write your reply as normal and ignore this note entirely.`
+
+  if (!recentlyAddressed) return base
+
+  return `${base}
+
+One caution: ${characterName} appears to have been addressed or mentioned since you last spoke. If someone has spoken to you and you have not yet answered them, you should answer rather than pass.`
 }
 
 /**
@@ -2023,6 +2065,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // never breaks the turn; the chat-load GET runs the same sweep for idle rooms.
   await surfaceOperatorMailForChat(chat.id, chat.participants)
 
+  // "Nothing to add" turn-skipping: build the ephemeral Turn note when the
+  // orchestrator has decided this character may pass. Injected as a trailing
+  // context section on the new user message when there is one, or as its own
+  // trailing user message on chained/continue turns (no newUserMessage). Never
+  // persisted.
+  const turnSkipInstruction = options.turnSkip?.offerSkip
+    ? buildTurnSkipInstruction(options.turnSkip.characterName, options.turnSkip.recentlyAddressed)
+    : ''
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -2035,6 +2086,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     if (coreWhisperLLMContext) trailingContextSections.push(coreWhisperLLMContext)
     if (llmRecallText) trailingContextSections.push(llmRecallText)
     if (suparnaMailLLMContext) trailingContextSections.push(suparnaMailLLMContext)
+    if (turnSkipInstruction) trailingContextSections.push(turnSkipInstruction)
     const composedUserContent = trailingContextSections.length > 0
       ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
       : newUserMessage
@@ -2043,6 +2095,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       role: 'user',
       content: composedUserContent,
       name: newUserMsgName,
+    })
+  } else if (turnSkipInstruction) {
+    // Chained / continue turns carry no new user message, so the note can't
+    // ride as a trailing section above. Push it as its own trailing user
+    // message (same off-scene/timestamp pattern) so the model sees it this
+    // turn. Anthropic 4.6+ rejects role=assistant tails, so 'user' is required.
+    contextMessages.push({
+      role: 'user',
+      content: turnSkipInstruction,
     })
   }
 

@@ -607,6 +607,14 @@ export function encodeDoneEvent(
     reasoningContent?: string | null
     /** Positioned reasoning blocks — DISPLAY ONLY (see ReasoningSegment). */
     reasoningSegments?: ReasoningSegment[] | null
+    /**
+     * "Nothing to add" turn-skipping: this turn was passed. The client resets
+     * its streaming buffer without appending a bubble or toasting (the Host
+     * turn-pass announcement already carries the visible note).
+     */
+    skipped?: boolean
+    /** Participant ID of the character who passed (set when `skipped` is true). */
+    skippedParticipantId?: string | null
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ done: true, ...data })}\n\n`)
@@ -674,7 +682,7 @@ export function encodeTurnStartEvent(
  */
 export function encodeTurnCompleteEvent(
   encoder: TextEncoder,
-  data: { participantId: string; messageId: string; chainDepth: number }
+  data: { participantId: string; messageId: string; chainDepth: number; skipped?: boolean }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ turnComplete: true, ...data })}\n\n`)
 }
@@ -711,6 +719,23 @@ export function encodeCarinaAnswerEvent(
   message: MessageEvent
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ carinaAnswer: message })}\n\n`)
+}
+
+/**
+ * Encode a Host announcement event.
+ *
+ * Emitted the instant a Host announcement is persisted mid-turn — currently
+ * the "nothing to add" turn-pass note — so the Salon can surface the Host
+ * bubble immediately rather than waiting for the post-turn `fetchChat()`
+ * refresh. Carries the full posted message; the client inserts optimistically
+ * and dedupes by `id`, and the end-of-turn refresh replaces it with the
+ * authoritative pre-rendered copy (same `id`), so there is no duplicate.
+ */
+export function encodeHostAnnouncementEvent(
+  encoder: TextEncoder,
+  message: MessageEvent
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ hostAnnouncement: message })}\n\n`)
 }
 
 /**

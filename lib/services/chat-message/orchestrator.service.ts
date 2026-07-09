@@ -10,7 +10,12 @@ import { createLLMProvider } from '@/lib/llm'
 import { requiresApiKey } from '@/lib/plugins/provider-validation'
 import {
   isMultiCharacterChat,
+  computeSkipEligibility,
+  detectSkipSentinel,
+  computeSpokenThisCycleAfterSkip,
+  qualifiesForTurnSkipping,
 } from '@/lib/chat/turn-manager'
+import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -48,6 +53,7 @@ import {
   encodeStatusEvent,
   encodeTurnStartEvent,
   encodeCarinaAnswerEvent,
+  encodeHostAnnouncementEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -158,6 +164,11 @@ export const continueMessageSchema = z.object({
   respondingParticipantId: z.uuid().optional(),
   /** The user-controlled participant the human is "Speaking As" (for context/identity) */
   speakingAsParticipantId: z.uuid().nullable().optional(),
+  /**
+   * Nudge: the human explicitly summoned this character (Nudge button). When
+   * true, the "nothing to add" skip option is withheld for this turn.
+   */
+  nudge: z.boolean().optional(),
 })
 
 /**
@@ -477,6 +488,39 @@ async function processMessage(
 
   // Get existing messages
   const existingMessages = await repos.chats.getMessages(chatId)
+
+  // ============================================================================
+  // "Nothing to add" turn-skipping — eligibility
+  // ============================================================================
+  // Decide once whether this character may be offered the pass option this
+  // turn. Only meaningful in multi-character chats with an LLM-controlled
+  // responder. `summoned` (nudge or queue-pop) withholds the option — you don't
+  // offer a pass to a voice the operator explicitly called on.
+  let turnSkip: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string } | undefined
+  if (qualifiesForTurnSkipping(chat.participants) && characterParticipant.controlledBy !== 'user') {
+    const eligibility = computeSkipEligibility({
+      events: existingMessages,
+      participants: chat.participants,
+      respondingParticipantId: characterParticipant.id,
+      respondingCharacter: character,
+      summoned: options.nudge === true || options.chainSelectionReason === 'queue',
+      turnSkippingEnabled: chat.turnSkippingEnabled !== false,
+    })
+    turnSkip = {
+      offerSkip: eligibility.offerSkip,
+      recentlyAddressed: eligibility.recentlyAddressed,
+      characterName: character.name,
+    }
+    logger.debug('[TurnSkip] eligibility computed', {
+      chatId,
+      characterId: character.id,
+      participantId: characterParticipant.id,
+      offerSkip: eligibility.offerSkip,
+      mustSpeakReason: eligibility.mustSpeakReason,
+      recentlyAddressed: eligibility.recentlyAddressed,
+      summoned: options.nudge === true || options.chainSelectionReason === 'queue',
+    })
+  }
 
   // ============================================================================
   // Project + General Context Re-injection (Phase E: Prospero whisper)
@@ -982,6 +1026,8 @@ async function processMessage(
       // Autonomous-room per-turn context cap (tokens). Clamps the model-derived
       // budget so a token-budgeted room paces its run across multiple turns.
       autonomousContextCap: options.autonomousContextCap,
+      // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
+      turnSkip,
       // Pass cached compression result and message count for dynamic window calculation
       cachedCompressionResult: cachedCompressionResponse?.result,
       cachedCompressionMessageCount: cachedCompressionResponse?.cachedMessageCount,
@@ -1405,6 +1451,52 @@ async function processMessage(
   // enqueuing per-edit; here we fire one job each and clear.
   await flushPendingWardrobeAnnouncements(toolContext)
 
+  // ============================================================================
+  // "Nothing to add" turn-skipping — sentinel handling
+  // ============================================================================
+  // Detect the pass sentinel on the raw response before the finalizer. Only
+  // when eligibility was computed for this turn (multi-character, LLM responder).
+  if (turnSkip) {
+    const detection = detectSkipSentinel(
+      streamingState.fullResponse,
+      character.name,
+      character.aliases ?? undefined,
+    )
+    if (detection.skip) {
+      if (toolMessages.length > 0) {
+        // Tools ran this turn — the turn had real effects, so the tool-save
+        // branch must win. Clear the bare sentinel so that branch fires.
+        logger.warn('[TurnSkip] Sentinel emitted but tools ran; keeping tool results, ignoring the pass', {
+          chatId,
+          characterId: character.id,
+          participantId: characterParticipant.id,
+          toolCount: toolMessages.length,
+        })
+        streamingState.fullResponse = ''
+      } else if (turnSkip.offerSkip) {
+        return handleTurnSkip({
+          repos,
+          chatId,
+          character,
+          characterParticipant,
+          isMultiCharacter,
+          userParticipantId,
+          streaming: streamingState,
+          controller,
+          encoder,
+        })
+      } else {
+        // Sentinel when the skip option wasn't offered: route to the existing
+        // empty-response branch (bare pass with no effects → nothing persisted).
+        streamingState.fullResponse = ''
+      }
+    } else if (detection.cleaned !== undefined) {
+      // Sentinel line + trailing prose: strip the line, keep the prose, and
+      // fall through to the normal finalizer as a real reply.
+      streamingState.fullResponse = detection.cleaned
+    }
+  }
+
   if (streamingState.fullResponse && streamingState.fullResponse.trim().length > 0) {
     return finalizeMessageResponse({
       repos,
@@ -1512,6 +1604,106 @@ async function processMessage(
       userParticipantId,
       isPaused: chat.isPaused,
     }
+  }
+}
+
+/**
+ * "Nothing to add" turn-skipping — skip path.
+ *
+ * Posts the Host turn-pass announcement, records the passing participant in the
+ * persisted cycle set (so the rotation advances past them), surfaces the Host
+ * bubble live over SSE, and emits a `done` event flagged `skipped: true` so the
+ * client resets its streaming buffer without appending a phantom bubble. No
+ * character reply is persisted.
+ */
+async function handleTurnSkip(params: {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  character: { id: string; name: string }
+  characterParticipant: { id: string }
+  isMultiCharacter: boolean
+  userParticipantId: string | null
+  streaming: StreamingState
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<ProcessMessageResult> {
+  const {
+    repos,
+    chatId,
+    character,
+    characterParticipant,
+    isMultiCharacter,
+    userParticipantId,
+    streaming,
+    controller,
+    encoder,
+  } = params
+
+  logger.info('[TurnSkip] Character passed the turn', {
+    chatId,
+    characterId: character.id,
+    participantId: characterParticipant.id,
+  })
+
+  // Post the Host announcement (errors swallowed by the writer contract).
+  const hostMessage = await postHostTurnPassAnnouncement({
+    chatId,
+    characterName: character.name,
+    participantId: characterParticipant.id,
+    source: 'llm',
+  })
+
+  // Record the pass in the persisted cycle so the next speaker selection
+  // advances past this character. Re-read for fresh participants/cycle state.
+  let isPaused = false
+  try {
+    const freshChat = await repos.chats.findById(chatId)
+    if (freshChat) {
+      isPaused = freshChat.isPaused === true
+      const cycleUpdate = computeSpokenThisCycleAfterSkip(
+        characterParticipant.id,
+        freshChat.participants,
+        freshChat.spokenThisCycleParticipantIds,
+      )
+      const updatePayload: Record<string, unknown> = { updatedAt: new Date().toISOString() }
+      if (cycleUpdate !== null) {
+        updatePayload.spokenThisCycleParticipantIds = cycleUpdate
+      }
+      await repos.chats.update(chatId, updatePayload)
+    }
+  } catch (error) {
+    logger.warn('[TurnSkip] Failed to persist cycle update after pass', {
+      chatId,
+      participantId: characterParticipant.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  // Surface the Host bubble live, then close the turn with the skipped flag.
+  if (hostMessage) {
+    safeEnqueue(controller, encodeHostAnnouncementEvent(encoder, hostMessage))
+  }
+  safeEnqueue(controller, encodeDoneEvent(encoder, {
+    messageId: null,
+    participantId: characterParticipant.id,
+    usage: streaming.usage,
+    cacheUsage: streaming.cacheUsage,
+    attachmentResults: streaming.attachmentResults,
+    toolsExecuted: false,
+    skipped: true,
+    skippedParticipantId: characterParticipant.id,
+    provider: streaming.effectiveProfile.provider,
+    modelName: streaming.effectiveProfile.modelName,
+  }))
+
+  return {
+    isMultiCharacter,
+    hasContent: false,
+    skipped: true,
+    skippedParticipantId: characterParticipant.id,
+    messageId: null,
+    userParticipantId,
+    isPaused,
   }
 }
 

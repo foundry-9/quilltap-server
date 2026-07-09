@@ -48,6 +48,12 @@ export interface Message {
     answererId: string
     question: string
   } | null
+  /** Host structured payload. On turn-pass records (systemKind='turn-pass'), participantId names the character/participant who passed — read by the client Skip-button guard. */
+  hostEvent?: {
+    participantId?: string | null
+    toStatus?: string | null
+    introducedCharacterIds?: string[] | null
+  } | null
   /** Danger flags from content classification */
   dangerFlags?: Array<{
     category: string
@@ -225,6 +231,8 @@ export interface Chat {
   coreWhisperEnabled?: boolean | null
   /** Per-chat override for Aurora's Core whisper cadence (assistant turns between offerings). null = inherit. */
   coreWhisperInterval?: number | null
+  /** "Nothing to add" turn-skipping toggle. null = enabled (default); false = disabled. */
+  turnSkippingEnabled?: boolean | null
   /** Per-chat override for showing reasoning models' thinking (null = inherit global `thinkingDisplay.defaultVisible`; true = show; false = hide). DISPLAY ONLY. */
   showThinking?: boolean | null
   /** Per-chat answer-confirmation override (null = inherit project/global; 'ON'/'OFF' = explicit). */

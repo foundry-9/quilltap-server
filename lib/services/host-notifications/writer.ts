@@ -214,7 +214,7 @@ async function postHostMessage(
   content: string,
   opaqueContent: string | null,
   kindLabel: string,
-  hostEvent: { participantId: string; toStatus: ParticipantStatus } | null = null,
+  hostEvent: { participantId?: string; toStatus?: ParticipantStatus } | null = null,
 ): Promise<MessageEvent | null> {
   try {
     const repos = getRepositories();
@@ -311,6 +311,57 @@ export async function postHostStatusChangeAnnouncement(
   return postHostMessage(params.chatId, content, opaqueContent, `status:${params.oldStatus}->${params.newStatus}`, {
     participantId: params.participantId,
     toStatus: params.newStatus,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Turn-pass announcements ("nothing to add").
+//
+// When a character (or the human, via the Skip button) passes their turn, the
+// Host notes it and the rotation moves on. The persona content NEVER contains
+// the `[NOTHING TO ADD]` sentinel — otherwise the announcement would sit in
+// history and teach later turns the very phrase we detect. `systemKind` is
+// `turn-pass`; `hostEvent.participantId` records who passed so the turn-state
+// derivations (last speaker, stall guard) can reconstruct the pass from history.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_TURN_PASS = 'turn-pass';
+
+export function buildTurnPassContent(name: string): string {
+  return `The Host inclines his head as ${name} waves the turn graciously by — nothing to add for the moment, it seems. The floor passes on.`;
+}
+
+export function buildUserTurnPassContent(name: string): string {
+  return `The Host observes ${name} declining the floor with a courteous wave; the turn passes on.`;
+}
+
+export function buildTurnPassOpaqueContent(name: string): string {
+  return `${name} has nothing to add right now. The conversation moves on.`;
+}
+
+export interface HostTurnPassAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the character (or user-controlled participant) who passed. */
+  participantId: string;
+  /** Whether an LLM character passed via the sentinel, or the human hit Skip. */
+  source: 'llm' | 'user';
+}
+
+/**
+ * Post the Host's turn-pass announcement. Errors are swallowed (the existing
+ * Host-notification contract): a pass must never fail the turn. Returns the
+ * persisted MessageEvent so the caller can surface it live over SSE.
+ */
+export async function postHostTurnPassAnnouncement(
+  params: HostTurnPassAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = params.source === 'user'
+    ? buildUserTurnPassContent(params.characterName)
+    : buildTurnPassContent(params.characterName);
+  const opaqueContent = buildTurnPassOpaqueContent(params.characterName);
+  return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_TURN_PASS, {
+    participantId: params.participantId,
   });
 }
 

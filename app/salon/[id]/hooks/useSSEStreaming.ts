@@ -87,6 +87,13 @@ interface SSEEvent {
   // fetchChat(). Inserted optimistically and deduped by id; the end-of-turn
   // refresh reconciles it to the authoritative copy.
   carinaAnswer?: Message
+  // "Nothing to add" turn-skipping. `hostAnnouncement` carries the full posted
+  // Host turn-pass message (surfaced live like carinaAnswer, deduped by id).
+  // On the done event, `skipped` marks that this turn was passed so the client
+  // resets its streaming buffer without appending a phantom bubble.
+  hostAnnouncement?: Message
+  skipped?: boolean
+  skippedParticipantId?: string | null
   // Answer confirmation: the resolved state for a just-streamed message. On a
   // re-affirmation rewrite, `content` carries the replacement bubble text.
   confirmationResult?: {
@@ -379,6 +386,8 @@ export function useSSEStreaming({
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
       /** Called when a Carina reference answer is surfaced mid-turn */
       onCarinaAnswer?: (message: Message) => void
+      /** Called when a Host announcement (e.g. a turn-pass note) is surfaced mid-turn */
+      onHostAnnouncement?: (message: Message) => void
       /** Called when an answer-confirmation result resolves for a message */
       onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
       /** Called for intermediate done events during a chain (not the final one) */
@@ -463,6 +472,12 @@ export function useSSEStreaming({
         // flow immediately rather than waiting for the post-turn fetchChat().
         if (data.carinaAnswer && opts.onCarinaAnswer) {
           opts.onCarinaAnswer(data.carinaAnswer)
+        }
+
+        // Handle a Host announcement surfaced mid-turn (turn-pass note) — insert
+        // it immediately, deduped by id, same as Carina answers.
+        if (data.hostAnnouncement && opts.onHostAnnouncement) {
+          opts.onHostAnnouncement(data.hostAnnouncement)
         }
 
         // Handle an answer-confirmation result — update the badge and, on a
@@ -672,8 +687,21 @@ export function useSSEStreaming({
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
+        onHostAnnouncement: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
         onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
+          // "Nothing to add" turn-pass: the Host note already surfaced via
+          // onHostAnnouncement. Reset streaming without appending a bubble or
+          // toasting; the chain (or chainComplete) drives the rest.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
+
           if (data.emptyResponse) {
             showErrorToast(data.emptyResponseReason || 'The AI returned an empty response. Use the Resend button to try again.')
             resetStreamingContent()
@@ -732,6 +760,13 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
+          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
+          // reset streaming without appending a bubble.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
           if (data.emptyResponse || !fullContent) return
 
           // Use server-provided participantId if available (authoritative)
@@ -816,7 +851,7 @@ export function useSSEStreaming({
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
    */
-  const triggerContinueMode = useCallback(async (participantId: string) => {
+  const triggerContinueMode = useCallback(async (participantId: string, nudge = false) => {
     if (streaming || waitingForResponse) return
     if (isPaused) return
 
@@ -855,6 +890,9 @@ export function useSSEStreaming({
           continueMode: true,
           respondingParticipantId: participantId,
           speakingAsParticipantId: activeTypingParticipantIdRef.current ?? undefined,
+          // Nudge (explicit summon) withholds the "nothing to add" skip option;
+          // the algorithm-picked Continue button leaves it undefined so skip is offered.
+          nudge: nudge || undefined,
         }),
         signal,
       })
@@ -875,9 +913,22 @@ export function useSSEStreaming({
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
+        onHostAnnouncement: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
         onConfirmationResult: applyConfirmationResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
+
+          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
+          // reset streaming without appending a bubble or toasting.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
+            return
+          }
 
           if (fullContent.trim()) {
             // Use server-provided participantId if available (authoritative)
@@ -904,6 +955,13 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
+          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
+          // reset streaming without appending a bubble.
+          if (data.skipped) {
+            resetStreamingContent()
+            setStreaming(false)
+            return
+          }
           if (!fullContent.trim()) return
 
           // Use server-provided participantId if available (authoritative)

@@ -24,7 +24,10 @@ import {
   calculateTurnStateFromHistory,
   selectNextSpeaker,
   isAllLLMChat,
+  computeSkipEligibility,
+  qualifiesForTurnSkipping,
 } from '@/lib/chat/turn-manager'
+import type { ChatEvent, ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
@@ -153,7 +156,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<ComposerEditorHandle>(null)
   const hasRestoredTurnStateRef = useRef<boolean>(false)
-  const triggerContinueModeRef = useRef<(participantId: string) => Promise<void>>(async () => {})
+  const triggerContinueModeRef = useRef<(participantId: string, nudge?: boolean) => Promise<void>>(async () => {})
   const wasGeneratingRef = useRef(false)
   const streamingRef = useRef(false)
 
@@ -623,10 +626,17 @@ export function SalonView({ chatId }: SalonViewProps) {
       createdAt: m.createdAt,
       attachments: m.attachments?.map(a => a.id) ?? [],
       targetParticipantIds: m.targetParticipantIds ?? null,
+      // Staff fields so turn-pass records (systemSender='host', systemKind='turn-pass')
+      // are recognized by calculateTurnStateFromHistory / the skip guard.
+      systemSender: m.systemSender ?? null,
+      systemKind: m.systemKind ?? null,
+      hostEvent: m.hostEvent ?? null,
     }))
 
     const newTurnState = calculateTurnStateFromHistory({
-      messages: messageEvents,
+      // Cast: the client Message shape carries nullable hostEvent fields the
+      // schema MessageEvent narrows; the turn-state reader only reads them.
+      messages: messageEvents as unknown as Parameters<typeof calculateTurnStateFromHistory>[0]['messages'],
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
       spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
@@ -1388,18 +1398,58 @@ export function SalonView({ chatId }: SalonViewProps) {
           const next = participantsWithImpersonation.participantData.find(p => p.id === nextId)
           if (!next || next.controlledBy !== 'user') return null
           const name = next.character?.name ?? 'this character'
+
+          // Must-speak guard: when every other active character has passed since
+          // the last substantive message, the floor falls to this participant and
+          // the Skip button is withheld (the server rejects the POST too). Only
+          // `all-others-skipped` blocks — computed via the shared function so the
+          // client and server agree. Best-effort: any failure leaves Skip enabled.
+          let mustSpeak = false
+          try {
+            if (next.character) {
+              const events = messages.map(m => ({
+                type: 'message' as const,
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                participantId: m.participantId,
+                createdAt: m.createdAt,
+                targetParticipantIds: m.targetParticipantIds ?? null,
+                systemSender: m.systemSender ?? null,
+                systemKind: m.systemKind ?? null,
+                hostEvent: m.hostEvent ?? null,
+                isSilentMessage: m.isSilentMessage,
+              })) as unknown as ChatEvent[]
+              const eligibility = computeSkipEligibility({
+                events,
+                participants: participantsWithImpersonation.participantsAsBase as unknown as ChatParticipantBase[],
+                respondingParticipantId: next.id,
+                respondingCharacter: next.character as unknown as Character,
+                summoned: false,
+                turnSkippingEnabled: chat?.turnSkippingEnabled !== false,
+              })
+              mustSpeak = eligibility.mustSpeakReason === 'all-others-skipped'
+            }
+          } catch {
+            mustSpeak = false
+          }
+
           return (
             <div className="qt-chat-user-turn-banner flex items-center justify-between px-4 py-2 border-t qt-border-default text-sm">
               <span className="qt-text-secondary">
-                {name}&apos;s turn — type as them, or skip to let someone else respond.
+                {mustSpeak
+                  ? `Everyone else has passed — it falls to ${name} to say something.`
+                  : `${name}'s turn — type as them, or skip to let someone else respond.`}
               </span>
-              <button
-                type="button"
-                onClick={() => turnManagement.handleSkipUserTurn(next.id)}
-                className="qt-button-secondary px-3 py-1 rounded text-sm"
-              >
-                Skip
-              </button>
+              {!mustSpeak && (
+                <button
+                  type="button"
+                  onClick={() => turnManagement.handleSkipUserTurn(next.id)}
+                  className="qt-button-secondary px-3 py-1 rounded text-sm"
+                >
+                  Skip
+                </button>
+              )}
             </div>
           )
         })()}
@@ -1718,6 +1768,14 @@ export function SalonView({ chatId }: SalonViewProps) {
           onSetCoreWhisperEnabled={chatControls.handleSetCoreWhisperEnabled}
           coreWhisperInterval={chatControls.coreWhisperInterval}
           onSetCoreWhisperInterval={chatControls.handleSetCoreWhisperInterval}
+          turnSkippingEnabled={chatControls.turnSkippingEnabled}
+          onSetTurnSkippingEnabled={
+            qualifiesForTurnSkipping(
+              participantsWithImpersonation.participantsAsBase as unknown as ChatParticipantBase[],
+            )
+              ? chatControls.handleSetTurnSkippingEnabled
+              : undefined
+          }
           showThinking={chatControls.showThinking}
           onSetShowThinking={chatControls.handleSetShowThinking}
           answerConfirmationOverride={chatControls.answerConfirmationOverride}

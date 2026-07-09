@@ -349,6 +349,8 @@ import { addConnectionProfileUniqueNameIndexMigration } from './add-connection-p
 import { addDocMountFilePolicyFlagsMigration } from './add-doc-mount-file-policy-flags';
 // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
 import { addCommonplaceRecallHistoryMigration } from './add-commonplace-recall-history';
+// "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
+import { addTurnSkippingFieldMigration } from './add-turn-skipping-field';
 
 /**
  * All available migrations.
@@ -695,6 +697,8 @@ export const migrations: Migration[] = [
   addDocMountFilePolicyFlagsMigration,
   // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
   addCommonplaceRecallHistoryMigration,
+  // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
+  addTurnSkippingFieldMigration,
 ];
 
 export {
@@ -1022,5 +1026,7 @@ export {
   addDocMountFilePolicyFlagsMigration,
   // Commonplace recall anti-repetition: commonplaceRecallHistory ring-buffer column on chats
   addCommonplaceRecallHistoryMigration,
+  // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
+  addTurnSkippingFieldMigration,
 };
 

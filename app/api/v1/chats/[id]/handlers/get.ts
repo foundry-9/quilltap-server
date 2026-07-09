@@ -412,6 +412,9 @@ export async function handleGet(
             isSilentMessage: event.isSilentMessage || null,
             systemSender: event.systemSender || null,
             systemKind: event.systemKind || null,
+            // Host structured payload — projected so the client can reconstruct
+            // turn-pass records (hostEvent.participantId) for the Skip-button guard.
+            hostEvent: event.hostEvent || null,
             customAnnouncer: event.customAnnouncer || null,
             carinaMeta: event.carinaMeta || null,
             pendingExternalPrompt: event.pendingExternalPrompt || null,
@@ -535,6 +538,7 @@ export async function handleGet(
       allowCrossCharacterVaultReads: chatMetadata.allowCrossCharacterVaultReads ?? false,
       coreWhisperEnabled: chatMetadata.coreWhisperEnabled ?? null,
       coreWhisperInterval: chatMetadata.coreWhisperInterval ?? null,
+      turnSkippingEnabled: chatMetadata.turnSkippingEnabled ?? null,
       agentModeEnabled: chatMetadata.agentModeEnabled ?? false,
       resolvedAgentModeEnabled: resolvedAgentMode.enabled,
       agentModeSource: resolvedAgentMode.enabledSource,

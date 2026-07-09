@@ -506,6 +506,7 @@ CREATE TABLE "chats" (
   -- Aurora Core whisper per-chat overrides (NULL = inherit from character → global)
   "coreWhisperEnabled" INTEGER DEFAULT NULL,
   "coreWhisperInterval" INTEGER DEFAULT NULL,
+  "turnSkippingEnabled" INTEGER DEFAULT NULL, -- added in 4.8 (add-turn-skipping-field-v1): "nothing to add" turn-skipping toggle. NULL = enabled (default); 0 = disabled.
   "showThinking" INTEGER DEFAULT NULL          -- added in 4.6 (add-thinking-display-fields-v1): per-chat thinking-visibility override (tri-state). NULL = inherit global chat_settings.thinkingDisplay.defaultVisible; 0 = hide; 1 = show. DISPLAY ONLY.
 );
 

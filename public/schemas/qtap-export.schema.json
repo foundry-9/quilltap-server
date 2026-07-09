@@ -413,6 +413,10 @@
           "minimum": 1,
           "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
         },
+        "turnSkippingEnabled": {
+          "type": ["boolean", "null"],
+          "description": "\"Nothing to add\" turn-skipping toggle. Null = enabled (the default); false = disabled."
+        },
         "showThinking": {
           "type": ["boolean", "null"],
           "description": "Per-chat override for showing reasoning models' thinking (tri-state). Null = inherit global chat.thinkingDisplay.defaultVisible; true = show; false = hide. DISPLAY ONLY."

@@ -8,6 +8,7 @@ import { turnManagerLogger as logger } from './logger';
 import type { TurnState, CalculateTurnStateOptions } from './types';
 import type { ChatEvent, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
+import { isTurnPassMessage } from './skip-signal';
 
 /**
  * Creates a fresh turn state (e.g., for a new chat or after reset)
@@ -51,8 +52,15 @@ export function calculateTurnStateFromHistory(
   }
 
   // lastSpeakerId = most recent non-whisper message with a participantId.
+  // A Host turn-pass record occupies the floor position of the character who
+  // passed (stall prevention): without this, the last substantive speaker
+  // would stay permanently unpickable while everyone else ping-pongs passes.
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
+    if (isTurnPassMessage(msg)) {
+      state.lastSpeakerId = msg.hostEvent.participantId;
+      break;
+    }
     if (msg.role !== 'USER' && msg.role !== 'ASSISTANT') continue;
     if (!msg.participantId) continue;
     const isWhisper = 'targetParticipantIds' in msg

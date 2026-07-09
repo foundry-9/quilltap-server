@@ -55,6 +55,7 @@ export function buildContinueMessageOptions(
     continueMode: true,
     respondingParticipantId: parsed.respondingParticipantId,
     speakingAsParticipantId: parsed.speakingAsParticipantId,
+    nudge: parsed.nudge,
     browserUserAgent: extras.browserUserAgent,
   }
 }

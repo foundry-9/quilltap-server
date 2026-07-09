@@ -883,6 +883,14 @@ export const ChatMetadataSchema = z.object({
   coreWhisperInterval: z.number().int().min(1).nullable().optional(),
 
   /**
+   * "Nothing to add" turn-skipping — per-chat toggle for the multi-character
+   * pass option. NULL = enabled (the default); false = disabled. When enabled,
+   * every LLM character is offered a per-turn option to pass by replying with
+   * a sentinel, and the human Skip button feeds the same stall guard.
+   */
+  turnSkippingEnabled: z.boolean().nullable().optional(),
+
+  /**
    * Per-chat override for showing reasoning models' thinking in the Salon.
    * Tri-state: NULL = inherit the global `chat.thinkingDisplay.defaultVisible`
    * default; true = always show; false = always hide. DISPLAY ONLY — this only
@@ -1131,6 +1139,9 @@ export const ChatMetadataBaseSchema = z.object({
   coreWhisperEnabled: z.boolean().nullable().optional(),
   /** Aurora Core whisper — per-chat override of the global `coreWhisper.interval` setting (assistant turns between periodic whispers). NULL = inherit. */
   coreWhisperInterval: z.number().int().min(1).nullable().optional(),
+
+  /** "Nothing to add" turn-skipping — per-chat toggle. NULL = enabled (default); false = disabled. */
+  turnSkippingEnabled: z.boolean().nullable().optional(),
 
   /** Per-chat override for showing reasoning models' thinking. NULL = inherit global `chat.thinkingDisplay.defaultVisible`; true = show; false = hide. DISPLAY ONLY. */
   showThinking: z.boolean().nullable().optional(),

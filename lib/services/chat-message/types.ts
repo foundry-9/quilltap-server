@@ -85,6 +85,20 @@ export interface SendMessageOptions {
   /** Specific participant to respond (for multi-character continue mode) */
   respondingParticipantId?: string
   /**
+   * Nudge flag: the human explicitly summoned this specific character to speak
+   * (Nudge button / queue). Distinct from an algorithm-picked chained turn.
+   * When true, the "nothing to add" skip option is withheld — you don't offer
+   * a pass to a voice the operator just called on.
+   */
+  nudge?: boolean
+  /**
+   * How a chained turn's speaker was chosen: `queue` (popped from the manual
+   * turn queue — treated as summoned) or `algorithm` (weighted rotation — the
+   * skip option is offered). Threaded from the turn orchestrator into chained
+   * `processMessage` calls; undefined on the initial (non-chained) turn.
+   */
+  chainSelectionReason?: 'queue' | 'algorithm'
+  /**
    * The user-controlled participant the human is "Speaking As" for this turn.
    * When several characters are user-controlled, this decides who a typed
    * message is attributed to (storage + LLM context). Falls back to the
@@ -282,6 +296,14 @@ export interface ProcessMessageResult {
   userParticipantId: string | null
   /** Whether the chat is paused */
   isPaused: boolean
+  /**
+   * "Nothing to add" turn-skipping: the character passed this turn (posted a
+   * Host turn-pass record, persisted no reply). The chain continuation treats
+   * this like a content turn — it advances the rotation rather than stopping.
+   */
+  skipped?: boolean
+  /** Participant ID of the character who passed (set when `skipped` is true). */
+  skippedParticipantId?: string | null
   /** Scene tracking context for the orchestrator to trigger after chain completion */
   sceneTrackingContext?: {
     connectionProfile: ConnectionProfile

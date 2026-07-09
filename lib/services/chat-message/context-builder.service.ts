@@ -80,6 +80,14 @@ export interface BuildMessageContextOptions {
    * room paces its run across multiple turns. Undefined for everything else.
    */
   autonomousContextCap?: number
+  /**
+   * "Nothing to add" turn-skipping — per-turn instruction control. When
+   * `offerSkip` is true, a Turn note is injected inviting the character to pass
+   * with the `[NOTHING TO ADD]` sentinel; `recentlyAddressed` adds a caution to
+   * answer rather than pass. Undefined / `offerSkip: false` → no note. Ephemeral,
+   * never persisted.
+   */
+  turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
 }
 
 /**
@@ -638,6 +646,8 @@ export async function buildMessageContext(
     // Autonomous-room per-turn context cap (tokens) — clamps the model-derived
     // budget so a token-budgeted room paces its run across multiple turns.
     autonomousContextCap: options.autonomousContextCap,
+    // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
+    turnSkip: options.turnSkip,
   })
 
   // Log context building results for debugging

@@ -30,7 +30,7 @@ interface UseChatControlsParams {
   fetchChat: () => Promise<void>
   setEphemeralMessages: React.Dispatch<React.SetStateAction<import('@/components/chat/EphemeralMessage').EphemeralMessageData[]>>
   setTurnState: React.Dispatch<React.SetStateAction<TurnState>>
-  triggerContinueModeRef: React.MutableRefObject<(participantId: string) => Promise<void>>
+  triggerContinueModeRef: React.MutableRefObject<(participantId: string, nudge?: boolean) => Promise<void>>
   setChat: (fn: (prev: Chat | null) => Chat | null) => void
   startBackgroundPolling: () => void
 }
@@ -63,6 +63,8 @@ export function useChatControls({
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
   const [coreWhisperEnabled, setCoreWhisperEnabled] = useState<boolean | null>(null)
   const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
+  // "Nothing to add" turn-skipping toggle (null = enabled default; false = disabled).
+  const [turnSkippingEnabled, setTurnSkippingEnabled] = useState<boolean | null>(null)
   // Per-chat thinking visibility override (tri-state: null = inherit global). DISPLAY ONLY.
   const [showThinking, setShowThinking] = useState<boolean | null>(null)
   // Per-chat answer-confirmation override (tri-state: null = inherit project/global).
@@ -122,6 +124,13 @@ export function useChatControls({
       setCoreWhisperInterval(chat.coreWhisperInterval ?? null)
     }
   }, [chat?.coreWhisperInterval])
+  // Initialize turnSkippingEnabled from chat data (null = enabled default)
+  useEffect(() => {
+    if (chat?.turnSkippingEnabled !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setTurnSkippingEnabled(chat.turnSkippingEnabled ?? null)
+    }
+  }, [chat?.turnSkippingEnabled])
   // Initialize showThinking from chat data (tri-state: null = inherit global)
   useEffect(() => {
     if (chat?.showThinking !== undefined) {
@@ -246,6 +255,28 @@ export function useChatControls({
       showErrorToast('Could not update Core whisper setting')
     }
   }, [chatId, coreWhisperEnabled])
+
+  // Per-chat "nothing to add" turn-skipping toggle. null = enabled (default); false = disabled.
+  const handleSetTurnSkippingEnabled = useCallback(async (value: boolean | null) => {
+    const previous = turnSkippingEnabled
+    setTurnSkippingEnabled(value)
+    try {
+      const response = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { turnSkippingEnabled: value } }),
+      })
+      if (!response.ok) {
+        console.error('[Chat] Failed to persist turnSkippingEnabled', response.status)
+        setTurnSkippingEnabled(previous)
+        showErrorToast('Could not update turn-skipping setting')
+      }
+    } catch (error) {
+      console.error('[Chat] Error persisting turnSkippingEnabled', error)
+      setTurnSkippingEnabled(previous)
+      showErrorToast('Could not update turn-skipping setting')
+    }
+  }, [chatId, turnSkippingEnabled])
 
   // Per-chat Core whisper cadence override. null = inherit, positive integer = explicit.
   const handleSetCoreWhisperInterval = useCallback(async (value: number | null) => {
@@ -630,6 +661,8 @@ export function useChatControls({
     coreWhisperInterval,
     handleSetCoreWhisperEnabled,
     handleSetCoreWhisperInterval,
+    turnSkippingEnabled,
+    handleSetTurnSkippingEnabled,
     showThinking,
     handleSetShowThinking,
     answerConfirmationOverride,

@@ -148,3 +148,7 @@ help_navigate(url: "/settings?tab=chat&section=autonomous-rooms")
 ```
 help_navigate(url: "/settings?tab=chat&section=autonomous-room-schedules")
 ```
+
+## Related Pages
+
+- [Nothing to Add — Turn Skipping](turn-skipping.md) — Characters may pass a turn; in a run, a pass still consumes one turn of the budget

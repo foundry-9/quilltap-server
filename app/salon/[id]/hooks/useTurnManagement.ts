@@ -116,7 +116,7 @@ export function useTurnManagement(
   setTurnState: (state: TurnState) => void,
   setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
   setEphemeralMessages: (messages: EphemeralMessageData[]) => void,
-  triggerContinueMode: (participantId: string) => Promise<void>,
+  triggerContinueMode: (participantId: string, nudge?: boolean) => Promise<void>,
   isPaused?: boolean,
   onUnpause?: () => Promise<void>,
 ) {
@@ -155,7 +155,8 @@ export function useTurnManagement(
     // already requests a response for this participant.  Adding them to the
     // queue as well causes the server-side chain loop to pop the queue entry
     // and generate a second (duplicate) response.
-    triggerContinueMode(participantId)
+    // Nudge is an explicit summon → withhold the "nothing to add" skip option.
+    triggerContinueMode(participantId, true)
   }, [turnState, participantsAsBase, participantData, ephemeralMessages, setTurnState, setEphemeralMessages, triggerContinueMode, isPaused, onUnpause])
 
   const handleQueue = useCallback(async (participantId: string) => {

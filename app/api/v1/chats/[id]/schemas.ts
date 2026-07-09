@@ -20,6 +20,7 @@ export const updateChatSchema = z.object({
   allowCrossCharacterVaultReads: z.boolean().optional(),
   coreWhisperEnabled: z.boolean().nullish(),
   coreWhisperInterval: z.number().int().min(1).nullish(),
+  turnSkippingEnabled: z.boolean().nullish(), // "Nothing to add" turn-skipping toggle. null = enabled (default); false = disabled.
   showThinking: z.boolean().nullish(), // Per-chat thinking visibility (tri-state). DISPLAY ONLY.
   answerConfirmationOverride: z.enum(['ON', 'OFF']).nullish(), // Per-chat answer-confirmation override (tri-state; null = inherit project/global)
   // Layout state for the salon split panes

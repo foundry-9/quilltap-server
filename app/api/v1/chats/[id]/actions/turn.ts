@@ -18,8 +18,11 @@ import {
   findUserParticipant,
   getSelectionExplanation,
   computeSpokenThisCycleAfterSkip,
+  computeSkipEligibility,
+  qualifiesForTurnSkipping,
   isUsersTurn,
 } from '@/lib/chat/turn-manager';
+import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer';
 import { turnActionSchema } from '../schemas';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata, MessageEvent, Character } from '@/lib/schemas/types';
@@ -86,6 +89,33 @@ export async function handleTurnAction(
       // Read-only: just compute next speaker from current state
       break;
     case 'skipUserTurn': {
+      // Turn-skipping only applies to genuine group scenes; in a one-on-one the
+      // Skip button behaves as it always did — no must-speak guard and no Host
+      // turn-pass note. (source: shared qualifiesForTurnSkipping.)
+      const turnSkippingApplies = qualifiesForTurnSkipping(chat.participants);
+      const skipParticipant = chat.participants.find(p => p.id === participantId);
+      const skipChar = skipParticipant?.characterId
+        ? await repos.characters.findById(skipParticipant.characterId)
+        : null;
+      // Must-speak guard: when every OTHER active character has already passed
+      // since the last substantive message, the floor falls to this participant
+      // and the human is refused the skip. Only `all-others-skipped` blocks a
+      // human — when the feature is toggled off, `feature-disabled` fires first
+      // and the human is never blocked. (source: shared computeSkipEligibility.)
+      if (turnSkippingApplies && skipChar) {
+        const eligibility = computeSkipEligibility({
+          events: messageEvents,
+          participants: chat.participants,
+          respondingParticipantId: participantId!,
+          respondingCharacter: skipChar,
+          summoned: false,
+          turnSkippingEnabled: chat.turnSkippingEnabled !== false,
+        });
+        if (eligibility.mustSpeakReason === 'all-others-skipped') {
+          return badRequest(`Everyone else has passed — it falls to ${skipChar.name} to say something.`);
+        }
+      }
+
       // Record the user-controlled participant as having "taken" their turn,
       // and treat them as the last speaker so the next pick excludes them.
       skipCycleUpdate = computeSpokenThisCycleAfterSkip(
@@ -113,6 +143,18 @@ export async function handleTurnAction(
         }
       }
       turnState = { ...turnState, lastSpeakerId: participantId! };
+      // Post a Host turn-pass record so human passes feed the same stall guard
+      // as LLM passes — but only in chats where turn-skipping applies. In a
+      // one-on-one, skipping the user's turn stays a quiet rotation advance.
+      // Errors are swallowed by the writer contract.
+      if (turnSkippingApplies) {
+        await postHostTurnPassAnnouncement({
+          chatId,
+          characterName: skipChar?.name ?? 'The player',
+          participantId: participantId!,
+          source: 'user',
+        });
+      }
       break;
     }
   }

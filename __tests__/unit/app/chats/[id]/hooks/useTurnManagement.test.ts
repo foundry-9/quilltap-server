@@ -358,7 +358,8 @@ describe('useTurnManagement', () => {
       // Nudge should NOT call the turn action API — triggerContinueMode handles
       // the immediate response directly.  Adding to the queue AND triggering
       // continueMode caused duplicate responses from the chain loop.
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      // Nudge passes `true` (summoned) so the turn-skip option is withheld.
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should create ephemeral message for nudge', async () => {
@@ -417,7 +418,7 @@ describe('useTurnManagement', () => {
           body: JSON.stringify({ action: 'nudge', participantId: 'p1' }),
         })
       )
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should trigger continue mode for the nudged participant', async () => {
@@ -441,7 +442,7 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should unpause chat before nudge if paused', async () => {
@@ -1109,7 +1110,7 @@ describe('useTurnManagement', () => {
       expect(setEphemeralMessages).toHaveBeenCalled()
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
-      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
     it('should handle queue then dequeue sequence', async () => {

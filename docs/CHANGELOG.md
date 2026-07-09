@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Feature: characters can pass a turn when they have nothing to add
+
+In group chats, every LLM character is now given a per-turn option to pass instead of being forced to reply with filler. On any turn except the very first character turn of the chat, a character may respond with the single line `[NOTHING TO ADD]`; the Host then posts a short "nothing to add" note and the rotation moves on to the next speaker. If a character has been addressed or mentioned since it last spoke, its turn note warns it to answer rather than pass.
+
+- Scope: the feature applies only to genuine group scenes — chats with more than two active character participants, or with at least two LLM-driven characters. A one-on-one (a lone human plus a single character) is excluded entirely.
+- New per-chat toggle **Turn Skipping** in the Chat Sidebar's Visibility drawer (shown only in qualifying group chats). Default is on; `turnSkippingEnabled` is a nullable chat column where NULL/true = on.
+- A pass is recorded as a Host message (`systemKind: 'turn-pass'`, `hostEvent.participantId`) — no new message-sender or state columns. Turn-state, the stall guard, and the client all recompute passes from history.
+- Stall guard: when every other active character has passed since the last substantive message, the next speaker is forced to speak (the skip option is withheld). The same rule powers the human case — the Salon **Skip** button now posts a Host "nothing to add" note, and is hidden (and refused server-side with a 400) when everyone else has already passed.
+- Nudged or queued characters are never offered the skip option (they were explicitly summoned); the Continue button's algorithm-picked speaker is.
+- Applies to autonomous rooms: a pass consumes a turn from the run budget (already the case — every job counts as a turn), and the stall guard bounds all-skip loops.
+- New migration `add-turn-skipping-field-v1`. `.qtap` export/import round-trips `turnSkippingEnabled` and the turn-pass Host messages.
+
 #### Feature: copy a conversation's UUID from the header or the Organize drawer
 
 The header of a Salon chat now has a small copy button just after the conversation title that puts the chat's UUID on the clipboard, and the title itself is now a direct link to the conversation's Salon URL. The Chat Sidebar's Organize drawer has the same copy button at the top, before Rename. Both buttons flash a check-mark for a moment after copying. New shared component `components/chat/CopyChatIdButton.tsx` (inline icon variant for the header, full palette-button variant for the sidebar), built on the existing `useCopyToClipboard` hook.

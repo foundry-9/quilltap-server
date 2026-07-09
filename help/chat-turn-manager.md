@@ -436,5 +436,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Chats Overview](chats.md) — Basic chat functionality
 - [Multi-Character Chats](chat-multi-character.md) — Setting up group conversations
+- [Nothing to Add — Turn Skipping](turn-skipping.md) — Letting a character pass a turn
 - [Chat Sidebar](chat-participants.md) — Managing participants and per-chat settings
 - [Message Actions](chat-message-actions.md) — Editing and managing messages
