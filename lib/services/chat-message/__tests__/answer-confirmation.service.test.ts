@@ -12,6 +12,7 @@ import {
   findLatestCommonplaceWhisper,
   isUserDrivenTurn,
   CONFIRMATION_READ_TOOLS,
+  buildRecentConversationContext,
   runAnswerConfirmation,
 } from '../answer-confirmation.service';
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution';
@@ -148,6 +149,59 @@ describe('isUserDrivenTurn', () => {
 })
 
 // ---------------------------------------------------------------------------
+// buildRecentConversationContext — the anchor that keeps a rewrite in-scene
+// ---------------------------------------------------------------------------
+describe('buildRecentConversationContext', () => {
+  const participants = [
+    { id: 'p-user', type: 'CHARACTER', characterId: 'c-user', controlledBy: 'user' },
+    { id: 'p-ada', type: 'CHARACTER', characterId: 'c-ada' },
+  ] as any
+  const participantCharacters = new Map<string, any>([
+    ['c-user', { id: 'c-user', name: 'Bertie' }],
+    ['c-ada', { id: 'c-ada', name: 'Ada' }],
+  ])
+  function msg(over: Partial<MessageEvent>): MessageEvent {
+    return { type: 'message', role: 'USER', content: 'hi', ...over } as MessageEvent
+  }
+
+  it('renders Name: text for resolved participants', () => {
+    const out = buildRecentConversationContext(
+      [
+        msg({ role: 'USER', participantId: 'p-user', content: 'How tall is the tower?' }),
+        msg({ role: 'ASSISTANT', participantId: 'p-ada', content: 'Let me check.' }),
+      ],
+      participants,
+      participantCharacters,
+    )
+    expect(out).toBe('Bertie: How tall is the tower?\n\nAda: Let me check.')
+  })
+
+  it('drops Staff/system-sender whispers, tool bubbles, and silent messages', () => {
+    const out = buildRecentConversationContext(
+      [
+        msg({ role: 'USER', participantId: 'p-user', content: 'real line' }),
+        msg({ role: 'ASSISTANT', systemSender: 'commonplaceBook', content: 'a recalled memory' }),
+        msg({ role: 'ASSISTANT', systemSender: 'prospero', content: 'ran a tool' }),
+        msg({ role: 'ASSISTANT', participantId: 'p-ada', isSilentMessage: true, content: 'silent' }),
+      ],
+      participants,
+      participantCharacters,
+    )
+    expect(out).toBe('Bertie: real line')
+  })
+
+  it('null when there is no real dialogue', () => {
+    expect(buildRecentConversationContext([], participants, participantCharacters)).toBeNull()
+    const onlyWhispers = buildRecentConversationContext(
+      [msg({ role: 'ASSISTANT', systemSender: 'host', content: 'scene note' })],
+      participants,
+      participantCharacters,
+    )
+    expect(onlyWhispers).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // runAnswerConfirmation — verdict handling
 // ---------------------------------------------------------------------------
 describe('runAnswerConfirmation', () => {
@@ -205,6 +259,25 @@ describe('runAnswerConfirmation', () => {
     const out = await runAnswerConfirmation(baseOpts({ onAffirming }))
     expect(out).toEqual({ confirmed: true, revised: true, notes: 'height wrong', revisedContent: 'The tower is 324m tall.' })
     expect(onAffirming).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-affirmation prompt carries the conversation scene + character name, and frames reference as background', async () => {
+    mockExecute
+      .mockResolvedValueOnce({ success: true, result: { consistent: false, discrepancies: 'height wrong' } } as any)
+      .mockResolvedValueOnce({ success: true, result: { revise: false } } as any)
+    await runAnswerConfirmation(baseOpts({
+      characterName: 'Ada',
+      conversationContext: 'Bertie: How tall is the tower?',
+    }))
+    // Second harness call is the re-affirmation pass.
+    const reaffMessages = (mockExecute.mock.calls[1][1] as any[])
+    const system = reaffMessages[0].content as string
+    const user = reaffMessages[1].content as string
+    expect(system).toContain('You are Ada.')
+    expect(user).toContain('The conversation so far')
+    expect(user).toContain('Bertie: How tall is the tower?')
+    // The reference is explicitly labelled background knowledge, not the scene.
+    expect(user).toContain('NOT the conversation')
   })
 
   it('revise requested but empty reply → confirmed null (no gamble)', async () => {

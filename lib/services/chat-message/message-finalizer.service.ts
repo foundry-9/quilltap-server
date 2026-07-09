@@ -31,6 +31,7 @@ import {
   hasCheckableInputs,
   gatherConfirmationInputs,
   findLatestCommonplaceWhisper,
+  buildRecentConversationContext,
   runAnswerConfirmation,
   type AnswerConfirmationOverride,
 } from './answer-confirmation.service'
@@ -231,6 +232,14 @@ export async function finalizeMessageResponse({
       if (hasCheckableInputs(whisper, toolMessages)) {
         const reference = gatherConfirmationInputs(whisper, toolMessages)
         if (reference) {
+          // Recent live conversation, so any re-affirmation rewrite stays anchored
+          // to THIS scene instead of drifting into an old conversation the
+          // reference material may quote.
+          const conversationContext = buildRecentConversationContext(
+            priorEvents,
+            chat.participants ?? [],
+            participantCharacters,
+          )
           safeEnqueue(controller, encodeStatusEvent(encoder, {
             stage: 'confirming',
             message: 'Confirming…',
@@ -244,6 +253,8 @@ export async function finalizeMessageResponse({
             chatId,
             messageId: assistantMessageId,
             characterId: character.id,
+            characterName: character.name,
+            conversationContext,
             cheapLLMSelection,
             connectionProfile,
             isDangerousChat: isChatActiveDangerous(chat),

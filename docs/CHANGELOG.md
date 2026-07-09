@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Fix: answer-confirmation amendments now stay in the current conversation
+
+When the answer-confirmation check flagged a character's reply and the character's own model was asked to correct it, the correction pass received only the draft reply plus the reference material (recalled memories and lookup results). It had no view of the actual conversation. When the reference material quoted an older conversation the character had read via `read_conversation`, the model would treat that old exchange as the live scene and rewrite its reply into it — producing an amendment that answered the wrong conversation.
+
+The re-affirmation pass is now given a compact transcript of the recent live conversation (`buildRecentConversationContext` in `answer-confirmation.service.ts`) plus the character's name, and the prompt is rewritten to require a minimal, in-scene correction: same addressee, same moment, same tone, changing only the details that conflict with the facts. The reference block is now explicitly labeled background knowledge rather than the conversation. The transcript filters out Staff/system-sender whispers, tool bubbles, and silent messages, and the pass degrades gracefully when there is no prior dialogue.
+
 #### Feature: characters can pass a turn when they have nothing to add
 
 In group chats, every LLM character is now given a per-turn option to pass instead of being forced to reply with filler. On any turn except the very first character turn of the chat, a character may respond with the single line `[NOTHING TO ADD]`; the Host then posts a short "nothing to add" note and the rotation moves on to the next speaker. If a character has been addressed or mentioned since it last spoke, its turn note warns it to answer rather than pass.

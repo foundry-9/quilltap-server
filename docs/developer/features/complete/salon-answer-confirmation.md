@@ -282,15 +282,31 @@ timeout (e.g. 20–30 s); on timeout → `confirmed: null`.
 Only runs when the check returns `consistent:false`. Call the **character's own
 model** with the normal in-character system prompt/context is **not** required —
 send a compact single-shot: a brief system framing plus a user-role message that
-(a) quotes the character's drafted reply, (b) lists the discrepancies the checker
-found, (c) states the reference facts, and (d) instructs:
+(a) shows the **recent live conversation** (so the rewrite stays in-scene),
+(b) quotes the character's drafted reply as the next thing it was about to say,
+(c) lists the discrepancies the checker found, (d) states the reference facts —
+explicitly labelled *background knowledge, NOT the conversation* — and (e)
+instructs:
 
-> Some of what you wrote appears to conflict with what you actually know or looked
-> up this turn (listed below). If, on reflection, you stand by your reply exactly
-> as written, respond with strict JSON `{"revise": false}`. If you want to correct
-> it, respond with `{"revise": true, "reply": "<your corrected reply>"}` — the
-> corrected reply replaces what you send, so write it in full and in your own
-> voice.
+> Stay in the current scene. If you correct the reply it must still answer the
+> same person about the same thing at this same moment — same addressee, tone,
+> and flow — changing ONLY the details that conflict with the facts. Do NOT
+> rewrite from scratch, restart the exchange, or answer some earlier/different
+> conversation. If you stand by your draft exactly as written, respond with
+> strict JSON `{"revise": false}`. If you correct it, respond with `{"revise":
+> true, "reply": "<your corrected reply>"}` — the corrected reply replaces what
+> you send, so write it in full and in your own voice.
+
+**Why the conversation transcript matters:** without it the re-affirmation only
+sees the bare draft plus the reference block — and the reference can itself quote
+an *older* conversation the character read via `read_conversation`. With no anchor
+to the current scene the model treats that quoted material as the live exchange
+and rewrites its reply into the wrong conversation. `buildRecentConversationContext`
+(in `answer-confirmation.service.ts`) supplies a compact `Name: text` transcript of
+the recent real dialogue — Staff/system-sender whispers, tool bubbles, and silent
+messages filtered out — so the correction lands in place. It is passed as
+`conversationContext` alongside `characterName` (both optional; the pass degrades
+gracefully when there is no prior dialogue).
 
 Parse: `revise:false` → character stood by it → `confirmed:false`, keep original.
 `revise:true` with non-empty `reply` → use `reply` as the new `cleanedResponse`,

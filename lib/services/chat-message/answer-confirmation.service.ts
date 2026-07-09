@@ -23,7 +23,8 @@ import { resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/li
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import type { UncensoredFallbackOptions, CheapLLMTaskResult } from '@/lib/memory/cheap-llm-tasks/types'
 import type { LLMMessage } from '@/lib/llm/base'
-import type { ConnectionProfile, MessageEvent, ChatMetadataBase } from '@/lib/schemas/types'
+import type { ConnectionProfile, MessageEvent, ChatMetadataBase, Character, ChatParticipantBase } from '@/lib/schemas/types'
+import { getParticipantName } from '@/lib/chat/context/message-attribution'
 import type { ToolMessage } from './types'
 
 const logger = createServiceLogger('AnswerConfirmation')
@@ -49,6 +50,18 @@ export const CONFIRMATION_READ_TOOLS: ReadonlySet<string> = new Set<string>([
 
 /** Char budget for the assembled reference block handed to the cheap LLM. */
 const REFERENCE_CHAR_BUDGET = 24_000
+
+/**
+ * Char budget / message cap for the recent-conversation transcript handed to
+ * the re-affirmation pass. This is what keeps a correction anchored to the
+ * CURRENT scene: without it the model only sees its draft plus the reference
+ * material (which can itself contain an OLD conversation the character read via
+ * `read_conversation`), and rewrites its reply as if it were back in that old
+ * scene. Kept small — the model only needs the immediate moment it was replying
+ * to, not the whole history.
+ */
+const RECENT_CONTEXT_CHAR_BUDGET = 8_000
+const RECENT_CONTEXT_MAX_MESSAGES = 20
 
 /** Default timeouts (ms). The check is cheap; the re-affirmation is a full model. */
 const CONSISTENCY_CHECK_TIMEOUT_MS = 25_000
@@ -165,10 +178,58 @@ export function gatherConfirmationInputs(
   return reference
 }
 
+/**
+ * Build a compact transcript of the recent live conversation for the
+ * re-affirmation pass, so the character corrects its draft *in place* rather
+ * than drifting to whatever old scene the reference material happens to quote.
+ *
+ * Only real participant dialogue is kept — Staff/system-sender whispers, tool
+ * bubbles, and silent messages are dropped (the recalled/looked-up material is
+ * supplied separately as the "reference"; this block is strictly the scene the
+ * character is speaking into). `messages` is the conversation up to but not
+ * including the draft reply. Returns null when there is no prior dialogue.
+ */
+export function buildRecentConversationContext(
+  messages: MessageEvent[],
+  participants: ChatParticipantBase[],
+  participantCharacters: Map<string, Character>,
+): string | null {
+  const dialogue = messages.filter(
+    (m) =>
+      m.type === 'message' &&
+      !m.systemSender &&
+      !m.isSilentMessage &&
+      typeof m.content === 'string' &&
+      m.content.trim().length > 0,
+  )
+  if (dialogue.length === 0) return null
+
+  const recent = dialogue.slice(-RECENT_CONTEXT_MAX_MESSAGES)
+  const lines = recent.map((m) => {
+    const name =
+      getParticipantName(m.participantId, participantCharacters, participants) ||
+      (String(m.role).toUpperCase() === 'USER' ? 'User' : 'Character')
+    return `${name}: ${m.content.trim()}`
+  })
+
+  let transcript = lines.join('\n\n')
+  if (transcript.length > RECENT_CONTEXT_CHAR_BUDGET) {
+    // Keep the most-recent turns (the moment being replied to) — drop oldest.
+    transcript = transcript.slice(transcript.length - RECENT_CONTEXT_CHAR_BUDGET)
+    transcript = `[…earlier conversation truncated…]\n${transcript}`
+  }
+  return transcript
+}
+
 const CONSISTENCY_SYSTEM_PROMPT = `You are a consistency checker. You are given (A) reference information a character was working from this turn — their recalled memories and the results of any lookups/searches/document reads they performed — and (B) the reply they are about to send. Decide whether the reply is consistent with the reference information: it must not contradict it, invent facts that conflict with it, or misstate what the lookups returned. The reply may add in-character color, tone, or opinion not present in the reference — that is fine and not an inconsistency. Only flag genuine factual contradictions or misrepresentations of the reference. Respond with strict JSON: {"consistent": boolean, "discrepancies": string}. When consistent, discrepancies is "". When not, discrepancies briefly lists each contradiction in plain language.`
 
-function buildReaffirmationSystemPrompt(): string {
-  return `You are reconsidering a reply you just drafted, in your own voice, before it is sent. Some of what you wrote appears to conflict with what you actually know or looked up this turn. Respond ONLY with strict JSON.`
+function buildReaffirmationSystemPrompt(characterName?: string): string {
+  const you = characterName ? `You are ${characterName}. ` : ''
+  return `${you}You are reconsidering a reply you just drafted, in your own voice, at this exact point in the conversation shown below, before it is sent. Some of what you wrote appears to conflict with what you recalled or looked up this turn.
+
+Stay in the current scene. If you correct the reply, it must still answer the same person about the same thing at this same moment — same addressee, tone, and flow — changing ONLY the specific details that conflict with the facts. Do NOT rewrite it from scratch, do NOT restart the exchange, and do NOT respond to some earlier or different conversation. The recalled/looked-up material is your own background knowledge for this turn, not the conversation you are in — it may even quote a different, older exchange, which you must not slip into.
+
+Respond ONLY with strict JSON.`
 }
 
 interface ConsistencyVerdict {
@@ -247,6 +308,15 @@ export interface RunAnswerConfirmationOptions {
   chatId: string
   messageId?: string
   characterId?: string
+  /** Display name of the replying character, used to anchor the re-affirmation. */
+  characterName?: string
+  /**
+   * Compact transcript of the recent live conversation (from
+   * `buildRecentConversationContext`). Anchors the re-affirmation rewrite to the
+   * current scene; only used on the re-affirmation pass. Optional/null when
+   * there is no prior dialogue.
+   */
+  conversationContext?: string | null
   /** Already-resolved cheap-LLM selection (compression.cheapLLMSelection). */
   cheapLLMSelection: CheapLLMSelection | null
   /** The character's own model, used verbatim for the re-affirmation pass. */
@@ -265,7 +335,7 @@ export async function runAnswerConfirmation(
   opts: RunAnswerConfirmationOptions,
 ): Promise<AnswerConfirmationOutcome> {
   const {
-    reply, reference, userId, chatId, messageId, characterId,
+    reply, reference, userId, chatId, messageId, characterId, characterName, conversationContext,
     cheapLLMSelection, connectionProfile, isDangerousChat, uncensoredFallback, onAffirming,
   } = opts
 
@@ -341,23 +411,32 @@ export async function runAnswerConfirmation(
       : undefined,
   }
 
-  const reaffUser = [
-    'You drafted this reply this turn:',
+  const reaffParts: string[] = []
+  if (conversationContext && conversationContext.trim().length > 0) {
+    reaffParts.push(
+      '=== The conversation so far (this is the scene you are in) ===',
+      conversationContext,
+      '',
+    )
+  }
+  reaffParts.push(
+    '=== Your draft reply — the next thing you were about to say ===',
     '"""',
     reply,
     '"""',
     '',
-    'A consistency check flagged these apparent conflicts with what you know or looked up this turn:',
+    'A consistency check flagged these apparent conflicts with what you recalled or looked up this turn:',
     discrepancies,
     '',
-    'For reference, here is what you actually knew and looked up this turn:',
+    '=== What you actually recalled and looked up this turn (your background knowledge — NOT the conversation) ===',
     reference,
     '',
-    'If, on reflection, you stand by your reply exactly as written, respond with strict JSON {"revise": false}. If you want to correct it, respond with {"revise": true, "reply": "<your corrected reply>"} — the corrected reply replaces what you send, so write it in full and in your own voice.',
-  ].join('\n')
+    'If, on reflection, you stand by your draft exactly as written, respond with strict JSON {"revise": false}. If you want to correct it, respond with {"revise": true, "reply": "<your corrected reply>"}. The corrected reply replaces your draft, so write it in full and in your own voice — but it must fit this exact point in the conversation above: reply to the same person about the same thing, in the same moment, and change only what conflicts with the facts. Do not start over or answer a different or earlier conversation.',
+  )
+  const reaffUser = reaffParts.join('\n')
 
   const reaffMessages: LLMMessage[] = [
-    { role: 'system', content: buildReaffirmationSystemPrompt() },
+    { role: 'system', content: buildReaffirmationSystemPrompt(characterName) },
     { role: 'user', content: reaffUser },
   ]
 
