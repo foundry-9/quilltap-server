@@ -126,7 +126,6 @@ interface UseSSEStreamingParams {
   chat: Chat | null
   messages: Message[]
   setMessages: (fn: Message[] | ((prev: Message[]) => Message[])) => void
-  setEphemeralMessages: React.Dispatch<React.SetStateAction<import('@/components/chat/EphemeralMessage').EphemeralMessageData[]>>
   isMultiChar: boolean
   hasActiveCharacters: boolean
   participantsAsBase: ChatParticipantBase[]
@@ -152,7 +151,7 @@ interface UseSSEStreamingParams {
  * TanStack Query boundary: this is deliberately NOT a TanStack Query concern.
  * Query is a server-state *cache*, not a streaming transport — stream chunks are
  * never written into the query cache, and the live message buffer is owned here
- * via `setMessages`/`setEphemeralMessages`. The query reads that surround
+ * via `setMessages`. The query reads that surround
  * streaming (chat list, chat settings, LLM logs) live on TanStack Query and are
  * refreshed through their own hooks (e.g. `useLLMLogs.refreshLogs()` fires when a
  * turn completes); the authoritative post-turn message reconciliation goes
@@ -164,7 +163,6 @@ export function useSSEStreaming({
   chat,
   messages,
   setMessages,
-  setEphemeralMessages,
   isMultiChar,
   hasActiveCharacters,
   participantsAsBase,
@@ -926,7 +924,6 @@ export function useSSEStreaming({
           if (data.skipped) {
             resetStreamingContent()
             setStreaming(false)
-            setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
             return
           }
 
@@ -948,10 +945,6 @@ export function useSSEStreaming({
             }
             setMessages(prev => [...prev, newMessage])
           }
-
-          setEphemeralMessages(prev =>
-            prev.filter(em => em.participantId !== participantId)
-          )
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
@@ -1024,7 +1017,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, setEphemeralMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

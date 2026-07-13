@@ -59,6 +59,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-nearing-end': 'nearing the end',
   'mail-delivery': 'mail delivery',
   'turn-pass': 'nothing to add',
+  nudge: 'invited to speak',
   timestamp: 'time',
 }
 
@@ -86,6 +87,7 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.startsWith('The Host marks the time')) return 'timestamp'
       if (c.startsWith('The Host introduces')) return 'user-character'
       if (c.startsWith('The Host inclines his head') || c.includes('declining the floor')) return 'turn-pass'
+      if (c.startsWith('The Host turns to') && c.includes('invites them to take the floor')) return 'nudge'
       if (c.startsWith('The Host whispers a private note')) {
         if (c.includes('SILENT mode')) return 'silent-mode-enter'
         if (c.includes('silence is lifted')) return 'silent-mode-exit'
@@ -218,6 +220,9 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     'autonomous-room-nearing-end': 'high',
     // A turn pass ("nothing to add") is incidental — quiet, hollow dot.
     'turn-pass': 'low',
+    // A nudge is a deliberate operator summon — worth an amber dot, but not the
+    // red reserved for structural room changes (add / remove / status).
+    nudge: 'medium',
     '*': 'medium',
   },
   concierge: { danger: 'high', '*': 'high' },

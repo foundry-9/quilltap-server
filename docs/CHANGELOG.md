@@ -4,6 +4,14 @@
 
 ### 4.8-dev
 
+#### Change: nudging a character is now a persisted Host announcement
+
+Nudging a character to speak previously showed a client-only "_Name_ was asked to speak" note that lived in React state and vanished on reload. It is now a real Host announcement (`systemSender: 'host'`, `systemKind: 'nudge'`, `hostEvent.participantId`) posted server-side when the summoned turn begins and surfaced live over SSE, so the invitation is a permanent part of the transcript and the characters see it in context.
+
+- The Host posts "The Host turns to _Name_ … and invites them to take the floor"; an opaque-room variant carries persona-free steering so the summoned voice knows the floor is theirs.
+- The announcement renders as an amber (`medium`) announcement chip labeled "invited to speak", with content-inference fallback for any row missing the `systemKind` column.
+- Removed the now-orphaned ephemeral-message subsystem — the nudge was its only remaining user. Deleted `EphemeralMessage`/`EphemeralMessages` and their state plumbing across the Salon view, streaming, and turn-management hooks.
+
 #### Fix: answer-confirmation amendments now stay in the current conversation
 
 When the answer-confirmation check flagged a character's reply and the character's own model was asked to correct it, the correction pass received only the draft reply plus the reference material (recalled memories and lookup results). It had no view of the actual conversation. When the reference material quoted an older conversation the character had read via `read_conversation`, the model would treat that old exchange as the live scene and rewrite its reply into it — producing an amendment that answered the wrong conversation.

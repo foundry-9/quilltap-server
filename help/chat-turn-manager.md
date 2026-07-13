@@ -116,6 +116,7 @@ The selection formula considers all eligible characters' weights. A character wi
 - Nudged character speaks even if they already spoke this cycle
 - Nudge takes priority over the queue
 - Only works for LLM-controlled characters
+- The Host announces the summons in the transcript ("The Host turns to _Name_ … and invites them to take the floor"), so the invitation is a permanent part of the conversation rather than a note that vanishes on reload
 
 ### Queue
 

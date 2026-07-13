@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
-import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
 import { ChatCostSummary } from '@/components/chat/ChatCostSummary'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
@@ -143,7 +142,6 @@ export function SalonView({ chatId }: SalonViewProps) {
   const [narrationDelimiters, setNarrationDelimiters] = useState<NarrationDelimiters | undefined>(undefined)
   const [turnState, setTurnState] = useState<TurnState>(createInitialTurnState())
   const [turnSelectionResult, setTurnSelectionResult] = useState<TurnSelectionResult | null>(null)
-  const [ephemeralMessages, setEphemeralMessages] = useState<EphemeralMessageData[]>([])
   const [respondingParticipantId, setRespondingParticipantId] = useState<string | null>(null)
   const [isPaused, setIsPaused] = useState(false)
   const [pendingToolResults, setPendingToolResults] = useState<PendingToolResult[]>([])
@@ -427,7 +425,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     isPaused,
     setIsPaused,
     fetchChat,
-    setEphemeralMessages,
     setTurnState,
     triggerContinueModeRef,
     setChat: (fn) => setChat(fn as any),
@@ -440,7 +437,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     chat,
     messages,
     setMessages,
-    setEphemeralMessages,
     isMultiChar: participantsWithImpersonation.isMultiChar,
     hasActiveCharacters: participantsWithImpersonation.hasActiveCharacters,
     participantsAsBase: participantsWithImpersonation.participantsAsBase,
@@ -578,10 +574,8 @@ export function SalonView({ chatId }: SalonViewProps) {
     turnState,
     participantsWithImpersonation.userParticipantId,
     participantsWithImpersonation.participantData,
-    ephemeralMessages,
     setTurnState,
     setTurnSelectionResult,
-    setEphemeralMessages,
     stableTriggerContinueMode,
     isPaused,
     unpauseChat,
@@ -1361,7 +1355,6 @@ export function SalonView({ chatId }: SalonViewProps) {
           messagesWithLogs={llmLogs.messagesWithLogs}
           onViewLLMLogs={llmLogs.handleViewLLMLogs}
           streamingToolBatches={sseStreaming.streamingToolBatches}
-          ephemeralMessages={ephemeralMessages}
           getRespondingCharacter={getRespondingCharacter}
           shouldShowAvatars={shouldShowAvatars}
           getFirstCharacter={participantsWithImpersonation.getFirstCharacter}

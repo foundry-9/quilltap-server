@@ -15,7 +15,7 @@ import {
   computeSpokenThisCycleAfterSkip,
   qualifiesForTurnSkipping,
 } from '@/lib/chat/turn-manager'
-import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer'
+import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -325,6 +325,23 @@ async function processMessage(
     characterName: character.name,
     characterId: character.id,
   }))
+
+  // Nudge (the human explicitly summoned this voice via the Nudge button): the
+  // Host announces the invitation so it persists in the transcript instead of a
+  // client-only ephemeral note that vanishes on reload. Fires exactly once — the
+  // `nudge` flag rides only on this initial summoned request, never on the
+  // server-driven chained turns that follow. Best-effort by the writer contract;
+  // surfaced live so the household sees it before the summoned reply streams in.
+  if (isContinueMode && options.nudge === true) {
+    const nudgeMessage = await postHostNudgeAnnouncement({
+      chatId,
+      characterName: character.name,
+      participantId: characterParticipant.id,
+    })
+    if (nudgeMessage) {
+      safeEnqueue(controller, encodeHostAnnouncementEvent(encoder, nudgeMessage))
+    }
+  }
 
   // The Courier (manual / clipboard transport): no API key, no plugin call.
   // Detected here so the API-key check, tool build, and streamMessage block

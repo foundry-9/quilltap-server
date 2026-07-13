@@ -366,6 +366,50 @@ export async function postHostTurnPassAnnouncement(
 }
 
 // ---------------------------------------------------------------------------
+// Nudge announcements ("invited to speak").
+//
+// When the human summons a specific character to take the floor (the Nudge
+// button), the Host notes the invitation so it persists in the transcript
+// rather than living as a client-only ephemeral note that vanishes on reload.
+// `systemKind` is `nudge`; `hostEvent.participantId` records who was summoned.
+// The persona `content` is what the household reads; `opaqueContent` is the
+// persona-free steering swapped into an opaque room so the summoned voice knows
+// the floor is theirs.
+// ---------------------------------------------------------------------------
+
+const HOST_KIND_NUDGE = 'nudge';
+
+export function buildNudgeContent(name: string): string {
+  return `The Host turns to ${name} with an encouraging nod and invites them to take the floor.`;
+}
+
+export function buildNudgeOpaqueContent(name: string): string {
+  return `${name} has been invited to take the floor and speak next.`;
+}
+
+export interface HostNudgeAnnouncement {
+  chatId: string;
+  characterName: string;
+  /** Participant ID of the summoned character. */
+  participantId: string;
+}
+
+/**
+ * Post the Host's nudge announcement. Errors are swallowed (the existing
+ * Host-notification contract): a summon must never fail the turn. Returns the
+ * persisted MessageEvent so the caller can surface it live over SSE.
+ */
+export async function postHostNudgeAnnouncement(
+  params: HostNudgeAnnouncement,
+): Promise<MessageEvent | null> {
+  const content = buildNudgeContent(params.characterName);
+  const opaqueContent = buildNudgeOpaqueContent(params.characterName);
+  return postHostMessage(params.chatId, content, opaqueContent, HOST_KIND_NUDGE, {
+    participantId: params.participantId,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Phase C extensions: scenario, user character, multi-character context,
 // silent-mode entry/exit, join scenario. Build helpers + post functions.
 // These announce content that previously lived in the per-turn system prompt.

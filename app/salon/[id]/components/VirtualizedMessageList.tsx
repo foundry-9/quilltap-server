@@ -11,10 +11,8 @@ import type { RenderItem } from '../announcement-render-items'
 import { Icon } from '@/components/ui/icon'
 import { MessageRow } from './MessageRow'
 import { AnnouncementGroup } from './AnnouncementChip'
-import { EphemeralMessages as EphemeralMessagesComponent } from './EphemeralMessages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
-import type { EphemeralMessageData } from '@/components/chat/EphemeralMessage'
 
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
@@ -69,7 +67,6 @@ interface VirtualizedMessageListProps {
     handleQueue: (participantId: string) => void
     handleDequeue: (participantId: string) => void
     handleContinue: () => void
-    handleDismissEphemeral: (id: string) => void
   }
   // Handlers
   setEditContent: (content: string) => void
@@ -86,8 +83,6 @@ interface VirtualizedMessageListProps {
   onViewLLMLogs: (messageId: string) => void
   // In-progress tool calls, batched by prose offset, for the streaming bubble
   streamingToolBatches: StreamingToolBatch[]
-  // Ephemeral messages
-  ephemeralMessages: EphemeralMessageData[]
   // Streaming message display
   getRespondingCharacter: () => CharacterData | undefined
   shouldShowAvatars: () => boolean
@@ -155,7 +150,6 @@ export function VirtualizedMessageList({
   messagesWithLogs,
   onViewLLMLogs,
   streamingToolBatches,
-  ephemeralMessages,
   getRespondingCharacter,
   shouldShowAvatars,
   getFirstCharacter,
@@ -365,12 +359,6 @@ export function VirtualizedMessageList({
             )
           })}
         </div>
-
-        {/* Ephemeral messages */}
-        <EphemeralMessagesComponent
-          messages={ephemeralMessages}
-          onDismiss={turnManagement.handleDismissEphemeral}
-        />
 
         {/* Streaming message — in-progress tool calls nest inside this bubble */}
         <StreamingMessage

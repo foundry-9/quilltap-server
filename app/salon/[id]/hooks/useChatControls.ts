@@ -28,7 +28,6 @@ interface UseChatControlsParams {
   isPaused: boolean
   setIsPaused: (paused: boolean) => void
   fetchChat: () => Promise<void>
-  setEphemeralMessages: React.Dispatch<React.SetStateAction<import('@/components/chat/EphemeralMessage').EphemeralMessageData[]>>
   setTurnState: React.Dispatch<React.SetStateAction<TurnState>>
   triggerContinueModeRef: React.MutableRefObject<(participantId: string, nudge?: boolean) => Promise<void>>
   setChat: (fn: (prev: Chat | null) => Chat | null) => void
@@ -50,7 +49,6 @@ export function useChatControls({
   isPaused,
   setIsPaused,
   fetchChat,
-  setEphemeralMessages,
   setTurnState,
   triggerContinueModeRef,
   setChat,
@@ -479,7 +477,6 @@ export function useChatControls({
 
       showSuccessToast(`${characterName} has been removed from the chat`)
 
-      setEphemeralMessages(prev => prev.filter(em => em.participantId !== participantId))
       setTurnState(prev => ({
         ...prev,
         queue: prev.queue.filter(qId => qId !== participantId),
@@ -497,7 +494,7 @@ export function useChatControls({
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to remove character')
     }
-  }, [chatId, participantData, fetchChat, streamingRef, turnState.lastSpeakerId, participantsAsBase, setEphemeralMessages, setTurnState])
+  }, [chatId, participantData, fetchChat, streamingRef, turnState.lastSpeakerId, participantsAsBase, setTurnState])
 
   // Handle connection profile change from participant sidebar
   const handleConnectionProfileChange = useCallback(async (
