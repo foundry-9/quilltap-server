@@ -245,6 +245,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-doc-mount-file-policy-flags-v1': 'Noting which manuscripts wish to remain unread, unwritten, or unindexed…',
   'add-commonplace-recall-history-v1': 'Teaching the Commonplace Book not to repeat itself…',
   'migrate-extraction-knobs-to-instance-settings-v1': 'Moving extraction knobs into instance settings',
+  'quantize-embeddings-v1': 'Compacting the memory-vaults so they take up less room on the shelf…',
 
   // Misc / fixes
   'add-use-native-web-search-field-v1': 'Adding native-web-search flag',

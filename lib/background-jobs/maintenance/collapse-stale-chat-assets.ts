@@ -51,7 +51,7 @@ import { resolveCharacterAvatar } from '@/lib/photos/resolve-character-avatar';
 import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { deleteFileCompletely } from '@/lib/cascade-delete';
 import type { ChatMetadata, FileEntry } from '@/lib/schemas/types';
-import { STALE_CHAT_RETENTION_DAYS, retentionCutoff } from './retention-constants';
+import { resolveStaleChatDays, retentionCutoff } from './retention-constants';
 
 const moduleLogger = logger.child({ module: 'maintenance.collapse-stale-chat-assets' });
 
@@ -85,8 +85,12 @@ export interface StaleChatCollapseSummary {
  * Falls back to `chat.updatedAt` only when the chat has no played messages at
  * all (a brand-new or transcript-less chat), matching the previous "unknown
  * activity — never touch" safety: a null/NaN timestamp is never stale.
+ *
+ * Exported as THE staleness gate for every stale-gated maintenance sweep
+ * (asset collapse, cache collapse, chunk cold-tiering) so they can never
+ * disagree on what "stale" means.
  */
-async function isStale(
+export async function isStale(
   chat: ChatMetadata,
   cutoffMs: number,
   repos: ReturnType<typeof getRepositories>,
@@ -226,7 +230,7 @@ export async function collapseStaleChatAssets(
   now: number = Date.now(),
 ): Promise<StaleChatCollapseSummary> {
   const repos = getRepositories();
-  const cutoffMs = retentionCutoff(STALE_CHAT_RETENTION_DAYS, now).getTime();
+  const cutoffMs = retentionCutoff(await resolveStaleChatDays(), now).getTime();
 
   const allChats = await repos.chats.findAll();
   let staleChats = 0;

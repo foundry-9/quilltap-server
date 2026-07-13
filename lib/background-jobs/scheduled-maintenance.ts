@@ -7,8 +7,11 @@
  *     longer one);
  *  2. superseded generated story-backgrounds & wardrobe avatars of *stale*
  *     chats (collapse down to the currently-referenced ones);
- *  3. orphaned mount-index files (belt-and-suspenders after the collapse);
- *  4. closed terminal (Ariel) PTY sessions and their transcript files.
+ *  3. regenerable caches of stale chats (compression cache, rendered
+ *     markdown/HTML, raw provider payloads, thinking traces, memory-gate
+ *     debug logs) plus cold-tiering of their conversation-chunk embeddings;
+ *  4. orphaned mount-index files (belt-and-suspenders after the collapse);
+ *  5. closed terminal (Ariel) PTY sessions and their transcript files.
  *
  * ## Why parent-side, not a forked-child job
  * The asset collapse and orphan sweep bottom out in `deleteWithGC`, which opens
@@ -36,6 +39,7 @@ import {
 } from '@/lib/instance-settings';
 import { cleanupFinishedJobs } from './queue-service';
 import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-assets';
+import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
 
 const moduleLogger = logger.child({ module: 'scheduled-maintenance' });
@@ -59,6 +63,13 @@ const RECENT_RUN_WINDOW_MS = 20 * 60 * 60 * 1000;
 export interface MaintenanceSweepSummary {
   jobs: { completed: number; dead: number };
   assets: { staleChats: number; chatsCollapsed: number; filesDeleted: number };
+  caches: {
+    staleChats: number;
+    chatsCollapsed: number;
+    chatRowsCleared: number;
+    messageRowsCleared: number;
+    chunkEmbeddingsCleared: number;
+  };
   orphanedFilesSwept: number;
   terminals: { rows: number; transcripts: number };
   /** Sweeps that threw (and were swallowed so the rest could run). */
@@ -145,6 +156,13 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   const summary: MaintenanceSweepSummary = {
     jobs: { completed: 0, dead: 0 },
     assets: { staleChats: 0, chatsCollapsed: 0, filesDeleted: 0 },
+    caches: {
+      staleChats: 0,
+      chatsCollapsed: 0,
+      chatRowsCleared: 0,
+      messageRowsCleared: 0,
+      chunkEmbeddingsCleared: 0,
+    },
     orphanedFilesSwept: 0,
     terminals: { rows: 0, transcripts: 0 },
     failures: [],
@@ -175,7 +193,24 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     });
   }
 
-  // 3. Orphaned mount-index files — run AFTER the collapse to mop up stragglers.
+  // 3. Stale-chat cache collapse + conversation-chunk cold-tiering.
+  try {
+    const result = await collapseStaleChatCaches();
+    summary.caches = {
+      staleChats: result.staleChats,
+      chatsCollapsed: result.chatsCollapsed,
+      chatRowsCleared: result.chatRowsCleared,
+      messageRowsCleared: result.messageRowsCleared,
+      chunkEmbeddingsCleared: result.chunkEmbeddingsCleared,
+    };
+  } catch (error) {
+    summary.failures.push('caches');
+    moduleLogger.warn('Stale-chat cache collapse failed — continuing', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  // 4. Orphaned mount-index files — run AFTER the collapse to mop up stragglers.
   try {
     summary.orphanedFilesSwept = await getRepositories().docMountFileLinks.sweepOrphanedFiles();
   } catch (error) {
@@ -185,7 +220,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     });
   }
 
-  // 4. Closed terminal sessions + transcript files.
+  // 5. Closed terminal sessions + transcript files.
   try {
     summary.terminals = await getRepositories().terminalSessions.cleanupClosedSessions(
       retentionCutoff(CLOSED_TERMINAL_RETENTION_DAYS),

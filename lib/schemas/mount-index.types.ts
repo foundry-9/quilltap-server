@@ -10,6 +10,7 @@
  */
 
 import { z } from 'zod';
+import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 import { UUIDSchema, TimestampSchema } from './common.types';
 
 // ============================================================================
@@ -173,10 +174,9 @@ export const DocMountChunkSchema = z.object({
   embedding: z.union([
     z.instanceof(Float32Array),
     z.array(z.number()).transform((arr): Float32Array => new Float32Array(arr)),
-    z.instanceof(Buffer).transform((buf): Float32Array => {
-      const view = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / Float32Array.BYTES_PER_ELEMENT);
-      return new Float32Array(view);
-    }),
+    // Header-aware decode: handles both legacy raw Float32 blobs and the
+    // self-describing quantized format (see lib/embedding/float32-conversion.ts).
+    z.instanceof(Buffer).transform((buf): Float32Array => blobToFloat32(buf)),
   ]).nullable().optional(),  // Unit-length Float32 BLOB on disk
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

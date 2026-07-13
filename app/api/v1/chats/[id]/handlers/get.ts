@@ -21,6 +21,7 @@ import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
+import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer';
 import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox } from '../actions';
 import {
@@ -236,6 +237,17 @@ export async function handleGet(
     if (!chatMetadata) {
       return notFound('Chat');
     }
+
+    // Cold-tier re-warm: if the maintenance sweep cold-tiered this chat's
+    // conversation-chunk embeddings, opening it re-enqueues them through the
+    // standard embedding pipeline. Fire-and-forget (debounced + deduped
+    // inside) — never allowed to slow or break the chat load.
+    maybeEnqueueColdChunkReembed(user.id, chatId).catch((error) => {
+      logger.warn('[Chats v1] Cold-chunk re-embed check failed — continuing', {
+        chatId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
     // Sweep terminal sessions whose PTYs were lost across a server restart
     // (DB row says "live" but ptyManager doesn't have it) and post the close

@@ -40,7 +40,6 @@ import { blobToFloat32, float32ToBlob } from '@/lib/embedding/float32-conversion
 import type { EmbeddingProfile } from '@/lib/schemas/types'
 
 const FLUSH_BATCH = 500
-const BYTES_PER_FLOAT = 4
 const ZERO_MAG = 1e-10
 
 const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs'] as const
@@ -173,7 +172,6 @@ function reapplyTable(
   targetDim: number,
   normalize: boolean,
 ): TableReapplyResult {
-  const targetBytes = targetDim * BYTES_PER_FLOAT
   const result: TableReapplyResult = {
     table,
     truncated: 0,
@@ -196,16 +194,19 @@ function reapplyTable(
   for (const row of rows) {
     if (!row.embedding || typeof row.embedding === 'string') continue
     const buf = row.embedding
-    if (buf.byteLength === targetBytes) {
+    // Dimensions must come from the decoded vector, not the byte length —
+    // blobs may be legacy raw Float32 OR the self-describing quantized format
+    // (different bytes-per-dimension).
+    const src = blobToFloat32(buf)
+    if (src.length === targetDim) {
       result.alreadyAtTarget++
       continue
     }
-    if (buf.byteLength < targetBytes) {
+    if (src.length < targetDim) {
       result.shorterThanTarget++
       continue
     }
 
-    const src = blobToFloat32(buf)
     const { dst, magnitude } = sliceAndNormalize(src, targetDim, normalize)
 
     if (magnitude < ZERO_MAG) {
@@ -229,9 +230,24 @@ function reapplyTable(
 }
 
 /**
- * Inspect every relevant table and return the maximum embedding BLOB length
- * (in float32 components) found anywhere. Lets the caller short-circuit if
- * the corpus is already smaller than the requested target.
+ * SQL expression yielding an embedding blob's dimension regardless of its
+ * on-disk format. Quantized blobs announce themselves with the 0xEB 0x01
+ * magic+version prefix and encode dim in their byte length (int8: 11-byte
+ * header + 1 byte/dim; f16: 7-byte header + 2 bytes/dim); anything else is
+ * legacy raw Float32 at 4 bytes/dim. Mirrors
+ * `lib/embedding/float32-conversion.ts` — keep in sync with the layout there.
+ */
+const EMBEDDING_DIM_SQL = `CASE
+  WHEN substr(embedding, 1, 3) = X'EB0101' THEN length(embedding) - 11
+  WHEN substr(embedding, 1, 3) = X'EB0102' THEN (length(embedding) - 7) / 2
+  ELSE length(embedding) / 4
+END`
+
+/**
+ * Inspect every relevant table and return the maximum embedding dimension
+ * found anywhere (format-aware: legacy Float32 and quantized blobs coexist).
+ * Lets the caller short-circuit if the corpus is already smaller than the
+ * requested target.
  */
 function maxStoredDimension(): number {
   let max = 0
@@ -241,11 +257,11 @@ function maxStoredDimension(): number {
     if (!tableExists(main, table)) continue
     const row = main
       .prepare(
-        `SELECT MAX(length(embedding)) AS maxBytes FROM "${table}" WHERE embedding IS NOT NULL`,
+        `SELECT MAX(${EMBEDDING_DIM_SQL}) AS maxDim FROM "${table}" WHERE embedding IS NOT NULL`,
       )
-      .get() as { maxBytes: number | null }
-    if (row?.maxBytes && row.maxBytes / BYTES_PER_FLOAT > max) {
-      max = row.maxBytes / BYTES_PER_FLOAT
+      .get() as { maxDim: number | null }
+    if (row?.maxDim && row.maxDim > max) {
+      max = row.maxDim
     }
   }
 
@@ -260,11 +276,11 @@ function maxStoredDimension(): number {
       if (tableExists) {
         const row = mount
           .prepare(
-            `SELECT MAX(length(embedding)) AS maxBytes FROM doc_mount_chunks WHERE embedding IS NOT NULL`,
+            `SELECT MAX(${EMBEDDING_DIM_SQL}) AS maxDim FROM doc_mount_chunks WHERE embedding IS NOT NULL`,
           )
-          .get() as { maxBytes: number | null }
-        if (row?.maxBytes && row.maxBytes / BYTES_PER_FLOAT > max) {
-          max = row.maxBytes / BYTES_PER_FLOAT
+          .get() as { maxDim: number | null }
+        if (row?.maxDim && row.maxDim > max) {
+          max = row.maxDim
         }
       }
     } finally {

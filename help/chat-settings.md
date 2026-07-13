@@ -476,6 +476,14 @@ The timezone resolution follows a courteous chain of precedence: per-chat settin
 
 For those engaged in period dramas or interstellar adventures, toggle "Use fictional time" to inject a made-up timestamp that advances in real time from a base you specify. The timezone setting still applies to how the fictional time is formatted.
 
+### Data Retention
+
+Sets how many days a chat may sit with nobody actually speaking in it (Staff announcements don't count) before Quilltap's nightly housekeeping tidies away its regenerable working data — compression caches, pre-rendered pages, model scratch-work, superseded generated images, and semantic-search embeddings. The conversation itself is never touched, keyword search keeps working, and a tidied chat re-indexes itself for semantic search the moment you reopen it.
+
+- **Keep inactive chats' working data for N days** — 1 to 3650; the default is 30. Global only — no per-chat dial.
+
+Full particulars, including what precisely is and isn't tidied: [Data Retention](data-retention.md).
+
 ## Saving Chat Settings
 
 Most settings save automatically as you make changes. You'll see:

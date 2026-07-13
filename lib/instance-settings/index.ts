@@ -19,6 +19,8 @@
 import { rawQuery } from '@/lib/database/manager';
 import { logger } from '@/lib/logger';
 import {
+  DataRetentionSettingsSchema,
+  type DataRetentionSettings,
   MemoryExtractionLimitsSchema,
   type MemoryExtractionLimits,
   MemoryRecallSettingsSchema,
@@ -33,6 +35,7 @@ const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
 const KEY_LAST_MAINTENANCE_SWEEP_AT = 'lastMaintenanceSweepAt';
+const KEY_DATA_RETENTION = 'dataRetention';
 
 const DEFAULT_MAX_CONCURRENT_JOBS = 4;
 const DEFAULT_MEMORY_EXTRACTION_CONCURRENCY = 1;
@@ -45,6 +48,9 @@ const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
 const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
   scopePolicy: 'down-weight',
   expandRelated: false,
+};
+const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
+  staleChatDays: 30,
 };
 
 async function readSetting(key: string): Promise<string | null> {
@@ -164,6 +170,31 @@ export async function setMemoryRecallSettings(value: MemoryRecallSettings): Prom
 }
 
 /**
+ * Read the per-instance data-retention settings (the stale-chat window that
+ * governs the daily maintenance sweep's cache collapse, image collapse, and
+ * conversation-chunk cold-tiering). Returns the documented default (30 days)
+ * when the setting hasn't been written yet.
+ */
+export async function getDataRetentionSettings(): Promise<DataRetentionSettings> {
+  const raw = await readSetting(KEY_DATA_RETENTION);
+  if (raw === null) return DEFAULT_DATA_RETENTION_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw);
+    return DataRetentionSettingsSchema.parse(parsed);
+  } catch (error) {
+    logger.warn('[InstanceSettings] dataRetention failed to parse — using defaults', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return DEFAULT_DATA_RETENTION_SETTINGS;
+  }
+}
+
+export async function setDataRetentionSettings(value: DataRetentionSettings): Promise<void> {
+  const validated = DataRetentionSettingsSchema.parse(value);
+  await writeSetting(KEY_DATA_RETENTION, JSON.stringify(validated));
+}
+
+/**
  * Read the Lantern Backgrounds mount-point id. The provisioning migration
  * writes this on first boot; runtime callers (the Lantern bridge) read it
  * to find where to land generated story backgrounds when no project context
@@ -228,5 +259,5 @@ export async function setLastMaintenanceSweepAt(when: Date = new Date()): Promis
 }
 
 // Re-export the schema for callers that want to validate independently.
-export { MemoryExtractionLimitsSchema, MemoryRecallSettingsSchema };
-export type { MemoryExtractionLimits, MemoryRecallSettings };
+export { DataRetentionSettingsSchema, MemoryExtractionLimitsSchema, MemoryRecallSettingsSchema };
+export type { DataRetentionSettings, MemoryExtractionLimits, MemoryRecallSettings };

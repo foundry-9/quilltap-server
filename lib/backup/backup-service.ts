@@ -15,6 +15,7 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { logger } from '@/lib/logger';
+import { blobToFloat32 } from '@/lib/embedding/float32-conversion';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
@@ -56,12 +57,9 @@ function encodeEmbedding(
   if (embedding instanceof Float32Array) return Array.from(embedding);
   if (Array.isArray(embedding)) return [...embedding];
   if (embedding instanceof Buffer) {
-    const view = new Float32Array(
-      embedding.buffer,
-      embedding.byteOffset,
-      embedding.byteLength / Float32Array.BYTES_PER_ELEMENT
-    );
-    return Array.from(view);
+    // Header-aware decode: handles both legacy raw Float32 blobs and the
+    // self-describing quantized format.
+    return Array.from(blobToFloat32(embedding));
   }
   return null;
 }

@@ -228,6 +228,39 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
   }
 
   /**
+   * Cold-tier a chat's chunks: NULL every non-null embedding while keeping
+   * `content`/`messageIds`/`interchangeIndex` intact, so the chat stays
+   * keyword-searchable and can be re-embedded (embed-only, no re-chunk) when
+   * reopened. Idempotent — the `embedding IS NOT NULL` guard makes a second
+   * pass a no-op. Returns the number of rows cleared.
+   *
+   * Raw SQL rather than `_update` so a maintenance pass over a large stale
+   * chat is one statement, and so `updatedAt` stamping stays explicit.
+   */
+  async clearEmbeddingsForChat(chatId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const result = await rawQuery<{ changes: number }>(
+          `UPDATE conversation_chunks SET embedding = NULL, updatedAt = ?
+            WHERE chatId = ? AND embedding IS NOT NULL`,
+          [new Date().toISOString(), chatId]
+        );
+        const cleared = Number(result?.changes ?? 0);
+        if (cleared > 0) {
+          logger.debug('[ConversationChunks] Cold-tiered chunk embeddings for chat', {
+            chatId,
+            cleared,
+          });
+        }
+        return cleared;
+      },
+      'Error clearing chunk embeddings for chat',
+      { chatId },
+      0
+    );
+  }
+
+  /**
    * Update just the embedding field on a chunk
    * @param id The chunk ID
    * @param embedding The new embedding vector

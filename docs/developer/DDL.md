@@ -141,6 +141,35 @@ The **Brahma Console** can also query these databases from inside a running inst
 
 ## Main Database Schema (`quilltap.db`)
 
+### Embedding BLOB format (all `embedding` columns)
+
+Every `embedding BLOB` column in every database (`memories`, `vector_entries`,
+`conversation_chunks`, `help_docs` in the main DB; `doc_mount_chunks` in the
+mount index) holds a **self-describing quantized vector** since
+`quantize-embeddings-v1` (v4.8.0). The single-source-of-truth codec is
+`lib/embedding/float32-conversion.ts`; consumers always see a hydrated
+`Float32Array` — the on-disk layout is:
+
+```
+Byte layout (little-endian):
+  [0]      magic   = 0xEB
+  [1]      version = 0x01
+  [2]      dtype   : 0x01 = int8-symmetric, 0x02 = float16
+  [3..6]   dim     : uint32
+  dtype==int8: [7..10] scale : float32   (dequant: f = int8 * scale)
+               [11..11+dim)   int8 body            → total = 11 + dim bytes
+  dtype==f16 : [7..7+2*dim)   float16 body (no scale) → total = 7 + 2*dim bytes
+```
+
+New writes use int8-symmetric (`scale = max|v|/127`, ~4× smaller than
+Float32; embeddings are unit-normalized so mean cosine similarity to the
+original is ≥ 0.999). Blobs **without** the magic+version prefix (or whose
+declared dim is inconsistent with their byte length) are legacy raw Float32
+bytes (`dim = byteLength / 4`) and remain readable forever — the read path
+dispatches on the header. Raw SQL that infers dimensions from
+`length(embedding)` must branch on the prefix (see `EMBEDDING_DIM_SQL` in
+`lib/embedding/reapply-profile.ts`).
+
 ### users
 
 ```sql
@@ -636,7 +665,7 @@ CREATE INDEX "idx_conversation_chunks_chatId" ON "conversation_chunks"("chatId")
 | content | TEXT | Rendered Markdown for this interchange |
 | participantNames | TEXT (JSON array) | Names of participants in this interchange |
 | messageIds | TEXT (JSON array) | Message UUIDs included in this interchange |
-| embedding | BLOB (nullable) | Float32 vector embedding (same format as memories.embedding) |
+| embedding | BLOB (nullable) | Quantized vector embedding (see "Embedding BLOB format" above; same codec as memories.embedding). NULL when cold-tiered by the stale-chat maintenance sweep — content stays for keyword search and the chat re-embeds on next open |
 | createdAt | TEXT (ISO 8601) | Creation timestamp |
 | updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
@@ -964,7 +993,7 @@ CREATE INDEX "idx_help_docs_url" ON "help_docs" ("url");
 | url | TEXT | URL route this doc is associated with (e.g., `/aurora`, `/settings?tab=chat`) |
 | content | TEXT | Full document content with frontmatter stripped |
 | contentHash | TEXT | SHA-256 hash of raw file content, used for change detection during sync |
-| embedding | BLOB (nullable) | Float32 embedding vector, generated at runtime using user's embedding profile |
+| embedding | BLOB (nullable) | Quantized embedding vector (see "Embedding BLOB format"), generated at runtime using user's embedding profile |
 | createdAt | TEXT (ISO 8601) | Creation timestamp |
 | updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
@@ -1294,6 +1323,8 @@ Known keys (others may be present from migrations / startup hooks):
 - `memoryExtractionConcurrency` (4.4+) — integer 1–32. **DEPRECATED in 4.7**: the dispatcher unified to the global `maxConcurrentJobs` cap above; this key is no longer read at runtime (the `/api/v1/memories?action=extraction-concurrency` route still persists it for the `memory-diff` CLI). Was a per-instance MEMORY_EXTRACTION concurrency cap.
 - `memoryExtractionLimits` (4.4+) — JSON: `{enabled, maxPerHour, softStartFraction, softFloor}`. Per-instance memory extraction rate limits. Read by `lib/background-jobs/handlers/memory-extraction.ts` and the dry-run extraction route; updated by `POST /api/v1/memories?action=extraction-limits-config`. Migrated from `chat_settings.memoryExtractionLimits` for SINGLE_USER_ID by `migrate-extraction-knobs-to-instance-settings-v1`.
 - `memoryRecall` (4.7+) — JSON: `{scopePolicy: 'down-weight' | 'exclude', expandRelated: boolean}`. Per-instance Commonplace Book recall relevance settings. `scopePolicy` controls what happens to a `scope: narrow` memory whose `projectId` differs from the current chat's project (cross-project leakage): `down-weight` (default) applies a strong recall penalty, `exclude` filters it out entirely. `expandRelated` (default `false`, added in Phase 2) is the opt-in related-memory one-hop expansion toggle: when on, recall pulls each top hit's strongly-linked related memories in as extra candidates (capped at 3 per hit, 10 total), scores them against the same query embedding, and re-ranks the union. Read on the per-turn recall path (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`) via `getMemoryRecallSettings`; updated by `POST /api/v1/memories?action=recall-config`. No column on `chat_settings` (it is column-per-field; this knob lives instance-wide instead, like `memoryExtractionLimits`). Schema: `MemoryRecallSettingsSchema` in `lib/schemas/settings.types.ts`.
+- `dataRetention` (4.8+) — JSON: `{staleChatDays: number}` (1–3650, default 30). Per-instance stale-chat retention window: how many days a chat must sit with no *played* message (participant character or human user; feature whispers don't count) before the daily maintenance sweep collapses its regenerable data — superseded generated images, `chats.compressionCache`/`renderedMarkdown`, the discardable `chat_messages` columns (`rawResponse`, `reasoningContent`, `reasoningSegments`, `renderedHtml`, `debugMemoryLogs`), and cold-tiered `conversation_chunks.embedding`. Resolved by `resolveStaleChatDays()` (`lib/background-jobs/maintenance/retention-constants.ts`); accessors in `lib/instance-settings`; updated by `PUT /api/v1/settings/data-retention` (Settings → Chat → Data Retention). Schema: `DataRetentionSettingsSchema` in `lib/schemas/settings.types.ts`.
+- `lastMaintenanceSweepAt` (4.7+) — ISO 8601 timestamp of the last completed scheduled-maintenance pass. Written/read by `lib/background-jobs/scheduled-maintenance.ts` to skip the startup tick when a sweep ran within the last 20 h (dev-restart friendliness). Internal; not exported.
 - `lanternBackgroundsMountPointId` (4.3+) — UUID of the global "Lantern Backgrounds" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/lantern-store-bridge.ts`; written by `provision-lantern-backgrounds-mount-v1`. Used to land story-background job output and generic `generate_image` tool output when no project context is available.
 - `userUploadsMountPointId` (4.4+) — UUID of the global "Quilltap Uploads" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/file-storage/user-uploads-bridge.ts`; written by `provision-user-uploads-mount-v1`. Used for every project-less file write: chat attachments, paste/drag-drop images, the Files-tab uploader, capabilities-report exports, and backup-restore replay of project-less files. Replaces the legacy `<filesDir>/_general/` namespace as the catch-all destination.
 - `generalMountPointId` (4.4+) — UUID of the global "Quilltap General" database-backed mount point in `quilltap-mount-index.db`. Read by `lib/mount-index/general-scenarios.ts`; written by `provision-general-mount-v1`. Houses the instance-wide `Scenarios/` folder offered alongside project- and character-specific scenarios in every non-help New Chat dialog. Managed via `/api/v1/scenarios` and the `/scenarios` page.
@@ -1524,7 +1555,7 @@ CREATE TABLE IF NOT EXISTS "doc_mount_chunks" (
 );
 ```
 
-Chunks are keyed by **linkId**, not by fileId — every hard link to a file maintains its own chunk + embedding set so consumers can re-extract independently. The `embedding` column stores Float32 arrays as BLOBs (same format as `conversation_chunks.embedding`). `mountPointId` is denormalized off the link row for fast per-mount queries.
+Chunks are keyed by **linkId**, not by fileId — every hard link to a file maintains its own chunk + embedding set so consumers can re-extract independently. The `embedding` column stores quantized vectors (see "Embedding BLOB format" in the main-DB section; same codec as `conversation_chunks.embedding`). `mountPointId` is denormalized off the link row for fast per-mount queries.
 
 ### project_doc_mount_links
 

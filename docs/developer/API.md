@@ -432,6 +432,30 @@ Update chat settings.
 }
 ```
 
+#### `GET /api/v1/settings/data-retention`
+
+Read the instance-wide stale-chat retention window (`instance_settings['dataRetention']`, not a `chat_settings` column). Governs the daily maintenance sweep's cache collapse, generated-image collapse, and conversation-chunk cold-tiering.
+
+**Response:**
+
+```json
+{
+  "staleChatDays": 30
+}
+```
+
+#### `PUT /api/v1/settings/data-retention`
+
+Update the retention window. Merges with the current value and validates (integer, 1–3650 days).
+
+**Request Body:**
+
+```json
+{
+  "staleChatDays": 90
+}
+```
+
 ---
 
 ### API Keys

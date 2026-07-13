@@ -351,6 +351,8 @@ import { addDocMountFilePolicyFlagsMigration } from './add-doc-mount-file-policy
 import { addCommonplaceRecallHistoryMigration } from './add-commonplace-recall-history';
 // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
 import { addTurnSkippingFieldMigration } from './add-turn-skipping-field';
+// DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
+import { quantizeEmbeddingsMigration } from './quantize-embeddings';
 
 /**
  * All available migrations.
@@ -699,6 +701,8 @@ export const migrations: Migration[] = [
   addCommonplaceRecallHistoryMigration,
   // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
   addTurnSkippingFieldMigration,
+  // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
+  quantizeEmbeddingsMigration,
 ];
 
 export {
@@ -1028,5 +1032,7 @@ export {
   addCommonplaceRecallHistoryMigration,
   // "Nothing to add" turn-skipping: turnSkippingEnabled toggle column on chats
   addTurnSkippingFieldMigration,
+  // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
+  quantizeEmbeddingsMigration,
 };
 
