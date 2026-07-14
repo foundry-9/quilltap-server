@@ -16,6 +16,8 @@ On any turn but the very first character turn of a fresh conversation, each thin
 
 A pass is never an invitation to be coy or mysterious. A brief in-character remark is always the better contribution; the pass exists only for the genuine case of *nothing to say*.
 
+Occasionally a character says its piece — a gesture, a quiet observation, a real contribution to the moment — and *then* tacks the pass phrase on at the very end, as a sort of afterthought. That is not a pass: there is genuine communication above it, and it is kept and remembered in full. Quilltap simply strikes the stray closing phrase from the message, so what remains in the transcript is the remark the character actually made, with no dangling *"nothing to add"* line trailing beneath it.
+
 ### When a character is expected to speak
 
 If a character has been addressed or mentioned by name since it last spoke, its turn note carries a gentle caution to answer rather than pass. Someone spoke to you; the courteous thing is to reply.

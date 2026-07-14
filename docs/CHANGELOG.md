@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Fix: strip a trailing "nothing to add" line from an otherwise real turn
+
+Weak models sometimes narrate a genuine turn — a gesture, an observation, a real contribution — and then append `[NOTHING TO ADD]` as a final line. That is not a pass, so the message is kept, but the dangling sentinel line should not survive into the transcript.
+
+`detectSkipSentinel` (`lib/chat/turn-manager/skip-signal.ts`) now checks the last non-empty line in addition to the first. When the first line is real prose and the message ends with a lone sentinel line, it returns `{ skip: false, cleaned }` with that trailing line removed, exactly as it already did for a sentinel-plus-prose message led by the sentinel. The orchestrator's existing `detection.cleaned` path carries the stripped text through to display, persistence, and memory, so the `[NOTHING TO ADD]` line never reaches any of them. A bare sentinel (a real pass) and a mid-sentence mention of the phrase are unaffected.
+
 #### Feature: database size reduction — stale-chat tidying, cold-tier embeddings, int8 quantization
 
 Three coordinated changes shrink the main database (spec: `docs/developer/features/db-size-reduction-spec.md`) without discarding anything needed to re-read a conversation or re-run memory extraction. Message text, attachments, memories, and summaries are never touched.

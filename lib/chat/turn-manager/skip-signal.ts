@@ -62,6 +62,11 @@ export type DetectSkipResult = { skip: true } | { skip: false; cleaned?: string 
  *   - Sentinel line followed by real prose → NOT a skip; returns
  *     `{ skip: false, cleaned }` with the sentinel line removed so the caller
  *     can keep the prose.
+ *   - Real prose that merely ENDS with a lone sentinel line → NOT a skip;
+ *     returns `{ skip: false, cleaned }` with that trailing line removed. Weak
+ *     models often narrate, then tack `[NOTHING TO ADD]` on the end; the
+ *     narration is a genuine contribution and must be kept, but the dangling
+ *     sentinel line should never reach display / persistence / memory.
  *   - No sentinel → `{ skip: false }`.
  */
 export function detectSkipSentinel(
@@ -91,19 +96,41 @@ export function detectSkipSentinel(
   }
   if (firstIdx === -1) return { skip: false }
 
-  if (!isSentinelLine(lines[firstIdx])) return { skip: false }
+  if (isSentinelLine(lines[firstIdx])) {
+    // Sentinel matched on the first line. Is there any non-whitespace after it?
+    const trailing = lines.slice(firstIdx + 1).join('\n')
+    if (trailing.trim().length === 0) {
+      return { skip: true }
+    }
 
-  // Sentinel matched. Is there any non-whitespace after it?
-  const trailing = lines.slice(firstIdx + 1).join('\n')
-  if (trailing.trim().length === 0) {
-    return { skip: true }
+    // Sentinel + prose: drop the sentinel line, keep the rest.
+    const cleaned = [...lines.slice(0, firstIdx), ...lines.slice(firstIdx + 1)]
+      .join('\n')
+      .trim()
+    return { skip: false, cleaned }
   }
 
-  // Sentinel + prose: drop the sentinel line, keep the rest.
-  const cleaned = [...lines.slice(0, firstIdx), ...lines.slice(firstIdx + 1)]
-    .join('\n')
-    .trim()
-  return { skip: false, cleaned }
+  // The first line is real content, not the sentinel. But weak models often
+  // narrate a genuine turn and then dangle a lone `[NOTHING TO ADD]` line at the
+  // end. That is NOT a pass — there's real communication above it — but the
+  // dangling line must be stripped from what is displayed, saved, and
+  // remembered. Locate the LAST non-empty line and, if it is a sentinel line on
+  // its own, drop it and keep the prose above.
+  let lastIdx = -1
+  for (let i = lines.length - 1; i > firstIdx; i--) {
+    if (lines[i].trim().length > 0) {
+      lastIdx = i
+      break
+    }
+  }
+  if (lastIdx !== -1 && isSentinelLine(lines[lastIdx])) {
+    const cleaned = [...lines.slice(0, lastIdx), ...lines.slice(lastIdx + 1)]
+      .join('\n')
+      .trim()
+    return { skip: false, cleaned }
+  }
+
+  return { skip: false }
 }
 
 /**

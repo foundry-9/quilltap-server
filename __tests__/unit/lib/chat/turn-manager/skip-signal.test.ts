@@ -118,8 +118,29 @@ describe('detectSkipSentinel', () => {
     expect((res as { cleaned?: string }).cleaned).toBe('Actually, wait — I do have a thought.')
   })
 
+  it('treats narration ending with a lone sentinel line as NOT a skip and strips the trailing line', () => {
+    const res = detectSkipSentinel(
+      '*I stay where I am, my hand on his arm.*\n\n*There is nothing I need to add.*\n\n[NOTHING TO ADD]',
+    )
+    expect(res.skip).toBe(false)
+    expect((res as { cleaned?: string }).cleaned).toBe(
+      '*I stay where I am, my hand on his arm.*\n\n*There is nothing I need to add.*',
+    )
+  })
+
+  it('strips a trailing sentinel even when wrapped in markdown', () => {
+    const res = detectSkipSentinel('*She nods once and says nothing more.*\n\n**[nothing to add]**')
+    expect(res.skip).toBe(false)
+    expect((res as { cleaned?: string }).cleaned).toBe('*She nods once and says nothing more.*')
+  })
+
   it('does not treat a mid-reply mention of the phrase as a skip', () => {
     const res = detectSkipSentinel('I have plenty to say. Nothing to add would be a lie.')
+    expect(res).toEqual({ skip: false })
+  })
+
+  it('does not strip a sentinel-looking phrase that is not on its own final line', () => {
+    const res = detectSkipSentinel('There is nothing to add here, but I will speak anyway.')
     expect(res).toEqual({ skip: false })
   })
 
