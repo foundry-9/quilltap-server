@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: custom tools were invisible — missing from the tool list, and load errors were unreachable
+
+Two gaps that together made a custom tool impossible to find or diagnose.
+
+- **`run_custom` was missing from `GET /api/v1/tools`**, the hand-maintained catalogue behind the per-chat tool toggles, so the tool never appeared in any tool list. Now registered under `utility`. Note this catalogue is hand-maintained with no drift guard — it lists 40 of the 58 registered tool definitions, the rest being deliberately non-toggleable (agent/console-only tools like `run_sql`, `terminal_*`, `memory_search`).
+- **The composer gutter button only rendered when at least one tool loaded successfully**, but load errors ride in the same payload. A user whose only `Tools/*.tool.json` was malformed therefore got no button, no error badge, and no sign the file had been seen — the diagnostic was hidden exactly when it was needed. The button now shows when there is a runnable tool *or* a failed definition, and the dropdown distinguishes an empty table from a broken one before listing the file and the reason.
+
+Reminder of the rules that reject a definition, since all three are easy to hit at once: `outcomes` must be an **array**; `name` must be lowercase (`^[a-z][a-z0-9_-]{0,63}$`); every outcome needs a `state`.
+
 #### Feature: custom pseudo-tools — Pascal's table (`run_custom`)
 
 User-defined chance mechanics. A custom tool is a single JSON document matching `Tools/*.tool.json` at the root of any document store: a named action with parameters, a random roll, and an ordered table of outcomes mapping the roll to a message and a semantic state. Both the LLM (via one `run_custom` tool) and the user (via a composer popup) can run them. Spec: `docs/developer/features/pascal-custom-tools.md`.

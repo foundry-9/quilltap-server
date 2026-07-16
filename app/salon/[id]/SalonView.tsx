@@ -294,9 +294,16 @@ export function SalonView({ chatId }: SalonViewProps) {
   const customToolsQuery = useQuery({
     queryKey: queryKeys.customTools.byChat(id),
     queryFn: ({ signal }) =>
-      apiFetch<{ tools: unknown[] }>(`/api/v1/chats/${id}/custom-tools`, { signal }),
+      apiFetch<{ tools: unknown[]; errors?: unknown[] }>(`/api/v1/chats/${id}/custom-tools`, { signal }),
   })
-  const customToolsAvailable = (customToolsQuery.data?.tools?.length ?? 0) > 0
+  // Show the gutter button when there is anything to say — a runnable tool OR a
+  // definition that failed to load. Gating on tools alone hides the error badge
+  // exactly when it is most needed: a user whose only .tool.json is malformed
+  // would otherwise get no button, no badge, and no hint that the file was even
+  // seen. A broken tool is not the same as no tool, and must not look like one.
+  const customToolsAvailable =
+    (customToolsQuery.data?.tools?.length ?? 0) > 0 ||
+    (customToolsQuery.data?.errors?.length ?? 0) > 0
 
   const visibleMessages = useMemo(() => {
     return messages.filter(msg => {

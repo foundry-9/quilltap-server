@@ -263,9 +263,18 @@ export function CustomToolsDropdown({
               </div>
             )}
 
-            {!rosterQuery.isLoading && !rosterQuery.isError && tools.length === 0 && (
+            {/* "Nothing here" only when there is genuinely nothing. With a
+                failed definition below, this line would contradict the badge
+                that is about to explain why the table looks bare. */}
+            {!rosterQuery.isLoading && !rosterQuery.isError && tools.length === 0 && errors.length === 0 && (
               <div className="px-3 py-2 text-sm qt-text-secondary">
                 No custom tools are laid out on the table.
+              </div>
+            )}
+
+            {!rosterQuery.isLoading && !rosterQuery.isError && tools.length === 0 && errors.length > 0 && (
+              <div className="px-3 py-2 text-sm qt-text-secondary">
+                Nothing is runnable — the table was set, but the cards below would not read.
               </div>
             )}
 
