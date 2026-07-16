@@ -2258,6 +2258,90 @@ Queue a story background regeneration job.
 
 ---
 
+### Custom Tools (Pascal the Croupier)
+
+The operator's surface for user-authored pseudo-tools (`Tools/*.tool.json` in any document store). Characters reach for the same definitions via the `run_custom` LLM tool; these endpoints are the composer popup's route in.
+
+The roster is resolved **fresh on every request** — never cached — so a definition the user just edited is live on the next popup open.
+
+**The roll spec and outcome table are never returned.** The popup does not show the odds; `definitionPath` + `mountName` let the UI link to the user's own file instead.
+
+#### `GET /api/v1/chats/[id]/custom-tools`
+
+List the roster for the popup. Because a character-tier store shadows farther tiers, the roster is resolved once per character participant and merged: a tool that resolves identically for everyone is listed once with no `characterLabel`; a tool whose definition differs per character is listed once **per variant**, each labelled with that character's name. `asCharacterId` records whose perspective produced the entry and is replayed by the run action.
+
+**Response**: `200 OK`
+
+```json
+{
+  "tools": [
+    {
+      "name": "unlock",
+      "description": "Try the lock with whatever is to hand.",
+      "parameters": {
+        "bonus": { "type": "integer", "default": 0, "description": "Anything helping the attempt.", "min": -5, "max": 5 }
+      },
+      "defaultVisibility": "public",
+      "sourceTier": "character",
+      "characterLabel": "Miss Ashcroft",
+      "asCharacterId": "character-uuid",
+      "definitionPath": "Tools/unlock.tool.json",
+      "mountName": "Ashcroft's Vault"
+    }
+  ],
+  "errors": [
+    {
+      "definitionPath": "Tools/broken.tool.json",
+      "mountPointId": "mount-uuid",
+      "mountName": "Quilltap General",
+      "tier": "global",
+      "reason": "is not valid JSON: Unexpected token }"
+    }
+  ],
+  "droppedForCap": ["spare_tool"]
+}
+```
+
+`characterLabel` is present only on variant rows. `droppedForCap` is present only when the roster hit its size cap. `sourceTier` is one of `character`, `participant`, `group`, `project`, `global`.
+
+#### `POST /api/v1/chats/[id]/custom-tools?action=run`
+
+Run one tool at the operator's behest. Posts two messages: a **USER**-role invocation (so the model attributes the roll to the operator) followed by Pascal's outcome (`systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`). Both share the run's visibility.
+
+A failed run posts **no Pascal message** — the failure is announced by Prospero (`systemKind: 'custom-tool-error'`) and returns `400`.
+
+**Request Body**:
+
+```json
+{
+  "tool": "unlock",
+  "parameters": { "bonus": 2 },
+  "private": false,
+  "asCharacterId": "character-uuid"
+}
+```
+
+`parameters` and `asCharacterId` are optional/nullable; omitting `asCharacterId` resolves from the first character participant's perspective. `private: true` whispers both messages to the operator alone — no character sees them.
+
+**Response**: `200 OK`
+
+```json
+{
+  "messages": [ { "role": "USER", "content": "*I ran `unlock` (bonus: 2).*" }, { "role": "ASSISTANT", "systemSender": "pascal" } ],
+  "result": {
+    "tool": "unlock",
+    "value": 14,
+    "state": "success",
+    "message": "The wards give with a sigh.",
+    "whispered": false
+  }
+}
+```
+
+**Errors**: `400` for an unknown tool (the response lists the available names), a rejected parameter, or a definition that will not run. `404` when the chat does not exist.
+
+---
+
 ### Autonomous Room Control
 
 Run-control and settings surface for `chatType: 'autonomous'` chats (autonomous rooms / enclaves). All endpoints require the chat to have `chatType === 'autonomous'`; non-autonomous chats return `400`.

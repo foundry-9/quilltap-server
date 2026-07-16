@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quilltap.ai/schemas/qtap-custom-tool.schema.json",
+  "title": "Quilltap Custom Tool",
+  "description": "Schema for a `Tools/*.tool.json` custom-tool (pseudo-tool) definition — a named action with parameters, a random roll, and an ordered table of outcomes. Place the file in a `Tools/` folder at the root of any document store; the tool's identity is its `name` field, not the filename. One tool per file. Kept in sync by hand with the Zod schema in lib/pascal/custom-tool.types.ts, which is the runtime source of truth.",
+  "type": "object",
+  "required": ["name", "description", "outcomes"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint pointing at this schema. Ignored at runtime."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "description": "The tool's identity — what the model calls and what shadowing resolves on. Lowercase, starts with a letter, 1–64 characters. The filename is not significant."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "What the tool does IN THE FICTION. This is how the model decides when to reach for it and how the UI labels it — write 'Attempt to pick the lock,' not 'rolls 0–1 against thresholds.'"
+    },
+    "disabled": {
+      "type": "boolean",
+      "description": "true suppresses a tool of this name at this tier and every tier below it. Use to switch off an inherited tool for one character or project."
+    },
+    "revealOdds": {
+      "type": "boolean",
+      "default": true,
+      "description": "When false, the model sees only name/description/parameters — never the roll spec or outcome table. NOTE: this hides the odds from the tool roster only. The .tool.json file is still an ordinary document; a character with character_read on the store can read it with doc_* tools. For genuinely secret odds, put the file in a store the character cannot read."
+    },
+    "defaultVisibility": {
+      "enum": ["public", "whisper"],
+      "default": "public",
+      "description": "Default visibility of the result. 'whisper' hides the outcome from other participants (a GM-style hidden roll); the human operator always sees it."
+    },
+    "parameters": {
+      "type": "object",
+      "maxProperties": 8,
+      "description": "Optional inputs, keyed by parameter name (same identifier rules as `name`). At most 8.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "default"],
+        "properties": {
+          "type": {
+            "enum": ["number", "integer", "string", "boolean"],
+            "description": "Value type of this parameter."
+          },
+          "default": {
+            "type": ["number", "string", "boolean"],
+            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type."
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "What this parameter means, in the fiction."
+          },
+          "min": {
+            "type": "number",
+            "description": "Numeric types only. Run-time values are clamped up to this."
+          },
+          "max": {
+            "type": "number",
+            "description": "Numeric types only. Run-time values are clamped down to this."
+          }
+        }
+      }
+    },
+    "roll": {
+      "description": "How chance is drawn. Either a numeric-range object (Form A) or a dice-notation string (Form B). Omit for a plain uniform 0–1 roll.",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^\\s*(\\d+)?[dD](\\d+)(?:\\s*[+-]\\s*(\\d+))?\\s*$",
+          "description": "Form B — dice notation like \"3d6+2\", \"1d20\", \"2d10-1\". Rolled by Quilltap's shared dice roller (2–1000 sides, 1–100 dice, modifier within ±1000). The raw value is the dice total, and {{dice}} renders the breakdown. Dice notation does not accept $param references in v1."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Form A — a uniform float in [min, max), then transformed: value = raw * multiplier + offset, rounded last if `round` is set. Each numeric field accepts a literal number or a { \"$param\": \"name\" } reference to a declared numeric parameter.",
+          "properties": {
+            "min": { "$ref": "#/$defs/NumberOrParamRef", "description": "Low bound, inclusive. Default 0." },
+            "max": { "$ref": "#/$defs/NumberOrParamRef", "description": "High bound, exclusive. Default 1." },
+            "multiplier": { "$ref": "#/$defs/NumberOrParamRef", "description": "Raw value is multiplied by this first. Default 1." },
+            "offset": { "$ref": "#/$defs/NumberOrParamRef", "description": "Added after multiplication. Default 0." },
+            "round": { "type": "boolean", "description": "Round the final value to a whole number. Applied last. Default false." }
+          }
+        }
+      ]
+    },
+    "outcomes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "description": "Ordered outcome table; the first match wins. The LAST entry must be a `true` catch-all so every roll lands somewhere, and no earlier entry may be `true` (everything below it would be unreachable). At most 32.",
+      "items": {
+        "type": "object",
+        "required": ["when", "message", "state"],
+        "additionalProperties": false,
+        "properties": {
+          "when": {
+            "description": "The test. Either the literal `true` (catch-all) or an object of comparators that AND together — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "oneOf": [
+              { "const": true },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "gt": { "type": "number", "description": "Greater than." },
+                  "gte": { "type": "number", "description": "Greater than or equal to." },
+                  "lt": { "type": "number", "description": "Less than." },
+                  "lte": { "type": "number", "description": "Less than or equal to." },
+                  "eq": { "type": "number", "description": "Equal to." },
+                  "neq": { "type": "number", "description": "Not equal to." }
+                }
+              }
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), and {{params.name}} (a resolved parameter). Unknown placeholders are left as written."
+          },
+          "state": {
+            "enum": ["success", "partial", "failure", "info"],
+            "description": "Semantic state of this outcome. Accents the result bubble; authors never write CSS."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "NumberOrParamRef": {
+      "oneOf": [
+        { "type": "number" },
+        {
+          "type": "object",
+          "required": ["$param"],
+          "additionalProperties": false,
+          "properties": {
+            "$param": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "description": "Name of a declared parameter of type number or integer. The only form of indirection in the format — there are no expression strings anywhere."
+            }
+          }
+        }
+      ]
+    }
+  }
+}

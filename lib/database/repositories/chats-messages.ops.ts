@@ -65,7 +65,7 @@ export const ChatMessageRowSchema = z.object({
   confirmationOriginalContent: z.string().nullable().optional(),
   targetParticipantIds: z.array(UUIDSchema).nullable().optional(),  // JSON array — whisper targets
   isSilentMessage: z.union([z.boolean(), z.number().transform(v => v === 1)]).nullable().optional(),  // Whether message was generated while character was in silent mode (SQLite stores as 0/1)
-  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
+  systemSender: z.enum(['lantern', 'aurora', 'librarian', 'concierge', 'prospero', 'host', 'commonplaceBook', 'ariel', 'carina', 'suparna', 'pascal']).nullable().optional(),  // Personified feature that authored this message in lieu of a participant
   systemKind: z.string().nullable().optional(),  // Sub-classification of a Staff-authored message (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender.
   // Neutral, persona-free rewrite of `content` for Staff-authored messages.
   // Swapped into every character's LLM context when the chat has any non-user-
@@ -100,6 +100,30 @@ export const ChatMessageRowSchema = z.object({
   carinaMeta: z.object({
     answererId: UUIDSchema,
     question: z.string(),
+  }).nullable().optional(),
+  // Pascal the Croupier (custom pseudo-tools) roll record, set on
+  // systemSender='pascal' messages. The server rolled and the server picked the
+  // outcome, so none of this is the model's account of its own luck.
+  // definitionTier/definitionMountId = the store the definition resolved from
+  // (tiers shadow, so a name can differ per room); rollForm = 'range' or 'dice'
+  // ('dice' carries notation + diceRolls); raw = untransformed roll, value =
+  // what the outcome table tested; outcomeIndex/state = the winning entry and
+  // its verdict; invokedBy = model reach vs. user Run-Tool. NULL on every
+  // non-Pascal message.
+  pascalMeta: z.object({
+    tool: z.string(),
+    definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
+    definitionMountId: z.string(),
+    params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),
+    rollForm: z.enum(['range', 'dice']),
+    notation: z.string().optional(),
+    raw: z.number(),
+    diceRolls: z.array(z.number()).optional(),
+    value: z.number(),
+    state: z.enum(['success', 'partial', 'failure', 'info']),
+    outcomeIndex: z.number(),
+    invokedBy: z.enum(['llm', 'user']),
+    callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),
   // The Courier: when non-null, this row is a placeholder for a manual /
   // clipboard turn awaiting a pasted reply. Cleared on resolve.

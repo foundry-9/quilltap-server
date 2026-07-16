@@ -4,6 +4,33 @@
 
 ### 4.8-dev
 
+#### Feature: custom pseudo-tools — Pascal's table (`run_custom`)
+
+User-defined chance mechanics. A custom tool is a single JSON document matching `Tools/*.tool.json` at the root of any document store: a named action with parameters, a random roll, and an ordered table of outcomes mapping the roll to a message and a semantic state. Both the LLM (via one `run_custom` tool) and the user (via a composer popup) can run them. Spec: `docs/developer/features/pascal-custom-tools.md`.
+
+- **Tamper-evident by construction.** The roll executes server-side with crypto-strength randomness and the outcome persists as a message the model did not author (new `systemSender: 'pascal'` — the Croupier's first synthetic messages). A model cannot narrate a failure into a success, and regenerating a reply does not re-roll. The full roll record — raw value, transform, dice faces, which outcome matched — is kept in a new `pascalMeta` column.
+- **Two roll forms.** A numeric range with an optional transform (`value = raw * multiplier + offset`, rounded last), or dice notation (`3d6+2`, `1d20`, `2d10-1`). Numeric fields accept a `{ "$param": "name" }` reference to a declared parameter; run-time values are clamped to declared bounds before use.
+- **No expression evaluation anywhere.** Outcome tests are AND-composed comparator objects (`{ "gte": 0.3, "lte": 0.6 }`), not strings — there is no grammar to parse and nothing to inject. The last outcome must be a `true` catch-all, checked at load time, so a coverage gap is structurally impossible rather than a run-time surprise; an earlier catch-all is rejected as unreachable.
+- **Tiers and shadowing.** Definitions resolve through the existing five-tier pool (character → participant → group → project → global); the nearest tier wins on a name collision, `"disabled": true` suppresses an inherited tool, and a same-tier collision resolves deterministically by mount id. Tools are read from both database-backed and on-disk stores.
+- **Resolved per call, never cached across turns.** A `.tool.json` added, edited, or deleted mid-chat takes effect on the next LLM call and the next popup open; a new chat gets its full roster on turn one with no initialization step.
+- **Whispered rolls.** A private run is whispered to the rolling character alone via `targetParticipantIds`; a private manual run hides the outcome from every character. Relatedly, **any message with a `systemSender` now always renders for the human user** regardless of the "show all whispers" toggle — this instance is single-user and the operator is never the one being surprised. Commonplace Book recall whispers benefit from the same fix.
+- `revealOdds: false` hides the roll spec and outcome table from the model's tool roster, but the `.tool.json` remains an ordinary document a character with read access can open. For genuinely secret odds, put the file in a store the character cannot read.
+- Failures are reported by Prospero (`systemKind: 'custom-tool-error'`), never by Pascal — Pascal only announces genuine outcomes. New setting Settings → Chat → "Custom tools" (default on). Published JSON Schema at `public/schemas/qtap-custom-tool.schema.json` for editor completion. Docs: `help/custom-tools.md`.
+
+#### Fix: the RNG tool now accepts numbers the model quoted
+
+Models often send tool arguments as strings — `{"type": "6"}` rather than `{"type": 6}`. The `rng` tool rejected that outright, so the roll never happened and the character was told their request was invalid. All three of its numeric arguments (`type`, `rolls`, `modifier`) now accept a numeric-looking string.
+
+Only strings are converted, and only when they parse to a finite number. Bounds still apply afterward, so `"1001"` fails the 1000-sides limit exactly as `1001` does, and `"6.5"` fails the integer check exactly as `6.5` does. `true`, `null`, `[]`, and `""` are still rejected rather than coerced — the standard `z.coerce.number()` would silently turn them into 1 or 0, trading a rejected call for a wrong result, which is the worse outcome for a dice roll. `flip_coin` and `spin_the_bottle` are unaffected. The published tool schema is unchanged and still asks for integers; this only forgives a model for not having listened. Helper: `lib/tools/llm-number.ts`.
+
+#### Fix: dice notation now honors its modifier
+
+Typing `3d6+2` or `2d10-1` in a message previously rolled the dice and silently discarded the modifier — the only dice pattern in the codebase captured count and sides and nothing else. Dice parsing and rolling now live in one shared module (`lib/pascal/dice.ts`), used by the `rng` tool, the prose auto-detector, and Pascal's custom tools alike.
+
+- The `rng` tool gained an optional `modifier` parameter, so a model can roll `3d6+2` directly. Its result line only changes when a modifier is present.
+- The prose auto-detector honors a modifier written closed-up (`3d6+2`). Spacing still disambiguates: `2d6 - 1 apple` remains a plain 2d6 roll next to unrelated prose, as before.
+- Bounds are unchanged (2–1000 sides, 1–100 dice; modifier within ±1000), and out-of-range notation is still skipped rather than clamped.
+
 #### Docs: spec for custom pseudo-tools (Pascal the Croupier)
 
 New feature spec at `docs/developer/features/pascal-custom-tools.md`. Users will be able to define chance-based pseudo-tools as `Tools/*.tool.json` documents at any document-store tier (character/participant/group/project/global, nearest tier wins); each defines parameters, a random roll (numeric range or dice notation reusing the existing dice roller), and an ordered outcome table mapping the roll to a message and a semantic state. A single `run_custom` LLM tool and a composer popup both execute them server-side; outcomes post as tamper-evident synthetic messages from a new `systemSender: 'pascal'`, with optional whispered (hidden) rolls. Roster is re-resolved on every LLM call so mid-chat definition changes take effect immediately. Spec only — no code changes yet.

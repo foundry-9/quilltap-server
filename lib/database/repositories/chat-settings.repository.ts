@@ -214,6 +214,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               retentionDays: 30,
             },
             autoDetectRng: true,
+            customTools: true,
             compositionModeDefault: false,
             composerSpellcheck: true,
             textReplacementsEnabled: true,

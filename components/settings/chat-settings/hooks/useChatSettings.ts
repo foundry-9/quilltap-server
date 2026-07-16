@@ -56,6 +56,7 @@ interface UseChatSettingsReturn {
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
   handleLLMLoggingChange: (key: keyof LLMLoggingSettings, value: boolean | number) => Promise<void>
   handleAutoDetectRngChange: (value: boolean) => Promise<void>
+  handleCustomToolsChange: (value: boolean) => Promise<void>
   handleCompositionModeDefaultChange: (value: boolean) => Promise<void>
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
@@ -483,6 +484,40 @@ export function useChatSettings(): UseChatSettingsReturn {
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
         console.error('Failed to update auto-detect RNG setting', { error: errorMsg })
+      } finally {
+        setSaving(false)
+      }
+    },
+    [settings, mutateSettings, showSuccess]
+  )
+
+  /**
+   * Update custom-tools setting
+   */
+  const handleCustomToolsChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      try {
+        setSaving(true)
+
+        const res = await fetch('/api/v1/settings/chat', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customTools: value }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update custom tools setting')
+        }
+
+        const updatedSettings = await res.json()
+        await mutateSettings(updatedSettings, false)
+        await showSuccess()
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+        console.error('Failed to update custom tools setting', { error: errorMsg })
       } finally {
         setSaving(false)
       }
@@ -985,6 +1020,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleContextCompressionUpdate,
     handleLLMLoggingChange,
     handleAutoDetectRngChange,
+    handleCustomToolsChange,
     handleCompositionModeDefaultChange,
     handleComposerSpellcheckChange,
     handleAutoScrollOnResponseCompleteChange,

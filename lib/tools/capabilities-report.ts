@@ -189,6 +189,7 @@ export interface FeatureConfigInfo {
   autoLock: { enabled: boolean; idleMinutes: number };
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };
   autoDetectRng: boolean;
+  customTools: boolean;
   avatarDisplay: { mode: string; style: string };
 }
 
@@ -975,6 +976,7 @@ async function collectFeatureConfig(userId: string): Promise<FeatureConfigInfo> 
       onSwipeRegenerate: mc?.onSwipeRegenerate ?? 'DELETE_MEMORIES',
     },
     autoDetectRng: chatSettings?.autoDetectRng ?? true,
+    customTools: chatSettings?.customTools ?? true,
     avatarDisplay: {
       mode: chatSettings?.avatarDisplayMode ?? 'ALWAYS',
       style: chatSettings?.avatarDisplayStyle ?? 'CIRCULAR',
@@ -1596,6 +1598,7 @@ export function generateMarkdownReport(data: CapabilitiesReportData): string {
   lines.push('### Pascal the Croupier (RNG)');
   lines.push('');
   lines.push(`- **Auto-Detect RNG**: ${data.featureConfig.autoDetectRng ? 'Yes' : 'No'}`);
+  lines.push(`- **Custom Tools**: ${data.featureConfig.customTools ? 'Yes' : 'No'}`);
   lines.push('');
 
   lines.push('### Avatar Display');

@@ -349,6 +349,13 @@ export function VirtualizedMessageList({
                   participantNames={participantNames}
                   isOverheardWhisper={
                     !!(message.targetParticipantIds?.length) &&
+                    // Staff whispers (Pascal, the Commonplace Book, …) are
+                    // surfaced to the operator on purpose — see the visibility
+                    // rule in SalonView. Dimming what we deliberately showed
+                    // them to read would undercut the reason we showed it. They
+                    // keep the whisper border and "whispered" label, so the
+                    // privacy status stays legible without the 0.6 opacity.
+                    !message.systemSender &&
                     !!(userParticipantIdSet) &&
                     !(message.participantId && userParticipantIdSet.has(message.participantId)) &&
                     !message.targetParticipantIds.some(id => userParticipantIdSet.has(id))

@@ -54,6 +54,7 @@ import {
   encodeTurnStartEvent,
   encodeCarinaAnswerEvent,
   encodeHostAnnouncementEvent,
+  encodePascalResultEvent,
   safeEnqueue,
   safeClose,
 } from './streaming.service'
@@ -89,6 +90,7 @@ import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import { runPreContextPreCompute } from './pre-compute.service'
 import { runTextToolPass } from './text-tool-loop.service'
 import { findPreviousResponseId, makePreservePartialOnError, runPrimaryStream } from './primary-stream.service'
@@ -659,7 +661,10 @@ async function processMessage(
       // Execute each detected pattern and save as TOOL messages
       for (const pattern of rngPatterns) {
         const rngContext = { userId, chatId }
-        const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+        const result = await executeRngTool(
+          { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
+          rngContext
+        )
         const formattedResult = formatRngResults(result)
 
         const toolMessageId = crypto.randomUUID()
@@ -673,7 +678,7 @@ async function processMessage(
             success: result.success,
             result: formattedResult,
             prompt: pattern.matchText,
-            arguments: { type: pattern.type, rolls: pattern.rolls },
+            arguments: { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
           }),
           createdAt: new Date().toISOString(),
           attachments: [],
@@ -865,6 +870,29 @@ async function processMessage(
     })
   }
 
+  // Pascal's custom pseudo-tools (`run_custom`). The roster's perspective is the
+  // RESPONDING character's, because a character-tier store shadows the farther
+  // tiers — two characters in one room can hold different definitions of the
+  // same tool name. `characterId` is REQUIRED (the group tier is keyed on the
+  // responding character's own group memberships and silently resolves to []
+  // without it); `characterMountPointId` is merely the fast path to their vault.
+  // Withholding the context entirely is how the chat-level setting turns the
+  // feature off: buildTools then never lists a single mount.
+  const participantCharacterIds = chat.participants
+    .filter(p => p.type === 'CHARACTER' && p.characterId)
+    .map(p => p.characterId as string)
+  const customToolsEnabled = chatSettings?.customTools ?? true
+  const customToolContext: CustomToolRosterContext | null = customToolsEnabled
+    ? {
+        userId,
+        chatId,
+        characterId: character.id ?? null,
+        characterMountPointId: character.characterDocumentMountPointId ?? null,
+        characterIds: participantCharacterIds,
+        projectId: chat.projectId ?? null,
+      }
+    : null
+
   let tools: unknown[] = []
   let modelSupportsNativeTools = false
   let useNativeWebSearch = false
@@ -886,7 +914,11 @@ async function processMessage(
       canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off
       canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
       documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
-      askCarinaEnabled // askCarinaEnabled - enables ask_carina tool when an answerer exists
+      askCarinaEnabled, // askCarinaEnabled - enables ask_carina tool when an answerer exists
+      undefined, // includeWorkspaceTools - Salon turns keep the always-on set
+      undefined, // excludeMemorySearch - Brahma Console only
+      undefined, // sqlAccess - Brahma Console only
+      customToolContext // customToolContext - enables run_custom when the scene has a roster
     )
     tools = builtTools.tools
     modelSupportsNativeTools = builtTools.modelSupportsNativeTools
@@ -1129,6 +1161,17 @@ async function processMessage(
   // toolContext threads down into the native/text tool loops.
   toolContext.emitCarinaAnswer = (msg) =>
     safeEnqueue(controller, encodeCarinaAnswerEvent(encoder, msg))
+
+  // Pascal's `run_custom`: the tiered mount pool needs the same perspective the
+  // roster was built from, or the model would be offered a tool the executor
+  // then cannot find. Vault fast path + the peers whose vaults form the
+  // 'participant' tier.
+  toolContext.characterMountPointId = character.characterDocumentMountPointId ?? null
+  toolContext.characterIds = participantCharacterIds
+  // Surface Pascal's outcome the instant it posts, rather than waiting for the
+  // post-turn refetch — same live-SSE pattern as the Carina answer above.
+  toolContext.emitPascalResult = (msg) =>
+    safeEnqueue(controller, encodePascalResultEvent(encoder, msg))
 
   // ============================================================================
   // Tool Change Notification

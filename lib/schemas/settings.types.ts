@@ -513,6 +513,8 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically (default: true) */
   autoDetectRng: z.boolean().default(true),
+  /** Offer Pascal's custom pseudo-tools (`run_custom`) to models and show the composer gutter button (default: true) */
+  customTools: z.boolean().default(true),
   /** Whether new chats start in composition mode (Enter = newline, Ctrl/Cmd+Enter = submit) by default */
   compositionModeDefault: z.boolean().default(false),
   /** Whether browser spellcheck is enabled in the Salon composer and Document Mode rich editor (default: true) */

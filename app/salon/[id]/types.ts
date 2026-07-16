@@ -33,8 +33,8 @@ export interface Message {
   targetParticipantIds?: string[] | null
   /** Whether this message was generated while the character was in silent mode */
   isSilentMessage?: boolean
-  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements, 'suparna' for Post Office mail-delivery announcements) */
-  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | 'carina' | 'suparna' | null
+  /** Personified feature that authored this message (e.g., 'lantern' for Lantern announcements, 'aurora' for character-avatar refreshes, 'librarian' for Document Mode open/save announcements, 'concierge' for dangerous-content classification announcements, 'host' for Salon participation announcements, 'commonplaceBook' for memory recall whispers, 'ariel' for terminal session announcements, 'suparna' for Post Office mail-delivery announcements, 'pascal' for Pascal the Croupier's custom-tool roll outcomes) */
+  systemSender?: 'lantern' | 'aurora' | 'librarian' | 'concierge' | 'prospero' | 'host' | 'commonplaceBook' | 'ariel' | 'carina' | 'suparna' | 'pascal' | null
   /** Sub-classification of a Staff-authored message — used by the Salon UI to label collapsed system-message bars (e.g. 'timestamp', 'project-context', 'memory-recap'). Always paired with systemSender. */
   systemKind?: string | null
   /** Ad-hoc announcer metadata for user-authored announcement bubbles (Insert Announcement composer button). Mutually exclusive with systemSender. */
@@ -47,6 +47,22 @@ export interface Message {
   carinaMeta?: {
     answererId: string
     question: string
+  } | null
+  /** Pascal the Croupier (custom pseudo-tools) roll record, set on systemSender='pascal' messages. The server rolled and picked the outcome; the client only renders it. `state` accents the result bubble; `rollForm`/`notation`/`diceRolls` describe how the number came about. */
+  pascalMeta?: {
+    tool: string
+    definitionTier: 'character' | 'participant' | 'group' | 'project' | 'global'
+    definitionMountId: string
+    params: Record<string, number | string | boolean>
+    rollForm: 'range' | 'dice'
+    notation?: string
+    raw: number
+    diceRolls?: number[]
+    value: number
+    state: 'success' | 'partial' | 'failure' | 'info'
+    outcomeIndex: number
+    invokedBy: 'llm' | 'user'
+    callerParticipantId?: string
   } | null
   /** Host structured payload. On turn-pass records (systemKind='turn-pass'), participantId names the character/participant who passed — read by the client Skip-button guard. */
   hostEvent?: {

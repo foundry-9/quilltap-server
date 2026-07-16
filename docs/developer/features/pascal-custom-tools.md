@@ -199,7 +199,9 @@ New file `lib/tools/run-custom-tool.ts`, following the five-part chokepoint patt
 
 ### The outcome message
 
-Constructed like Suparṇā's writer (`lib/services/suparna-notifications/writer.ts:90` is the template): `role: 'ASSISTANT'`, `participantId: null`, `systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`, non-opaque (`opaqueContent = content`), persisted via `repos.chats.addMessage`. New writer module: `lib/services/pascal/writer.ts`.
+Constructed like Suparṇā's writer (`lib/services/suparna-notifications/writer.ts:90` is the template): `role: 'ASSISTANT'`, `participantId: null`, `systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`, persisted via `repos.chats.addMessage`. New writer module: `lib/services/pascal/writer.ts`.
+
+**Correction (implementation):** this spec originally said non-opaque (`opaqueContent = content`), copying Suparṇā. That is wrong for Pascal. Suparṇā and Carina set `opaqueContent = content` because their bodies carry *no persona framing* — Pascal's does ("🎲 **unlock** — …", and "At {userName}'s behest, Pascal spins the wheel: …"). Reusing `content` verbatim would leak the name "Pascal" into an opaque character's context, breaking the standing staff-voicing rule. Pascal therefore follows the **Prospero** precedent instead: a genuinely distinct, neutral `System: …` opaque body. The author's own `message` text is interpolated **verbatim into both** bodies — only the framing around it differs.
 
 `content` is the human/LLM-readable text, e.g.:
 

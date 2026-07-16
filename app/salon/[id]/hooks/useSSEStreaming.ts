@@ -92,6 +92,11 @@ interface SSEEvent {
   // On the done event, `skipped` marks that this turn was passed so the client
   // resets its streaming buffer without appending a phantom bubble.
   hostAnnouncement?: Message
+  // Pascal: the full posted custom-tool outcome message, surfaced the instant
+  // the dice fall so the Salon renders the bubble without waiting for the
+  // post-turn fetchChat(). Inserted optimistically and deduped by id; the
+  // end-of-turn refresh reconciles it to the authoritative copy.
+  pascalResult?: Message
   skipped?: boolean
   skippedParticipantId?: string | null
   // Answer confirmation: the resolved state for a just-streamed message. On a
@@ -386,6 +391,8 @@ export function useSSEStreaming({
       onCarinaAnswer?: (message: Message) => void
       /** Called when a Host announcement (e.g. a turn-pass note) is surfaced mid-turn */
       onHostAnnouncement?: (message: Message) => void
+      /** Called when a Pascal custom-tool outcome is surfaced mid-turn */
+      onPascalResult?: (message: Message) => void
       /** Called when an answer-confirmation result resolves for a message */
       onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
       /** Called for intermediate done events during a chain (not the final one) */
@@ -476,6 +483,12 @@ export function useSSEStreaming({
         // it immediately, deduped by id, same as Carina answers.
         if (data.hostAnnouncement && opts.onHostAnnouncement) {
           opts.onHostAnnouncement(data.hostAnnouncement)
+        }
+
+        // Handle a Pascal custom-tool outcome surfaced mid-turn — insert it
+        // immediately, deduped by id, same as Carina answers.
+        if (data.pascalResult && opts.onPascalResult) {
+          opts.onPascalResult(data.pascalResult)
         }
 
         // Handle an answer-confirmation result — update the badge and, on a
@@ -686,6 +699,10 @@ export function useSSEStreaming({
           scrollOnStreamComplete()
         },
         onHostAnnouncement: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
+        onPascalResult: (msg) => {
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },
@@ -912,6 +929,10 @@ export function useSSEStreaming({
           scrollOnStreamComplete()
         },
         onHostAnnouncement: (msg) => {
+          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
+          scrollOnStreamComplete()
+        },
+        onPascalResult: (msg) => {
           setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
           scrollOnStreamComplete()
         },

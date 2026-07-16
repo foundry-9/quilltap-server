@@ -1166,6 +1166,32 @@
 }
 
 /**
+ * Pascal result — the outcome of a custom tool (pseudo-tool) roll, announced by
+ * Pascal the Croupier. The accent carries the outcome's semantic `state`.
+ * Built on the --qt-alert-* families, which every bundled theme defines.
+ */
+.qt-pascal-result {
+  border-left: 3px solid var(--qt-alert-info-border);
+  padding-left: 0.75rem;
+}
+
+.qt-pascal-result--success {
+  border-left-color: var(--qt-alert-success-border);
+}
+
+.qt-pascal-result--partial {
+  border-left-color: var(--qt-alert-warning-border);
+}
+
+.qt-pascal-result--failure {
+  border-left-color: var(--qt-alert-error-border);
+}
+
+.qt-pascal-result--info {
+  border-left-color: var(--qt-alert-info-border);
+}
+
+/**
  * Silent message — inner thoughts and actions from character in silent mode.
  * Distinguished from whispers by a dotted border (vs dashed) and sage/teal tones.
  */

@@ -79,6 +79,16 @@ export const queryKeys = {
   tools: {
     all: ['tools'] as const,
   },
+  customTools: {
+    all: ['custom-tools'] as const,
+    /**
+     * Pascal's roster for one chat, merged across every character participant's
+     * perspective. Resolved fresh server-side on every request — a `.tool.json`
+     * edit must show up on the next popup open — so callers should not hold this
+     * cached across an open.
+     */
+    byChat: (chatId: string) => ['custom-tools', chatId] as const,
+  },
   userProfile: {
     detail: ['user', 'profile'] as const,
   },

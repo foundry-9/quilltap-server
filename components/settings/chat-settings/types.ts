@@ -76,6 +76,8 @@ export interface ChatSettings {
   llmLoggingSettings?: LLMLoggingSettings
   /** Auto-detect RNG patterns (dice rolls, coin flips) in user messages and execute them automatically */
   autoDetectRng?: boolean
+  /** Whether Pascal's custom pseudo-tools are offered to models and the composer gutter button is shown */
+  customTools?: boolean
   /** Whether new chats start in composition mode by default */
   compositionModeDefault?: boolean
   /** Whether browser spellcheck is enabled in the composer and rich-text Document Mode editor */
@@ -454,6 +456,11 @@ export const AUTOMATION_OPTIONS = [
  * Default automation settings
  */
 export const DEFAULT_AUTO_DETECT_RNG = true
+
+/**
+ * Default custom-tools setting
+ */
+export const DEFAULT_CUSTOM_TOOLS = true
 
 /**
  * Agent Mode Settings

@@ -80,6 +80,10 @@ interface ChatComposerProps {
   hideStopButton?: boolean
   /** Callback when a pending tool result is added */
   onPendingToolResult?: (result: Omit<PendingToolResult, 'id' | 'createdAt'>) => void
+  /** Whether this chat resolves a non-empty Pascal custom-tool roster */
+  customToolsAvailable?: boolean
+  /** Callback after a custom tool runs, so the chat can refetch */
+  onCustomToolRan?: () => void
   /** Current roleplay template narration delimiters (e.g. '*' or ['[', ']']) */
   narrationDelimiters?: NarrationDelimiters
   /** Callback to open a new terminal session */
@@ -128,6 +132,8 @@ export function ChatComposer({
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
+  customToolsAvailable,
+  onCustomToolRan,
   narrationDelimiters,
   onOpenTerminalClick,
   isTerminalModeActive,
@@ -345,6 +351,8 @@ export function ChatComposer({
               onComposeMailClick={onComposeMailClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
+              customToolsAvailable={customToolsAvailable}
+              onCustomToolRan={onCustomToolRan}
               disabled={sending || !hasActiveCharacters}
             />
             </div>

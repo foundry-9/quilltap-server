@@ -33,6 +33,7 @@ async function updateChatSettings(
   memoryCascadePreferences?: unknown,
   llmLoggingSettings?: unknown,
   autoDetectRng?: boolean,
+  customTools?: boolean,
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
@@ -139,6 +140,12 @@ async function updateChatSettings(
       throw new Error('Invalid autoDetectRng value (must be boolean)')
     }
     updateData.autoDetectRng = autoDetectRng
+  }
+  if (typeof customTools !== 'undefined') {
+    if (typeof customTools !== 'boolean') {
+      throw new Error('Invalid customTools value (must be boolean)')
+    }
+    updateData.customTools = customTools
   }
   if (typeof agentModeSettings !== 'undefined') {
     const validatedAgentModeSettings = AgentModeSettingsSchema.parse(agentModeSettings)
@@ -304,6 +311,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       memoryCascadePreferences,
       llmLoggingSettings,
       autoDetectRng,
+      customTools,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
@@ -334,6 +342,7 @@ export const PUT = createAuthenticatedHandler(async (req: NextRequest, { user, r
       memoryCascadePreferences,
       llmLoggingSettings,
       autoDetectRng,
+      customTools,
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,

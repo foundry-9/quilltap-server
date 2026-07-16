@@ -1289,6 +1289,13 @@ exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`
 {
   "additionalProperties": false,
   "properties": {
+    "modifier": {
+      "default": 0,
+      "description": "Flat amount added to the dice total after rolling (default: 0). Use for notation like 3d6+2 (modifier 2) or 2d10-1 (modifier -1). Ignored for flip_coin and spin_the_bottle.",
+      "maximum": 1000,
+      "minimum": -1000,
+      "type": "integer",
+    },
     "rolls": {
       "default": 1,
       "description": "Number of times to roll/flip (default: 1). For dice, this is like rolling multiple dice (e.g., 3 rolls of d6 = 3d6).",
@@ -1318,6 +1325,41 @@ exports[`tool definitions: derived OpenAI parameters rng: parameters snapshot 1`
   },
   "required": [
     "type",
+  ],
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters runCustom: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "parameters": {
+      "anyOf": [
+        {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        {
+          "type": "null",
+        },
+      ],
+      "description": "Arguments for the tool, keyed by parameter name. Omit entirely to accept every default. Only parameters the tool declares are accepted.",
+    },
+    "private": {
+      "description": "Roll privately: the outcome is whispered to you alone and other characters never see it. Defaults to the tool's own setting.",
+      "type": "boolean",
+    },
+    "tool": {
+      "description": "Name of the custom tool to run, exactly as listed in this tool's description (e.g. "unlock").",
+      "type": "string",
+    },
+  },
+  "required": [
+    "tool",
   ],
   "type": "object",
 }

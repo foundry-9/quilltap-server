@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -284,10 +287,28 @@ export function SalonView({ chatId }: SalonViewProps) {
     )
   }, [chat?.participants])
 
+  // Pascal's custom-tool roster, read only to decide whether the composer's
+  // custom-tools button exists at all — an empty roster means no definitions are
+  // in scope and the button would open onto nothing. The dropdown refetches this
+  // key itself on open; this read just gates the gutter slot.
+  const customToolsQuery = useQuery({
+    queryKey: queryKeys.customTools.byChat(id),
+    queryFn: ({ signal }) =>
+      apiFetch<{ tools: unknown[] }>(`/api/v1/chats/${id}/custom-tools`, { signal }),
+  })
+  const customToolsAvailable = (customToolsQuery.data?.tools?.length ?? 0) > 0
+
   const visibleMessages = useMemo(() => {
     return messages.filter(msg => {
       if (!msg.targetParticipantIds || msg.targetParticipantIds.length === 0) return true
       if (showAllWhispers) return true
+      // Staff whispers (Pascal outcomes, Commonplace Book recall, …) always
+      // render for the human, regardless of the "show all whispers" toggle.
+      // This is a single-user instance: the operator is the audience, never the
+      // mark. Hiding a private roll from the characters is the point; hiding it
+      // from the person running the table is not. Scoped to systemSender
+      // messages — character-to-character whispers stay hidden as before.
+      if (msg.systemSender) return true
       // Show if user is sender or target
       if (msg.participantId && userParticipantIdSet.has(msg.participantId)) return true
       if (msg.targetParticipantIds.some(id => userParticipantIdSet.has(id))) return true
@@ -1107,6 +1128,9 @@ export function SalonView({ chatId }: SalonViewProps) {
     if (message.systemSender === 'suparna') {
       return { name: 'Suparṇā', title: null, avatarUrl: '/images/avatars/suparna-avatar.webp', defaultImage: null }
     }
+    if (message.systemSender === 'pascal') {
+      return { name: 'Pascal', title: 'the Croupier', avatarUrl: '/images/avatars/pascal-avatar.webp', defaultImage: null }
+    }
     // Carina (inline LLM queries): a reference answer renders with the ANSWERER
     // character's own avatar — there is no dedicated Carina staff avatar. Resolve
     // them via carinaMeta.answererId among participants, then off-scene cards,
@@ -1470,6 +1494,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
+          customToolsAvailable={customToolsAvailable}
+          onCustomToolRan={fetchChat}
           renderingPatterns={roleplayRenderingPatterns}
           dialogueDetection={roleplayDialogueDetection}
           roleplayTemplateId={chat?.roleplayTemplateId}

@@ -429,6 +429,7 @@ export async function handleGet(
             hostEvent: event.hostEvent || null,
             customAnnouncer: event.customAnnouncer || null,
             carinaMeta: event.carinaMeta || null,
+            pascalMeta: event.pascalMeta || null,
             pendingExternalPrompt: event.pendingExternalPrompt || null,
             pendingExternalPromptFull: event.pendingExternalPromptFull || null,
             pendingExternalAttachments: event.pendingExternalAttachments || null,

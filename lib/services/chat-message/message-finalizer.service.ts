@@ -393,7 +393,10 @@ export async function finalizeMessageResponse({
       let rngAnchorSearchFrom = 0
       for (const pattern of rngPatternsInResponse) {
         const rngContext = { userId, chatId }
-        const result = await executeRngTool({ type: pattern.type, rolls: pattern.rolls }, rngContext)
+        const result = await executeRngTool(
+          { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
+          rngContext
+        )
         const formattedResult = formatRngResults(result)
 
         // Place the result block right after the dice notation that triggered it.
@@ -415,7 +418,7 @@ export async function finalizeMessageResponse({
             success: result.success,
             result: formattedResult,
             prompt: pattern.matchText,
-            arguments: { type: pattern.type, rolls: pattern.rolls },
+            arguments: { type: pattern.type, rolls: pattern.rolls, modifier: pattern.modifier ?? 0 },
             ...(typeof rngAnchor === 'number' ? { anchorOffset: rngAnchor } : {}),
           }),
           createdAt: new Date().toISOString(),

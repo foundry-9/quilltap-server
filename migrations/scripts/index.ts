@@ -339,6 +339,8 @@ import { addAutonomousRunMilestonesMigration } from './add-autonomous-run-milest
 import { addCarinaFlagMigration } from './add-carina-flag-v1';
 // Carina (inline LLM queries): carinaMeta provenance column on chat_messages
 import { addCarinaMessageMetaMigration } from './add-carina-message-meta-v1';
+// Pascal the Croupier (custom pseudo-tools): pascalMeta roll-record column on chat_messages
+import { addPascalMessageMetaMigration } from './add-pascal-message-meta-v1';
 // RP formatting overhaul: add kind discriminant (wrap/linePrefix) to template delimiters
 import { rpDelimiterKindsMigration } from './rp-delimiter-kinds-v1';
 // Brahma Console: consoleConnectionProfileId column on chats (per-chat model selection)
@@ -353,6 +355,8 @@ import { addCommonplaceRecallHistoryMigration } from './add-commonplace-recall-h
 import { addTurnSkippingFieldMigration } from './add-turn-skipping-field';
 // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
 import { quantizeEmbeddingsMigration } from './quantize-embeddings';
+// Pascal's custom pseudo-tools: customTools toggle column on chat_settings
+import { addCustomToolsFieldMigration } from './add-custom-tools-field';
 
 /**
  * All available migrations.
@@ -703,6 +707,10 @@ export const migrations: Migration[] = [
   addTurnSkippingFieldMigration,
   // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
   quantizeEmbeddingsMigration,
+  // Pascal the Croupier (custom pseudo-tools): pascalMeta roll-record column on chat_messages
+  addPascalMessageMetaMigration,
+  // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
+  addCustomToolsFieldMigration,
 ];
 
 export {
@@ -1034,5 +1042,9 @@ export {
   addTurnSkippingFieldMigration,
   // DB size reduction: re-pack stored embeddings as int8 (self-describing quantized format)
   quantizeEmbeddingsMigration,
+  // Pascal the Croupier (custom pseudo-tools): pascalMeta roll-record column on chat_messages
+  addPascalMessageMetaMigration,
+  // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
+  addCustomToolsFieldMigration,
 };
 

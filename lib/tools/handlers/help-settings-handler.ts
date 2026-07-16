@@ -109,6 +109,7 @@ async function fetchCategorySettings(
         agentModeSettings: settings.agentModeSettings,
         dangerousContentSettings: settings.dangerousContentSettings,
         autoDetectRng: settings.autoDetectRng,
+        customTools: settings.customTools,
         llmLoggingSettings: settings.llmLoggingSettings,
         avatarDisplayMode: settings.avatarDisplayMode,
         avatarDisplayStyle: settings.avatarDisplayStyle,

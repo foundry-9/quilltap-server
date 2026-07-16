@@ -14,6 +14,7 @@ import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
@@ -173,7 +174,21 @@ export async function buildTools(
    * When true, include the read-only `run_sql` tool (Brahma Console only).
    * Execution is additionally gated on `operatorSurface` in the tool executor.
    */
-  sqlAccess?: boolean
+  sqlAccess?: boolean,
+  /**
+   * Pascal's custom-tool roster perspective — the RESPONDING character's, since
+   * a character-tier store shadows the farther tiers. Pass it to offer
+   * `run_custom`; omit it (the caller's `customTools` setting is off, or the
+   * surface has no roster at all) and the tool is never built.
+   *
+   * The roster is resolved here rather than by the caller so the work happens
+   * only once tools are actually being built — a Courier turn, a profile with
+   * `allowToolUse: false`, or the legacy `disabledTools === undefined` bail all
+   * return before a single mount is listed. Deliberately NOT cached across
+   * turns: a `.tool.json` edited mid-chat must be live on the next call (see
+   * the freshness note atop `lib/pascal/custom-tools.ts`).
+   */
+  customToolContext?: RosterContext | null
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -222,6 +237,31 @@ export async function buildTools(
     return { tools: [], modelSupportsNativeTools, useNativeWebSearch }
   }
 
+  // Pascal's custom pseudo-tools. Resolved once per turn, at the last possible
+  // moment (every early return above skips it entirely). A roster that comes
+  // back empty leaves `run_custom` unbuilt — the tool list stays stable for
+  // scenes that have no `.tool.json` at all.
+  let customTools: DiscoveredCustomTool[] | undefined
+  if (customToolContext) {
+    try {
+      const roster = await resolveCustomToolRoster(customToolContext)
+      customTools = [...roster.tools.values()]
+      logger.debug('Custom-tool roster resolved for the turn', {
+        chatId: customToolContext.chatId,
+        characterId: customToolContext.characterId ?? null,
+        toolCount: customTools.length,
+        errorCount: roster.errors.length,
+      })
+    } catch (rosterError) {
+      // A broken vault must not take the whole turn down — the character simply
+      // goes to the table without their custom tools.
+      logger.warn('Failed to resolve custom-tool roster; run_custom withheld', {
+        chatId: customToolContext.chatId,
+        error: rosterError instanceof Error ? rosterError.message : String(rosterError),
+      })
+    }
+  }
+
   // Web search tool is independent of native web search - user can enable both
   let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
@@ -246,6 +286,7 @@ export async function buildTools(
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
     sqlAccess: !!sqlAccess,
+    customTools,
     toolConfigs,
   })
 
@@ -736,6 +777,26 @@ export function encodeHostAnnouncementEvent(
   message: MessageEvent
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ hostAnnouncement: message })}\n\n`)
+}
+
+/**
+ * Encode a Pascal custom-tool outcome event.
+ *
+ * Emitted the instant Pascal's outcome is persisted mid-turn — a character
+ * reached for a `run_custom` tool and the dice have fallen — so the Salon can
+ * surface the outcome bubble immediately rather than waiting for the post-turn
+ * `fetchChat()` refresh. Carries the full posted message (`pascalMeta` and all)
+ * so the client can insert it without an extra round-trip.
+ *
+ * The client inserts optimistically and dedupes by `id`; the end-of-turn
+ * `fetchChat()` replaces the array with the authoritative, pre-rendered copy
+ * (same `id`), so there is no duplicate.
+ */
+export function encodePascalResultEvent(
+  encoder: TextEncoder,
+  message: MessageEvent
+): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify({ pascalResult: message })}\n\n`)
 }
 
 /**

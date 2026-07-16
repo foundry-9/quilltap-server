@@ -12,6 +12,7 @@ import { ContextCompressionSettingsComponent } from '@/components/settings/chat-
 import { MemoryCascadeSettings } from '@/components/settings/chat-settings/MemoryCascadeSettings'
 import { ImageDescriptionSettings } from '@/components/settings/chat-settings/ImageDescriptionSettings'
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
+import { CustomToolsSettings } from '@/components/settings/chat-settings/CustomToolsSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
@@ -41,6 +42,7 @@ export function ChatTabContent() {
     handleImageDescriptionProfileChange,
     handleUncensoredImageDescriptionProfileChange,
     handleAutoDetectRngChange,
+    handleCustomToolsChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
     handleDangerousContentUpdate,
@@ -139,6 +141,14 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onAutoDetectRngChange={handleAutoDetectRngChange}
+          />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Custom Tools" description="Whether Pascal's custom tools are offered to models and the composer" sectionId="custom-tools" forceOpen={activeSection === 'custom-tools'}>
+          <CustomToolsSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleCustomToolsChange}
           />
         </CollapsibleCard>
 

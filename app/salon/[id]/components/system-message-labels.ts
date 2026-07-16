@@ -11,6 +11,7 @@ const SENDER_DISPLAY_NAMES: Record<NonNullable<Message['systemSender']>, string>
   ariel: 'Ariel',
   carina: 'Carina',
   suparna: 'Suparṇā',
+  pascal: 'Pascal',
 }
 
 const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
@@ -58,6 +59,8 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-halfway': 'halfway through',
   'autonomous-room-nearing-end': 'nearing the end',
   'mail-delivery': 'mail delivery',
+  'custom-tool-result': 'roll outcome',
+  'custom-tool-error': "the table couldn't deal",
   'turn-pass': 'nothing to add',
   nudge: 'invited to speak',
   timestamp: 'time',
@@ -135,6 +138,10 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       return 'terminal'
     case 'suparna':
       return 'mail-delivery'
+    // Pascal always stamps an explicit systemKind (the column landed with the
+    // sender), so this is a defensive default rather than a legacy inference.
+    case 'pascal':
+      return 'custom-tool-result'
   }
   return 'announcement'
 }
@@ -251,6 +258,10 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
   carina: { 'carina-response': 'medium', '*': 'medium' },
   // A fresh letter is a real event the recipient should act on.
   suparna: { 'mail-delivery': 'high', '*': 'high' },
+  // A roll outcome is binding on the scene — the table dealt it, and nobody in
+  // the room may argue with it. Pascal's results render as their own full row
+  // (never a collapsed chip), so this tier is largely a defensive fallback.
+  pascal: { 'custom-tool-result': 'high', 'custom-tool-error': 'high', '*': 'high' },
 }
 
 const DEFAULT_IMPORTANCE: AnnouncementImportance = 'medium'

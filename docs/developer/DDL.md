@@ -717,7 +717,8 @@ CREATE TABLE "chat_messages" (
   "confirmationChecked" INTEGER DEFAULT NULL, -- Answer confirmation: 1 when a check actually ran; distinguishes a persisted "unverified" (confirmed NULL but checked) from "never checked".
   "confirmationRevised" INTEGER DEFAULT NULL, -- Answer confirmation: shown content is a re-affirmation rewrite of the original.
   "confirmationNotes" TEXT DEFAULT NULL,      -- Answer confirmation: cheap-LLM discrepancy explanation (badge hover text).
-  "confirmationOriginalContent" TEXT DEFAULT NULL -- Answer confirmation: pre-revision text retained for the logs when confirmationRevised.
+  "confirmationOriginalContent" TEXT DEFAULT NULL, -- Answer confirmation: pre-revision text retained for the logs when confirmationRevised.
+  "pascalMeta" TEXT DEFAULT NULL              -- Pascal the Croupier (custom pseudo-tools): JSON { tool, definitionTier, definitionMountId, params, rollForm, notation?, raw, diceRolls?, value, state, outcomeIndex, invokedBy, callerParticipantId? } on systemSender='pascal' messages. The server-side roll record — authoritative, so a model cannot fudge a failure into a success. NULL on every non-Pascal message. Added by add-pascal-message-meta-v1.
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
@@ -763,6 +764,7 @@ CREATE TABLE "chat_settings" (
   "thinkingDisplay" TEXT DEFAULT '{"defaultVisible":true,"defaultCollapsed":true}', -- added in 4.6 (add-thinking-display-fields-v1): global defaults for showing reasoning models' thinking { defaultVisible, defaultCollapsed }. Per-chat override lives on chats.showThinking. DISPLAY ONLY.
   "autoScrollOnResponseComplete" INTEGER DEFAULT 0, -- added in 4.6 (add-auto-scroll-on-response-complete-field-v1): when 1, the Salon scrolls to the newest message as a reply finishes / a new message arrives (only when already near the bottom). Default 0 so long replies don't yank the reader away. DISPLAY ONLY.
   "answerConfirmationSettings" TEXT DEFAULT '{"enabled":false}', -- added in 4.8 (add-answer-confirmation-columns-v2): global default for the Salon answer-confirmation check { enabled }. Per-project override in project properties.json; per-chat override on chats.answerConfirmationOverride.
+  "customTools" INTEGER DEFAULT 1, -- added in 4.8 (add-custom-tools-field-v1): when 0, Pascal's run_custom pseudo-tool is never offered to models and the composer gutter button is hidden. Custom tool definitions themselves are retained.
   UNIQUE("userId")
 );
 
