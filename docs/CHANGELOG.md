@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: spec for custom pseudo-tools (Pascal the Croupier)
+
+New feature spec at `docs/developer/features/pascal-custom-tools.md`. Users will be able to define chance-based pseudo-tools as `Tools/*.tool.json` documents at any document-store tier (character/participant/group/project/global, nearest tier wins); each defines parameters, a random roll (numeric range or dice notation reusing the existing dice roller), and an ordered outcome table mapping the roll to a message and a semantic state. A single `run_custom` LLM tool and a composer popup both execute them server-side; outcomes post as tamper-evident synthetic messages from a new `systemSender: 'pascal'`, with optional whispered (hidden) rolls. Roster is re-resolved on every LLM call so mid-chat definition changes take effect immediately. Spec only — no code changes yet.
+
 #### Fix: strip a trailing "nothing to add" line from an otherwise real turn
 
 Weak models sometimes narrate a genuine turn — a gesture, an observation, a real contribution — and then append `[NOTHING TO ADD]` as a final line. That is not a pass, so the message is kept, but the dangling sentinel line should not survive into the transcript.
