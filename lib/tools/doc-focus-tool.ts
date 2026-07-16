@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the doc_focus tool's input.
@@ -32,9 +33,11 @@ export const docFocusToolInputSchema = z
       .string()
       .describe('A short text string to find and briefly highlight in the document.')
       .optional(),
-    line: z
-      .number()
-      .describe('Line number to scroll to. Used as fallback when string matching is not viable.')
+    line: llmNumber(
+      z
+        .number()
+        .describe('Line number to scroll to. Used as fallback when string matching is not viable.')
+    )
       .optional(),
     clear_focus: z
       .boolean()

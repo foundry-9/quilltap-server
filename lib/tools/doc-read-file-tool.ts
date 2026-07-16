@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the doc-read-file tool's input.
@@ -28,17 +29,21 @@ export const docReadFileToolInputSchema = z.object({
     .string()
     .describe('Relative path to the file within the selected scope.')
     .optional(),
-  offset: z
-    .number()
-    .int()
-    .min(1)
-    .describe('Start line number (1-based) for pagination. Default is 1.')
+  offset: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .describe('Start line number (1-based) for pagination. Default is 1.')
+  )
     .optional(),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .describe('Maximum number of lines to return. Default returns all lines.')
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .describe('Maximum number of lines to return. Default returns all lines.')
+  )
     .optional(),
 }).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 

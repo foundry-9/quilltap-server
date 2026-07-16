@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the doc-write-file tool's input.
@@ -35,9 +36,11 @@ export const docWriteFileToolInputSchema = z.object({
     .string()
     .describe('Optional MIME type hint; extension detection takes precedence if absent.')
     .optional(),
-  expected_mtime: z
-    .number()
-    .describe('Expected modification time from a previous read. If the file has been modified since this time, the write is rejected to prevent overwriting concurrent changes.')
+  expected_mtime: llmNumber(
+    z
+      .number()
+      .describe('Expected modification time from a previous read. If the file has been modified since this time, the write is rejected to prevent overwriting concurrent changes.')
+  )
     .optional(),
 }).refine((d) => Boolean(d.uri || d.path), 'Provide either a `uri` or a `path`.');
 

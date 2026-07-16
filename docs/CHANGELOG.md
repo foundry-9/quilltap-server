@@ -17,11 +17,13 @@ User-defined chance mechanics. A custom tool is a single JSON document matching 
 - `revealOdds: false` hides the roll spec and outcome table from the model's tool roster, but the `.tool.json` remains an ordinary document a character with read access can open. For genuinely secret odds, put the file in a store the character cannot read.
 - Failures are reported by Prospero (`systemKind: 'custom-tool-error'`), never by Pascal — Pascal only announces genuine outcomes. New setting Settings → Chat → "Custom tools" (default on). Published JSON Schema at `public/schemas/qtap-custom-tool.schema.json` for editor completion. Docs: `help/custom-tools.md`.
 
-#### Fix: the RNG tool now accepts numbers the model quoted
+#### Fix: tools now accept numbers the model quoted
 
-Models often send tool arguments as strings — `{"type": "6"}` rather than `{"type": 6}`. The `rng` tool rejected that outright, so the roll never happened and the character was told their request was invalid. All three of its numeric arguments (`type`, `rolls`, `modifier`) now accept a numeric-looking string.
+Models often send tool arguments as strings — `{"type": "6"}` rather than `{"type": 6}`. Every tool rejected that outright, so the call simply failed and the character was told its perfectly sensible request was invalid. All 28 numeric arguments across the 18 tools that take one now accept a numeric-looking string: `rng` (`type`, `rolls`, `modifier`), `memory_search`, `search_scriptorium`, `web_search`, `run_sql`, `help_search`, `image_generation`, `list_images`, `submit_final_response`, `terminal_read`, `upsert_annotation`, `delete_annotation`, and the `doc_*` family.
 
-Only strings are converted, and only when they parse to a finite number. Bounds still apply afterward, so `"1001"` fails the 1000-sides limit exactly as `1001` does, and `"6.5"` fails the integer check exactly as `6.5` does. `true`, `null`, `[]`, and `""` are still rejected rather than coerced — the standard `z.coerce.number()` would silently turn them into 1 or 0, trading a rejected call for a wrong result, which is the worse outcome for a dice roll. `flip_coin` and `spin_the_bottle` are unaffected. The published tool schema is unchanged and still asks for integers; this only forgives a model for not having listened. Helper: `lib/tools/llm-number.ts`.
+Only strings are converted, and only when they parse to a finite number. Bounds still apply afterward, so a quoted `"1001"` fails a 1000 maximum exactly as `1001` does, and `"6.5"` fails an integer check exactly as `6.5` does. `true`, `null`, `[]`, and `""` are still rejected rather than coerced — the standard `z.coerce.number()` would silently turn them into 1 or 0, trading a rejected call for a wrong result, which is the worse failure. Floats (`confidence`, `minImportance`) and negatives (`terminal_read`'s `start`/`end`) work as before. String enums such as `flip_coin` are unaffected.
+
+The published tool schemas are byte-identical — models are still told `integer`, with the same bounds and defaults. This is a runtime leniency only; it forgives a model for not having listened. Helper: `lib/tools/llm-number.ts`.
 
 #### Fix: dice notation now honors its modifier
 

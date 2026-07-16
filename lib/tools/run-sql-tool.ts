@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the run_sql tool's input.
@@ -40,13 +41,15 @@ export const runSqlToolInputSchema = z.object({
       'you cannot JOIN across them in one query.'
     )
     .optional(),
-  max_rows: z
-    .number()
-    .int()
-    .min(1)
-    .max(1000)
+  max_rows: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .describe('Maximum rows to return (hard-capped at 1000). Use aggregates for large sets rather than dumping rows.')
+  )
     .default(200)
-    .describe('Maximum rows to return (hard-capped at 1000). Use aggregates for large sets rather than dumping rows.')
     .optional(),
 });
 

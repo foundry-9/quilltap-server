@@ -9,6 +9,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { llmNumber } from './llm-number'
 
 /**
  * Zod schema for the memory search tool's input.
@@ -21,22 +22,26 @@ export const memorySearchToolInputSchema = z.object({
     .describe(
       'What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user\'s favorite food", "their birthday", "what happened last time we talked about work", "their pet\'s name"'
     ),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .describe('Maximum number of memories to retrieve. Default is 5.')
+  )
     .default(5)
-    .describe('Maximum number of memories to retrieve. Default is 5.')
     .optional(),
-  minImportance: z
-    .number()
-    .min(0)
-    .max(1)
+  minImportance: llmNumber(
+    z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        'Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.'
+      )
+  )
     .default(0)
-    .describe(
-      'Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.'
-    )
     .optional(),
 })
 

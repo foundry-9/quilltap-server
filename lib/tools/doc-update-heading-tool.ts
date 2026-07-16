@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
+import { llmNumber } from './llm-number';
 
 /**
  * Zod schema for the doc-update-heading tool's input.
@@ -35,12 +36,14 @@ export const docUpdateHeadingToolInputSchema = z.object({
   content: z
     .string()
     .describe('New content to place under the heading. Can be empty to clear the section.'),
-  level: z
-    .number()
-    .int()
-    .min(1)
-    .max(6)
-    .describe('Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.')
+  level: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(6)
+      .describe('Heading level (1-6) if the heading text is ambiguous. Use this to disambiguate when the same heading text appears at different levels.')
+  )
     .optional(),
   preserve_subheadings: z
     .boolean()

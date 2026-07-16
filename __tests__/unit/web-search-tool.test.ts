@@ -221,8 +221,22 @@ describe('validateWebSearchInput()', () => {
       expect(validateWebSearchInput(input)).toBe(false)
     })
 
-    it('should reject maxResults as a string (no coercion under Zod)', () => {
+    it('should accept maxResults as a quoted number (models quote their numbers)', () => {
+      // llmNumber converts numeric-looking strings: a model sending "5" instead
+      // of 5 gets its search rather than a validation failure. The published
+      // JSON Schema still asks for an integer. See lib/tools/llm-number.ts and
+      // __tests__/unit/lib/tools/tool-input-lenient-numbers.test.ts.
       const input: unknown = { query: 'test', maxResults: '5' }
+      expect(validateWebSearchInput(input)).toBe(true)
+    })
+
+    it('should still reject maxResults as a non-numeric string', () => {
+      const input: unknown = { query: 'test', maxResults: 'five' }
+      expect(validateWebSearchInput(input)).toBe(false)
+    })
+
+    it('should still reject a quoted maxResults above the maximum', () => {
+      const input: unknown = { query: 'test', maxResults: '11' }
       expect(validateWebSearchInput(input)).toBe(false)
     })
 

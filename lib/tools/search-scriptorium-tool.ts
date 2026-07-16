@@ -8,6 +8,7 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { llmNumber } from './llm-number'
 
 /**
  * Zod schema for the search-scriptorium tool's input.
@@ -33,22 +34,26 @@ export const searchScriptoriumToolInputSchema = z.object({
       "Which document stores the `documents` and `knowledge` sources reach into. \"all\" (the default) searches every store you can see — your own character vault, the stores of every group you belong to, every document store linked to this chat's project, and the instance-wide Quilltap General store. \"project\" narrows to just the document stores linked to this chat's project (returns nothing if no project is attached). \"character\" narrows to just your own character vault. \"group\" narrows to just the document stores of the groups you are a member of (returns nothing if you belong to no groups). `scope` has no effect on `memories` or `conversations`."
     )
     .optional(),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .describe('Maximum number of results to return across all sources. Default is 10.')
+  )
     .default(10)
-    .describe('Maximum number of results to return across all sources. Default is 10.')
     .optional(),
-  minImportance: z
-    .number()
-    .min(0)
-    .max(1)
+  minImportance: llmNumber(
+    z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        'Minimum importance score (0-1) for memory results. Only affects memory search, not conversations. Default is 0.'
+      )
+  )
     .default(0)
-    .describe(
-      'Minimum importance score (0-1) for memory results. Only affects memory search, not conversations. Default is 0.'
-    )
     .optional(),
 })
 
@@ -157,13 +162,15 @@ export const searchScriptoriumBrahmaToolInputSchema = z.object({
       'Which document stores the `documents` and `knowledge` sources reach into. The Brahma Console searches every enabled document store regardless of scope, so this parameter has no practical effect here.'
     )
     .optional(),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .describe('Maximum number of results to return across all sources. Default is 10.')
+  )
     .default(10)
-    .describe('Maximum number of results to return across all sources. Default is 10.')
     .optional(),
 })
 
