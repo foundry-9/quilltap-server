@@ -23,7 +23,18 @@ Every category in Help → Guide showed `(0)` topics and could not be opened, an
 
 The slug is now a first-class field on a help document, derived from its path in one place (`lib/help/help-doc-slug.ts`) rather than computed and discarded in the sync. `/api/v1/help-docs` returns it alongside the database ID, and `/api/v1/help-docs/[id]` accepts either identifier, so existing callers that hold a UUID keep working.
 
-Two documents (`answer-confirmation`, `brahma-console`) are still missing from the Guide — a separate issue: help docs are only synced from disk when the table is empty or a full embedding reindex runs, so docs added later never get in.
+#### Fix: help docs added after the first sync now reach the database
+
+A help doc written after the initial sync never appeared in the Guide. `ensureHelpDocsSynced()` only ran when the `help_docs` table was completely empty, and the only other sync trigger is a full embedding reindex, so eleven docs that shipped in the repo — including `answer-confirmation`, `brahma-console`, `custom-tools`, and `post-office` — had no row at all. It now also syncs when a Markdown file on disk has no row yet, which costs a directory scan rather than a read of every file; `syncHelpDocs()` already skips unchanged docs by content hash. Edits to an already-synced doc are still picked up only by a full `syncHelpDocs()` call, and nothing prunes rows for docs deleted from disk.
+
+#### Fix: writing a help doc could corrupt its embedding
+
+Updating any `help_docs` row could silently destroy its embedding and make the doc vanish from help entirely. `lib/database/manager.ts` registers the known embedding BLOB columns when it builds a backend, "regardless of which repository is accessed first" — but `help_docs` was not on that list. It alone relied on `HelpDocsRepository` registering the column lazily and then remembering it on the instance. A repository outlives the backend it first ran against (a reconnect, or a dev-server reload), so the stale flag left the fresh backend with no blob handling for `help_docs`, and both directions broke without an error:
+
+- **Writes:** `documentToRow` only converts a `Float32Array` to a `Buffer` for a registered blob column. Unregistered, the embedding reached `JSON.stringify` and persisted as an index-keyed object (`{"0":..,"1":..}`) of TEXT.
+- **Reads:** `hydrateRow` only applies `parseLegacyEmbeddingText` to a registered blob column, so those rows then failed Zod validation and were dropped from `findAll()` — the doc disappeared from the Guide and from help search.
+
+This is where the "legacy" JSON-text embeddings came from. They were not legacy: an unregistered blob column was minting them on every write, and the previous fix (read-side recovery plus the every-boot repair in `lib/startup/repair-text-embeddings.ts`) treated the symptom, which is why the corruption kept coming back and looked historical. `help_docs` is now registered at backend init alongside `memories`, `vector_entries`, and `conversation_chunks`, and the repository re-asserts registration on every `getCollection()` instead of caching it — merging an already-registered column is a no-op. Existing mis-stored rows still convert losslessly to BLOB at the next startup, with no re-embedding needed. Regression test: `__tests__/unit/lib/database/repositories/help-docs-blob-registration.test.ts`.
 
 #### Docs: annotated custom-tool reference specimens
 

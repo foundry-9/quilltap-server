@@ -63,6 +63,18 @@ function findMarkdownFiles(dir: string): string[] {
 }
 
 /**
+ * List the help documents present on disk, as repository-relative paths
+ * (the form stored in `help_docs.path`).
+ */
+function listHelpDocPathsOnDisk(): string[] {
+  if (!existsSync(HELP_DIR)) {
+    return []
+  }
+
+  return findMarkdownFiles(HELP_DIR).map(filePath => relative(process.cwd(), filePath))
+}
+
+/**
  * Parse YAML frontmatter from Markdown content
  */
 function parseFrontmatter(content: string): { url: string; body: string } {
@@ -200,8 +212,15 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
 
 /**
  * Ensure help docs are synced (lazy initialization).
- * Only syncs if the help_docs collection is empty.
- * For a full re-sync, call syncHelpDocs() directly.
+ *
+ * Syncs when the help_docs collection is empty, and when a Markdown file on
+ * disk has no row yet — otherwise a doc added after the first sync would never
+ * reach the database, since this is the only sync trigger outside a full
+ * embedding reindex. Detecting a new doc costs a directory scan, not a read of
+ * every file; syncHelpDocs() itself skips unchanged docs by content hash.
+ *
+ * Edits to an already-synced doc are still picked up only by the next
+ * syncHelpDocs() call. For a full re-sync, call it directly.
  */
 let syncPromise: Promise<HelpDocSyncResult> | null = null
 
@@ -209,7 +228,7 @@ export async function ensureHelpDocsSynced(): Promise<void> {
   const repos = getRepositories()
   const existing = await repos.helpDocs.findAll()
 
-  if (existing.length > 0) {
+  if (existing.length > 0 && !hasUnsyncedHelpDocs(existing)) {
     return
   }
 
@@ -221,4 +240,25 @@ export async function ensureHelpDocsSynced(): Promise<void> {
   }
 
   await syncPromise
+}
+
+/**
+ * Whether any help document on disk is missing from the database.
+ *
+ * A doc that has been deleted from disk but still has a row is not sync-worthy
+ * on its own — nothing here prunes rows.
+ */
+function hasUnsyncedHelpDocs(existing: { path: string }[]): boolean {
+  const syncedPaths = new Set(existing.map(doc => doc.path))
+  const unsynced = listHelpDocPathsOnDisk().filter(path => !syncedPaths.has(path))
+
+  if (unsynced.length > 0) {
+    logger.info('[HelpDocSync] Found help docs on disk with no database row', {
+      context: 'ensureHelpDocsSynced',
+      unsyncedCount: unsynced.length,
+      unsynced,
+    })
+  }
+
+  return unsynced.length > 0
 }
