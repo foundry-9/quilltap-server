@@ -1,0 +1,25 @@
+{
+  "$schema": "/schemas/qtap-custom-tool.schema.json",
+  "name": "saving_throw",
+  "description": "Roll a saving throw against the house's better judgement. Reference specimen for the dice form: `roll` is either a range object (see CUSTOM_TOOL_SPEC.json) or a dice string — never both — so the three features below cannot be shown in the same file as that one.",
+  "revealOdds": false,
+  "defaultVisibility": "whisper",
+  "roll": "3d6+2",
+  "outcomes": [
+    {
+      "when": { "gte": 15 },
+      "message": "Saved, and with something to spare. {{dice}}",
+      "state": "success"
+    },
+    {
+      "when": { "gte": 11, "lte": 14 },
+      "message": "Saved, but the house noticed. {{dice}}",
+      "state": "partial"
+    },
+    {
+      "when": true,
+      "message": "Not saved. The total was {{value}}, and the dice are not interested in your opinion of them. {{dice}}",
+      "state": "failure"
+    }
+  ]
+}

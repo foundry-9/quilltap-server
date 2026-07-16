@@ -95,17 +95,6 @@ function extractTitle(content: string, filePath: string): string {
 }
 
 /**
- * Generate document ID from file path (matches build-help-index.ts pattern)
- */
-function generateDocumentId(relPath: string): string {
-  return relPath
-    .replace(/^help\//, '')
-    .replace(/\.md$/, '')
-    .replace(/[^a-zA-Z0-9]/g, '-')
-    .toLowerCase()
-}
-
-/**
  * Generate SHA-256 hash of content
  */
 function hashContent(content: string): string {
@@ -163,7 +152,6 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
       const contentHash = hashContent(rawContent)
       const { url, body } = parseFrontmatter(rawContent)
       const title = extractTitle(body, relPath)
-      const docId = generateDocumentId(relPath)
 
       // Check if doc already exists with same content hash
       const existing = await repos.helpDocs.findByPath(relPath)

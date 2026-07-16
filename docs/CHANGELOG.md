@@ -17,6 +17,23 @@ User-defined chance mechanics. A custom tool is a single JSON document matching 
 - `revealOdds: false` hides the roll spec and outcome table from the model's tool roster, but the `.tool.json` remains an ordinary document a character with read access can open. For genuinely secret odds, put the file in a store the character cannot read.
 - Failures are reported by Prospero (`systemKind: 'custom-tool-error'`), never by Pascal — Pascal only announces genuine outcomes. New setting Settings → Chat → "Custom tools" (default on). Published JSON Schema at `public/schemas/qtap-custom-tool.schema.json` for editor completion. Docs: `help/custom-tools.md`.
 
+#### Fix: the Help Guide is browseable again
+
+Every category in Help → Guide showed `(0)` topics and could not be opened, and no document would load. When help docs moved into the database, their IDs became UUIDs, but the Guide's category lists, the `Related Pages` links between documents, and the welcome card all identify documents by the slug derived from the filename (`character-creation`). Nothing matched, so every category resolved to an empty list and the reader's fetch 404'd.
+
+The slug is now a first-class field on a help document, derived from its path in one place (`lib/help/help-doc-slug.ts`) rather than computed and discarded in the sync. `/api/v1/help-docs` returns it alongside the database ID, and `/api/v1/help-docs/[id]` accepts either identifier, so existing callers that hold a UUID keep working.
+
+Two documents (`answer-confirmation`, `brahma-console`) are still missing from the Guide — a separate issue: help docs are only synced from disk when the table is empty or a full embedding reindex runs, so docs added later never get in.
+
+#### Docs: annotated custom-tool reference specimens
+
+Two valid, copy-pasteable `Tools/*.tool.json` templates in `docs/developer/`, linked from `help/custom-tools.md`.
+
+- `CUSTOM_TOOL_SPEC.json` exercises every key of the range roll form: all four parameter types with bounds and defaults, `$param` references on `multiplier` and `offset`, the multiply/offset/round transform, all six comparators including an AND band, all four outcome states, the `{{value}}`/`{{roll}}`/`{{params.*}}` placeholders, and the mandatory trailing catch-all. Each field's `description` explains what it demonstrates.
+- `CUSTOM_TOOL_SPEC_DICE.json` covers what the other structurally cannot, since `roll` is either a range object or a dice string but never both: dice notation, the `{{dice}}` breakdown, `revealOdds: false`, and `defaultVisibility: "whisper"`.
+
+Both are validated against the live Zod schema, and every outcome in each is verified reachable.
+
 #### Fix: tools now accept numbers the model quoted
 
 Models often send tool arguments as strings — `{"type": "6"}` rather than `{"type": 6}`. Every tool rejected that outright, so the call simply failed and the character was told its perfectly sensible request was invalid. All 28 numeric arguments across the 18 tools that take one now accept a numeric-looking string: `rng` (`type`, `rolls`, `modifier`), `memory_search`, `search_scriptorium`, `web_search`, `run_sql`, `help_search`, `image_generation`, `list_images`, `submit_final_response`, `terminal_read`, `upsert_annotation`, `delete_annotation`, and the `doc_*` family.

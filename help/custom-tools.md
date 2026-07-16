@@ -22,6 +22,8 @@ The folder is not made for you and need not exist; if you want one, simply creat
 
 Here is a complete one. Copy it, put it in `Tools/unlock.tool.json` in any store your character can reach, and it is available immediately — there is nothing to restart and no button to press.
 
+> Should you prefer to see every key at once rather than meet them one at a time, there is an annotated specimen at `docs/developer/CUSTOM_TOOL_SPEC.json` that exercises the lot, and a dice-form companion beside it at `docs/developer/CUSTOM_TOOL_SPEC_DICE.json`. Both are valid and may be copied wholesale.
+
 ```json
 {
   "$schema": "/schemas/qtap-custom-tool.schema.json",

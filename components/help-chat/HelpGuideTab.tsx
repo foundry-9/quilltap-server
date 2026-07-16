@@ -17,6 +17,7 @@ import { HelpCategorySection } from './HelpCategorySection'
 import { HelpTopicReader } from './HelpTopicReader'
 
 interface DocumentInfo {
+  /** Slug, not the database ID — categories and doc links are keyed by slug */
   id: string
   title: string
   url: string
@@ -70,8 +71,8 @@ export function HelpGuideTab() {
             const docsData = await docsRes.json()
             const docMap = new Map<string, DocumentInfo>()
             for (const doc of docsData.documents || []) {
-              if (!EXCLUDED_DOCUMENTS.includes(doc.id)) {
-                docMap.set(doc.id, { id: doc.id, title: doc.title, url: doc.url })
+              if (!EXCLUDED_DOCUMENTS.includes(doc.slug)) {
+                docMap.set(doc.slug, { id: doc.slug, title: doc.title, url: doc.url })
               }
             }
             setDocuments(docMap)
