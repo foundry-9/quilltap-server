@@ -25,7 +25,15 @@ The slug is now a first-class field on a help document, derived from its path in
 
 #### Fix: help docs added after the first sync now reach the database
 
-A help doc written after the initial sync never appeared in the Guide. `ensureHelpDocsSynced()` only ran when the `help_docs` table was completely empty, and the only other sync trigger is a full embedding reindex, so eleven docs that shipped in the repo — including `answer-confirmation`, `brahma-console`, `custom-tools`, and `post-office` — had no row at all. It now also syncs when a Markdown file on disk has no row yet, which costs a directory scan rather than a read of every file; `syncHelpDocs()` already skips unchanged docs by content hash. Edits to an already-synced doc are still picked up only by a full `syncHelpDocs()` call, and nothing prunes rows for docs deleted from disk.
+A help doc written after the initial sync never appeared in the Guide. `ensureHelpDocsSynced()` only ran when the `help_docs` table was completely empty, and the only other sync trigger is a full embedding reindex, so eleven docs that shipped in the repo — including `answer-confirmation`, `brahma-console`, `custom-tools`, and `post-office` — had no row at all. It now also syncs when a Markdown file on disk has no row yet, which costs a directory scan rather than a read of every file; `syncHelpDocs()` already skips unchanged docs by content hash. Edits to an already-synced doc are still picked up only by a full `syncHelpDocs()` call.
+
+#### Fix: help docs deleted from disk are pruned, and new ones get embedded
+
+Two gaps left by the sync fix above.
+
+A doc removed from `help/` kept its database row and stayed in the Guide forever, because the sync only ever added and updated. Rows whose file is gone are now deleted, along with their embedding-status rows. The sync trigger scans for divergence in both directions — a file with no row, or a row with no file — since a deletion on its own would otherwise never start a sync and the prune would be unreachable. Both directions come out of the same directory listing, so the trigger still reads no file contents.
+
+Separately, nothing enqueued a `HELP_DOC` embedding outside a full reindex, so a newly synced doc appeared in the Guide but stayed invisible to `help_search`. Any doc without an embedding is now queued through the normal pipeline after a sync; per-entity dedup keeps this from duplicating a reindex's jobs. The sync also reads the table once and indexes by path instead of issuing a `findByPath` per file, which the prune needed anyway.
 
 #### Fix: writing a help doc could corrupt its embedding
 

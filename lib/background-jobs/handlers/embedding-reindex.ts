@@ -139,6 +139,7 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
       created: syncResult.created,
       updated: syncResult.updated,
       unchanged: syncResult.unchanged,
+      deleted: syncResult.deleted,
       totalOnDisk: syncResult.totalOnDisk,
     });
 

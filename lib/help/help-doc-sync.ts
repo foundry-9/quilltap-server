@@ -28,6 +28,8 @@ export interface HelpDocSyncResult {
   updated: number
   /** Docs unchanged (hash match) */
   unchanged: number
+  /** Docs deleted (row in the database, file gone from disk) */
+  deleted: number
   /** Docs that failed to sync */
   failed: number
   /** IDs of docs that were created or updated (need embedding) */
@@ -117,8 +119,14 @@ function hashContent(content: string): string {
  * Sync help documentation from disk to database.
  *
  * Reads all .md files from the help/ directory, parses frontmatter,
- * and upserts into the help_docs collection. Returns info about
- * which docs changed (need re-embedding).
+ * and upserts into the help_docs collection. Rows whose file has been
+ * deleted from disk are pruned. Returns info about which docs changed
+ * (need re-embedding).
+ *
+ * Enqueues nothing — embedding is the caller's business, because the two
+ * callers want different things: EMBEDDING_REINDEX_ALL re-embeds every doc
+ * regardless of what changed, while {@link ensureHelpDocsSynced} only tops
+ * up the docs that still lack an embedding.
  *
  * @returns Sync result with counts and changed doc IDs
  */
@@ -128,6 +136,7 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
     created: 0,
     updated: 0,
     unchanged: 0,
+    deleted: 0,
     failed: 0,
     changedIds: [],
   }
@@ -152,6 +161,13 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
 
   const repos = getRepositories()
 
+  // One read of the table, indexed by path. The prune below needs every row
+  // anyway, and it doubles as the per-file lookup — the alternative is a
+  // findByPath per file, which is ~115 queries on every sync.
+  const existingDocs = await repos.helpDocs.findAll()
+  const existingByPath = new Map(existingDocs.map(doc => [doc.path, doc]))
+  const pathsOnDisk = new Set<string>()
+
   for (const filePath of files) {
     try {
       const relPath = relative(process.cwd(), filePath)
@@ -161,12 +177,13 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
         continue
       }
 
+      pathsOnDisk.add(relPath)
+
       const contentHash = hashContent(rawContent)
       const { url, body } = parseFrontmatter(rawContent)
       const title = extractTitle(body, relPath)
 
-      // Check if doc already exists with same content hash
-      const existing = await repos.helpDocs.findByPath(relPath)
+      const existing = existingByPath.get(relPath)
 
       if (existing && existing.contentHash === contentHash) {
         result.unchanged++
@@ -201,6 +218,29 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
     }
   }
 
+  // Prune rows whose file is gone from disk. Only reached once we know the
+  // help directory exists and produced at least one readable file, so a
+  // missing/unreadable help/ can never empty the table.
+  for (const doc of existingDocs) {
+    if (pathsOnDisk.has(doc.path)) {
+      continue
+    }
+
+    try {
+      await repos.helpDocs.delete(doc.id)
+      await repos.embeddingStatus.deleteByEntity('HELP_DOC', doc.id)
+      result.deleted++
+    } catch (error) {
+      result.failed++
+      logger.error('[HelpDocSync] Failed to prune deleted help doc', {
+        context: 'syncHelpDocs',
+        docId: doc.id,
+        path: doc.path,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   logger.info('[HelpDocSync] Sync completed', {
     context: 'syncHelpDocs',
     ...result,
@@ -213,14 +253,16 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
 /**
  * Ensure help docs are synced (lazy initialization).
  *
- * Syncs when the help_docs collection is empty, and when a Markdown file on
- * disk has no row yet — otherwise a doc added after the first sync would never
- * reach the database, since this is the only sync trigger outside a full
- * embedding reindex. Detecting a new doc costs a directory scan, not a read of
- * every file; syncHelpDocs() itself skips unchanged docs by content hash.
+ * Syncs when the help_docs collection is empty, and when the set of Markdown
+ * files on disk no longer matches the set of rows — otherwise a doc added
+ * after the first sync would never reach the database, since this is the only
+ * sync trigger outside a full embedding reindex. Detecting divergence costs a
+ * directory scan, not a read of every file; syncHelpDocs() itself skips
+ * unchanged docs by content hash.
  *
  * Edits to an already-synced doc are still picked up only by the next
- * syncHelpDocs() call. For a full re-sync, call it directly.
+ * syncHelpDocs() call — a file's content is never read here. For a full
+ * re-sync, call it directly.
  */
 let syncPromise: Promise<HelpDocSyncResult> | null = null
 
@@ -228,7 +270,7 @@ export async function ensureHelpDocsSynced(): Promise<void> {
   const repos = getRepositories()
   const existing = await repos.helpDocs.findAll()
 
-  if (existing.length > 0 && !hasUnsyncedHelpDocs(existing)) {
+  if (existing.length > 0 && !helpDocsDivergeFromDisk(existing)) {
     return
   }
 
@@ -240,25 +282,96 @@ export async function ensureHelpDocsSynced(): Promise<void> {
   }
 
   await syncPromise
+  await enqueueMissingHelpDocEmbeddings()
 }
 
 /**
- * Whether any help document on disk is missing from the database.
+ * Whether the help documents on disk and the rows in the database have parted
+ * ways in either direction — a file with no row, or a row whose file is gone.
  *
- * A doc that has been deleted from disk but still has a row is not sync-worthy
- * on its own — nothing here prunes rows.
+ * Both directions come out of the same directory listing, and both need the
+ * same fix: syncHelpDocs() creates the missing rows and prunes the stale ones.
+ * Ignoring the deleted direction would leave the prune unreachable, since a
+ * deletion alone would never trigger a sync.
  */
-function hasUnsyncedHelpDocs(existing: { path: string }[]): boolean {
+function helpDocsDivergeFromDisk(existing: { path: string }[]): boolean {
   const syncedPaths = new Set(existing.map(doc => doc.path))
-  const unsynced = listHelpDocPathsOnDisk().filter(path => !syncedPaths.has(path))
+  const pathsOnDisk = listHelpDocPathsOnDisk()
+  const onDisk = new Set(pathsOnDisk)
 
-  if (unsynced.length > 0) {
-    logger.info('[HelpDocSync] Found help docs on disk with no database row', {
+  const unsynced = pathsOnDisk.filter(path => !syncedPaths.has(path))
+  const deleted = [...syncedPaths].filter(path => !onDisk.has(path))
+
+  if (unsynced.length > 0 || deleted.length > 0) {
+    logger.info('[HelpDocSync] Help docs on disk diverge from the database', {
       context: 'ensureHelpDocsSynced',
       unsyncedCount: unsynced.length,
       unsynced,
+      deletedCount: deleted.length,
+      deleted,
     })
   }
 
-  return unsynced.length > 0
+  return unsynced.length > 0 || deleted.length > 0
+}
+
+/**
+ * Enqueue embedding jobs for help docs that have no embedding — newly synced
+ * docs, docs whose content changed (the sync clears their stale embedding),
+ * and any left unembedded by an earlier failure. Without this a new doc lands
+ * in the Guide but stays invisible to `help_search` until a full reindex.
+ *
+ * Per-entity dedup in enqueueEmbeddingGenerate keeps this from duplicating
+ * jobs an EMBEDDING_REINDEX_ALL has already queued.
+ */
+async function enqueueMissingHelpDocEmbeddings(): Promise<void> {
+  try {
+    const repos = getRepositories()
+    const needEmbedding = await repos.helpDocs.findAllNeedingEmbedding()
+
+    if (needEmbedding.length === 0) {
+      return
+    }
+
+    const profiles = await repos.embeddingProfiles.findAll()
+    const defaultProfile = profiles.find(p => p.isDefault) || profiles[0]
+    if (!defaultProfile) {
+      logger.debug('[HelpDocSync] Help docs need embedding but no embedding profile is configured', {
+        context: 'enqueueMissingHelpDocEmbeddings',
+        needEmbedding: needEmbedding.length,
+      })
+      return
+    }
+
+    const users = await repos.users.findAll()
+    const userId = users[0]?.id
+    if (!userId) {
+      return
+    }
+
+    const { enqueueEmbeddingGenerate } = await import('@/lib/background-jobs/queue-service')
+
+    let enqueued = 0
+    for (const doc of needEmbedding) {
+      const { isNew } = await enqueueEmbeddingGenerate(userId, {
+        entityType: 'HELP_DOC',
+        entityId: doc.id,
+        profileId: defaultProfile.id,
+      })
+      if (isNew) enqueued++
+    }
+
+    logger.info('[HelpDocSync] Enqueued help doc embeddings', {
+      context: 'enqueueMissingHelpDocEmbeddings',
+      enqueued,
+      needEmbedding: needEmbedding.length,
+    })
+  } catch (error) {
+    // Embedding top-up is best-effort: the docs are already in the database
+    // and listable in the Guide, which is the caller's actual dependency.
+    logger.error('[HelpDocSync] Failed to enqueue help doc embeddings', {
+      context: 'enqueueMissingHelpDocEmbeddings',
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
