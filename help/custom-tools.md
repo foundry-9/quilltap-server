@@ -49,6 +49,18 @@ Here is a complete one. Copy it, put it in `Tools/unlock.tool.json` in any store
 
 That `$schema` line at the top is worth keeping. It is what lets a decent text editor complete the field names for you and complain before Quilltap has to.
 
+### `title` — what the thing is called in polite company
+
+The `name` is the tool's identity: lowercase, no spaces, and the string your characters actually call. It is not, however, a thing anyone wants to read. Add a `title` and Pascal will announce that instead:
+
+```json
+{ "name": "scan_hawking_radiation", "title": "Scan Hawking Radiation" }
+```
+
+Omit it and Quilltap derives one from the name — underscores and hyphens become spaces, and each word is given its capital — which for the example above produces precisely the same string, and for a great many tools will do perfectly well. Write a `title` when the derivation isn't what you'd have said yourself: `saving_throw` might be *Save vs. the House*.
+
+Your characters never see the title. They know the tool as `unlock` and ask for it by that name, which spares them the confusion of a thing with two names and spares you a model that guesses wrong about which one to use.
+
 ### `description` — write it for the story, not for the machinery
 
 This is the single most consequential sentence in the file, because it is how a character decides whether this tool is the thing they want. Write what the tool *does in the fiction*: "Attempt to pick the lock." Do not write what it does arithmetically: "rolls 0–1 against thresholds." Your character is picking a lock; they are not consulting a probability distribution, and describing it as one is a reliable way to get stilted results.
@@ -92,6 +104,34 @@ Each entry has a `when`, a `message`, and a `state`.
 ```
 
 There is deliberately no "or". You will not need it: the table is read from the top and the first entry that matches wins, so ordering says everything an "or" would have said, and says it more legibly.
+
+#### Asking about more than the number
+
+Written bare like that, the comparisons are about the rolled value. Two other things may be asked about in the same breath, and everything you name must hold:
+
+| | |
+|---|---|
+| bare `gt`, `gte`, … | the final value, after the transformation |
+| `roll` | the raw number, *before* it |
+| `params` | what the tool was actually called with, by parameter name |
+
+So *"the value exceeded 1, and the scale was set past 12"* is written:
+
+```json
+{ "when": { "gt": 1, "params": { "scale": { "gt": 12 } } }, "message": "…", "state": "success" }
+```
+
+`roll` earns its keep when a multiplier or an offset has carried the value some distance from what the dice actually did — a raw draw in the bottom fiftieth is a fumble whatever you have since multiplied it by, and only `roll` can say so.
+
+`params` will compare numbers with any of the six, and will compare a string or a boolean with `eq` and `neq` — `{ "params": { "material": { "eq": "brass" } } }` is a perfectly good question. It will not pretend to *order* a string: asking whether `"brass"` is greater than 1 is refused when the file loads rather than quietly never happening.
+
+A comparison may also be made against a parameter instead of a number you fixed in advance, by writing `{ "$param": "difficulty" }` where the number would go. This is the opposed check, and it is written thus:
+
+```json
+{ "when": { "gte": { "$param": "difficulty" } }, "message": "Beaten, by exactly enough.", "state": "success" }
+```
+
+Still no formulas, still nothing evaluated — only a flat list of comparisons, all of which must hold. It is a smaller box than you might like for about a week, and a considerable comfort thereafter.
 
 **The last outcome must be `true`.** Quilltap insists, and refuses to load a tool that ends any other way. The reason is that a table with a gap in it is a table that will one day produce a roll matching nothing at all, at the worst possible moment, in front of everybody. Requiring a catch-all at the end makes that impossible rather than merely unlikely. For the same reason, a `true` anywhere *except* the end is refused too — everything below it could never be reached, which is never what anyone meant.
 
@@ -178,17 +218,23 @@ If the odds must genuinely be secret, put the file in a store the character cann
 
 When a scene has any custom tools, a button appears in the composer's left-hand gutter. It lists what's available, with a small form for any parameters (already filled in with their defaults), a **Roll privately** tick, and a Run button.
 
-Rolling this way posts two things: a brief note from you saying you ran the tool — so your characters understand it was you who reached for it — and then Pascal's outcome. Should a tool be defined differently for different characters, you'll see each variant listed with the character's name beside it, and running it rolls that character's version.
+Rolling this way posts one thing: the outcome, exactly as it would have appeared had a character rolled it themselves. Pascal is a croupier and not a raconteur — he lays out the result and says nothing else about it.
+
+**Which means nothing records that it was you.** Should you nudge a parameter before rolling, that is between you and the wheel: the transcript does not note that the operator reached for the tool, nor what figures you chose, and no character can read what you did to arrange the odds. They see what befell. This seems to us the correct division of information.
+
+Should a tool be defined differently for different characters, you'll see each variant listed with the character's name beside it, and running it rolls that character's version.
 
 ## When something is wrong with a file
 
-A tool that cannot be loaded is simply left out of the roster, and appears in the popup with a badge explaining why. It is never half-loaded and never guessed at. Common causes: the JSON doesn't parse; the last outcome isn't `true`; a `$param` names a parameter that doesn't exist, or one that isn't a number; the dice notation has a typo; two files in the same store claim the same name.
+A tool that cannot be loaded is simply left out of the roster, and appears in the popup with a badge explaining why. It is never half-loaded and never guessed at. Common causes: the JSON doesn't parse; the last outcome isn't `true`; a `$param` names a parameter that doesn't exist, or one that isn't a number; an outcome asks after a parameter you never declared, or asks whether a string is greater than a number; the dice notation has a typo; two files in the same store claim the same name.
+
+Misspelled keys are refused too, rather than ignored. A `when` containing `gt3` is not a `when` with an eccentric extra key in it; it is a comparison you meant to make and didn't, and had Quilltap shrugged and loaded the file, that outcome would have sat in your table for months looking like a branch that simply never comes up.
 
 If a roll fails while it's actually running — a bound that ended up above its own ceiling, say — **Prospero** reports it, not Pascal. Pascal announces outcomes, and only outcomes. A roll that didn't happen doesn't get one.
 
 ## Limits
 
-Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, a thousand characters per message, five hundred per description. If a scene somehow exceeds the roster limit, the surplus is dropped and said so out loud — never silently.
+Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, a thousand characters per message, five hundred per description, eighty per title. If a scene somehow exceeds the roster limit, the surplus is dropped and said so out loud — never silently.
 
 ## Turning it off
 

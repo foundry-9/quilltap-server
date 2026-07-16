@@ -718,7 +718,7 @@ CREATE TABLE "chat_messages" (
   "confirmationRevised" INTEGER DEFAULT NULL, -- Answer confirmation: shown content is a re-affirmation rewrite of the original.
   "confirmationNotes" TEXT DEFAULT NULL,      -- Answer confirmation: cheap-LLM discrepancy explanation (badge hover text).
   "confirmationOriginalContent" TEXT DEFAULT NULL, -- Answer confirmation: pre-revision text retained for the logs when confirmationRevised.
-  "pascalMeta" TEXT DEFAULT NULL              -- Pascal the Croupier (custom pseudo-tools): JSON { tool, definitionTier, definitionMountId, params, rollForm, notation?, raw, diceRolls?, value, state, outcomeIndex, invokedBy, callerParticipantId? } on systemSender='pascal' messages. The server-side roll record — authoritative, so a model cannot fudge a failure into a success. NULL on every non-Pascal message. Added by add-pascal-message-meta-v1.
+  "pascalMeta" TEXT DEFAULT NULL              -- Pascal the Croupier (custom pseudo-tools): JSON { tool, toolTitle?, definitionTier, definitionMountId, params, rollForm, notation?, raw, diceRolls?, value, state, outcomeIndex, invokedBy, callerParticipantId? } on systemSender='pascal' messages. `toolTitle` is the display title at roll time; absent on rows written before it existed, where readers fall back to `tool`. The server-side roll record — authoritative, so a model cannot fudge a failure into a success. NULL on every non-Pascal message. Added by add-pascal-message-meta-v1.
 );
 
 CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");

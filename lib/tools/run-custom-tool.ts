@@ -16,7 +16,12 @@
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
-import { isParamRef, type QtapCustomTool } from '@/lib/pascal/custom-tool.types';
+import {
+  isParamRef,
+  type NumericComparator,
+  type ParamComparator,
+  type QtapCustomTool,
+} from '@/lib/pascal/custom-tool.types';
 
 /**
  * Zod schema for the run_custom tool's input. The single source of truth for
@@ -91,16 +96,46 @@ function describeRoll(roll: QtapCustomTool['roll']): string {
   return bits.join(' ');
 }
 
-/** Render one comparator as a readable test. */
+/** The comparator keys, paired with the operator a reader expects to see. */
+const COMPARATOR_SYMBOLS: Array<[keyof NumericComparator, string]> = [
+  ['gt', '>'],
+  ['gte', '>='],
+  ['lt', '<'],
+  ['lte', '<='],
+  ['eq', '='],
+  ['neq', '!='],
+];
+
+/** Render a comparator operand: a literal, or the parameter it points at. */
+function describeOperand(operand: unknown): string {
+  if (isParamRef(operand)) return operand.$param;
+  return typeof operand === 'string' ? JSON.stringify(operand) : String(operand);
+}
+
+/** Render one comparator as a readable test of a named subject. */
+function describeComparator(
+  comparator: NumericComparator | ParamComparator,
+  subject: string
+): string[] {
+  return COMPARATOR_SYMBOLS.filter(([key]) => comparator[key] !== undefined).map(
+    ([key, symbol]) => `${subject} ${symbol} ${describeOperand(comparator[key])}`
+  );
+}
+
+/**
+ * Render an outcome test. Every subject is named — the bare comparators are
+ * about `value`, so saying so keeps them legible beside a `roll` or a parameter
+ * test rather than leaving the model to infer which is which.
+ */
 function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string {
   if (when === true) return 'otherwise';
-  const parts: string[] = [];
-  if (when.gt !== undefined) parts.push(`> ${when.gt}`);
-  if (when.gte !== undefined) parts.push(`>= ${when.gte}`);
-  if (when.lt !== undefined) parts.push(`< ${when.lt}`);
-  if (when.lte !== undefined) parts.push(`<= ${when.lte}`);
-  if (when.eq !== undefined) parts.push(`= ${when.eq}`);
-  if (when.neq !== undefined) parts.push(`!= ${when.neq}`);
+
+  const parts: string[] = [
+    ...describeComparator(when, 'value'),
+    ...(when.roll !== undefined ? describeComparator(when.roll, 'roll') : []),
+    ...Object.entries(when.params ?? {}).flatMap(([name, comparator]) => describeComparator(comparator, name)),
+  ];
+
   return parts.join(' and ');
 }
 

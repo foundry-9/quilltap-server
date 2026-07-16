@@ -34,6 +34,37 @@ describe('getAnnouncementImportance', () => {
     expect(getSystemKindDisplayLabel(ann('librarian', 'blob-written-by-character'))).toBe('asset added by character')
   })
 
+  describe('a roll outcome names the tool, not the machinery', () => {
+    const roll = (pascalMeta: Partial<NonNullable<Message['pascalMeta']>> | null) =>
+      ({
+        systemSender: 'pascal',
+        systemKind: 'custom-tool-result',
+        content: '',
+        pascalMeta: pascalMeta as Message['pascalMeta'],
+      }) as Pick<Message, 'systemSender' | 'systemKind' | 'content' | 'pascalMeta'>
+
+    it('prefers the display title recorded with the roll', () => {
+      expect(getSystemKindDisplayLabel(roll({ tool: 'scan_hawking_radiation', toolTitle: 'Scan Hawking Radiation' })))
+        .toBe('Scan Hawking Radiation')
+    })
+
+    it('falls back to the tool name on a roll recorded before toolTitle existed', () => {
+      expect(getSystemKindDisplayLabel(roll({ tool: 'scan_hawking_radiation' }))).toBe('scan_hawking_radiation')
+    })
+
+    it('ignores a blank title rather than showing an empty chip', () => {
+      expect(getSystemKindDisplayLabel(roll({ tool: 'unlock', toolTitle: '   ' }))).toBe('unlock')
+    })
+
+    it('falls back to the generic label when there is no roll record at all', () => {
+      expect(getSystemKindDisplayLabel(roll(null))).toBe('roll outcome')
+    })
+
+    it('leaves the error chip alone — it is Prospero\'s, and names no tool', () => {
+      expect(getSystemKindDisplayLabel(ann('prospero', 'custom-tool-error'))).toBe("the table couldn't deal")
+    })
+  })
+
   it('rates Host arrivals/status high and time calls low', () => {
     expect(getAnnouncementImportance(ann('host', 'add'))).toBe('high')
     expect(getAnnouncementImportance(ann('host', 'remove'))).toBe('high')

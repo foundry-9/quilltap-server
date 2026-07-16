@@ -340,6 +340,14 @@ export const MessageEventSchema = z.object({
    */
   pascalMeta: z.object({
     tool: z.string(),
+    /**
+     * The tool's display title at the moment it ran (`displayTitle()`), so the
+     * Salon can label the outcome with the tool rather than a generic "roll
+     * outcome". Optional: messages posted before this field existed have none,
+     * and the UI falls back to `tool` — the declaration name, which is the
+     * identity and always present.
+     */
+    toolTitle: z.string().optional(),
     definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
     definitionMountId: z.string(),
     params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),

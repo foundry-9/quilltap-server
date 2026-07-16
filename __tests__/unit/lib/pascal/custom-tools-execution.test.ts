@@ -15,7 +15,7 @@ import {
   formatValue,
   CustomToolRunError,
 } from '@/lib/pascal/custom-tools'
-import { QtapCustomToolSchema, type QtapCustomTool } from '@/lib/pascal/custom-tool.types'
+import { QtapCustomToolSchema, type QtapCustomTool, type When } from '@/lib/pascal/custom-tool.types'
 
 /** Parse through the real schema so tests can never drift from what loads. */
 function define(doc: unknown): QtapCustomTool {
@@ -86,8 +86,11 @@ describe('resolveParams', () => {
 })
 
 describe('matchesWhen', () => {
+  /** Pose a test about the value alone — the subject bare comparators address. */
+  const against = (when: When, value: number) => matchesWhen(when, { value, roll: value, params: {} })
+
   it('always matches the literal true', () => {
-    expect(matchesWhen(true, -999)).toBe(true)
+    expect(matchesWhen(true, { value: -999, roll: -999, params: {} })).toBe(true)
   })
 
   it.each([
@@ -102,16 +105,58 @@ describe('matchesWhen', () => {
     [{ neq: 5 }, 6, true],
     [{ neq: 5 }, 5, false],
   ])('%j against %d is %s', (when, value, expected) => {
-    expect(matchesWhen(when, value)).toBe(expected)
+    expect(against(when, value)).toBe(expected)
   })
 
   it('ANDs multiple comparators together', () => {
     const band = { gte: 0.3, lte: 0.6 }
-    expect(matchesWhen(band, 0.45)).toBe(true)
-    expect(matchesWhen(band, 0.3)).toBe(true)
-    expect(matchesWhen(band, 0.6)).toBe(true)
-    expect(matchesWhen(band, 0.29)).toBe(false)
-    expect(matchesWhen(band, 0.61)).toBe(false)
+    expect(against(band, 0.45)).toBe(true)
+    expect(against(band, 0.3)).toBe(true)
+    expect(against(band, 0.6)).toBe(true)
+    expect(against(band, 0.29)).toBe(false)
+    expect(against(band, 0.61)).toBe(false)
+  })
+
+  it('tests the raw roll separately from the transformed value', () => {
+    // The whole point of the `roll` subject: after a transform, the two
+    // subjects disagree, and only one of them is what was actually drawn.
+    const when = { gt: 50, roll: { lt: 0.6 } }
+    expect(matchesWhen(when, { value: 55, roll: 0.55, params: {} })).toBe(true)
+    expect(matchesWhen(when, { value: 55, roll: 0.7, params: {} })).toBe(false)
+  })
+
+  it('ANDs a params test with a value test', () => {
+    const when = { gt: 1, params: { scale: { gt: 12 } } }
+    expect(matchesWhen(when, { value: 2, roll: 2, params: { scale: 14 } })).toBe(true)
+    expect(matchesWhen(when, { value: 2, roll: 2, params: { scale: 12 } })).toBe(false)
+    expect(matchesWhen(when, { value: 1, roll: 1, params: { scale: 14 } })).toBe(false)
+  })
+
+  it('compares a string parameter with eq/neq', () => {
+    const subjects = { value: 0, roll: 0, params: { material: 'brass' } }
+    expect(matchesWhen({ params: { material: { eq: 'brass' } } }, subjects)).toBe(true)
+    expect(matchesWhen({ params: { material: { eq: 'iron' } } }, subjects)).toBe(false)
+    expect(matchesWhen({ params: { material: { neq: 'iron' } } }, subjects)).toBe(true)
+  })
+
+  it('compares a boolean parameter with eq', () => {
+    const subjects = { value: 0, roll: 0, params: { loudly: true } }
+    expect(matchesWhen({ params: { loudly: { eq: true } } }, subjects)).toBe(true)
+    expect(matchesWhen({ params: { loudly: { eq: false } } }, subjects)).toBe(false)
+  })
+
+  it('resolves a $param operand — the opposed check', () => {
+    const when = { gte: { $param: 'difficulty' } }
+    expect(matchesWhen(when, { value: 15, roll: 15, params: { difficulty: 12 } })).toBe(true)
+    expect(matchesWhen(when, { value: 15, roll: 15, params: { difficulty: 18 } })).toBe(false)
+  })
+
+  it('throws rather than declining to match when an ordering test meets a non-number', () => {
+    // Load-time validation rejects this shape, so reaching it is a regression.
+    // Returning false would look like the table simply skipping a row.
+    expect(() =>
+      matchesWhen({ params: { material: { gt: 1 } } } as When, { value: 0, roll: 0, params: { material: 'brass' } })
+    ).toThrow(CustomToolRunError)
   })
 })
 
@@ -290,6 +335,59 @@ describe('executeCustomTool — outcome selection', () => {
       ],
     })
     expect(executeCustomTool(overlapping, {}).message).toBe('first')
+  })
+
+  it('selects on the CLAMPED parameter, as the roll does', () => {
+    // The one value the table tests must be the one the roll used — a test
+    // against the caller's unclamped 999 would contradict the number rolled.
+    const tool = define({
+      name: 'scan',
+      description: 'Test a parameter alongside the value.',
+      parameters: { scale: { type: 'number', default: 1, min: 0, max: 12 } },
+      roll: { min: 5, max: 5 },
+      outcomes: [
+        { when: { params: { scale: { gt: 12 } } }, message: 'off the scale', state: 'success' },
+        { when: true, message: 'within tolerance', state: 'info' },
+      ],
+    })
+    expect(executeCustomTool(tool, { scale: 999 }).message).toBe('within tolerance')
+  })
+
+  it('selects on the raw draw when the outcome tests `roll`', () => {
+    // raw 0.5 → value 50, so the two subjects genuinely disagree here.
+    const tool = define({
+      name: 'scaled',
+      description: 'The raw draw and the value disagree.',
+      roll: { min: 0.5, max: 0.5, multiplier: 100 },
+      outcomes: [
+        { when: { roll: { lt: 0.6 } }, message: 'raw was low', state: 'info' },
+        { when: true, message: 'fallback', state: 'info' },
+      ],
+    })
+    const result = executeCustomTool(tool, {})
+    expect(result.value).toBe(50)
+    expect(result.message).toBe('raw was low')
+  })
+
+  it('ANDs the value, the raw roll, and a parameter in one test', () => {
+    const tool = define({
+      name: 'compound',
+      description: 'Every subject at once.',
+      parameters: { scale: { type: 'integer', default: 1 }, mode: { type: 'string', default: 'passive' } },
+      roll: { min: 0.5, max: 0.5, multiplier: 10 },
+      outcomes: [
+        {
+          when: { gt: 1, roll: { gte: 0.5 }, params: { scale: { gt: 12 }, mode: { eq: 'active' } } },
+          message: 'all four held',
+          state: 'success',
+        },
+        { when: true, message: 'something did not hold', state: 'info' },
+      ],
+    })
+    expect(executeCustomTool(tool, { scale: 14, mode: 'active' }).message).toBe('all four held')
+    // One conjunct false is enough to fall through.
+    expect(executeCustomTool(tool, { scale: 14, mode: 'passive' }).message).toBe('something did not hold')
+    expect(executeCustomTool(tool, { scale: 12, mode: 'active' }).message).toBe('something did not hold')
   })
 })
 

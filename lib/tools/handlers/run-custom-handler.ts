@@ -24,6 +24,7 @@ import {
   type CustomToolRunResult,
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
+import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 import type { MessageEvent } from '@/lib/schemas/chat.types';
@@ -162,13 +163,11 @@ export async function executeRunCustomTool(
   const targetParticipantIds =
     whispered && context.callerParticipantId ? [context.callerParticipantId] : null;
 
+  const toolTitle = displayTitle(entry.definition);
+
   const { content, opaqueContent } = buildPascalResultContent({
-    toolName: result.tool,
+    toolTitle,
     message: result.message,
-    value: result.value,
-    rollForm: result.rollForm,
-    diceBreakdown: result.diceBreakdown,
-    invokedBy: 'llm',
   });
 
   const posted = await postPascalResult({
@@ -178,6 +177,7 @@ export async function executeRunCustomTool(
     targetParticipantIds,
     pascalMeta: {
       tool: result.tool,
+      toolTitle,
       definitionTier: entry.tier,
       definitionMountId: entry.mountPointId,
       params: result.params,

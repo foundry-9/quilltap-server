@@ -1,7 +1,8 @@
 {
   "$schema": "/schemas/qtap-custom-tool.schema.json",
   "name": "force_the_lock",
-  "description": "Attempt to force a lock, quietly or otherwise. Reference specimen: exercises every key the custom-tool format understands. Copy it to Tools/force-the-lock.tool.json in any document store, then cut it down to what you actually need — every key below except name, description and outcomes is optional.",
+  "title": "Force the Lock",
+  "description": "Attempt to force a lock, quietly or otherwise. Reference specimen: exercises every key the custom-tool format understands. Copy it to Tools/force-the-lock.tool.json in any document store, then cut it down to what you actually need — every key here except name, description and outcomes is optional. `title` is what Pascal announces and what the popup lists; omit it and the name is title-cased instead, as CUSTOM_TOOL_SPEC_DICE.json does. The model never sees it — it calls the tool by `name`.",
   "disabled": false,
   "revealOdds": true,
   "defaultVisibility": "public",
@@ -47,9 +48,19 @@
   },
   "outcomes": [
     {
-      "when": { "gt": 100 },
-      "message": "{{params.label}} does not so much open as capitulate. The score was {{value}} — past the ceiling entirely, which is what a bonus of {{params.bonus}} will do for a person. (Raw draw: {{roll}}.)",
+      "when": { "roll": { "lt": 0.02 } },
+      "message": "The pick shears off in {{params.label}}. Demonstrates the `roll` subject: this tests the RAW 0-1 draw ({{roll}}), not the scaled score ({{value}}), so it means the same thing however the ceiling and bonus move the value about — which is a thing `value` alone cannot express. It sits first because a draw that low would otherwise be swallowed by the lt:5 band below.",
+      "state": "failure"
+    },
+    {
+      "when": { "gt": { "$param": "ceiling" } },
+      "message": "{{params.label}} does not so much open as capitulate. The score was {{value}} — past the ceiling of {{params.ceiling}} entirely, which is what a bonus of {{params.bonus}} will do for a person. (Raw draw: {{roll}}.) Demonstrates a $param operand: the test is against a number the caller supplied, not one fixed here. This is how an opposed check is written.",
       "state": "success"
+    },
+    {
+      "when": { "gte": 70, "lte": 100, "params": { "loudly": { "eq": true } } },
+      "message": "{{params.label}} gives up at {{value}}, and so does any pretence of discretion — that noise was heard three streets over. Demonstrates the `params` subject ANDed with a value band: score 70-100 AND loudly=true. It must sit BEFORE the quiet band below, which it would otherwise never outrank.",
+      "state": "partial"
     },
     {
       "when": { "gte": 70, "lte": 100 },
@@ -65,6 +76,11 @@
       "when": { "neq": 42, "gte": 40, "lte": 50 },
       "message": "{{params.label}} shifts, then thinks better of it. Score {{value}}. Demonstrates neq composed with a band — 40 to 50, but never 42, which the outcome above already claimed.",
       "state": "partial"
+    },
+    {
+      "when": { "lt": 5, "params": { "label": { "eq": "the safe" } } },
+      "message": "The safe declines to notice you at all. Score {{value}}. Demonstrates eq against a STRING parameter: ordering comparators (gt/gte/lt/lte) need numbers on both sides, but eq and neq will address a string or a boolean. A mismatch — eq: 5 against a string parameter — is rejected when the file loads rather than quietly never firing.",
+      "state": "failure"
     },
     {
       "when": { "lt": 5 },

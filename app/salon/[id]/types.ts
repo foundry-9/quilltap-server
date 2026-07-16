@@ -51,6 +51,8 @@ export interface Message {
   /** Pascal the Croupier (custom pseudo-tools) roll record, set on systemSender='pascal' messages. The server rolled and picked the outcome; the client only renders it. `state` accents the result bubble; `rollForm`/`notation`/`diceRolls` describe how the number came about. */
   pascalMeta?: {
     tool: string
+    /** Display title at the time of the roll. Absent on messages predating it — fall back to `tool`. */
+    toolTitle?: string
     definitionTier: 'character' | 'participant' | 'group' | 'project' | 'global'
     definitionMountId: string
     params: Record<string, number | string | boolean>

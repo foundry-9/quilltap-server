@@ -16,6 +16,12 @@
       "pattern": "^[a-z][a-z0-9_-]{0,63}$",
       "description": "The tool's identity — what the model calls and what shadowing resolves on. Lowercase, starts with a letter, 1–64 characters. The filename is not significant."
     },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "How the tool is named to a human — in Pascal's announcement, in the composer popup, and in the roster list. Omit it and the `name` is title-cased instead ('scan_hawking_radiation' becomes 'Scan Hawking Radiation'), which is often enough. The model never sees this: it calls the tool by `name`."
+    },
     "description": {
       "type": "string",
       "minLength": 1,
@@ -101,7 +107,7 @@
         "additionalProperties": false,
         "properties": {
           "when": {
-            "description": "The test. Either the literal `true` (catch-all) or an object of comparators that AND together — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, and `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }. There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
             "oneOf": [
               { "const": true },
               {
@@ -109,12 +115,23 @@
                 "minProperties": 1,
                 "additionalProperties": false,
                 "properties": {
-                  "gt": { "type": "number", "description": "Greater than." },
-                  "gte": { "type": "number", "description": "Greater than or equal to." },
-                  "lt": { "type": "number", "description": "Less than." },
-                  "lte": { "type": "number", "description": "Less than or equal to." },
-                  "eq": { "type": "number", "description": "Equal to." },
-                  "neq": { "type": "number", "description": "Not equal to." }
+                  "gt": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than." },
+                  "gte": { "$ref": "#/$defs/NumberOperand", "description": "Value is greater than or equal to." },
+                  "lt": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than." },
+                  "lte": { "$ref": "#/$defs/NumberOperand", "description": "Value is less than or equal to." },
+                  "eq": { "$ref": "#/$defs/NumberOperand", "description": "Value is equal to." },
+                  "neq": { "$ref": "#/$defs/NumberOperand", "description": "Value is not equal to." },
+                  "roll": {
+                    "$ref": "#/$defs/NumericComparator",
+                    "description": "Test the RAW pre-transform draw rather than the final value. Useful when multiplier/offset/round have moved the value away from what was actually rolled."
+                  },
+                  "params": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one.",
+                    "additionalProperties": { "$ref": "#/$defs/ParamComparator" },
+                    "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+                  }
                 }
               }
             ]
@@ -134,21 +151,64 @@
     }
   },
   "$defs": {
-    "NumberOrParamRef": {
+    "NumberOperand": {
+      "description": "A number to compare against: a literal, or a { \"$param\": \"name\" } reference to a declared numeric parameter. The reference form is how an opposed check is written — { \"gte\": { \"$param\": \"difficulty\" } } tests against a number the caller supplied rather than one fixed when the file was written.",
+      "$ref": "#/$defs/NumberOrParamRef"
+    },
+    "AnyOperand": {
+      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, or a { \"$param\": \"name\" } reference to a declared parameter of any type.",
       "oneOf": [
         { "type": "number" },
-        {
-          "type": "object",
-          "required": ["$param"],
-          "additionalProperties": false,
-          "properties": {
-            "$param": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
-              "description": "Name of a declared parameter of type number or integer. The only form of indirection in the format — there are no expression strings anywhere."
-            }
-          }
+        { "type": "string" },
+        { "type": "boolean" },
+        { "$ref": "#/$defs/ParamRef" }
+      ]
+    },
+    "NumericComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against a number. Every key present must hold (they AND together).",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to." },
+        "eq": { "$ref": "#/$defs/NumberOperand", "description": "Equal to." },
+        "neq": { "$ref": "#/$defs/NumberOperand", "description": "Not equal to." }
+      }
+    },
+    "ParamComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against one declared parameter. Every key present must hold (they AND together). Identical to NumericComparator except that eq/neq widen to strings and booleans, since a parameter need not be a number.",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than. Numeric parameters only." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to. Numeric parameters only." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Numeric parameters only." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Numeric parameters only." },
+        "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. The operand's type must match the parameter's." },
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. The operand's type must match the parameter's." }
+      }
+    },
+    "ParamRef": {
+      "type": "object",
+      "required": ["$param"],
+      "additionalProperties": false,
+      "properties": {
+        "$param": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "description": "Name of a declared parameter. The only form of indirection in the format — there are no expression strings anywhere."
         }
+      }
+    },
+    "NumberOrParamRef": {
+      "description": "A literal number, or a reference to a declared parameter of type number or integer. That the referenced parameter is numeric is enforced when the file loads, which JSON Schema cannot express here.",
+      "oneOf": [
+        { "type": "number" },
+        { "$ref": "#/$defs/ParamRef" }
       ]
     }
   }

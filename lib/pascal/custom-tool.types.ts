@@ -39,6 +39,9 @@ export const MAX_MESSAGE_LENGTH = 1000;
 /** Cap on a tool description, in characters. */
 export const MAX_DESCRIPTION_LENGTH = 500;
 
+/** Cap on a tool's display title, in characters. */
+export const MAX_TITLE_LENGTH = 80;
+
 /**
  * Identifier rules shared by tool names and parameter names: lowercase, starts
  * with a letter, 1–64 characters.
@@ -53,7 +56,7 @@ const IdentifierSchema = z
  * A reference to a declared numeric parameter, usable anywhere a roll takes a
  * number. The ONLY form of indirection in the format.
  */
-export const ParamRefSchema = z.object({
+export const ParamRefSchema = z.strictObject({
   $param: IdentifierSchema.describe('Name of a declared numeric parameter.'),
 });
 
@@ -132,7 +135,7 @@ export type CustomToolParameter = z.infer<typeof CustomToolParameterSchema>;
  *
  * The transform runs in a fixed order: multiply, then offset, then round.
  */
-export const RollRangeSchema = z.object({
+export const RollRangeSchema = z.strictObject({
   min: NumberOrParamRefSchema.optional().describe('Low bound, inclusive. Default 0.'),
   max: NumberOrParamRefSchema.optional().describe('High bound, exclusive. Default 1.'),
   multiplier: NumberOrParamRefSchema.optional().describe('Raw value is multiplied by this. Default 1.'),
@@ -160,29 +163,99 @@ export const RollSchema = z.union([RollDiceSchema, RollRangeSchema]);
 
 export type Roll = z.infer<typeof RollSchema>;
 
+/** The comparator keys, in the order tests are described to a reader. */
+export const COMPARATOR_KEYS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
+
+/** The four keys that order two values, and so demand numbers on both sides. */
+const ORDERING_KEYS: ReadonlySet<string> = new Set(['gt', 'gte', 'lt', 'lte']);
+
 /**
- * An outcome test. Either the literal `true` (catch-all) or an object of
- * comparators that AND together — `>= 0.3 && <= 0.6` is `{ gte: 0.3, lte: 0.6 }`.
- *
- * There is no OR and no nesting: ordered, first-match-wins outcomes make OR
- * unnecessary, and this keeps the evaluator eval-free.
+ * A comparator operand for an ordering test: a literal number, or a `$param`
+ * reference. The reference form is what makes an opposed check expressible —
+ * `{ "gte": { "$param": "difficulty" } }` tests against a number the caller
+ * supplied rather than one the author fixed at authoring time.
  */
-export const ComparatorSchema = z
-  .object({
-    gt: z.number().finite().optional(),
-    gte: z.number().finite().optional(),
-    lt: z.number().finite().optional(),
-    lte: z.number().finite().optional(),
-    eq: z.number().finite().optional(),
-    neq: z.number().finite().optional(),
+const NumberOperandSchema = z.union([z.number().finite(), ParamRefSchema]);
+
+/**
+ * A comparator operand for eq/neq, which may address a parameter of any
+ * declared type — `{ "eq": "brass" }` is a legitimate test of a string.
+ */
+const AnyOperandSchema = z.union([z.number().finite(), z.string(), z.boolean(), ParamRefSchema]);
+
+/** Shape shared by every comparator. Ordering keys are numeric on both sides. */
+const NUMERIC_COMPARATOR_SHAPE = {
+  gt: NumberOperandSchema.optional(),
+  gte: NumberOperandSchema.optional(),
+  lt: NumberOperandSchema.optional(),
+  lte: NumberOperandSchema.optional(),
+  eq: NumberOperandSchema.optional(),
+  neq: NumberOperandSchema.optional(),
+};
+
+/** True when a comparator object actually tests something. */
+const hasComparator = (c: Record<string, unknown>): boolean =>
+  COMPARATOR_KEYS.some((key) => c[key] !== undefined);
+
+const AT_LEAST_ONE = { message: 'must specify at least one comparator (gt, gte, lt, lte, eq, neq)' };
+
+/**
+ * A comparator against a number — the rolled value, or the raw draw. Keys AND
+ * together: `>= 0.3 && <= 0.6` is `{ gte: 0.3, lte: 0.6 }`.
+ */
+export const NumericComparatorSchema = z.strictObject(NUMERIC_COMPARATOR_SHAPE).refine(hasComparator, AT_LEAST_ONE);
+
+export type NumericComparator = z.infer<typeof NumericComparatorSchema>;
+
+/**
+ * A comparator against a declared parameter. Identical to the numeric form
+ * except that eq/neq widen to strings and booleans, since a parameter need not
+ * be a number.
+ */
+export const ParamComparatorSchema = z
+  .strictObject({
+    ...NUMERIC_COMPARATOR_SHAPE,
+    eq: AnyOperandSchema.optional(),
+    neq: AnyOperandSchema.optional(),
   })
-  .refine((c) => Object.values(c).some((v) => v !== undefined), {
-    message: 'must specify at least one comparator (gt, gte, lt, lte, eq, neq)',
-  });
+  .refine(hasComparator, AT_LEAST_ONE);
 
-export type Comparator = z.infer<typeof ComparatorSchema>;
+export type ParamComparator = z.infer<typeof ParamComparatorSchema>;
 
-export const WhenSchema = z.union([z.literal(true), ComparatorSchema]);
+/**
+ * An outcome test. Either the literal `true` (catch-all) or an object naming
+ * one or more subjects, ALL of which must hold.
+ *
+ * Bare comparator keys test the final value, so the common case stays as short
+ * as it ever was and every definition written before this key existed still
+ * means what it meant. `roll` tests the raw pre-transform draw; `params` tests
+ * what the caller supplied, keyed by parameter name:
+ *
+ * ```json
+ * { "gt": 1, "roll": { "gte": 15 }, "params": { "scale": { "gt": 12 } } }
+ * ```
+ *
+ * There is still no OR and no nesting: ordered, first-match-wins outcomes make
+ * OR unnecessary, and a flat AND of comparators keeps the evaluator eval-free.
+ */
+export const WhenObjectSchema = z
+  .strictObject({
+    ...NUMERIC_COMPARATOR_SHAPE,
+    roll: NumericComparatorSchema.optional().describe('Test the raw pre-transform draw rather than the final value.'),
+    params: z
+      .record(IdentifierSchema, ParamComparatorSchema)
+      .optional()
+      .describe('Test the resolved parameters, keyed by parameter name.'),
+  })
+  .refine(
+    (when) =>
+      hasComparator(when) || when.roll !== undefined || (when.params !== undefined && Object.keys(when.params).length > 0),
+    { message: 'must test something: a comparator on the value, `roll`, or a non-empty `params`' }
+  );
+
+export type WhenObject = z.infer<typeof WhenObjectSchema>;
+
+export const WhenSchema = z.union([z.literal(true), WhenObjectSchema]);
 
 export type When = z.infer<typeof WhenSchema>;
 
@@ -191,8 +264,10 @@ export const OutcomeStateSchema = z.enum(['success', 'partial', 'failure', 'info
 
 export type OutcomeState = z.infer<typeof OutcomeStateSchema>;
 
-export const CustomToolOutcomeSchema = z.object({
-  when: WhenSchema.describe('`true` for a catch-all, or comparators that AND together.'),
+export const CustomToolOutcomeSchema = z.strictObject({
+  when: WhenSchema.describe(
+    '`true` for a catch-all, or comparators on the value, `roll`, and `params` that AND together.'
+  ),
   message: z
     .string()
     .min(1)
@@ -211,14 +286,28 @@ export type Visibility = z.infer<typeof VisibilitySchema>;
 /**
  * The custom-tool definition.
  *
- * Unknown top-level keys are tolerated (Zod strips rather than rejects by
- * default), which reserves room for v2 keys — notably `persist` — without
- * breaking older builds. `collectUnknownKeys` surfaces them for a debug log.
+ * Unknown TOP-LEVEL keys are tolerated, which reserves room for v2 keys —
+ * notably `persist` — without breaking older builds. `collectUnknownKeys`
+ * surfaces them for a debug log.
+ *
+ * That tolerance stops at the top level: every nested object below is strict.
+ * The forward-compatibility argument does not reach them, and inside a `when`
+ * an unrecognised key is overwhelmingly a misspelled comparator — which, if
+ * tolerated, silently drops the test and leaves a row of the outcome table
+ * looking like a dead branch. It is also what the published JSON Schema has
+ * always claimed (`additionalProperties: false`), so an author's editor and
+ * the loader now agree.
  */
 export const QtapCustomToolSchema = z
   .object({
     $schema: z.string().optional().describe('Editor hint; ignored at runtime.'),
     name: IdentifierSchema.describe("The tool's identity. Not the filename."),
+    title: z
+      .string()
+      .min(1)
+      .max(MAX_TITLE_LENGTH)
+      .optional()
+      .describe('Human-readable name for display. Defaults to a title-cased `name`.'),
     description: z
       .string()
       .min(1)
@@ -245,10 +334,31 @@ export const QtapCustomToolSchema = z
   })
   .superRefine((tool, ctx) => {
     validateOutcomeOrdering(tool.outcomes, ctx);
-    validateParamRefs(tool, ctx);
+    validateReferences(tool, ctx);
   });
 
 export type QtapCustomTool = z.infer<typeof QtapCustomToolSchema>;
+
+/**
+ * The name to show a human — the author's `title`, or one derived from `name`.
+ *
+ * The single source of the display string: the announcement, the composer
+ * popup, and the roster listing all come through here, so `scan_hawking_radiation`
+ * reads as "Scan Hawking Radiation" in every one of them without three
+ * implementations agreeing by luck. The model never sees this — it calls tools
+ * by `name`, and a second string for one tool would only invite it to pass the
+ * wrong one.
+ */
+export function displayTitle(definition: Pick<QtapCustomTool, 'name' | 'title'>): string {
+  const authored = definition.title?.trim();
+  if (authored) return authored;
+
+  return definition.name
+    .split(/[_-]+/)
+    .filter((word) => word.length > 0)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
 
 /**
  * Rule: the final outcome must be the literal `true`, and no earlier outcome
@@ -283,16 +393,70 @@ function validateOutcomeOrdering(outcomes: CustomToolOutcome[], ctx: z.Refinemen
   });
 }
 
-/**
- * Rule: every `$param` reference must name a declared parameter of a numeric
- * type. A reference to a string parameter cannot be rolled with.
- */
-function validateParamRefs(tool: { parameters?: Record<string, CustomToolParameter>; roll?: Roll }, ctx: z.RefinementCtx): void {
-  if (!tool.roll || typeof tool.roll === 'string') return;
+/** The value types a subject or an operand can carry, with `integer` folded in. */
+type ValueType = 'number' | 'string' | 'boolean';
 
+/** Fold a declared parameter type down to the type its values actually have. */
+function valueTypeOf(type: ParameterType): ValueType {
+  return type === 'integer' ? 'number' : type;
+}
+
+/**
+ * Rule: every `$param` reference — in a roll field or in a comparator — must
+ * name a declared parameter, and the comparison it takes part in must be one
+ * that can hold at run time.
+ *
+ * All of this is authoring error caught at load: a misspelled parameter, an
+ * ordering test against a string, `{ "eq": "brass" }` posed to a number. Left
+ * to run time these are silent — a test that simply never fires reads as a dead
+ * branch in the outcome table rather than the typo it is.
+ */
+function validateReferences(
+  tool: { parameters?: Record<string, CustomToolParameter>; roll?: Roll; outcomes: CustomToolOutcome[] },
+  ctx: z.RefinementCtx
+): void {
   const declared = tool.parameters ?? {};
 
-  for (const [field, value] of Object.entries(tool.roll)) {
+  validateRollRefs(declared, tool.roll, ctx);
+
+  tool.outcomes.forEach((outcome, i) => {
+    if (outcome.when === true) return;
+    const path = ['outcomes', i, 'when'];
+
+    // Bare comparator keys, and `roll`, both address a number.
+    validateComparator(declared, outcome.when, 'number', 'the rolled value', ctx, path);
+    if (outcome.when.roll !== undefined) {
+      validateComparator(declared, outcome.when.roll, 'number', 'the raw roll', ctx, [...path, 'roll']);
+    }
+
+    for (const [name, comparator] of Object.entries(outcome.when.params ?? {})) {
+      const target = declared[name];
+      if (!target) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `tests undeclared parameter "${name}"`,
+          path: [...path, 'params', name],
+        });
+        continue;
+      }
+      validateComparator(declared, comparator, valueTypeOf(target.type), `parameter "${name}"`, ctx, [
+        ...path,
+        'params',
+        name,
+      ]);
+    }
+  });
+}
+
+/** Roll fields are numeric, so every `$param` in one must name a numeric parameter. */
+function validateRollRefs(
+  declared: Record<string, CustomToolParameter>,
+  roll: Roll | undefined,
+  ctx: z.RefinementCtx
+): void {
+  if (!roll || typeof roll === 'string') return;
+
+  for (const [field, value] of Object.entries(roll)) {
     if (!isParamRef(value)) continue;
 
     const target = declared[value.$param];
@@ -315,10 +479,113 @@ function validateParamRefs(tool: { parameters?: Record<string, CustomToolParamet
   }
 }
 
+/**
+ * Check one comparator against the type of what it tests: every operand must
+ * resolve, and the comparison must be one the two types can sustain.
+ */
+function validateComparator(
+  declared: Record<string, CustomToolParameter>,
+  comparator: NumericComparator | ParamComparator,
+  subjectType: ValueType,
+  subjectLabel: string,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>
+): void {
+  for (const key of COMPARATOR_KEYS) {
+    const operand = (comparator as Record<string, unknown>)[key];
+    if (operand === undefined) continue;
+
+    const operandType = resolveOperandType(declared, operand, ctx, [...path, key]);
+    if (operandType === null) continue;
+
+    if (ORDERING_KEYS.has(key)) {
+      if (subjectType !== 'number' || operandType !== 'number') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} orders ${subjectLabel} against a ${operandType}, and only numbers can be ordered`,
+          path: [...path, key],
+        });
+      }
+      continue;
+    }
+
+    if (subjectType !== operandType) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `${key} compares ${subjectLabel}, which is a ${subjectType}, with a ${operandType} — this can never hold`,
+        path: [...path, key],
+      });
+    }
+  }
+}
+
+/**
+ * The type an operand carries: a literal's own, or that of the parameter it
+ * references. null means the operand is broken and has already been reported.
+ */
+function resolveOperandType(
+  declared: Record<string, CustomToolParameter>,
+  operand: unknown,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>
+): ValueType | null {
+  if (isParamRef(operand)) {
+    const target = declared[operand.$param];
+    if (!target) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `references undeclared parameter "${operand.$param}"`,
+        path,
+      });
+      return null;
+    }
+    return valueTypeOf(target.type);
+  }
+
+  const literal = typeof operand;
+  if (literal === 'number' || literal === 'string' || literal === 'boolean') return literal;
+
+  // Unreachable: the schema types operands before this runs.
+  return null;
+}
+
+/**
+ * Render a rejection as the sentence an author reads on the load-error badge.
+ *
+ * Exists because of unions. `when` is `true | object` and `roll` is
+ * `string | object`, and when both branches fail Zod reports a bare "Invalid
+ * input" at the union and buries the actual complaint — the misspelled
+ * comparator, the malformed dice notation — one level down in `issue.errors`.
+ * A rejection nobody can read is barely better than no rejection at all, so
+ * every branch's message is surfaced, joined by "or" since either would have
+ * satisfied the schema.
+ */
+export function formatDefinitionIssues(error: z.ZodError): string {
+  return flattenIssues(error.issues).join('; ');
+}
+
+function flattenIssues(issues: readonly z.core.$ZodIssue[], prefix: Array<string | number> = []): string[] {
+  return issues.map((issue) => {
+    const path = [...prefix, ...issue.path];
+    const located = (message: string) => (path.length ? `${path.join('.')}: ${message}` : message);
+
+    if (issue.code === 'invalid_union') {
+      // Sub-issue paths are relative to the union, so carry the prefix down.
+      const branches = issue.errors
+        .map((branch) => flattenIssues(branch).join('; '))
+        .filter((branch) => branch.length > 0);
+      if (branches.length > 0) return located(branches.join(' — or — '));
+    }
+
+    return located(issue.message);
+  });
+}
+
 /** Top-level keys the v1 format knows about. Anything else is reserved for v2. */
 const KNOWN_TOP_LEVEL_KEYS = new Set([
   '$schema',
   'name',
+  'title',
   'description',
   'disabled',
   'revealOdds',

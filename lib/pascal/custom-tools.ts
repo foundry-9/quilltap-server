@@ -38,17 +38,21 @@ import { getErrorMessage } from '@/lib/error-utils';
 import {
   QtapCustomToolSchema,
   collectUnknownKeys,
+  formatDefinitionIssues,
   isParamRef,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
   TOOL_FILE_SUFFIX,
-  type CustomToolOutcome,
   type CustomToolParameter,
   type NumberOrParamRef,
+  type NumericComparator,
   type OutcomeState,
+  type ParamComparator,
+  type ParamRef,
   type QtapCustomTool,
   type RollRange,
   type Visibility,
+  type When,
 } from './custom-tool.types';
 import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceRollResult } from './dice';
 
@@ -232,9 +236,7 @@ async function loadToolsFromMount(
 
     const result = QtapCustomToolSchema.safeParse(parsedJson);
     if (!result.success) {
-      const reason = result.error.issues
-        .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
-        .join('; ');
+      const reason = formatDefinitionIssues(result.error);
       errors.push({ definitionPath: relativePath, mountPointId, mountName, tier, reason });
       logger.debug('Custom tool rejected at load time', {
         context: CONTEXT,
@@ -540,15 +542,117 @@ function rollRange(
   return { raw, value };
 }
 
-/** Evaluate one comparator object against the final value. Keys AND together. */
-export function matchesWhen(when: CustomToolOutcome['when'], value: number): boolean {
+/** Everything an outcome test may be posed about. */
+export interface OutcomeSubjects {
+  /** The final post-transform value. */
+  value: number;
+  /** The raw pre-transform draw. */
+  roll: number;
+  /** The resolved parameters, post-default and post-clamp. */
+  params: ResolvedParams;
+}
+
+/**
+ * Resolve a comparator operand: a literal, or the value of the parameter it
+ * references.
+ *
+ * The reference is validated at load time, so a failure here is a regression
+ * rather than an authoring error — it throws instead of quietly declining to
+ * match, which would look like the table simply skipping a row.
+ */
+function resolveOperand(
+  toolName: string,
+  operand: number | string | boolean | ParamRef,
+  params: ResolvedParams,
+  label: string
+): number | string | boolean {
+  if (!isParamRef(operand)) return operand;
+
+  const value = params[operand.$param];
+  if (value === undefined) {
+    throw new CustomToolRunError(
+      `${toolName}: ${label} references "${operand.$param}", which is not a declared parameter`
+    );
+  }
+  return value;
+}
+
+/** Demand a number for an ordering comparison. Load-time validation precedes this. */
+function requireNumber(toolName: string, value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new CustomToolRunError(
+      `${toolName}: ${label} cannot be ordered — it is ${JSON.stringify(value)} rather than a finite number`
+    );
+  }
+  return value;
+}
+
+/**
+ * Evaluate one comparator against one subject. Keys AND together, and an
+ * operand may be a `$param` reference rather than a literal.
+ */
+function matchesComparator(
+  toolName: string,
+  comparator: NumericComparator | ParamComparator,
+  subject: number | string | boolean,
+  subjectLabel: string,
+  params: ResolvedParams
+): boolean {
+  const operandFor = (key: keyof ParamComparator): number | string | boolean =>
+    resolveOperand(toolName, comparator[key] as number | string | boolean | ParamRef, params, `${subjectLabel} ${key}`);
+
+  const order = (key: 'gt' | 'gte' | 'lt' | 'lte'): [number, number] => [
+    requireNumber(toolName, subject, subjectLabel),
+    requireNumber(toolName, operandFor(key), `${subjectLabel} ${key}`),
+  ];
+
+  if (comparator.gt !== undefined) {
+    const [a, b] = order('gt');
+    if (!(a > b)) return false;
+  }
+  if (comparator.gte !== undefined) {
+    const [a, b] = order('gte');
+    if (!(a >= b)) return false;
+  }
+  if (comparator.lt !== undefined) {
+    const [a, b] = order('lt');
+    if (!(a < b)) return false;
+  }
+  if (comparator.lte !== undefined) {
+    const [a, b] = order('lte');
+    if (!(a <= b)) return false;
+  }
+  if (comparator.eq !== undefined && subject !== operandFor('eq')) return false;
+  if (comparator.neq !== undefined && subject === operandFor('neq')) return false;
+
+  return true;
+}
+
+/**
+ * Evaluate an outcome test. Every subject named must hold — bare comparators
+ * against the final value, `roll` against the raw draw, `params` against what
+ * the caller supplied.
+ */
+export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'custom tool'): boolean {
   if (when === true) return true;
-  if (when.gt !== undefined && !(value > when.gt)) return false;
-  if (when.gte !== undefined && !(value >= when.gte)) return false;
-  if (when.lt !== undefined && !(value < when.lt)) return false;
-  if (when.lte !== undefined && !(value <= when.lte)) return false;
-  if (when.eq !== undefined && !(value === when.eq)) return false;
-  if (when.neq !== undefined && !(value !== when.neq)) return false;
+
+  const { value, roll, params } = subjects;
+
+  if (!matchesComparator(toolName, when, value, 'the rolled value', params)) return false;
+
+  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params)) {
+    return false;
+  }
+
+  for (const [name, comparator] of Object.entries(when.params ?? {})) {
+    const subject = params[name];
+    if (subject === undefined) {
+      // Load-time validation rejects a test of an undeclared parameter.
+      throw new CustomToolRunError(`${toolName}: an outcome tests "${name}", which is not a declared parameter`);
+    }
+    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params)) return false;
+  }
+
   return true;
 }
 
@@ -634,7 +738,8 @@ export function executeCustomTool(
     value = drawn.value;
   }
 
-  const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, value));
+  const subjects: OutcomeSubjects = { value, roll: raw, params };
+  const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
   if (outcomeIndex < 0) {
     // The schema's mandatory trailing catch-all makes this unreachable.
     throw new CustomToolRunError(`${definition.name}: no outcome matched ${formatValue(value)}`);

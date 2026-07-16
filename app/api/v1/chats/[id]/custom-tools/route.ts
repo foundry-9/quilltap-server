@@ -12,8 +12,9 @@
  *     freshness note atop `lib/pascal/custom-tools.ts`).
  *
  * POST /api/v1/chats/[id]/custom-tools?action=run
- *   - Run one tool at the operator's behest. Posts the user's invocation and
- *     Pascal's outcome as a pair.
+ *   - Run one tool at the operator's behest. Posts Pascal's outcome, and
+ *     nothing else — see the note in `handleRun` on why the operator's own
+ *     invocation line is not written to the transcript.
  *
  * ## Perspective
  *
@@ -33,7 +34,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
@@ -44,20 +44,21 @@ import {
   resolveCustomToolRoster,
   executeCustomTool,
   CustomToolRunError,
-  formatValue,
   type CustomToolRoster,
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
-import type { ResolvedParams } from '@/lib/pascal/custom-tools';
+import { displayTitle } from '@/lib/pascal/custom-tool.types';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
-import type { MessageEvent } from '@/lib/schemas/types';
 
 const HANDLER = 'api.v1.chats.custom-tools';
 
 /** One entry in the popup's list. Deliberately odds-free — see the file header. */
 interface CustomToolListing {
+  /** Identity — what `?action=run` names, and what shadowing resolved on. */
   name: string;
+  /** What the popup shows. Resolved here so the client never re-derives it. */
+  title: string;
   description: string;
   parameters: NonNullable<DiscoveredCustomTool['definition']['parameters']> | Record<string, never>;
   defaultVisibility: 'public' | 'whisper';
@@ -143,6 +144,7 @@ function variantKey(entry: DiscoveredCustomTool): string {
   return `${entry.mountPointId}::${entry.definitionPath}`;
 }
 
+
 // ---------------------------------------------------------------------------
 // GET — the roster
 // ---------------------------------------------------------------------------
@@ -221,7 +223,9 @@ async function handleList(
     });
   }
 
-  tools.sort((a, b) => a.name.localeCompare(b.name) || (a.characterLabel ?? '').localeCompare(b.characterLabel ?? ''));
+  // Sorted by what the popup shows, not by the identity behind it — a list
+  // ordered on a key the reader cannot see reads as unordered.
+  tools.sort((a, b) => a.title.localeCompare(b.title) || (a.characterLabel ?? '').localeCompare(b.characterLabel ?? ''));
 
   const errors = [...errorsByKey.values()];
 
@@ -248,6 +252,7 @@ function buildListing(
 ): CustomToolListing {
   return {
     name: entry.definition.name,
+    title: displayTitle(entry.definition),
     description: entry.definition.description,
     parameters: entry.definition.parameters ?? {},
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
@@ -271,27 +276,6 @@ const runSchema = z.object({
   /** Whose perspective to resolve from — required only when a tool has variants. */
   asCharacterId: z.string().nullish(),
 });
-
-/**
- * The user's own line in the transcript.
- *
- * The invocation is authored as a USER message so the model attributes the roll
- * to the operator rather than to whoever spoke last. Only parameters the user
- * actually moved off their declared default are named: listing every default
- * back would bury the one value that mattered.
- */
-function buildInvocationContent(
-  toolName: string,
-  resolved: ResolvedParams,
-  declaredDefaults: Record<string, number | string | boolean>,
-): string {
-  const changed = Object.entries(resolved)
-    .filter(([name, value]) => !Object.is(value, declaredDefaults[name]))
-    .map(([name, value]) => `${name}: ${typeof value === 'number' ? formatValue(value) : String(value)}`);
-
-  const suffix = changed.length > 0 ? ` (${changed.join(', ')})` : '';
-  return `*I ran \`${toolName}\`${suffix}.*`;
-}
 
 async function handleRun(
   req: NextRequest,
@@ -380,36 +364,17 @@ async function handleRun(
     throw error;
   }
 
-  const declaredDefaults = Object.fromEntries(
-    Object.entries(entry.definition.parameters ?? {}).map(([name, spec]) => [name, spec.default]),
-  );
-
-  const userMessage = await ctx.repos.chats.addMessage(id, {
-    type: 'message',
-    id: randomUUID(),
-    role: 'USER',
-    content: buildInvocationContent(result.tool, result.params, declaredDefaults),
-    participantId: null,
-    attachments: [],
-    createdAt: new Date().toISOString(),
-    targetParticipantIds,
-  } as MessageEvent);
-
-  logger.debug('Manual custom-tool invocation posted', {
-    context: HANDLER,
-    chatId: id,
-    tool: result.tool,
-    whispered,
-  });
+  // Pascal's announcement is the ONLY thing posted for a manual run, and it is
+  // identical to the one a character's roll produces — the transcript does not
+  // record that the operator was the one who reached for the tool, nor what
+  // they set. A companion USER message ("*I ran unlock (scale: 1)*") used to
+  // publish exactly that: the human's hand on the scale, from which a character
+  // could infer the roll was arranged.
+  const toolTitle = displayTitle(entry.definition);
 
   const { content, opaqueContent } = buildPascalResultContent({
-    toolName: result.tool,
+    toolTitle,
     message: result.message,
-    value: result.value,
-    rollForm: result.rollForm,
-    diceBreakdown: result.diceBreakdown,
-    invokedBy: 'user',
-    userName: ctx.user.name,
   });
 
   const pascalMessage = await postPascalResult({
@@ -419,6 +384,7 @@ async function handleRun(
     targetParticipantIds,
     pascalMeta: {
       tool: result.tool,
+      toolTitle,
       definitionTier: entry.tier,
       definitionMountId: entry.mountPointId,
       params: result.params,
@@ -442,7 +408,7 @@ async function handleRun(
   });
 
   return successResponse({
-    messages: [userMessage, pascalMessage],
+    messages: pascalMessage ? [pascalMessage] : [],
     result: {
       tool: result.tool,
       value: result.value,

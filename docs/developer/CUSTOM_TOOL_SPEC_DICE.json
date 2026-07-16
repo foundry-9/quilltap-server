@@ -1,7 +1,7 @@
 {
   "$schema": "/schemas/qtap-custom-tool.schema.json",
   "name": "saving_throw",
-  "description": "Roll a saving throw against the house's better judgement. Reference specimen for the dice form: `roll` is either a range object (see CUSTOM_TOOL_SPEC.json) or a dice string — never both — so the three features below cannot be shown in the same file as that one.",
+  "description": "Roll a saving throw against the house's better judgement. Reference specimen for the dice form: `roll` is either a range object (see CUSTOM_TOOL_SPEC.json) or a dice string — never both — so the three features below cannot be shown in the same file as that one. Note also what is NOT here: with no `title`, Pascal announces this one as 'Saving Throw', title-cased from the name. Write a `title` only when the derived form is not what you want.",
   "revealOdds": false,
   "defaultVisibility": "whisper",
   "roll": "3d6+2",

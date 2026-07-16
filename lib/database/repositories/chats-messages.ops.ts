@@ -104,6 +104,13 @@ export const ChatMessageRowSchema = z.object({
   // Pascal the Croupier (custom pseudo-tools) roll record, set on
   // systemSender='pascal' messages. The server rolled and the server picked the
   // outcome, so none of this is the model's account of its own luck.
+  // This row schema describes what is STORED; the gate on the way in is
+  // ChatEventSchema (lib/schemas/chat.types.ts), which addMessage parses
+  // against — a field declared there but not here still persists, since this
+  // shape only tells the backend that pascalMeta is a JSON column. Kept in
+  // lockstep anyway: it is the account of the column a reader will consult.
+  // toolTitle = display title at roll time (absent on older rows; readers fall
+  // back to `tool`);
   // definitionTier/definitionMountId = the store the definition resolved from
   // (tiers shadow, so a name can differ per room); rollForm = 'range' or 'dice'
   // ('dice' carries notation + diceRolls); raw = untransformed roll, value =
@@ -112,6 +119,7 @@ export const ChatMessageRowSchema = z.object({
   // non-Pascal message.
   pascalMeta: z.object({
     tool: z.string(),
+    toolTitle: z.string().optional(),
     definitionTier: z.enum(['character', 'participant', 'group', 'project', 'global']),
     definitionMountId: z.string(),
     params: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])),

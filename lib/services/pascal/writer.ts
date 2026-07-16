@@ -15,13 +15,20 @@
  * `lib/services/prospero-notifications/writer.ts`), never by Pascal. A Pascal
  * message in the transcript therefore always means the dice truly fell.
  *
- * Opacity: Pascal is a named member of the Staff, so an opaque character (one
- * whose `systemTransparency !== true`) must not read his name or his flourishes.
- * Unlike Suparṇā and Carina — whose bodies carry no persona framing and so set
- * `opaqueContent = content` — Pascal's visible body IS framed, so we build a
- * genuinely different, plainly-worded `System: …` body for the opaque swap. The
- * author's own outcome `message` is rendered VERBATIM in both: the framing is
- * ours to voice, the outcome is not.
+ * **The croupier does not narrate.** The body is the tool's own title and the
+ * author's own outcome message, and nothing else. Pascal once spoke here — "At
+ * Charlie's behest, Pascal spins the wheel: …", with an italic *(rolled 14)*
+ * suffix — and both are gone by request. What a roll says is the author's to
+ * decide in their `.tool.json`: a table that wants its number shown puts
+ * `{{value}}` or `{{dice}}` in the message. Nothing is lost by dropping the
+ * suffix — the whole roll record (raw draw, dice faces, transform, which
+ * outcome matched) is persisted in `pascalMeta` regardless.
+ *
+ * Opacity: this is why `opaqueContent === content` here. The dual body exists
+ * to keep Staff NAMES out of an opaque character's context, and with the
+ * flourishes gone there is no persona left to strip — the same position
+ * Suparṇā and Carina are in. Both bodies are still populated, in lockstep, as
+ * the `opaqueContent` contract asks (see `lib/schemas/chat.types.ts`).
  *
  * Errors never propagate — a failure to announce is logged and surfaced to the
  * caller as null rather than thrown.
@@ -31,7 +38,6 @@ import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { formatValue } from '@/lib/pascal/custom-tools';
 import type { MessageEvent } from '@/lib/schemas/types';
 
 const CONTEXT = 'pascal';
@@ -40,56 +46,32 @@ const CONTEXT = 'pascal';
 export type PascalMeta = NonNullable<NonNullable<MessageEvent['pascalMeta']>>;
 
 export interface BuildPascalResultContentParams {
-  /** Declaration name of the tool that was run, e.g. `unlock`. */
-  toolName: string;
+  /**
+   * Human-readable name of the tool that was run, e.g. `Scan Hawking Radiation`
+   * — always from `displayTitle()`, never the raw declaration name. The
+   * identity (`unlock`) lives on in `pascalMeta.tool` for audit; what the table
+   * reads is prose.
+   */
+  toolTitle: string;
   /** The author's rendered outcome message. Emitted VERBATIM, never revoiced. */
   message: string;
-  /** Post-transform value the outcome table tested. */
-  value: number;
-  /** Which roll form the definition declared. */
-  rollForm: 'range' | 'dice';
-  /** Dice breakdown (e.g. `3d6+2: [4, 2, 6] + 2 = 14`), or '' for the range form. */
-  diceBreakdown?: string;
-  /** Who reached for the tool: a character (`llm`) or the operator (`user`). */
-  invokedBy: 'llm' | 'user';
-  /** Display name of the operator — used only for the manual (`user`) attribution. */
-  userName?: string | null;
 }
 
 /**
- * The parenthetical that shows what fell. The dice form prefers its breakdown —
- * `[4, 2, 6] + 2 = 14` tells the table far more than a bare `14` — and the range
- * form has nothing to show but the value itself.
- */
-function formatRollSuffix(params: BuildPascalResultContentParams): string {
-  const breakdown = params.diceBreakdown?.trim();
-  if (params.rollForm === 'dice' && breakdown) return breakdown;
-  return formatValue(params.value);
-}
-
-/**
- * Build both bodies for an outcome announcement: the visible one in Pascal's
- * voice, and the plain one an opaque character reads in its place. The author's
- * `message` is identical in each — only the framing around it differs.
+ * Build the body of an outcome announcement: the tool's title, and the
+ * author's own message. Both bodies are the same string — see the note on
+ * opacity in the file header.
+ *
+ * Deliberately knows nothing about the roll. Who invoked it, what fell, and
+ * what the parameters were are all matters for `pascalMeta`, not for the
+ * scene: a table that wants its number read out says so with `{{value}}`.
  */
 export function buildPascalResultContent(
   params: BuildPascalResultContentParams,
 ): { content: string; opaqueContent: string } {
-  const roll = formatRollSuffix(params);
-  const message = params.message.trim();
+  const body = `🎲 **${params.toolTitle}** — ${params.message.trim()}`;
 
-  const manual = params.invokedBy === 'user';
-  const patron = params.userName?.trim() || 'the house';
-
-  const content = manual
-    ? `🎲 **${params.toolName}** — At ${patron}'s behest, Pascal spins the wheel: ${message} *(rolled ${roll})*`
-    : `🎲 **${params.toolName}** — ${message} *(rolled ${roll})*`;
-
-  const opaqueContent = manual
-    ? `System: Custom tool "${params.toolName}" was run at ${patron}'s request. ${message} (rolled ${roll})`
-    : `System: Custom tool "${params.toolName}" was run. ${message} (rolled ${roll})`;
-
-  return { content, opaqueContent };
+  return { content: body, opaqueContent: body };
 }
 
 export interface PostPascalResultParams {

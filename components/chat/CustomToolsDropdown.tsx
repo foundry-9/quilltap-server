@@ -36,7 +36,10 @@ export interface CustomToolParameter {
 
 /** A runnable tool in the resolved roster. */
 export interface CustomTool {
+  /** Identity — what the run call names. Never displayed. */
   name: string
+  /** What to display. Server-resolved, so `title` is always present. */
+  title: string
   description: string
   parameters: Record<string, CustomToolParameter>
   defaultVisibility: 'public' | 'whisper'
@@ -160,8 +163,10 @@ export function CustomToolsDropdown({
   const droppedForCap = rosterQuery.data?.droppedForCap ?? []
 
   const runMutation = useMutation({
-    mutationFn: (vars: {
+    mutationFn: ({ title: _title, ...vars }: {
       tool: string
+      /** Display only — the toast's, not the API's. */
+      title: string
       parameters: Record<string, number | string | boolean>
       private: boolean
       asCharacterId?: string
@@ -172,7 +177,7 @@ export function CustomToolsDropdown({
         body: JSON.stringify(vars),
       }),
     onSuccess: (_data, vars) => {
-      showSuccessToast(`Pascal has settled ${vars.tool}.`)
+      showSuccessToast(`Pascal has settled ${vars.title}.`)
       queryClient.invalidateQueries({ queryKey: queryKeys.chats.detail(chatId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.customTools.byChat(chatId) })
       onRan?.()
@@ -216,6 +221,7 @@ export function CustomToolsDropdown({
     const key = toolKey(tool)
     runMutation.mutate({
       tool: tool.name,
+      title: tool.title,
       parameters: coerceParameters(tool, formValues[key] ?? initialValues(tool)),
       private: privateByKey[key] ?? tool.defaultVisibility === 'whisper',
       asCharacterId: tool.asCharacterId,
@@ -296,7 +302,7 @@ export function CustomToolsDropdown({
                   >
                     <span className="min-w-0">
                       <span className="block text-sm truncate">
-                        {tool.name}
+                        {tool.title}
                         {tool.characterLabel ? ` (${tool.characterLabel})` : ''}
                       </span>
                       {tool.description && (
@@ -365,7 +371,7 @@ export function CustomToolsDropdown({
                         disabled={isRunning}
                         className="w-full px-2 py-1 text-sm qt-button qt-button-primary rounded"
                       >
-                        {isRunning ? 'Running…' : `Run ${tool.name}`}
+                        {isRunning ? 'Running…' : `Run ${tool.title}`}
                       </button>
                     </div>
                   )}

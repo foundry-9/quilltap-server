@@ -4,6 +4,28 @@
 
 ### 4.8-dev
 
+#### Feature: custom tools get a display title, and outcomes can test more than the value
+
+Two additions to the `Tools/*.tool.json` format. Both are backward compatible — existing definitions load and behave exactly as before.
+
+- **`title`** — an optional display name, max 80 characters. Pascal announces it, the composer popup lists it, and the roster sorts on it, so `scan_hawking_radiation` reads as "Scan Hawking Radiation". Omit it and the title is derived from the name (underscores and hyphens to spaces, each word capitalized); write one when that derivation isn't what you'd have said. The model never sees the title — it still calls tools by `name`, so there is no second string for it to pass by mistake. `pascalMeta.tool` still records `name`, and because the title is interpolated when the message is posted, editing a title later does not rewrite past announcements.
+- **Multi-subject `when`** — an outcome test may now name three subjects, all of which must hold: bare comparators still test the final value, `roll` tests the raw pre-transform draw, and `params` tests what the tool was called with. So `value > 1 && params.scale > 12` is `{ "gt": 1, "params": { "scale": { "gt": 12 } } }`. Comparator operands may also be a `{ "$param": "difficulty" }` reference instead of a literal, which is the opposed check. `eq`/`neq` on a `params` subject accept strings and booleans; ordering comparators still require numbers on both sides. Still no OR, no nesting, and no expression grammar — the evaluator stays eval-free.
+- **`roll`** earns its keep when a multiplier or offset has moved the value away from what was drawn: a raw draw in the bottom 2% is a fumble whatever it was later scaled by, and no test on the value could say so.
+- **Stricter, and more legible, load errors.** Nested objects in a definition (`when`, comparators, outcome entries, the roll range, `$param` refs) now reject unknown keys instead of dropping them, so a misspelled comparator like `gt3` is a load-time rejection rather than a test that silently never fires. Unknown **top-level** keys are still tolerated, which is what reserves room for future keys. An outcome that tests an undeclared parameter, orders a string, or compares a parameter against the wrong type is likewise rejected at load. Rejection messages for `when` and `roll` used to read `Invalid input` — Zod reports that at a union and buries the real complaint in its branches — and now name the actual problem.
+- The published JSON Schema at `public/schemas/qtap-custom-tool.schema.json` is hand-synced with the Zod schema and had no drift guard. A test now checks both against one corpus and asserts they agree; the one intentional divergence (JSON Schema cannot express the trailing catch-all rule, or that a `$param` resolves) is asserted explicitly. Both annotated specimens in `docs/developer/` cover the new keys, and every outcome in them was verified reachable by execution.
+
+#### Change: a custom-tool outcome is now just the result — no croupier's voice, no roll, no trace of who ran it
+
+Pascal's announcement is the tool's title and whatever the `.tool.json` says to display, and nothing else:
+
+> 🎲 **Scan Hawking Radiation** — The detector registers a faint whisper of something.
+
+- **The croupier's narration is gone.** A manual run used to read "At *name*'s behest, Pascal spins the wheel: …". A manual run's announcement is now byte-identical to the one a character's roll produces, so nothing in the transcript records that the operator was the one who reached for the tool. (`pascalMeta.invokedBy` still does, for audit.)
+- **The italic `*(rolled 14)*` suffix is gone.** What a roll says is the author's to decide: put `{{value}}` or `{{dice}}` in the outcome message to have the number read out. Nothing is lost — the full roll record (raw draw, dice faces, transform, matched outcome) still persists in `pascalMeta`, and the rolling model still receives `value` and `state` from `run_custom`.
+- **A manual run no longer publishes the parameters you chose.** It used to post a second message in your voice — "*I ran `unlock` (scale: 1).*" — listing any parameter moved off its default. That put the operator's hand on the scale into every character's context, where a model could read what you set to arrange the outcome. `?action=run` now returns `messages: [pascalMessage]`.
+- **`opaqueContent` is once again identical to `content`.** The separate neutral body existed to keep the name "Pascal" out of an opaque character's context; with the framing gone there is no persona to strip, which is the position Suparṇā and Carina are already in. Both bodies are still populated in lockstep.
+- **The message bar names the tool.** The header chip read "● PASCAL · ROLL OUTCOME" — the machinery, and something random happening. It now reads "● PASCAL · SCAN HAWKING RADIATION": the tool's display title, or its name when the roll predates the new `pascalMeta.toolTitle` field. This is a Salon label only; `systemKind` never reaches a model's context.
+
 #### Fix: custom tools were invisible — missing from the tool list, and load errors were unreachable
 
 Two gaps that together made a custom tool impossible to find or diagnose.

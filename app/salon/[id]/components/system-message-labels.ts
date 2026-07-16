@@ -159,9 +159,32 @@ function resolveRawKind(message: Pick<Message, 'systemSender' | 'systemKind' | '
   return inferKindFromContent(message.systemSender, message.content || '')
 }
 
-export function getSystemKindDisplayLabel(message: Pick<Message, 'systemSender' | 'systemKind' | 'content'>): string {
+/**
+ * The label for a Staff message's kind chip — the "roll outcome" half of
+ * "● PASCAL · ROLL OUTCOME".
+ *
+ * A roll outcome names the TOOL rather than the kind: "scan hawking radiation",
+ * not "roll outcome". The generic label described the machinery — Pascal, and
+ * something random happening — where what actually happened is that a named
+ * tool ran. Every other kind keeps its static label; only this one has a
+ * per-message subject worth naming.
+ *
+ * `toolTitle ?? tool` — the display title when the message carries one, else
+ * the declaration name, which every roll record has. Both come from
+ * `pascalMeta`, the authoritative account of the deal, rather than from parsing
+ * the body.
+ */
+export function getSystemKindDisplayLabel(
+  message: Pick<Message, 'systemSender' | 'systemKind' | 'content' | 'pascalMeta'>,
+): string {
   const raw = resolveRawKind(message)
   if (!raw) return ''
+
+  if (raw === 'custom-tool-result') {
+    const named = message.pascalMeta?.toolTitle?.trim() || message.pascalMeta?.tool?.trim()
+    if (named) return named
+  }
+
   return KIND_DISPLAY_OVERRIDES[raw] ?? raw.replace(/-/g, ' ')
 }
 

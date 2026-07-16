@@ -28,6 +28,11 @@ Zod schema `QtapCustomToolSchema` in `lib/pascal/custom-tool.types.ts`, plus a p
 {
   "$schema": "/schemas/qtap-custom-tool.schema.json",
   "name": "unlock",                      // required. ^[a-z][a-z0-9_-]{0,63}$
+  "title": "Force the Lock",             // optional, max 80 chars. Display only — Pascal's announcement, the composer
+                                         // popup, the roster listing. Defaults to a title-cased `name`
+                                         // ("scan_hawking_radiation" → "Scan Hawking Radiation") via displayTitle().
+                                         // NEVER sent to the model: it calls tools by `name`, and a second string
+                                         // for one tool only invites it to pass the wrong one.
   "description": "Attempt to pick the lock.",  // required. What the tool does *in the fiction* — this is how
                                                // the model decides when to reach for it and how the UI labels it.
                                                // Roleplay-facing, not mechanical ("Attempt to pick the lock,"
@@ -109,7 +114,27 @@ If `$param` substitution yields `min > max`, or any substituted value is non-fin
 
 ### `when` — comparators, not expressions
 
-`when` is either the literal `true` (catch-all) or an object whose keys are drawn from `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, each with a numeric value. Multiple keys AND together, so `>= 0.30 && <= 0.60` is written `{ "gte": 0.30, "lte": 0.60 }`. There is no OR, no nesting, and no string expression grammar — ordered first-match-wins outcomes make OR unnecessary and this keeps the evaluator eval-free and trivially testable.
+`when` is either the literal `true` (catch-all) or an object naming one or more **subjects**, all of which must hold. There is no OR, no nesting, and no string expression grammar — ordered first-match-wins outcomes make OR unnecessary and this keeps the evaluator eval-free and trivially testable.
+
+| Subject | Written as | Tests |
+|---|---|---|
+| the value | bare comparator keys | the final post-transform value |
+| the raw roll | `roll: { … }` | the raw pre-transform draw |
+| a parameter | `params: { <name>: { … } }` | the resolved (post-default, post-clamp) parameter |
+
+Comparator keys are drawn from `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, and AND together, so `>= 0.30 && <= 0.60` is `{ "gte": 0.30, "lte": 0.60 }`. Bare keys mean the value, which is what makes the extension **backward compatible** — every definition written before `roll`/`params` existed still means exactly what it meant. `"value > 1 && params.scale > 12"` is:
+
+```json
+{ "when": { "gt": 1, "params": { "scale": { "gt": 12 } } }, "message": "…", "state": "success" }
+```
+
+`roll` exists because a transform moves the value away from what was drawn: a raw draw in the bottom 2% is a fumble however the multiplier has since scaled it, and only `roll` can express that. It is degenerate for the dice form (raw == total) but harmless there.
+
+**Operands** are a literal or a `{ "$param": "<name>" }` reference — the same indirection the roll fields already take, reused rather than reinvented. `{ "gte": { "$param": "difficulty" } }` is the opposed check: a test against a number the caller supplied rather than one fixed at authoring time.
+
+**Types.** Ordering comparators (`gt`/`gte`/`lt`/`lte`) demand a number on both sides. `eq`/`neq` on a `params` subject widen to strings and booleans, since a parameter need not be a number — `{ "params": { "material": { "eq": "brass" } } }`. A mismatch is a load-time rejection, not a test that quietly never fires (see [Validation rules](#validation-rules-load-time)).
+
+Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-tools.ts`), which takes `{ value, roll, params }` and throws rather than returning false when a comparison is impossible at run time — that state is a regression past load-time validation, and returning false would look like the table skipping a row.
 
 ### `outcomes` entries
 
@@ -134,11 +159,16 @@ Files are validated with `QtapCustomToolSchema.safeParse` at roster-resolution t
 
 1. JSON parse failure or schema mismatch.
 2. `outcomes` is empty, or the **final** outcome's `when` is not the literal `true`. Requiring a trailing catch-all makes coverage gaps structurally impossible; earlier `when: true` entries are also invalid (unreachable outcomes below them).
-3. Any `$param` references an undeclared or non-numeric parameter.
-4. Dice notation fails to parse via the shared dice module.
-5. Duplicate `name` **within the same file set of a single mount** (across mounts/tiers, shadowing rules apply instead).
+3. Any `$param` — in a roll field or in a comparator operand — references an undeclared parameter, or a non-numeric one where a number is required.
+4. An outcome's `params` names an undeclared parameter, orders a non-numeric one, or compares one against a literal of the wrong type. All of these are tests that could never hold; left to run time they read as dead branches rather than the typos they are.
+5. Dice notation fails to parse via the shared dice module.
+6. Duplicate `name` **within the same file set of a single mount** (across mounts/tiers, shadowing rules apply instead).
 
-Unknown top-level keys are **ignored with a debug warning**, not rejected — this reserves room for v2 keys (notably `persist`, see [Deferred](#deferred-to-v2)) without breaking older builds.
+Unknown **top-level** keys are **ignored with a debug warning**, not rejected — this reserves room for v2 keys (notably `persist`, see [Deferred](#deferred-to-v2)) without breaking older builds. That tolerance stops at the top level: every nested object (`when`, comparators, outcome entries, the roll range, `$param` refs) is a `z.strictObject`. The forward-compatibility argument doesn't reach them, an unrecognised key inside a `when` is overwhelmingly a misspelled comparator (`gt3`) that would otherwise silently drop the test, and `additionalProperties: false` is what the published JSON Schema has always claimed — so the loader and the author's editor now agree.
+
+**Rejection messages** are rendered by `formatDefinitionIssues()` (`lib/pascal/custom-tool.types.ts`), the single chokepoint for the sentence an author reads on the badge. It exists because `when` (`true | object`) and `roll` (`string | object`) are unions: when both branches fail, Zod reports a bare `Invalid input` at the union and buries the real complaint one level down in `issue.errors`. The helper surfaces every branch, joined by `— or —`. A rejection nobody can read is barely better than no rejection.
+
+**The published JSON Schema is a deliberate superset.** JSON Schema can describe what an outcome looks like but not what the *last* one must be, so the cross-item rules — the trailing catch-all, and every `$param` resolving — are the loader's alone. What the mirror rejects, Zod rejects; what the mirror accepts, Zod may still refuse. `__tests__/unit/lib/pascal/custom-tool-definition.test.ts` checks both schemas against one corpus and asserts they agree, so the hand-synced mirror cannot drift unnoticed; the one accepted divergence is asserted explicitly there.
 
 ## Scope resolution — tiers and shadowing
 
@@ -201,13 +231,21 @@ New file `lib/tools/run-custom-tool.ts`, following the five-part chokepoint patt
 
 Constructed like Suparṇā's writer (`lib/services/suparna-notifications/writer.ts:90` is the template): `role: 'ASSISTANT'`, `participantId: null`, `systemSender: 'pascal'`, `systemKind: 'custom-tool-result'`, persisted via `repos.chats.addMessage`. New writer module: `lib/services/pascal/writer.ts`.
 
-**Correction (implementation):** this spec originally said non-opaque (`opaqueContent = content`), copying Suparṇā. That is wrong for Pascal. Suparṇā and Carina set `opaqueContent = content` because their bodies carry *no persona framing* — Pascal's does ("🎲 **unlock** — …", and "At {userName}'s behest, Pascal spins the wheel: …"). Reusing `content` verbatim would leak the name "Pascal" into an opaque character's context, breaking the standing staff-voicing rule. Pascal therefore follows the **Prospero** precedent instead: a genuinely distinct, neutral `System: …` opaque body. The author's own `message` text is interpolated **verbatim into both** bodies — only the framing around it differs.
+`content` is the human/LLM-readable text, and it is the tool's title plus the author's own message — nothing else:
 
-`content` is the human/LLM-readable text, e.g.:
+> 🎲 **Force the Lock** — The lock clicks open.
 
-> 🎲 **unlock** — The lock clicks open. *(rolled 0.7134)*
+The tool is named by `displayTitle(definition)` — the author's `title`, or a title-cased `name` — never by the raw declaration name. `buildPascalResultContent` takes it as `toolTitle` for exactly that reason. The identity is not lost: `pascalMeta.tool` records `name`, which is what audit and shadowing resolve on. Because the title is interpolated at post time, no stored message changes when a `title` is later edited — the transcript keeps what was announced, which is correct for a record of what happened.
 
-For manual runs the content also attributes the invoker: "At {userName}'s behest, …". Steampunk voice applies to the fixed framing copy (not to the author's own `message` text, which is rendered verbatim).
+**Correction (implementation) — the croupier does not narrate.** This spec designed a voiced announcement, and it was built and then cut back to the line above. Three things went, by request:
+
+- **Pascal's own voice.** The manual form once read "At {patron}'s behest, Pascal spins the wheel: …". Gone — so a manual run's announcement is now **byte-identical** to the one a character's roll produces. Two consequences worth understanding: the transcript no longer records that the operator was the one who reached for the tool (`pascalMeta.invokedBy` still does), and the `patronName` plumbing — resolving the human's persona via `findUserParticipantName` rather than their account name — is gone with the clause that used it.
+- **The `*(rolled 14)*` suffix.** What a roll says is the author's to decide: a table that wants its number read out puts `{{value}}` or `{{dice}}` in the `message`. Nothing is lost — the whole roll record still lives in `pascalMeta`, and the rolling model still gets `value`/`state` back from `run_custom`.
+- **The separate opaque body.** The spec first said `opaqueContent = content` (copying Suparṇā), then a correction made it a distinct neutral `System: …` body, because Pascal's framing would have leaked his name to an opaque character. With the framing gone the original answer is right again for the original reason: no persona in the body, nothing to strip. `opaqueContent === content`, both still populated in lockstep per the contract in `lib/schemas/chat.types.ts`.
+
+The remaining `🎲 **Title** —` prefix is a label, not a voice: it carries no Staff name and every part of it comes from the author's own JSON.
+
+**A manual run posts ONE message, not two.** The spec paired Pascal's outcome with a USER invocation line (`*I ran unlock (scale: 1)*`) so the model would attribute the roll to the operator. Its only unique contribution was to publish the operator's chosen parameters — precisely what a model must not see, since it is the human's hand on the scale and a character reading it can infer the roll was arranged. The line is gone; `?action=run` returns `messages: [pascalMessage]`.
 
 ### `pascalMeta` column
 
@@ -216,6 +254,10 @@ New nullable TEXT (JSON) column on `chat_messages`, following the `carinaMeta` p
 ```jsonc
 {
   "tool": "unlock",
+  "toolTitle": "Force the Lock",        // optional; displayTitle() at roll time. The Salon labels the
+                                        // outcome's header chip with this — "● PASCAL · FORCE THE LOCK"
+                                        // rather than a generic "roll outcome". Absent on rows written
+                                        // before the field existed, where readers fall back to `tool`.
   "definitionTier": "project",          // MountTier
   "definitionMountId": "…",
   "params": { "bonus": 2 },              // resolved, post-clamp
@@ -256,7 +298,7 @@ Both paths support GM-style hidden rolls, riding the existing `targetParticipant
 
 - New gutter button in `components/chat/ComposerGutterTools.tsx` (the 3×2 grid gains a slot or reflows to 4×2 — implementer's call, keep `qt-composer-gutter-button` styling), visible **only when the resolved roster is non-empty**.
 - The popup follows the `RngDropdown` pattern (`components/chat/RngDropdown.tsx`: outside-click ref, `variant="gutter"`). New component `components/chat/CustomToolsDropdown.tsx`: a list of available tools (name + description; character-labeled variants where shadowed; error badges for invalid files), each expanding to a small parameter form generated from the `parameters` block (defaults pre-filled; number/integer/string/boolean inputs), a "Roll privately" checkbox (pre-checked when `defaultVisibility: "whisper"`), and a Run button.
-- Running posts **two messages**: a USER-role message with auto-generated content (e.g. "*I ran `unlock`.*" — with resolved non-default parameters listed) so the model attributes the invocation to the user, followed by the Pascal outcome message. Both share the run's visibility (private manual runs target both messages).
+- Running posts **one message** — the Pascal outcome, carrying the run's visibility. (This spec originally called for a USER invocation line alongside it; see the correction under [The outcome message](#the-outcome-message) for why it was dropped.) The popup lists tools by `title`, not `name`, and sorts on it.
 - Icons go through the central `<Icon name>` system (themeable-icons).
 
 ### API
@@ -363,7 +405,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 5. **One `run_custom` tool, not per-definition dynamic tools.** Keeps the tool list stable for prompt caching, avoids snapshot churn, and matches the Zod-chokepoint rule; the roster rides in the description.
 6. **Pascal synthetic message is the canonical display; the TOOL message is protocol-only** (`delegatedDisplay`), avoiding double bubbles while preserving tool-call threading.
 7. **Rolls are persisted facts.** Raw roll, transform, and outcome live in `pascalMeta`; regeneration never re-rolls.
-8. **Manual runs post a USER invocation message + Pascal outcome** so models attribute the action to the user, matching the requested "message from you saying you ran X."
+8. **Manual runs post the Pascal outcome alone**, which attributes the act to the operator's persona in its own framing. The USER invocation line this spec originally called for is not written: its only unique contribution was to publish the parameters the operator chose, which is the one thing a model must not see.
 9. **Per-invoker perspective for character-tier shadowing**; the composer popup surfaces character-labeled variants with `asCharacterId` disambiguation.
 10. **`revealOdds` hides odds from the roster only**; file readability is governed by existing document-store policy, documented as a caveat rather than new machinery.
 11. **`persist`/ratcheting deferred to v2**, with the schema tolerating the key today.
