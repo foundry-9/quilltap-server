@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: character `metadata.json` spec marked complete
+
+The spec moved from `docs/developer/features/` to `features/complete/`, with its status line updated to implemented (shipped).
+
 #### Fix: document-store names and paths are one case-insensitive namespace
 
 Database-backed vaults compared paths case-insensitively when reading but enforced uniqueness case-sensitively when writing, so `Lore` and `lore` could exist as sibling folders (and `Notes.md` beside `notes.md`), with readers silently resolving one and shadowing the other. Store names had no uniqueness at all — two stores could share the exact same name.

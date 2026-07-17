@@ -1,6 +1,6 @@
 # Feature: Character `metadata.json` — a generic per-character key/value store
 
-**Status:** Specified, not yet implemented.
+**Status:** Implemented (shipped) — commit 8bc43333.
 **Owner subsystems:** Character vault overlay (`lib/database/repositories/vault-overlay/`) and Pascal the Croupier (`lib/pascal/`).
 **Implementation note:** This spec is written to be executed by Claude Code (Opus) with minimal further design input. Where a choice existed, it has been made — see [Design Decisions](#design-decisions-resolved). Follow CLAUDE.md standing rules throughout (changelog, help docs, logging, export/import round-tripping, tool chokepoints).
 
