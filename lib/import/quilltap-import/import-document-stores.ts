@@ -17,6 +17,7 @@ import type {
   ExportedProjectDocMountLink,
 } from '@/lib/export/types';
 import type { ImportOptions, IdMappingState, DocumentStoreImportCounts } from './types';
+import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -45,6 +46,10 @@ export async function importDocumentStores(
 
   const existingStores = await globalRepos.docMountPoints.findAll();
   const byName = new Map(existingStores.map(s => [s.name.toLowerCase(), s]));
+  // Store names are one case-insensitive namespace; track every name we see
+  // (pre-existing + created this run) so neither a clash with an existing
+  // store nor a duplicate inside the import payload mints a colliding name.
+  const takenNames = new Set(existingStores.map(s => s.name));
 
   for (const mp of mountPoints) {
     try {
@@ -76,9 +81,11 @@ export async function importDocumentStores(
         // 'duplicate' — fall through to create a freshly-named mount point.
       }
 
-      const name = existing && options.conflictStrategy === 'duplicate'
-        ? `${mp.name} (imported)`
-        : mp.name;
+      const name = nextUniqueMountPointName(
+        takenNames,
+        existing && options.conflictStrategy === 'duplicate' ? `${mp.name} (imported)` : mp.name
+      );
+      takenNames.add(name);
       const created = await globalRepos.docMountPoints.create({
         name,
         basePath: mp.mountType === 'database' ? '' : mp.basePath,

@@ -4,6 +4,16 @@
 
 ### 4.8-dev
 
+#### Fix: document-store names and paths are one case-insensitive namespace
+
+Database-backed vaults compared paths case-insensitively when reading but enforced uniqueness case-sensitively when writing, so `Lore` and `lore` could exist as sibling folders (and `Notes.md` beside `notes.md`), with readers silently resolving one and shadowing the other. Store names had no uniqueness at all — two stores could share the exact same name.
+
+- Sibling folders and files in database-backed stores can no longer differ only by casing: the unique indexes on `doc_mount_folders` and `doc_mount_file_links` are now `COLLATE NOCASE`. A repair pass runs at every startup — not just once — so collisions introduced by editing the database out-of-band are also caught: the newer of two colliding rows is renamed with a ` (2)` suffix (subtree paths and links repaired with it) and the rename is logged. The pass also verifies the indexes' actual definitions (a same-named non-unique stand-in is replaced) and catches non-ASCII case-collisions that SQLite's ASCII-only NOCASE tolerates.
+- Folder resolution is case-preserving: writing to `lore/new.md` when `Lore` exists reuses `Lore` and files under it, instead of minting a second folder. Re-writing an existing document under a different casing updates it in place and keeps its stored name. Filesystem-backed stores still adopt on-disk casing.
+- Case-only renames (`notes.md` → `Notes.md`, `lore` → `Lore`) now work everywhere — they used to be rejected as "destination already exists" on some paths.
+- Fixed a hazard where force-copying a file onto a case-variant of its own path deleted the source before copying.
+- Store names are now unique case-insensitively. Creating or renaming a store to a name a peer already holds (in any casing) returns a 409; auto-provisioned stores and character vaults suffix ` (N)` instead. Existing duplicate names are suffixed at startup (oldest keeps the name). Characters that share a name now get distinct vault names.
+
 #### Feature: `metadata.json` — a per-character fact sheet, and custom tools that can test it
 
 Every character vault gains an optional `metadata.json` at its root, alongside `properties.json`: one JSON object of arbitrary user-authored keys with any JSON value.

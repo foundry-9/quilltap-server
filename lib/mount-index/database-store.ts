@@ -229,12 +229,18 @@ export async function moveDatabaseDocument(
       'UNSUPPORTED'
     );
   }
-  const conflict = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, toRel);
-  if (conflict) {
-    throw new DatabaseStoreError(
-      `Target already exists: ${toRel}`,
-      'CONFLICT'
-    );
+  // Case-only rename of the same document (notes.md → Notes.md) is allowed —
+  // the case-insensitive lookup would otherwise find the source itself and
+  // report a bogus conflict.
+  const caseOnlyRename = fromRel !== toRel && fromRel.toLowerCase() === toRel.toLowerCase();
+  if (!caseOnlyRename) {
+    const conflict = await repos.docMountDocuments.findByMountPointAndPath(mountPointId, toRel);
+    if (conflict) {
+      throw new DatabaseStoreError(
+        `Target already exists: ${toRel}`,
+        'CONFLICT'
+      );
+    }
   }
 
   // Ensure destination folder exists and get its ID
@@ -427,9 +433,12 @@ export async function moveDatabaseFolder(
     );
   }
 
-  // Check destination doesn't exist
+  // Check destination doesn't exist. The lookup is case-insensitive, so a
+  // case-only rename of the folder itself (lore → Lore) finds the source
+  // row — that's allowed; any OTHER folder at the destination (in any
+  // casing) is a conflict.
   const destFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, toRel);
-  if (destFolder) {
+  if (destFolder && destFolder.id !== sourceFolder.id) {
     throw new DatabaseStoreError(
       `Destination folder already exists: ${toPath}`,
       'CONFLICT'
@@ -445,24 +454,30 @@ export async function moveDatabaseFolder(
 
   // Get destination parent folder ID
   let destParentId: string | null = null;
+  let destParentPath = '';
   if (destDir !== '.') {
     const parentFolder = await repos.docMountFolders.findByMountPointAndPath(mountPointId, destDir);
     if (parentFolder) {
       destParentId = parentFolder.id;
+      destParentPath = parentFolder.path;
     }
   }
 
-  const oldPrefix = fromRel ? `${fromRel}/` : '';
-  const newPrefix = toRel ? `${toRel}/` : '';
+  // Canonicalise: the destination directory may have been addressed in a
+  // different casing than its stored path; the source's descendants share the
+  // source's STORED path prefix, not necessarily the caller-typed one.
+  const newName = path.basename(toRel);
+  const canonicalToRel = destParentPath ? `${destParentPath}/${newName}` : newName;
+  const oldPrefix = `${sourceFolder.path}/`;
+  const newPrefix = `${canonicalToRel}/`;
 
   const movedDocuments: Array<{ oldPath: string; newPath: string }> = [];
 
   // Update the source folder row itself
-  const newName = path.basename(toRel);
   await repos.docMountFolders.update(sourceFolder.id, {
     parentId: destParentId,
     name: newName,
-    path: toRel,
+    path: canonicalToRel,
   });
 
   // Update all descendant folder paths

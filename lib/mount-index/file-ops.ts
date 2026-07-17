@@ -292,6 +292,18 @@ export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
 
   const sourceInfo = await sourceExistsOrThrow(sourceMount, sourceRel);
 
+  // Same mount and same path is a no-op; reject so the caller doesn't
+  // accidentally garbage-collect both ends in the move flow. Case-insensitive
+  // (paths are one namespace regardless of casing) and BEFORE the force-
+  // overwrite branch — force-copying onto a case-variant of the source would
+  // otherwise delete the source itself.
+  if (sourceMount.id === destMount.id && sourceRel.toLowerCase() === destRel.toLowerCase()) {
+    throw new FileOpError(
+      `Source and destination are the same path: ${destRel}`,
+      'INVALID_PATH'
+    );
+  }
+
   if (await destExists(destMount, destRel)) {
     if (!opts.force) {
       throw new FileOpError(
@@ -302,15 +314,6 @@ export async function copyFile(opts: CopyOpts): Promise<FileOpResult> {
     // Force overwrite: remove the existing destination first so write paths
     // don't have to special-case overwrite semantics on every storage type.
     await deleteAtDest(destMount, destRel);
-  }
-
-  // Same mount and same path is a no-op; reject so the caller doesn't
-  // accidentally garbage-collect both ends in the move flow.
-  if (sourceMount.id === destMount.id && sourceRel === destRel) {
-    throw new FileOpError(
-      `Source and destination are the same path: ${destRel}`,
-      'INVALID_PATH'
-    );
   }
 
   const sourceIsFs = isFilesystemMount(sourceMount);
@@ -427,7 +430,11 @@ export async function moveFile(opts: MoveOpts): Promise<FileOpResult> {
 
   const sourceInfo = await sourceExistsOrThrow(sourceMount, sourceRel);
 
-  if (await destExists(destMount, destRel)) {
+  // A case-only rename (notes.md → Notes.md on the same mount) is legal: the
+  // case-insensitive existence check would find the source itself, so skip it.
+  const caseOnlyRename =
+    sourceMount.id === destMount.id && sourceRel.toLowerCase() === destRel.toLowerCase();
+  if (!caseOnlyRename && await destExists(destMount, destRel)) {
     throw new FileOpError(
       `Destination already exists: ${destRel}. Move will not overwrite.`,
       'DEST_EXISTS'

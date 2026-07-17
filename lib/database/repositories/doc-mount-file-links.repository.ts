@@ -32,6 +32,7 @@ import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
 import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { ensureLinkNocaseUniqueIndex } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
@@ -56,24 +57,33 @@ type SyncDb = {
  * Mirrors the segment-by-segment idempotent walk in
  * `lib/mount-index/folder-paths.ts#ensureFolderPath`, plus an
  * `ON CONFLICT`-style fallback for races.
+ *
+ * Folder matching is case-insensitive and case-preserving: a segment that
+ * matches an existing folder except for casing reuses that folder, and the
+ * walk continues under the folder's STORED casing. `canonicalDir` is the
+ * resulting stored-casing directory path ('' for root) so callers can keep
+ * the link's relativePath consistent with the folder rows.
  */
 function ensureLinkFolderId(
   db: SyncDb,
   mountPointId: string,
   relativePath: string,
   now: string,
-): string | null {
+): { folderId: string | null; canonicalDir: string } {
   const dir = posixPath.dirname(relativePath || '');
-  if (!dir || dir === '.' || dir === '/') return null;
+  if (!dir || dir === '.' || dir === '/') return { folderId: null, canonicalDir: '' };
 
   const normalized = dir.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/^\/+|\/+$/g, '');
-  if (!normalized) return null;
+  if (!normalized) return { folderId: null, canonicalDir: '' };
 
   const segments = normalized.split('/').filter((s) => s.length > 0);
-  if (segments.length === 0) return null;
+  if (segments.length === 0) return { folderId: null, canonicalDir: '' };
 
+  // Exact match wins; the NOCASE fallback rides the case-insensitive unique
+  // index on (mountPointId, parentId, name)-equivalent paths.
   const findStmt = db.prepare(
-    'SELECT id FROM doc_mount_folders WHERE mountPointId = ? AND path = ?'
+    `SELECT id, path FROM doc_mount_folders WHERE mountPointId = ? AND path = ? COLLATE NOCASE
+     ORDER BY (path = ?) DESC LIMIT 1`
   );
   const insertStmt = db.prepare(
     `INSERT INTO doc_mount_folders (id, mountPointId, parentId, name, path, createdAt, updatedAt)
@@ -84,24 +94,30 @@ function ensureLinkFolderId(
   let currentPath = '';
 
   for (const segment of segments) {
-    currentPath = currentPath ? `${currentPath}/${segment}` : segment;
-    let row = findStmt.get(mountPointId, currentPath) as { id: string } | undefined;
+    const requestedPath = currentPath ? `${currentPath}/${segment}` : segment;
+    let row = findStmt.get(mountPointId, requestedPath, requestedPath) as
+      | { id: string; path: string }
+      | undefined;
     if (!row) {
       const id = randomUUID();
       try {
-        insertStmt.run(id, mountPointId, currentParentId, segment, currentPath, now, now);
+        insertStmt.run(id, mountPointId, currentParentId, segment, requestedPath, now, now);
         currentParentId = id;
+        currentPath = requestedPath;
         continue;
       } catch (err) {
-        // Re-look up after conflict (UNIQUE(mountPointId, path)).
-        row = findStmt.get(mountPointId, currentPath) as { id: string } | undefined;
+        // Re-look up after conflict (UNIQUE(mountPointId, parentId, name NOCASE)).
+        row = findStmt.get(mountPointId, requestedPath, requestedPath) as
+          | { id: string; path: string }
+          | undefined;
         if (!row) throw err;
       }
     }
     currentParentId = row.id;
+    currentPath = row.path;
   }
 
-  return currentParentId;
+  return { folderId: currentParentId, canonicalDir: currentPath };
 }
 
 export type FileType = DocMountFile['fileType'];
@@ -221,12 +237,13 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           db.exec(sql);
         }
 
-        // (mountPointId, relativePath) replaces the advisory uniqueness the
-        // old doc_mount_files row carried via app-level lookup. Now enforced.
-        db.exec(
-          `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_mp_path" ` +
-          `ON "${this.collectionName}" ("mountPointId", "relativePath")`
-        );
+        // Case-insensitive (mountPointId, relativePath) uniqueness: one file
+        // per location, where `Notes.md` and `notes.md` are the same location
+        // (all path lookups already compare via LOWER()). Runs a repair scan
+        // every init (catching out-of-band edits, and swapping out the legacy
+        // case-sensitive index on older databases) before guaranteeing the
+        // NOCASE index.
+        ensureLinkNocaseUniqueIndex(db);
         db.exec(
           `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
           `ON "${this.collectionName}" ("fileId")`
@@ -633,7 +650,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       // Any caller-supplied input.folderId is informational and ignored —
       // the relativePath wins, and missing folder rows are created here so
       // doc_mount_folders stays in sync with what the link table claims.
-      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      // canonicalRel carries the stored folder casing so the link's path
+      // never disagrees with the folder rows except in the leaf name.
+      const { folderId, canonicalDir } = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      const canonicalRel = canonicalDir ? `${canonicalDir}/${input.fileName}` : input.fileName;
       if (input.folderId !== undefined && input.folderId !== folderId) {
         logger.warn('linkBlobContent: caller folderId disagrees with relativePath; using derived', {
           mountPointId: input.mountPointId,
@@ -660,12 +680,14 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         ).run(blobId, fileRow.id, computed, sizeBytes, input.storedMimeType, input.data, now, now);
       }
 
-      // Upsert the link row. The UNIQUE(mountPointId, relativePath) index
-      // means a second write to the same path overwrites the existing
-      // link's metadata in place rather than creating a duplicate.
+      // Upsert the link row. The UNIQUE(mountPointId, relativePath NOCASE)
+      // index means a second write to the same path — in any casing —
+      // overwrites the existing link's metadata in place rather than
+      // creating a duplicate. Case-preserving: the existing row keeps its
+      // relativePath/fileName casing.
       const existingLink = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
-      ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
+        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
+      ).get(input.mountPointId, canonicalRel) as { id: string } | undefined;
 
       const description = input.description ?? '';
       const descriptionUpdatedAt = description ? now : null;
@@ -678,14 +700,14 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         linkId = existingLink.id;
         db.prepare(
           `UPDATE doc_mount_file_links SET
-             fileId = ?, fileName = ?, folderId = ?,
+             fileId = ?, folderId = ?,
              originalFileName = ?, originalMimeType = ?,
              description = ?, descriptionUpdatedAt = ?,
              extractedText = ?, extractedTextSha256 = ?, extractionStatus = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, folderId,
+          fileRow.id, folderId,
           input.originalFileName, input.originalMimeType,
           description, descriptionUpdatedAt,
           extractedText, extractedTextSha256, extractionStatus,
@@ -710,7 +732,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              0, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
+          linkId, fileRow.id, input.mountPointId, canonicalRel, input.fileName, folderId,
           input.originalFileName, input.originalMimeType,
           description, descriptionUpdatedAt,
           conversionStatus,
@@ -785,8 +807,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         ).run(documentId, fileRow.id, input.content, input.contentSha256, input.plainTextLength, now, now);
       }
 
-      // Derive folderId from relativePath (see linkBlobContent for rationale).
-      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      // Derive folderId from relativePath (see linkBlobContent for rationale,
+      // including the canonical stored-casing directory).
+      const { folderId, canonicalDir } = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      const canonicalRel = canonicalDir ? `${canonicalDir}/${input.fileName}` : input.fileName;
       if (input.folderId !== undefined && input.folderId !== folderId) {
         logger.warn('linkDocumentContent: caller folderId disagrees with relativePath; using derived', {
           mountPointId: input.mountPointId,
@@ -796,9 +820,11 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         });
       }
 
+      // Case-insensitive, case-preserving upsert: a write to `NOTES.md`
+      // updates the row stored as `notes.md` and keeps its casing.
       const existingLink = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
-      ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
+        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
+      ).get(input.mountPointId, canonicalRel) as { id: string } | undefined;
 
       // Per-document policy. For markdown, derive it from the frontmatter in
       // `content` unless the caller passed explicit flags; other native text
@@ -817,14 +843,14 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         linkId = existingLink.id;
         db.prepare(
           `UPDATE doc_mount_file_links SET
-             fileId = ?, fileName = ?, folderId = ?,
+             fileId = ?, folderId = ?,
              plainTextLength = ?,
              conversionStatus = 'converted', conversionError = NULL,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, folderId,
+          fileRow.id, folderId,
           input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
           now, now, linkId
@@ -844,7 +870,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
              0, ?, ?, ?
            )`
         ).run(
-          linkId, fileRow.id, input.mountPointId, input.relativePath, input.fileName, folderId,
+          linkId, fileRow.id, input.mountPointId, canonicalRel, input.fileName, folderId,
           input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
           now, now, now
@@ -906,7 +932,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       // The scanner calls this without passing folderId at all, so this
       // derivation is the only place new filesystem-scan rows get a sensible
       // folderId.
-      const folderId = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
+      const { folderId } = ensureLinkFolderId(db, input.mountPointId, input.relativePath, now);
       if (input.folderId !== undefined && input.folderId !== null && input.folderId !== folderId) {
         logger.warn('linkFilesystemFile: caller folderId disagrees with relativePath; using derived', {
           mountPointId: input.mountPointId,
@@ -916,8 +942,12 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         });
       }
 
+      // NOCASE match so a case-only rename on disk updates the existing row
+      // instead of minting a case-variant duplicate. Unlike the database-store
+      // writers, the update below ADOPTS the scanned casing — the filesystem
+      // is the source of truth for these rows.
       const existingLink = db.prepare(
-        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ?`
+        `SELECT id FROM doc_mount_file_links WHERE mountPointId = ? AND relativePath = ? COLLATE NOCASE`
       ).get(input.mountPointId, input.relativePath) as { id: string } | undefined;
 
       let linkId: string;
@@ -934,14 +964,14 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         linkId = existingLink.id;
         db.prepare(
           `UPDATE doc_mount_file_links SET
-             fileId = ?, fileName = ?, folderId = ?,
+             fileId = ?, relativePath = ?, fileName = ?, folderId = ?,
              conversionStatus = ?, conversionError = ?,
              plainTextLength = ?, chunkCount = ?,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
-          fileRow.id, input.fileName, folderId,
+          fileRow.id, input.relativePath, input.fileName, folderId,
           conversionStatus, input.conversionError ?? null,
           plainTextLength, chunkCount,
           allowEmbed, allowCharacterRead, allowCharacterWrite,

@@ -15,7 +15,7 @@ import { withActionDispatch } from '@/lib/api/middleware/actions';
 import type { RequestContext } from '@/lib/api/middleware/auth';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, conflict, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { scanMountPoint } from '@/lib/mount-index/scanner';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { reindexLinks, enqueueEmbeddingJobsScoped } from '@/lib/mount-index/reindex';
@@ -96,6 +96,27 @@ export const PATCH = createAuthenticatedParamsHandler<{ id: string }>(
 
       const body = await req.json();
       const validatedData = updateMountPointSchema.parse(body);
+
+      // Renames stay inside the case-insensitive name namespace: no store may
+      // take a name a peer already holds, even in a different casing.
+      if (validatedData.name !== undefined) {
+        const desiredLower = validatedData.name.trim().toLowerCase();
+        const allStores = await repos.docMountPoints.findAll();
+        const clash = allStores.find(
+          mp => mp.id !== id && mp.name.trim().toLowerCase() === desiredLower
+        );
+        if (clash) {
+          logger.warn('[Mount Points v1] Rejected duplicate mount point rename', {
+            mountPointId: id,
+            name: validatedData.name,
+            clashesWith: clash.id,
+            userId: user.id,
+          });
+          return conflict(
+            `A document store named "${clash.name}" already exists. Names are matched without regard to case — please choose a different name.`
+          );
+        }
+      }
 
       const updated = await repos.docMountPoints.update(id, validatedData);
 

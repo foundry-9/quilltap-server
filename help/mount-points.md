@@ -68,6 +68,17 @@ Document stores are managed from the **Scriptorium** page, accessible via the da
 
 You may also manage document stores through the API at `/api/v1/mount-points` if you prefer the programmatic approach.
 
+### One Name Per Shelf, and Casing Doesn't Count
+
+A library in which *Lore* and *lore* are two different rooms is a library designed by a prankster, and the Scriptorium will have none of it. Names here are compared without regard to capitalization, and no two things at the same level may share one:
+
+- **Store names are unique.** Attempting to create or rename a store to a name another store already holds — even dressed in different capitals — is politely declined, and you will be asked to choose another. Stores Quilltap conjures on its own behalf (project file stores, character vaults, and the like) sidestep the collision by appending a discreet ` (2)`, ` (3)`, and so on; two characters who share a name thus receive distinctly named vaults.
+- **Folders and files within a database-backed store follow the same rule.** Sibling folders may not differ only by casing, nor may two files at the same path. Writing to `lore/notes.md` when a `Lore` folder already exists simply files the note in `Lore`, keeping the folder's original capitalization; saving over `Notes.md` as `notes.md` updates the existing document rather than minting a shadow copy.
+- **Changing only the capitalization of a name is always allowed.** Renaming `notes.md` to `Notes.md`, or `lore` to `Lore`, does exactly what you intend — no spurious "destination already exists" objections.
+- **Existing collisions are tidied automatically — and re-checked at every opening.** Should an older library arrive carrying such duplicates, or should some enterprising soul introduce them by rummaging in the database directly, the inspection that runs each time Quilltap starts will find them: the newer of the two is renamed with a ` (2)` suffix (subfolders and files moving with it), and a note of the correction is made in the logs.
+
+Filesystem and Obsidian stores defer to your operating system's own opinions about casing, as they always have.
+
 ### Converting Between Backends
 
 Every store card sports a small button for changing its mind about where it keeps its things. Should you decide, mid-career, that your sprawling vault of research notes deserves the encrypted sanctuary of the mount-index database — or, on the contrary, that your database-backed store ought to be let out for a walk on the filesystem — the Scriptorium will oblige without losing so much as a single embedding.

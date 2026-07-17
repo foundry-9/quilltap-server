@@ -10,7 +10,7 @@ import { createAuthenticatedHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { created, serverError, badRequest } from '@/lib/api/responses';
+import { created, serverError, badRequest, conflict } from '@/lib/api/responses';
 import { attachMountPoint } from '@/lib/mount-index/watcher';
 import { verifyBasePath } from '@/lib/mount-index/scanner';
 import { scaffoldCharacterMount } from '@/lib/mount-index/character-scaffold';
@@ -158,6 +158,22 @@ export const POST = createAuthenticatedHandler(async (req: NextRequest, { user, 
 
   const body = await req.json();
   const validatedData = createMountPointSchema.parse(body);
+
+  // Document-store names form one case-insensitive namespace: no store may
+  // share a name with a peer, even in a different casing.
+  const allStores = await repos.docMountPoints.findAll();
+  const desiredLower = validatedData.name.trim().toLowerCase();
+  const clash = allStores.find(mp => mp.name.trim().toLowerCase() === desiredLower);
+  if (clash) {
+    logger.warn('[Mount Points v1] Rejected duplicate mount point name', {
+      name: validatedData.name,
+      clashesWith: clash.id,
+      userId: user.id,
+    });
+    return conflict(
+      `A document store named "${clash.name}" already exists. Names are matched without regard to case — please choose a different name.`
+    );
+  }
 
   const mountPoint = await repos.docMountPoints.create({
     name: validatedData.name,

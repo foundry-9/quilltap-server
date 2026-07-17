@@ -1455,6 +1455,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_points" (
 
 `conversionStatus` is one of `'idle'`, `'converting'`, `'deconverting'`, or `'error'`, and tracks the Convert / Deconvert action that moves a store between filesystem- and database-backed storage (see `POST /api/v1/mount-points/:id?action=convert` / `?action=deconvert`). Distinct from the file-level `doc_mount_files.conversionStatus`, which tracks pdf/docx→text extraction. `conversionError` holds the failure message when `conversionStatus = 'error'`. Both columns are added by in-repo `ALTER TABLE` on first access for legacy databases that predate this feature.
 
+**`name` uniqueness (case-insensitive, app-level):** store names form one case-insensitive namespace — no two stores may share a name, even in different casing. There is deliberately no DB unique index (backup restore must be able to recreate legacy rows verbatim); enforcement lives at the write chokepoints (the mount-points create/rename routes return 409, `nextUniqueMountPointName` suffixes ` (N)` for auto-provisioned stores and character vaults) plus `repairMountPointNameCollisions` in `lib/database/repositories/mount-index-case-repair.ts`, which runs on every table init and suffixes any surviving duplicates (keep-oldest wins).
+
 ### doc_mount_folders
 
 ```sql
@@ -1467,13 +1469,13 @@ CREATE TABLE IF NOT EXISTS "doc_mount_folders" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_parent_name"
-  ON "doc_mount_folders" ("mountPointId", COALESCE("parentId", ''), "name");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_parent_name_nocase"
+  ON "doc_mount_folders" ("mountPointId", COALESCE("parentId", ''), "name" COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS "idx_doc_mount_folders_mp_path"
   ON "doc_mount_folders" ("mountPointId", "path");
 ```
 
-Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` column on `doc_mount_file_links` is always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name) enforces one folder per parent per name; the COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints.
+Folder rows are populated only for `database`-backed mount points. Filesystem-backed mounts continue to derive folder structure from the OS; their `folderId` column on `doc_mount_file_links` is always NULL. The unique index on (mountPointId, COALESCE(parentId, ''), name COLLATE NOCASE) enforces one folder per parent per name **case-insensitively** — sibling folders may never differ only by casing (the read paths already treat paths case-insensitively, so `Lore` and `lore` would be ambiguous). The COALESCE is required because SQLite treats each NULL as distinct in UNIQUE constraints. Folder resolution is case-preserving: `ensureFolderPath` / `ensureLinkFolderId` reuse an existing case-variant folder and continue under its stored casing. `ensureFolderNocaseUniqueIndex` (`lib/database/repositories/mount-index-case-repair.ts`) runs on every table init — effectively every startup — as a double-check against out-of-band edits: it scans for case-colliding siblings unconditionally (renaming the newer with a ` (N)` suffix, subtree paths and link rows repaired with it) and recreates the index unless a genuine `UNIQUE … NOCASE` definition is already present under that name (existence alone is not trusted — a hand-made stand-in with the right name but the wrong definition is replaced). NOCASE folds ASCII only — non-ASCII case-variants slip past the index but are folded by the JS scan, so they are repaired at the next startup and blocked at the write chokepoints.
 
 ### doc_mount_files
 
@@ -1527,8 +1529,8 @@ CREATE TABLE IF NOT EXISTS "doc_mount_file_links" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mp_path"
-  ON "doc_mount_file_links" ("mountPointId", "relativePath");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mp_path_nocase"
+  ON "doc_mount_file_links" ("mountPointId", "relativePath" COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_fileId"
   ON "doc_mount_file_links" ("fileId");
 CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mountPointId"
@@ -1537,7 +1539,7 @@ CREATE INDEX IF NOT EXISTS "idx_doc_mount_file_links_mountPointId"
 
 One row per visible location of a file (i.e. the hard link). Multiple link rows may point at the same `doc_mount_files` row, meaning the same bytes appear at multiple `(mountPointId, relativePath)` tuples. Per-consumer extraction state (conversion lifecycle, extracted text, chunk count) lives here so two consumers hard-linking the same content can re-extract or re-caption independently.
 
-The UNIQUE index on `(mountPointId, relativePath)` enforces "one file per location" — what used to be advisory in app code. Deleting a link via `DocMountFileLinksRepository.deleteWithGC` cascades to chunks (FK), and if it was the last link for its file the file row gets dropped (cascading to documents/blobs). `sweepOrphanedFiles()` is the defense-in-depth GC for writers that bypass the helper.
+The UNIQUE index on `(mountPointId, relativePath COLLATE NOCASE)` enforces "one file per location" **case-insensitively** — `Notes.md` and `notes.md` are the same location, matching the `LOWER()`-based path lookups. Upserts are case-preserving: a database-store write addressed in a different casing updates the existing row and keeps its stored `relativePath`/`fileName`; filesystem-scan writes (`linkFilesystemFile`) instead adopt the on-disk casing, since disk is the source of truth there. `ensureLinkNocaseUniqueIndex` (`lib/database/repositories/mount-index-case-repair.ts`) runs on every table init — effectively every startup — as a double-check against out-of-band edits: it scans for case-colliding rows unconditionally (the newer is renamed `stem (N).ext`) and recreates the index unless a genuine `UNIQUE … NOCASE` definition is already present under that name; the legacy case-sensitive `idx_doc_mount_file_links_mp_path` is dropped on the way. Same ASCII-only NOCASE caveat as the folders index: non-ASCII case-variants are caught by the JS scan at startup and by the write chokepoints, not by the index. Deleting a link via `DocMountFileLinksRepository.deleteWithGC` cascades to chunks (FK), and if it was the last link for its file the file row gets dropped (cascading to documents/blobs). `sweepOrphanedFiles()` is the defense-in-depth GC for writers that bypass the helper.
 
 The three `allow*` columns are the per-document policy, derived from a markdown document's YAML frontmatter at index time (positive sense: `1` == permissive == the frontmatter default of `true`). `allowEmbed` (frontmatter `embed`) gates inclusion in the embedding pipeline — `0` skips embedding and NULLs any existing chunk vectors. `allowCharacterRead` (`character_read`) gates whether LLM characters may read/list/grep/RAG the document — `0` makes it invisible to them (the human operator is unaffected). `allowCharacterWrite` (`character_write`) gates character-initiated mutation. `character_read` is the master gate: the coercion in `lib/doc-edit/document-policy.ts` forces `allowEmbed` and `allowCharacterWrite` to `0` whenever `allowCharacterRead` is `0`, so the stored columns are the *effective* policy (a row with `allowCharacterRead = 0, allowEmbed = 1` should never be written by the normal path). Non-markdown links keep the permissive defaults (no frontmatter to parse). The columns are re-derived on every reindex, so editing the frontmatter (operator or on-disk) is the control surface. See `lib/doc-edit/document-policy.ts` and the `add-doc-mount-file-policy-flags-v1` migration.
 
