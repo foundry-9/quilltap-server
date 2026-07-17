@@ -28,6 +28,7 @@ import {
   CHARACTER_VAULT_DESCRIPTORS,
   MANAGED_FIELDS,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -43,6 +44,7 @@ import { hasLinkedVault, stableUuidFromString } from './parsers';
 import {
   readVaultTextFile,
   readCharacterVaultProperties,
+  readCharacterVaultMetadata,
   readCharacterVaultPhysicalPrompts,
   readCharacterVaultSystemPrompts,
   readCharacterVaultScenarios,
@@ -88,6 +90,13 @@ export async function readCharacterVaultManagedFields(
           snapshot.title = props.title;
           snapshot.firstMessage = props.firstMessage;
           snapshot.talkativeness = props.talkativeness;
+        }
+        break;
+      }
+      case 'metadata-json': {
+        const metadata = await readCharacterVaultMetadata(mountPointId, characterId);
+        if (metadata) {
+          snapshot.metadata = metadata;
         }
         break;
       }
@@ -221,6 +230,27 @@ export async function writeCharacterVaultManagedFields(
     ),
   );
   result.singleFileWriteCount++;
+
+  // The fact sheet — projected ONLY when the caller actually has one.
+  //
+  // Every other field above has a DB column, so "the caller passed nothing"
+  // safely reads as "the value is empty". `metadata` has no column: a raw
+  // character row simply cannot carry it. Writing `{}` on its absence would let
+  // any caller holding a raw row — the startup backfill's repopulate path does
+  // exactly that — silently erase a fact sheet it never saw. So absence here
+  // means "no opinion", not "empty", and the file is left alone.
+  //
+  // Nothing is lost by the skip: a fresh vault's `metadata.json` is seeded by
+  // the scaffold, and the startup backfill seeds any older vault still lacking
+  // one. Same reasoning as the wardrobe note at the end of this function.
+  if (character.metadata != null) {
+    await writeDatabaseDocument(
+      mountPointId,
+      CHARACTER_METADATA_JSON_PATH,
+      JSON.stringify(character.metadata, null, 2),
+    );
+    result.singleFileWriteCount++;
+  }
 
   await writeDatabaseDocument(mountPointId, CHARACTER_IDENTITY_MD_PATH, character.identity ?? '');
   result.singleFileWriteCount++;
@@ -401,6 +431,27 @@ export async function applyDocumentStoreWriteOverlay(
           JSON.stringify(next, null, 2),
         );
         for (const k of touched) delete dbPatch[k];
+        break;
+      }
+      case 'metadata-json': {
+        if (!('metadata' in patch)) break;
+        // Whole-object REPLACE, not a key-merge: `metadata` is one field owning
+        // one file, so the patch's value simply becomes the file. (properties.json
+        // read-modify-writes because five Character fields share it — that dance
+        // buys nothing here and would make it impossible to delete a key.)
+        // Key-level edits are the caller's read-modify-write to do.
+        const next = patch.metadata ?? {};
+        await writeDatabaseDocument(
+          mountPointId,
+          descriptor.vaultPath,
+          JSON.stringify(next, null, 2),
+        );
+        logger.debug('Routed character metadata patch to the vault', {
+          characterId,
+          mountPointId,
+          keys: Object.keys(next),
+        });
+        delete dbPatch.metadata;
         break;
       }
       case 'physical-md':

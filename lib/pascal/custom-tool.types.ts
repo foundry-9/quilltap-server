@@ -223,17 +223,49 @@ export const ParamComparatorSchema = z
 export type ParamComparator = z.infer<typeof ParamComparatorSchema>;
 
 /**
+ * A comparator against one key of the invoking character's metadata sheet.
+ * Shape-identical to {@link ParamComparatorSchema} — the same six keys, the
+ * same widened eq/neq, the same `$param` operands.
+ *
+ * It is a separate schema because the two differ entirely in what can be known
+ * at load time. A `params` test names something the file itself declares, so a
+ * misspelling is a rejection. A `metadata` test names a key on a character the
+ * file has never met: nothing here can be checked beyond the comparator's own
+ * shape, and the run-time rule (a key that is absent, non-primitive, or of the
+ * wrong type simply fails to match) closes the gap. See `matchesWhen`.
+ */
+export const MetadataComparatorSchema = ParamComparatorSchema;
+
+export type MetadataComparator = z.infer<typeof MetadataComparatorSchema>;
+
+/**
+ * Metadata keys are the USER's vocabulary, not an identifier we get to shape:
+ * `metadata.json` is hand-authored and `hasAnsibleAccess` is a perfectly
+ * ordinary key. So unlike `params`, whose keys must match a declared
+ * `IdentifierSchema` name, these are any non-empty string.
+ */
+const MetadataKeySchema = z.string().min(1);
+
+/**
  * An outcome test. Either the literal `true` (catch-all) or an object naming
  * one or more subjects, ALL of which must hold.
  *
  * Bare comparator keys test the final value, so the common case stays as short
  * as it ever was and every definition written before this key existed still
  * means what it meant. `roll` tests the raw pre-transform draw; `params` tests
- * what the caller supplied, keyed by parameter name:
+ * what the caller supplied, keyed by parameter name; `metadata` tests the
+ * invoking character's own fact sheet (`metadata.json`), keyed by whatever the
+ * user called it:
  *
  * ```json
- * { "gt": 1, "roll": { "gte": 15 }, "params": { "scale": { "gt": 12 } } }
+ * { "gt": 1, "roll": { "gte": 15 }, "params": { "scale": { "gt": 12 } },
+ *   "metadata": { "hasAnsibleAccess": { "eq": true } } }
  * ```
+ *
+ * A `metadata` key that this character simply doesn't have is not an error —
+ * the comparator is false and the table falls through to its catch-all. That is
+ * the whole point: a lockpicking table branches on the key its author invented,
+ * and must still deal sensibly to the character who's never heard of it.
  *
  * There is still no OR and no nesting: ordered, first-match-wins outcomes make
  * OR unnecessary, and a flat AND of comparators keeps the evaluator eval-free.
@@ -246,11 +278,18 @@ export const WhenObjectSchema = z
       .record(IdentifierSchema, ParamComparatorSchema)
       .optional()
       .describe('Test the resolved parameters, keyed by parameter name.'),
+    metadata: z
+      .record(MetadataKeySchema, MetadataComparatorSchema)
+      .optional()
+      .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
   })
   .refine(
     (when) =>
-      hasComparator(when) || when.roll !== undefined || (when.params !== undefined && Object.keys(when.params).length > 0),
-    { message: 'must test something: a comparator on the value, `roll`, or a non-empty `params`' }
+      hasComparator(when) ||
+      when.roll !== undefined ||
+      (when.params !== undefined && Object.keys(when.params).length > 0) ||
+      (when.metadata !== undefined && Object.keys(when.metadata).length > 0),
+    { message: 'must test something: a comparator on the value, `roll`, a non-empty `params`, or a non-empty `metadata`' }
   );
 
 export type WhenObject = z.infer<typeof WhenObjectSchema>;
@@ -266,13 +305,13 @@ export type OutcomeState = z.infer<typeof OutcomeStateSchema>;
 
 export const CustomToolOutcomeSchema = z.strictObject({
   when: WhenSchema.describe(
-    '`true` for a catch-all, or comparators on the value, `roll`, and `params` that AND together.'
+    '`true` for a catch-all, or comparators on the value, `roll`, `params`, and `metadata` that AND together.'
   ),
   message: z
     .string()
     .min(1)
     .max(MAX_MESSAGE_LENGTH)
-    .describe('Narrative result. Supports {{value}}, {{roll}}, {{dice}}, and {{params.name}}.'),
+    .describe('Narrative result. Supports {{value}}, {{roll}}, {{dice}}, {{params.name}}, and {{metadata.key}}.'),
   state: OutcomeStateSchema.describe('Semantic state, used to accent the result bubble.'),
 });
 
@@ -445,7 +484,36 @@ function validateReferences(
         name,
       ]);
     }
+
+    // `metadata` gets a shallower check, and there is no way around it: the
+    // keys live on a character the file has never seen, so neither the key's
+    // existence nor its stored type is knowable here. What IS checkable is the
+    // operand — a `$param` reference must still resolve to a declared
+    // parameter, exactly as anywhere else. The rest (absent key, wrong type,
+    // non-primitive value) is caught fail-soft at run time by `matchesWhen`,
+    // where the character is finally in the room.
+    for (const [key, comparator] of Object.entries(outcome.when.metadata ?? {})) {
+      validateMetadataOperands(declared, comparator, ctx, [...path, 'metadata', key]);
+    }
   });
+}
+
+/**
+ * Check only what a metadata comparator can be checked on at load: that every
+ * `$param` operand names a declared parameter. Deliberately silent about the
+ * subject's type — see the caller.
+ */
+function validateMetadataOperands(
+  declared: Record<string, CustomToolParameter>,
+  comparator: MetadataComparator,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>
+): void {
+  for (const key of COMPARATOR_KEYS) {
+    const operand = (comparator as Record<string, unknown>)[key];
+    if (operand === undefined) continue;
+    resolveOperandType(declared, operand, ctx, [...path, key]);
+  }
 }
 
 /** Roll fields are numeric, so every `$param` in one must name a numeric parameter. */

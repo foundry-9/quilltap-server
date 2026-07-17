@@ -158,6 +158,21 @@ export const CharacterSchema = z.object({
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),  // Default roleplay template for this character
   defaultImageProfileId: UUIDSchema.nullable().optional(),  // Default image generation profile for this character
   sillyTavernData: JsonSchema.nullable().optional(),
+  /**
+   * The character's fact sheet: a flat object of user-authored keys with any
+   * JSON value — `{ "hasAnsibleAccess": true, "clearanceLevel": 3 }`. Lives in
+   * the vault as `metadata.json`, which is its sole source of truth (no DB
+   * column). Hydration always yields at least `{}` for a vault-linked
+   * character, so `character.metadata?.["key"]` needs no null gymnastics;
+   * null/undefined and `{}` mean the same thing to a reader.
+   *
+   * Driven user-side and user-side only. It is never injected into a prompt,
+   * and no generation system (create-character, summon-from-lore, the
+   * optimizer) may invent or populate it. Its consumer is Pascal: outcome
+   * tables test `when.metadata.<key>`. A transparent character can read and
+   * edit the file through the ordinary doc_* tools, like any vault document.
+   */
+  metadata: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),
   npc: z.boolean().default(false),  // NPC flag - true for ad-hoc NPCs created in chat
   talkativeness: z.number().min(0.1).max(1.0).default(0.5),

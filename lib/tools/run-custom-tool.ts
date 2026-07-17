@@ -70,11 +70,20 @@ export interface RunCustomToolOutput {
   error?: string;
 }
 
-/** Fixed preamble; the roster is appended per build. */
+/**
+ * Fixed preamble; the roster is appended per build.
+ *
+ * The metadata sentence says only that outcome tables MAY consult the sheet —
+ * never which keys exist or what they hold. Those are per-character and often
+ * the point of the table (a `revealOdds: false` lock that opens for whoever
+ * carries the key); enumerating them here would leak every character's secrets
+ * into every participant's tool block on every call.
+ */
 const RUN_CUSTOM_PREAMBLE = [
   'Run one of this scene\'s custom tools — user-authored actions with a random outcome.',
   'The roll happens server-side and its result is posted as a permanent message by Pascal the Croupier, so you cannot choose the outcome: run the tool and then narrate whatever it returns, including failure.',
   'Do not describe the result before calling, and do not re-run a tool to get a better answer.',
+  'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
   '',
   'Available tools:',
 ].join('\n');
@@ -134,6 +143,12 @@ function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string 
     ...describeComparator(when, 'value'),
     ...(when.roll !== undefined ? describeComparator(when.roll, 'roll') : []),
     ...Object.entries(when.params ?? {}).flatMap(([name, comparator]) => describeComparator(comparator, name)),
+    // Metadata clauses render like any other comparator — but ONLY here, inside
+    // a table the author chose to reveal. `revealOdds: false` returns before
+    // this is ever called, which is how an author keeps a metadata branch secret.
+    ...Object.entries(when.metadata ?? {}).flatMap(([key, comparator]) =>
+      describeComparator(comparator, `your ${key}`)
+    ),
   ];
 
   return parts.join(' and ');

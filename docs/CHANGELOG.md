@@ -4,6 +4,31 @@
 
 ### 4.8-dev
 
+#### Feature: `metadata.json` — a per-character fact sheet, and custom tools that can test it
+
+Every character vault gains an optional `metadata.json` at its root, alongside `properties.json`: one JSON object of arbitrary user-authored keys with any JSON value.
+
+```json
+{ "hasAnsibleAccess": true, "clearanceLevel": 3, "faction": "Ordo Aurum" }
+```
+
+- **The file.** Keys are the user's own — no reserved names, no schema, no size limit beyond the usual document-store ones. The only requirement is that the file hold an object, not an array or a scalar. It hydrates onto the character as `character.metadata`, so any code path holding a hydrated character can read `character.metadata?.["key"]`.
+- **Not a keystone, and no migration script.** An absent file hydrates as `{}`; so does an unparseable one, with a warning to the log. Only `properties.json` can declare a vault broken. New vaults are seeded with `{}`, and the startup character-vault backfill seeds an empty `metadata.json` into every already-linked vault that lacks one — an existence check, not a parse, so a file holding invalid JSON is never "healed" into an empty one. Managed-field projection writes the file only when the character actually carries `metadata`; a caller without it (like the backfill's repopulate path, which reads raw rows that have no such column) leaves the file alone rather than clobbering a real fact sheet with `{}`.
+- **Writable managed field.** `metadata` joins `MANAGED_FIELDS`, so repository and API writes route to the vault file like `pronouns` or `title`; there is no `characters` column and no DDL change. A patch **replaces** the whole object rather than merging keys — one field owns one file, so PUT-the-object is the coherent semantics, and a merge would make deleting a key impossible. `properties.json` merges only because five fields share it.
+- **User-driven, and only user-driven.** No generation system reads or writes it: not character creation, not summon-from-lore, not the optimizer. It is never injected into a system prompt or character context. A character with `systemTransparency: true` can read and edit the file through the ordinary `doc_*` tools, like any other vault document; an opaque character cannot see it. No new access machinery.
+- **The file manager is the editing surface.** There is no form for it in the Aurora editor; the plumbing for one exists.
+
+Custom tools are the first consumer. Both additions are backward compatible.
+
+- **`when.metadata`** — a fourth outcome-test subject, symmetric to `params`: `{ "gt": 0.60, "metadata": { "hasAnsibleAccess": { "eq": true } } }`. Same six comparators, ANDed the same way, `$param` operands included, so `{ "metadata": { "clearanceLevel": { "gte": { "$param": "required" } } } }` is an opposed check against what the character carries. Keys are any non-empty string, not the `params` identifier grammar — `metadata.json` is hand-authored and `hasAnsibleAccess` is an ordinary key there.
+- **Missing keys fail soft, and never throw.** A metadata comparator whose key is absent, holds a non-primitive, or holds a type the comparator can't sustain simply does not match: the row is passed over and evaluation falls through to the mandatory catch-all, with a debug log. This is the deliberate difference from `params`, whose keys are declared in the file and so can be validated at load. Metadata keys name something on a character the file has never met, so load-time validation checks only the comparator's shape and its `$param` operands. A table branching on a key must still deal sensibly to the character who lacks it. Note that absence is not inequality — `neq` on an absent key does not match either — and `{ "eq": null }` is not expressible.
+- **`{{metadata.key}}`** — a fourth template family in outcome messages, rendering primitives the way `{{params.name}}` does. An absent key, or one holding a list or object, is left verbatim as the placeholder, like any unknown placeholder.
+- **The roster never enumerates metadata.** The `run_custom` description gains one sentence saying tables *may* consult the invoking character's metadata, and nothing more — keys and values are per-character and often the point of the table. Tables with `revealOdds: true` render their `when` clauses as they always have, metadata clauses included; `revealOdds: false` is how an author keeps a condition secret.
+- **Who rolled.** The LLM path loads the rolling character's hydrated sheet; a broken vault lands on the existing Prospero error bubble. The manual popup rolls with the sheet of the character the run names, which the popup always does. A run naming nobody rolls against an empty sheet and lands on the catch-all.
+- **`pascalMeta.metadataTested`** records the keys the winning outcome consulted and their values at roll time — only those keys, primitives only, so the transcript shows what the table saw without publishing the whole sheet. Additive JSON in an existing nullable column; no migration.
+
+Export/import round-trips `metadata` both as an `ExportedCharacter` field and as the vault document itself, with the existing managed-field precedence. SillyTavern export omits it; it is Quilltap-native. Both published JSON Schemas (`qtap-custom-tool.schema.json`, `qtap-export.schema.json`) are updated, and the Zod/JSON-Schema agreement test covers the new grammar.
+
 #### Fix: Staff whispers to characters honor the All Whispers toggle again
 
 The custom pseudo-tools work (`61ec90bd`) exempted every `systemSender` message from the Salon's whisper filter so that Pascal's private rolls would stay visible to the operator. That was too broad: it also unhid every other Staff whisper addressed to a character, so the Commonplace Book's memory-recall whispers, Carina's answers, and the Librarian's and Host's targeted messages all rendered whether or not All Whispers was on.

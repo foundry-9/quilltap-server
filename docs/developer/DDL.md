@@ -295,6 +295,7 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | personality | `personality.md` |
 | exampleDialogues | `example-dialogues.md` |
 | pronouns, aliases, title, firstMessage, talkativeness | `properties.json` |
+| metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys. |
 | physicalDescription.fullDescription | `physical-description.md` |
 | physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt | `physical-prompts.json` |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |

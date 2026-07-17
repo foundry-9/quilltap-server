@@ -22,6 +22,7 @@ import { slugifyWardrobeTitle } from '@/lib/mount-index/character-vault';
 
 import {
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -34,11 +35,13 @@ import {
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
   type CharacterVaultProperties,
+  type CharacterVaultMetadata,
   type CharacterVaultPhysicalPrompts,
   type CharacterVaultWardrobe,
 } from './schema';
 import {
   parseVaultProperties,
+  parseVaultMetadata,
   parseVaultPhysicalPrompts,
   parseLegacyWardrobeJson,
   parsePromptFile,
@@ -81,6 +84,20 @@ export async function readCharacterVaultProperties(
   const content = await readVaultTextFile(mountPointId, CHARACTER_PROPERTIES_JSON_PATH, characterId);
   if (content === null) return null;
   return parseVaultProperties(content, characterId ?? mountPointId);
+}
+
+/**
+ * Read a character's vault metadata.json — the freeform fact sheet — or null
+ * when the file is missing or isn't a JSON object. Callers substitute `{}`:
+ * "no metadata" and "an empty sheet" mean the same thing to every reader.
+ */
+export async function readCharacterVaultMetadata(
+  mountPointId: string,
+  characterId?: string,
+): Promise<CharacterVaultMetadata | null> {
+  const content = await readVaultTextFile(mountPointId, CHARACTER_METADATA_JSON_PATH, characterId);
+  if (content === null) return null;
+  return parseVaultMetadata(content, characterId ?? mountPointId, mountPointId);
 }
 
 /**

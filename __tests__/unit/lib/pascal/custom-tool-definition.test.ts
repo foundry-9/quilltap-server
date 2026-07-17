@@ -137,6 +137,70 @@ describe('when — subjects', () => {
   it('rejects an empty comparator on roll', () => {
     expect(rejection(withWhen({ roll: {} }))).toMatch(/at least one comparator/)
   })
+
+  it('accepts a metadata subject ANDed with a value test', () => {
+    expect(accepts(withWhen({ gt: 0.6, metadata: { hasAnsibleAccess: { eq: true } } }))).toBe(true)
+  })
+
+  it('accepts a metadata subject as the only test', () => {
+    expect(accepts(withWhen({ metadata: { clearanceLevel: { gte: 3 } } }))).toBe(true)
+  })
+
+  it('rejects an empty metadata object', () => {
+    expect(rejection(withWhen({ metadata: {} }))).toMatch(/must test something/)
+  })
+
+  it('rejects an empty comparator on a metadata key', () => {
+    expect(rejection(withWhen({ metadata: { faction: {} } }))).toMatch(/at least one comparator/)
+  })
+})
+
+describe('when — the metadata subject', () => {
+  it('takes keys in the USER\'s vocabulary, not our identifier grammar', () => {
+    // metadata.json is hand-authored: camelCase, capitals, and spaces are all
+    // perfectly ordinary keys there, and none would pass the `params` pattern.
+    expect(accepts(withWhen({ metadata: { hasAnsibleAccess: { eq: true } } }))).toBe(true)
+    expect(accepts(withWhen({ metadata: { 'Clearance Level': { gte: 3 } } }))).toBe(true)
+    expect(accepts(withWhen({ metadata: { HOUSE: { eq: 'Aurum' } } }))).toBe(true)
+  })
+
+  it('rejects an empty-string key', () => {
+    expect(accepts(withWhen({ metadata: { '': { eq: 1 } } }))).toBe(false)
+  })
+
+  it('rejects a misspelled comparator inside a metadata test', () => {
+    // Strict, like every other nested object: tolerating `gt3` would silently
+    // drop the test and leave the row looking like a dead branch.
+    expect(accepts(withWhen({ metadata: { faction: { eq: 'Aurum', nonsense: 1 } } }))).toBe(false)
+  })
+
+  it('accepts a $param operand against a metadata key — the opposed check', () => {
+    expect(
+      accepts(withWhen({ metadata: { clearanceLevel: { gte: { $param: 'scale' } } } }, NUM_PARAM))
+    ).toBe(true)
+  })
+
+  it('still rejects a $param operand naming an undeclared parameter', () => {
+    // The one thing a metadata test CAN be checked on at load: its operands.
+    expect(rejection(withWhen({ metadata: { clearanceLevel: { gte: { $param: 'nope' } } } }, NUM_PARAM))).toMatch(
+      /references undeclared parameter "nope"/
+    )
+  })
+
+  /**
+   * The deliberate gap. A metadata key names something on a character the file
+   * has never met, so neither its existence nor its type is knowable here —
+   * `matchesWhen` closes this fail-soft at run time instead.
+   */
+  it('accepts a test of a key no character may ever have', () => {
+    expect(accepts(withWhen({ metadata: { utterlyMadeUp: { eq: true } } }))).toBe(true)
+  })
+
+  it('accepts an ordering test that only a numeric key could satisfy', () => {
+    // Unlike the params equivalent, which is a load-time rejection: we cannot
+    // know that `faction` holds a string until a character turns up holding one.
+    expect(accepts(withWhen({ metadata: { faction: { gt: 1 } } }))).toBe(true)
+  })
 })
 
 describe('when — reference and type rules', () => {
@@ -214,6 +278,13 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['a params subject', withWhen({ gt: 1, params: { scale: { gt: 12 } } }, NUM_PARAM)],
     ['eq against a string parameter', withWhen({ params: { material: { eq: 'brass' } } }, STR_PARAM)],
     ['a $param operand', withWhen({ gte: { $param: 'scale' } }, NUM_PARAM)],
+    ['a metadata subject', withWhen({ gt: 0.6, metadata: { hasAnsibleAccess: { eq: true } } })],
+    ['a metadata key outside the identifier grammar', withWhen({ metadata: { 'Clearance Level': { gte: 3 } } })],
+    ['an empty-string metadata key', withWhen({ metadata: { '': { eq: 1 } } })],
+    ['an empty metadata object', withWhen({ metadata: {} })],
+    ['an empty comparator on a metadata key', withWhen({ metadata: { faction: {} } })],
+    ['an unknown key inside a metadata comparator', withWhen({ metadata: { faction: { eq: 'a', gt3: 1 } } })],
+    ['a $param operand on a metadata key', withWhen({ metadata: { level: { gte: { $param: 'scale' } } } }, NUM_PARAM)],
     ['a test that tests nothing', withWhen({})],
     ['an empty params object', withWhen({ params: {} })],
     ['an empty roll comparator', withWhen({ roll: {} })],

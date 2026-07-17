@@ -107,7 +107,7 @@
         "additionalProperties": false,
         "properties": {
           "when": {
-            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, and `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }. There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, and `metadata` tests the invoking character's own metadata.json fact sheet. There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
             "oneOf": [
               { "const": true },
               {
@@ -131,6 +131,13 @@
                     "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one.",
                     "additionalProperties": { "$ref": "#/$defs/ParamComparator" },
                     "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. At run time a key the character does not have, or one holding a list/object/null, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
+                    "additionalProperties": { "$ref": "#/$defs/MetadataComparator" },
+                    "propertyNames": { "minLength": 1 }
                   }
                 }
               }
@@ -140,7 +147,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000,
-            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), and {{params.name}} (a resolved parameter). Unknown placeholders are left as written."
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), and {{metadata.key}} (a key from the invoking character's fact sheet). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, or one holding a list or object."
           },
           "state": {
             "enum": ["success", "partial", "failure", "info"],
@@ -190,6 +197,20 @@
         "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Numeric parameters only." },
         "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. The operand's type must match the parameter's." },
         "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. The operand's type must match the parameter's." }
+      }
+    },
+    "MetadataComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against one key of the invoking character's metadata sheet. Every key present must hold (they AND together). Shape-identical to ParamComparator; what differs is that nothing about the subject is knowable at load time, so every type rule below is enforced fail-soft at run time instead of as a rejection.",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than. Does not match unless the key holds a number." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to. Does not match unless the key holds a number." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Does not match unless the key holds a number." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the key holds a number." },
+        "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. Does not match unless the key exists and holds a matching primitive." },
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. Does not match when the key is absent — absence is not inequality." }
       }
     },
     "ParamRef": {

@@ -107,13 +107,14 @@ There is deliberately no "or". You will not need it: the table is read from the 
 
 #### Asking about more than the number
 
-Written bare like that, the comparisons are about the rolled value. Two other things may be asked about in the same breath, and everything you name must hold:
+Written bare like that, the comparisons are about the rolled value. Three other things may be asked about in the same breath, and everything you name must hold:
 
 | | |
 |---|---|
 | bare `gt`, `gte`, … | the final value, after the transformation |
 | `roll` | the raw number, *before* it |
 | `params` | what the tool was actually called with, by parameter name |
+| `metadata` | what the *character doing the rolling* carries on their fact sheet |
 
 So *"the value exceeded 1, and the scale was set past 12"* is written:
 
@@ -133,13 +134,35 @@ A comparison may also be made against a parameter instead of a number you fixed 
 
 Still no formulas, still nothing evaluated — only a flat list of comparisons, all of which must hold. It is a smaller box than you might like for about a week, and a considerable comfort thereafter.
 
+#### Asking what the character is carrying
+
+`metadata` asks about the roller's **fact sheet** — the `metadata.json` file at the root of their character vault, holding whatever keys you troubled to write there. (See *[Editing Characters](character-editing.md)* for the file itself.) It is how one table deals differently to different people:
+
+```json
+{ "when": { "gt": 0.60, "metadata": { "hasAnsibleAccess": { "eq": true } } },
+  "message": "The ansible flickers to life.", "state": "success" }
+```
+
+The same six comparisons, ANDed the same way, and `{ "$param": "…" }` operands work here too — `{ "metadata": { "clearanceLevel": { "gte": { "$param": "required" } } } }` weighs what the character *has* against what the caller *asked for*, which is a great deal of drama for one line of JSON.
+
+**And now the important part: a character who hasn't got the key.** Suppose Bertie, who has never in his life heard of an ansible, reaches for that tool. The `hasAnsibleAccess` test simply does not match — no error, no complaint, no bubble in the transcript. The row is passed over, the table reads on, and Bertie lands wherever your catch-all sends him. This is not Quilltap being lenient; it is the only sensible reading. Metadata keys are yours to invent, per character, and no file could possibly know which characters have which. A table branching on a key **must** still deal to whoever lacks it, and the `true` at the bottom of your table is precisely where you say what that means.
+
+The same quiet non-match covers every way a sheet can decline to answer:
+
+- **The key isn't there at all.** Including under `neq` — absence is not inequality, and `{ "faction": { "neq": "Ordo Ferrum" } }` will not match a character who has no `faction` whatsoever. If you want "hasn't got it" to be *interesting*, put it in the catch-all, or order a row above it that tests something they do have.
+- **The key holds a list or an object.** `knownLanguages: ["Trade Cant"]` is a perfectly good thing to keep on a sheet, but there is no sensible way to ask whether a list is greater than 3, so no comparison against it matches.
+- **The key holds the wrong sort of thing.** Ordering a string (`{ "faction": { "gt": 1 } }`) doesn't match; nor does comparing a number against a string. Note the contrast with `params`, where the very same mistake is refused when the file loads: there, the tool declares its own parameters, so the types are knowable and a nonsense comparison is certainly a typo. Here the file has never met the character, so it cannot be told apart from a perfectly deliberate test of a key that some characters keep as a number and others don't keep at all.
+- **`null` cannot be tested.** There is no way to write `{ "eq": null }`, and that is deliberate: an empty key and an absent one both simply fail to match, which spares you having to decide which of the two you meant.
+
+One consequence worth stating plainly: because a row only wins when its metadata tests *held*, a metadata branch is silent in the failure direction. It cannot tell you *why* a character fell through. If a table isn't behaving, check the sheet, not the tool.
+
 **The last outcome must be `true`.** Quilltap insists, and refuses to load a tool that ends any other way. The reason is that a table with a gap in it is a table that will one day produce a roll matching nothing at all, at the worst possible moment, in front of everybody. Requiring a catch-all at the end makes that impossible rather than merely unlikely. For the same reason, a `true` anywhere *except* the end is refused too — everything below it could never be reached, which is never what anyone meant.
 
 `state` is one of `success`, `partial`, `failure`, or `info`. It tints Pascal's announcement accordingly. You never write any styling yourself.
 
 ### Putting things in the message
 
-Four things may be dropped into a `message`:
+Five things may be dropped into a `message`:
 
 | | |
 |---|---|
@@ -147,8 +170,9 @@ Four things may be dropped into a `message`:
 | `{{roll}}` | the raw number, before it |
 | `{{dice}}` | the dice breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14` (empty if you're not rolling dice) |
 | `{{params.bonus}}` | a parameter, as it was actually used — after defaulting and clamping |
+| `{{metadata.faction}}` | a key from the roller's fact sheet |
 
-Anything else in braces is left exactly as you typed it.
+Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object. The placeholder stands there in the sentence looking conspicuous, which is the point: it tells you exactly which key is missing, where an empty space would merely leave you puzzled. If a message leans on `{{metadata.faction}}`, gate its row on `faction` and let the catch-all speak for the factionless.
 
 ```json
 {
@@ -210,6 +234,8 @@ Some rolls should not be public knowledge. Set `"defaultVisibility": "whisper"` 
 
 Set `"revealOdds": false` and a character is told only the tool's name, its description, and its parameters. The roll spec and the outcome table are withheld — they know they may attempt the lock; they do not know what it takes.
 
+**Fact sheets are never enumerated to anybody, whatever `revealOdds` says.** A character is told, in general terms, that a table may consult their metadata; they are never handed a list of their keys, nor anyone else's, nor the values. Those belong to each character severally, and printing them into every participant's tool listing would be a poor way to keep a secret. Do note the other half of this, though: when `revealOdds` is left at its default of `true`, that table's `when` clauses are shown — *including* its metadata clauses. A character reading `your hasAnsibleAccess = true → success` has learned what the lock wants, if not whether they have it. If the condition itself is the secret, set `revealOdds: false`.
+
 **One honest caveat, which you should read before relying on this.** `revealOdds` hides the odds from the *tool listing*. It does not make the file secret. A `.tool.json` is an ordinary document in an ordinary store, and a character with read access to that store can simply open it and read the odds for themselves, as they could any other document.
 
 If the odds must genuinely be secret, put the file in a store the character cannot read. Quilltap's per-document and per-store permissions already do this properly; `revealOdds` is a courtesy, not a lock.
@@ -222,7 +248,9 @@ Rolling this way posts one thing: the outcome, exactly as it would have appeared
 
 **Which means nothing records that it was you.** Should you nudge a parameter before rolling, that is between you and the wheel: the transcript does not note that the operator reached for the tool, nor what figures you chose, and no character can read what you did to arrange the odds. They see what befell. This seems to us the correct division of information.
 
-Should a tool be defined differently for different characters, you'll see each variant listed with the character's name beside it, and running it rolls that character's version.
+Should a tool be defined differently for different characters, you'll see each variant listed with the character's name beside it, and running it rolls that character's version — fact sheet and all, so a metadata-gated table deals to that character exactly as it would have done had they reached for it themselves.
+
+**A caution where fact sheets are concerned.** A tool is listed *once, unlabelled* when it resolves to the same file for everyone at the table — and metadata lives on the character, not in the file, so a metadata-gated tool that everyone shares is listed exactly that way. Running it still rolls as *somebody*: whichever character the listing happened to be resolved from, which in a multi-character room is an arbitrary pick you are not shown. Where that matters — where you mean *Bertie* to try the ansible and not merely *someone* — say so by having Bertie reach for it in the fiction, rather than reaching for it yourself from the gutter.
 
 ## When something is wrong with a file
 

@@ -160,6 +160,90 @@ describe('matchesWhen', () => {
   })
 })
 
+describe('matchesWhen — the metadata subject', () => {
+  const SHEET = {
+    hasAnsibleAccess: true,
+    clearanceLevel: 3,
+    faction: 'Ordo Aurum',
+    knownLanguages: ['Trade Cant'],
+    dossier: { rank: 'adept' },
+    lastSeen: null,
+  }
+
+  /** Pose a test about the sheet alone. */
+  const against = (when: When, metadata: Record<string, unknown> = SHEET) =>
+    matchesWhen(when, { value: 0, roll: 0, params: {}, metadata })
+
+  it.each([
+    ['a boolean that holds', { hasAnsibleAccess: { eq: true } }, true],
+    ['a boolean that does not', { hasAnsibleAccess: { eq: false } }, false],
+    ['neq against a boolean', { hasAnsibleAccess: { neq: false } }, true],
+    ['a number ordered', { clearanceLevel: { gte: 3 } }, true],
+    ['a number ordered short', { clearanceLevel: { gt: 3 } }, false],
+    ['a number banded', { clearanceLevel: { gte: 2, lte: 4 } }, true],
+    ['a string matched', { faction: { eq: 'Ordo Aurum' } }, true],
+    ['a string mismatched', { faction: { eq: 'Ordo Ferrum' } }, false],
+  ])('%s', (_label, metadata, expected) => {
+    expect(against({ metadata } as When)).toBe(expected)
+  })
+
+  it('ANDs several metadata keys together', () => {
+    expect(against({ metadata: { hasAnsibleAccess: { eq: true }, clearanceLevel: { gte: 3 } } } as When)).toBe(true)
+    expect(against({ metadata: { hasAnsibleAccess: { eq: true }, clearanceLevel: { gte: 4 } } } as When)).toBe(false)
+  })
+
+  it('ANDs a metadata test with bare, roll, and params subjects', () => {
+    const when = {
+      gt: 1,
+      roll: { lt: 0.6 },
+      params: { scale: { gt: 12 } },
+      metadata: { hasAnsibleAccess: { eq: true } },
+    } as When
+    const subjects = { value: 2, roll: 0.55, params: { scale: 14 }, metadata: SHEET }
+    expect(matchesWhen(when, subjects)).toBe(true)
+    // Every subject is load-bearing: falsify each in turn.
+    expect(matchesWhen(when, { ...subjects, value: 1 })).toBe(false)
+    expect(matchesWhen(when, { ...subjects, roll: 0.7 })).toBe(false)
+    expect(matchesWhen(when, { ...subjects, params: { scale: 12 } })).toBe(false)
+    expect(matchesWhen(when, { ...subjects, metadata: { hasAnsibleAccess: false } })).toBe(false)
+  })
+
+  it('resolves a $param operand against a metadata key — the opposed check', () => {
+    const when = { metadata: { clearanceLevel: { gte: { $param: 'required' } } } } as When
+    expect(matchesWhen(when, { value: 0, roll: 0, params: { required: 2 }, metadata: SHEET })).toBe(true)
+    expect(matchesWhen(when, { value: 0, roll: 0, params: { required: 4 }, metadata: SHEET })).toBe(false)
+  })
+
+  /**
+   * The fail-soft rule, which is the whole reason `metadata` is not `params`.
+   * Every one of these is a fact about a character rather than an authoring
+   * mistake — a table branching on a key must still deal to whoever lacks it —
+   * so each declines to match and lets the catch-all answer, and none throw.
+   */
+  describe('declines rather than throwing when the sheet cannot answer', () => {
+    it.each([
+      ['a key this character has never heard of', { ansibleAccess: { eq: true } }],
+      ['an absent key tested with neq — absence is not inequality', { ansibleAccess: { neq: true } }],
+      ['a key holding an array', { knownLanguages: { eq: 'Trade Cant' } }],
+      ['a key holding an object', { dossier: { eq: 'adept' } }],
+      ['a key holding null', { lastSeen: { neq: 'never' } }],
+      ['a string ordered against a number', { faction: { gt: 1 } }],
+      ['a number compared against a string', { clearanceLevel: { eq: 'three' } }],
+      ['an ordering test whose operand is a string', { clearanceLevel: { gte: 'three' } }],
+    ])('%s', (_label, metadata) => {
+      expect(() => against({ metadata } as When)).not.toThrow()
+      expect(against({ metadata } as When)).toBe(false)
+    })
+
+    it('treats a missing metadata sheet as a sheet with nothing on it', () => {
+      // Nobody in particular rolled: the subjects carry no metadata at all.
+      const when = { metadata: { hasAnsibleAccess: { eq: true } } } as When
+      expect(matchesWhen(when, { value: 0, roll: 0, params: {} })).toBe(false)
+      expect(against(when, {})).toBe(false)
+    })
+  })
+})
+
 describe('formatValue', () => {
   it('renders integers without decimals', () => {
     expect(formatValue(14)).toBe('14')
@@ -201,6 +285,47 @@ describe('renderTemplate', () => {
 
   it('tolerates whitespace inside the braces', () => {
     expect(renderTemplate('{{ value }}', vars)).toBe('14')
+  })
+
+  describe('the {{metadata.key}} family', () => {
+    const sheet = {
+      faction: 'Ordo Aurum',
+      clearanceLevel: 3,
+      trust: 0.7134567,
+      hasAnsibleAccess: true,
+      knownLanguages: ['Trade Cant'],
+      dossier: { rank: 'adept' },
+      lastSeen: null,
+    }
+    const withSheet = { ...vars, metadata: sheet }
+
+    it('substitutes primitives the way {{params.name}} does', () => {
+      expect(renderTemplate('{{metadata.faction}} / {{metadata.hasAnsibleAccess}}', withSheet)).toBe(
+        'Ordo Aurum / true'
+      )
+    })
+
+    it('renders an integer undecorated and a float to 4 significant digits', () => {
+      expect(renderTemplate('{{metadata.clearanceLevel}} at {{metadata.trust}}', withSheet)).toBe('3 at 0.7135')
+    })
+
+    it.each([
+      ['an absent key', '{{metadata.nope}}'],
+      ['a key holding an array', '{{metadata.knownLanguages}}'],
+      ['a key holding an object', '{{metadata.dossier}}'],
+      ['a key holding null', '{{metadata.lastSeen}}'],
+    ])('leaves %s verbatim rather than eating the hole in the sentence', (_label, template) => {
+      expect(renderTemplate(template, withSheet)).toBe(template)
+    })
+
+    it('leaves every metadata placeholder verbatim when there is no sheet', () => {
+      expect(renderTemplate('{{metadata.faction}}', vars)).toBe('{{metadata.faction}}')
+    })
+
+    it('does not re-scan a substituted metadata value as a template', () => {
+      const sneaky = { ...vars, metadata: { motto: '{{value}}' } }
+      expect(renderTemplate('{{metadata.motto}}', sneaky)).toBe('{{value}}')
+    })
   })
 })
 
@@ -388,6 +513,87 @@ describe('executeCustomTool — outcome selection', () => {
     // One conjunct false is enough to fall through.
     expect(executeCustomTool(tool, { scale: 14, mode: 'passive' }).message).toBe('something did not hold')
     expect(executeCustomTool(tool, { scale: 12, mode: 'active' }).message).toBe('something did not hold')
+  })
+})
+
+describe('executeCustomTool — the invoking character\'s metadata', () => {
+  /** A gated table: the same roll, dealt differently by who is holding what. */
+  const tool = define({
+    name: 'ansible',
+    description: 'Reach for the ansible.',
+    roll: { min: 0.7, max: 0.7 },
+    outcomes: [
+      {
+        when: { gt: 0.6, metadata: { hasAnsibleAccess: { eq: true } } },
+        message: 'The ansible flickers to life for {{metadata.faction}}.',
+        state: 'success',
+      },
+      { when: true, message: 'The panel stays dark.', state: 'failure' },
+    ],
+  })
+
+  it('matches the gated outcome for a character carrying the key', () => {
+    const result = executeCustomTool(tool, {}, {
+      metadata: { hasAnsibleAccess: true, faction: 'Ordo Aurum' },
+    })
+    expect(result.state).toBe('success')
+    expect(result.message).toBe('The ansible flickers to life for Ordo Aurum.')
+  })
+
+  it('falls to the catch-all for a character who has never heard of an ansible', () => {
+    const result = executeCustomTool(tool, {}, { metadata: { faction: 'Ordo Ferrum' } })
+    expect(result.state).toBe('failure')
+    expect(result.message).toBe('The panel stays dark.')
+  })
+
+  it('falls to the catch-all when the key is there but false', () => {
+    expect(executeCustomTool(tool, {}, { metadata: { hasAnsibleAccess: false } }).state).toBe('failure')
+  })
+
+  it('falls to the catch-all when nobody in particular rolled', () => {
+    // A characterless manual run passes no sheet at all.
+    expect(executeCustomTool(tool, {}).state).toBe('failure')
+    expect(executeCustomTool(tool, {}, { metadata: {} }).state).toBe('failure')
+  })
+
+  describe('metadataTested — what the winning row saw', () => {
+    it('records the keys the winning row consulted, at their roll-time values', () => {
+      const result = executeCustomTool(tool, {}, {
+        metadata: { hasAnsibleAccess: true, faction: 'Ordo Aurum', clearanceLevel: 3 },
+      })
+      // Only what the row tested — not the whole sheet, which is the
+      // character's business and may hold things the room should not see.
+      expect(result.metadataTested).toEqual({ hasAnsibleAccess: true })
+    })
+
+    it('is absent when the winning row consulted no metadata', () => {
+      expect(executeCustomTool(tool, {}, { metadata: {} }).metadataTested).toBeUndefined()
+    })
+
+    it('is absent on a run that never had a sheet', () => {
+      expect(executeCustomTool(tool, {}).metadataTested).toBeUndefined()
+    })
+
+    it('records every key of a multi-key winning row', () => {
+      const gated = define({
+        name: 'vault',
+        description: 'Open the vault.',
+        roll: { min: 0.7, max: 0.7 },
+        outcomes: [
+          {
+            when: { metadata: { clearanceLevel: { gte: 3 }, faction: { eq: 'Ordo Aurum' } } },
+            message: 'Open.',
+            state: 'success',
+          },
+          { when: true, message: 'Shut.', state: 'failure' },
+        ],
+      })
+      const result = executeCustomTool(gated, {}, {
+        metadata: { clearanceLevel: 3, faction: 'Ordo Aurum', hasAnsibleAccess: true },
+      })
+      expect(result.state).toBe('success')
+      expect(result.metadataTested).toEqual({ clearanceLevel: 3, faction: 'Ordo Aurum' })
+    })
   })
 })
 

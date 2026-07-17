@@ -44,6 +44,7 @@ import {
   TOOLS_FOLDER,
   TOOL_FILE_SUFFIX,
   type CustomToolParameter,
+  type MetadataComparator,
   type NumberOrParamRef,
   type NumericComparator,
   type OutcomeState,
@@ -398,6 +399,11 @@ export interface CustomToolRunResult {
   /** Dice breakdown, or '' for Form A. */
   diceBreakdown: string;
   visibility: Visibility;
+  /**
+   * The metadata keys the winning outcome tested, and what they held when it
+   * was tested. Absent when the winning row consulted no metadata.
+   */
+  metadataTested?: MetadataTested;
 }
 
 /**
@@ -550,7 +556,16 @@ export interface OutcomeSubjects {
   roll: number;
   /** The resolved parameters, post-default and post-clamp. */
   params: ResolvedParams;
+  /**
+   * The invoking character's metadata sheet, as hydrated from their vault's
+   * `metadata.json`. Absent (or `{}`) when nobody in particular rolled — every
+   * `metadata` test then fails and the catch-all answers.
+   */
+  metadata?: Record<string, unknown>;
 }
+
+/** The metadata keys a run actually consulted, and what they held at the time. */
+export type MetadataTested = Record<string, number | string | boolean>;
 
 /**
  * Resolve a comparator operand: a literal, or the value of the parameter it
@@ -628,15 +643,94 @@ function matchesComparator(
   return true;
 }
 
+/** True for the value types a comparator can actually compare. */
+function isPrimitive(value: unknown): value is number | string | boolean {
+  return typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean';
+}
+
+/**
+ * Evaluate one comparator against one metadata key — the fail-soft twin of
+ * {@link matchesComparator}.
+ *
+ * Everything `matchesComparator` treats as a regression worth throwing over is,
+ * here, an ordinary fact about a character: the key may not exist, or may hold
+ * a list, or may hold a string where the table wanted a number. Metadata keys
+ * are undeclared by nature — no load-time check could have caught any of it —
+ * so each of those simply fails to match, the row is passed over, and the
+ * table's mandatory catch-all does what the author wrote it to do. Throwing
+ * would punish an author whose table is working exactly as designed.
+ *
+ * `$param` operands still throw if they don't resolve: those ARE load-validated,
+ * so a failure there is a regression rather than a fact about the character.
+ */
+function matchesMetadataComparator(
+  toolName: string,
+  comparator: MetadataComparator,
+  key: string,
+  metadata: Record<string, unknown>,
+  params: ResolvedParams
+): boolean {
+  const decline = (reason: string): false => {
+    logger.debug('Custom tool metadata test did not match', {
+      context: CONTEXT,
+      tool: toolName,
+      key,
+      reason,
+    });
+    return false;
+  };
+
+  if (!(key in metadata)) return decline('the character has no such metadata key');
+
+  const subject = metadata[key];
+  if (!isPrimitive(subject)) {
+    return decline(
+      `the key holds ${subject === null ? 'null' : Array.isArray(subject) ? 'an array' : 'an object'}, which cannot be compared`
+    );
+  }
+
+  const label = `metadata "${key}"`;
+  const operandFor = (comparatorKey: keyof MetadataComparator): number | string | boolean =>
+    resolveOperand(
+      toolName,
+      comparator[comparatorKey] as number | string | boolean | ParamRef,
+      params,
+      `${label} ${comparatorKey}`
+    );
+
+  for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
+    if (comparator[comparatorKey] === undefined) continue;
+    const operand = operandFor(comparatorKey);
+    if (typeof subject !== 'number' || typeof operand !== 'number') {
+      return decline(`${comparatorKey} orders ${JSON.stringify(subject)}, and only numbers can be ordered`);
+    }
+    const held =
+      comparatorKey === 'gt'
+        ? subject > operand
+        : comparatorKey === 'gte'
+          ? subject >= operand
+          : comparatorKey === 'lt'
+            ? subject < operand
+            : subject <= operand;
+    if (!held) return false;
+  }
+
+  if (comparator.eq !== undefined && subject !== operandFor('eq')) return false;
+  if (comparator.neq !== undefined && subject === operandFor('neq')) return false;
+
+  return true;
+}
+
 /**
  * Evaluate an outcome test. Every subject named must hold — bare comparators
  * against the final value, `roll` against the raw draw, `params` against what
- * the caller supplied.
+ * the caller supplied, `metadata` against the invoking character's fact sheet.
  */
 export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'custom tool'): boolean {
   if (when === true) return true;
 
   const { value, roll, params } = subjects;
+  const metadata = subjects.metadata ?? {};
 
   if (!matchesComparator(toolName, when, value, 'the rolled value', params)) return false;
 
@@ -653,7 +747,34 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
     if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params)) return false;
   }
 
+  for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
+    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params)) return false;
+  }
+
   return true;
+}
+
+/**
+ * The metadata a winning outcome consulted, for the roll record.
+ *
+ * Only the keys that row actually tested, and only their primitive values —
+ * which is every key it tested, since a row whose metadata comparator declined
+ * (absent key, non-primitive value, wrong type) is precisely a row that did not
+ * win. So the transcript records what the table saw, not the whole sheet: the
+ * sheet is the character's business, and may hold things the room shouldn't.
+ */
+export function collectMetadataTested(
+  when: When,
+  metadata: Record<string, unknown> | undefined
+): MetadataTested | undefined {
+  if (when === true || when.metadata === undefined || !metadata) return undefined;
+
+  const tested: MetadataTested = {};
+  for (const key of Object.keys(when.metadata)) {
+    const value = metadata[key];
+    if (isPrimitive(value)) tested[key] = value;
+  }
+  return Object.keys(tested).length > 0 ? tested : undefined;
 }
 
 /**
@@ -667,12 +788,17 @@ export function formatValue(value: number): string {
 }
 
 /**
- * Substitute the three placeholder families. Plain string replacement — user
+ * Substitute the four placeholder families. Plain string replacement — user
  * text is never interpreted, and an unknown placeholder is left as written.
+ *
+ * `{{metadata.key}}` follows that same leave-it-as-written rule when the key is
+ * absent or holds a list or an object: the alternative — rendering an empty
+ * string — would quietly eat the hole in the sentence, where the placeholder
+ * left standing tells the author exactly which key their character lacks.
  */
 export function renderTemplate(
   message: string,
-  vars: { value: number; roll: number; dice: string; params: ResolvedParams }
+  vars: { value: number; roll: number; dice: string; params: ResolvedParams; metadata?: Record<string, unknown> }
 ): string {
   return message.replace(/\{\{([^}]+)\}\}/g, (whole, rawKey: string) => {
     const key = rawKey.trim();
@@ -689,6 +815,20 @@ export function renderTemplate(
       }
     }
 
+    if (key.startsWith('metadata.')) {
+      const name = key.slice('metadata.'.length);
+      const v = vars.metadata?.[name];
+      if (isPrimitive(v)) {
+        return typeof v === 'number' ? formatValue(v) : String(v);
+      }
+      logger.debug('Custom tool message references metadata the character cannot render', {
+        context: CONTEXT,
+        placeholder: whole,
+        reason: v === undefined ? 'no such metadata key' : 'the key does not hold a primitive',
+      });
+      return whole;
+    }
+
     logger.debug('Custom tool message carries an unknown placeholder', { context: CONTEXT, placeholder: whole });
     return whole;
   });
@@ -703,7 +843,7 @@ export function renderTemplate(
 export function executeCustomTool(
   definition: QtapCustomTool,
   suppliedParams: Record<string, unknown> | null | undefined,
-  overrides?: { private?: boolean }
+  overrides?: { private?: boolean; metadata?: Record<string, unknown> }
 ): CustomToolRunResult {
   const params = resolveParams(definition, suppliedParams);
 
@@ -738,7 +878,8 @@ export function executeCustomTool(
     value = drawn.value;
   }
 
-  const subjects: OutcomeSubjects = { value, roll: raw, params };
+  const metadata = overrides?.metadata ?? {};
+  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata };
   const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
   if (outcomeIndex < 0) {
     // The schema's mandatory trailing catch-all makes this unreachable.
@@ -746,7 +887,8 @@ export function executeCustomTool(
   }
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params });
+  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata });
+  const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   const visibility: Visibility =
     overrides?.private === true
@@ -768,5 +910,6 @@ export function executeCustomTool(
     message,
     diceBreakdown,
     visibility,
+    ...(metadataTested ? { metadataTested } : {}),
   };
 }

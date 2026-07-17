@@ -29,6 +29,8 @@ import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/databas
 import {
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
+  CharacterVaultMetadataSchema,
+  type CharacterVaultMetadata,
   CharacterVaultPhysicalPromptsSchema,
   type CharacterVaultPhysicalPrompts,
   type CharacterVaultWardrobe,
@@ -63,6 +65,46 @@ export function parseVaultProperties(
   if (!parsed.success) {
     logger.warn('Vault properties.json failed schema validation; falling back to DB values', {
       characterId,
+      issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+    });
+    return null;
+  }
+
+  return parsed.data;
+}
+
+/**
+ * Parse `metadata.json` — the character's freeform fact sheet.
+ *
+ * Returns null for anything that isn't a JSON object (invalid JSON, a
+ * top-level array, a bare scalar), and the caller hydrates `{}` instead.
+ * Deliberately unlike `properties.json`: metadata is not a keystone, so a file
+ * the user fat-fingered costs them their metadata for that read and nothing
+ * else. Hollowing the character over it would be wildly out of proportion to a
+ * missing brace.
+ */
+export function parseVaultMetadata(
+  raw: string,
+  characterId: string,
+  mountPointId?: string,
+): CharacterVaultMetadata | null {
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch (error) {
+    logger.warn('Invalid JSON in vault metadata.json; hydrating empty metadata', {
+      characterId,
+      mountPointId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+
+  const parsed = CharacterVaultMetadataSchema.safeParse(json);
+  if (!parsed.success) {
+    logger.warn('Vault metadata.json is not a JSON object; hydrating empty metadata', {
+      characterId,
+      mountPointId,
       issues: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
     });
     return null;

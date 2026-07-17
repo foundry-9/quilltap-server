@@ -17,6 +17,7 @@
 
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { getRepositories } from '@/lib/repositories/factory';
 import {
   resolveCustomToolRoster,
   executeCustomTool,
@@ -147,9 +148,36 @@ export async function executeRunCustomTool(
     );
   }
 
+  // The rolling character's fact sheet, so outcome tables can branch on what
+  // THIS character carries. `findById` hydrates the vault, and throws
+  // CharacterVaultUnavailableError when that vault is broken — which lands on
+  // the same Prospero error bubble as any other refused run, since a table that
+  // consults metadata cannot honestly be dealt without it.
+  let metadata: Record<string, unknown> = {};
+  if (context.characterId) {
+    try {
+      const character = await getRepositories().characters.findById(context.characterId);
+      metadata = character?.metadata ?? {};
+      logger.debug('Loaded metadata for a custom-tool run', {
+        context: CONTEXT,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        keys: Object.keys(metadata),
+      });
+    } catch (error) {
+      const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
+      return reportFailure(
+        context,
+        toolName,
+        `the rolling character's vault could not be read: ${getErrorMessage(error)}`,
+        whisper
+      );
+    }
+  }
+
   let result: CustomToolRunResult;
   try {
-    result = executeCustomTool(entry.definition, parameters ?? null, { private: isPrivate });
+    result = executeCustomTool(entry.definition, parameters ?? null, { private: isPrivate, metadata });
   } catch (error) {
     const reason = error instanceof CustomToolRunError ? error.message : getErrorMessage(error);
     const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
@@ -190,6 +218,7 @@ export async function executeRunCustomTool(
       value: result.value,
       state: result.state,
       outcomeIndex: result.outcomeIndex,
+      ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
       invokedBy: 'llm',
       ...(context.callerParticipantId ? { callerParticipantId: context.callerParticipantId } : {}),
     },

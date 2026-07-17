@@ -313,6 +313,11 @@
         },
         "firstMessage": { "type": "string" },
         "exampleDialogues": { "type": "string" },
+        "metadata": {
+          "type": ["object", "null"],
+          "description": "The character's freeform fact sheet — a flat object of user-authored keys with any JSON value, e.g. { \"hasAnsibleAccess\": true, \"clearanceLevel\": 3 }. Lives in the vault as metadata.json (its sole source of truth; no DB column), so it also travels as a document-store document; materialized here like the other managed fields, and applied back into the fresh vault on import. Absent/null and {} mean the same thing. Never LLM-authored and never injected into a prompt; read by Pascal's outcome tables via when.metadata.",
+          "additionalProperties": true
+        },
         "physicalDescription": {
           "oneOf": [{ "type": "object" }, { "type": "null" }],
           "description": "Singular physical description with full text plus token-sized prompt variants (headAndShoulders/short/medium/long/complete; headAndShoulders is the head-and-shoulders crop preferred for avatar generation). Pre-4.6 exports carried a `physicalDescriptions` array instead; importers fold legacy index 0 into this field."
@@ -738,6 +743,7 @@
             "value": { "type": "number", "description": "The final value the outcome table was tested against (raw after multiplier/offset/round)." },
             "state": { "type": "string", "enum": ["success", "partial", "failure", "info"], "description": "Semantic state of the winning outcome; accents the result bubble." },
             "outcomeIndex": { "type": "integer", "minimum": 0, "description": "Index of the winning entry in the definition's ordered outcome table." },
+            "metadataTested": { "type": "object", "description": "The invoking character's metadata as the WINNING outcome read it: only the keys that row tested, holding their values at the moment of the roll. Absent when the winning row consulted no metadata, and never the whole sheet — the sheet is the character's business.", "additionalProperties": { "type": ["number", "string", "boolean"] } },
             "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
             "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
           }

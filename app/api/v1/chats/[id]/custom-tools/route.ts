@@ -76,6 +76,8 @@ interface Perspective {
   characterId: string;
   characterName: string;
   characterMountPointId: string | null;
+  /** The character's hydrated fact sheet, for `when.metadata` tests on a run. */
+  metadata: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,6 +109,9 @@ async function loadPerspectives(
         characterName: character.name,
         characterMountPointId:
           (character as unknown as Record<string, unknown>).characterDocumentMountPointId as string | null ?? null,
+        // findById hydrates the vault, so the fact sheet is already in hand —
+        // no second read when a run turns out to need it.
+        metadata: character.metadata ?? {},
       });
     } catch (error) {
       logger.warn('Custom-tool perspective dropped — character unreadable', {
@@ -339,9 +344,29 @@ async function handleRun(
   const whispered = body.private === true;
   const targetParticipantIds = whispered ? [ctx.user.id] : null;
 
+  // Metadata comes from the character the run is made AS. The popup always
+  // names one (every listing carries an `asCharacterId`, labelled or not), so
+  // in practice a popup run consults that character's sheet — consistent with
+  // the roster itself, which already resolved through that character's vault
+  // tier. A run that names nobody is one nobody made: it rolls against an empty
+  // sheet, every metadata test declines, and the catch-all answers, rather than
+  // borrowing some arbitrary participant's secrets to decide it.
+  const metadata = body.asCharacterId ? perspective.metadata : {};
+
+  logger.debug('Manual custom-tool run metadata resolved', {
+    context: HANDLER,
+    chatId: id,
+    tool: body.tool,
+    asCharacterId: body.asCharacterId ?? null,
+    keys: Object.keys(metadata),
+  });
+
   let result;
   try {
-    result = executeCustomTool(entry.definition, body.parameters ?? undefined, { private: body.private });
+    result = executeCustomTool(entry.definition, body.parameters ?? undefined, {
+      private: body.private,
+      metadata,
+    });
   } catch (error) {
     if (error instanceof CustomToolRunError) {
       // Pascal never announces a run that did not happen — the failure is
@@ -395,6 +420,7 @@ async function handleRun(
       value: result.value,
       state: result.state,
       outcomeIndex: result.outcomeIndex,
+      ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
       invokedBy: 'user',
     },
   });

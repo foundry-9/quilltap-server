@@ -10,6 +10,7 @@ import { checkOwnership } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
+import { JsonSchema } from '@/lib/schemas/common.types';
 import { TimestampConfigSchema } from '@/lib/schemas/settings.types';
 import type { Character } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
@@ -65,6 +66,11 @@ const updateCharacterSchema = z.object({
   systemTransparency: z.boolean().nullable().optional(),
   coreWhisperEnabled: z.boolean().nullable().optional(),
   canBeCarina: z.boolean().nullable().optional(),
+  // The freeform fact sheet (vault `metadata.json`). This schema strips unknown
+  // keys, so the field has to be named here or a PUT carrying it would be
+  // silently dropped before the write overlay ever saw it. Sending `metadata`
+  // REPLACES the whole object — patch a single key by reading first.
+  metadata: JsonSchema.nullable().optional(),
   physicalDescription: z
     .object({
       id: z.string().uuid().optional(),

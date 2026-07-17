@@ -332,9 +332,10 @@ export const MessageEventSchema = z.object({
    * 'range' (uniform, optionally transformed) or 'dice' (`notation` + the
    * individual `diceRolls`). `raw` is the untransformed roll; `value` is what
    * the outcome table was tested against; `outcomeIndex` names the winning
-   * entry and `state` its semantic verdict. `invokedBy` distinguishes a model's
-   * reach for the tool from a user's own Run-Tool, and `callerParticipantId`
-   * names the participant who rolled, when there was one.
+   * entry and `state` its semantic verdict. `metadataTested` records the
+   * invoking character's metadata as the winning row read it. `invokedBy`
+   * distinguishes a model's reach for the tool from a user's own Run-Tool, and
+   * `callerParticipantId` names the participant who rolled, when there was one.
    *
    * NULL on every non-Pascal message.
    */
@@ -358,6 +359,14 @@ export const MessageEventSchema = z.object({
     value: z.number(),
     state: z.enum(['success', 'partial', 'failure', 'info']),
     outcomeIndex: z.number(),
+    /**
+     * The metadata keys the winning outcome consulted, and what the invoking
+     * character's `metadata.json` held for them at the moment of the roll — so
+     * the transcript records what the table actually saw rather than requiring
+     * a reader to guess at a fact sheet that has since been edited. Only the
+     * keys that row tested, primitives only; absent when it tested none.
+     */
+    metadataTested: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
     invokedBy: z.enum(['llm', 'user']),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),

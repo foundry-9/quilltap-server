@@ -74,10 +74,13 @@
 export {
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
+  CharacterVaultMetadataSchema,
+  type CharacterVaultMetadata,
   CharacterVaultPhysicalPromptsSchema,
   type CharacterVaultPhysicalPrompts,
   type CharacterVaultWardrobe,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -103,6 +106,7 @@ export {
 export {
   readVaultTextFile,
   readCharacterVaultProperties,
+  readCharacterVaultMetadata,
   readCharacterVaultIdentity,
   readCharacterVaultDescription,
   readCharacterVaultManifesto,

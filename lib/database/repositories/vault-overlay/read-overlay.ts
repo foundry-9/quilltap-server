@@ -30,6 +30,7 @@ import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/databas
 import {
   SINGLE_FILE_OVERLAY_PATHS,
   CHARACTER_PROPERTIES_JSON_PATH,
+  CHARACTER_METADATA_JSON_PATH,
   CHARACTER_IDENTITY_MD_PATH,
   CHARACTER_DESCRIPTION_MD_PATH,
   CHARACTER_MANIFESTO_MD_PATH,
@@ -44,6 +45,7 @@ import {
 import {
   hasLinkedVault,
   parseVaultProperties,
+  parseVaultMetadata,
   parseVaultPhysicalPrompts,
   markdownToNullable,
   stableUuidFromString,
@@ -137,6 +139,7 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
   const mountId = character.characterDocumentMountPointId as string;
 
   const propsByMount = maps.contentByMountByPath.get(CHARACTER_PROPERTIES_JSON_PATH)!;
+  const metadataByMount = maps.contentByMountByPath.get(CHARACTER_METADATA_JSON_PATH)!;
   const idByMount = maps.contentByMountByPath.get(CHARACTER_IDENTITY_MD_PATH)!;
   const descByMount = maps.contentByMountByPath.get(CHARACTER_DESCRIPTION_MD_PATH)!;
   const manifestoByMount = maps.contentByMountByPath.get(CHARACTER_MANIFESTO_MD_PATH)!;
@@ -168,6 +171,22 @@ function hydrateOne(character: Character, maps: VaultFileMaps): Character {
       talkativeness: parsed.talkativeness,
     };
   }
+
+  // metadata.json: the user's freeform fact sheet. Explicitly NOT a keystone —
+  // vaults predating the feature have no such file, and the absence is the
+  // normal state rather than a broken vault, so it hydrates as {} instead of
+  // throwing. An unparseable file lands on {} too (parseVaultMetadata warns);
+  // a stray comma in a fact sheet must not hollow the character.
+  const metadataRaw = metadataByMount.get(mountId);
+  const metadata =
+    metadataRaw === undefined ? {} : (parseVaultMetadata(metadataRaw, character.id, mountId) ?? {});
+  if (metadataRaw === undefined) {
+    logger.debug('Character vault has no metadata.json; hydrating empty metadata', {
+      characterId: character.id,
+      mountPointId: mountId,
+    });
+  }
+  out = { ...out, metadata };
 
   // identity.md
   const idRaw = idByMount.get(mountId);
