@@ -58,6 +58,11 @@
       "state": "success"
     },
     {
+      "when": { "gte": 40, "metadata": { "hasSkeletonKey": { "eq": true } } },
+      "message": "{{params.label}} opens to the skeleton key before the score of {{value}} is properly consulted. Demonstrates the `metadata` subject: this tests the INVOKING character's metadata.json fact sheet (hasSkeletonKey = {{metadata.hasSkeletonKey}}), whose keys this file never declares — so the loader checks only the comparator's shape. A character without the key is not an error: the test simply fails, soft, and the roll falls through to the rows below. eq/neq address strings and booleans; ordering comparators need the sheet to hold a number, as the nerve row demonstrates further down.",
+      "state": "success"
+    },
+    {
       "when": { "gte": 70, "lte": 100, "params": { "loudly": { "eq": true } } },
       "message": "{{params.label}} gives up at {{value}}, and so does any pretence of discretion — that noise was heard three streets over. Demonstrates the `params` subject ANDed with a value band: score 70-100 AND loudly=true. It must sit BEFORE the quiet band below, which it would otherwise never outrank.",
       "state": "partial"
@@ -75,6 +80,11 @@
     {
       "when": { "neq": 42, "gte": 40, "lte": 50 },
       "message": "{{params.label}} shifts, then thinks better of it. Score {{value}}. Demonstrates neq composed with a band — 40 to 50, but never 42, which the outcome above already claimed.",
+      "state": "partial"
+    },
+    {
+      "when": { "lt": 5, "metadata": { "nerve": { "gte": 8 } } },
+      "message": "A dreadful draw — {{value}} — salvaged by sheer nerve ({{metadata.nerve}} of a possible 10). Demonstrates an ORDERING comparator on metadata: gte needs a number on both sides, and since the sheet cannot be known at load time the check waits for the roll — a character whose nerve is absent, a string, or a list simply does not match, fail-soft, no error, and the draw falls through to the failures below. And {{metadata.limerick}}, a key this character surely lacks, stays exactly as written — metadata placeholders for missing keys render verbatim, like any unknown placeholder.",
       "state": "partial"
     },
     {

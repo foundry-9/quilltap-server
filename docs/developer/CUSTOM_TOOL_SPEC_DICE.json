@@ -12,6 +12,11 @@
       "state": "success"
     },
     {
+      "when": { "gte": 11, "metadata": { "blessed": { "eq": true } } },
+      "message": "Saved — the total was only {{value}}, but the house respects a blessing where it finds one. {{dice}} Demonstrates: `metadata` tests the rolling character's metadata.json in the dice form exactly as in the range form; a character whose sheet lacks `blessed` falls through to the ordinary band below.",
+      "state": "success"
+    },
+    {
       "when": { "gte": 11, "lte": 14 },
       "message": "Saved, but the house noticed. {{dice}}",
       "state": "partial"

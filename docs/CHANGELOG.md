@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: Pascal custom-tools spec absorbs the metadata test subject
+
+The parent custom-tools spec (`docs/developer/features/pascal-custom-tools.md`) now documents the `when.metadata` test subject, the `{{metadata.<key>}}` template family, `pascalMeta.metadataTested`, the fail-soft run-time rules, and the roster secrecy rule — all shipped earlier by the character `metadata.json` feature but never woven into the parent spec. Its stale "not yet implemented" status line was corrected to shipped. Both annotated reference specimens (`docs/developer/CUSTOM_TOOL_SPEC.json` and `CUSTOM_TOOL_SPEC_DICE.json`) gained outcome rows demonstrating metadata tests: a boolean `eq`, a numeric ordering comparator, the fall-through for characters lacking a key, and verbatim rendering of placeholders for missing keys.
+
 #### Docs: character `metadata.json` spec marked complete
 
 The spec moved from `docs/developer/features/` to `features/complete/`, with its status line updated to implemented (shipped).

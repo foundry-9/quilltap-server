@@ -1,6 +1,6 @@
 # Feature: Custom Tools — Pascal's Table (`run_custom`)
 
-**Status:** Specified, not yet implemented.
+**Status:** Implemented (shipped). Kept current in place: "Correction" notes record where implementation amended the design, and the sections below include the **`metadata` test subject** — outcome tables branching on the invoking character's `metadata.json` fact sheet — added after the initial ship by the [character `metadata.json` feature](complete/character-metadata-json.md).
 **Owner subsystem:** Pascal the Croupier (RNG / game-state — `lib/foundry/subsystem-defaults.ts:134`, settings under `/settings?tab=chat`).
 **Implementation note:** This spec is written to be executed by Claude Code (Opus) with minimal further design input. Where a choice existed, it has been made — see [Design Decisions](#design-decisions-resolved). Follow CLAUDE.md standing rules throughout (changelog, help docs, logging, migration pretty-labels, tool chokepoints).
 
@@ -121,6 +121,7 @@ If `$param` substitution yields `min > max`, or any substituted value is non-fin
 | the value | bare comparator keys | the final post-transform value |
 | the raw roll | `roll: { … }` | the raw pre-transform draw |
 | a parameter | `params: { <name>: { … } }` | the resolved (post-default, post-clamp) parameter |
+| the invoker's metadata | `metadata: { <key>: { … } }` | one key of the invoking character's `metadata.json` fact sheet |
 
 Comparator keys are drawn from `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, and AND together, so `>= 0.30 && <= 0.60` is `{ "gte": 0.30, "lte": 0.60 }`. Bare keys mean the value, which is what makes the extension **backward compatible** — every definition written before `roll`/`params` existed still means exactly what it meant. `"value > 1 && params.scale > 12"` is:
 
@@ -134,7 +135,9 @@ Comparator keys are drawn from `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, and AND to
 
 **Types.** Ordering comparators (`gt`/`gte`/`lt`/`lte`) demand a number on both sides. `eq`/`neq` on a `params` subject widen to strings and booleans, since a parameter need not be a number — `{ "params": { "material": { "eq": "brass" } } }`. A mismatch is a load-time rejection, not a test that quietly never fires (see [Validation rules](#validation-rules-load-time)).
 
-Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-tools.ts`), which takes `{ value, roll, params }` and throws rather than returning false when a comparison is impossible at run time — that state is a regression past load-time validation, and returning false would look like the table skipping a row.
+**Metadata.** The `metadata` subject (added by [character `metadata.json`](complete/character-metadata-json.md)) is shape-identical to `params` — the same six comparator keys, the same `eq`/`neq` widening to strings and booleans, the same `$param` operands (`{ "metadata": { "clearanceLevel": { "gte": { "$param": "required" } } } }`). What differs is what can be known at load time. A `params` test names something the file itself declares, so a misspelling is a rejection; a `metadata` test names a key on a character the file has never met — keys are the *user's* vocabulary (`hasAnsibleAccess`), any non-empty string, not identifiers — so the loader can check only the comparator's shape and its `$param` references. The gap closes at run time, **fail-soft**: a key that is absent, holds a non-primitive (array/object/null), or type-mismatches its comparator (an ordering comparator against a string) makes that comparator **false**. The row declines, evaluation falls through — ultimately to the mandatory trailing `when: true` — and a debug log records the tool, key, and reason. Never a throw, never an error bubble: a lockpicking table that branches on `hasSkeletonKey` must still deal sensibly to the character who has never heard of one, and the catch-all row is the author's "otherwise."
+
+Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-tools.ts`), which takes `{ value, roll, params, metadata }` and throws rather than returning false when a comparison is impossible at run time — for `value`/`roll`/`params`, that state is a regression past load-time validation, and returning false would look like the table skipping a row. `metadata` is the deliberate exception: there an impossible comparison is an expected state, handled fail-soft as above.
 
 ### `outcomes` entries
 
@@ -144,12 +147,13 @@ Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-
 
 ### Templating
 
-`message` supports exactly three placeholder families, replaced server-side with plain string substitution (no template engine):
+`message` supports exactly these placeholder families, replaced server-side with plain string substitution (no template engine):
 
 - `{{value}}` — the final post-transform value (integers rendered without decimals; floats to 4 significant digits).
 - `{{roll}}` — the raw pre-transform value. For dice form, the total.
 - `{{dice}}` — dice form only: the breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14`. Empty string for Form A.
 - `{{params.<name>}}` — the resolved (post-clamp, post-default) value of a declared parameter.
+- `{{metadata.<key>}}` — the invoking character's metadata value for that key. Primitives render like `{{params.<name>}}`; an absent key or non-primitive value leaves the placeholder verbatim (with a debug log), the same convention as unknown placeholders.
 
 Unknown placeholders are left verbatim (and logged at debug level).
 
@@ -163,6 +167,8 @@ Files are validated with `QtapCustomToolSchema.safeParse` at roster-resolution t
 4. An outcome's `params` names an undeclared parameter, orders a non-numeric one, or compares one against a literal of the wrong type. All of these are tests that could never hold; left to run time they read as dead branches rather than the typos they are.
 5. Dice notation fails to parse via the shared dice module.
 6. Duplicate `name` **within the same file set of a single mount** (across mounts/tiers, shadowing rules apply instead).
+
+`metadata` comparators get a deliberately shallower version of rules 3–4: shape and `$param` operand references are checked, but key existence and stored-value types are unknowable at load time (the sheet belongs to whichever character eventually rolls) and are handled fail-soft at run time instead — see [`when`](#when--comparators-not-expressions).
 
 Unknown **top-level** keys are **ignored with a debug warning**, not rejected — this reserves room for v2 keys (notably `persist`, see [Deferred](#deferred-to-v2)) without breaking older builds. That tolerance stops at the top level: every nested object (`when`, comparators, outcome entries, the roll range, `$param` refs) is a `z.strictObject`. The forward-compatibility argument doesn't reach them, an unrecognised key inside a `when` is overwhelmingly a misspelled comparator (`gt3`) that would otherwise silently drop the test, and `additionalProperties: false` is what the published JSON Schema has always claimed — so the loader and the author's editor now agree.
 
@@ -206,15 +212,18 @@ New file `lib/tools/run-custom-tool.ts`, following the five-part chokepoint patt
 
 **Roster injection:** the tool's `description` is composed dynamically on **every** tool build (see [Roster freshness](#roster-freshness--resolved-per-call-never-cached-across-turns)): a fixed preamble plus, per available tool, its `name`, its roleplay-facing `description`, parameter list (name, type, default, min/max, description), and — unless `revealOdds: false` — a compact rendering of the roll spec and outcome table. This is how the model learns what its custom tools are and what parameters they take, on the first turn of a new chat and after any mid-chat definition change alike. Prompt-cache trade-off: the description changes only when definitions change, which is rare. `canonicalizeUniversalTools()` handles ordering stability as usual.
 
+**Metadata stays out of the roster.** The fixed preamble notes that outcome tables *may* consult the invoking character's metadata sheet — and that is all the model learns. The roster never enumerates metadata keys or values: they are per-character and potentially secret, and enumeration would leak them into every participant's tool block. A table with `revealOdds: true` renders its `when` clauses as always, `metadata` clauses included; authors who want those conditions hidden set `revealOdds: false`, the existing machinery.
+
 **Handler behavior** (`run-custom-handler.ts`):
 
 1. Resolve the invoker's roster; look up `tool`. Unknown name → error result listing available names.
 2. Validate/coerce `parameters` against the definition's declarations: unknown keys rejected, missing keys defaulted, numeric values clamped to declared `[min, max]`.
-3. Substitute `$param` refs, roll (crypto RNG or shared dice module), run the transform pipeline, evaluate outcomes in order, take the first match (the trailing `when: true` guarantees one).
-4. Render the `message` template.
-5. Post the **Pascal outcome message** (next section) — honoring visibility: `private` param if present, else the definition's `defaultVisibility`.
-6. Return a compact JSON tool result to the model: `{ tool, value, state, message, whispered }`. The TOOL-role message persists as usual for tool-call threading (`tool-call-threading.ts` — do not break linkage), but its content JSON includes `"delegatedDisplay": true` so `ToolMessage.tsx` renders nothing for it (the Pascal bubble is the single visible artifact; no double display).
-7. Debug logs at every step per the standing logging rule.
+3. Load the invoking character **hydrated** (`repos.characters.findById`), so `character.metadata` is populated, and pass `metadata: character.metadata ?? {}` into the execution core. A manual run with no character association passes `{}` — every `metadata` test then fails soft and the catch-all answers, the honest reading of "nobody in particular rolled this." A `CharacterVaultUnavailableError` from a broken vault lands on the standard error path (Prospero bubble), not a fabricated outcome.
+4. Substitute `$param` refs, roll (crypto RNG or shared dice module), run the transform pipeline, evaluate outcomes in order, take the first match (the trailing `when: true` guarantees one).
+5. Render the `message` template.
+6. Post the **Pascal outcome message** (next section) — honoring visibility: `private` param if present, else the definition's `defaultVisibility`.
+7. Return a compact JSON tool result to the model: `{ tool, value, state, message, whispered }`. The TOOL-role message persists as usual for tool-call threading (`tool-call-threading.ts` — do not break linkage), but its content JSON includes `"delegatedDisplay": true` so `ToolMessage.tsx` renders nothing for it (the Pascal bubble is the single visible artifact; no double display).
+8. Debug logs at every step per the standing logging rule.
 
 **Job-child compatibility:** the handler runs in autonomous rooms too. All writes go through the buffered `getRepositories()` proxy — never assume read-your-writes. The roll and outcome evaluation are pure computation; only the message post is a write.
 
@@ -268,6 +277,10 @@ New nullable TEXT (JSON) column on `chat_messages`, following the `carinaMeta` p
   "value": 0.7134,                       // post-transform; what outcomes tested
   "state": "success",
   "outcomeIndex": 0,
+  "metadataTested": { "hasSkeletonKey": true },  // optional; the metadata keys the WINNING row consulted
+                                                 // and what they held at roll time, primitives only —
+                                                 // the transcript records what the table saw. Absent
+                                                 // when the winning row tested no metadata.
   "invokedBy": "llm" | "user",
   "callerParticipantId": "…"             // LLM path only
 }
@@ -410,3 +423,4 @@ Load-time validation failures do not error at run time; they simply keep the too
 10. **`revealOdds` hides odds from the roster only**; file readability is governed by existing document-store policy, documented as a caveat rather than new machinery.
 11. **`persist`/ratcheting deferred to v2**, with the schema tolerating the key today.
 12. **Roster is resolved per call, never cached across turns.** New chats get the full roster on turn one with no initialization step; mid-chat definition changes take effect on the next LLM call and the next popup open. Mount-index invalidation was rejected because document edits inside a mount don't reliably touch the index; per-call listing is cheap enough.
+13. **Character metadata is a fourth test subject** (added post-ship; full design in [character `metadata.json`](complete/character-metadata-json.md)): same comparators and `$param` operands as `params`, shape-only load-time validation, fail-soft run-time misses (absent/non-primitive/mistyped keys decline the row, never throw), a `{{metadata.<key>}}` template family, `pascalMeta.metadataTested` in the roll record, and a roster that says only that the sheet *may* be consulted — never which keys or values exist.
