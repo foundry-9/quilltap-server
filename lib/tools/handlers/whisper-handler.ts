@@ -74,7 +74,8 @@ export async function executeWhisperTool(
   context: WhisperToolContext
 ): Promise<WhisperToolOutput> {
   try {
-    if (!validateWhisperInput(input)) {
+    const parsed = validateWhisperInput(input);
+    if (!parsed) {
       logger.warn('Whisper validation failed', { userId: context.userId, input });
       return {
         success: false,
@@ -82,7 +83,7 @@ export async function executeWhisperTool(
       };
     }
 
-    const { target, message } = input;
+    const { target, message } = parsed;
     const repos = getRepositories();
 
     // Load chat and participants

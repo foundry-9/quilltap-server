@@ -1208,7 +1208,8 @@ export async function executeToolCallWithContext(
         // Import validators at the point of use to avoid circular imports
         const { validateTerminalReadInput } = await import('@/lib/tools/terminal-read-tool');
 
-        if (!validateTerminalReadInput(toolCall.arguments)) {
+        const parsedTerminalRead = validateTerminalReadInput(toolCall.arguments);
+        if (!parsedTerminalRead) {
           return {
             toolName: 'terminal_read',
             success: false,
@@ -1217,7 +1218,7 @@ export async function executeToolCallWithContext(
           };
         }
 
-        const result = await executeTerminalReadTool(toolCall.arguments, terminalReadContext);
+        const result = await executeTerminalReadTool(parsedTerminalRead, terminalReadContext);
         const formattedResult = formatTerminalReadResults(result);
 
         return {
@@ -1263,7 +1264,8 @@ export async function executeToolCallWithContext(
         // Import validator at the point of use to avoid circular imports
         const { validateTerminalListInput } = await import('@/lib/tools/terminal-list-tool');
 
-        if (!validateTerminalListInput(toolCall.arguments)) {
+        const parsedTerminalList = validateTerminalListInput(toolCall.arguments);
+        if (!parsedTerminalList) {
           return {
             toolName: 'terminal_list',
             success: false,
@@ -1272,7 +1274,7 @@ export async function executeToolCallWithContext(
           };
         }
 
-        const result = await executeTerminalListTool(toolCall.arguments, terminalListContext);
+        const result = await executeTerminalListTool(parsedTerminalList, terminalListContext);
         const formattedResult = formatTerminalListResults(result);
 
         return {

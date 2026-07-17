@@ -221,7 +221,8 @@ export async function executeHelpSettingsTool(
   context: HelpSettingsToolContext
 ): Promise<HelpSettingsToolOutput> {
   try {
-    if (!validateHelpSettingsInput(input)) {
+    const parsed = validateHelpSettingsInput(input)
+    if (!parsed) {
       logger_.warn('Help settings validation failed', {
         userId: context.userId,
         input,
@@ -233,7 +234,7 @@ export async function executeHelpSettingsTool(
       }
     }
 
-    const { category } = input
+    const { category } = parsed
 
     const data = await fetchCategorySettings(category, context.userId)
 

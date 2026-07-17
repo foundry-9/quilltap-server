@@ -93,6 +93,7 @@ export const memorySearchToolDefinition = {
  */
 export function validateMemorySearchInput(
   input: unknown
-): input is MemorySearchToolInput {
-  return memorySearchToolInputSchema.safeParse(input).success
+): MemorySearchToolInput | null {
+  const parsed = memorySearchToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

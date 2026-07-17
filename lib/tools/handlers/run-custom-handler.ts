@@ -100,12 +100,13 @@ export async function executeRunCustomTool(
   input: unknown,
   context: RunCustomToolContext
 ): Promise<RunCustomToolOutput> {
-  if (!validateRunCustomInput(input)) {
+  const parsed = validateRunCustomInput(input);
+  if (!parsed) {
     logger.warn('run_custom validation failed', { context: CONTEXT, userId: context.userId, input });
     return failure('Invalid input: `tool` must be the name of an available custom tool.');
   }
 
-  const { tool: toolName, parameters, private: isPrivate } = input as RunCustomToolInput;
+  const { tool: toolName, parameters, private: isPrivate } = parsed;
 
   logger.debug('run_custom invoked', {
     context: CONTEXT,

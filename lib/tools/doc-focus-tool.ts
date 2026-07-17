@@ -61,8 +61,9 @@ export type DocFocusInput = z.infer<typeof docFocusToolInputSchema>;
 /**
  * Validates input for doc_focus tool.
  */
-export function validateDocFocusInput(input: unknown): input is DocFocusInput {
-  return docFocusToolInputSchema.safeParse(input).success;
+export function validateDocFocusInput(input: unknown): DocFocusInput | null {
+  const parsed = docFocusToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docFocusToolDefinition = {

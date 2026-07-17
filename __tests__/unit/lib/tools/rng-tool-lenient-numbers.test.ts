@@ -9,6 +9,7 @@
  */
 
 import { rngToolInputSchema, validateRngInput, rngToolDefinition } from '@/lib/tools/rng-tool'
+import { executeRngTool } from '@/lib/tools/handlers/rng-handler'
 
 describe('rng input — quoted numbers are accepted', () => {
   it.each([
@@ -22,7 +23,9 @@ describe('rng input — quoted numbers are accepted', () => {
     const result = rngToolInputSchema.safeParse(input)
     expect(result.success).toBe(true)
     expect(result.data).toEqual(expected)
-    expect(validateRngInput(input)).toBe(true)
+    // The validator returns the parsed data itself — the handler reads the
+    // coerced values, not the raw strings.
+    expect(validateRngInput(input)).toEqual(expected)
   })
 
   it('still accepts genuine numbers unchanged', () => {
@@ -42,7 +45,7 @@ describe('rng input — the string enums still work', () => {
   ])('%s survives the numeric leniency', (_label, input) => {
     // The union tries the numeric branch first; a non-numeric string must fall
     // through to the enum rather than becoming NaN and failing outright.
-    expect(validateRngInput(input)).toBe(true)
+    expect(validateRngInput(input)).not.toBeNull()
   })
 })
 
@@ -57,7 +60,7 @@ describe('rng input — bad values are still refused', () => {
     ['an empty string', { type: '' }],
     ['whitespace only', { type: '   ' }],
   ])('rejects %s', (_label, input) => {
-    expect(validateRngInput(input)).toBe(false)
+    expect(validateRngInput(input)).toBeNull()
   })
 
   it.each([
@@ -68,7 +71,7 @@ describe('rng input — bad values are still refused', () => {
   ])('rejects %s for rolls rather than coercing it', (_label, input) => {
     // z.coerce.number() would turn true into 1 and null/[] into 0 — trading a
     // rejected call for a wrong one. Only strings are converted.
-    expect(validateRngInput(input)).toBe(false)
+    expect(validateRngInput(input)).toBeNull()
   })
 
   it.each([
@@ -76,7 +79,40 @@ describe('rng input — bad values are still refused', () => {
     ['null', { type: null }],
     ['an array', { type: [] }],
   ])('rejects %s for type', (_label, input) => {
-    expect(validateRngInput(input)).toBe(false)
+    expect(validateRngInput(input)).toBeNull()
+  })
+})
+
+describe('rng execution — the coerced values reach the handler', () => {
+  // The validator returning parsed data (rather than a bare boolean) is what
+  // makes the leniency real: before that, {"type":"6"} passed validation but
+  // the handler read the raw string, matched neither the numeric arm nor the
+  // enums, and answered "Unknown RNG type" without consuming a single random
+  // byte. And {"modifier":"2"} concatenated: 4 + "2" = "42".
+  const context = { userId: 'user-1', chatId: 'chat-1' }
+
+  it('rolls a d6 for a quoted type', async () => {
+    const result = await executeRngTool({ type: '6' }, context)
+    expect(result.success).toBe(true)
+    expect(result.type).toBe(6)
+    expect(result.rollCount).toBe(1)
+    expect(result.results).toHaveLength(1)
+    expect(result.results[0]).toBeGreaterThanOrEqual(1)
+    expect(result.results[0]).toBeLessThanOrEqual(6)
+  })
+
+  it('adds a quoted modifier numerically, never as string concatenation', async () => {
+    const result = await executeRngTool({ type: 6, modifier: '2' }, context)
+    expect(result.success).toBe(true)
+    expect(typeof result.total).toBe('number')
+    expect(result.total).toBe((result.sum as number) + 2)
+  })
+
+  it('reports a quoted rolls count as a number', async () => {
+    const result = await executeRngTool({ type: 6, rolls: '3' }, context)
+    expect(result.success).toBe(true)
+    expect(result.rollCount).toBe(3)
+    expect(result.results).toHaveLength(3)
   })
 })
 

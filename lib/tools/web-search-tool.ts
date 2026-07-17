@@ -81,6 +81,7 @@ export const webSearchToolDefinition = {
  */
 export function validateWebSearchInput(
   input: unknown
-): input is WebSearchToolInput {
-  return webSearchToolInputSchema.safeParse(input).success;
+): WebSearchToolInput | null {
+  const parsed = webSearchToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

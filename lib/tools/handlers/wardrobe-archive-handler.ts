@@ -44,7 +44,9 @@ export async function executeWardrobeArchiveTool(
 ): Promise<WardrobeArchiveToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeArchiveInput(input)) {
+  const parsed = validateWardrobeArchiveInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe archive tool validation failed', {
       context: 'wardrobe-archive-handler',
       userId: context.userId,
@@ -56,7 +58,7 @@ export async function executeWardrobeArchiveTool(
   }
 
   try {
-    const { item_id, item_title } = input as WardrobeArchiveToolInput;
+    const { item_id, item_title } = parsed;
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
 
     const item = await resolveWardrobeItemAcrossTiers(

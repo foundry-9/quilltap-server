@@ -117,6 +117,7 @@ export const rngToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateRngInput(input: unknown): input is RngToolInput {
-  return rngToolInputSchema.safeParse(input).success;
+export function validateRngInput(input: unknown): RngToolInput | null {
+  const parsed = rngToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

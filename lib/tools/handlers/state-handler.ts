@@ -203,7 +203,8 @@ export async function executeStateTool(
 
   try {
     // Validate input
-    if (!validateStateInput(input)) {
+    const parsed = validateStateInput(input);
+    if (!parsed) {
       logger.warn('State tool validation failed', {
         context: 'state-handler',
         userId: context.userId,
@@ -218,7 +219,7 @@ export async function executeStateTool(
       };
     }
 
-    const { operation, context: stateContext, path, value } = input;
+    const { operation, context: stateContext, path, value } = parsed;
     const parsedPath = parsePath(path);
 
     // Fetch chat

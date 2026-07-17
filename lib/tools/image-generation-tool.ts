@@ -127,6 +127,7 @@ export const imageGenerationToolDefinition = {
  */
 export function validateImageGenerationInput(
   input: unknown
-): input is ImageGenerationToolInput {
-  return imageGenerationToolInputSchema.safeParse(input).success;
+): ImageGenerationToolInput | null {
+  const parsed = imageGenerationToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

@@ -79,6 +79,7 @@ export const submitFinalResponseToolDefinition = {
  */
 export function validateSubmitFinalResponseInput(
   input: unknown
-): input is SubmitFinalResponseToolInput {
-  return submitFinalResponseToolInputSchema.safeParse(input).success
+): SubmitFinalResponseToolInput | null {
+  const parsed = submitFinalResponseToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

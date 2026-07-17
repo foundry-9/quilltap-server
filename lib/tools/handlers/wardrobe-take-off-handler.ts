@@ -62,7 +62,9 @@ export async function executeWardrobeTakeOffTool(
 ): Promise<WardrobeTakeOffToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeTakeOffInput(input)) {
+  const parsed = validateWardrobeTakeOffInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe take off tool validation failed', {
       context: 'wardrobe-take-off-handler',
       userId: context.userId,
@@ -82,7 +84,7 @@ export async function executeWardrobeTakeOffTool(
   let appliedCount = 0;
   let failedError: string | undefined;
 
-  for (const op of (input as WardrobeTakeOffToolInput).operations) {
+  for (const op of parsed.operations) {
     const mode = op.mode ?? 'remove';
     const itemId = normalizeNoItemSentinel(op.item_id);
     const itemTitle = normalizeNoItemSentinel(op.item_title);

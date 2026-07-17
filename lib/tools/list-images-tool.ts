@@ -54,8 +54,9 @@ export const listImagesToolDefinition = {
   },
 };
 
-export function validateListImagesInput(input: unknown): input is ListImagesInput {
-  return listImagesToolInputSchema.safeParse(input).success;
+export function validateListImagesInput(input: unknown): ListImagesInput | null {
+  const parsed = listImagesToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface ListedImage {

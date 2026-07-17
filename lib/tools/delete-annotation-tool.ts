@@ -58,6 +58,7 @@ export const deleteAnnotationToolDefinition = {
  */
 export function validateDeleteAnnotationInput(
   input: unknown
-): input is DeleteAnnotationToolInput {
-  return deleteAnnotationToolInputSchema.safeParse(input).success;
+): DeleteAnnotationToolInput | null {
+  const parsed = deleteAnnotationToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

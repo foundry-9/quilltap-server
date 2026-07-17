@@ -62,8 +62,9 @@ export const docWriteFileToolDefinition = {
 /**
  * Validates input for doc_write_file tool.
  */
-export function validateDocWriteFileInput(input: unknown): input is DocWriteFileInput {
-  return docWriteFileToolInputSchema.safeParse(input).success;
+export function validateDocWriteFileInput(input: unknown): DocWriteFileInput | null {
+  const parsed = docWriteFileToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

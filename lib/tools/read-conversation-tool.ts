@@ -63,6 +63,7 @@ export const readConversationToolDefinition = {
  */
 export function validateReadConversationInput(
   input: unknown
-): input is ReadConversationToolInput {
-  return readConversationToolInputSchema.safeParse(input).success
+): ReadConversationToolInput | null {
+  const parsed = readConversationToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

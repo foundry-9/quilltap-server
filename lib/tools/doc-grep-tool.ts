@@ -68,8 +68,9 @@ export type DocGrepInput = z.infer<typeof docGrepToolInputSchema>;
 /**
  * Validates input for doc_grep tool.
  */
-export function validateDocGrepInput(input: unknown): input is DocGrepInput {
-  return docGrepToolInputSchema.safeParse(input).success;
+export function validateDocGrepInput(input: unknown): DocGrepInput | null {
+  const parsed = docGrepToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docGrepToolDefinition = {

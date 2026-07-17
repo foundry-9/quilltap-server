@@ -24,15 +24,15 @@ describe('validateMemorySearchInput', () => {
         limit: 3,
         minImportance: 0.4,
       })
-    ).toBe(true)
+    ).not.toBeNull()
   })
 
   it('rejects payloads without a query', () => {
-    expect(validateMemorySearchInput({ limit: 5 })).toBe(false)
+    expect(validateMemorySearchInput({ limit: 5 })).toBeNull()
   })
 
   it('rejects payloads with invalid limits or importance ranges', () => {
-    expect(validateMemorySearchInput({ query: 'info', limit: 25 })).toBe(false)
-    expect(validateMemorySearchInput({ query: 'info', minImportance: 2 })).toBe(false)
+    expect(validateMemorySearchInput({ query: 'info', limit: 25 })).toBeNull()
+    expect(validateMemorySearchInput({ query: 'info', minImportance: 2 })).toBeNull()
   })
 })

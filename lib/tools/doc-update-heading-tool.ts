@@ -70,8 +70,9 @@ export const docUpdateHeadingToolDefinition = {
 /**
  * Validates input for doc_update_heading tool.
  */
-export function validateDocUpdateHeadingInput(input: unknown): input is DocUpdateHeadingInput {
-  return docUpdateHeadingToolInputSchema.safeParse(input).success;
+export function validateDocUpdateHeadingInput(input: unknown): DocUpdateHeadingInput | null {
+  const parsed = docUpdateHeadingToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

@@ -64,6 +64,7 @@ export const upsertAnnotationToolDefinition = {
  */
 export function validateUpsertAnnotationInput(
   input: unknown
-): input is UpsertAnnotationToolInput {
-  return upsertAnnotationToolInputSchema.safeParse(input).success;
+): UpsertAnnotationToolInput | null {
+  const parsed = upsertAnnotationToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

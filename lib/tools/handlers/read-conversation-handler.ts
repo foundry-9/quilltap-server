@@ -45,7 +45,8 @@ export async function executeReadConversationTool(
 
   try {
     // Validate input
-    if (!validateReadConversationInput(input)) {
+    const parsed = validateReadConversationInput(input);
+    if (!parsed) {
       logger.warn('Read conversation tool validation failed', {
         context: 'read-conversation-handler',
         userId: context.userId,
@@ -58,7 +59,7 @@ export async function executeReadConversationTool(
       };
     }
 
-    const { conversationId, exclude_annotations } = input as ReadConversationToolInput;
+    const { conversationId, exclude_annotations } = parsed;
     const targetChatId = conversationId || context.chatId;
 
     // Load chat

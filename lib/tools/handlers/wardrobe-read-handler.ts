@@ -115,7 +115,9 @@ export async function executeWardrobeReadTool(
 ): Promise<WardrobeReadToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeReadInput(input)) {
+  const parsed = validateWardrobeReadInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe read tool validation failed', {
       context: 'wardrobe-read-handler',
       userId: context.userId,
@@ -127,7 +129,7 @@ export async function executeWardrobeReadTool(
   }
 
   try {
-    const { item_id, item_title } = input as WardrobeReadToolInput;
+    const { item_id, item_title } = parsed;
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
 
     const item = await resolveWardrobeItemAcrossTiers(

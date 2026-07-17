@@ -51,8 +51,9 @@ export const terminalReadToolDefinition = {
   },
 };
 
-export function validateTerminalReadInput(input: unknown): input is TerminalReadInput {
-  return terminalReadToolInputSchema.safeParse(input).success;
+export function validateTerminalReadInput(input: unknown): TerminalReadInput | null {
+  const parsed = terminalReadToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface TerminalReadOutput {

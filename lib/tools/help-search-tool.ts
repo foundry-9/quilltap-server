@@ -82,6 +82,7 @@ export const helpSearchToolDefinition = {
  */
 export function validateHelpSearchInput(
   input: unknown
-): input is HelpSearchToolInput {
-  return helpSearchToolInputSchema.safeParse(input).success
+): HelpSearchToolInput | null {
+  const parsed = helpSearchToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }

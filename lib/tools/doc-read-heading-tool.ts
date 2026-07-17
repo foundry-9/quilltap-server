@@ -62,8 +62,9 @@ export const docReadHeadingToolDefinition = {
 /**
  * Validates input for doc_read_heading tool.
  */
-export function validateDocReadHeadingInput(input: unknown): input is DocReadHeadingInput {
-  return docReadHeadingToolInputSchema.safeParse(input).success;
+export function validateDocReadHeadingInput(input: unknown): DocReadHeadingInput | null {
+  const parsed = docReadHeadingToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

@@ -37,8 +37,9 @@ export type DocCloseDocumentInput = z.infer<typeof docCloseDocumentToolInputSche
 /**
  * Validates input for doc_close_document tool.
  */
-export function validateDocCloseDocumentInput(input: unknown): input is DocCloseDocumentInput {
-  return docCloseDocumentToolInputSchema.safeParse(input).success;
+export function validateDocCloseDocumentInput(input: unknown): DocCloseDocumentInput | null {
+  const parsed = docCloseDocumentToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const docCloseDocumentToolDefinition = {

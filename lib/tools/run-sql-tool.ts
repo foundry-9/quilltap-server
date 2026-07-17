@@ -61,8 +61,9 @@ export type RunSqlInput = z.infer<typeof runSqlToolInputSchema>;
 /**
  * Validates input for the run_sql tool.
  */
-export function validateRunSqlInput(input: unknown): input is RunSqlInput {
-  return runSqlToolInputSchema.safeParse(input).success;
+export function validateRunSqlInput(input: unknown): RunSqlInput | null {
+  const parsed = runSqlToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 export const runSqlToolDefinition = {

@@ -124,8 +124,9 @@ export const searchScriptoriumToolDefinition = {
  */
 export function validateSearchScriptoriumInput(
   input: unknown
-): input is SearchScriptoriumToolInput {
-  return searchScriptoriumToolInputSchema.safeParse(input).success
+): SearchScriptoriumToolInput | null {
+  const parsed = searchScriptoriumToolInputSchema.safeParse(input)
+  return parsed.success ? parsed.data : null
 }
 
 // ============================================================================

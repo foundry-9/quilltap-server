@@ -59,7 +59,8 @@ export async function executeSearchScriptoriumTool(
 ): Promise<SearchScriptoriumToolOutput> {
   try {
     // Validate input
-    if (!validateSearchScriptoriumInput(input)) {
+    const parsed = validateSearchScriptoriumInput(input)
+    if (!parsed) {
       logger.warn('Search scriptorium tool validation failed', {
         context: 'search-scriptorium-handler',
         userId: context.userId,
@@ -80,7 +81,7 @@ export async function executeSearchScriptoriumTool(
       scope = 'all',
       limit = 10,
       minImportance = 0,
-    } = input
+    } = parsed
 
     // Operator surface (Brahma Console): no character, no memories. Memory
     // search is forced off here defensively even if a caller somehow requests

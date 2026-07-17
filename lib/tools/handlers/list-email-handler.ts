@@ -37,7 +37,8 @@ export async function executeListEmailTool(
   context: ListEmailToolContext,
 ): Promise<ListEmailToolOutput> {
   try {
-    if (!validateListEmailInput(input)) {
+    const parsed = validateListEmailInput(input);
+    if (!parsed) {
       return fail('That request to the Post Office made no sense.');
     }
     if (!context.characterId) {

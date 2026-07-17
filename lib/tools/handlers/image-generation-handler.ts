@@ -737,7 +737,8 @@ async function validateAndLoadProfile(
   context: ImageToolExecutionContext
 ): Promise<{ toolInput: ImageGenerationToolInput; imageProfile: any } | ImageGenerationToolOutput> {
   // 1. Validate input
-  if (!validateImageGenerationInput(input)) {
+  const parsed = validateImageGenerationInput(input);
+  if (!parsed) {
     return {
       success: false,
       error: 'Invalid input: prompt is required and must be a non-empty string',
@@ -745,7 +746,7 @@ async function validateAndLoadProfile(
     };
   }
 
-  const toolInput = input as unknown as ImageGenerationToolInput;
+  const toolInput = parsed;
 
   // 2. Load and validate profile
   const profileResult = await loadAndValidateProfile(context.profileId, context.userId);

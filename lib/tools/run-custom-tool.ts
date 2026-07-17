@@ -203,6 +203,7 @@ export const runCustomToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateRunCustomInput(input: unknown): input is RunCustomToolInput {
-  return runCustomToolInputSchema.safeParse(input).success;
+export function validateRunCustomInput(input: unknown): RunCustomToolInput | null {
+  const parsed = runCustomToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }

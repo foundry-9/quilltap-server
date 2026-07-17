@@ -66,7 +66,9 @@ export async function executeWardrobeWearTool(
 ): Promise<WardrobeWearToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeWearInput(input)) {
+  const parsed = validateWardrobeWearInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe wear tool validation failed', {
       context: 'wardrobe-wear-handler',
       userId: context.userId,
@@ -86,7 +88,7 @@ export async function executeWardrobeWearTool(
   let appliedCount = 0;
   let failedError: string | undefined;
 
-  for (const op of (input as WardrobeWearToolInput).operations) {
+  for (const op of parsed.operations) {
     const mode = op.mode ?? 'wear';
     const itemId = normalizeNoItemSentinel(op.item_id);
     const itemTitle = normalizeNoItemSentinel(op.item_title);

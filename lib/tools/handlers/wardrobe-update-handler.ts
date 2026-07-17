@@ -38,7 +38,9 @@ export async function executeWardrobeUpdateTool(
 ): Promise<WardrobeUpdateToolOutput> {
   const repos = getRepositories();
 
-  if (!validateWardrobeUpdateInput(input)) {
+  const parsed = validateWardrobeUpdateInput(input);
+
+  if (!parsed) {
     logger.warn('Wardrobe update tool validation failed', {
       context: 'wardrobe-update-handler',
       userId: context.userId,
@@ -61,7 +63,7 @@ export async function executeWardrobeUpdateTool(
       is_default,
       replace,
       component_item_ids,
-    } = input as WardrobeUpdateToolInput;
+    } = parsed;
 
     const projectMountPointIds = await resolveProjectMountPointIdsForChat(context.chatId);
 

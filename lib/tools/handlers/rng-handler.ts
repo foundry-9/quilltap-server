@@ -111,7 +111,8 @@ export async function executeRngTool(
 ): Promise<RngToolOutput> {
   try {
     // Validate input
-    if (!validateRngInput(input)) {
+    const parsed = validateRngInput(input);
+    if (!parsed) {
       logger.warn('RNG validation failed', { userId: context.userId, input });
       return {
         success: false,
@@ -124,7 +125,7 @@ export async function executeRngTool(
       };
     }
 
-    const { type, rolls = 1, modifier = 0 } = input;
+    const { type, rolls = 1, modifier = 0 } = parsed;
 
     // Handle dice roll
     if (typeof type === 'number') {

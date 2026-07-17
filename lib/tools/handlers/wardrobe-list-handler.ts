@@ -75,7 +75,8 @@ export async function executeWardrobeListTool(
   const repos = getRepositories();
 
   try {
-    if (!validateWardrobeListInput(input)) {
+    const parsed = validateWardrobeListInput(input);
+    if (!parsed) {
       logger.warn('Wardrobe list tool validation failed', {
         context: 'wardrobe-list-handler',
         userId: context.userId,
@@ -91,7 +92,7 @@ export async function executeWardrobeListTool(
       };
     }
 
-    const validatedInput = input as WardrobeListToolInput;
+    const validatedInput = parsed;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
     // Merge the character's own wardrobe with shared archetypes (project +

@@ -65,8 +65,9 @@ export const docReadFileToolDefinition = {
 /**
  * Validates input for doc_read_file tool.
  */
-export function validateDocReadFileInput(input: unknown): input is DocReadFileInput {
-  return docReadFileToolInputSchema.safeParse(input).success;
+export function validateDocReadFileInput(input: unknown): DocReadFileInput | null {
+  const parsed = docReadFileToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
 
 

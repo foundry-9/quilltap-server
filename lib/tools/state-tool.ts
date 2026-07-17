@@ -100,6 +100,7 @@ export const stateToolDefinition = {
 /**
  * Helper to validate tool input parameters
  */
-export function validateStateInput(input: unknown): input is StateToolInput {
-  return stateToolInputSchema.safeParse(input).success;
+export function validateStateInput(input: unknown): StateToolInput | null {
+  const parsed = stateToolInputSchema.safeParse(input);
+  return parsed.success ? parsed.data : null;
 }
