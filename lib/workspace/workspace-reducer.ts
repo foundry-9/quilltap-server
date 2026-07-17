@@ -108,6 +108,11 @@ export function tabIdentity(tab: { kind: TabKind; payload?: unknown }): string {
       return `character-edit:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
     case 'character-view':
       return `character-view:${(tab.payload as { characterId?: string } | undefined)?.characterId ?? ''}`
+    case 'custom-tools': {
+      // One tab per open definition; the payload-less library is its own tab.
+      const payload = tab.payload as { mountPointId?: string; path?: string } | undefined
+      return `custom-tools:${payload?.mountPointId ?? ''}:${payload?.path ?? ''}`
+    }
     default:
       return tab.kind
   }

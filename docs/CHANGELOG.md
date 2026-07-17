@@ -4,6 +4,19 @@
 
 ### 4.8-dev
 
+#### Feature: Pascal's Workbench — a visual editor for custom tools
+
+Custom tools were hand-authored `Tools/*.tool.json` files with no UI. Pascal's Workbench (`/custom-tools`, also a workspace tab, left-rail entry, and links from Settings → Chat → Custom tools, the composer popup, and Scriptorium file rows) adds:
+
+- A library view listing every definition in every enabled store — valid or broken — with store/attachment badges (General, project, group, character vault, unattached), state chips, cross-store name-collision advisories, and open/duplicate/delete actions. Broken files show the loader's own rejection reason and open straight into repair mode.
+- A form builder that can only produce schema-valid output: identifier-coerced name field with title slug suggestion, parameter cards (rename rewrites all references atomically; delete lists reference sites and breaks loudly), range/dice roll forms with literal-vs-`$param` toggles and a live range readout, and an ordered outcome cascade with a pinned catch-all row, AND-composed condition chips over value/raw-roll/params/metadata subjects, duplicate subject+comparator blocking, and a message editor with a placeholder insert menu (unknown placeholders warn without blocking; `{{metadata.*}}` is never flagged).
+- A proving bench: single test rolls and a 10,000-draw outcome audit, both executed server-side through the same `executeCustomTool`/`matchesWhen` core live chats use, plus a fact-sheet card (pick a character or hand-type a JSON object) for metadata-gated rows and a live JSON preview of the exact bytes a save would write.
+- A JSON mode with debounced validation and unknown-top-level-key passthrough (`persist` etc. round-trip untouched), and a repair mode that can save a still-invalid file back to itself after an explicit confirm.
+- A save flow using the existing mount-points file routes (no second write path): destination picker grouped by attachment with per-store duplicate-name blocking, `Tools/<name>.tool.json` naming with an optional write-then-delete file rename when a tool's name changes, and mtime conflict detection with reload-theirs/overwrite-mine resolution.
+- New API resource `/api/v1/custom-tools`: GET library, GET `?action=destinations`, POST `?action=preview`, POST `?action=audit`. The chat roster GET now includes `mountPointId` per tool. New server helpers `listAllCustomTools`, `simulateOutcomes`, and `lib/pascal/workbench.ts`; `loadToolsFromMount` is exported.
+- Refactors: dice-notation parsing split into `lib/pascal/dice-notation.ts` (pure, no `crypto`) so the tool schema is client-safe and the browser validates with the same Zod schema the loader uses; the composer popup's parameter form extracted to a shared `CustomToolParamsForm` used by both the popup and the bench.
+- Help: new `help/pascals-workbench.md`; `help/custom-tools.md` cross-links it.
+
 #### Fix: mount-index case-repair test loaded the SQLite mock in CI
 
 The new `mount-index-case-repair` unit suite tried the real SQLite binding via a nested `packages/quilltap/node_modules` copy that only exists after a full local install. In CI that path is absent, so the loader fell through to a bare `require('better-sqlite3-multiple-ciphers')`, which the Jest `moduleNameMapper` redirects to the no-op mock — every query returned empty and 8 tests failed. It now requires the root `better-sqlite3` alias by absolute path (bypassing the mapper), matching the `quantize-embeddings` suite. Test-only change.

@@ -88,6 +88,13 @@ export const queryKeys = {
      * cached across an open.
      */
     byChat: (chatId: string) => ['custom-tools', chatId] as const,
+    /**
+     * Pascal's Workbench: every definition in every enabled store, no
+     * per-invoker shadowing. Fresh per request, same doctrine as `byChat`.
+     */
+    library: () => ['custom-tools', 'library'] as const,
+    /** The Workbench save-target list, grouped by attachment. */
+    destinations: () => ['custom-tools', 'destinations'] as const,
   },
   userProfile: {
     detail: ['user', 'profile'] as const,

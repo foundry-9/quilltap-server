@@ -16,7 +16,7 @@
  */
 
 import { z } from 'zod';
-import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice';
+import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation';
 
 /** Well-known folder, at a store's root, holding custom-tool definitions. */
 export const TOOLS_FOLDER = 'Tools';

@@ -41,6 +41,7 @@ import { CharacterEditView } from '@/app/aurora/[id]/edit/CharacterEditView'
 import { CharacterDetailView } from '@/app/aurora/[id]/view/CharacterDetailView'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
+import { CustomToolsView } from '@/app/custom-tools/CustomToolsView'
 import type {
   TerminalTabPayload,
   DocumentTabPayload,
@@ -48,6 +49,7 @@ import type {
   WardrobeTabPayload,
   CharacterEditTabPayload,
   CharacterViewTabPayload,
+  CustomToolsTabPayload,
 } from '@/lib/workspace/types'
 
 /**
@@ -118,6 +120,8 @@ function renderView(tab: WorkspaceTab) {
     }
     case 'settings-wizard':
       return <SettingsWizardView />
+    case 'custom-tools':
+      return <CustomToolsView payload={tab.payload as CustomToolsTabPayload | undefined} />
     default:
       return null
   }

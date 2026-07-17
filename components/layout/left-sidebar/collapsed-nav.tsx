@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { id: 'characters', label: 'Characters', tooltip: 'View all characters', href: '/aurora', icon: 'characters' },
   { id: 'photos', label: 'My Photos', tooltip: "Your saved photo gallery", href: '/photos', icon: 'photos' },
   { id: 'scenarios', label: 'Scenarios', tooltip: 'Manage general scenarios', href: '/scenarios', icon: 'scenarios' },
+  { id: 'custom-tools', label: "Pascal's Workbench", tooltip: 'Build and prove custom tools', href: '/custom-tools', icon: 'wrench' },
   { id: 'chats', label: 'Chats', tooltip: 'View all chats', href: '/salon', icon: 'chat' },
 ]
 

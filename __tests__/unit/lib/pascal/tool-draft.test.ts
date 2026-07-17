@@ -1,0 +1,408 @@
+/**
+ * Pascal's Workbench — draft model round-trips.
+ *
+ * The §6.2 invariant: load any valid definition into form mode, change
+ * nothing, save — the only permissible diffs are key order, whitespace, and
+ * default-elision; semantics identical (deep-equal after safeParse). Plus the
+ * `when` chip ⇄ JSON bijection across every subject and comparator, and the
+ * unknown-key passthrough that keeps v2 files intact.
+ */
+
+import {
+  conditionsFromWhen,
+  definitionFromDraft,
+  draftFromDefinition,
+  findParameterReferences,
+  newDraft,
+  renameParameterEverywhere,
+  serializeDraft,
+  slugFromTitle,
+  validateDraft,
+  whenFromConditions,
+  type DraftCondition,
+} from '@/lib/pascal/tool-draft'
+import { QtapCustomToolSchema, type WhenObject } from '@/lib/pascal/custom-tool.types'
+
+/**
+ * Collapse the permissible diffs — `$schema` handling and default-elision — so
+ * the remaining comparison is pure semantics. Deletes any optional key whose
+ * value equals its documented default, at both the top level and inside a
+ * range-form `roll`.
+ */
+function normalize(parsed: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...parsed }
+  delete out.$schema
+  if (out.disabled === false) delete out.disabled
+  if (out.revealOdds === true) delete out.revealOdds
+  if (out.defaultVisibility === 'public') delete out.defaultVisibility
+  if (out.parameters && Object.keys(out.parameters as object).length === 0) delete out.parameters
+  if (typeof out.roll === 'object' && out.roll !== null) {
+    const roll: Record<string, unknown> = { ...(out.roll as Record<string, unknown>) }
+    if (roll.min === 0) delete roll.min
+    if (roll.max === 1) delete roll.max
+    if (roll.multiplier === 1) delete roll.multiplier
+    if (roll.offset === 0) delete roll.offset
+    if (roll.round === false) delete roll.round
+    if (Object.keys(roll).length === 0) delete out.roll
+    else out.roll = roll
+  }
+  return out
+}
+
+/** Load → serialize → parse both sides and demand identical semantics. */
+function expectRoundTrip(document: Record<string, unknown>) {
+  const draft = draftFromDefinition(document)
+  expect(draft).not.toBeNull()
+
+  const emitted = definitionFromDraft(draft!)
+
+  const before = QtapCustomToolSchema.safeParse(document)
+  const after = QtapCustomToolSchema.safeParse(emitted)
+  expect(before.success).toBe(true)
+  expect(after.success).toBe(true)
+  expect(normalize(after.data as unknown as Record<string, unknown>)).toEqual(
+    normalize(before.data as unknown as Record<string, unknown>)
+  )
+  return emitted
+}
+
+describe('draft round-trip (§6.2 invariant)', () => {
+  it('round-trips a minimal definition', () => {
+    const emitted = expectRoundTrip({
+      name: 'unlock',
+      description: 'Attempt to pick the lock.',
+      outcomes: [{ when: true, message: 'The lock resists.', state: 'info' }],
+    })
+
+    // Canonical emission: $schema first, no bloat added.
+    expect(Object.keys(emitted)).toEqual(['$schema', 'name', 'description', 'outcomes'])
+  })
+
+  it('round-trips the full surface: params, transforms, every subject', () => {
+    expectRoundTrip({
+      $schema: '/schemas/qtap-custom-tool.schema.json',
+      name: 'measure',
+      title: 'Measure the Field',
+      description: 'Take a reading.',
+      disabled: true,
+      revealOdds: false,
+      defaultVisibility: 'whisper',
+      parameters: {
+        baseline: { type: 'number', default: 0, description: 'Floor.', min: -10, max: 10 },
+        scale: { type: 'integer', default: 2 },
+        material: { type: 'string', default: 'brass' },
+        blessed: { type: 'boolean', default: false },
+      },
+      roll: {
+        min: { $param: 'baseline' },
+        max: 100,
+        multiplier: 2,
+        offset: { $param: 'scale' },
+        round: true,
+      },
+      outcomes: [
+        {
+          when: {
+            gte: 10,
+            lte: 90,
+            roll: { lt: 0.9 },
+            params: { material: { eq: 'brass' }, scale: { gt: { $param: 'baseline' } } },
+            metadata: {
+              'has ansible access': { eq: true },
+              clearanceLevel: { gte: { $param: 'scale' } },
+            },
+          },
+          message: 'Reading: {{value}} ({{params.material}})',
+          state: 'success',
+        },
+        { when: { neq: 0 }, message: 'Odd reading {{roll}}.', state: 'partial' },
+        { when: true, message: 'Nothing.', state: 'failure' },
+      ],
+    })
+  })
+
+  it('round-trips a dice definition', () => {
+    expectRoundTrip({
+      name: 'saving_throw',
+      description: 'Roll a d20 saving throw.',
+      roll: '1d20',
+      outcomes: [
+        { when: { gte: 12 }, message: 'Saved! ({{dice}})', state: 'success' },
+        { when: true, message: 'Failed. ({{dice}})', state: 'failure' },
+      ],
+    })
+  })
+
+  it('elides defaults a hand-written file left implicit', () => {
+    const emitted = expectRoundTrip({
+      name: 'plain',
+      description: 'A plain tool.',
+      disabled: false,
+      revealOdds: true,
+      defaultVisibility: 'public',
+      roll: { min: 0, max: 1, multiplier: 1, offset: 0, round: false },
+      outcomes: [{ when: true, message: 'Done.', state: 'info' }],
+    })
+
+    expect(emitted.disabled).toBeUndefined()
+    expect(emitted.revealOdds).toBeUndefined()
+    expect(emitted.defaultVisibility).toBeUndefined()
+    expect(emitted.roll).toBeUndefined()
+  })
+
+  it('passes unknown top-level keys through untouched, after known keys', () => {
+    const emitted = expectRoundTrip({
+      name: 'ratchet',
+      persist: { baseline: '{{value}}' },
+      futureKey: [1, 2, 3],
+      description: 'A v2 file.',
+      outcomes: [{ when: true, message: 'Done.', state: 'info' }],
+    })
+
+    expect(emitted.persist).toEqual({ baseline: '{{value}}' })
+    expect(emitted.futureKey).toEqual([1, 2, 3])
+    const keys = Object.keys(emitted)
+    expect(keys.indexOf('persist')).toBeGreaterThan(keys.indexOf('outcomes'))
+    // Original relative order of unknown keys is preserved.
+    expect(keys.indexOf('persist')).toBeLessThan(keys.indexOf('futureKey'))
+  })
+
+  it('preserves a non-default $schema value and inserts one when absent', () => {
+    const custom = expectRoundTrip({
+      $schema: 'https://example.com/custom.schema.json',
+      name: 'remote',
+      description: 'Points elsewhere.',
+      outcomes: [{ when: true, message: 'Done.', state: 'info' }],
+    })
+    expect(custom.$schema).toBe('https://example.com/custom.schema.json')
+
+    const inserted = expectRoundTrip({
+      name: 'bare',
+      description: 'No $schema.',
+      outcomes: [{ when: true, message: 'Done.', state: 'info' }],
+    })
+    expect(inserted.$schema).toBe('/schemas/qtap-custom-tool.schema.json')
+  })
+
+  it('emits 2-space indent with a trailing newline', () => {
+    const draft = draftFromDefinition({
+      name: 'plain',
+      description: 'A plain tool.',
+      outcomes: [{ when: true, message: 'Done.', state: 'info' }],
+    })
+    const text = serializeDraft(draft!)
+    expect(text.endsWith('}\n')).toBe(true)
+    expect(text).toContain('\n  "name": "plain"')
+  })
+
+  it('refuses an invalid document', () => {
+    expect(draftFromDefinition({ name: 'broken' })).toBeNull()
+    expect(draftFromDefinition('not even an object')).toBeNull()
+  })
+})
+
+describe('when chips ⇄ JSON bijection', () => {
+  function expectWhenRoundTrip(when: WhenObject) {
+    const chips = conditionsFromWhen(when)
+    expect(whenFromConditions(chips)).toEqual(when)
+    return chips
+  }
+
+  it('covers every comparator on the value subject', () => {
+    const chips = expectWhenRoundTrip({ gt: 1, gte: 2, lt: 9, lte: 8, eq: 5, neq: 4 })
+    expect(chips).toHaveLength(6)
+    expect(chips.map((c) => c.comparator)).toEqual(['gt', 'gte', 'lt', 'lte', 'eq', 'neq'])
+    expect(chips.every((c) => c.subject.kind === 'value')).toBe(true)
+  })
+
+  it('covers the raw-roll subject and $param operands', () => {
+    const chips = expectWhenRoundTrip({ roll: { lte: { $param: 'fumble_under' }, gt: 0 } })
+    const paramOperand = chips.find((c) => c.operand.kind === 'param')
+    expect(paramOperand?.subject).toEqual({ kind: 'roll' })
+    expect(paramOperand?.operand).toEqual({ kind: 'param', name: 'fumble_under' })
+  })
+
+  it('covers param subjects with string, boolean, and number literals', () => {
+    expectWhenRoundTrip({
+      params: {
+        material: { eq: 'brass', neq: 'iron' },
+        blessed: { eq: true },
+        scale: { gte: 3 },
+      },
+    })
+  })
+
+  it('covers metadata subjects with exotic keys and every operand shape', () => {
+    expectWhenRoundTrip({
+      metadata: {
+        'keys with spaces': { eq: 'yes' },
+        'dotted.key.name': { neq: false },
+        'ünïcode✓': { gte: { $param: 'threshold' } },
+        plain: { lt: 12 },
+      },
+    })
+  })
+
+  it('merges a band on one subject into one comparator object', () => {
+    const chips: DraftCondition[] = [
+      { id: 'a', subject: { kind: 'value' }, comparator: 'gte', operand: { kind: 'number', text: '0.3' } },
+      { id: 'b', subject: { kind: 'value' }, comparator: 'lte', operand: { kind: 'number', text: '0.6' } },
+    ]
+    expect(whenFromConditions(chips)).toEqual({ gte: 0.3, lte: 0.6 })
+  })
+
+  it('keeps metadata identity per key: two keys with the same comparator coexist', () => {
+    const when: WhenObject = {
+      metadata: { strength: { gte: 10 }, cunning: { gte: 4 } },
+    } as WhenObject
+    const chips = conditionsFromWhen(when)
+    expect(chips).toHaveLength(2)
+    expect(whenFromConditions(chips)).toEqual(when)
+  })
+})
+
+describe('validateDraft', () => {
+  it('accepts a well-formed loaded draft', () => {
+    const draft = draftFromDefinition({
+      name: 'fine',
+      description: 'A fine tool.',
+      outcomes: [
+        { when: { gte: 0.5 }, message: 'High.', state: 'success' },
+        { when: true, message: 'Low.', state: 'failure' },
+      ],
+    })
+    expect(validateDraft(draft!).filter((i) => i.severity === 'error')).toEqual([])
+  })
+
+  it('starts a new draft with the empty row in error state', () => {
+    const issues = validateDraft(newDraft())
+    expect(issues.some((i) => i.message.includes('must test something'))).toBe(true)
+    expect(issues.some((i) => i.where.section === 'identity')).toBe(true)
+  })
+
+  it('blocks duplicate subject+comparator pairs but not distinct metadata keys', () => {
+    const draft = newDraft()
+    draft.name = 'dup'
+    draft.description = 'x'
+    draft.outcomes[0].message = 'm'
+    draft.outcomes[0].conditions = [
+      { id: 'a', subject: { kind: 'metadata', key: 'strength' }, comparator: 'gte', operand: { kind: 'number', text: '1' } },
+      { id: 'b', subject: { kind: 'metadata', key: 'cunning' }, comparator: 'gte', operand: { kind: 'number', text: '1' } },
+    ]
+    expect(validateDraft(draft).filter((i) => i.severity === 'error')).toEqual([])
+
+    draft.outcomes[0].conditions.push({
+      id: 'c',
+      subject: { kind: 'metadata', key: 'strength' },
+      comparator: 'gte',
+      operand: { kind: 'number', text: '5' },
+    })
+    const issues = validateDraft(draft)
+    expect(issues.some((i) => i.message.includes('only once'))).toBe(true)
+  })
+
+  it('warns on {{dice}} in range form without blocking', () => {
+    const draft = draftFromDefinition({
+      name: 'ranged',
+      description: 'x',
+      outcomes: [{ when: true, message: 'Rolled {{dice}}.', state: 'info' }],
+    })
+    const issues = validateDraft(draft!)
+    const diceIssue = issues.find((i) => i.message.includes('{{dice}}'))
+    expect(diceIssue?.severity).toBe('warning')
+  })
+
+  it('never flags {{metadata.*}} placeholders as unknown', () => {
+    const draft = draftFromDefinition({
+      name: 'meta',
+      description: 'x',
+      outcomes: [{ when: true, message: 'Sheet says {{metadata.some key nobody declared}}.', state: 'info' }],
+    })
+    expect(validateDraft(draft!)).toEqual([])
+  })
+
+  it('warns on a typo placeholder but does not block', () => {
+    const draft = draftFromDefinition({
+      name: 'typo',
+      description: 'x',
+      parameters: { bonus: { type: 'number', default: 0 } },
+      outcomes: [{ when: true, message: '{{params.bonsu}} and {{vlaue}}.', state: 'info' }],
+    })
+    const issues = validateDraft(draft!)
+    expect(issues).toHaveLength(2)
+    expect(issues.every((i) => i.severity === 'warning')).toBe(true)
+  })
+
+  it('flags a literal min above a literal max, but not a $param bound', () => {
+    const draft = newDraft()
+    draft.name = 'bounds'
+    draft.description = 'x'
+    draft.outcomes[0].conditions = [
+      { id: 'a', subject: { kind: 'value' }, comparator: 'gte', operand: { kind: 'number', text: '0' } },
+    ]
+    draft.outcomes[0].message = 'm'
+
+    draft.rollRange.min = { kind: 'literal', text: '5' }
+    draft.rollRange.max = { kind: 'literal', text: '2' }
+    expect(validateDraft(draft).some((i) => i.message.includes('low bound'))).toBe(true)
+
+    draft.parameters = [
+      { id: 'p1', name: 'top', type: 'number', defaultValue: '9', description: '', min: '', max: '' },
+    ]
+    draft.rollRange.max = { kind: 'param', name: 'top' }
+    expect(validateDraft(draft).some((i) => i.message.includes('low bound'))).toBe(false)
+  })
+})
+
+describe('parameter rename and reference finding', () => {
+  const document = {
+    name: 'opposed',
+    description: 'x',
+    parameters: { difficulty: { type: 'number' as const, default: 10 } },
+    roll: { offset: { $param: 'difficulty' } },
+    outcomes: [
+      {
+        when: { gte: { $param: 'difficulty' }, params: { difficulty: { gt: 0 } } },
+        message: 'Beat {{params.difficulty}}.',
+        state: 'success' as const,
+      },
+      { when: true, message: 'Failed.', state: 'failure' as const },
+    ],
+  }
+
+  it('finds every reference site for the deletion confirm', () => {
+    const draft = draftFromDefinition(document)!
+    const sites = findParameterReferences(draft, 'difficulty')
+    expect(sites.sort()).toEqual(
+      [
+        'roll offset',
+        'outcome 1: a condition tests it',
+        'outcome 1: a condition compares against it',
+        'outcome 1: the message renders it',
+      ].sort()
+    )
+  })
+
+  it('renames everywhere atomically and stays valid', () => {
+    const draft = draftFromDefinition(document)!
+    const renamed = renameParameterEverywhere(draft, 'difficulty', 'target')
+
+    const emitted = definitionFromDraft(renamed)
+    const parsed = QtapCustomToolSchema.safeParse(emitted)
+    expect(parsed.success).toBe(true)
+    expect(JSON.stringify(emitted)).not.toContain('difficulty')
+    expect((emitted.roll as { offset: unknown }).offset).toEqual({ $param: 'target' })
+    expect((emitted.outcomes as Array<{ message: string }>)[0].message).toBe('Beat {{params.target}}.')
+  })
+})
+
+describe('slugFromTitle', () => {
+  it.each([
+    ['Force the Lock', 'force_the_lock'],
+    ["The Baron's Gambit", 'the_barons_gambit'],
+    ['  3 Wishes!  ', 'wishes'],
+    ['Scan — Hawking Radiation', 'scan_hawking_radiation'],
+  ])('%s → %s', (title, expected) => {
+    expect(slugFromTitle(title)).toBe(expected)
+  })
+})

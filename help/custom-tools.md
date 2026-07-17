@@ -12,6 +12,10 @@ This is what Pascal the Croupier is for. A **custom tool** is a small contrivanc
 
 **The wheel cannot be argued with.** This is the entire point, so it bears stating plainly: the roll happens on the server, and Pascal announces the outcome himself, in his own message. Your characters do not write that message. A model that would dearly love to have picked the lock will find the lock has not been picked, and will have to go on from there. Regenerating a reply does not spin again — a roll, once fallen, has fallen.
 
+## Pascal's Workbench
+
+You need not write the JSON by hand at all. **[Pascal's Workbench](pascals-workbench.md)** (`/custom-tools`) is a visual editor for everything on this page: a library of every definition in every store, a form that cannot produce an invalid file, a proving bench for dry-run rolls and a ten-thousand-hand audit, and a repair mode for files that would not read. The hand-format below remains fully supported — the Workbench is sugar, and its live JSON preview is a fine way to learn the format.
+
 ## Where the tools live
 
 Pascal looks for a folder called `Tools` at the top of any document store, and reads every file in it whose name ends in `.tool.json`. One tool per file.
@@ -276,5 +280,6 @@ Characters with help tools enabled can navigate directly to this setting:
 
 ## Related Settings
 
+- **[Pascal's Workbench](pascals-workbench.md)** — the visual editor, library, and proving bench at `/custom-tools`.
 - **Settings → Chat → Automation** — auto-detection of dice rolls (`2d6`, `3d6+2`) written plainly in a message.
 - **The Scriptorium** — the document stores your `Tools/` folders live in.

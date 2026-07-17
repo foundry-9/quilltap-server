@@ -68,6 +68,8 @@ interface CustomToolListing {
   /** Whose perspective produced this variant — POST replays it. */
   asCharacterId: string;
   definitionPath: string;
+  /** Which store holds the file — Pascal's Workbench edits it by this pair. */
+  mountPointId: string;
   mountName: string;
 }
 
@@ -265,6 +267,7 @@ function buildListing(
     ...(characterLabel ? { characterLabel } : {}),
     asCharacterId: perspective.characterId,
     definitionPath: entry.definitionPath,
+    mountPointId: entry.mountPointId,
     mountName: entry.mountName,
   };
 }

@@ -352,7 +352,7 @@ Load-time validation failures do not error at run time; they simply keep the too
 
 - **`persist` block** — `"persist": { "baseline": "{{value}}" }`: after each run, store the value as this chat's default for a parameter, backed by Pascal's existing state system (`lib/tools/state-tool.ts`). Enables self-ratcheting tools (each Hawking reading becomes the next floor) and counters ("third failed lockpick breaks the pick"). v1 ignores the key with a warning.
 - Parameterized dice notation (`"{{params.n}}d6"`).
-- Group-tier authoring UI (definitions are hand-authored JSON in v1; a form-based editor could come later).
+- ~~Group-tier authoring UI (definitions are hand-authored JSON in v1; a form-based editor could come later).~~ Shipped as [Pascal's Workbench](complete/custom-tool-builder.md) — a full visual editor, library, and proving bench at `/custom-tools`.
 - Per-run seeds / deterministic replay.
 
 ## New modules

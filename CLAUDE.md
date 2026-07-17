@@ -117,7 +117,7 @@ Client server-state runs on **TanStack Query v5** (`@tanstack/react-query`); SWR
 | **The Commonplace Book** | character memory (self-managed RAG) — `/settings?tab=memory` |
 | **The Lantern** | story-background / image subsystem — `/settings?tab=images` |
 | **The Concierge** | dangerous-content tracking/rerouting — `/settings?tab=chat` |
-| **Pascal the Croupier** | RNG / game-state — `/settings?tab=chat` |
+| **Pascal the Croupier** | RNG / game-state — `/settings?tab=chat`; custom-tool editor **Pascal's Workbench** — `/custom-tools` |
 | **Saquel Ytzama** | encryption / secrets / API keys — `/settings?tab=system` |
 | **The Librarian** | synthetic author for Document-Mode events + character `doc_*` calls |
 | **The Host** | synthetic author for Salon participation + autonomous-room events |

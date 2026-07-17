@@ -42,6 +42,7 @@ const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
   'character-new',
   'character-edit',
   'settings-wizard',
+  'custom-tools',
 ])
 
 const CHAT_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(['salon', 'terminal', 'document'])
@@ -71,6 +72,12 @@ export function WorkspaceIntent() {
       let payload: unknown
       if (CHAT_KINDS.has(kind)) payload = chatId ? { chatId } : undefined
       else if (kind === 'settings') payload = { tab, section }
+      else if (kind === 'custom-tools') {
+        const mountPointId = searchParams.get('mount') || undefined
+        const path = searchParams.get('path') || undefined
+        const create = searchParams.get('new') === '1' || undefined
+        payload = mountPointId || path || create ? { mountPointId, path, create } : undefined
+      }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
       else if (kind === 'character-edit') payload = characterId ? { characterId, tab } : undefined
       else if (kind === 'document-standalone') {

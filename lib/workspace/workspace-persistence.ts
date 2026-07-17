@@ -62,6 +62,7 @@ const TAB_KINDS = [
   'character-edit',
   'character-view',
   'settings-wizard',
+  'custom-tools',
 ] as const satisfies readonly TabKind[]
 
 // Compile-time exhaustiveness: errors if any `TabKind` is missing above.

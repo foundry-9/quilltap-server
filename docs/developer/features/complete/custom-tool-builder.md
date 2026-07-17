@@ -1,7 +1,7 @@
 # Custom Tool Builder — Pascal's Workbench
 
-**Status:** Speced, not started.
-**Parent feature:** [pascal-custom-tools.md](pascal-custom-tools.md) (shipped). This spec fills the item that spec deferred: *"a form-based editor could come later."* It is now coming.
+**Status:** Implemented (shipped).
+**Parent feature:** [pascal-custom-tools.md](../pascal-custom-tools.md) (shipped). This spec fills the item that spec deferred: *"a form-based editor could come later."* It is now coming.
 **Intended implementer:** an agent with this document, the parent spec, and the codebase. Everything here was verified against the code as of commit `8e4b00d4`; the character-metadata subject (§4.4.1) was added after the `metadata.json` feature shipped (`8bc43333`, spec: [character-metadata-json.md](complete/character-metadata-json.md)) and verified against `WhenObjectSchema` / `MetadataComparatorSchema` / `MetadataKeySchema` in `lib/pascal/custom-tool.types.ts`.
 
 ---

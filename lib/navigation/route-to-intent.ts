@@ -89,6 +89,16 @@ export function parseHrefToIntent(href: string): TabIntent | null {
       return { kind: 'photos' }
     case '/scenarios':
       return { kind: 'scenarios' }
+    case '/custom-tools': {
+      const sp = new URLSearchParams(query)
+      const mountPointId = sp.get('mount') ?? undefined
+      const path = sp.get('path') ?? undefined
+      const create = sp.get('new') === '1' || undefined
+      return {
+        kind: 'custom-tools',
+        payload: mountPointId || path || create ? { mountPointId, path, create } : undefined,
+      }
+    }
     case '/settings': {
       const sp = new URLSearchParams(query)
       return {

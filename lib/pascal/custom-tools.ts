@@ -55,7 +55,7 @@ import {
   type Visibility,
   type When,
 } from './custom-tool.types';
-import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceRollResult } from './dice';
+import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceNotation, type DiceRollResult } from './dice';
 
 const CONTEXT = 'pascal.custom-tools';
 
@@ -168,8 +168,12 @@ async function readToolFile(
  * Load every definition in one mount. Never throws: a broken file becomes an
  * error entry, because one malformed `.tool.json` must not take the whole
  * roster down with it.
+ *
+ * Exported for Pascal's Workbench, whose library view lists every store's
+ * definitions — valid and broken alike — through this same read → parse →
+ * validate sequence rather than a second copy of it.
  */
-async function loadToolsFromMount(
+export async function loadToolsFromMount(
   mountPointId: string,
   tier: MountTier
 ): Promise<{ found: DiscoveredCustomTool[]; errors: CustomToolLoadError[] }> {
@@ -366,6 +370,46 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
   });
 
   return { tools, errors, droppedForCap };
+}
+
+/** Everything the Workbench library shows: every definition in every enabled store. */
+export interface CustomToolLibrary {
+  entries: DiscoveredCustomTool[];
+  errors: CustomToolLoadError[];
+}
+
+/**
+ * Enumerate every definition in every enabled store — the Workbench library.
+ *
+ * Deliberately NOT the tiered roster: no shadowing, no `disabled` suppression,
+ * no per-invoker perspective, no cap. The library is the authoring surface, so
+ * it shows the whole table face up; which definition would win a given chat
+ * depends on the invoker and is not this function's question to answer.
+ *
+ * Tier attribution is meaningless without an invoker, so every entry carries
+ * `'global'` — callers should not read anything into it.
+ */
+export async function listAllCustomTools(): Promise<CustomToolLibrary> {
+  const repos = getRepositories();
+  const mounts = await repos.docMountPoints.findEnabled();
+
+  const entries: DiscoveredCustomTool[] = [];
+  const errors: CustomToolLoadError[] = [];
+
+  for (const mount of [...mounts].sort((a, b) => a.id.localeCompare(b.id))) {
+    const { found, errors: mountErrors } = await loadToolsFromMount(mount.id, 'global');
+    entries.push(...found);
+    errors.push(...mountErrors);
+  }
+
+  logger.debug('Custom-tool library resolved', {
+    context: CONTEXT,
+    mountCount: mounts.length,
+    entryCount: entries.length,
+    errorCount: errors.length,
+  });
+
+  return { entries, errors };
 }
 
 // ---------------------------------------------------------------------------
@@ -911,5 +955,86 @@ export function executeCustomTool(
     diceBreakdown,
     visibility,
     ...(metadataTested ? { metadataTested } : {}),
+  };
+}
+
+/** The Workbench audit: per-outcome hit counts over many simulated draws. */
+export interface CustomToolAuditResult {
+  runs: number;
+  outcomes: Array<{ index: number; hits: number; share: number }>;
+  valueMin: number;
+  valueMax: number;
+  valueMean: number;
+}
+
+/**
+ * Deal many hands and count where they land — the proving bench's table audit.
+ *
+ * Same draw, same transform, same {@link matchesWhen} evaluation as
+ * {@link executeCustomTool}, run `runs` times with one param resolution up
+ * front. `renderTemplate` is deliberately skipped: it is the expensive step and
+ * contributes nothing to hit rates.
+ *
+ * The result is one sample of a wider space — hit rates generally depend on the
+ * supplied `params` and `metadata`, so a zero-hit row here may simply need a
+ * different caller, not a different table.
+ */
+export function simulateOutcomes(
+  definition: QtapCustomTool,
+  suppliedParams: Record<string, unknown> | null | undefined,
+  runs: number,
+  metadata?: Record<string, unknown>
+): CustomToolAuditResult {
+  const params = resolveParams(definition, suppliedParams);
+
+  let parsedDice: DiceNotation | null = null;
+  let rangeRoll: RollRange = {};
+  if (typeof definition.roll === 'string') {
+    parsedDice = parseDiceNotation(definition.roll);
+    if (!parsedDice) {
+      throw new CustomToolRunError(`${definition.name}: "${definition.roll}" is not dice notation this build can roll`);
+    }
+  } else {
+    rangeRoll = definition.roll ?? {};
+  }
+
+  const hits = new Array<number>(definition.outcomes.length).fill(0);
+  let valueMin = Infinity;
+  let valueMax = -Infinity;
+  let valueSum = 0;
+
+  for (let i = 0; i < runs; i++) {
+    let raw: number;
+    let value: number;
+
+    if (parsedDice) {
+      const rolled = rollNotation(parsedDice);
+      raw = rolled.total;
+      value = rolled.total;
+    } else {
+      const drawn = rollRange(definition, rangeRoll, params);
+      raw = drawn.raw;
+      value = drawn.value;
+    }
+
+    const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {} };
+    const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
+    if (outcomeIndex < 0) {
+      // The schema's mandatory trailing catch-all makes this unreachable.
+      throw new CustomToolRunError(`${definition.name}: no outcome matched ${formatValue(value)}`);
+    }
+    hits[outcomeIndex] += 1;
+
+    if (value < valueMin) valueMin = value;
+    if (value > valueMax) valueMax = value;
+    valueSum += value;
+  }
+
+  return {
+    runs,
+    outcomes: hits.map((count, index) => ({ index, hits: count, share: runs > 0 ? count / runs : 0 })),
+    valueMin: runs > 0 ? valueMin : 0,
+    valueMax: runs > 0 ? valueMax : 0,
+    valueMean: runs > 0 ? valueSum / runs : 0,
   };
 }

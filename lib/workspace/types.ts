@@ -40,6 +40,7 @@ export type TabKind =
   | 'character-edit' // payload: { characterId: string; tab?: string }
   | 'character-view' // payload: { characterId: string; tab?: string } — the read-only character detail page
   | 'settings-wizard' // the provider setup wizard, re-entered from Settings
+  | 'custom-tools' // Pascal's Workbench — payload: CustomToolsTabPayload (absent = library view)
 
 /** Kind-specific tab payloads. */
 export interface SalonTabPayload {
@@ -117,6 +118,17 @@ export interface CharacterViewTabPayload {
   characterId: string
   /** Deep-link target sub-tab (e.g. `conversations`). */
   tab?: string
+}
+/**
+ * Pascal's Workbench. No payload = the library view. A `mountPointId` + `path`
+ * pair opens one definition in the builder (one tab per open definition, like
+ * `character-edit`); `create` opens the builder on a fresh draft, with
+ * `mountPointId` preselecting the destination.
+ */
+export interface CustomToolsTabPayload {
+  mountPointId?: string
+  path?: string
+  create?: boolean
 }
 
 export interface WorkspaceTab {

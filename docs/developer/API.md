@@ -2286,6 +2286,7 @@ List the roster for the popup. Because a character-tier store shadows farther ti
       "characterLabel": "Miss Ashcroft",
       "asCharacterId": "character-uuid",
       "definitionPath": "Tools/unlock.tool.json",
+      "mountPointId": "mount-uuid",
       "mountName": "Ashcroft's Vault"
     }
   ],
@@ -2341,6 +2342,108 @@ A failed run posts **no Pascal message** — the failure is announced by Prosper
 **Errors**: `400` for an unknown tool (the response lists the available names), a rejected parameter, or a definition that will not run. `404` when the chat does not exist.
 
 ---
+
+#### `GET /api/v1/custom-tools`
+
+Pascal's Workbench library: **every** definition in **every** enabled store — no per-invoker shadowing, no roster cap, broken files included. Resolved fresh per request.
+
+**Response**: `200 OK`
+
+```json
+{
+  "tools": [
+    {
+      "valid": true,
+      "name": "unlock",
+      "title": "Force the Lock",
+      "description": "Try the lock with whatever is to hand.",
+      "disabled": false,
+      "defaultVisibility": "public",
+      "rollForm": "range",
+      "parameterCount": 1,
+      "outcomeCount": 3,
+      "mountPointId": "mount-uuid",
+      "mountName": "Ashcroft's Vault",
+      "definitionPath": "Tools/unlock.tool.json",
+      "attachments": [{ "kind": "character", "id": "character-uuid", "label": "Miss Ashcroft" }]
+    }
+  ],
+  "errors": [
+    {
+      "valid": false,
+      "definitionPath": "Tools/broken.tool.json",
+      "mountPointId": "mount-uuid",
+      "mountName": "Quilltap General",
+      "reason": "is not valid JSON: Unexpected token }",
+      "attachments": [{ "kind": "general", "label": "General" }]
+    }
+  ]
+}
+```
+
+`attachments[].kind` is one of `general`, `project`, `group`, `character`, `unattached`; a store may carry several.
+
+#### `GET /api/v1/custom-tools?action=destinations`
+
+The Workbench save-target list: every enabled store grouped by what it is attached to, with the tool names each store already carries (a same-store duplicate `name` is a load-time rejection, so the picker warns before writing).
+
+**Response**: `200 OK`
+
+```json
+{
+  "general": { "mountPointId": "mount-uuid", "mountName": "Quilltap General", "existingToolNames": ["unlock"] },
+  "projects": [
+    { "projectId": "project-uuid", "projectName": "Ashfall Chronicle", "stores": [{ "mountPointId": "mount-uuid", "mountName": "Ashfall Docs", "existingToolNames": [] }] }
+  ],
+  "groups": [
+    { "groupId": "group-uuid", "groupName": "The Night Shift", "stores": [{ "mountPointId": "mount-uuid", "mountName": "Night Shift Files", "official": true, "existingToolNames": [] }] }
+  ],
+  "characters": [
+    { "characterId": "character-uuid", "characterName": "Miss Ashcroft", "mountPointId": "mount-uuid", "mountName": "Ashcroft's Vault", "existingToolNames": [] }
+  ],
+  "other": [{ "mountPointId": "mount-uuid", "mountName": "Loose Papers", "existingToolNames": [] }]
+}
+```
+
+`general` is `null` when the General store is unprovisioned. Characters without a vault are omitted.
+
+#### `POST /api/v1/custom-tools?action=preview`
+
+Dry-run a definition through the same `executeCustomTool` core live chats use. **Posts nothing, writes nothing** — pure computation with the crypto RNG kept server-side.
+
+**Request Body**:
+
+```json
+{
+  "definition": { "name": "unlock", "description": "…", "outcomes": [{ "when": true, "message": "…", "state": "info" }] },
+  "params": { "bonus": 2 },
+  "private": false,
+  "metadata": { "hasSkeletonKey": true }
+}
+```
+
+`metadata` may instead be `{ "characterId": "uuid" }`, in which case the server hydrates that character and uses their real `metadata.json` (404 for an unknown id; a broken vault returns 422 with the reason).
+
+**Response**: `200 OK` — the full run result (`tool`, `params`, `rollForm`, `raw`, `value`, `state`, `outcomeIndex`, rendered `message`, `diceBreakdown`, `visibility`, and `metadataTested` when the winning row consulted the sheet). An invalid definition returns 400 with the loader's rejection sentence; a run-time refusal (e.g. an inverted range after `$param` substitution) returns 422.
+
+#### `POST /api/v1/custom-tools?action=audit`
+
+Monte Carlo table audit: 10,000 draws with roll + outcome matching only (no template rendering). Body is the preview body without `private`; `metadata` resolves the same way and is threaded into the match subjects so metadata-gated rows can fire.
+
+**Response**: `200 OK`
+
+```json
+{
+  "runs": 10000,
+  "outcomes": [
+    { "index": 0, "hits": 4012, "share": 0.4012 },
+    { "index": 1, "hits": 5988, "share": 0.5988 }
+  ],
+  "valueMin": 0.0001,
+  "valueMax": 0.9998,
+  "valueMean": 0.5003
+}
+```
 
 ### Autonomous Room Control
 

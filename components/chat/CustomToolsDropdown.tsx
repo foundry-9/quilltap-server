@@ -18,21 +18,24 @@
  */
 
 import { useMemo, useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
+import {
+  CustomToolParamsForm,
+  coerceParamValues,
+  initialParamValues,
+  type CustomToolParameterSpec,
+  type ParameterFormValues,
+} from '@/components/custom-tools/CustomToolParamsForm'
 
 /** A single declared parameter of a custom-tool definition. */
-export interface CustomToolParameter {
-  type: 'number' | 'integer' | 'string' | 'boolean'
-  default: number | string | boolean
-  description?: string
-  min?: number
-  max?: number
-}
+export type CustomToolParameter = CustomToolParameterSpec
 
 /** A runnable tool in the resolved roster. */
 export interface CustomTool {
@@ -49,12 +52,15 @@ export interface CustomTool {
   /** Disambiguates a character-labeled variant on the run call. */
   asCharacterId?: string
   definitionPath: string
+  /** Which store holds the file — the Workbench edits it by this pair. */
+  mountPointId?: string
   mountName: string
 }
 
 /** A definition file that failed load-time validation and stayed out of the roster. */
 export interface CustomToolError {
   definitionPath: string
+  mountPointId?: string
   mountName: string
   tier: string
   reason: string
@@ -80,9 +86,6 @@ interface CustomToolsDropdownProps {
   variant?: 'palette' | 'gutter'
 }
 
-/** Form values are held loosely (text inputs yield strings) and coerced on run. */
-type ParameterFormValues = Record<string, string | boolean>
-
 /**
  * Identity of a roster entry. `name` alone isn't unique — a per-character
  * variant shadows a broader definition under the same name.
@@ -93,39 +96,15 @@ function toolKey(tool: CustomTool): string {
 
 /** Seed a tool's form from its declared defaults. */
 function initialValues(tool: CustomTool): ParameterFormValues {
-  const values: ParameterFormValues = {}
-  for (const [name, param] of Object.entries(tool.parameters)) {
-    values[name] = param.type === 'boolean' ? Boolean(param.default) : String(param.default)
-  }
-  return values
+  return initialParamValues(tool.parameters)
 }
 
-/**
- * Coerce the form's loose values back to the declared types. Blank or
- * unparseable numbers fall back to the declared default rather than sending
- * NaN — the server validates properly; this only keeps the payload well-typed.
- */
+/** Coerce the form's loose values back to the declared types. */
 function coerceParameters(
   tool: CustomTool,
   values: ParameterFormValues,
 ): Record<string, number | string | boolean> {
-  const out: Record<string, number | string | boolean> = {}
-  for (const [name, param] of Object.entries(tool.parameters)) {
-    const raw = values[name]
-    if (param.type === 'boolean') {
-      out[name] = Boolean(raw)
-      continue
-    }
-    if (param.type === 'string') {
-      out[name] = typeof raw === 'string' ? raw : String(param.default)
-      continue
-    }
-    const parsed = param.type === 'integer'
-      ? parseInt(String(raw), 10)
-      : parseFloat(String(raw))
-    out[name] = Number.isFinite(parsed) ? parsed : Number(param.default)
-  }
-  return out
+  return coerceParamValues(tool.parameters, values)
 }
 
 export function CustomToolsDropdown({
@@ -141,6 +120,24 @@ export function CustomToolsDropdown({
   const [privateByKey, setPrivateByKey] = useState<Record<string, boolean>>({})
   const dropdownRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+  const workspace = useWorkspaceOptional()
+  const router = useRouter()
+
+  /** Open Pascal's Workbench — as a tab inside the workspace, a route outside. */
+  const openWorkbench = (payload?: { mountPointId?: string; path?: string; create?: boolean }) => {
+    setIsOpen(false)
+    setExpandedKey(null)
+    onClose?.()
+    if (workspace) {
+      workspace.openTab('custom-tools', payload)
+      return
+    }
+    const search = new URLSearchParams()
+    if (payload?.create) search.set('new', '1')
+    if (payload?.mountPointId) search.set('mount', payload.mountPointId)
+    if (payload?.path) search.set('path', payload.path)
+    router.push(search.size > 0 ? `/custom-tools?${search.toString()}` : '/custom-tools')
+  }
 
   useClickOutside(dropdownRef, () => {
     setIsOpen(false)
@@ -288,7 +285,6 @@ export function CustomToolsDropdown({
               const key = toolKey(tool)
               const isExpanded = expandedKey === key
               const values = formValues[key] ?? initialValues(tool)
-              const params = Object.entries(tool.parameters)
 
               return (
                 <div key={key}>
@@ -309,49 +305,45 @@ export function CustomToolsDropdown({
                         <span className="block text-xs qt-text-secondary">{tool.description}</span>
                       )}
                     </span>
-                    <Icon
-                      name="chevron-down"
-                      className={`w-3 h-3 mt-1 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    />
+                    <span className="flex items-center gap-1 mt-1 flex-shrink-0">
+                      {tool.mountPointId && (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="qt-text-secondary hover:opacity-70"
+                          title="Open on Pascal's Workbench"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openWorkbench({ mountPointId: tool.mountPointId, path: tool.definitionPath })
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              openWorkbench({ mountPointId: tool.mountPointId, path: tool.definitionPath })
+                            }
+                          }}
+                        >
+                          <Icon name="wrench" className="w-3 h-3" />
+                        </span>
+                      )}
+                      <Icon
+                        name="chevron-down"
+                        className={`w-3 h-3 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                      />
+                    </span>
                   </button>
 
                   {/* Parameter form — generated from the definition's `parameters` */}
                   {isExpanded && (
                     <div className="px-3 py-2 space-y-2 border-t">
-                      {params.map(([name, param]) => {
-                        const inputId = `custom-tool-${key}-${name}`
-                        if (param.type === 'boolean') {
-                          return (
-                            <label key={name} className="flex items-center gap-2 text-sm">
-                              <input
-                                id={inputId}
-                                type="checkbox"
-                                checked={Boolean(values[name])}
-                                onChange={(e) => handleValueChange(key, name, e.target.checked)}
-                                disabled={isRunning}
-                              />
-                              <span title={param.description}>{name}</span>
-                            </label>
-                          )
-                        }
-                        return (
-                          <div key={name} className="flex items-center justify-between gap-2">
-                            <label htmlFor={inputId} className="text-sm" title={param.description}>
-                              {name}
-                            </label>
-                            <input
-                              id={inputId}
-                              type={param.type === 'string' ? 'text' : 'number'}
-                              value={String(values[name] ?? '')}
-                              onChange={(e) => handleValueChange(key, name, e.target.value)}
-                              min={param.type === 'string' ? undefined : param.min}
-                              max={param.type === 'string' ? undefined : param.max}
-                              disabled={isRunning}
-                              className={param.type === 'string' ? 'qt-input w-40' : 'qt-input w-20'}
-                            />
-                          </div>
-                        )
-                      })}
+                      <CustomToolParamsForm
+                        parameters={tool.parameters}
+                        values={values}
+                        onChange={(name, value) => handleValueChange(key, name, value)}
+                        disabled={isRunning}
+                        idPrefix={`custom-tool-${key}`}
+                      />
 
                       <label className="flex items-center gap-2 text-sm">
                         <input
@@ -379,17 +371,26 @@ export function CustomToolsDropdown({
               )
             })}
 
-            {/* Definition files that failed validation — named, never swallowed */}
+            {/* Definition files that failed validation — named, never swallowed.
+                Each badge opens the Workbench's repair mode: the place you fix
+                a broken file. */}
             {errors.length > 0 && (
               <div className="border-t mt-1 pt-1">
                 {errors.map((err) => (
-                  <div
+                  <button
                     key={`${err.mountName}:${err.definitionPath}`}
-                    className="px-3 py-2 text-xs qt-text-destructive"
+                    type="button"
+                    className="w-full px-3 py-2 text-xs qt-text-destructive text-left hover:qt-bg-muted disabled:hover:bg-transparent"
+                    disabled={!err.mountPointId}
+                    title={err.mountPointId ? "Open in Pascal's Workbench to repair" : undefined}
+                    onClick={() =>
+                      err.mountPointId &&
+                      openWorkbench({ mountPointId: err.mountPointId, path: err.definitionPath })
+                    }
                   >
                     <span className="block break-all">{err.definitionPath}</span>
                     <span className="block">{err.reason}</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -401,6 +402,19 @@ export function CustomToolsDropdown({
                 {droppedForCap.join(', ')}
               </div>
             )}
+
+            {/* Pascal's Workbench — authoring lives there, not in this popup */}
+            <div className="border-t mt-1 pt-1">
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-sm text-left hover:qt-bg-muted flex items-center gap-2"
+                onClick={() => openWorkbench({ create: true })}
+                role="menuitem"
+              >
+                <Icon name="wrench" className="w-3.5 h-3.5" />
+                New contrivance&hellip;
+              </button>
+            </div>
           </div>
         </div>
       )}
