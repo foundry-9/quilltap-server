@@ -33,22 +33,12 @@ import {
 } from '@/lib/database/repositories/mount-index-case-repair';
 import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
 
-function loadDriver(): any {
-  try {
-    return require(path.join(
-      __dirname, '..', '..', '..', '..', '..',
-      'packages', 'quilltap', 'node_modules', 'better-sqlite3-multiple-ciphers'
-    ));
-  } catch {
-    try {
-      return require('better-sqlite3-multiple-ciphers');
-    } catch {
-      return require(path.join(__dirname, '..', '..', '..', '..', '..', 'node_modules', 'better-sqlite3'));
-    }
-  }
-}
-
-const Database = loadDriver();
+// Root package.json aliases better-sqlite3-multiple-ciphers as better-sqlite3,
+// and the jest moduleNameMapper replaces both bare names with a no-op mock.
+// Require the real binding by absolute path (which the mapper's `^name$`
+// patterns don't match) so this suite exercises actual SQL. The root alias is
+// always installed by `npm ci`, unlike packages/quilltap's nested copy.
+const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
 
 const MP = 'mp-1';
 

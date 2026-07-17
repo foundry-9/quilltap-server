@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: mount-index case-repair test loaded the SQLite mock in CI
+
+The new `mount-index-case-repair` unit suite tried the real SQLite binding via a nested `packages/quilltap/node_modules` copy that only exists after a full local install. In CI that path is absent, so the loader fell through to a bare `require('better-sqlite3-multiple-ciphers')`, which the Jest `moduleNameMapper` redirects to the no-op mock — every query returned empty and 8 tests failed. It now requires the root `better-sqlite3` alias by absolute path (bypassing the mapper), matching the `quantize-embeddings` suite. Test-only change.
+
 #### Docs: Pascal's Workbench spec covers the metadata test subject
 
 The custom-tool builder spec (`docs/developer/features/custom-tool-builder.md`) was written before character `metadata.json` shipped. Updated it to cover the fourth outcome-test subject: a Metadata condition chip with a free-text key input, all six comparators (ordering ones noted as fail-soft at run time), metadata placeholders in the message editor's insert menu (never warning-underlined as unknown), a fact-sheet card on the proving bench (pick a character or hand-type a JSON object) with a `metadata` field on the preview/audit request bodies, fail-soft rules in the implementer checklist, and metadata comparators in the serialization bijection tests.
