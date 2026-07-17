@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: Pascal's Workbench spec covers the metadata test subject
+
+The custom-tool builder spec (`docs/developer/features/custom-tool-builder.md`) was written before character `metadata.json` shipped. Updated it to cover the fourth outcome-test subject: a Metadata condition chip with a free-text key input, all six comparators (ordering ones noted as fail-soft at run time), metadata placeholders in the message editor's insert menu (never warning-underlined as unknown), a fact-sheet card on the proving bench (pick a character or hand-type a JSON object) with a `metadata` field on the preview/audit request bodies, fail-soft rules in the implementer checklist, and metadata comparators in the serialization bijection tests.
+
 #### Docs: Pascal custom-tools spec absorbs the metadata test subject
 
 The parent custom-tools spec (`docs/developer/features/pascal-custom-tools.md`) now documents the `when.metadata` test subject, the `{{metadata.<key>}}` template family, `pascalMeta.metadataTested`, the fail-soft run-time rules, and the roster secrecy rule — all shipped earlier by the character `metadata.json` feature but never woven into the parent spec. Its stale "not yet implemented" status line was corrected to shipped. Both annotated reference specimens (`docs/developer/CUSTOM_TOOL_SPEC.json` and `CUSTOM_TOOL_SPEC_DICE.json`) gained outcome rows demonstrating metadata tests: a boolean `eq`, a numeric ordering comparator, the fall-through for characters lacking a key, and verbatim rendering of placeholders for missing keys.

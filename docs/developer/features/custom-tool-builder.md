@@ -2,7 +2,7 @@
 
 **Status:** Speced, not started.
 **Parent feature:** [pascal-custom-tools.md](pascal-custom-tools.md) (shipped). This spec fills the item that spec deferred: *"a form-based editor could come later."* It is now coming.
-**Intended implementer:** an agent with this document, the parent spec, and the codebase. Everything here was verified against the code as of commit `8e4b00d4`.
+**Intended implementer:** an agent with this document, the parent spec, and the codebase. Everything here was verified against the code as of commit `8e4b00d4`; the character-metadata subject (§4.4.1) was added after the `metadata.json` feature shipped (`8bc43333`, spec: [character-metadata-json.md](complete/character-metadata-json.md)) and verified against `WhenObjectSchema` / `MetadataComparatorSchema` / `MetadataKeySchema` in `lib/pascal/custom-tool.types.ts`.
 
 ---
 
@@ -15,7 +15,7 @@ The Builder is a visual editor that:
 1. **Reads** any existing definition that matches (or fails) `QtapCustomToolSchema`, including gracefully degrading to a raw-JSON repair mode for files the form cannot represent.
 2. **Writes** only schema-valid output — validity is guaranteed *by construction* in form mode and *by gate* in JSON mode, both against the same Zod schema that the roster loader uses (single source of truth, no drift possible).
 3. **Saves anywhere a tool can live**: the General store, project-linked stores, group official/linked stores, and character vaults (database-backed), plus unattached stores.
-4. Makes the **cascading outcome table** (ordered, first-match-wins, AND-composed comparators over value / raw roll / params) editable without knowing the JSON grammar.
+4. Makes the **cascading outcome table** (ordered, first-match-wins, AND-composed comparators over value / raw roll / params / character metadata) editable without knowing the JSON grammar.
 5. Makes **value insertion** trivial: `{{value}} / {{roll}} / {{dice}} / {{params.x}}` placeholders in messages via an insert menu, and literal-vs-`{ "$param": … }` toggles on every numeric field that accepts a reference (roll fields and comparator operands).
 6. Provides a **test bench**: single dry-run rolls and a Monte Carlo table audit, executed server-side through the very same `executeCustomTool` core that live chats use.
 
@@ -122,23 +122,24 @@ The core of the feature. An **ordered list** of outcome rows, rendered as a casc
 
 #### 4.4.1 The condition (`when`) builder
 
-A `when` object is a flat AND of comparators over three subjects. The builder renders it as a list of **condition chips**, joined by an "AND" connective label:
+A `when` object is a flat AND of comparators over four subjects. The builder renders it as a list of **condition chips**, joined by an "AND" connective label:
 
 ```
 value  ≥  15                          [×]
 raw roll  ≤  { $param: fumble_under } [×]
 bonus  =  true                        [×]
+metadata hasAnsibleAccess  =  true    [×]
 [+ add condition]
 ```
 
 One condition = **subject** + **comparator** + **operand**:
 
-- **Subject** select: `Value` (the final, post-transform number), `Raw roll` (pre-transform draw — only meaningfully different in the Range form with a transform; still always offered, with a hint when it currently equals value), and one entry per declared parameter (`Parameter: scale`).
-- **Comparator** select: > ≥ < ≤ = ≠. **Filtered by type**: for a string or boolean parameter subject, only = and ≠ are offered (ordering a string is a load-time rejection; the UI never constructs one).
-- **Operand**: a typed NumberOrParam-style field. For numeric subjects: literal number or numeric-param reference. For = / ≠ on a string param: literal text or any-param reference; boolean param: true/false toggle or reference. Type mismatches (e.g. `=` between a number subject and a string param reference) are prevented by filtering the reference select to type-compatible parameters — mirroring `validateComparator` exactly.
-- Multiple conditions on the **same subject** are legal (`value ≥ 0.3 AND value ≤ 0.6` is a band) and serialize into one comparator object. Two conditions with the same subject *and* same comparator key is impossible JSON (object keys) — the builder blocks adding a duplicate subject+comparator pair with an inline explanation ("a row can test ≥ on the value only once").
+- **Subject** select: `Value` (the final, post-transform number), `Raw roll` (pre-transform draw — only meaningfully different in the Range form with a transform; still always offered, with a hint when it currently equals value), one entry per declared parameter (`Parameter: scale`), and `Metadata…`. Choosing `Metadata…` reveals a **free-text key input** beside the select — metadata keys are the *user's* vocabulary, hand-authored in a character's `metadata.json` and declared nowhere the file can see, so there is no list to pick from. Any non-empty string is a valid key (`MetadataKeySchema` — spaces, dots, whatever the author called it); an empty key is the only inline error. A short hint under the input: "the invoking character's fact sheet — a key the character lacks simply doesn't match."
+- **Comparator** select: > ≥ < ≤ = ≠. **Filtered by type**: for a string or boolean parameter subject, only = and ≠ are offered (ordering a string is a load-time rejection; the UI never constructs one). **Metadata subjects offer all six** — the stored value's type is unknowable at authoring time, so nothing can be filtered out. A note on the chip when an ordering comparator is chosen: "matches only when the stored value is a number — anything else declines the row at run time, fail-soft, never an error."
+- **Operand**: a typed NumberOrParam-style field. For numeric subjects: literal number or numeric-param reference. For = / ≠ on a string param: literal text or any-param reference; boolean param: true/false toggle or reference. Type mismatches (e.g. `=` between a number subject and a string param reference) are prevented by filtering the reference select to type-compatible parameters — mirroring `validateComparator` exactly. **Metadata subjects** follow the parameter grammar (`MetadataComparatorSchema` *is* `ParamComparatorSchema`): ordering comparators take a literal number or a numeric-param reference; = / ≠ take a number, string, or boolean literal — a segmented literal-type picker, since no declared type steers the widget — or a `$param` reference to **any** declared parameter (with the stored value's type unknown, no reference can be ruled incompatible; the only load-time check on a metadata operand is that a referenced parameter exists, per `validateMetadataOperands`).
+- Multiple conditions on the **same subject** are legal (`value ≥ 0.3 AND value ≤ 0.6` is a band) and serialize into one comparator object. Two conditions with the same subject *and* same comparator key is impossible JSON (object keys) — the builder blocks adding a duplicate subject+comparator pair with an inline explanation ("a row can test ≥ on the value only once"). For metadata subjects, identity is subject *plus key*: `metadata.strength ≥` and `metadata.cunning ≥` coexist happily; a second `metadata.strength ≥` is blocked.
 - Zero conditions is invalid for a non-catch-all row (`must test something`); an empty row renders in error state and blocks save.
-- Serialization: subject `Value` → bare comparator keys on the `when` object; `Raw roll` → the `roll` sub-object; parameters → `params.<name>` sub-objects. Deserialization is the exact inverse. `when: true` never appears in the chip UI — it is exclusively the pinned tail.
+- Serialization: subject `Value` → bare comparator keys on the `when` object; `Raw roll` → the `roll` sub-object; parameters → `params.<name>` sub-objects; metadata → `metadata.<key>` sub-objects. Deserialization is the exact inverse. `when: true` never appears in the chip UI — it is exclusively the pinned tail.
 
 #### 4.4.2 The message editor
 
@@ -148,16 +149,18 @@ A textarea (≤1000, counter) with an **Insert value ▾** menu that inserts a p
 - **Raw roll** → `{{roll}}`
 - **Dice breakdown** → `{{dice}}` (offered only in Dice form; if the roll form is later switched to Range, existing `{{dice}}` occurrences get a warning underline — it renders as an empty string there, which is legal but probably unintended)
 - **Parameter: x** → `{{params.x}}` per declared parameter
+- **Metadata key…** → prompts for a key (free-text, any non-empty string — the same no-declared-list reality as §4.4.1; pre-fill the input with keys already tested in this tool's `when` objects as suggestions, since those are the keys the author demonstrably cares about) and inserts `{{metadata.<key>}}`
 
-Placeholders already present in the text render with a subtle highlight (regex `\{\{[^}]+\}\}`, same as `renderTemplate`'s). An unknown placeholder (typo'd name, deleted param) gets a warning underline and a save-time *warning* (not a block — the runtime leaves unknown placeholders as written, so this is legal, merely suspicious).
+Placeholders already present in the text render with a subtle highlight (regex `\{\{[^}]+\}\}`, same as `renderTemplate`'s). An unknown placeholder (typo'd name, deleted param) gets a warning underline and a save-time *warning* (not a block — the runtime leaves unknown placeholders as written, so this is legal, merely suspicious). **The warning logic must never flag `{{metadata.*}}` as unknown**: metadata keys aren't declared in the file, so every `{{metadata.<key>}}` is presumptively legitimate — at run time an absent key (or a non-primitive value) renders the placeholder verbatim with a debug log, which is the runtime's convention, not an authoring error the Builder can detect.
 
 ### 4.5 The proving bench (right panel)
 
-Three stacked cards:
+Four stacked cards:
 
-1. **Test roll.** A parameter form generated from the current declarations, defaults pre-filled — reuse/extract the form logic already in `CustomToolsDropdown.tsx` (`initialValues` / `coerceParameters`) into a shared component rather than writing a third copy. A **Roll** button calls the preview endpoint (§5.3) and renders the result as a faithful mini Pascal bubble: state accent, rendered message, dice breakdown when present, plus a debug line the real bubble doesn't show — raw draw, final value, and *which outcome row matched* (the matched row also flashes in the form column; this is the "aha" moment of the cascade). Repeated rolls append to a short scrollback (last ~10). Disabled with a hint while the draft is invalid.
-2. **Table audit.** A **Deal a thousand hands** button (N = 10,000 server-side; label stays in voice) calling the audit endpoint (§5.4) with the *current bench parameter values*. Renders per-outcome hit percentages as a horizontal bar list in row order, and flags any **zero-hit row** with a warning: "this outcome never fired in 10,000 draws *with these parameters* — it may be unreachable, or reachable only with other parameter values." That caveat is honest and required: reachability generally depends on params, and the audit samples one point of that space.
-3. **JSON preview.** Read-only, live, pretty-printed — the exact bytes Save would write (§6.2), with `$schema` line included. This is the teaching surface: users learn the hand-format by watching the form write it.
+1. **Test roll.** A parameter form generated from the current declarations, defaults pre-filled — reuse/extract the form logic already in `CustomToolsDropdown.tsx` (`initialValues` / `coerceParameters`) into a shared component rather than writing a third copy. A **Roll** button calls the preview endpoint (§5.3) and renders the result as a faithful mini Pascal bubble: state accent, rendered message, dice breakdown when present, plus a debug line the real bubble doesn't show — raw draw, final value, *which outcome row matched* (the matched row also flashes in the form column; this is the "aha" moment of the cascade), and the metadata keys the winning row consulted with the values they held (`metadataTested` from the run result). Repeated rolls append to a short scrollback (last ~10). Disabled with a hint while the draft is invalid.
+2. **The fact sheet.** `executeCustomTool` is pure — the caller supplies `opts.metadata` — so the bench must supply one too, or every metadata-gated row is dealt to nobody in particular and audits as unreachable. Below the parameter form, a **metadata card** with two modes: **pick a character** (a character select; the server hydrates that character and uses `character.metadata` — the honest "what would happen if Imogen rolled this" answer) or **hand-typed sheet** (a small JSON-object editor, validated as a single JSON object, for testing keys no existing character carries yet). Default: empty `{}`, with a standing hint whenever the draft contains any `metadata` test: "no fact sheet supplied — metadata tests will all decline, exactly as for an unattributed manual roll." The supplied sheet feeds both the test roll and the audit.
+3. **Table audit.** A **Deal a thousand hands** button (N = 10,000 server-side; label stays in voice) calling the audit endpoint (§5.4) with the *current bench parameter values and fact sheet*. Renders per-outcome hit percentages as a horizontal bar list in row order, and flags any **zero-hit row** with a warning: "this outcome never fired in 10,000 draws *with these parameters and this fact sheet* — it may be unreachable, or reachable only with other parameter values, or gated on metadata this sheet doesn't carry." That caveat is honest and required: reachability generally depends on params and on the supplied metadata, and the audit samples one point of that space. A metadata-gated row showing 0% under an empty sheet is working as designed, not a bug.
+4. **JSON preview.** Read-only, live, pretty-printed — the exact bytes Save would write (§6.2), with `$schema` line included. This is the teaching surface: users learn the hand-format by watching the form write it.
 
 ### 4.6 JSON mode
 
@@ -196,11 +199,11 @@ Only **enabled** mounts. Characters lacking a vault are omitted (v1 does not pro
 
 ### 5.3 `POST /api/v1/custom-tools?action=preview`
 
-Body: `{ definition: <raw JSON object>, params?: Record<string, unknown>, private?: boolean }`. Server validates with `QtapCustomToolSchema.safeParse` (400 with `formatDefinitionIssues` on failure), then calls `executeCustomTool(definition, params, { private })` and returns the full `CustomToolRunResult`. **Posts nothing, writes nothing** — pure computation, which `executeCustomTool` already is. This keeps the crypto-strength RNG and the one true execution core server-side; the bench can never drift from what a live chat would do.
+Body: `{ definition: <raw JSON object>, params?: Record<string, unknown>, private?: boolean, metadata?: Record<string, unknown> | { characterId: string } }`. Server validates with `QtapCustomToolSchema.safeParse` (400 with `formatDefinitionIssues` on failure), resolves `metadata` — a plain object passes through verbatim; the `{ characterId }` form hydrates that character (`repos.characters.findById`, the hydrating read) and uses `character.metadata ?? {}`, with a 404 for an unknown id and the vault-failure error surfaced honestly (`CharacterVaultUnavailableError` → 4xx with the reason) — then calls `executeCustomTool(definition, params, { private, metadata })` and returns the full `CustomToolRunResult` (which carries `metadataTested` for the bench's debug line). **Posts nothing, writes nothing** — pure computation, which `executeCustomTool` already is. This keeps the crypto-strength RNG and the one true execution core server-side; the bench can never drift from what a live chat would do.
 
 ### 5.4 `POST /api/v1/custom-tools?action=audit`
 
-Body: `{ definition, params? }`. Validate as above; then run the roll + `matchesWhen` loop N = 10,000 times (roll and match only — **skip `renderTemplate`**, it's the expensive part and irrelevant to hit rates). Return `{ runs: 10000, outcomes: [{ index, hits, share }], valueMin, valueMax, valueMean }`. Cheap (<50 ms). Cap: reject definitions the schema wouldn't accept anyway; no other rate limiting needed on a single-user instance. Debug-log both actions per the logging rule.
+Body: `{ definition, params?, metadata? }` — `metadata` in the same two forms as §5.3, resolved the same way, threaded into the match subjects so metadata-gated rows can actually fire. Validate as above; then run the roll + `matchesWhen` loop N = 10,000 times (roll and match only — **skip `renderTemplate`**, it's the expensive part and irrelevant to hit rates). Return `{ runs: 10000, outcomes: [{ index, hits, share }], valueMin, valueMax, valueMean }`. Cheap (<50 ms). Cap: reject definitions the schema wouldn't accept anyway; no other rate limiting needed on a single-user instance. Debug-log both actions per the logging rule.
 
 ### 5.5 Query keys
 
@@ -276,7 +279,7 @@ The Builder then imports `QtapCustomToolSchema`, `displayTitle`, `formatDefiniti
 
 ### 7.2 Export the per-mount loader
 
-Expose `loadToolsFromMount` (or extract its read→parse→validate core) from `lib/pascal/custom-tools.ts` for `listAllCustomTools()` (§5.1). Also export a small `simulateOutcomes(definition, params, runs)` helper next to `executeCustomTool` for the audit endpoint, built from the existing internals (`rollRange`/`rollNotation` + `matchesWhen`) rather than reimplementing the draw.
+Expose `loadToolsFromMount` (or extract its read→parse→validate core) from `lib/pascal/custom-tools.ts` for `listAllCustomTools()` (§5.1). Also export a small `simulateOutcomes(definition, params, runs, metadata?)` helper next to `executeCustomTool` for the audit endpoint, built from the existing internals (`rollRange`/`rollNotation` + `matchesWhen`, with `metadata` threaded into the match subjects exactly as `executeCustomTool` threads `opts.metadata`) rather than reimplementing the draw.
 
 ### 7.3 Shared parameter form
 
@@ -298,6 +301,9 @@ Extract the parameter-form generation from `CustomToolsDropdown.tsx` (`initialVa
 - **Disabled tools**: fully editable (a tombstone is a real file). The library renders them dimmed with the tombstone chip.
 - **Deleting the file of a shadowing definition**: no special handling — the roster re-resolves fresh every call; just invalidate queries.
 - **Whisper preview**: the bench's `private` flag simply passes through to preview; the mini-bubble renders whisper styling when `visibility === 'whisper'`.
+- **Metadata fails soft, everywhere**: a `metadata` comparator whose key is absent, whose stored value is non-primitive (array/object/null), or whose type mismatches the comparator (an ordering test against a string, `eq: true` against a number) is simply **false** — the row declines and evaluation falls through, ultimately to the catch-all. Never an error, never a `CustomToolRunError`. The Builder must not invent a stricter authoring-time story: there is nothing to validate beyond comparator shape and `$param` declaredness (§4.4.1), and the bench surfaces the rest empirically.
+- **Metadata-gated rows and the empty sheet**: with no fact sheet supplied (§4.5 card 2), every metadata test declines by design. Zero-hit audit warnings must say so (§4.5 card 3's wording — "gated on metadata this sheet doesn't carry"), and the standing hint on the metadata card fires whenever the draft tests metadata and the sheet is `{}`. Do not auto-mark such rows "unreachable" — they are reachable by the right character.
+- **`{{metadata.*}}` placeholders are never "unknown"** (§4.4.2): keys are undeclared by nature; absent keys render verbatim at run time by convention.
 
 ---
 
@@ -307,7 +313,7 @@ Extract the parameter-form generation from `CustomToolsDropdown.tsx` (`initialVa
 - **`docs/CHANGELOG.md`**: entry in plain American English (no voice).
 - **`docs/developer/API.md`**: document the new `/api/v1/custom-tools` resource and actions.
 - **Parent spec** (`pascal-custom-tools.md`): tick the deferred "form-based editor" item with a pointer here; move this file to `features/complete/` when shipped.
-- **Snapshot/tests**: no new LLM tools are added (the Builder is UI + API only), so `tool-definitions-snapshot.test.ts` is untouched. New unit tests: serialization round-trip (§6.2 invariant, including unknown-key passthrough), `when` chip ⇄ JSON bijection (every comparator, every subject, `$param` operands, bands), destination grouping, audit distribution sanity (a `{ "gte": 2 }` on 1d1+1 hits 100%), and the dice split (client-safe import compiles — a jest test importing `dice-notation` asserting no `crypto` in its module graph is overkill; the tsc + bundle build covers it).
+- **Snapshot/tests**: no new LLM tools are added (the Builder is UI + API only), so `tool-definitions-snapshot.test.ts` is untouched. New unit tests: serialization round-trip (§6.2 invariant, including unknown-key passthrough), `when` chip ⇄ JSON bijection (every comparator, every subject **including `metadata` — string/boolean/number literals, `$param` operands, ordering comparators, and exotic keys the free-text input permits: spaces, dots, unicode**, bands), destination grouping, audit distribution sanity (a `{ "gte": 2 }` on 1d1+1 hits 100%; a metadata-gated row hits 0% with an empty sheet and its expected share with the key supplied), and the dice split (client-safe import compiles — a jest test importing `dice-notation` asserting no `crypto` in its module graph is overkill; the tsc + bundle build covers it).
 - **Logging**: debug logs on library resolution, preview, audit, and save/rename flows (context `pascal.workbench` or similar).
 - **Migrations**: none — the Builder stores nothing new; definitions remain plain documents in stores.
 - **Export/import**: no new data model fields, so `.qtap` export is untouched (definitions already travel inside their stores).
