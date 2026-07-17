@@ -462,7 +462,7 @@ The per-chat dials, formerly scattered across a Tools palette popover and a Chat
 
 Only present in chats with two or more characters. Two toggles:
 
-- **All Whispers** — show or hide the private asides characters send to one another, plus the various Staff whispers the system itself drops
+- **All Whispers** — show or hide the private asides characters send to one another, along with the Staff's own whispers to your cast: the Commonplace Book's murmured recollections, Carina's quiet answers, and the rest. Two exceptions never hide, on the grounds that they are your machinery rather than the scene's: Pascal's private rolls and your own private Run Tool results. The house does not conceal the dice from the person who called for them.
 - **Shared Vaults** — let characters in this chat peek at one another's vaults (read-only) via the `doc_*` tools; off by default, in which case vault reads remain whispered to the caller
 
 ### Organize

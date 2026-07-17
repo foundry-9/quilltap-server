@@ -4,6 +4,15 @@
 
 ### 4.8-dev
 
+#### Fix: Staff whispers to characters honor the All Whispers toggle again
+
+The custom pseudo-tools work (`61ec90bd`) exempted every `systemSender` message from the Salon's whisper filter so that Pascal's private rolls would stay visible to the operator. That was too broad: it also unhid every other Staff whisper addressed to a character, so the Commonplace Book's memory-recall whispers, Carina's answers, and the Librarian's and Host's targeted messages all rendered whether or not All Whispers was on.
+
+- The exemption is now limited to `pascal` and `prospero` — private rolls and private Run Tool results, which exist for the person running the table and are excluded from every character's context either way.
+- Every other Staff whisper follows the same rule as a character-to-character whisper: hidden unless All Whispers is on, or the human is its author or one of its targets.
+- The filter moved out of `SalonView` into `app/salon/[id]/whisper-visibility.ts` and has unit tests, including one that pins the Commonplace Book case that regressed.
+- Display only. What a character can see was always decided server-side from `targetParticipantIds`; showing or hiding a message here never changed anyone's context.
+
 #### Feature: custom tools get a display title, and outcomes can test more than the value
 
 Two additions to the `Tools/*.tool.json` format. Both are backward compatible — existing definitions load and behave exactly as before.

@@ -52,6 +52,7 @@ import {
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
 import { buildRenderItems } from './announcement-render-items'
+import { isMessageVisibleToOperator } from './whisper-visibility'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -306,21 +307,12 @@ export function SalonView({ chatId }: SalonViewProps) {
     (customToolsQuery.data?.errors?.length ?? 0) > 0
 
   const visibleMessages = useMemo(() => {
-    return messages.filter(msg => {
-      if (!msg.targetParticipantIds || msg.targetParticipantIds.length === 0) return true
-      if (showAllWhispers) return true
-      // Staff whispers (Pascal outcomes, Commonplace Book recall, …) always
-      // render for the human, regardless of the "show all whispers" toggle.
-      // This is a single-user instance: the operator is the audience, never the
-      // mark. Hiding a private roll from the characters is the point; hiding it
-      // from the person running the table is not. Scoped to systemSender
-      // messages — character-to-character whispers stay hidden as before.
-      if (msg.systemSender) return true
-      // Show if user is sender or target
-      if (msg.participantId && userParticipantIdSet.has(msg.participantId)) return true
-      if (msg.targetParticipantIds.some(id => userParticipantIdSet.has(id))) return true
-      return false
-    })
+    return messages.filter(msg =>
+      isMessageVisibleToOperator(msg, {
+        showAllWhispers,
+        userParticipantIds: userParticipantIdSet,
+      }),
+    )
   }, [messages, showAllWhispers, userParticipantIdSet])
 
   // Fold character-initiated tool results into the assistant message that

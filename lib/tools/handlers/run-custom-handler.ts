@@ -160,7 +160,8 @@ export async function executeRunCustomTool(
 
   // A private roll is whispered to the rolling character alone: every other
   // participant's context excludes it. The human operator sees it regardless —
-  // Staff whispers always render for them.
+  // Pascal is one of the operator-facing senders the Salon's whisper filter
+  // exempts (see app/salon/[id]/whisper-visibility.ts).
   const targetParticipantIds =
     whispered && context.callerParticipantId ? [context.callerParticipantId] : null;
 
