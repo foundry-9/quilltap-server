@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Feature: Custom tools can ask an LLM for a generated result
+
+Custom-tool definitions gain an optional `llm` block: a prompt template (same placeholder families as outcome messages — value, roll, dice, params, metadata), a required author-written `errorMessage`, and an optional `maxOutput`. When present, every run renders the prompt and poses it to the instance's cheap utility model after the roll and before the outcome table. The result is a pair `{ ok, output }`: the model's trimmed answer on success (capped at `maxOutput` characters, default 8,000, up to 100,000 — the call's token budget scales with the cap so long-form consults aren't starved; `errorMessage` is never truncated), or the author's `errorMessage` on any failure (provider error, 60-second timeout, empty answer, no model configured). A failed consult never fails the run — the outcome table branches on it instead.
+
+- New `when.llm` test subject: the six comparators against the answer (eq/neq compare trimmed and case-insensitive, trailing `.`/`!` forgiven; ordering comparators apply when the answer parses as a number and decline the row fail-soft otherwise) plus an `ok` boolean key testing whether the consult succeeded. Load-time validation rejects `llm` tests on a tool with no `llm` block.
+- New `{{llm}}` message placeholder rendering the output (the answer, or the errorMessage after a failure).
+- The consult resolves the standard cheap-LLM selection per call (including Concierge uncensored rerouting for dangerous chats) via a new `lib/pascal/llm-consult.ts`, injected into `executeCustomTool` (now async) as an `llmInvoke` seam. Logs under a new `CUSTOM_TOOL_CONSULT` LLM-log type. Job-child safe, so autonomous-room rolls consult too.
+- `pascalMeta.llm` records the rendered prompt, `ok`, `output`, the technical failure `reason`, and provider/model. Row schema, export schema, and DDL updated.
+- Pascal's Workbench: a "consulted oracle" form section (prompt + error line, both required while enabled, plus an optional answer-cap field), consult-answer and consult-succeeded condition chips, `{{llm}}` in the message insert menu, an oracle card on the proving bench (scripted answer / silence / live single-roll consult; the audit never calls live and deals against the scripted answer or silence), consult details on the test-roll debug line, and an "oracle" badge in the library.
+- The published JSON Schema mirrors the new block and subject (with the documented cross-item divergence: it cannot see that an `llm` test requires an `llm` block); the annotated reference specimen demonstrates both.
+- `run_custom`'s roster preamble tells models some tools consult a separate model server-side; revealed odds render `llm` clauses, and a tool with a consult is flagged — the prompt itself is never shown to scene models.
+
 #### Feature: Pascal's Workbench — a visual editor for custom tools
 
 Custom tools were hand-authored `Tools/*.tool.json` files with no UI. Pascal's Workbench (`/custom-tools`, also a workspace tab, left-rail entry, and links from Settings → Chat → Custom tools, the composer popup, and Scriptorium file rows) adds:

@@ -130,6 +130,20 @@ export const ChatMessageRowSchema = z.object({
     value: z.number(),
     state: z.enum(['success', 'partial', 'failure', 'info']),
     outcomeIndex: z.number(),
+    // The metadata keys the winning row tested, and what they held at roll time.
+    metadataTested: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
+    // The LLM consult, when the definition declared one: the rendered prompt,
+    // whether it was answered, and the output the table tested (the model's
+    // answer, or the author's errorMessage on failure — `reason` records the
+    // technical cause for the operator).
+    llm: z.object({
+      ok: z.boolean(),
+      output: z.string(),
+      prompt: z.string(),
+      reason: z.string().optional(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
+    }).optional(),
     invokedBy: z.enum(['llm', 'user']),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),

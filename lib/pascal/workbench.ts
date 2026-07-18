@@ -36,6 +36,8 @@ export interface CustomToolLibraryEntry {
   disabled: boolean;
   defaultVisibility: Visibility;
   rollForm: 'range' | 'dice';
+  /** Whether the tool consults an LLM mid-run. */
+  llm: boolean;
   parameterCount: number;
   outcomeCount: number;
   mountPointId: string;
@@ -184,6 +186,7 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     disabled: entry.definition.disabled ?? false,
     defaultVisibility: entry.definition.defaultVisibility ?? 'public',
     rollForm: typeof entry.definition.roll === 'string' ? 'dice' : 'range',
+    llm: entry.definition.llm !== undefined,
     parameterCount: Object.keys(entry.definition.parameters ?? {}).length,
     outcomeCount: entry.definition.outcomes.length,
     mountPointId: entry.mountPointId,

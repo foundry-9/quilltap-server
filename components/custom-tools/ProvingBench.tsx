@@ -45,6 +45,13 @@ type FactSheet =
   | { mode: 'character'; characterId: string }
   | { mode: 'manual'; text: string }
 
+/**
+ * The bench's oracle: script an answer, script a silence, or — for single
+ * rolls only — spend a real consult. The audit never goes live: ten thousand
+ * hands must not mean ten thousand LLM calls.
+ */
+type BenchOracle = { mode: 'scripted'; answer: string } | { mode: 'fail' } | { mode: 'live' }
+
 function extractErrorMessage(err: unknown): string {
   if (err instanceof ApiFetchError) {
     const info = err.info
@@ -77,6 +84,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   const [values, setValues] = useState<ParameterFormValues>({})
   const [isPrivate, setIsPrivate] = useState(false)
   const [sheet, setSheet] = useState<FactSheet>({ mode: 'manual', text: '{}' })
+  const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<CustomToolRunResult[]>([])
   const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
 
@@ -126,6 +134,21 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
     }
   }
 
+  /** The oracle input for a single roll; undefined when the tool has no consult. */
+  const previewOracle = (): { output: string } | { fail: true } | { live: true } | undefined => {
+    if (!draft.llmEnabled) return undefined
+    if (oracle.mode === 'live') return { live: true }
+    if (oracle.mode === 'scripted' && oracle.answer.trim() !== '') return { output: oracle.answer }
+    return { fail: true }
+  }
+
+  /** The audit's oracle: the scripted answer, else silence. Never live. */
+  const auditOracle = (): { output: string } | { fail: true } | undefined => {
+    if (!draft.llmEnabled) return undefined
+    if (oracle.mode === 'scripted' && oracle.answer.trim() !== '') return { output: oracle.answer }
+    return { fail: true }
+  }
+
   const rollMutation = useMutation({
     mutationFn: () =>
       apiFetch<CustomToolRunResult>('/api/v1/custom-tools?action=preview', {
@@ -136,6 +159,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
           params: coerceParamValues(paramSpecs, effectiveValues),
           private: isPrivate,
           metadata: benchMetadata(),
+          llm: previewOracle(),
         }),
       }),
     onSuccess: (result) => {
@@ -153,6 +177,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
           definition: definitionFromDraft(draft),
           params: coerceParamValues(paramSpecs, effectiveValues),
           metadata: benchMetadata(),
+          llm: auditOracle(),
         }),
       }),
     onSuccess: setAudit,
@@ -267,6 +292,71 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
             </p>
           )}
       </section>
+
+      {/* Card 2½ — The oracle (only when the tool consults one) */}
+      {draft.llmEnabled && (
+        <section className="qt-card p-3 space-y-2">
+          <h3 className="qt-card-title text-sm">The oracle</h3>
+          <p className="qt-hint">
+            This tool consults a model mid-run. Script its answer here, or spend a real consult on a single roll.
+          </p>
+          <div className="flex rounded overflow-hidden border w-fit" role="radiogroup" aria-label="Oracle mode">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={oracle.mode === 'scripted'}
+              className={`px-2 py-1 text-xs ${oracle.mode === 'scripted' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
+              onClick={() => setOracle({ mode: 'scripted', answer: oracle.mode === 'scripted' ? oracle.answer : '' })}
+            >
+              Scripted answer
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={oracle.mode === 'fail'}
+              className={`px-2 py-1 text-xs ${oracle.mode === 'fail' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
+              onClick={() => setOracle({ mode: 'fail' })}
+              title="The consult fails; the run shows your error line"
+            >
+              Silence
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={oracle.mode === 'live'}
+              className={`px-2 py-1 text-xs ${oracle.mode === 'live' ? 'qt-button qt-button-primary' : 'qt-button qt-button-ghost'}`}
+              onClick={() => setOracle({ mode: 'live' })}
+              title="A single roll asks the real model — one paid consult per roll"
+            >
+              Ask it live
+            </button>
+          </div>
+
+          {oracle.mode === 'scripted' && (
+            <div>
+              <textarea
+                value={oracle.answer}
+                onChange={(e) => setOracle({ mode: 'scripted', answer: e.target.value })}
+                rows={2}
+                className="qt-textarea w-full text-xs"
+                placeholder="What shall the oracle be made to say?"
+                aria-label="Scripted oracle answer"
+              />
+              {oracle.answer.trim() === '' && (
+                <p className="text-xs qt-text-secondary">
+                  Empty — the bench treats this as silence, and the run shows your error line.
+                </p>
+              )}
+            </div>
+          )}
+          {oracle.mode === 'live' && (
+            <p className="text-xs qt-text-secondary">
+              Each roll pays for one real consult through the cheap-model machinery. The audit never goes live — it
+              deals its hands against the scripted answer, or silence.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Card 3 — Table audit */}
       <section className="qt-card p-3 space-y-2">
@@ -390,6 +480,12 @@ function MiniPascalBubble({
             .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
             .join(', ')}`}
       </p>
+      {roll.llm && (
+        <p className="text-xs qt-text-secondary font-mono">
+          consult {roll.llm.ok ? 'answered' : `failed (${roll.llm.reason ?? 'no reason recorded'})`}:{' '}
+          {JSON.stringify(roll.llm.output)}
+        </p>
+      )}
     </div>
   )
 }

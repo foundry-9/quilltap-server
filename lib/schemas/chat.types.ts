@@ -367,6 +367,22 @@ export const MessageEventSchema = z.object({
      * keys that row tested, primitives only; absent when it tested none.
      */
     metadataTested: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
+    /**
+     * The LLM consult, when the definition declared one: what was asked
+     * (`prompt`, fully rendered), whether it was answered (`ok`), and the
+     * `output` the table tested — the model's trimmed answer, or the author's
+     * `errorMessage` when the consult failed. `reason` is the technical
+     * failure cause, recorded here for the operator and never spoken in the
+     * fiction. Absent on tools with no `llm` block.
+     */
+    llm: z.object({
+      ok: z.boolean(),
+      output: z.string(),
+      prompt: z.string(),
+      reason: z.string().optional(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
+    }).optional(),
     invokedBy: z.enum(['llm', 'user']),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),

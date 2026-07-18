@@ -46,6 +46,10 @@
     "offset": { "$param": "bonus" },
     "round": true
   },
+  "llm": {
+    "prompt": "A lockpicking attempt on {{params.label}} scored {{value}} against a ceiling of {{params.ceiling}} (raw draw {{roll}}). In one word, YES or NO: was it elegant? — Demonstrates the llm consult: this prompt is rendered with the same placeholders a message takes ({{llm}} excepted — the oracle cannot quote an answer it has not yet given) and posed to the instance's cheap utility model once per run, after the roll and before the outcome table.",
+    "errorMessage": "The oracle of locks is not answering today. (Demonstrates errorMessage: the consult's output when the call fails — the author's words, never the provider's. The technical failure reason goes to the roll record and the logs, not the fiction.)"
+  },
   "outcomes": [
     {
       "when": { "roll": { "lt": 0.02 } },
@@ -60,6 +64,16 @@
     {
       "when": { "gte": 40, "metadata": { "hasSkeletonKey": { "eq": true } } },
       "message": "{{params.label}} opens to the skeleton key before the score of {{value}} is properly consulted. Demonstrates the `metadata` subject: this tests the INVOKING character's metadata.json fact sheet (hasSkeletonKey = {{metadata.hasSkeletonKey}}), whose keys this file never declares — so the loader checks only the comparator's shape. A character without the key is not an error: the test simply fails, soft, and the roll falls through to the rows below. eq/neq address strings and booleans; ordering comparators need the sheet to hold a number, as the nerve row demonstrates further down.",
+      "state": "success"
+    },
+    {
+      "when": { "llm": { "ok": false } },
+      "message": "{{llm}} — Demonstrates the consult's failure path, and where {{llm}} gets its words when the oracle is silent: the answer BECOMES the llm block's errorMessage, ok goes false, and the run itself never errors. A table that keeps an oracle should decide what silence means; an ok:false row like this is one way, trusting the catch-all is the other.",
+      "state": "info"
+    },
+    {
+      "when": { "gte": 40, "llm": { "ok": true, "eq": "YES" } },
+      "message": "\"{{llm}},\" pronounces the oracle, and {{params.label}} concedes the point at {{value}}. Demonstrates the `llm` subject: eq/neq compare the trimmed answer without regard to case (a trailing full stop is forgiven — a model that says \"yes.\" has still said yes), ordering comparators apply when the answer reads as a number and otherwise decline the row fail-soft, and `ok` — the one non-comparator key — tests whether the consult produced an answer at all.",
       "state": "success"
     },
     {

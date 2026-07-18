@@ -26,6 +26,7 @@ import {
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 import type { MessageEvent } from '@/lib/schemas/chat.types';
@@ -177,7 +178,15 @@ export async function executeRunCustomTool(
 
   let result: CustomToolRunResult;
   try {
-    result = executeCustomTool(entry.definition, parameters ?? null, { private: isPrivate, metadata });
+    result = await executeCustomTool(entry.definition, parameters ?? null, {
+      private: isPrivate,
+      metadata,
+      // Only built when the definition wants one; the invoker resolves the
+      // cheap-LLM selection fresh on each consult.
+      ...(entry.definition.llm
+        ? { llmInvoke: buildCustomToolLlmInvoker({ userId: context.userId, chatId: context.chatId }) }
+        : {}),
+    });
   } catch (error) {
     const reason = error instanceof CustomToolRunError ? error.message : getErrorMessage(error);
     const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
@@ -219,6 +228,7 @@ export async function executeRunCustomTool(
       state: result.state,
       outcomeIndex: result.outcomeIndex,
       ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
+      ...(result.llm ? { llm: result.llm } : {}),
       invokedBy: 'llm',
       ...(context.callerParticipantId ? { callerParticipantId: context.callerParticipantId } : {}),
     },

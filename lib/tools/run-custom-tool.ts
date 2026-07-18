@@ -18,6 +18,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema';
 import type { DiscoveredCustomTool } from '@/lib/pascal/custom-tools';
 import {
   isParamRef,
+  type LlmComparator,
   type NumericComparator,
   type ParamComparator,
   type QtapCustomTool,
@@ -84,6 +85,7 @@ const RUN_CUSTOM_PREAMBLE = [
   'The roll happens server-side and its result is posted as a permanent message by Pascal the Croupier, so you cannot choose the outcome: run the tool and then narrate whatever it returns, including failure.',
   'Do not describe the result before calling, and do not re-run a tool to get a better answer.',
   'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
+  'Some tools additionally pose a question to a separate model mid-run and let its answer steer the outcome; that consult happens server-side too, and you never speak for it.',
   '',
   'Available tools:',
 ].join('\n');
@@ -149,9 +151,20 @@ function describeWhen(when: QtapCustomTool['outcomes'][number]['when']): string 
     ...Object.entries(when.metadata ?? {}).flatMap(([key, comparator]) =>
       describeComparator(comparator, `your ${key}`)
     ),
+    ...(when.llm !== undefined ? describeLlmComparator(when.llm) : []),
   ];
 
   return parts.join(' and ');
+}
+
+/** Render an `llm` test: the ok flag reads as a sentence, the rest as comparators. */
+function describeLlmComparator(comparator: LlmComparator): string[] {
+  const parts: string[] = [];
+  if (comparator.ok !== undefined) {
+    parts.push(comparator.ok ? 'the consult succeeded' : 'the consult failed');
+  }
+  parts.push(...describeComparator(comparator, "the consulted answer"));
+  return parts;
 }
 
 /**
@@ -191,6 +204,12 @@ export function buildRunCustomDescription(roster: DiscoveredCustomTool[]): strin
     }
 
     lines.push(`    Roll: ${describeRoll(definition.roll)}`);
+    if (definition.llm) {
+      // The consult's existence is part of the odds; the prompt itself is not
+      // rendered — it is instructions for a different model, and quoting it
+      // here would invite this one to answer it.
+      lines.push('    Consults a separate model; outcomes may test its answer.');
+    }
     for (const outcome of definition.outcomes) {
       lines.push(`    ${describeWhen(outcome.when)} → ${outcome.state}`);
     }

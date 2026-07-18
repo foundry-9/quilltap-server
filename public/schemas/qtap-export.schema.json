@@ -744,6 +744,19 @@
             "state": { "type": "string", "enum": ["success", "partial", "failure", "info"], "description": "Semantic state of the winning outcome; accents the result bubble." },
             "outcomeIndex": { "type": "integer", "minimum": 0, "description": "Index of the winning entry in the definition's ordered outcome table." },
             "metadataTested": { "type": "object", "description": "The invoking character's metadata as the WINNING outcome read it: only the keys that row tested, holding their values at the moment of the roll. Absent when the winning row consulted no metadata, and never the whole sheet — the sheet is the character's business.", "additionalProperties": { "type": ["number", "string", "boolean"] } },
+            "llm": {
+              "type": "object",
+              "required": ["ok", "output", "prompt"],
+              "description": "The LLM consult, when the definition declared one: what was asked (prompt, fully rendered), whether it was answered (ok), and the output the table tested — the model's trimmed answer, or the author's errorMessage when the consult failed. `reason` is the technical failure cause, recorded for the operator and never spoken in the fiction. Absent on tools with no llm block.",
+              "properties": {
+                "ok": { "type": "boolean" },
+                "output": { "type": "string" },
+                "prompt": { "type": "string" },
+                "reason": { "type": "string" },
+                "provider": { "type": "string" },
+                "model": { "type": "string" }
+              }
+            },
             "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
             "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
           }

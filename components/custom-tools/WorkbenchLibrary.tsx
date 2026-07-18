@@ -221,6 +221,11 @@ export function WorkbenchLibrary({ onOpen, onCreate, onDuplicate }: Readonly<Wor
           </span>
         )}
         <span className="qt-badge qt-badge-outline">{tool.rollForm === 'dice' ? 'dice' : 'range'}</span>
+        {tool.llm && (
+          <span className="qt-badge qt-badge-outline" title="Consults an LLM mid-run; outcomes may test its answer">
+            oracle
+          </span>
+        )}
         {tool.parameterCount > 0 && (
           <span className="qt-badge qt-badge-outline">
             {tool.parameterCount} param{tool.parameterCount === 1 ? '' : 's'}

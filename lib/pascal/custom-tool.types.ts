@@ -42,6 +42,25 @@ export const MAX_DESCRIPTION_LENGTH = 500;
 /** Cap on a tool's display title, in characters. */
 export const MAX_TITLE_LENGTH = 80;
 
+/** Cap on an LLM consult prompt, in characters (measured before templating). */
+export const MAX_LLM_PROMPT_LENGTH = 4000;
+
+/**
+ * Default cap on the answer an LLM consult may contribute, in characters. The
+ * model's reply is trimmed and truncated before it is tested or rendered.
+ * A definition that wants a longer (or shorter) leash sets `llm.maxOutput`;
+ * this is only what applies when it doesn't say.
+ */
+export const MAX_LLM_OUTPUT_LENGTH = 8000;
+
+/**
+ * Hard ceiling on `llm.maxOutput`. Generous on purpose — a consult may well BE
+ * the deliverable (a generated document, a deep outline) — but still bounded:
+ * the answer lands in `pascalMeta` on a chat_messages row, and rows must not
+ * become arbitrarily large because one oracle would not stop talking.
+ */
+export const MAX_LLM_OUTPUT_CEILING = 100_000;
+
 /**
  * Identifier rules shared by tool names and parameter names: lowercase, starts
  * with a letter, 1–64 characters.
@@ -239,6 +258,34 @@ export const MetadataComparatorSchema = ParamComparatorSchema;
 export type MetadataComparator = z.infer<typeof MetadataComparatorSchema>;
 
 /**
+ * A comparator against the LLM consult's result. The comparator keys test the
+ * answer string (see below for how types are reconciled at run time); `ok` is
+ * an extra, non-comparator key testing whether the consult succeeded at all.
+ *
+ * Like `metadata`, the subject's run-time type is unknowable at load time — the
+ * answer is whatever the model says — so type rules are enforced fail-soft at
+ * run time: an ordering comparator against an answer that does not parse as a
+ * number simply declines the row. eq/neq compare numerically when both sides
+ * are numbers, and otherwise case-insensitively as trimmed strings, because an
+ * author who asked for "YES" should not lose to a model that said "yes".
+ */
+export const LlmComparatorSchema = z
+  .strictObject({
+    ...NUMERIC_COMPARATOR_SHAPE,
+    eq: AnyOperandSchema.optional(),
+    neq: AnyOperandSchema.optional(),
+    ok: z
+      .boolean()
+      .optional()
+      .describe('true: this row only applies when the consult succeeded. false: only when it failed.'),
+  })
+  .refine((c) => hasComparator(c) || c.ok !== undefined, {
+    message: 'must test something: a comparator on the answer, or `ok`',
+  });
+
+export type LlmComparator = z.infer<typeof LlmComparatorSchema>;
+
+/**
  * Metadata keys are the USER's vocabulary, not an identifier we get to shape:
  * `metadata.json` is hand-authored and `hasAnsibleAccess` is a perfectly
  * ordinary key. So unlike `params`, whose keys must match a declared
@@ -282,14 +329,18 @@ export const WhenObjectSchema = z
       .record(MetadataKeySchema, MetadataComparatorSchema)
       .optional()
       .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
+    llm: LlmComparatorSchema.optional().describe(
+      "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
+    ),
   })
   .refine(
     (when) =>
       hasComparator(when) ||
       when.roll !== undefined ||
+      when.llm !== undefined ||
       (when.params !== undefined && Object.keys(when.params).length > 0) ||
       (when.metadata !== undefined && Object.keys(when.metadata).length > 0),
-    { message: 'must test something: a comparator on the value, `roll`, a non-empty `params`, or a non-empty `metadata`' }
+    { message: 'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, or a non-empty `metadata`' }
   );
 
 export type WhenObject = z.infer<typeof WhenObjectSchema>;
@@ -321,6 +372,55 @@ export type CustomToolOutcome = z.infer<typeof CustomToolOutcomeSchema>;
 export const VisibilitySchema = z.enum(['public', 'whisper']);
 
 export type Visibility = z.infer<typeof VisibilitySchema>;
+
+/**
+ * The LLM consult block. When present, every run renders `prompt` (the same
+ * placeholder families an outcome message takes, minus `{{llm}}` itself) and
+ * poses it to the instance's cheap utility model AFTER the roll and BEFORE the
+ * outcome table is evaluated. The result is a pair `{ ok, output }`:
+ *
+ * - success → `ok: true`, `output` is the model's trimmed answer;
+ * - failure (provider error, timeout, empty answer, no model configured) →
+ *   `ok: false`, `output` is this block's `errorMessage` — the AUTHOR's words,
+ *   never the provider's stack trace, because whatever lands in the fiction is
+ *   the author's to write.
+ *
+ * Either way the pair is testable in `when` (the `llm` subject) and renderable
+ * in messages (`{{llm}}`), so a failed consult is an outcome the table can deal
+ * with rather than an error bubble: the run itself never fails because the
+ * oracle went quiet.
+ */
+export const CustomToolLlmSchema = z.strictObject({
+  prompt: z
+    .string()
+    .min(1)
+    .max(MAX_LLM_PROMPT_LENGTH)
+    .describe(
+      'What to ask. Supports {{value}}, {{roll}}, {{dice}}, {{params.name}}, and {{metadata.key}} — but not {{llm}}. ' +
+        'Ask for the answer shape you intend to test: a bare word, a number, a sentence.'
+    ),
+  errorMessage: z
+    .string()
+    .min(1)
+    .max(MAX_MESSAGE_LENGTH)
+    .describe(
+      "The consult's output when the call fails, in the author's own words. Never the technical reason — " +
+        'that goes to the roll record and the logs.'
+    ),
+  maxOutput: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_LLM_OUTPUT_CEILING)
+    .optional()
+    .describe(
+      `Cap on the answer, in characters. Default ${MAX_LLM_OUTPUT_LENGTH}. Set it low for a verdict, ` +
+        'high for a consult whose answer IS the deliverable. The token budget of the call scales with it. ' +
+        'Applies to the model\'s answer only, never to errorMessage.'
+    ),
+});
+
+export type CustomToolLlm = z.infer<typeof CustomToolLlmSchema>;
 
 /**
  * The custom-tool definition.
@@ -365,6 +465,9 @@ export const QtapCustomToolSchema = z
       })
       .optional(),
     roll: RollSchema.optional().describe('Numeric range object, or dice notation. Default: 0–1 uniform.'),
+    llm: CustomToolLlmSchema.optional().describe(
+      'Ask an LLM for a generated result after the roll; outcomes may then test it and messages may render it.'
+    ),
     outcomes: z
       .array(CustomToolOutcomeSchema)
       .min(1, 'at least one outcome is required')
@@ -451,7 +554,12 @@ function valueTypeOf(type: ParameterType): ValueType {
  * branch in the outcome table rather than the typo it is.
  */
 function validateReferences(
-  tool: { parameters?: Record<string, CustomToolParameter>; roll?: Roll; outcomes: CustomToolOutcome[] },
+  tool: {
+    parameters?: Record<string, CustomToolParameter>;
+    roll?: Roll;
+    llm?: CustomToolLlm;
+    outcomes: CustomToolOutcome[];
+  },
   ctx: z.RefinementCtx
 ): void {
   const declared = tool.parameters ?? {};
@@ -483,6 +591,23 @@ function validateReferences(
         'params',
         name,
       ]);
+    }
+
+    // An `llm` test on a tool with no `llm` block could never fire — there is
+    // no consult whose answer it might match. That is a typo, not an intent,
+    // and left alone it reads as a dead branch in the outcome table.
+    if (outcome.when.llm !== undefined) {
+      if (!tool.llm) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'tests the LLM consult, but the tool declares no `llm` block',
+          path: [...path, 'llm'],
+        });
+      }
+      // The answer's run-time type is the model's business (see the schema
+      // comment), so — exactly as with `metadata` — only the `$param` operands
+      // are checkable here.
+      validateMetadataOperands(declared, outcome.when.llm, ctx, [...path, 'llm']);
     }
 
     // `metadata` gets a shallower check, and there is no way around it: the
@@ -660,6 +785,7 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
   'defaultVisibility',
   'parameters',
   'roll',
+  'llm',
   'outcomes',
 ]);
 

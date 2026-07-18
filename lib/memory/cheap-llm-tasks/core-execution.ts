@@ -59,6 +59,7 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'scene-state-tracking': 'SCENE_STATE_TRACKING',
     'answer-confirmation': 'ANSWER_CONFIRMATION',
     'answer-reaffirmation': 'ANSWER_CONFIRMATION',
+    'custom-tool-consult': 'CUSTOM_TOOL_CONSULT',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }

@@ -111,7 +111,7 @@ There is deliberately no "or". You will not need it: the table is read from the 
 
 #### Asking about more than the number
 
-Written bare like that, the comparisons are about the rolled value. Three other things may be asked about in the same breath, and everything you name must hold:
+Written bare like that, the comparisons are about the rolled value. Four other things may be asked about in the same breath, and everything you name must hold:
 
 | | |
 |---|---|
@@ -119,6 +119,7 @@ Written bare like that, the comparisons are about the rolled value. Three other 
 | `roll` | the raw number, *before* it |
 | `params` | what the tool was actually called with, by parameter name |
 | `metadata` | what the *character doing the rolling* carries on their fact sheet |
+| `llm` | what the consulted oracle answered, if the tool keeps one — see below |
 
 So *"the value exceeded 1, and the scale was set past 12"* is written:
 
@@ -160,13 +161,40 @@ The same quiet non-match covers every way a sheet can decline to answer:
 
 One consequence worth stating plainly: because a row only wins when its metadata tests *held*, a metadata branch is silent in the failure direction. It cannot tell you *why* a character fell through. If a table isn't behaving, check the sheet, not the tool.
 
-**The last outcome must be `true`.** Quilltap insists, and refuses to load a tool that ends any other way. The reason is that a table with a gap in it is a table that will one day produce a roll matching nothing at all, at the worst possible moment, in front of everybody. Requiring a catch-all at the end makes that impossible rather than merely unlikely. For the same reason, a `true` anywhere *except* the end is refused too — everything below it could never be reached, which is never what anyone meant.
+#### Asking an oracle
+
+Chance settles a great many questions, but not all of them are chance's to settle. *Does the forged invitation pass inspection?* is partly a roll and partly a judgment — and for judgment, a tool may keep an oracle. Add an `llm` block beside your `roll`:
+
+```json
+"llm": {
+  "prompt": "A forged invitation scored {{value}} out of 10 for craftsmanship, presented by someone whose composure is {{metadata.composure}}. In one word, YES or NO: does the doorman wave it through?",
+  "errorMessage": "The doorman squints at the card, and the moment stretches on unresolved."
+}
+```
+
+With that in place, every run pauses after the roll and puts the rendered `prompt` to your instance's **cheap utility model** — the same modest engine that titles your chats and files your memories, chosen in your cheap-model settings. The prompt takes every placeholder a message does — `{{value}}`, `{{roll}}`, `{{dice}}`, `{{params.…}}`, `{{metadata.…}}` — everything except `{{llm}}` itself, the oracle being in no position to quote an answer it has not yet given. Ask for the shape of answer your table means to test: a bare word, a number, a sentence.
+
+What comes back is a pair — *did the oracle answer*, and *what did it say* — and the outcome table may ask about both under the `llm` subject:
+
+```json
+{ "when": { "llm": { "ok": false } },  "message": "{{llm}}",                       "state": "failure" },
+{ "when": { "llm": { "eq": "YES" } },  "message": "The rope lifts. \"{{llm}},\" says the doorman.", "state": "success" },
+{ "when": true,                        "message": "The doorman is unmoved.",       "state": "partial" }
+```
+
+The comparisons are forgiving in exactly the ways an oracle requires. `eq` and `neq` compare the answer trimmed and without regard to case, and forgive a trailing full stop — you asked for `YES`, and a model that says `yes.` has still said yes. The ordering four (`gt`, `gte`, `lt`, `lte`) apply when the answer reads as a number — ask the oracle to *rate the attempt from 1 to 10* and band the table on the rating — and when the answer is not a number they simply decline the row, fail-soft, exactly as a metadata test declines for a character without the key. And `ok` is the one extra: `{ "ok": true }` holds only when the consult produced an answer, `{ "ok": false }` only when it did not.
+
+**When the oracle is silent** — the provider is down, no cheap model is configured, the call times out, the answer comes back empty — the run does **not** fail, and no error bubble interrupts the scene. Instead the answer *becomes your `errorMessage`*, word for word, with `ok` set false, and the table deals with it like anything else. The technical reason is kept for the roll record and the logs; the fiction only ever hears what you wrote. Every table that keeps an oracle should decide what silence means — an `ok: false` row near the top, or simply trust in the catch-all, which as ever answers for everything.
+
+A word on length: by default the answer is kept to eight thousand characters. If your oracle is the laconic sort — a verdict, a rating — or the opposite — a consult whose answer *is* the deliverable, a generated document at full length — set `maxOutput` in the block (`"maxOutput": 50000`, up to one hundred thousand) and the answer is trimmed to *that* instead, with the call's token budget scaled to match. Your `errorMessage` is never subject to it; those are your words, kept whole.
+
+Two practicalities. First, the consult costs one cheap-model call per run — real money on a metered provider, though of the smallest denomination, and rather more of it if you set a generous `maxOutput` and the oracle uses the room. Second, the models *playing* in your scene are told only that the tool consults an oracle; the prompt itself is never shown to them, and `revealOdds: false` hides the branching along with everything else. Quilltap insists, and refuses to load a tool that ends any other way. The reason is that a table with a gap in it is a table that will one day produce a roll matching nothing at all, at the worst possible moment, in front of everybody. Requiring a catch-all at the end makes that impossible rather than merely unlikely. For the same reason, a `true` anywhere *except* the end is refused too — everything below it could never be reached, which is never what anyone meant.
 
 `state` is one of `success`, `partial`, `failure`, or `info`. It tints Pascal's announcement accordingly. You never write any styling yourself.
 
 ### Putting things in the message
 
-Five things may be dropped into a `message`:
+Six things may be dropped into a `message`:
 
 | | |
 |---|---|
@@ -175,6 +203,7 @@ Five things may be dropped into a `message`:
 | `{{dice}}` | the dice breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14` (empty if you're not rolling dice) |
 | `{{params.bonus}}` | a parameter, as it was actually used — after defaulting and clamping |
 | `{{metadata.faction}}` | a key from the roller's fact sheet |
+| `{{llm}}` | what the oracle answered — or, after a failed consult, your `errorMessage`, word for word |
 
 Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object. The placeholder stands there in the sentence looking conspicuous, which is the point: it tells you exactly which key is missing, where an empty space would merely leave you puzzled. If a message leans on `{{metadata.faction}}`, gate its row on `faction` and let the catch-all speak for the factionless.
 
@@ -266,7 +295,7 @@ If a roll fails while it's actually running — a bound that ended up above its 
 
 ## Limits
 
-Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, a thousand characters per message, five hundred per description, eighty per title. If a scene somehow exceeds the roster limit, the surplus is dropped and said so out loud — never silently.
+Sixty-four tools per scene, eight parameters and thirty-two outcomes per tool, a thousand characters per message, five hundred per description, eighty per title. An oracle's prompt runs to four thousand characters and its error line to a thousand; its answer is trimmed to eight thousand before anything tests or prints it, unless the tool's own `maxOutput` says otherwise — anywhere from one character to a hundred thousand, with the call's token budget following along. If a scene somehow exceeds the roster limit, the surplus is dropped and said so out loud — never silently.
 
 ## Turning it off
 

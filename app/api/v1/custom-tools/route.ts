@@ -23,8 +23,21 @@ import { z } from 'zod';
 import { createContextHandler, withCollectionActionDispatch, type RequestContext } from '@/lib/api/middleware';
 import { badRequest, errorResponse, notFound, successResponse } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { QtapCustomToolSchema, formatDefinitionIssues, type QtapCustomTool } from '@/lib/pascal/custom-tool.types';
-import { CustomToolRunError, executeCustomTool, simulateOutcomes } from '@/lib/pascal/custom-tools';
+import {
+  MAX_LLM_OUTPUT_CEILING,
+  MAX_LLM_OUTPUT_LENGTH,
+  QtapCustomToolSchema,
+  formatDefinitionIssues,
+  type QtapCustomTool,
+} from '@/lib/pascal/custom-tool.types';
+import {
+  CustomToolRunError,
+  executeCustomTool,
+  simulateOutcomes,
+  type LlmInvoker,
+  type LlmSubject,
+} from '@/lib/pascal/custom-tools';
+import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildCustomToolLibrary, listCustomToolDestinations } from '@/lib/pascal/workbench';
 import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
 
@@ -64,17 +77,36 @@ const MetadataInputSchema = z.union([
   z.record(z.string(), z.unknown()),
 ]);
 
+/**
+ * The bench's oracle: a pretend answer, a pretend failure, or — preview only —
+ * a live consult through the real cheap-LLM machinery. When a definition
+ * declares an `llm` block and the bench supplies nothing, the consult fails
+ * soft and the run shows the author's `errorMessage` path, which is the one
+ * path every such table must survive anyway.
+ */
+const LlmSimulationSchema = z.union([
+  // The ceiling, not the default: the definition's own maxOutput governs what
+  // the core keeps, and the bench must be able to script anything a tool could.
+  z.strictObject({ output: z.string().min(1).max(MAX_LLM_OUTPUT_CEILING) }),
+  z.strictObject({ fail: z.literal(true) }),
+]);
+
 const PreviewBodySchema = z.object({
   definition: z.unknown(),
   params: z.record(z.string(), z.unknown()).nullish(),
   private: z.boolean().optional(),
   metadata: MetadataInputSchema.nullish(),
+  llm: z.union([z.strictObject({ live: z.literal(true) }), LlmSimulationSchema]).nullish(),
 });
 
 const AuditBodySchema = z.object({
   definition: z.unknown(),
   params: z.record(z.string(), z.unknown()).nullish(),
   metadata: MetadataInputSchema.nullish(),
+  // No `live` here: an audit is ten thousand hands, and the point of the bench
+  // is that it never spends ten thousand LLM calls. The simulated answer is
+  // held fixed across every draw.
+  llm: LlmSimulationSchema.nullish(),
 });
 
 /** A parsed body, or the error response that should be returned instead. */
@@ -146,10 +178,25 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
   const metadata = await resolveMetadata(ctx, body.value.metadata);
   if (!metadata.ok) return metadata.response;
 
+  // Which oracle answers the bench: the real one (live), a scripted one, or a
+  // scripted failure. Absent input leaves the seam unwired, so the consult
+  // fails soft into the author's errorMessage path.
+  let llmInvoke: LlmInvoker | undefined;
+  const llmInput = body.value.llm;
+  if (llmInput && 'live' in llmInput) {
+    llmInvoke = buildCustomToolLlmInvoker({ userId: ctx.user.id, chatId: null });
+  } else if (llmInput && 'output' in llmInput) {
+    const output = llmInput.output;
+    llmInvoke = async () => ({ ok: true, output, provider: 'bench', model: 'simulated' });
+  } else if (llmInput && 'fail' in llmInput) {
+    llmInvoke = async () => ({ ok: false, reason: 'a simulated failure, as the bench requested' });
+  }
+
   try {
-    const result = executeCustomTool(definition.value, body.value.params ?? undefined, {
+    const result = await executeCustomTool(definition.value, body.value.params ?? undefined, {
       private: body.value.private,
       metadata: metadata.value,
+      ...(llmInvoke ? { llmInvoke } : {}),
     });
     logger.debug('Workbench preview rolled', {
       context: HANDLER,
@@ -177,8 +224,29 @@ async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextR
   const metadata = await resolveMetadata(ctx, body.value.metadata);
   if (!metadata.ok) return metadata.response;
 
+  // The fixed consult every draw shares. A definition with an `llm` block and
+  // no scripted answer audits its failure path — the honest default, since
+  // that is the path a live table must always survive.
+  let llm: LlmSubject | undefined;
+  if (definition.value.llm) {
+    const llmInput = body.value.llm;
+    // Trimmed and capped exactly as a live run would keep it, so the audit
+    // tests the answer the table would actually see.
+    const maxOutput = definition.value.llm.maxOutput ?? MAX_LLM_OUTPUT_LENGTH;
+    llm =
+      llmInput && 'output' in llmInput
+        ? { ok: true, output: llmInput.output.trim().slice(0, maxOutput).trim() }
+        : { ok: false, output: definition.value.llm.errorMessage };
+  }
+
   try {
-    const result = simulateOutcomes(definition.value, body.value.params ?? undefined, AUDIT_RUNS, metadata.value);
+    const result = simulateOutcomes(
+      definition.value,
+      body.value.params ?? undefined,
+      AUDIT_RUNS,
+      metadata.value,
+      llm
+    );
     logger.debug('Workbench audit dealt', {
       context: HANDLER,
       tool: definition.value.name,

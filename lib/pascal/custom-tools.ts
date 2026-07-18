@@ -40,10 +40,13 @@ import {
   collectUnknownKeys,
   formatDefinitionIssues,
   isParamRef,
+  MAX_LLM_OUTPUT_LENGTH,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
   TOOL_FILE_SUFFIX,
+  type CustomToolLlm,
   type CustomToolParameter,
+  type LlmComparator,
   type MetadataComparator,
   type NumberOrParamRef,
   type NumericComparator,
@@ -416,6 +419,54 @@ export async function listAllCustomTools(): Promise<CustomToolLibrary> {
 // Execution core
 // ---------------------------------------------------------------------------
 
+/**
+ * What an LLM invoker hands back: the model's raw answer, or the technical
+ * reason there is none. The invoker never sees the author's `errorMessage` —
+ * translating failure into the author's words is the execution core's job.
+ */
+export type LlmInvokeResult =
+  | { ok: true; output: string; provider?: string; model?: string }
+  | { ok: false; reason: string };
+
+/** What the core tells an invoker about the answer it is prepared to keep. */
+export interface LlmInvokeOptions {
+  /**
+   * The effective output cap (the definition's `maxOutput`, or the default).
+   * Advisory: the real invoker scales the call's token budget from it, so a
+   * long-form consult is not starved at the provider. The core still enforces
+   * the cap on whatever comes back.
+   */
+  maxOutputChars: number;
+}
+
+/**
+ * The seam between the execution core and whatever actually talks to a model.
+ * Injected by the entrances (`lib/pascal/llm-consult.ts` builds the real one)
+ * so the core stays pure enough to test — and so the proving bench can hand in
+ * a pretend oracle instead of spending money.
+ */
+export type LlmInvoker = (prompt: string, options?: LlmInvokeOptions) => Promise<LlmInvokeResult>;
+
+/**
+ * The consult as the rest of a run sees it — subjects, templates, and the roll
+ * record all read from this one resolution.
+ */
+export interface LlmConsultResult {
+  /** Whether the consult produced an answer. */
+  ok: boolean;
+  /** The model's trimmed answer on success; the author's `errorMessage` on failure. */
+  output: string;
+  /** The rendered prompt actually posed — the record of what was asked. */
+  prompt: string;
+  /** Technical failure reason. Logged and recorded, never spoken in the fiction. */
+  reason?: string;
+  provider?: string;
+  model?: string;
+}
+
+/** The pair `when.llm` tests and `{{llm}}` renders. */
+export type LlmSubject = Pick<LlmConsultResult, 'ok' | 'output'>;
+
 /** A run that could not be completed. Never becomes a fabricated outcome. */
 export class CustomToolRunError extends Error {
   constructor(message: string) {
@@ -448,6 +499,8 @@ export interface CustomToolRunResult {
    * was tested. Absent when the winning row consulted no metadata.
    */
   metadataTested?: MetadataTested;
+  /** The LLM consult, when the definition declares one. */
+  llm?: LlmConsultResult;
 }
 
 /**
@@ -606,6 +659,11 @@ export interface OutcomeSubjects {
    * `metadata` test then fails and the catch-all answers.
    */
   metadata?: Record<string, unknown>;
+  /**
+   * The LLM consult's result. Absent when the definition declares no `llm`
+   * block — an `llm` test then fails soft and the table falls through.
+   */
+  llm?: LlmSubject;
 }
 
 /** The metadata keys a run actually consulted, and what they held at the time. */
@@ -766,6 +824,80 @@ function matchesMetadataComparator(
 }
 
 /**
+ * Evaluate one comparator against the LLM consult — the second fail-soft
+ * evaluator, for the same reason as {@link matchesMetadataComparator}: the
+ * subject's run-time type is unknowable at load time, because the answer is
+ * whatever the model chose to say.
+ *
+ * Reconciliation rules, chosen so an author testing an oracle they prompted
+ * for "YES", "42", or "the west door" gets the match they meant:
+ *
+ * - `ok` tests the consult's success flag directly.
+ * - Ordering comparators need the answer to parse as a finite number; an
+ *   answer that doesn't simply declines the row (debug-logged).
+ * - eq/neq compare numerically when both sides are numbers, and otherwise as
+ *   trimmed, case-insensitive strings — a model that says "yes." instead of
+ *   "YES" has still said yes. (Trailing sentence punctuation is also
+ *   forgiven for that reason.)
+ *
+ * `$param` operands still throw when they fail to resolve: those are
+ * load-validated, so a failure is a regression, not a fact about the model.
+ */
+function matchesLlmComparator(
+  toolName: string,
+  comparator: LlmComparator,
+  llm: LlmSubject,
+  params: ResolvedParams
+): boolean {
+  const decline = (reason: string): false => {
+    logger.debug('Custom tool llm test did not match', { context: CONTEXT, tool: toolName, reason });
+    return false;
+  };
+
+  if (comparator.ok !== undefined && comparator.ok !== llm.ok) return false;
+
+  const answer = llm.output.trim();
+  const numericAnswer = answer !== '' && Number.isFinite(Number(answer)) ? Number(answer) : null;
+
+  const operandFor = (comparatorKey: Exclude<keyof LlmComparator, 'ok'>): number | string | boolean =>
+    resolveOperand(
+      toolName,
+      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef,
+      params,
+      `the llm answer ${comparatorKey}`
+    );
+
+  for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
+    if (comparator[comparatorKey] === undefined) continue;
+    const operand = operandFor(comparatorKey);
+    if (numericAnswer === null || typeof operand !== 'number') {
+      return decline(`${comparatorKey} orders ${JSON.stringify(answer)}, and only numbers can be ordered`);
+    }
+    const held =
+      comparatorKey === 'gt'
+        ? numericAnswer > operand
+        : comparatorKey === 'gte'
+          ? numericAnswer >= operand
+          : comparatorKey === 'lt'
+            ? numericAnswer < operand
+            : numericAnswer <= operand;
+    if (!held) return false;
+  }
+
+  const equalsAnswer = (operand: number | string | boolean): boolean => {
+    if (typeof operand === 'number' && numericAnswer !== null) return numericAnswer === operand;
+    const operandText = String(operand).trim().toLowerCase();
+    const answerText = answer.toLowerCase();
+    return answerText === operandText || answerText === `${operandText}.` || answerText === `${operandText}!`;
+  };
+
+  if (comparator.eq !== undefined && !equalsAnswer(operandFor('eq'))) return false;
+  if (comparator.neq !== undefined && equalsAnswer(operandFor('neq'))) return false;
+
+  return true;
+}
+
+/**
  * Evaluate an outcome test. Every subject named must hold — bare comparators
  * against the final value, `roll` against the raw draw, `params` against what
  * the caller supplied, `metadata` against the invoking character's fact sheet.
@@ -793,6 +925,17 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
 
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
     if (!matchesMetadataComparator(toolName, comparator, key, metadata, params)) return false;
+  }
+
+  if (when.llm !== undefined) {
+    // No consult ran (a definition without an `llm` block, or a simulation
+    // that supplied none): the test fails soft, exactly like a metadata key
+    // the character doesn't carry.
+    if (!subjects.llm) {
+      logger.debug('Custom tool llm test did not match — no consult ran', { context: CONTEXT, tool: toolName });
+      return false;
+    }
+    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params)) return false;
   }
 
   return true;
@@ -842,7 +985,15 @@ export function formatValue(value: number): string {
  */
 export function renderTemplate(
   message: string,
-  vars: { value: number; roll: number; dice: string; params: ResolvedParams; metadata?: Record<string, unknown> }
+  vars: {
+    value: number;
+    roll: number;
+    dice: string;
+    params: ResolvedParams;
+    metadata?: Record<string, unknown>;
+    /** The consult's result. Absent while rendering the consult's own prompt. */
+    llm?: LlmSubject;
+  }
 ): string {
   return message.replace(/\{\{([^}]+)\}\}/g, (whole, rawKey: string) => {
     const key = rawKey.trim();
@@ -850,6 +1001,12 @@ export function renderTemplate(
     if (key === 'value') return formatValue(vars.value);
     if (key === 'roll') return formatValue(vars.roll);
     if (key === 'dice') return vars.dice;
+
+    if (key === 'llm') {
+      if (vars.llm) return vars.llm.output;
+      logger.debug('Custom tool message references {{llm}} with no consult to render', { context: CONTEXT });
+      return whole;
+    }
 
     if (key.startsWith('params.')) {
       const name = key.slice('params.'.length);
@@ -879,16 +1036,74 @@ export function renderTemplate(
 }
 
 /**
- * Run a definition: validate params, roll, transform, evaluate, render.
+ * Resolve a definition's LLM consult: render the prompt, pose it through the
+ * injected invoker, and translate whatever happens into the author's terms.
  *
- * Pure computation — no writes, no message posting. Both entrances call this
- * and then decide how to announce the result.
+ * Fail-soft by design — a consult NEVER throws. A provider error, a timeout,
+ * an empty answer, or an entrance that wired no invoker all land in the same
+ * place: `ok: false` with the author's `errorMessage` as the output, so the
+ * outcome table gets to deal with the silence the way its author wrote it to.
  */
-export function executeCustomTool(
+async function resolveLlmConsult(
+  toolName: string,
+  spec: CustomToolLlm,
+  prompt: string,
+  invoke: LlmInvoker | undefined
+): Promise<LlmConsultResult> {
+  const failed = (reason: string): LlmConsultResult => {
+    logger.warn('Custom tool LLM consult failed', { context: CONTEXT, tool: toolName, reason });
+    return { ok: false, output: spec.errorMessage, prompt, reason };
+  };
+
+  if (!invoke) return failed('no LLM invoker was available in this context');
+
+  // The author's own leash, or the default. errorMessage is never subject to
+  // it — those are the author's words, kept whole.
+  const maxOutput = spec.maxOutput ?? MAX_LLM_OUTPUT_LENGTH;
+
+  let result: LlmInvokeResult;
+  try {
+    result = await invoke(prompt, { maxOutputChars: maxOutput });
+  } catch (error) {
+    return failed(getErrorMessage(error));
+  }
+
+  if (!result.ok) return failed(result.reason);
+
+  const output = result.output.trim().slice(0, maxOutput).trim();
+  if (output === '') return failed('the model returned an empty answer');
+
+  logger.debug('Custom tool LLM consult answered', {
+    context: CONTEXT,
+    tool: toolName,
+    provider: result.provider,
+    model: result.model,
+    outputLength: output.length,
+  });
+
+  return {
+    ok: true,
+    output,
+    prompt,
+    ...(result.provider ? { provider: result.provider } : {}),
+    ...(result.model ? { model: result.model } : {}),
+  };
+}
+
+/**
+ * Run a definition: validate params, roll, transform, consult (when declared),
+ * evaluate, render.
+ *
+ * No writes, no message posting — both entrances call this and then decide how
+ * to announce the result. The one impurity is the optional LLM consult, which
+ * arrives as an injected {@link LlmInvoker} so this stays testable and the
+ * proving bench can substitute a pretend oracle.
+ */
+export async function executeCustomTool(
   definition: QtapCustomTool,
   suppliedParams: Record<string, unknown> | null | undefined,
-  overrides?: { private?: boolean; metadata?: Record<string, unknown> }
-): CustomToolRunResult {
+  overrides?: { private?: boolean; metadata?: Record<string, unknown>; llmInvoke?: LlmInvoker }
+): Promise<CustomToolRunResult> {
   const params = resolveParams(definition, suppliedParams);
 
   let raw: number;
@@ -923,7 +1138,16 @@ export function executeCustomTool(
   }
 
   const metadata = overrides?.metadata ?? {};
-  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata };
+
+  // The consult runs AFTER the roll — its prompt may quote the draw — and
+  // BEFORE the table, which may test its answer.
+  let llm: LlmConsultResult | undefined;
+  if (definition.llm) {
+    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata });
+    llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
+  }
+
+  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, ...(llm ? { llm } : {}) };
   const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
   if (outcomeIndex < 0) {
     // The schema's mandatory trailing catch-all makes this unreachable.
@@ -931,7 +1155,7 @@ export function executeCustomTool(
   }
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata });
+  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, llm });
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   const visibility: Visibility =
@@ -955,6 +1179,7 @@ export function executeCustomTool(
     diceBreakdown,
     visibility,
     ...(metadataTested ? { metadataTested } : {}),
+    ...(llm ? { llm } : {}),
   };
 }
 
@@ -983,7 +1208,14 @@ export function simulateOutcomes(
   definition: QtapCustomTool,
   suppliedParams: Record<string, unknown> | null | undefined,
   runs: number,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  /**
+   * A pretend consult, held fixed across every draw — the audit never spends a
+   * real LLM call, let alone ten thousand of them. Hit rates for a table that
+   * branches on the answer are therefore conditional on this one answer; the
+   * bench says so beside the field.
+   */
+  llm?: LlmSubject
 ): CustomToolAuditResult {
   const params = resolveParams(definition, suppliedParams);
 
@@ -1017,7 +1249,7 @@ export function simulateOutcomes(
       value = drawn.value;
     }
 
-    const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {} };
+    const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {}, ...(llm ? { llm } : {}) };
     const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
     if (outcomeIndex < 0) {
       // The schema's mandatory trailing catch-all makes this unreachable.

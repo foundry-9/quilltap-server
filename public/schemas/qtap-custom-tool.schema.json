@@ -96,6 +96,32 @@
         }
       ]
     },
+    "llm": {
+      "type": "object",
+      "required": ["prompt", "errorMessage"],
+      "additionalProperties": false,
+      "description": "Ask an LLM for a generated result. When present, every run renders `prompt` and poses it to the instance's cheap utility model AFTER the roll and BEFORE the outcome table. The result is a pair { ok, output }: on success, output is the model's trimmed answer; on any failure (provider error, timeout, empty answer, no model configured), ok is false and output is this block's errorMessage — the author's words, never the provider's. Either way, outcomes may test the pair via the `llm` subject and messages may render it via {{llm}}, so a failed consult is an outcome the table deals with rather than an error: the run itself never fails because the model went quiet.",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
+        },
+        "errorMessage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "The consult's output when the call fails, in the author's own words. The technical reason goes to the roll record and the logs, never into the fiction."
+        },
+        "maxOutput": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "description": "Cap on the answer, in characters. Default 8000. Set it low for a verdict, high for a consult whose answer IS the deliverable — the call's token budget scales with it. Applies to the model's answer only, never to errorMessage."
+        }
+      }
+    },
     "outcomes": {
       "type": "array",
       "minItems": 1,
@@ -107,7 +133,7 @@
         "additionalProperties": false,
         "properties": {
           "when": {
-            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, and `metadata` tests the invoking character's own metadata.json fact sheet. There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
+            "description": "The test. Either the literal `true` (catch-all) or an object naming one or more subjects, ALL of which must hold. Bare comparators test the final value — `>= 0.30 && <= 0.60` is { \"gte\": 0.30, \"lte\": 0.60 }. `roll` tests the raw pre-transform draw, `params` tests what the caller supplied, so \"value > 1 and scale > 12\" is { \"gt\": 1, \"params\": { \"scale\": { \"gt\": 12 } } }, `metadata` tests the invoking character's own metadata.json fact sheet, and `llm` tests the LLM consult's answer (or its success, via `ok`). There is no OR and no nesting: ordered first-match-wins outcomes make OR unnecessary, and this keeps the evaluator free of any expression grammar.",
             "oneOf": [
               { "const": true },
               {
@@ -138,6 +164,10 @@
                     "description": "Test the INVOKING CHARACTER's metadata.json fact sheet, keyed by metadata key — { \"metadata\": { \"hasAnsibleAccess\": { \"eq\": true } } }. Keys are the user's own, so any non-empty string is allowed and nothing about them can be validated when the file loads. At run time a key the character does not have, or one holding a list/object/null, or one whose type the comparator cannot sustain (ordering a string), simply does not match: the row is passed over and the table falls through to its catch-all. That is by design — a table branching on a key must still deal to a character who lacks it. Note { \"eq\": null } is not expressible; absence and null alike just fail to match.",
                     "additionalProperties": { "$ref": "#/$defs/MetadataComparator" },
                     "propertyNames": { "minLength": 1 }
+                  },
+                  "llm": {
+                    "$ref": "#/$defs/LlmComparator",
+                    "description": "Test the LLM consult's result — { \"llm\": { \"eq\": \"YES\" } } tests the answer; { \"llm\": { \"ok\": false } } tests whether the consult failed. Only valid on a tool that declares an `llm` block (enforced when the file loads, which JSON Schema cannot express here)."
                   }
                 }
               }
@@ -147,7 +177,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000,
-            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), and {{metadata.key}} (a key from the invoking character's fact sheet). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, or one holding a list or object."
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, or one holding a list or object, or {{llm}} on a tool with no llm block."
           },
           "state": {
             "enum": ["success", "partial", "failure", "info"],
@@ -211,6 +241,21 @@
         "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the key holds a number." },
         "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. Does not match unless the key exists and holds a matching primitive." },
         "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. Does not match when the key is absent — absence is not inequality." }
+      }
+    },
+    "LlmComparator": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Comparisons against the LLM consult's result. The comparator keys test the answer; `ok` tests whether the consult succeeded at all. Every key present must hold (they AND together). Like metadata, the answer's run-time type is the model's business, so type rules are enforced fail-soft at run time: ordering comparators need the answer to parse as a number and otherwise decline the row; eq/neq compare numerically when both sides are numbers, and otherwise as trimmed, case-insensitive strings (trailing '.'/'!' forgiven) — an author who asked for \"YES\" should not lose to a model that said \"yes.\".",
+      "properties": {
+        "gt": { "$ref": "#/$defs/NumberOperand", "description": "Greater than. Does not match unless the answer parses as a number." },
+        "gte": { "$ref": "#/$defs/NumberOperand", "description": "Greater than or equal to. Does not match unless the answer parses as a number." },
+        "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Does not match unless the answer parses as a number." },
+        "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the answer parses as a number." },
+        "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to, numerically or as trimmed case-insensitive text. On a failed consult the answer is the block's errorMessage." },
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to, under the same reconciliation as eq." },
+        "ok": { "type": "boolean", "description": "true: this row only applies when the consult succeeded. false: only when it failed." }
       }
     },
     "ParamRef": {

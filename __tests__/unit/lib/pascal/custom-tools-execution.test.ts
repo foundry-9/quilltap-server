@@ -41,46 +41,46 @@ describe('resolveParams', () => {
     outcomes: [CATCH_ALL],
   })
 
-  it('fills every declared parameter from its default', () => {
+  it('fills every declared parameter from its default', async () => {
     expect(resolveParams(tool, {})).toEqual({ bonus: 0, tries: 1, label: 'lock', loud: false })
   })
 
-  it('defaults a parameter that was omitted', () => {
+  it('defaults a parameter that was omitted', async () => {
     expect(resolveParams(tool, { bonus: 3 }).tries).toBe(1)
   })
 
-  it('clamps a numeric value up to min', () => {
+  it('clamps a numeric value up to min', async () => {
     expect(resolveParams(tool, { bonus: -5 }).bonus).toBe(0)
   })
 
-  it('clamps a numeric value down to max', () => {
+  it('clamps a numeric value down to max', async () => {
     expect(resolveParams(tool, { bonus: 999 }).bonus).toBe(10)
   })
 
-  it('rounds an integer parameter', () => {
+  it('rounds an integer parameter', async () => {
     expect(resolveParams(tool, { tries: 2.6 }).tries).toBe(3)
   })
 
-  it('accepts a numeric string, as models routinely send', () => {
+  it('accepts a numeric string, as models routinely send', async () => {
     expect(resolveParams(tool, { bonus: '4' }).bonus).toBe(4)
   })
 
-  it('rejects an unknown parameter rather than ignoring it', () => {
+  it('rejects an unknown parameter rather than ignoring it', async () => {
     // Silently dropping it would look like the tool ran as asked.
     expect(() => resolveParams(tool, { bonuss: 5 })).toThrow(CustomToolRunError)
     expect(() => resolveParams(tool, { bonuss: 5 })).toThrow(/not a parameter/)
   })
 
-  it('rejects a non-numeric value for a numeric parameter', () => {
+  it('rejects a non-numeric value for a numeric parameter', async () => {
     expect(() => resolveParams(tool, { bonus: 'lots' })).toThrow(/must be a number/)
   })
 
-  it('coerces boolean strings', () => {
+  it('coerces boolean strings', async () => {
     expect(resolveParams(tool, { loud: 'true' }).loud).toBe(true)
     expect(resolveParams(tool, { loud: 'false' }).loud).toBe(false)
   })
 
-  it('treats null as absent and uses the default', () => {
+  it('treats null as absent and uses the default', async () => {
     expect(resolveParams(tool, { bonus: null }).bonus).toBe(0)
   })
 })
@@ -89,7 +89,7 @@ describe('matchesWhen', () => {
   /** Pose a test about the value alone — the subject bare comparators address. */
   const against = (when: When, value: number) => matchesWhen(when, { value, roll: value, params: {} })
 
-  it('always matches the literal true', () => {
+  it('always matches the literal true', async () => {
     expect(matchesWhen(true, { value: -999, roll: -999, params: {} })).toBe(true)
   })
 
@@ -108,7 +108,7 @@ describe('matchesWhen', () => {
     expect(against(when, value)).toBe(expected)
   })
 
-  it('ANDs multiple comparators together', () => {
+  it('ANDs multiple comparators together', async () => {
     const band = { gte: 0.3, lte: 0.6 }
     expect(against(band, 0.45)).toBe(true)
     expect(against(band, 0.3)).toBe(true)
@@ -117,7 +117,7 @@ describe('matchesWhen', () => {
     expect(against(band, 0.61)).toBe(false)
   })
 
-  it('tests the raw roll separately from the transformed value', () => {
+  it('tests the raw roll separately from the transformed value', async () => {
     // The whole point of the `roll` subject: after a transform, the two
     // subjects disagree, and only one of them is what was actually drawn.
     const when = { gt: 50, roll: { lt: 0.6 } }
@@ -125,33 +125,33 @@ describe('matchesWhen', () => {
     expect(matchesWhen(when, { value: 55, roll: 0.7, params: {} })).toBe(false)
   })
 
-  it('ANDs a params test with a value test', () => {
+  it('ANDs a params test with a value test', async () => {
     const when = { gt: 1, params: { scale: { gt: 12 } } }
     expect(matchesWhen(when, { value: 2, roll: 2, params: { scale: 14 } })).toBe(true)
     expect(matchesWhen(when, { value: 2, roll: 2, params: { scale: 12 } })).toBe(false)
     expect(matchesWhen(when, { value: 1, roll: 1, params: { scale: 14 } })).toBe(false)
   })
 
-  it('compares a string parameter with eq/neq', () => {
+  it('compares a string parameter with eq/neq', async () => {
     const subjects = { value: 0, roll: 0, params: { material: 'brass' } }
     expect(matchesWhen({ params: { material: { eq: 'brass' } } }, subjects)).toBe(true)
     expect(matchesWhen({ params: { material: { eq: 'iron' } } }, subjects)).toBe(false)
     expect(matchesWhen({ params: { material: { neq: 'iron' } } }, subjects)).toBe(true)
   })
 
-  it('compares a boolean parameter with eq', () => {
+  it('compares a boolean parameter with eq', async () => {
     const subjects = { value: 0, roll: 0, params: { loudly: true } }
     expect(matchesWhen({ params: { loudly: { eq: true } } }, subjects)).toBe(true)
     expect(matchesWhen({ params: { loudly: { eq: false } } }, subjects)).toBe(false)
   })
 
-  it('resolves a $param operand — the opposed check', () => {
+  it('resolves a $param operand — the opposed check', async () => {
     const when = { gte: { $param: 'difficulty' } }
     expect(matchesWhen(when, { value: 15, roll: 15, params: { difficulty: 12 } })).toBe(true)
     expect(matchesWhen(when, { value: 15, roll: 15, params: { difficulty: 18 } })).toBe(false)
   })
 
-  it('throws rather than declining to match when an ordering test meets a non-number', () => {
+  it('throws rather than declining to match when an ordering test meets a non-number', async () => {
     // Load-time validation rejects this shape, so reaching it is a regression.
     // Returning false would look like the table simply skipping a row.
     expect(() =>
@@ -187,12 +187,12 @@ describe('matchesWhen — the metadata subject', () => {
     expect(against({ metadata } as When)).toBe(expected)
   })
 
-  it('ANDs several metadata keys together', () => {
+  it('ANDs several metadata keys together', async () => {
     expect(against({ metadata: { hasAnsibleAccess: { eq: true }, clearanceLevel: { gte: 3 } } } as When)).toBe(true)
     expect(against({ metadata: { hasAnsibleAccess: { eq: true }, clearanceLevel: { gte: 4 } } } as When)).toBe(false)
   })
 
-  it('ANDs a metadata test with bare, roll, and params subjects', () => {
+  it('ANDs a metadata test with bare, roll, and params subjects', async () => {
     const when = {
       gt: 1,
       roll: { lt: 0.6 },
@@ -208,7 +208,7 @@ describe('matchesWhen — the metadata subject', () => {
     expect(matchesWhen(when, { ...subjects, metadata: { hasAnsibleAccess: false } })).toBe(false)
   })
 
-  it('resolves a $param operand against a metadata key — the opposed check', () => {
+  it('resolves a $param operand against a metadata key — the opposed check', async () => {
     const when = { metadata: { clearanceLevel: { gte: { $param: 'required' } } } } as When
     expect(matchesWhen(when, { value: 0, roll: 0, params: { required: 2 }, metadata: SHEET })).toBe(true)
     expect(matchesWhen(when, { value: 0, roll: 0, params: { required: 4 }, metadata: SHEET })).toBe(false)
@@ -235,7 +235,7 @@ describe('matchesWhen — the metadata subject', () => {
       expect(against({ metadata } as When)).toBe(false)
     })
 
-    it('treats a missing metadata sheet as a sheet with nothing on it', () => {
+    it('treats a missing metadata sheet as a sheet with nothing on it', async () => {
       // Nobody in particular rolled: the subjects carry no metadata at all.
       const when = { metadata: { hasAnsibleAccess: { eq: true } } } as When
       expect(matchesWhen(when, { value: 0, roll: 0, params: {} })).toBe(false)
@@ -245,12 +245,12 @@ describe('matchesWhen — the metadata subject', () => {
 })
 
 describe('formatValue', () => {
-  it('renders integers without decimals', () => {
+  it('renders integers without decimals', async () => {
     expect(formatValue(14)).toBe('14')
     expect(formatValue(-3)).toBe('-3')
   })
 
-  it('renders floats to 4 significant digits', () => {
+  it('renders floats to 4 significant digits', async () => {
     expect(formatValue(0.7134567)).toBe('0.7135')
     expect(formatValue(1234.5678)).toBe('1235')
   })
@@ -259,31 +259,31 @@ describe('formatValue', () => {
 describe('renderTemplate', () => {
   const vars = { value: 14, roll: 0.7134567, dice: '3d6+2: [4, 2, 6] + 2 = 14', params: { bonus: 2, who: 'Bertie' } }
 
-  it('substitutes {{value}}, {{roll}}, and {{dice}}', () => {
+  it('substitutes {{value}}, {{roll}}, and {{dice}}', async () => {
     expect(renderTemplate('{{value}} / {{roll}} / {{dice}}', vars)).toBe(
       '14 / 0.7135 / 3d6+2: [4, 2, 6] + 2 = 14'
     )
   })
 
-  it('substitutes {{params.name}} for numbers and strings', () => {
+  it('substitutes {{params.name}} for numbers and strings', async () => {
     expect(renderTemplate('{{params.bonus}} and {{params.who}}', vars)).toBe('2 and Bertie')
   })
 
-  it('leaves an unknown placeholder verbatim', () => {
+  it('leaves an unknown placeholder verbatim', async () => {
     expect(renderTemplate('{{nonsense}} stays', vars)).toBe('{{nonsense}} stays')
   })
 
-  it('leaves an unknown params reference verbatim', () => {
+  it('leaves an unknown params reference verbatim', async () => {
     expect(renderTemplate('{{params.nope}}', vars)).toBe('{{params.nope}}')
   })
 
-  it('does not interpret user text as a template', () => {
+  it('does not interpret user text as a template', async () => {
     // Substituted values are inserted, never re-scanned.
     const sneaky = { ...vars, params: { who: '{{value}}' } }
     expect(renderTemplate('{{params.who}}', sneaky)).toBe('{{value}}')
   })
 
-  it('tolerates whitespace inside the braces', () => {
+  it('tolerates whitespace inside the braces', async () => {
     expect(renderTemplate('{{ value }}', vars)).toBe('14')
   })
 
@@ -299,13 +299,13 @@ describe('renderTemplate', () => {
     }
     const withSheet = { ...vars, metadata: sheet }
 
-    it('substitutes primitives the way {{params.name}} does', () => {
+    it('substitutes primitives the way {{params.name}} does', async () => {
       expect(renderTemplate('{{metadata.faction}} / {{metadata.hasAnsibleAccess}}', withSheet)).toBe(
         'Ordo Aurum / true'
       )
     })
 
-    it('renders an integer undecorated and a float to 4 significant digits', () => {
+    it('renders an integer undecorated and a float to 4 significant digits', async () => {
       expect(renderTemplate('{{metadata.clearanceLevel}} at {{metadata.trust}}', withSheet)).toBe('3 at 0.7135')
     })
 
@@ -318,11 +318,11 @@ describe('renderTemplate', () => {
       expect(renderTemplate(template, withSheet)).toBe(template)
     })
 
-    it('leaves every metadata placeholder verbatim when there is no sheet', () => {
+    it('leaves every metadata placeholder verbatim when there is no sheet', async () => {
       expect(renderTemplate('{{metadata.faction}}', vars)).toBe('{{metadata.faction}}')
     })
 
-    it('does not re-scan a substituted metadata value as a template', () => {
+    it('does not re-scan a substituted metadata value as a template', async () => {
       const sneaky = { ...vars, metadata: { motto: '{{value}}' } }
       expect(renderTemplate('{{metadata.motto}}', sneaky)).toBe('{{value}}')
     })
@@ -330,7 +330,7 @@ describe('renderTemplate', () => {
 })
 
 describe('executeCustomTool — transform pipeline', () => {
-  it('applies multiply, then offset, then round, in that order', () => {
+  it('applies multiply, then offset, then round, in that order', async () => {
     // A degenerate range (min === max) pins raw to 0.5 so the arithmetic is
     // deterministic: 0.5 * 10 = 5, + 2 = 7. Rounding first would give 1*10+2=12.
     const tool = define({
@@ -339,12 +339,12 @@ describe('executeCustomTool — transform pipeline', () => {
       roll: { min: 0.5, max: 0.5, multiplier: 10, offset: 2, round: true },
       outcomes: [CATCH_ALL],
     })
-    const result = executeCustomTool(tool, {})
+    const result = await executeCustomTool(tool, {})
     expect(result.raw).toBe(0.5)
     expect(result.value).toBe(7)
   })
 
-  it('rounds last, not before the offset', () => {
+  it('rounds last, not before the offset', async () => {
     const tool = define({
       name: 'rounding',
       description: 'Rounding happens after the offset.',
@@ -352,10 +352,10 @@ describe('executeCustomTool — transform pipeline', () => {
       outcomes: [CATCH_ALL],
     })
     // 0.4 + 0.3 = 0.7 → 1. Rounding first would be 0 + 0.3 = 0.3 → 0.
-    expect(executeCustomTool(tool, {}).value).toBe(1)
+    expect((await executeCustomTool(tool, {})).value).toBe(1)
   })
 
-  it('substitutes a $param into the offset', () => {
+  it('substitutes a $param into the offset', async () => {
     const tool = define({
       name: 'unlock',
       description: 'Attempt to pick the lock.',
@@ -363,10 +363,10 @@ describe('executeCustomTool — transform pipeline', () => {
       roll: { min: 0, max: 0, offset: { $param: 'bonus' } },
       outcomes: [CATCH_ALL],
     })
-    expect(executeCustomTool(tool, { bonus: 4 }).value).toBe(4)
+    expect((await executeCustomTool(tool, { bonus: 4 })).value).toBe(4)
   })
 
-  it('uses the CLAMPED parameter value in the roll, not the raw one', () => {
+  it('uses the CLAMPED parameter value in the roll, not the raw one', async () => {
     const tool = define({
       name: 'unlock',
       description: 'Attempt to pick the lock.',
@@ -374,19 +374,19 @@ describe('executeCustomTool — transform pipeline', () => {
       roll: { min: 0, max: 0, offset: { $param: 'bonus' } },
       outcomes: [CATCH_ALL],
     })
-    expect(executeCustomTool(tool, { bonus: 999 }).value).toBe(10)
+    expect((await executeCustomTool(tool, { bonus: 999 })).value).toBe(10)
   })
 
-  it('defaults to a 0–1 uniform roll when `roll` is omitted', () => {
+  it('defaults to a 0–1 uniform roll when `roll` is omitted', async () => {
     const tool = define({ name: 'plain', description: 'No roll block.', outcomes: [CATCH_ALL] })
     for (let i = 0; i < 30; i++) {
-      const { value } = executeCustomTool(tool, {})
+      const { value } = await executeCustomTool(tool, {})
       expect(value).toBeGreaterThanOrEqual(0)
       expect(value).toBeLessThan(1)
     }
   })
 
-  it('draws within [min, max) across many runs', () => {
+  it('draws within [min, max) across many runs', async () => {
     const tool = define({
       name: 'ranged',
       description: 'A bounded draw.',
@@ -394,13 +394,13 @@ describe('executeCustomTool — transform pipeline', () => {
       outcomes: [CATCH_ALL],
     })
     for (let i = 0; i < 100; i++) {
-      const { value } = executeCustomTool(tool, {})
+      const { value } = await executeCustomTool(tool, {})
       expect(value).toBeGreaterThanOrEqual(10)
       expect(value).toBeLessThan(20)
     }
   })
 
-  it('fails rather than fabricating when $param substitution inverts the bounds', () => {
+  it('fails rather than fabricating when $param substitution inverts the bounds', async () => {
     const tool = define({
       name: 'inverted',
       description: 'Bounds that can cross.',
@@ -408,8 +408,8 @@ describe('executeCustomTool — transform pipeline', () => {
       roll: { min: 5, max: { $param: 'hi' } },
       outcomes: [CATCH_ALL],
     })
-    expect(() => executeCustomTool(tool, { hi: 1 })).toThrow(CustomToolRunError)
-    expect(() => executeCustomTool(tool, { hi: 1 })).toThrow(/low bound .* above its high bound/)
+    await expect(executeCustomTool(tool, { hi: 1 })).rejects.toThrow(CustomToolRunError)
+    await expect(executeCustomTool(tool, { hi: 1 })).rejects.toThrow(/low bound .* above its high bound/)
   })
 })
 
@@ -425,14 +425,14 @@ describe('executeCustomTool — outcome selection', () => {
     ],
   })
 
-  it('takes the first matching outcome', () => {
-    const result = executeCustomTool(tool, {})
+  it('takes the first matching outcome', async () => {
+    const result = await executeCustomTool(tool, {})
     expect(result.outcomeIndex).toBe(0)
     expect(result.state).toBe('success')
     expect(result.message).toBe('The lock clicks open.')
   })
 
-  it('falls through to the catch-all when nothing else matches', () => {
+  it('falls through to the catch-all when nothing else matches', async () => {
     const midband = define({
       name: 'unlock',
       description: 'Attempt to pick the lock.',
@@ -443,12 +443,12 @@ describe('executeCustomTool — outcome selection', () => {
         { when: true, message: 'giving way', state: 'partial' },
       ],
     })
-    const result = executeCustomTool(midband, {})
+    const result = await executeCustomTool(midband, {})
     expect(result.outcomeIndex).toBe(2)
     expect(result.state).toBe('partial')
   })
 
-  it('prefers the earlier of two matching outcomes', () => {
+  it('prefers the earlier of two matching outcomes', async () => {
     const overlapping = define({
       name: 'overlap',
       description: 'Two outcomes both match.',
@@ -459,10 +459,10 @@ describe('executeCustomTool — outcome selection', () => {
         { when: true, message: 'third', state: 'info' },
       ],
     })
-    expect(executeCustomTool(overlapping, {}).message).toBe('first')
+    expect((await executeCustomTool(overlapping, {})).message).toBe('first')
   })
 
-  it('selects on the CLAMPED parameter, as the roll does', () => {
+  it('selects on the CLAMPED parameter, as the roll does', async () => {
     // The one value the table tests must be the one the roll used — a test
     // against the caller's unclamped 999 would contradict the number rolled.
     const tool = define({
@@ -475,10 +475,10 @@ describe('executeCustomTool — outcome selection', () => {
         { when: true, message: 'within tolerance', state: 'info' },
       ],
     })
-    expect(executeCustomTool(tool, { scale: 999 }).message).toBe('within tolerance')
+    expect((await executeCustomTool(tool, { scale: 999 })).message).toBe('within tolerance')
   })
 
-  it('selects on the raw draw when the outcome tests `roll`', () => {
+  it('selects on the raw draw when the outcome tests `roll`', async () => {
     // raw 0.5 → value 50, so the two subjects genuinely disagree here.
     const tool = define({
       name: 'scaled',
@@ -489,12 +489,12 @@ describe('executeCustomTool — outcome selection', () => {
         { when: true, message: 'fallback', state: 'info' },
       ],
     })
-    const result = executeCustomTool(tool, {})
+    const result = await executeCustomTool(tool, {})
     expect(result.value).toBe(50)
     expect(result.message).toBe('raw was low')
   })
 
-  it('ANDs the value, the raw roll, and a parameter in one test', () => {
+  it('ANDs the value, the raw roll, and a parameter in one test', async () => {
     const tool = define({
       name: 'compound',
       description: 'Every subject at once.',
@@ -509,10 +509,10 @@ describe('executeCustomTool — outcome selection', () => {
         { when: true, message: 'something did not hold', state: 'info' },
       ],
     })
-    expect(executeCustomTool(tool, { scale: 14, mode: 'active' }).message).toBe('all four held')
+    expect((await executeCustomTool(tool, { scale: 14, mode: 'active' })).message).toBe('all four held')
     // One conjunct false is enough to fall through.
-    expect(executeCustomTool(tool, { scale: 14, mode: 'passive' }).message).toBe('something did not hold')
-    expect(executeCustomTool(tool, { scale: 12, mode: 'active' }).message).toBe('something did not hold')
+    expect((await executeCustomTool(tool, { scale: 14, mode: 'passive' })).message).toBe('something did not hold')
+    expect((await executeCustomTool(tool, { scale: 12, mode: 'active' })).message).toBe('something did not hold')
   })
 })
 
@@ -532,33 +532,33 @@ describe('executeCustomTool — the invoking character\'s metadata', () => {
     ],
   })
 
-  it('matches the gated outcome for a character carrying the key', () => {
-    const result = executeCustomTool(tool, {}, {
+  it('matches the gated outcome for a character carrying the key', async () => {
+    const result = await executeCustomTool(tool, {}, {
       metadata: { hasAnsibleAccess: true, faction: 'Ordo Aurum' },
     })
     expect(result.state).toBe('success')
     expect(result.message).toBe('The ansible flickers to life for Ordo Aurum.')
   })
 
-  it('falls to the catch-all for a character who has never heard of an ansible', () => {
-    const result = executeCustomTool(tool, {}, { metadata: { faction: 'Ordo Ferrum' } })
+  it('falls to the catch-all for a character who has never heard of an ansible', async () => {
+    const result = await executeCustomTool(tool, {}, { metadata: { faction: 'Ordo Ferrum' } })
     expect(result.state).toBe('failure')
     expect(result.message).toBe('The panel stays dark.')
   })
 
-  it('falls to the catch-all when the key is there but false', () => {
-    expect(executeCustomTool(tool, {}, { metadata: { hasAnsibleAccess: false } }).state).toBe('failure')
+  it('falls to the catch-all when the key is there but false', async () => {
+    expect((await executeCustomTool(tool, {}, { metadata: { hasAnsibleAccess: false } })).state).toBe('failure')
   })
 
-  it('falls to the catch-all when nobody in particular rolled', () => {
+  it('falls to the catch-all when nobody in particular rolled', async () => {
     // A characterless manual run passes no sheet at all.
-    expect(executeCustomTool(tool, {}).state).toBe('failure')
-    expect(executeCustomTool(tool, {}, { metadata: {} }).state).toBe('failure')
+    expect((await executeCustomTool(tool, {})).state).toBe('failure')
+    expect((await executeCustomTool(tool, {}, { metadata: {} })).state).toBe('failure')
   })
 
   describe('metadataTested — what the winning row saw', () => {
-    it('records the keys the winning row consulted, at their roll-time values', () => {
-      const result = executeCustomTool(tool, {}, {
+    it('records the keys the winning row consulted, at their roll-time values', async () => {
+      const result = await executeCustomTool(tool, {}, {
         metadata: { hasAnsibleAccess: true, faction: 'Ordo Aurum', clearanceLevel: 3 },
       })
       // Only what the row tested — not the whole sheet, which is the
@@ -566,15 +566,15 @@ describe('executeCustomTool — the invoking character\'s metadata', () => {
       expect(result.metadataTested).toEqual({ hasAnsibleAccess: true })
     })
 
-    it('is absent when the winning row consulted no metadata', () => {
-      expect(executeCustomTool(tool, {}, { metadata: {} }).metadataTested).toBeUndefined()
+    it('is absent when the winning row consulted no metadata', async () => {
+      expect((await executeCustomTool(tool, {}, { metadata: {} })).metadataTested).toBeUndefined()
     })
 
-    it('is absent on a run that never had a sheet', () => {
-      expect(executeCustomTool(tool, {}).metadataTested).toBeUndefined()
+    it('is absent on a run that never had a sheet', async () => {
+      expect((await executeCustomTool(tool, {})).metadataTested).toBeUndefined()
     })
 
-    it('records every key of a multi-key winning row', () => {
+    it('records every key of a multi-key winning row', async () => {
       const gated = define({
         name: 'vault',
         description: 'Open the vault.',
@@ -588,7 +588,7 @@ describe('executeCustomTool — the invoking character\'s metadata', () => {
           { when: true, message: 'Shut.', state: 'failure' },
         ],
       })
-      const result = executeCustomTool(gated, {}, {
+      const result = await executeCustomTool(gated, {}, {
         metadata: { clearanceLevel: 3, faction: 'Ordo Aurum', hasAnsibleAccess: true },
       })
       expect(result.state).toBe('success')
@@ -608,45 +608,45 @@ describe('executeCustomTool — dice form', () => {
     ],
   })
 
-  it('reports the dice form and its notation', () => {
-    const result = executeCustomTool(tool, {})
+  it('reports the dice form and its notation', async () => {
+    const result = await executeCustomTool(tool, {})
     expect(result.rollForm).toBe('dice')
     expect(result.notation).toBe('1d20')
     expect(result.diceRolls).toHaveLength(1)
   })
 
-  it('sets raw and value to the dice total', () => {
-    const result = executeCustomTool(tool, {})
+  it('sets raw and value to the dice total', async () => {
+    const result = await executeCustomTool(tool, {})
     expect(result.raw).toBe(result.value)
     expect(result.value).toBeGreaterThanOrEqual(1)
     expect(result.value).toBeLessThanOrEqual(20)
   })
 
-  it('renders {{dice}} as a breakdown', () => {
-    const result = executeCustomTool(tool, {})
+  it('renders {{dice}} as a breakdown', async () => {
+    const result = await executeCustomTool(tool, {})
     expect(result.message).toMatch(/1d20: \[\d+\] = \d+/)
   })
 
-  it('honours a dice modifier in the total', () => {
+  it('honours a dice modifier in the total', async () => {
     const modified = define({
       name: 'modified',
       description: 'Dice with a modifier.',
       roll: '3d6+2',
       outcomes: [CATCH_ALL],
     })
-    const result = executeCustomTool(modified, {})
+    const result = await executeCustomTool(modified, {})
     const facesTotal = result.diceRolls!.reduce((a, b) => a + b, 0)
     expect(result.value).toBe(facesTotal + 2)
   })
 
-  it('leaves {{dice}} empty for a range roll', () => {
+  it('leaves {{dice}} empty for a range roll', async () => {
     const ranged = define({
       name: 'ranged',
       description: 'A range roll has no dice.',
       roll: { min: 1, max: 2 },
       outcomes: [{ when: true, message: 'x{{dice}}y', state: 'info' }],
     })
-    const result = executeCustomTool(ranged, {})
+    const result = await executeCustomTool(ranged, {})
     expect(result.diceBreakdown).toBe('')
     expect(result.message).toBe('xy')
   })
@@ -656,19 +656,236 @@ describe('executeCustomTool — visibility', () => {
   const publicTool = define({ name: 'a', description: 'd', outcomes: [CATCH_ALL] })
   const whisperTool = define({ name: 'b', description: 'd', defaultVisibility: 'whisper', outcomes: [CATCH_ALL] })
 
-  it('defaults to public', () => {
-    expect(executeCustomTool(publicTool, {}).visibility).toBe('public')
+  it('defaults to public', async () => {
+    expect((await executeCustomTool(publicTool, {})).visibility).toBe('public')
   })
 
-  it("honours the definition's whisper default", () => {
-    expect(executeCustomTool(whisperTool, {}).visibility).toBe('whisper')
+  it("honours the definition's whisper default", async () => {
+    expect((await executeCustomTool(whisperTool, {})).visibility).toBe('whisper')
   })
 
-  it('lets an explicit private:true override a public default', () => {
-    expect(executeCustomTool(publicTool, {}, { private: true }).visibility).toBe('whisper')
+  it('lets an explicit private:true override a public default', async () => {
+    expect((await executeCustomTool(publicTool, {}, { private: true })).visibility).toBe('whisper')
   })
 
-  it('lets an explicit private:false override a whisper default', () => {
-    expect(executeCustomTool(whisperTool, {}, { private: false }).visibility).toBe('public')
+  it('lets an explicit private:false override a whisper default', async () => {
+    expect((await executeCustomTool(whisperTool, {}, { private: false })).visibility).toBe('public')
+  })
+})
+
+describe('executeCustomTool — the LLM consult', () => {
+  /** A tool that asks an oracle and branches on the answer. */
+  const tool = define({
+    name: 'augury',
+    description: 'Consult the oracle about the roll.',
+    parameters: { omen: { type: 'string', default: 'sparrows' } },
+    roll: { min: 0.7, max: 0.7 },
+    llm: {
+      prompt: 'The {{params.omen}} gave {{value}} for {{metadata.faction}}. Answer YES or NO.',
+      errorMessage: 'The wire crackles, and no answer comes.',
+    },
+    outcomes: [
+      { when: { llm: { ok: false } }, message: 'Silence: {{llm}}', state: 'failure' },
+      { when: { llm: { eq: 'YES' } }, message: 'The oracle assents: {{llm}}', state: 'success' },
+      { when: true, message: 'The oracle demurs: {{llm}}', state: 'partial' },
+    ],
+  })
+
+  /** An invoker scripted to answer, recording the prompt it was posed. */
+  const scripted = (output: string) => {
+    const calls: string[] = []
+    const invoke = async (prompt: string) => {
+      calls.push(prompt)
+      return { ok: true as const, output, provider: 'test', model: 'scripted' }
+    }
+    return { calls, invoke }
+  }
+
+  it('renders the prompt with params and metadata before asking', async () => {
+    const oracle = scripted('YES')
+    await executeCustomTool(tool, { omen: 'ravens' }, {
+      metadata: { faction: 'Ordo Aurum' },
+      llmInvoke: oracle.invoke,
+    })
+    expect(oracle.calls).toEqual(['The ravens gave 0.7 for Ordo Aurum. Answer YES or NO.'])
+  })
+
+  it('lets the answer pick the row and renders {{llm}}', async () => {
+    const result = await executeCustomTool(tool, {}, { llmInvoke: scripted('YES').invoke })
+    expect(result.state).toBe('success')
+    expect(result.message).toBe('The oracle assents: YES')
+    expect(result.llm).toMatchObject({ ok: true, output: 'YES', provider: 'test', model: 'scripted' })
+  })
+
+  it('matches the answer case-insensitively, trailing period forgiven', async () => {
+    expect((await executeCustomTool(tool, {}, { llmInvoke: scripted('yes.').invoke })).state).toBe('success')
+  })
+
+  it('falls through when the answer matches nothing gated', async () => {
+    const result = await executeCustomTool(tool, {}, { llmInvoke: scripted('PERHAPS').invoke })
+    expect(result.state).toBe('partial')
+    expect(result.message).toBe('The oracle demurs: PERHAPS')
+  })
+
+  it('trims the answer before testing or rendering', async () => {
+    const result = await executeCustomTool(tool, {}, { llmInvoke: scripted('  YES\n').invoke })
+    expect(result.state).toBe('success')
+    expect(result.llm?.output).toBe('YES')
+  })
+
+  describe('failure becomes the author’s words, never an error', () => {
+    const expectSilence = async (
+      invoke: ((p: string) => Promise<{ ok: true; output: string } | { ok: false; reason: string }>) | undefined,
+      reason?: RegExp
+    ) => {
+      const result = await executeCustomTool(tool, {}, invoke ? { llmInvoke: invoke } : {})
+      expect(result.state).toBe('failure')
+      expect(result.message).toBe('Silence: The wire crackles, and no answer comes.')
+      expect(result.llm?.ok).toBe(false)
+      expect(result.llm?.output).toBe('The wire crackles, and no answer comes.')
+      if (reason) expect(result.llm?.reason).toMatch(reason)
+      return result
+    }
+
+    it('when the invoker reports failure', async () => {
+      await expectSilence(async () => ({ ok: false as const, reason: 'provider went dark' }), /provider went dark/)
+    })
+
+    it('when the invoker throws', async () => {
+      await expectSilence(async () => { throw new Error('socket hang up') }, /socket hang up/)
+    })
+
+    it('when the model answers with nothing but whitespace', async () => {
+      await expectSilence(async () => ({ ok: true as const, output: '   \n' }), /empty answer/)
+    })
+
+    it('when no invoker was wired at all', async () => {
+      await expectSilence(undefined, /no LLM invoker/)
+    })
+  })
+
+  it('reconciles a numeric answer for ordering and equality', async () => {
+    const numeric = define({
+      name: 'gauge',
+      description: 'Ask for a number.',
+      llm: { prompt: 'A number, please.', errorMessage: 'No reading.' },
+      outcomes: [
+        { when: { llm: { gte: 7 } }, message: 'high', state: 'success' },
+        { when: { llm: { eq: 5 } }, message: 'exactly five', state: 'info' },
+        { when: true, message: 'low', state: 'failure' },
+      ],
+    })
+    expect((await executeCustomTool(numeric, {}, { llmInvoke: scripted('7.5').invoke })).message).toBe('high')
+    expect((await executeCustomTool(numeric, {}, { llmInvoke: scripted('5').invoke })).message).toBe('exactly five')
+    expect((await executeCustomTool(numeric, {}, { llmInvoke: scripted('3').invoke })).message).toBe('low')
+    // A non-numeric answer declines the ordering rows fail-soft.
+    expect((await executeCustomTool(numeric, {}, { llmInvoke: scripted('plenty').invoke })).message).toBe('low')
+  })
+
+  it('records the rendered prompt in the run result', async () => {
+    const result = await executeCustomTool(tool, {}, { llmInvoke: scripted('YES').invoke })
+    expect(result.llm?.prompt).toBe('The sparrows gave 0.7 for {{metadata.faction}}. Answer YES or NO.')
+  })
+
+  it('caps a rambling answer at the default output cap', async () => {
+    const ramble = 'x'.repeat(10_000)
+    const result = await executeCustomTool(tool, {}, { llmInvoke: scripted(ramble).invoke })
+    expect(result.llm?.output.length).toBe(8000)
+  })
+
+  describe('maxOutput — the author’s own leash', () => {
+    const leashed = (maxOutput: number) =>
+      define({
+        name: 'leashed',
+        description: 'A capped oracle.',
+        llm: { prompt: 'Speak.', errorMessage: 'A silence considerably longer than ten characters.', maxOutput },
+        outcomes: [CATCH_ALL],
+      })
+
+    it('truncates the answer to the declared cap', async () => {
+      const result = await executeCustomTool(leashed(10), {}, { llmInvoke: scripted('abcdefghijKLMNOP').invoke })
+      expect(result.llm?.output).toBe('abcdefghij')
+    })
+
+    it('lets a generous cap keep what the default would have cut', async () => {
+      const long = 'y'.repeat(20_000)
+      const result = await executeCustomTool(leashed(50_000), {}, { llmInvoke: scripted(long).invoke })
+      expect(result.llm?.output.length).toBe(20_000)
+    })
+
+    it('tells the invoker the cap, so the token budget can follow', async () => {
+      const seen: Array<number | undefined> = []
+      await executeCustomTool(leashed(50_000), {}, {
+        llmInvoke: async (_prompt, options) => {
+          seen.push(options?.maxOutputChars)
+          return { ok: true, output: 'noted' }
+        },
+      })
+      expect(seen).toEqual([50_000])
+    })
+
+    it('never truncates the errorMessage, whatever the cap', async () => {
+      const result = await executeCustomTool(leashed(10), {}, {
+        llmInvoke: async () => ({ ok: false as const, reason: 'gone' }),
+      })
+      expect(result.llm?.output).toBe('A silence considerably longer than ten characters.')
+    })
+  })
+
+  it('runs no consult on a tool without an llm block', async () => {
+    const plain = define({ name: 'plain', description: 'No oracle here.', outcomes: [CATCH_ALL] })
+    const oracle = scripted('YES')
+    const result = await executeCustomTool(plain, {}, { llmInvoke: oracle.invoke })
+    expect(oracle.calls).toHaveLength(0)
+    expect(result.llm).toBeUndefined()
+  })
+})
+
+describe('matchesWhen — the llm subject', () => {
+  const against = (when: When, llm?: { ok: boolean; output: string }) =>
+    matchesWhen(when, { value: 0, roll: 0, params: {}, ...(llm ? { llm } : {}) })
+
+  it('tests ok directly', () => {
+    expect(against({ llm: { ok: true } } as When, { ok: true, output: 'YES' })).toBe(true)
+    expect(against({ llm: { ok: false } } as When, { ok: true, output: 'YES' })).toBe(false)
+    expect(against({ llm: { ok: false } } as When, { ok: false, output: 'gone' })).toBe(true)
+  })
+
+  it('ANDs ok with an answer comparator', () => {
+    expect(against({ llm: { ok: true, eq: 'YES' } } as When, { ok: true, output: 'yes' })).toBe(true)
+    expect(against({ llm: { ok: true, eq: 'YES' } } as When, { ok: true, output: 'no' })).toBe(false)
+  })
+
+  it('declines fail-soft when no consult ran', () => {
+    expect(against({ llm: { eq: 'YES' } } as When)).toBe(false)
+    expect(against({ llm: { ok: false } } as When)).toBe(false)
+  })
+
+  it('resolves a $param operand against the answer', () => {
+    const when = { llm: { eq: { $param: 'expected' } } } as When
+    expect(
+      matchesWhen(when, { value: 0, roll: 0, params: { expected: 'brass' }, llm: { ok: true, output: 'Brass' } })
+    ).toBe(true)
+  })
+})
+
+describe('consultMaxTokens', () => {
+  // Imported here rather than atop the file: the module is server-only
+  // (repositories, providers), but this one export is pure arithmetic.
+  const { consultMaxTokens } = jest.requireActual('@/lib/pascal/llm-consult') as {
+    consultMaxTokens: (chars: number) => number
+  }
+
+  it('floors at the cheap-LLM pipeline minimum', () => {
+    expect(consultMaxTokens(10)).toBe(2048)
+    expect(consultMaxTokens(6000)).toBe(2048)
+  })
+
+  it('scales with the cap at ~3 characters per token', () => {
+    expect(consultMaxTokens(30_000)).toBe(10_000)
+  })
+
+  it('ceilings so a runaway cap cannot request an absurd budget', () => {
+    expect(consultMaxTokens(100_000)).toBe(32_768)
   })
 })

@@ -133,3 +133,32 @@ describe('simulateOutcomes', () => {
     expect(() => simulateOutcomes(definition, undefined, 10)).toThrow(CustomToolRunError)
   })
 })
+
+describe('simulateOutcomes — the fixed consult', () => {
+  /** An oracle-gated table: the answer decides everything. */
+  const gated = fixedRollTool({
+    name: 'augured',
+    llm: { prompt: 'YES or NO?', errorMessage: 'No answer.' },
+    outcomes: [
+      { when: { llm: { ok: false } }, message: 'silence', state: 'failure' },
+      { when: { llm: { eq: 'YES' } }, message: 'assent', state: 'success' },
+      { when: true, message: 'demurral', state: 'info' },
+    ],
+  })
+
+  it('gives an answer-gated row every hit when the scripted answer matches', () => {
+    const result = simulateOutcomes(gated, undefined, 200, undefined, { ok: true, output: 'YES' })
+    expect(result.outcomes[1]).toEqual({ index: 1, hits: 200, share: 1 })
+  })
+
+  it('routes every hit to the silence row under a scripted failure', () => {
+    const result = simulateOutcomes(gated, undefined, 200, undefined, { ok: false, output: 'No answer.' })
+    expect(result.outcomes[0]).toEqual({ index: 0, hits: 200, share: 1 })
+  })
+
+  it('routes to the catch-all when no consult is supplied at all', () => {
+    // Every llm test declines fail-soft, like a metadata key nobody carries.
+    const result = simulateOutcomes(gated, undefined, 200)
+    expect(result.outcomes[2]).toEqual({ index: 2, hits: 200, share: 1 })
+  })
+})

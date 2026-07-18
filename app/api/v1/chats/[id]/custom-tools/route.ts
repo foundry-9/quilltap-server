@@ -48,6 +48,7 @@ import {
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
 
@@ -366,9 +367,12 @@ async function handleRun(
 
   let result;
   try {
-    result = executeCustomTool(entry.definition, body.parameters ?? undefined, {
+    result = await executeCustomTool(entry.definition, body.parameters ?? undefined, {
       private: body.private,
       metadata,
+      ...(entry.definition.llm
+        ? { llmInvoke: buildCustomToolLlmInvoker({ userId: ctx.user.id, chatId: id }) }
+        : {}),
     });
   } catch (error) {
     if (error instanceof CustomToolRunError) {
@@ -424,6 +428,7 @@ async function handleRun(
       state: result.state,
       outcomeIndex: result.outcomeIndex,
       ...(result.metadataTested ? { metadataTested: result.metadataTested } : {}),
+      ...(result.llm ? { llm: result.llm } : {}),
       invokedBy: 'user',
     },
   });

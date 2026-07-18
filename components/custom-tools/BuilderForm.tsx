@@ -16,6 +16,10 @@ import { Icon } from '@/components/ui/icon'
 import {
   IDENTIFIER_PATTERN,
   MAX_DESCRIPTION_LENGTH,
+  MAX_LLM_OUTPUT_CEILING,
+  MAX_LLM_OUTPUT_LENGTH,
+  MAX_LLM_PROMPT_LENGTH,
+  MAX_MESSAGE_LENGTH,
   MAX_PARAMETERS,
   MAX_TITLE_LENGTH,
   displayTitle,
@@ -68,6 +72,11 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
 
   const nameError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'name')
   const descriptionError = fieldError((i) => i.where.section === 'identity' && i.where.field === 'description')
+  const llmError = (field: 'prompt' | 'errorMessage' | 'maxOutput') =>
+    fieldError((i) => i.where.section === 'llm' && i.where.field === field)
+  const llmWarnings = issues
+    .filter((i) => i.severity === 'warning' && i.where.section === 'llm')
+    .map((i) => i.message)
 
   const update = (partial: Partial<ToolDraft>) => onChange({ ...draft, ...partial })
 
@@ -522,6 +531,108 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
             )}
             <p className="qt-hint">{rangeReadout}</p>
           </div>
+        )}
+      </section>
+
+      {/* LLM consult */}
+      <section className="qt-card p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="qt-card-title text-sm">The consulted oracle</h2>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="qt-checkbox"
+              checked={draft.llmEnabled}
+              onChange={(e) => update({ llmEnabled: e.target.checked })}
+              disabled={disabled}
+            />
+            Consult an LLM
+          </label>
+        </div>
+
+        {draft.llmEnabled ? (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="wb-llm-prompt" className="qt-label">
+                The question
+              </label>
+              <textarea
+                id="wb-llm-prompt"
+                value={draft.llmPrompt}
+                maxLength={MAX_LLM_PROMPT_LENGTH}
+                onChange={(e) => update({ llmPrompt: e.target.value })}
+                disabled={disabled}
+                rows={3}
+                className={`qt-textarea w-full text-sm ${llmError('prompt') ? 'qt-input-error' : ''}`}
+                placeholder="The roll came up {{value}}. In one word, YES or NO: does the mechanism yield?"
+              />
+              <p className={llmError('prompt') ? 'text-xs qt-text-destructive mt-1' : 'qt-hint'}>
+                {llmError('prompt') ??
+                  'Posed to the instance’s cheap utility model after the roll, before the outcome table. ' +
+                    'Takes {{value}}, {{roll}}, {{dice}}, {{params.name}}, and {{metadata.key}}. ' +
+                    'Ask for the answer shape the table means to test — a bare word, a number, a sentence.'}
+              </p>
+              <p className="qt-hint text-right">
+                {draft.llmPrompt.length}/{MAX_LLM_PROMPT_LENGTH}
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="wb-llm-error" className="qt-label">
+                When the oracle is silent
+              </label>
+              <input
+                id="wb-llm-error"
+                type="text"
+                value={draft.llmErrorMessage}
+                maxLength={MAX_MESSAGE_LENGTH}
+                onChange={(e) => update({ llmErrorMessage: e.target.value })}
+                disabled={disabled}
+                className={`qt-input w-full text-sm ${llmError('errorMessage') ? 'qt-input-error' : ''}`}
+                placeholder="The wire crackles, and no answer comes."
+              />
+              <p className={llmError('errorMessage') ? 'text-xs qt-text-destructive mt-1' : 'qt-hint'}>
+                {llmError('errorMessage') ??
+                  'Stands in as the answer when the consult fails — your words, never the provider’s. ' +
+                    'The table can test for it with a “Consult succeeded” condition, and {{llm}} renders it.'}
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="wb-llm-max-output" className="qt-label">
+                Answer cap
+              </label>
+              <input
+                id="wb-llm-max-output"
+                type="number"
+                min={1}
+                max={MAX_LLM_OUTPUT_CEILING}
+                step={1}
+                value={draft.llmMaxOutput}
+                onChange={(e) => update({ llmMaxOutput: e.target.value })}
+                disabled={disabled}
+                placeholder={String(MAX_LLM_OUTPUT_LENGTH)}
+                className={`qt-input w-36 text-sm ${llmError('maxOutput') ? 'qt-input-error' : ''}`}
+              />
+              <p className={llmError('maxOutput') ? 'text-xs qt-text-destructive mt-1' : 'qt-hint'}>
+                {llmError('maxOutput') ??
+                  `Characters kept of the answer. Blank means ${MAX_LLM_OUTPUT_LENGTH.toLocaleString()}; ` +
+                    `up to ${MAX_LLM_OUTPUT_CEILING.toLocaleString()}. Keep it short for a verdict, ` +
+                    'or let a long-winded oracle run on — the call’s token budget follows suit.'}
+              </p>
+            </div>
+
+            {llmWarnings.map((message) => (
+              <p key={message} className="text-xs qt-text-secondary">
+                ⚠ {message}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs qt-text-secondary">
+            Off. Enable it and every run asks a model your question — the answer becomes {'{{llm}}'} in
+            messages and a testable subject in the outcome table, with your own error line when no answer comes.
+          </p>
         )}
       </section>
     </div>

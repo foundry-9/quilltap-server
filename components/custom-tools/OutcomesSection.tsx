@@ -65,6 +65,10 @@ function subjectSelectValue(subject: ConditionSubject): string {
       return `param:${subject.name}`
     case 'metadata':
       return 'metadata'
+    case 'llm':
+      return 'llm'
+    case 'llm-ok':
+      return 'llm-ok'
   }
 }
 
@@ -416,6 +420,10 @@ function describeSlot(condition: Pick<DraftCondition, 'subject' | 'comparator'>)
       return `A row can test ${label} on "${condition.subject.name}" only once.`
     case 'metadata':
       return `A row can test ${label} on metadata "${condition.subject.key}" only once.`
+    case 'llm':
+      return `A row can test ${label} on the consult's answer only once.`
+    case 'llm-ok':
+      return 'A row can test whether the consult succeeded only once.'
   }
 }
 
@@ -432,19 +440,33 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   const paramByName = new Map(draft.parameters.map((p) => [p.name, p] as const))
   const subject = condition.subject
 
-  /** The value type the subject carries, or null for metadata (unknowable). */
-  const subjectType: 'number' | 'string' | 'boolean' | null =
-    subject.kind === 'value' || subject.kind === 'roll'
-      ? 'number'
-      : subject.kind === 'param'
-        ? (() => {
-            const p = paramByName.get(subject.name)
-            return p ? (p.type === 'integer' ? 'number' : p.type) : null
-          })()
-        : null
+  /**
+   * The value type a subject carries, or null where it is unknowable at
+   * authoring time — a metadata key's stored value, or whatever the consulted
+   * model chooses to answer.
+   */
+  const typeOfSubject = (s: ConditionSubject): 'number' | 'string' | 'boolean' | null => {
+    switch (s.kind) {
+      case 'value':
+      case 'roll':
+        return 'number'
+      case 'param': {
+        const p = paramByName.get(s.name)
+        return p ? (p.type === 'integer' ? 'number' : p.type) : null
+      }
+      case 'llm-ok':
+        return 'boolean'
+      case 'metadata':
+      case 'llm':
+        return null
+    }
+  }
 
-  // Metadata offers all six comparators — the stored type is unknowable at
-  // authoring time (§4.4.1). String/boolean params offer only = and ≠.
+  const subjectType = typeOfSubject(subject)
+
+  // Metadata and the consult's answer offer all six comparators — the stored
+  // type is unknowable at authoring time (§4.4.1). String/boolean subjects
+  // offer only = and ≠.
   const comparators: ComparatorKey[] =
     subjectType === 'string' || subjectType === 'boolean' ? ['eq', 'neq'] : ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
 
@@ -454,8 +476,8 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   const eligibleOperandParams = draft.parameters
     .filter((p) => {
       if (!p.name) return false
-      if (subject.kind === 'metadata') {
-        // With the stored value's type unknown, no reference can be ruled
+      if (subject.kind === 'metadata' || subject.kind === 'llm') {
+        // With the subject's type unknown, no reference can be ruled
         // incompatible — ordering still demands a number, though.
         return !ordering || p.type === 'number' || p.type === 'integer'
       }
@@ -470,19 +492,13 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     if (value === 'value') nextSubject = { kind: 'value' }
     else if (value === 'roll') nextSubject = { kind: 'roll' }
     else if (value === 'metadata') nextSubject = { kind: 'metadata', key: subject.kind === 'metadata' ? subject.key : '' }
+    else if (value === 'llm') nextSubject = { kind: 'llm' }
+    else if (value === 'llm-ok') nextSubject = { kind: 'llm-ok' }
     else nextSubject = { kind: 'param', name: value.slice('param:'.length) }
 
     // Re-legalize the comparator and operand for the new subject's type.
     let nextComparator = condition.comparator
-    const nextType =
-      nextSubject.kind === 'value' || nextSubject.kind === 'roll'
-        ? 'number'
-        : nextSubject.kind === 'param'
-          ? (() => {
-              const p = paramByName.get(nextSubject.name)
-              return p ? (p.type === 'integer' ? 'number' : p.type) : null
-            })()
-          : null
+    const nextType = typeOfSubject(nextSubject)
     if ((nextType === 'string' || nextType === 'boolean') && ORDERING_COMPARATORS.has(nextComparator)) {
       nextComparator = 'eq'
     }
@@ -529,6 +545,16 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
             </option>
           ))}
         <option value="metadata">Metadata…</option>
+        {draft.llmEnabled && (
+          <>
+            <option value="llm" title="What the consulted model answered">
+              Consult answer
+            </option>
+            <option value="llm-ok" title="Whether the consult produced an answer at all">
+              Consult succeeded
+            </option>
+          </>
+        )}
       </select>
 
       {subject.kind === 'metadata' && (
@@ -575,6 +601,15 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         </span>
       )}
 
+      {subject.kind === 'llm' && ordering && (
+        <span
+          className="text-xs qt-text-secondary"
+          title="Matches only when the answer reads as a number — anything else declines the row at run time, fail-soft, never an error."
+        >
+          ⓘ
+        </span>
+      )}
+
       <button
         type="button"
         className="qt-button qt-button-ghost qt-button-sm"
@@ -600,13 +635,14 @@ interface OperandFieldProps {
 function OperandField({ condition, subjectType, eligibleParams, disabled, onChange }: Readonly<OperandFieldProps>) {
   const operand = condition.operand
   const ordering = ORDERING_COMPARATORS.has(condition.comparator)
-  const isMetadata = condition.subject.kind === 'metadata'
+  const typeUnknowable = condition.subject.kind === 'metadata' || condition.subject.kind === 'llm'
 
   const setOperand = (next: ConditionOperand) => onChange({ ...condition, operand: next })
 
-  // Metadata eq/neq: no declared type steers the widget, so a segmented
-  // literal-type picker chooses between number, text, and true/false (§4.4.1).
-  const showTypePicker = isMetadata && !ordering && operand.kind !== 'param'
+  // Metadata / consult-answer eq/neq: no declared type steers the widget, so a
+  // segmented literal-type picker chooses between number, text, and true/false
+  // (§4.4.1).
+  const showTypePicker = typeUnknowable && !ordering && operand.kind !== 'param'
 
   return (
     <div className="flex items-center gap-1">
@@ -794,6 +830,9 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
                   <MenuItem key={p.id} label={`Parameter: ${p.name}`} onClick={() => insertAtCursor(`{{params.${p.name}}}`)} />
                 ))}
               <MenuItem label="Metadata key…" onClick={insertMetadataKey} />
+              {draft.llmEnabled && (
+                <MenuItem label="Consult answer" onClick={() => insertAtCursor('{{llm}}')} />
+              )}
             </div>
           )}
         </div>

@@ -43,6 +43,7 @@ function withWhen(when: unknown, extra: Record<string, unknown> = {}) {
 
 const NUM_PARAM = { parameters: { scale: { type: 'number', default: 1 } } }
 const STR_PARAM = { parameters: { material: { type: 'string', default: 'brass' } } }
+const LLM_BLOCK = { llm: { prompt: 'Answer YES or NO: is {{value}} auspicious?', errorMessage: 'The wire went dead.' } }
 
 /**
  * The rejection an author would actually read on the load-error badge — the
@@ -203,6 +204,75 @@ describe('when — the metadata subject', () => {
   })
 })
 
+describe('when — the llm subject', () => {
+  it('accepts an answer test on a tool with an llm block', () => {
+    expect(accepts(withWhen({ llm: { eq: 'YES' } }, LLM_BLOCK))).toBe(true)
+  })
+
+  it('accepts an ok test as the only test', () => {
+    expect(accepts(withWhen({ llm: { ok: false } }, LLM_BLOCK))).toBe(true)
+  })
+
+  it('accepts ok ANDed with an answer comparator', () => {
+    expect(accepts(withWhen({ llm: { ok: true, eq: 'YES' } }, LLM_BLOCK))).toBe(true)
+  })
+
+  it('accepts an ordering test — the answer may well be a number', () => {
+    expect(accepts(withWhen({ llm: { gte: 5 } }, LLM_BLOCK))).toBe(true)
+  })
+
+  it('accepts a $param operand against the answer — the opposed check', () => {
+    expect(accepts(withWhen({ llm: { eq: { $param: 'scale' } } }, { ...NUM_PARAM, ...LLM_BLOCK }))).toBe(true)
+  })
+
+  it('rejects an llm test on a tool with no llm block', () => {
+    expect(rejection(withWhen({ llm: { eq: 'YES' } }))).toContain('declares no `llm` block')
+  })
+
+  it('rejects an empty llm comparator', () => {
+    expect(accepts(withWhen({ llm: {} }, LLM_BLOCK))).toBe(false)
+  })
+
+  it('rejects a $param operand naming an undeclared parameter', () => {
+    expect(rejection(withWhen({ llm: { eq: { $param: 'ghost' } } }, LLM_BLOCK))).toContain('undeclared parameter "ghost"')
+  })
+
+  it('rejects a misspelled comparator inside an llm test', () => {
+    expect(accepts(withWhen({ llm: { eq: 'a', gt3: 1 } }, LLM_BLOCK))).toBe(false)
+  })
+})
+
+describe('the llm block', () => {
+  it('accepts a prompt and an errorMessage', () => {
+    expect(accepts({ ...BASE, ...LLM_BLOCK })).toBe(true)
+  })
+
+  it('rejects a block missing its errorMessage — failure must have the author\'s words', () => {
+    expect(accepts({ ...BASE, llm: { prompt: 'Speak.' } })).toBe(false)
+  })
+
+  it('rejects an empty prompt', () => {
+    expect(accepts({ ...BASE, llm: { prompt: '', errorMessage: 'Silence.' } })).toBe(false)
+  })
+
+  it('rejects an unknown key inside the block', () => {
+    expect(accepts({ ...BASE, llm: { prompt: 'Speak.', errorMessage: 'Silence.', model: 'gpt' } })).toBe(false)
+  })
+
+  it('accepts a maxOutput within bounds', () => {
+    expect(accepts({ ...BASE, llm: { prompt: 'Speak.', errorMessage: 'Silence.', maxOutput: 50_000 } })).toBe(true)
+  })
+
+  it.each([
+    ['zero', 0],
+    ['negative', -5],
+    ['fractional', 12.5],
+    ['past the ceiling', 100_001],
+  ])('rejects a maxOutput that is %s', (_label, maxOutput) => {
+    expect(accepts({ ...BASE, llm: { prompt: 'Speak.', errorMessage: 'Silence.', maxOutput } })).toBe(false)
+  })
+})
+
 describe('when — reference and type rules', () => {
   it('rejects a test of an undeclared parameter', () => {
     expect(rejection(withWhen({ params: { scael: { gt: 12 } } }, NUM_PARAM))).toMatch(
@@ -295,6 +365,21 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['a malformed $param ref', withWhen({ gte: { $param: 'Not An Identifier' } }, NUM_PARAM)],
     ['a string compared with the value', withWhen({ eq: 'brass' })],
     ['an unknown outcome state', { ...BASE, outcomes: [{ when: true, message: '-', state: 'triumph' }] }],
+    ['an llm block', { ...BASE, ...LLM_BLOCK }],
+    ['an llm block missing its errorMessage', { ...BASE, llm: { prompt: 'Speak.' } }],
+    ['an llm block with an empty prompt', { ...BASE, llm: { prompt: '', errorMessage: 'Silence.' } }],
+    ['an unknown key inside the llm block', { ...BASE, llm: { prompt: 'Speak.', errorMessage: 'Silence.', model: 'x' } }],
+    ['an llm answer test', withWhen({ llm: { eq: 'YES' } }, LLM_BLOCK)],
+    ['an llm ok test', withWhen({ llm: { ok: false } }, LLM_BLOCK)],
+    ['ok ANDed with an answer comparator', withWhen({ llm: { ok: true, eq: 'YES' } }, LLM_BLOCK)],
+    ['an ordering test of the llm answer', withWhen({ llm: { gte: 5 } }, LLM_BLOCK)],
+    ['an empty llm comparator', withWhen({ llm: {} }, LLM_BLOCK)],
+    ['an unknown key inside an llm comparator', withWhen({ llm: { eq: 'a', gt3: 1 } }, LLM_BLOCK)],
+    ['a $param operand against the llm answer', withWhen({ llm: { eq: { $param: 'scale' } } }, { ...NUM_PARAM, ...LLM_BLOCK })],
+    ['an llm maxOutput within bounds', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 50_000 } }],
+    ['an llm maxOutput of zero', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 0 } }],
+    ['a fractional llm maxOutput', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 12.5 } }],
+    ['an llm maxOutput past the ceiling', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 100_001 } }],
   ]
 
   it.each(corpus)('on %s', (_label, doc) => {
@@ -313,5 +398,13 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     const noCatchAll = { ...BASE, outcomes: [{ when: { gt: 1 }, message: '-', state: 'info' }] }
     expect(validate(noCatchAll)).toBe(true)
     expect(accepts(noCatchAll)).toBe(false)
+  })
+
+  it('is deliberately weaker than Zod on an llm test with no llm block', () => {
+    // Same class of divergence: whether the tool declares an `llm` block is a
+    // cross-item fact the mirror cannot see from inside a `when`.
+    const orphanLlmTest = withWhen({ llm: { eq: 'YES' } })
+    expect(validate(orphanLlmTest)).toBe(true)
+    expect(accepts(orphanLlmTest)).toBe(false)
   })
 })
