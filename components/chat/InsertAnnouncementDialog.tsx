@@ -16,6 +16,7 @@ type StaffId =
   | 'commonplaceBook'
   | 'ariel'
   | 'suparna'
+  | 'pascal'
 
 const STAFF_OPTIONS: { id: StaffId; label: string }[] = [
   { id: 'host', label: 'The Host' },
@@ -27,6 +28,7 @@ const STAFF_OPTIONS: { id: StaffId; label: string }[] = [
   { id: 'commonplaceBook', label: 'The Commonplace Book' },
   { id: 'ariel', label: 'Ariel' },
   { id: 'suparna', label: 'Suparṇā' },
+  { id: 'pascal', label: 'Pascal the Croupier' },
 ]
 
 interface CharacterSystemPromptInfo {

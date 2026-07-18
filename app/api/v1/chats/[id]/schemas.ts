@@ -186,6 +186,7 @@ const STAFF_SENDER_ENUM = z.enum([
   'commonplaceBook',
   'ariel',
   'suparna',
+  'pascal',
 ]);
 
 export const insertAnnouncementSchema = z.object({

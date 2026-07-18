@@ -16,7 +16,7 @@ The result lands in the conversation as a public bubble, indistinguishable in de
 
 The dialog offers three tabs.
 
-**Staff** lists the eight personified members of Quilltap's staff — The Host, The Librarian, The Lantern, Aurora, The Concierge, Prospero, The Commonplace Book, and Ariel — each with their canonical name and avatar. Pick one and the bubble renders with their familiar likeness. There is no override here: a Staff member always appears as themselves.
+**Staff** lists the personified members of Quilltap's staff — The Host, The Librarian, The Lantern, Aurora, The Concierge, Prospero, The Commonplace Book, Ariel, Suparṇā, and Pascal the Croupier — each with their canonical name and avatar. Pick one and the bubble renders with their familiar likeness. There is no override here: a Staff member always appears as themselves.
 
 **Off-scene character** offers a searchable list of every workspace character who is *not* presently a participant in this chat. Use it when you want an absent figure to speak from offstage — a letter read aloud, a voice through a closed door, an introduction to a person being discussed but not yet on the scene. The bubble shows the character's name and avatar; characters in the chat will see them named and identified, but the absent character is still absent — adding them as a participant remains a separate ceremony.
 

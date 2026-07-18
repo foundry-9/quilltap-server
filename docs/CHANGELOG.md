@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Change: Pascal is selectable in the Insert Announcement dialog
+
+Pascal the Croupier joins the Staff tab of the Insert Announcement dialog, so an operator can post a bubble in Pascal's name and avatar. Added to the client staff list, the `StaffSender` type in the announcer writer, and the server-side `staffId` enum. (Suparṇā was already selectable but missing from the help doc's roster; corrected.)
+
 #### Feature: Custom tools can ask an LLM for a generated result
 
 Custom-tool definitions gain an optional `llm` block: a prompt template (same placeholder families as outcome messages — value, roll, dice, params, metadata), a required author-written `errorMessage`, and an optional `maxOutput`. When present, every run renders the prompt and poses it to the instance's cheap utility model after the roll and before the outcome table. The result is a pair `{ ok, output }`: the model's trimmed answer on success (capped at `maxOutput` characters, default 8,000, up to 100,000 — the call's token budget scales with the cap so long-form consults aren't starved; `errorMessage` is never truncated), or the author's `errorMessage` on any failure (provider error, 60-second timeout, empty answer, no model configured). A failed consult never fails the run — the outcome table branches on it instead.
