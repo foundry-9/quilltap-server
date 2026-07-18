@@ -183,10 +183,13 @@ export const RollSchema = z.union([RollDiceSchema, RollRangeSchema]);
 export type Roll = z.infer<typeof RollSchema>;
 
 /** The comparator keys, in the order tests are described to a reader. */
-export const COMPARATOR_KEYS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'] as const;
+export const COMPARATOR_KEYS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains'] as const;
 
 /** The four keys that order two values, and so demand numbers on both sides. */
 const ORDERING_KEYS: ReadonlySet<string> = new Set(['gt', 'gte', 'lt', 'lte']);
+
+/** The two keys that search one string inside another, and so demand strings. */
+const CONTAINMENT_KEYS: ReadonlySet<string> = new Set(['contains', 'ncontains']);
 
 /**
  * A comparator operand for an ordering test: a literal number, or a `$param`
@@ -201,6 +204,14 @@ const NumberOperandSchema = z.union([z.number().finite(), ParamRefSchema]);
  * declared type — `{ "eq": "brass" }` is a legitimate test of a string.
  */
 const AnyOperandSchema = z.union([z.number().finite(), z.string(), z.boolean(), ParamRefSchema]);
+
+/**
+ * A comparator operand for contains/ncontains: the substring to look for — a
+ * literal string, or a `$param` reference to a declared string parameter. The
+ * literal must be non-empty because every string contains "", which makes an
+ * empty needle a typo wearing a comparator's clothes.
+ */
+const StringOperandSchema = z.union([z.string().min(1, 'the substring to look for must not be empty'), ParamRefSchema]);
 
 /** Shape shared by every comparator. Ordering keys are numeric on both sides. */
 const NUMERIC_COMPARATOR_SHAPE = {
@@ -218,9 +229,15 @@ const hasComparator = (c: Record<string, unknown>): boolean =>
 
 const AT_LEAST_ONE = { message: 'must specify at least one comparator (gt, gte, lt, lte, eq, neq)' };
 
+const AT_LEAST_ONE_WIDE = {
+  message: 'must specify at least one comparator (gt, gte, lt, lte, eq, neq, contains, ncontains)',
+};
+
 /**
  * A comparator against a number — the rolled value, or the raw draw. Keys AND
- * together: `>= 0.3 && <= 0.6` is `{ gte: 0.3, lte: 0.6 }`.
+ * together: `>= 0.3 && <= 0.6` is `{ gte: 0.3, lte: 0.6 }`. Deliberately
+ * carries no contains/ncontains: the subject is always a number, and a number
+ * holds no substrings.
  */
 export const NumericComparatorSchema = z.strictObject(NUMERIC_COMPARATOR_SHAPE).refine(hasComparator, AT_LEAST_ONE);
 
@@ -229,22 +246,27 @@ export type NumericComparator = z.infer<typeof NumericComparatorSchema>;
 /**
  * A comparator against a declared parameter. Identical to the numeric form
  * except that eq/neq widen to strings and booleans, since a parameter need not
- * be a number.
+ * be a number — and contains/ncontains appear, testing whether a string
+ * parameter holds (or lacks) a substring. The substring is a literal or a
+ * `$param` reference, so a table can ask whether one input appears inside
+ * another.
  */
 export const ParamComparatorSchema = z
   .strictObject({
     ...NUMERIC_COMPARATOR_SHAPE,
     eq: AnyOperandSchema.optional(),
     neq: AnyOperandSchema.optional(),
+    contains: StringOperandSchema.optional(),
+    ncontains: StringOperandSchema.optional(),
   })
-  .refine(hasComparator, AT_LEAST_ONE);
+  .refine(hasComparator, AT_LEAST_ONE_WIDE);
 
 export type ParamComparator = z.infer<typeof ParamComparatorSchema>;
 
 /**
  * A comparator against one key of the invoking character's metadata sheet.
- * Shape-identical to {@link ParamComparatorSchema} — the same six keys, the
- * same widened eq/neq, the same `$param` operands.
+ * Shape-identical to {@link ParamComparatorSchema} — the same keys, the same
+ * widened eq/neq, the same contains/ncontains, the same `$param` operands.
  *
  * It is a separate schema because the two differ entirely in what can be known
  * at load time. A `params` test names something the file itself declares, so a
@@ -268,12 +290,17 @@ export type MetadataComparator = z.infer<typeof MetadataComparatorSchema>;
  * number simply declines the row. eq/neq compare numerically when both sides
  * are numbers, and otherwise case-insensitively as trimmed strings, because an
  * author who asked for "YES" should not lose to a model that said "yes".
+ * contains/ncontains search the answer for a substring under the same
+ * case-insensitive reconciliation — the natural test of prose, where equality
+ * would demand the whole sentence verbatim.
  */
 export const LlmComparatorSchema = z
   .strictObject({
     ...NUMERIC_COMPARATOR_SHAPE,
     eq: AnyOperandSchema.optional(),
     neq: AnyOperandSchema.optional(),
+    contains: StringOperandSchema.optional(),
+    ncontains: StringOperandSchema.optional(),
     ok: z
       .boolean()
       .optional()
@@ -696,6 +723,23 @@ function validateComparator(
         ctx.addIssue({
           code: 'custom',
           message: `${key} orders ${subjectLabel} against a ${operandType}, and only numbers can be ordered`,
+          path: [...path, key],
+        });
+      }
+      continue;
+    }
+
+    if (CONTAINMENT_KEYS.has(key)) {
+      if (subjectType !== 'string') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} searches ${subjectLabel}, which is a ${subjectType} — only a string can contain a substring`,
+          path: [...path, key],
+        });
+      } else if (operandType !== 'string') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} looks for a ${operandType} inside ${subjectLabel}, and a substring must be a string`,
           path: [...path, key],
         });
       }

@@ -204,6 +204,70 @@ describe('when — the metadata subject', () => {
   })
 })
 
+describe('when — contains and ncontains', () => {
+  const BOTH_PARAMS = { parameters: { ...STR_PARAM.parameters, ...NUM_PARAM.parameters } }
+
+  it('accepts contains against a string parameter', () => {
+    expect(accepts(withWhen({ params: { material: { contains: 'ras' } } }, STR_PARAM))).toBe(true)
+  })
+
+  it('accepts ncontains against a string parameter', () => {
+    expect(accepts(withWhen({ params: { material: { ncontains: 'iron' } } }, STR_PARAM))).toBe(true)
+  })
+
+  it('accepts a $param substring — one input sought inside another', () => {
+    const params = {
+      parameters: {
+        cargo: { type: 'string', default: 'silk' },
+        sought: { type: 'string', default: 'opium' },
+      },
+    }
+    expect(accepts(withWhen({ params: { cargo: { contains: { $param: 'sought' } } } }, params))).toBe(true)
+  })
+
+  it('accepts contains on a metadata key', () => {
+    expect(accepts(withWhen({ metadata: { faction: { contains: 'Aurum' } } }))).toBe(true)
+  })
+
+  it('accepts contains on the llm answer', () => {
+    expect(accepts(withWhen({ llm: { contains: 'west door' } }, LLM_BLOCK))).toBe(true)
+  })
+
+  it('rejects contains against a numeric parameter — a number holds no substrings', () => {
+    expect(rejection(withWhen({ params: { scale: { contains: '1' } } }, NUM_PARAM))).toMatch(
+      /only a string can contain a substring/
+    )
+  })
+
+  it('rejects contains on the bare value', () => {
+    expect(accepts(withWhen({ contains: 'x' }))).toBe(false)
+  })
+
+  it('rejects contains on the raw roll', () => {
+    expect(accepts(withWhen({ roll: { contains: 'x' } }))).toBe(false)
+  })
+
+  it('rejects an empty substring — everything contains ""', () => {
+    expect(accepts(withWhen({ params: { material: { contains: '' } } }, STR_PARAM))).toBe(false)
+  })
+
+  it('rejects a number literal as the substring', () => {
+    expect(accepts(withWhen({ params: { material: { contains: 42 } } }, STR_PARAM))).toBe(false)
+  })
+
+  it('rejects a $param substring referencing a numeric parameter', () => {
+    expect(
+      rejection(withWhen({ params: { material: { contains: { $param: 'scale' } } } }, BOTH_PARAMS))
+    ).toMatch(/a substring must be a string/)
+  })
+
+  it('rejects a $param substring naming an undeclared parameter', () => {
+    expect(rejection(withWhen({ params: { material: { contains: { $param: 'ghost' } } } }, STR_PARAM))).toMatch(
+      /references undeclared parameter "ghost"/
+    )
+  })
+})
+
 describe('when — the llm subject', () => {
   it('accepts an answer test on a tool with an llm block', () => {
     expect(accepts(withWhen({ llm: { eq: 'YES' } }, LLM_BLOCK))).toBe(true)
@@ -376,6 +440,15 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     ['an empty llm comparator', withWhen({ llm: {} }, LLM_BLOCK)],
     ['an unknown key inside an llm comparator', withWhen({ llm: { eq: 'a', gt3: 1 } }, LLM_BLOCK)],
     ['a $param operand against the llm answer', withWhen({ llm: { eq: { $param: 'scale' } } }, { ...NUM_PARAM, ...LLM_BLOCK })],
+    ['contains against a string parameter', withWhen({ params: { material: { contains: 'ras' } } }, STR_PARAM)],
+    ['ncontains against a string parameter', withWhen({ params: { material: { ncontains: 'iron' } } }, STR_PARAM)],
+    ['a $param substring operand', withWhen({ llm: { contains: { $param: 'material' } } }, { ...STR_PARAM, ...LLM_BLOCK })],
+    ['contains on a metadata key', withWhen({ metadata: { faction: { contains: 'Aurum' } } })],
+    ['contains on the llm answer', withWhen({ llm: { contains: 'west door' } }, LLM_BLOCK)],
+    ['contains on the bare value', withWhen({ contains: 'x' })],
+    ['contains on the raw roll', withWhen({ roll: { contains: 'x' } })],
+    ['an empty substring', withWhen({ params: { material: { contains: '' } } }, STR_PARAM)],
+    ['a number literal as the substring', withWhen({ params: { material: { contains: 42 } } }, STR_PARAM)],
     ['an llm maxOutput within bounds', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 50_000 } }],
     ['an llm maxOutput of zero', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 0 } }],
     ['a fractional llm maxOutput', { ...BASE, llm: { ...LLM_BLOCK.llm, maxOutput: 12.5 } }],
@@ -406,5 +479,13 @@ describe('the JSON Schema mirror agrees with Zod', () => {
     const orphanLlmTest = withWhen({ llm: { eq: 'YES' } })
     expect(validate(orphanLlmTest)).toBe(true)
     expect(accepts(orphanLlmTest)).toBe(false)
+  })
+
+  it('is deliberately weaker than Zod on containment against a numeric parameter', () => {
+    // Same class again: which type the named parameter declares is a
+    // cross-item fact, so the mirror cannot know a number is being searched.
+    const numericHaystack = withWhen({ params: { scale: { contains: '1' } } }, NUM_PARAM)
+    expect(validate(numericHaystack)).toBe(true)
+    expect(accepts(numericHaystack)).toBe(false)
   })
 })

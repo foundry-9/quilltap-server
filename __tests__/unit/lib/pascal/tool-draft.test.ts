@@ -106,7 +106,7 @@ describe('draft round-trip (§6.2 invariant)', () => {
             gte: 10,
             lte: 90,
             roll: { lt: 0.9 },
-            params: { material: { eq: 'brass' }, scale: { gt: { $param: 'baseline' } } },
+            params: { material: { eq: 'brass', ncontains: 'iron' }, scale: { gt: { $param: 'baseline' } } },
             metadata: {
               'has ansible access': { eq: true },
               clearanceLevel: { gte: { $param: 'scale' } },
@@ -243,6 +243,16 @@ describe('when chips ⇄ JSON bijection', () => {
     })
   })
 
+  it('covers containment on param, metadata, and llm subjects', () => {
+    const chips = expectWhenRoundTrip({
+      params: { material: { contains: 'ras', ncontains: 'iron' } },
+      metadata: { faction: { contains: 'Aurum' } },
+      llm: { ncontains: { $param: 'forbidden' } },
+    } as WhenObject)
+    expect(chips.map((c) => c.comparator)).toEqual(['contains', 'ncontains', 'contains', 'ncontains'])
+    expect(chips[3].operand).toEqual({ kind: 'param', name: 'forbidden' })
+  })
+
   it('merges a band on one subject into one comparator object', () => {
     const chips: DraftCondition[] = [
       { id: 'a', subject: { kind: 'value' }, comparator: 'gte', operand: { kind: 'number', text: '0.3' } },
@@ -331,6 +341,56 @@ describe('validateDraft', () => {
     const issues = validateDraft(draft!)
     expect(issues).toHaveLength(2)
     expect(issues.every((i) => i.severity === 'warning')).toBe(true)
+  })
+
+  it('audits containment chips: text subjects, text operands, nothing empty', () => {
+    const draft = newDraft()
+    draft.name = 'contain'
+    draft.description = 'x'
+    draft.parameters = [
+      { id: 'p1', name: 'scale', type: 'number', defaultValue: '1', description: '', min: '', max: '' },
+      { id: 'p2', name: 'material', type: 'string', defaultValue: 'brass', description: '', min: '', max: '' },
+    ]
+    draft.outcomes[0].message = 'm'
+
+    const chip = (partial: Partial<DraftCondition>): DraftCondition[] => [
+      {
+        id: 'a',
+        subject: { kind: 'param', name: 'material' },
+        comparator: 'contains',
+        operand: { kind: 'string', text: 'ras' },
+        ...partial,
+      },
+    ]
+
+    draft.outcomes[0].conditions = chip({})
+    expect(validateDraft(draft).filter((i) => i.severity === 'error')).toEqual([])
+
+    draft.outcomes[0].conditions = chip({ subject: { kind: 'param', name: 'scale' } })
+    expect(validateDraft(draft).some((i) => i.message.includes('only text can contain text'))).toBe(true)
+
+    draft.outcomes[0].conditions = chip({ operand: { kind: 'param', name: 'scale' } })
+    expect(validateDraft(draft).some((i) => i.message.includes('needs text to look for'))).toBe(true)
+
+    draft.outcomes[0].conditions = chip({ operand: { kind: 'string', text: '' } })
+    expect(validateDraft(draft).some((i) => i.message.includes('must not be empty'))).toBe(true)
+
+    draft.outcomes[0].conditions = chip({ operand: { kind: 'number', text: '5' } })
+    expect(validateDraft(draft).some((i) => i.message.includes('needs text to look for'))).toBe(true)
+  })
+
+  it('rejects containment on whether the consult succeeded', () => {
+    const draft = newDraft()
+    draft.name = 'okc'
+    draft.description = 'x'
+    draft.llmEnabled = true
+    draft.llmPrompt = 'Speak.'
+    draft.llmErrorMessage = 'Silence.'
+    draft.outcomes[0].message = 'm'
+    draft.outcomes[0].conditions = [
+      { id: 'a', subject: { kind: 'llm-ok' }, comparator: 'contains', operand: { kind: 'string', text: 'x' } },
+    ]
+    expect(validateDraft(draft).some((i) => i.message.includes('= or ≠'))).toBe(true)
   })
 
   it('flags a literal min above a literal max, but not a $param bound', () => {

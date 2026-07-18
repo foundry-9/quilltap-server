@@ -154,7 +154,7 @@
                   "params": {
                     "type": "object",
                     "minProperties": 1,
-                    "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one.",
+                    "description": "Test the resolved parameters, keyed by parameter name. Each must name a declared parameter. Ordering comparators (gt/gte/lt/lte) require a numeric parameter; eq/neq may address a string or boolean one; contains/ncontains search a string parameter for a substring.",
                     "additionalProperties": { "$ref": "#/$defs/ParamComparator" },
                     "propertyNames": { "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
                   },
@@ -201,6 +201,13 @@
         { "$ref": "#/$defs/ParamRef" }
       ]
     },
+    "StringOperand": {
+      "description": "The substring to look for with contains/ncontains: a non-empty literal string, or a { \"$param\": \"name\" } reference to a declared string parameter. Non-empty because every string contains \"\". That the referenced parameter is a string is enforced when the file loads, which JSON Schema cannot express here.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/$defs/ParamRef" }
+      ]
+    },
     "NumericComparator": {
       "type": "object",
       "minProperties": 1,
@@ -226,7 +233,9 @@
         "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Numeric parameters only." },
         "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Numeric parameters only." },
         "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. The operand's type must match the parameter's." },
-        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. The operand's type must match the parameter's." }
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. The operand's type must match the parameter's." },
+        "contains": { "$ref": "#/$defs/StringOperand", "description": "The parameter's text contains this substring (case-sensitive). String parameters only." },
+        "ncontains": { "$ref": "#/$defs/StringOperand", "description": "The parameter's text does not contain this substring (case-sensitive). String parameters only." }
       }
     },
     "MetadataComparator": {
@@ -240,7 +249,9 @@
         "lt": { "$ref": "#/$defs/NumberOperand", "description": "Less than. Does not match unless the key holds a number." },
         "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the key holds a number." },
         "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to. Does not match unless the key exists and holds a matching primitive." },
-        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. Does not match when the key is absent — absence is not inequality." }
+        "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to. Does not match when the key is absent — absence is not inequality." },
+        "contains": { "$ref": "#/$defs/StringOperand", "description": "Contains this substring (case-sensitive). Does not match unless the key holds a string." },
+        "ncontains": { "$ref": "#/$defs/StringOperand", "description": "Does not contain this substring (case-sensitive). Does not match unless the key holds a string — as with neq, absence is not a miss." }
       }
     },
     "LlmComparator": {
@@ -255,6 +266,8 @@
         "lte": { "$ref": "#/$defs/NumberOperand", "description": "Less than or equal to. Does not match unless the answer parses as a number." },
         "eq": { "$ref": "#/$defs/AnyOperand", "description": "Equal to, numerically or as trimmed case-insensitive text. On a failed consult the answer is the block's errorMessage." },
         "neq": { "$ref": "#/$defs/AnyOperand", "description": "Not equal to, under the same reconciliation as eq." },
+        "contains": { "$ref": "#/$defs/StringOperand", "description": "The answer contains this substring, compared trimmed and case-insensitively — 'west door' finds 'the West Door'." },
+        "ncontains": { "$ref": "#/$defs/StringOperand", "description": "The answer does not contain this substring, under the same reconciliation as contains." },
         "ok": { "type": "boolean", "description": "true: this row only applies when the consult succeeded. false: only when it failed." }
       }
     },

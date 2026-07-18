@@ -704,6 +704,16 @@ function requireNumber(toolName: string, value: unknown, label: string): number 
   return value;
 }
 
+/** Demand a string for a containment comparison. Load-time validation precedes this. */
+function requireString(toolName: string, value: unknown, label: string): string {
+  if (typeof value !== 'string') {
+    throw new CustomToolRunError(
+      `${toolName}: ${label} cannot be searched — it is ${JSON.stringify(value)} rather than a string`
+    );
+  }
+  return value;
+}
+
 /**
  * Evaluate one comparator against one subject. Keys AND together, and an
  * operand may be a `$param` reference rather than a literal.
@@ -716,7 +726,12 @@ function matchesComparator(
   params: ResolvedParams
 ): boolean {
   const operandFor = (key: keyof ParamComparator): number | string | boolean =>
-    resolveOperand(toolName, comparator[key] as number | string | boolean | ParamRef, params, `${subjectLabel} ${key}`);
+    resolveOperand(
+      toolName,
+      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef,
+      params,
+      `${subjectLabel} ${key}`
+    );
 
   const order = (key: 'gt' | 'gte' | 'lt' | 'lte'): [number, number] => [
     requireNumber(toolName, subject, subjectLabel),
@@ -741,6 +756,18 @@ function matchesComparator(
   }
   if (comparator.eq !== undefined && subject !== operandFor('eq')) return false;
   if (comparator.neq !== undefined && subject === operandFor('neq')) return false;
+
+  // Containment is strict and case-sensitive here, matching eq's exactness on
+  // declared values; the forgiving variant lives with the LLM subject, whose
+  // text is a model's prose rather than an author's literal.
+  const wide = comparator as ParamComparator;
+  const searched = (key: 'contains' | 'ncontains'): boolean =>
+    requireString(toolName, subject, subjectLabel).includes(
+      requireString(toolName, operandFor(key), `${subjectLabel} ${key}`)
+    );
+
+  if (wide.contains !== undefined && !searched('contains')) return false;
+  if (wide.ncontains !== undefined && searched('ncontains')) return false;
 
   return true;
 }
@@ -820,6 +847,19 @@ function matchesMetadataComparator(
   if (comparator.eq !== undefined && subject !== operandFor('eq')) return false;
   if (comparator.neq !== undefined && subject === operandFor('neq')) return false;
 
+  // Containment follows the same fail-soft rule as ordering: a key holding
+  // anything but a string cannot be searched, so the row declines — including
+  // under ncontains, where (as with neq) absence-of-a-string is not a miss.
+  for (const comparatorKey of ['contains', 'ncontains'] as const) {
+    if (comparator[comparatorKey] === undefined) continue;
+    const operand = operandFor(comparatorKey);
+    if (typeof subject !== 'string' || typeof operand !== 'string') {
+      return decline(`${comparatorKey} searches ${JSON.stringify(subject)}, and only a string can contain a substring`);
+    }
+    const held = subject.includes(operand);
+    if (comparatorKey === 'contains' ? !held : held) return false;
+  }
+
   return true;
 }
 
@@ -839,6 +879,8 @@ function matchesMetadataComparator(
  *   trimmed, case-insensitive strings — a model that says "yes." instead of
  *   "YES" has still said yes. (Trailing sentence punctuation is also
  *   forgiven for that reason.)
+ * - contains/ncontains search the answer for the operand under that same
+ *   trimmed, case-insensitive reconciliation.
  *
  * `$param` operands still throw when they fail to resolve: those are
  * load-validated, so a failure is a regression, not a fact about the model.
@@ -893,6 +935,15 @@ function matchesLlmComparator(
 
   if (comparator.eq !== undefined && !equalsAnswer(operandFor('eq'))) return false;
   if (comparator.neq !== undefined && equalsAnswer(operandFor('neq'))) return false;
+
+  // Containment under eq's reconciliation: trimmed, case-insensitive, and the
+  // operand stringified — an author hunting "west door" should find "the West
+  // Door", because the subject here is a model's prose, not a declared value.
+  const containsAnswer = (operand: number | string | boolean): boolean =>
+    answer.toLowerCase().includes(String(operand).trim().toLowerCase());
+
+  if (comparator.contains !== undefined && !containsAnswer(operandFor('contains'))) return false;
+  if (comparator.ncontains !== undefined && containsAnswer(operandFor('ncontains'))) return false;
 
   return true;
 }

@@ -108,13 +108,15 @@ function describeRoll(roll: QtapCustomTool['roll']): string {
 }
 
 /** The comparator keys, paired with the operator a reader expects to see. */
-const COMPARATOR_SYMBOLS: Array<[keyof NumericComparator, string]> = [
+const COMPARATOR_SYMBOLS: Array<[keyof ParamComparator, string]> = [
   ['gt', '>'],
   ['gte', '>='],
   ['lt', '<'],
   ['lte', '<='],
   ['eq', '='],
   ['neq', '!='],
+  ['contains', 'contains'],
+  ['ncontains', 'does not contain'],
 ];
 
 /** Render a comparator operand: a literal, or the parameter it points at. */
@@ -128,8 +130,9 @@ function describeComparator(
   comparator: NumericComparator | ParamComparator,
   subject: string
 ): string[] {
-  return COMPARATOR_SYMBOLS.filter(([key]) => comparator[key] !== undefined).map(
-    ([key, symbol]) => `${subject} ${symbol} ${describeOperand(comparator[key])}`
+  const wide = comparator as ParamComparator;
+  return COMPARATOR_SYMBOLS.filter(([key]) => wide[key] !== undefined).map(
+    ([key, symbol]) => `${subject} ${symbol} ${describeOperand(wide[key])}`
   );
 }
 

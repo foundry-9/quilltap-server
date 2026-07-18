@@ -51,6 +51,9 @@ export type ComparatorKey = (typeof COMPARATOR_KEYS)[number];
 /** Comparator keys that order two numbers. */
 export const ORDERING_COMPARATORS: ReadonlySet<ComparatorKey> = new Set(['gt', 'gte', 'lt', 'lte']);
 
+/** Comparator keys that search one string inside another. */
+export const CONTAINMENT_COMPARATORS: ReadonlySet<ComparatorKey> = new Set(['contains', 'ncontains']);
+
 let draftIdCounter = 0;
 /** Stable-enough ids for React keys within one session. */
 function nextDraftId(prefix: string): string {
@@ -708,7 +711,10 @@ function validateCondition(
     issues.push(err(where, 'tests the LLM consult, but the consult is not enabled'));
     return;
   }
-  if (condition.subject.kind === 'llm-ok' && ORDERING_COMPARATORS.has(condition.comparator)) {
+  if (
+    condition.subject.kind === 'llm-ok' &&
+    (ORDERING_COMPARATORS.has(condition.comparator) || CONTAINMENT_COMPARATORS.has(condition.comparator))
+  ) {
     issues.push(err(where, 'whether the consult succeeded can only be tested with = or ≠'));
     return;
   }
@@ -723,6 +729,30 @@ function validateCondition(
     if (ORDERING_COMPARATORS.has(condition.comparator) && draftParamValueType(target) !== 'number') {
       issues.push(err(where, `${condition.comparator} orders "${condition.subject.name}", which is not numeric`));
     }
+  }
+
+  // Containment gets its own complete audit — subject and operand must both be
+  // text where their types are knowable — and then returns, so the eq/neq and
+  // ordering rules below never double-report the same chip.
+  if (CONTAINMENT_COMPARATORS.has(condition.comparator)) {
+    const subjectType = subjectValueType(condition.subject, paramByName);
+    if (subjectType !== null && subjectType !== 'string') {
+      issues.push(err(where, `${condition.comparator} searches a ${subjectType}, and only text can contain text`));
+    }
+    const operand = condition.operand;
+    if (operand.kind === 'number' || operand.kind === 'boolean') {
+      issues.push(err(where, `${condition.comparator} needs text to look for`));
+    } else if (operand.kind === 'string' && operand.text === '') {
+      issues.push(err(where, 'the substring to look for must not be empty'));
+    } else if (operand.kind === 'param') {
+      const target = paramByName.get(operand.name);
+      if (!operand.name || !target) {
+        issues.push(err(where, `compares against "${operand.name || '(no parameter)'}", which is not declared`));
+      } else if (draftParamValueType(target) !== 'string') {
+        issues.push(err(where, `${condition.comparator} needs text to look for; "${operand.name}" is ${target.type}`));
+      }
+    }
+    return;
   }
 
   // Operand completeness and typing.

@@ -158,6 +158,35 @@ describe('matchesWhen', () => {
       matchesWhen({ params: { material: { gt: 1 } } } as When, { value: 0, roll: 0, params: { material: 'brass' } })
     ).toThrow(CustomToolRunError)
   })
+
+  it('searches a string parameter with contains/ncontains', async () => {
+    const subjects = { value: 0, roll: 0, params: { material: 'polished brass' } }
+    expect(matchesWhen({ params: { material: { contains: 'brass' } } }, subjects)).toBe(true)
+    expect(matchesWhen({ params: { material: { contains: 'iron' } } }, subjects)).toBe(false)
+    expect(matchesWhen({ params: { material: { ncontains: 'iron' } } }, subjects)).toBe(true)
+    expect(matchesWhen({ params: { material: { ncontains: 'brass' } } }, subjects)).toBe(false)
+  })
+
+  it('containment on a parameter is case-sensitive — declared values are exact, like eq', async () => {
+    const subjects = { value: 0, roll: 0, params: { material: 'polished brass' } }
+    expect(matchesWhen({ params: { material: { contains: 'Brass' } } }, subjects)).toBe(false)
+  })
+
+  it('resolves a $param substring — one input sought inside another', async () => {
+    const when = { params: { cargo: { contains: { $param: 'sought' } } } } as When
+    expect(
+      matchesWhen(when, { value: 0, roll: 0, params: { cargo: 'silk, opium, brandy', sought: 'opium' } })
+    ).toBe(true)
+    expect(matchesWhen(when, { value: 0, roll: 0, params: { cargo: 'silk and brandy', sought: 'opium' } })).toBe(false)
+  })
+
+  it('throws rather than declining when a containment test meets a non-string', async () => {
+    // Load-time validation rejects contains against a numeric parameter, so
+    // reaching it is a regression — same rule as ordering a string above.
+    expect(() =>
+      matchesWhen({ params: { scale: { contains: '1' } } } as When, { value: 0, roll: 0, params: { scale: 12 } })
+    ).toThrow(CustomToolRunError)
+  })
 })
 
 describe('matchesWhen — the metadata subject', () => {
@@ -183,6 +212,10 @@ describe('matchesWhen — the metadata subject', () => {
     ['a number banded', { clearanceLevel: { gte: 2, lte: 4 } }, true],
     ['a string matched', { faction: { eq: 'Ordo Aurum' } }, true],
     ['a string mismatched', { faction: { eq: 'Ordo Ferrum' } }, false],
+    ['a string searched', { faction: { contains: 'Aurum' } }, true],
+    ['a string searched for what it lacks', { faction: { contains: 'Ferrum' } }, false],
+    ['ncontains against a string', { faction: { ncontains: 'Ferrum' } }, true],
+    ['containment stays case-sensitive here', { faction: { contains: 'aurum' } }, false],
   ])('%s', (_label, metadata, expected) => {
     expect(against({ metadata } as When)).toBe(expected)
   })
@@ -230,6 +263,9 @@ describe('matchesWhen — the metadata subject', () => {
       ['a string ordered against a number', { faction: { gt: 1 } }],
       ['a number compared against a string', { clearanceLevel: { eq: 'three' } }],
       ['an ordering test whose operand is a string', { clearanceLevel: { gte: 'three' } }],
+      ['an absent key tested with ncontains — absence is not a miss', { ansibleAccess: { ncontains: 'x' } }],
+      ['a number searched for a substring', { clearanceLevel: { contains: '3' } }],
+      ['an array searched for a substring', { knownLanguages: { contains: 'Trade' } }],
     ])('%s', (_label, metadata) => {
       expect(() => against({ metadata } as When)).not.toThrow()
       expect(against({ metadata } as When)).toBe(false)
@@ -866,6 +902,30 @@ describe('matchesWhen — the llm subject', () => {
     expect(
       matchesWhen(when, { value: 0, roll: 0, params: { expected: 'brass' }, llm: { ok: true, output: 'Brass' } })
     ).toBe(true)
+  })
+
+  it('searches the answer with contains/ncontains, case-insensitively', () => {
+    const oracle = { ok: true, output: 'You will find the West Door unbarred.' }
+    expect(against({ llm: { contains: 'west door' } } as When, oracle)).toBe(true)
+    expect(against({ llm: { contains: 'east door' } } as When, oracle)).toBe(false)
+    expect(against({ llm: { ncontains: 'east door' } } as When, oracle)).toBe(true)
+    // Case-insensitive in BOTH directions — the operand is folded too.
+    expect(against({ llm: { ncontains: 'WEST DOOR' } } as When, oracle)).toBe(false)
+  })
+
+  it('trims the substring before searching, as eq trims the answer', () => {
+    expect(against({ llm: { contains: ' west door ' } } as When, { ok: true, output: 'the west door' })).toBe(true)
+  })
+
+  it('resolves a $param substring against the answer', () => {
+    const when = { llm: { contains: { $param: 'sought' } } } as When
+    const oracle = { ok: true, output: 'Crates of opium and silk.' }
+    expect(matchesWhen(when, { value: 0, roll: 0, params: { sought: 'Opium' }, llm: oracle })).toBe(true)
+    expect(matchesWhen(when, { value: 0, roll: 0, params: { sought: 'brandy' }, llm: oracle })).toBe(false)
+  })
+
+  it('searches the errorMessage on a failed consult — the answer is the author\'s words', () => {
+    expect(against({ llm: { contains: 'wire' } } as When, { ok: false, output: 'The wire went dead.' })).toBe(true)
   })
 })
 

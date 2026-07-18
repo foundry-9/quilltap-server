@@ -15,6 +15,7 @@ import { useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { MAX_MESSAGE_LENGTH, MAX_OUTCOMES, type OutcomeState } from '@/lib/pascal/custom-tool.types'
 import {
+  CONTAINMENT_COMPARATORS,
   ORDERING_COMPARATORS,
   conditionSlotKey,
   type ComparatorKey,
@@ -42,6 +43,8 @@ const COMPARATOR_LABELS: Record<ComparatorKey, string> = {
   lte: '≤',
   eq: '=',
   neq: '≠',
+  contains: 'contains',
+  ncontains: "doesn't contain",
 }
 
 const STATE_OPTIONS: Array<{ state: OutcomeState; label: string; badge: string }> = [
@@ -464,18 +467,27 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
 
   const subjectType = typeOfSubject(subject)
 
-  // Metadata and the consult's answer offer all six comparators — the stored
-  // type is unknowable at authoring time (§4.4.1). String/boolean subjects
-  // offer only = and ≠.
+  // Metadata and the consult's answer offer every comparator — the stored type
+  // is unknowable at authoring time (§4.4.1). String subjects offer equality
+  // and containment; boolean subjects only = and ≠; numbers cannot contain.
   const comparators: ComparatorKey[] =
-    subjectType === 'string' || subjectType === 'boolean' ? ['eq', 'neq'] : ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
+    subjectType === 'string'
+      ? ['eq', 'neq', 'contains', 'ncontains']
+      : subjectType === 'boolean'
+        ? ['eq', 'neq']
+        : subjectType === null
+          ? ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
+          : ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
 
   const ordering = ORDERING_COMPARATORS.has(condition.comparator)
+  const containment = CONTAINMENT_COMPARATORS.has(condition.comparator)
 
   /** Parameters an operand reference may name, mirroring `validateComparator`. */
   const eligibleOperandParams = draft.parameters
     .filter((p) => {
       if (!p.name) return false
+      // A substring must be text whatever the subject turns out to hold.
+      if (containment) return p.type === 'string'
       if (subject.kind === 'metadata' || subject.kind === 'llm') {
         // With the subject's type unknown, no reference can be ruled
         // incompatible — ordering still demands a number, though.
@@ -502,6 +514,9 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     if ((nextType === 'string' || nextType === 'boolean') && ORDERING_COMPARATORS.has(nextComparator)) {
       nextComparator = 'eq'
     }
+    if ((nextType === 'number' || nextType === 'boolean') && CONTAINMENT_COMPARATORS.has(nextComparator)) {
+      nextComparator = 'eq'
+    }
     let nextOperand: ConditionOperand = condition.operand
     if (nextType === 'boolean' && nextOperand.kind !== 'param') nextOperand = { kind: 'boolean', value: true }
     else if (nextType === 'string' && nextOperand.kind === 'number') nextOperand = { kind: 'string', text: nextOperand.text }
@@ -520,6 +535,13 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     ) {
       // Ordering takes a number (or a numeric-param reference) everywhere.
       nextOperand = { kind: 'number', text: nextOperand.kind === 'string' ? nextOperand.text : '' }
+    }
+    if (
+      CONTAINMENT_COMPARATORS.has(comparator) &&
+      (nextOperand.kind === 'number' || nextOperand.kind === 'boolean')
+    ) {
+      // Containment looks for text (or a string-param reference) everywhere.
+      nextOperand = { kind: 'string', text: nextOperand.kind === 'number' ? nextOperand.text : '' }
     }
     onChange({ ...condition, comparator, operand: nextOperand })
   }
@@ -574,7 +596,7 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         value={condition.comparator}
         onChange={(e) => handleComparatorChange(e.target.value as ComparatorKey)}
         disabled={disabled}
-        className="qt-select qt-select-sm w-14"
+        className="qt-select qt-select-sm min-w-14"
         aria-label="Comparator"
       >
         {comparators.map((key) => (
@@ -592,10 +614,14 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         onChange={onChange}
       />
 
-      {subject.kind === 'metadata' && ordering && (
+      {subject.kind === 'metadata' && (ordering || containment) && (
         <span
           className="text-xs qt-text-secondary"
-          title="Matches only when the stored value is a number — anything else declines the row at run time, fail-soft, never an error."
+          title={
+            ordering
+              ? 'Matches only when the stored value is a number — anything else declines the row at run time, fail-soft, never an error.'
+              : 'Matches only when the stored value is text — anything else declines the row at run time, fail-soft, never an error.'
+          }
         >
           ⓘ
         </span>
@@ -605,6 +631,15 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         <span
           className="text-xs qt-text-secondary"
           title="Matches only when the answer reads as a number — anything else declines the row at run time, fail-soft, never an error."
+        >
+          ⓘ
+        </span>
+      )}
+
+      {subject.kind === 'llm' && containment && (
+        <span
+          className="text-xs qt-text-secondary"
+          title="Searches the answer without regard to case — 'west door' finds 'the West Door'."
         >
           ⓘ
         </span>
@@ -635,14 +670,15 @@ interface OperandFieldProps {
 function OperandField({ condition, subjectType, eligibleParams, disabled, onChange }: Readonly<OperandFieldProps>) {
   const operand = condition.operand
   const ordering = ORDERING_COMPARATORS.has(condition.comparator)
+  const containment = CONTAINMENT_COMPARATORS.has(condition.comparator)
   const typeUnknowable = condition.subject.kind === 'metadata' || condition.subject.kind === 'llm'
 
   const setOperand = (next: ConditionOperand) => onChange({ ...condition, operand: next })
 
   // Metadata / consult-answer eq/neq: no declared type steers the widget, so a
   // segmented literal-type picker chooses between number, text, and true/false
-  // (§4.4.1).
-  const showTypePicker = typeUnknowable && !ordering && operand.kind !== 'param'
+  // (§4.4.1). Containment needs no picker — the substring is always text.
+  const showTypePicker = typeUnknowable && !ordering && !containment && operand.kind !== 'param'
 
   return (
     <div className="flex items-center gap-1">
@@ -691,7 +727,7 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
           <option value="true">true</option>
           <option value="false">false</option>
         </select>
-      ) : operand.kind === 'string' && subjectType !== 'number' ? (
+      ) : operand.kind === 'string' && (containment || subjectType !== 'number') ? (
         <input
           type="text"
           value={operand.text}
@@ -717,7 +753,11 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
         onClick={() =>
           operand.kind === 'param'
             ? setOperand(
-                subjectType === 'boolean' ? { kind: 'boolean', value: true } : subjectType === 'string' ? { kind: 'string', text: '' } : { kind: 'number', text: '' }
+                containment || subjectType === 'string'
+                  ? { kind: 'string', text: '' }
+                  : subjectType === 'boolean'
+                    ? { kind: 'boolean', value: true }
+                    : { kind: 'number', text: '' }
               )
             : setOperand({ kind: 'param', name: eligibleParams[0] ?? '' })
         }

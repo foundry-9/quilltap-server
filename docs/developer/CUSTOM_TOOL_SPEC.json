@@ -107,6 +107,11 @@
       "state": "failure"
     },
     {
+      "when": { "lt": 5, "params": { "label": { "contains": "door" } } },
+      "message": "Whatever {{params.label}} is, it is door-shaped enough to lean on, and it does not move. Score {{value}}. Demonstrates contains against a STRING parameter: the test holds when the parameter's text holds the substring, case-sensitively; ncontains is its complement, and an empty substring is rejected at load (everything contains \"\"). The substring may itself be a { \"$param\": \"...\" } reference to another string parameter, so one input can be sought inside another. metadata and llm subjects take contains too — fail-soft on a key that is not a string, and, on the consult's answer, trimmed and case-insensitive like eq there.",
+      "state": "failure"
+    },
+    {
       "when": { "lt": 5 },
       "message": "Something inside {{params.label}} snaps, and it was not the lock. Score {{value}}. Demonstrates the lt comparator.",
       "state": "failure"

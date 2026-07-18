@@ -4,7 +4,9 @@
 
 ### 4.8-dev
 
-#### Change: Pascal is selectable in the Insert Announcement dialog
+#### Feature: Custom-tool outcomes can test substrings with `contains`/`ncontains`
+
+Custom-tool `when` tests gain two comparator keys, `contains` and `ncontains`, testing whether a string holds (or lacks) a substring. The substring is a non-empty string literal or a `$param` reference to a string parameter, so one input can be searched for inside another (e.g. whether the LLM consult's answer mentions `params.searchTerm`). Valid on `params` (string parameters only, both sides checked at load), `metadata`, and `llm` subjects; rejected on the bare value and `roll`, which are always numbers. Matching follows each context's `eq` precedent: exact and case-sensitive on `params`/`metadata` (fail-soft on metadata — a key that is absent or holds a non-string declines the row, including under `ncontains`), trimmed and case-insensitive on the consult's answer. Pascal's Workbench offers the two comparators on string-capable subjects with a text-only operand widget; the published JSON Schema, reference specimen, roster description (`run_custom` renders them as "contains" / "does not contain"), and help docs are updated.
 
 Pascal the Croupier joins the Staff tab of the Insert Announcement dialog, so an operator can post a bubble in Pascal's name and avatar. Added to the client staff list, the `StaffSender` type in the announcer writer, and the server-side `staffId` enum. (Suparṇā was already selectable but missing from the help doc's roster; corrected.)
 

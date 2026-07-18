@@ -101,7 +101,7 @@ If you leave `roll` out altogether, you get a plain number between 0 and 1.
 
 Each entry has a `when`, a `message`, and a `state`.
 
-`when` is either the word `true` — meaning "anything" — or a small object of comparisons: `gt`, `gte`, `lt`, `lte`, `eq`, `neq`. Several in one object must *all* hold, so a middling band is written:
+`when` is either the word `true` — meaning "anything" — or a small object of comparisons: `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, and — for text — `contains` and `ncontains`. Several in one object must *all* hold, so a middling band is written:
 
 ```json
 { "when": { "gte": 0.30, "lte": 0.60 }, "message": "…", "state": "partial" }
@@ -129,13 +129,17 @@ So *"the value exceeded 1, and the scale was set past 12"* is written:
 
 `roll` earns its keep when a multiplier or an offset has carried the value some distance from what the dice actually did — a raw draw in the bottom fiftieth is a fumble whatever you have since multiplied it by, and only `roll` can say so.
 
-`params` will compare numbers with any of the six, and will compare a string or a boolean with `eq` and `neq` — `{ "params": { "material": { "eq": "brass" } } }` is a perfectly good question. It will not pretend to *order* a string: asking whether `"brass"` is greater than 1 is refused when the file loads rather than quietly never happening.
+`params` will compare numbers with any of the ordering four, and will compare a string or a boolean with `eq` and `neq` — `{ "params": { "material": { "eq": "brass" } } }` is a perfectly good question. It will not pretend to *order* a string: asking whether `"brass"` is greater than 1 is refused when the file loads rather than quietly never happening.
+
+For text, equality is often too blunt an instrument, and so there is `contains` — and its opposite number, `ncontains` — which ask whether a string *holds* a substring rather than whether it *is* one. `{ "params": { "cargo": { "contains": "opium" } } }` matches a manifest of `"silk, opium, brandy"` without requiring the whole inventory verbatim. The substring must be actual text: something to look for (an empty one is refused when the file loads, on the grounds that everything contains nothing), and pointing it at a number parameter is refused the same way. On `params` and `metadata` the search is exact and case-minded, like `eq` there; the oracle's answer is treated more forgivingly, as you will see below.
 
 A comparison may also be made against a parameter instead of a number you fixed in advance, by writing `{ "$param": "difficulty" }` where the number would go. This is the opposed check, and it is written thus:
 
 ```json
 { "when": { "gte": { "$param": "difficulty" } }, "message": "Beaten, by exactly enough.", "state": "success" }
 ```
+
+The same trick serves a substring: `{ "contains": { "$param": "searchTerm" } }` looks for whatever text the caller supplied, so one input may be sought inside another — or, as below, inside an oracle's answer.
 
 Still no formulas, still nothing evaluated — only a flat list of comparisons, all of which must hold. It is a smaller box than you might like for about a week, and a considerable comfort thereafter.
 
@@ -148,14 +152,14 @@ Still no formulas, still nothing evaluated — only a flat list of comparisons, 
   "message": "The ansible flickers to life.", "state": "success" }
 ```
 
-The same six comparisons, ANDed the same way, and `{ "$param": "…" }` operands work here too — `{ "metadata": { "clearanceLevel": { "gte": { "$param": "required" } } } }` weighs what the character *has* against what the caller *asked for*, which is a great deal of drama for one line of JSON.
+The same comparisons, ANDed the same way — `contains` and `ncontains` included, when the key holds text — and `{ "$param": "…" }` operands work here too — `{ "metadata": { "clearanceLevel": { "gte": { "$param": "required" } } } }` weighs what the character *has* against what the caller *asked for*, which is a great deal of drama for one line of JSON.
 
 **And now the important part: a character who hasn't got the key.** Suppose Bertie, who has never in his life heard of an ansible, reaches for that tool. The `hasAnsibleAccess` test simply does not match — no error, no complaint, no bubble in the transcript. The row is passed over, the table reads on, and Bertie lands wherever your catch-all sends him. This is not Quilltap being lenient; it is the only sensible reading. Metadata keys are yours to invent, per character, and no file could possibly know which characters have which. A table branching on a key **must** still deal to whoever lacks it, and the `true` at the bottom of your table is precisely where you say what that means.
 
 The same quiet non-match covers every way a sheet can decline to answer:
 
-- **The key isn't there at all.** Including under `neq` — absence is not inequality, and `{ "faction": { "neq": "Ordo Ferrum" } }` will not match a character who has no `faction` whatsoever. If you want "hasn't got it" to be *interesting*, put it in the catch-all, or order a row above it that tests something they do have.
-- **The key holds a list or an object.** `knownLanguages: ["Trade Cant"]` is a perfectly good thing to keep on a sheet, but there is no sensible way to ask whether a list is greater than 3, so no comparison against it matches.
+- **The key isn't there at all.** Including under `neq` — absence is not inequality, and `{ "faction": { "neq": "Ordo Ferrum" } }` will not match a character who has no `faction` whatsoever. `ncontains` follows the same rule: a character with no `faction` does not thereby *lack the substring* — they lack the sheet entry, which is a different thing. If you want "hasn't got it" to be *interesting*, put it in the catch-all, or order a row above it that tests something they do have.
+- **The key holds a list or an object.** `knownLanguages: ["Trade Cant"]` is a perfectly good thing to keep on a sheet, but there is no sensible way to ask whether a list is greater than 3, so no comparison against it matches — `contains` included, which searches a single string, not a list's members.
 - **The key holds the wrong sort of thing.** Ordering a string (`{ "faction": { "gt": 1 } }`) doesn't match; nor does comparing a number against a string. Note the contrast with `params`, where the very same mistake is refused when the file loads: there, the tool declares its own parameters, so the types are knowable and a nonsense comparison is certainly a typo. Here the file has never met the character, so it cannot be told apart from a perfectly deliberate test of a key that some characters keep as a number and others don't keep at all.
 - **`null` cannot be tested.** There is no way to write `{ "eq": null }`, and that is deliberate: an empty key and an absent one both simply fail to match, which spares you having to decide which of the two you meant.
 
@@ -182,7 +186,7 @@ What comes back is a pair — *did the oracle answer*, and *what did it say* —
 { "when": true,                        "message": "The doorman is unmoved.",       "state": "partial" }
 ```
 
-The comparisons are forgiving in exactly the ways an oracle requires. `eq` and `neq` compare the answer trimmed and without regard to case, and forgive a trailing full stop — you asked for `YES`, and a model that says `yes.` has still said yes. The ordering four (`gt`, `gte`, `lt`, `lte`) apply when the answer reads as a number — ask the oracle to *rate the attempt from 1 to 10* and band the table on the rating — and when the answer is not a number they simply decline the row, fail-soft, exactly as a metadata test declines for a character without the key. And `ok` is the one extra: `{ "ok": true }` holds only when the consult produced an answer, `{ "ok": false }` only when it did not.
+The comparisons are forgiving in exactly the ways an oracle requires. `eq` and `neq` compare the answer trimmed and without regard to case, and forgive a trailing full stop — you asked for `YES`, and a model that says `yes.` has still said yes. `contains` and `ncontains` are the natural fit for an oracle allowed whole sentences: `{ "llm": { "contains": "west door" } }` matches *"You will find the West Door unbarred"* without demanding the sentence verbatim, the search being every bit as indifferent to case as `eq` is here. The ordering four (`gt`, `gte`, `lt`, `lte`) apply when the answer reads as a number — ask the oracle to *rate the attempt from 1 to 10* and band the table on the rating — and when the answer is not a number they simply decline the row, fail-soft, exactly as a metadata test declines for a character without the key. And `ok` is the one extra: `{ "ok": true }` holds only when the consult produced an answer, `{ "ok": false }` only when it did not.
 
 **When the oracle is silent** — the provider is down, no cheap model is configured, the call times out, the answer comes back empty — the run does **not** fail, and no error bubble interrupts the scene. Instead the answer *becomes your `errorMessage`*, word for word, with `ok` set false, and the table deals with it like anything else. The technical reason is kept for the roll record and the logs; the fiction only ever hears what you wrote. Every table that keeps an oracle should decide what silence means — an `ok: false` row near the top, or simply trust in the catch-all, which as ever answers for everything.
 
