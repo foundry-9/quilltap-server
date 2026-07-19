@@ -30,6 +30,7 @@ import {
   MAX_TITLE_LENGTH,
   QtapCustomToolSchema,
   isParamRef,
+  isStateRef,
   type CustomToolOutcome,
   type CustomToolParameter,
   type NumberOrParamRef,
@@ -37,6 +38,7 @@ import {
   type ParamComparator,
   type ParameterType,
   type QtapCustomTool,
+  type StateRef,
   type Visibility,
   type WhenObject,
 } from './custom-tool.types';
@@ -69,18 +71,28 @@ export interface DraftParameter {
   id: string;
   name: string;
   type: ParameterType;
-  /** Loose form value: text for number/integer/string, boolean for boolean. */
-  defaultValue: string | boolean;
+  /**
+   * Loose form value: text for number/integer/string, boolean for boolean, or a
+   * `$state` reference object carried verbatim (the visual builder does not
+   * author `$state` defaults, but round-trips them without loss).
+   */
+  defaultValue: string | boolean | StateRef;
   description: string;
   /** Loose numeric text; '' means unset. Numeric types only. */
   min: string;
   max: string;
 }
 
-/** A roll field or comparator operand: a literal (as text) or a `$param` pick. */
+/**
+ * A roll field or comparator operand: a literal (as text), a `$param` pick, or
+ * a `$state` reference. The builder does not author the `state` kind, but
+ * carries it verbatim so a hand-written `$state` roll field survives a round
+ * trip; `fallback` is the numeric fallback as text.
+ */
 export type NumberOrParamValue =
   | { kind: 'literal'; text: string }
-  | { kind: 'param'; name: string };
+  | { kind: 'param'; name: string }
+  | { kind: 'state'; path: string; fallback: string };
 
 export interface DraftRollRange {
   min: NumberOrParamValue;
@@ -106,7 +118,9 @@ export type ConditionOperand =
   | { kind: 'number'; text: string }
   | { kind: 'string'; text: string }
   | { kind: 'boolean'; value: boolean }
-  | { kind: 'param'; name: string };
+  | { kind: 'param'; name: string }
+  /** A `$state` reference, carried verbatim (builder does not author it). */
+  | { kind: 'state'; path: string; fallback: number | string | boolean };
 
 export interface DraftCondition {
   id: string;
@@ -216,10 +230,12 @@ function numberText(value: number): string {
 function rollFieldToValue(field: NumberOrParamRef | undefined): NumberOrParamValue {
   if (field === undefined) return { kind: 'literal', text: '' };
   if (isParamRef(field)) return { kind: 'param', name: field.$param };
+  if (isStateRef(field)) return { kind: 'state', path: field.$state, fallback: String(field.fallback) };
   return { kind: 'literal', text: numberText(field) };
 }
 
-function operandToDraft(operand: number | string | boolean | { $param: string }): ConditionOperand {
+function operandToDraft(operand: number | string | boolean | { $param: string } | StateRef): ConditionOperand {
+  if (isStateRef(operand)) return { kind: 'state', path: operand.$state, fallback: operand.fallback };
   if (isParamRef(operand)) return { kind: 'param', name: operand.$param };
   if (typeof operand === 'number') return { kind: 'number', text: numberText(operand) };
   if (typeof operand === 'boolean') return { kind: 'boolean', value: operand };
@@ -235,7 +251,7 @@ function comparatorToConditions(subject: ConditionSubject, comparator: ParamComp
       id: nextDraftId('cond'),
       subject,
       comparator: key,
-      operand: operandToDraft(operand as number | string | boolean | { $param: string }),
+      operand: operandToDraft(operand as number | string | boolean | { $param: string } | StateRef),
     });
   }
   return conditions;
@@ -295,7 +311,12 @@ function parameterToDraft(name: string, spec: CustomToolParameter): DraftParamet
     id: nextDraftId('param'),
     name,
     type: spec.type,
-    defaultValue: spec.type === 'boolean' ? Boolean(spec.default) : String(spec.default),
+    // A `$state` default is carried verbatim; otherwise it is loose form text.
+    defaultValue: isStateRef(spec.default)
+      ? spec.default
+      : spec.type === 'boolean'
+        ? Boolean(spec.default)
+        : String(spec.default),
     description: spec.description ?? '',
     min: spec.min === undefined ? '' : numberText(spec.min),
     max: spec.max === undefined ? '' : numberText(spec.max),
@@ -378,14 +399,20 @@ export function parseNumberText(text: string): number {
 
 function valueToRollField(value: NumberOrParamValue): NumberOrParamRef | undefined {
   if (value.kind === 'param') return value.name ? { $param: value.name } : undefined;
+  if (value.kind === 'state') {
+    const fallback = parseNumberText(value.fallback);
+    return Number.isFinite(fallback) ? { $state: value.path, fallback } : undefined;
+  }
   const n = parseNumberText(value.text);
   return Number.isFinite(n) ? n : undefined;
 }
 
-function operandFromDraft(operand: ConditionOperand): number | string | boolean | { $param: string } | undefined {
+function operandFromDraft(operand: ConditionOperand): number | string | boolean | { $param: string } | StateRef | undefined {
   switch (operand.kind) {
     case 'param':
       return operand.name ? { $param: operand.name } : undefined;
+    case 'state':
+      return { $state: operand.path, fallback: operand.fallback };
     case 'number': {
       const n = parseNumberText(operand.text);
       return Number.isFinite(n) ? n : undefined;
@@ -460,8 +487,11 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
 function parameterFromDraft(param: DraftParameter): CustomToolParameter {
   const numeric = param.type === 'number' || param.type === 'integer';
 
-  let defaultValue: number | string | boolean;
-  if (param.type === 'boolean') {
+  let defaultValue: number | string | boolean | StateRef;
+  if (isStateRef(param.defaultValue)) {
+    // Carried verbatim — the builder never authored it, and must not lose it.
+    defaultValue = param.defaultValue;
+  } else if (param.type === 'boolean') {
     defaultValue = Boolean(param.defaultValue);
   } else if (numeric) {
     defaultValue = parseNumberText(String(param.defaultValue));
@@ -607,6 +637,14 @@ function validateNumberOrParam(
       issues.push(err({ section: 'roll', field }, `${field} needs a parameter picked`));
     } else if (!numericParamNames(draft).includes(value.name)) {
       issues.push(err({ section: 'roll', field }, `${field} references "${value.name}", which is not a declared numeric parameter`));
+    }
+    return;
+  }
+  if (value.kind === 'state') {
+    // A `$state` roll field is valid iff its fallback is a finite number — the
+    // same load-time rule `validateRollRefs` enforces on the definition.
+    if (!Number.isFinite(parseNumberText(value.fallback))) {
+      issues.push(err({ section: 'roll', field }, `${field} $state fallback must be a number`));
     }
     return;
   }

@@ -15,7 +15,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { displayTitle } from '@/lib/pascal/custom-tool.types'
+import { displayTitle, isStateRef } from '@/lib/pascal/custom-tool.types'
 import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
 import { definitionFromDraft, type ToolDraft } from '@/lib/pascal/tool-draft'
 import {
@@ -84,6 +84,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   const [values, setValues] = useState<ParameterFormValues>({})
   const [isPrivate, setIsPrivate] = useState(false)
   const [sheet, setSheet] = useState<FactSheet>({ mode: 'manual', text: '{}' })
+  const [mockStateText, setMockStateText] = useState('{}')
   const [oracle, setOracle] = useState<BenchOracle>({ mode: 'scripted', answer: '' })
   const [rolls, setRolls] = useState<CustomToolRunResult[]>([])
   const [audit, setAudit] = useState<CustomToolAuditResult | null>(null)
@@ -134,6 +135,37 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
     }
   }
 
+  const testsState =
+    draft.outcomes.some((o) => o.conditions.some((c) => c.operand.kind === 'state')) ||
+    (draft.rollForm === 'range' &&
+      (['min', 'max', 'multiplier', 'offset'] as const).some((f) => draft.rollRange[f].kind === 'state')) ||
+    draft.parameters.some((p) => isStateRef(p.defaultValue)) ||
+    /\{\{\s*state\./.test(draft.outcomes.map((o) => o.message).join('\n'))
+
+  const mockStateError = useMemo(() => {
+    try {
+      const parsed = JSON.parse(mockStateText)
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return 'Mock state must be a single JSON object.'
+      }
+      return null
+    } catch {
+      return 'Mock state is not valid JSON.'
+    }
+  }, [mockStateText])
+
+  /** The mock merged state a bench roll or audit resolves `$state` against. */
+  const benchState = (): Record<string, unknown> | undefined => {
+    try {
+      const parsed = JSON.parse(mockStateText)
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   /** The oracle input for a single roll; undefined when the tool has no consult. */
   const previewOracle = (): { output: string } | { fail: true } | { live: true } | undefined => {
     if (!draft.llmEnabled) return undefined
@@ -159,6 +191,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
           params: coerceParamValues(paramSpecs, effectiveValues),
           private: isPrivate,
           metadata: benchMetadata(),
+          state: benchState(),
           llm: previewOracle(),
         }),
       }),
@@ -177,13 +210,15 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
           definition: definitionFromDraft(draft),
           params: coerceParamValues(paramSpecs, effectiveValues),
           metadata: benchMetadata(),
+          state: benchState(),
           llm: auditOracle(),
         }),
       }),
     onSuccess: setAudit,
   })
 
-  const benchDisabled = !valid || (sheet.mode === 'manual' && manualSheetError !== null)
+  const benchDisabled =
+    !valid || (sheet.mode === 'manual' && manualSheetError !== null) || mockStateError !== null
   const jsonPreview = useMemo(() => `${JSON.stringify(definitionFromDraft(draft), null, 2)}\n`, [draft])
 
   return (
@@ -291,6 +326,29 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
               No fact sheet supplied — metadata tests will all decline, exactly as for an unattributed manual roll.
             </p>
           )}
+      </section>
+
+      {/* Card 2¾ — Mock state, for $state references */}
+      <section className="qt-card p-3 space-y-2">
+        <h3 className="qt-card-title text-sm">Mock state</h3>
+        <p className="qt-hint">
+          The merged state (chat → project → group → general) a roll resolves <code>$state</code> references
+          against. A path that is absent or the wrong type falls back to the reference&rsquo;s own fallback.
+        </p>
+        <textarea
+          value={mockStateText}
+          onChange={(e) => setMockStateText(e.target.value)}
+          rows={3}
+          className={`qt-textarea w-full font-mono text-xs ${mockStateError ? 'qt-input-error' : ''}`}
+          aria-label="Mock merged state (JSON object)"
+          spellCheck={false}
+        />
+        {mockStateError && <p className="text-xs qt-text-destructive">{mockStateError}</p>}
+        {testsState && mockStateText.trim().replace(/\s/g, '') === '{}' && (
+          <p className="text-xs qt-text-secondary">
+            No mock state supplied — every <code>$state</code> reference will use its fallback.
+          </p>
+        )}
       </section>
 
       {/* Card 2½ — The oracle (only when the tool consults one) */}

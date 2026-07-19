@@ -757,6 +757,27 @@ export async function register() {
         });
       }
 
+      // Companion: ensure the instance-wide "Quilltap General" mount has its
+      // root state.json (the bottom tier of the state cascade). Idempotent and
+      // silent when the mount hasn't been provisioned yet; never heals existing
+      // content.
+      try {
+        const { ensureGeneralStateFile } = await import(
+          './lib/mount-index/general-state'
+        );
+        const seeded = await ensureGeneralStateFile();
+        if (seeded) {
+          logger.info('Seeded general state.json in the Quilltap General mount', {
+            context: 'instrumentation.register',
+          });
+        }
+      } catch (ensureError) {
+        logger.warn('Error ensuring general state.json, continuing startup', {
+          context: 'instrumentation.register',
+          error: ensureError instanceof Error ? ensureError.message : String(ensureError),
+        });
+      }
+
       // ================================================================
       // PHASE 3.5: Start Background Schedulers (non-critical)
       // ================================================================

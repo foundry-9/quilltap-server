@@ -85,7 +85,7 @@ value = value + offset
 if round: value = the nearest whole number
 ```
 
-That order matters and does not vary. Any of `min`, `max`, `multiplier`, and `offset` may be a plain number or `{ "$param": "bonus" }`, referring to one of your numeric parameters. This is the only indirection the format has — there are no formulas, no expressions, and nothing that gets evaluated. You will find this restriction generous rather than mean: it means a typo is caught when the file loads, not three hours into a scene.
+That order matters and does not vary. Any of `min`, `max`, `multiplier`, and `offset` may be a plain number, a `{ "$param": "bonus" }` referring to one of your numeric parameters, or a `{ "$state": "path", "fallback": 0 }` drawing on persistent state (of which more below). These two references are the format's *only* indirection — there are no formulas, no expressions, and nothing that gets evaluated. You will find this restriction generous rather than mean: it means a typo is caught when the file loads, not three hours into a scene.
 
 **Dice.** Or simply write dice, as dice are written:
 
@@ -165,6 +165,22 @@ The same quiet non-match covers every way a sheet can decline to answer:
 
 One consequence worth stating plainly: because a row only wins when its metadata tests *held*, a metadata branch is silent in the failure direction. It cannot tell you *why* a character fell through. If a table isn't behaving, check the sheet, not the tool.
 
+#### Drawing on persistent state — `$state`
+
+A table may also consult the chat's **persistent state** — the same JSON ledger the `state` tool keeps, and the same four-tier cascade (chat → project → group → general) described in *[Chat State](chat-state.md)*, resolved from the rolling character's own vantage. Wherever a `{ "$param": "…" }` may go — a roll bound, a comparator operand, or a parameter's default — a `$state` reference may go instead:
+
+```json
+{ "$state": "weather.wind", "fallback": 0 }
+```
+
+The **`fallback` is required**, and it earns its keep twice over. It fixes the reference's *type* when the file loads — a number in a roll field, a string for a `contains` needle — so the same load-time checks that catch a mistyped `$param` catch a mistyped `$state`. And it guarantees the reference can never fail at run time: should the path be absent, or hold a value of the wrong sort, the fallback stands in. A roll is therefore always dealable, whatever state does or does not hold.
+
+The path is read with the same dot-and-bracket notation the `state` tool uses — `player.health`, `inventory[0].name`. (One quiet limitation, shared with the `state` tool: a key containing spaces or literal dots cannot be reached by a path, so name your state keys plainly.)
+
+You may also render state straight into a message with `{{state.path}}`, exactly as you would `{{metadata.key}}` — and it observes the same courtesy: a path that is absent, or holds a list or an object rather than a plain value, leaves the placeholder standing in the sentence rather than swallowing it.
+
+In **Pascal's Workbench**, the proving bench carries a **Mock state** field beside the fact sheet: type a JSON object there to stand in for the cascade while you dry-run or audit a `$state`-using table. Leave it empty and every reference simply takes its fallback — which is, after all, what a run does when there is nothing to draw on.
+
 #### Asking an oracle
 
 Chance settles a great many questions, but not all of them are chance's to settle. *Does the forged invitation pass inspection?* is partly a roll and partly a judgment — and for judgment, a tool may keep an oracle. Add an `llm` block beside your `roll`:
@@ -176,7 +192,7 @@ Chance settles a great many questions, but not all of them are chance's to settl
 }
 ```
 
-With that in place, every run pauses after the roll and puts the rendered `prompt` to your instance's **cheap utility model** — the same modest engine that titles your chats and files your memories, chosen in your cheap-model settings. The prompt takes every placeholder a message does — `{{value}}`, `{{roll}}`, `{{dice}}`, `{{params.…}}`, `{{metadata.…}}` — everything except `{{llm}}` itself, the oracle being in no position to quote an answer it has not yet given. Ask for the shape of answer your table means to test: a bare word, a number, a sentence.
+With that in place, every run pauses after the roll and puts the rendered `prompt` to your instance's **cheap utility model** — the same modest engine that titles your chats and files your memories, chosen in your cheap-model settings. The prompt takes every placeholder a message does — `{{value}}`, `{{roll}}`, `{{dice}}`, `{{params.…}}`, `{{metadata.…}}`, `{{state.…}}` — everything except `{{llm}}` itself, the oracle being in no position to quote an answer it has not yet given. Ask for the shape of answer your table means to test: a bare word, a number, a sentence.
 
 What comes back is a pair — *did the oracle answer*, and *what did it say* — and the outcome table may ask about both under the `llm` subject:
 
@@ -207,6 +223,7 @@ Six things may be dropped into a `message`:
 | `{{dice}}` | the dice breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14` (empty if you're not rolling dice) |
 | `{{params.bonus}}` | a parameter, as it was actually used — after defaulting and clamping |
 | `{{metadata.faction}}` | a key from the roller's fact sheet |
+| `{{state.weather.wind}}` | a path into persistent state (the four-tier cascade) |
 | `{{llm}}` | what the oracle answered — or, after a failed consult, your `errorMessage`, word for word |
 
 Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object. The placeholder stands there in the sentence looking conspicuous, which is the point: it tells you exactly which key is missing, where an empty space would merely leave you puzzled. If a message leans on `{{metadata.faction}}`, gate its row on `faction` and let the catch-all speak for the factionless.

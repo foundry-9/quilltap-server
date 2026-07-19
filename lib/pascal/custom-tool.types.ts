@@ -10,8 +10,9 @@
  * editor completion.
  *
  * Design constraint that shapes everything below: **no expression evaluation,
- * anywhere.** Outcome tests are AND-composed comparator objects, and the only
- * indirection is a `{ "$param": "name" }` reference. There is no string
+ * anywhere.** Outcome tests are AND-composed comparator objects, and indirection
+ * is limited to two closed forms — a `{ "$param": "name" }` reference and a
+ * `{ "$state": "path", "fallback": <literal> }` reference. There is no string
  * grammar to parse, so there is nothing to inject into.
  */
 
@@ -73,7 +74,8 @@ const IdentifierSchema = z
 
 /**
  * A reference to a declared numeric parameter, usable anywhere a roll takes a
- * number. The ONLY form of indirection in the format.
+ * number. One of the two forms of indirection in the format (the other is
+ * {@link StateRefSchema}).
  */
 export const ParamRefSchema = z.strictObject({
   $param: IdentifierSchema.describe('Name of a declared numeric parameter.'),
@@ -81,14 +83,39 @@ export const ParamRefSchema = z.strictObject({
 
 export type ParamRef = z.infer<typeof ParamRefSchema>;
 
-/** A roll field: a literal number, or a reference to a numeric parameter. */
-const NumberOrParamRefSchema = z.union([z.number().finite(), ParamRefSchema]);
+/**
+ * A reference into the merged persistent state (chat → project → group →
+ * general), usable anywhere a `$param` reference is. Its `fallback` is required
+ * and load-bearing: it types the reference at load time (a numeric fallback
+ * makes it a number, a string fallback a string, and so on) and guarantees that
+ * run-time resolution can never fail — an absent path or a value of the wrong
+ * type simply resolves to the fallback. A run is therefore always dealable.
+ */
+export const StateRefSchema = z.strictObject({
+  $state: z
+    .string()
+    .min(1)
+    .describe('Dot/bracket path into merged state, e.g. "player.health" or "inventory[0].name".'),
+  fallback: z
+    .union([z.number().finite(), z.string(), z.boolean()])
+    .describe('Required. Used whenever the path is absent or holds a value of a different type.'),
+});
+
+export type StateRef = z.infer<typeof StateRefSchema>;
+
+/** A roll field: a literal number, a `$param`, or a `$state` reference. */
+const NumberOrParamRefSchema = z.union([z.number().finite(), ParamRefSchema, StateRefSchema]);
 
 export type NumberOrParamRef = z.infer<typeof NumberOrParamRefSchema>;
 
 /** True when a roll field is a `$param` reference rather than a literal. */
 export function isParamRef(value: unknown): value is ParamRef {
   return typeof value === 'object' && value !== null && '$param' in value;
+}
+
+/** True when a value is a `$state` reference rather than a literal or `$param`. */
+export function isStateRef(value: unknown): value is StateRef {
+  return typeof value === 'object' && value !== null && '$state' in value;
 }
 
 /** The four parameter types a definition may declare. */
@@ -105,8 +132,8 @@ export const CustomToolParameterSchema = z
   .object({
     type: ParameterTypeSchema.describe('Value type of this parameter.'),
     default: z
-      .union([z.number(), z.string(), z.boolean()])
-      .describe('Required. Used whenever a run omits this parameter.'),
+      .union([z.number(), z.string(), z.boolean(), StateRefSchema])
+      .describe('Required. Used whenever a run omits this parameter. May be a $state reference whose fallback matches this type.'),
     description: z
       .string()
       .max(MAX_DESCRIPTION_LENGTH)
@@ -131,12 +158,15 @@ export const CustomToolParameterSchema = z
       ctx.addIssue({ code: 'custom', message: 'min must not exceed max', path: ['min'] });
     }
 
-    // The declared default must satisfy the parameter's own declared type.
-    const defaultType = typeof param.default;
+    // The declared default must satisfy the parameter's own declared type. A
+    // `$state` default is typed by its fallback (which run-time resolution is
+    // guaranteed to fall back to), so the fallback is what must match the type.
+    const defaultValue = isStateRef(param.default) ? param.default.fallback : param.default;
+    const defaultType = typeof defaultValue;
     if (numeric && defaultType !== 'number') {
       ctx.addIssue({ code: 'custom', message: `default must be a number for type ${param.type}`, path: ['default'] });
     }
-    if (param.type === 'integer' && defaultType === 'number' && !Number.isInteger(param.default)) {
+    if (param.type === 'integer' && defaultType === 'number' && !Number.isInteger(defaultValue)) {
       ctx.addIssue({ code: 'custom', message: 'default must be a whole number for type integer', path: ['default'] });
     }
     if (param.type === 'string' && defaultType !== 'string') {
@@ -197,21 +227,27 @@ const CONTAINMENT_KEYS: ReadonlySet<string> = new Set(['contains', 'ncontains'])
  * `{ "gte": { "$param": "difficulty" } }` tests against a number the caller
  * supplied rather than one the author fixed at authoring time.
  */
-const NumberOperandSchema = z.union([z.number().finite(), ParamRefSchema]);
+const NumberOperandSchema = z.union([z.number().finite(), ParamRefSchema, StateRefSchema]);
 
 /**
  * A comparator operand for eq/neq, which may address a parameter of any
- * declared type — `{ "eq": "brass" }` is a legitimate test of a string.
+ * declared type — `{ "eq": "brass" }` is a legitimate test of a string — or a
+ * `$state` reference typed by its fallback.
  */
-const AnyOperandSchema = z.union([z.number().finite(), z.string(), z.boolean(), ParamRefSchema]);
+const AnyOperandSchema = z.union([z.number().finite(), z.string(), z.boolean(), ParamRefSchema, StateRefSchema]);
 
 /**
  * A comparator operand for contains/ncontains: the substring to look for — a
- * literal string, or a `$param` reference to a declared string parameter. The
- * literal must be non-empty because every string contains "", which makes an
- * empty needle a typo wearing a comparator's clothes.
+ * literal string, a `$param` reference to a declared string parameter, or a
+ * `$state` reference whose fallback is a string. The literal must be non-empty
+ * because every string contains "", which makes an empty needle a typo wearing
+ * a comparator's clothes.
  */
-const StringOperandSchema = z.union([z.string().min(1, 'the substring to look for must not be empty'), ParamRefSchema]);
+const StringOperandSchema = z.union([
+  z.string().min(1, 'the substring to look for must not be empty'),
+  ParamRefSchema,
+  StateRefSchema,
+]);
 
 /** Shape shared by every comparator. Ordering keys are numeric on both sides. */
 const NUMERIC_COMPARATOR_SHAPE = {
@@ -668,7 +704,11 @@ function validateMetadataOperands(
   }
 }
 
-/** Roll fields are numeric, so every `$param` in one must name a numeric parameter. */
+/**
+ * Roll fields are numeric, so every reference in one must resolve to a number:
+ * a `$param` must name a numeric parameter, and a `$state` ref must carry a
+ * numeric fallback (the only thing knowable about it at load time).
+ */
 function validateRollRefs(
   declared: Record<string, CustomToolParameter>,
   roll: Roll | undefined,
@@ -677,6 +717,17 @@ function validateRollRefs(
   if (!roll || typeof roll === 'string') return;
 
   for (const [field, value] of Object.entries(roll)) {
+    if (isStateRef(value)) {
+      if (typeof value.fallback !== 'number') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `roll.${field} uses a $state reference whose fallback is ${typeof value.fallback} rather than a number`,
+          path: ['roll', field],
+        });
+      }
+      continue;
+    }
+
     if (!isParamRef(value)) continue;
 
     const target = declared[value.$param];
@@ -777,6 +828,17 @@ function resolveOperandType(
       return null;
     }
     return valueTypeOf(target.type);
+  }
+
+  // A `$state` operand carries the type of its (required) fallback — that is
+  // what run-time resolution is guaranteed to produce when the path misses.
+  if (isStateRef(operand)) {
+    const fallbackType = typeof operand.fallback;
+    if (fallbackType === 'number' || fallbackType === 'string' || fallbackType === 'boolean') {
+      return fallbackType;
+    }
+    // Unreachable: the schema types the fallback before this runs.
+    return null;
   }
 
   const literal = typeof operand;

@@ -48,6 +48,7 @@ import {
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { resolveStateCascade } from '@/lib/state/state-cascade';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
@@ -365,11 +366,35 @@ async function handleRun(
     keys: Object.keys(metadata),
   });
 
+  // The merged state cascade the run's `$state` references resolve against. The
+  // group tier follows the same asymmetry as metadata above: it is scoped to
+  // the named character's own groups, or skipped entirely for a run nobody made
+  // (no `asCharacterId`), rather than borrowing an arbitrary participant's
+  // groups. Fail-soft — required fallbacks keep every run dealable.
+  let toolState: Record<string, unknown> = {};
+  try {
+    const cascade = await resolveStateCascade({
+      chat,
+      groupScope: body.asCharacterId
+        ? { kind: 'character', characterId: body.asCharacterId }
+        : { kind: 'none' },
+    });
+    toolState = cascade.merged;
+  } catch (error) {
+    logger.debug('Manual custom-tool run: state cascade unavailable, defaulting to {}', {
+      context: HANDLER,
+      chatId: id,
+      error: getErrorMessage(error),
+    });
+    toolState = {};
+  }
+
   let result;
   try {
     result = await executeCustomTool(entry.definition, body.parameters ?? undefined, {
       private: body.private,
       metadata,
+      state: toolState,
       ...(entry.definition.llm
         ? { llmInvoke: buildCustomToolLlmInvoker({ userId: ctx.user.id, chatId: id }) }
         : {}),

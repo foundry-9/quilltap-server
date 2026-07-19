@@ -16,6 +16,7 @@ import { GroupLinkedStoresCard } from '../components/GroupLinkedStoresCard'
 import { useGroupMembers } from '../hooks/useGroupMembers'
 import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
 import { Icon } from '@/components/ui/icon'
+import StateEditorModal from '@/components/state/StateEditorModal'
 import type { Group } from '../../types'
 
 export interface GroupDetailViewProps {
@@ -31,6 +32,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
   const [formData, setFormData] = useState({ name: '', description: '', color: '', icon: '' })
   const [membersExpanded, setMembersExpanded] = useState(false)
   const [storesExpanded, setStoresExpanded] = useState(false)
+  const [showStateModal, setShowStateModal] = useState(false)
 
   const { members, allCharacters, fetchMembers, fetchAllCharacters, addMember, removeMember } = useGroupMembers(groupId)
   const { linkedStores, allStores, fetchLinkedStores, fetchAllStores, linkStore, unlinkStore } = useGroupMountPoints(groupId)
@@ -216,6 +218,13 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowStateModal(true)}
+            className="qt-button qt-button-secondary inline-flex items-center rounded-lg px-6 py-2 font-semibold qt-shadow-sm"
+          >
+            Group State
+          </button>
         </div>
       </form>
 
@@ -239,6 +248,14 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
           onUnlink={unlinkStore}
         />
       </div>
+
+      <StateEditorModal
+        isOpen={showStateModal}
+        onClose={() => setShowStateModal(false)}
+        entityType="group"
+        entityId={groupId}
+        entityName={group.name}
+      />
     </div>
   )
 }

@@ -1238,14 +1238,14 @@
 
     "ExportedDocumentStoreDocument": {
       "type": "object",
-      "description": "Text document inside a database-backed document store.",
+      "description": "Text document inside a database-backed document store. Instance-wide GENERAL STATE (the bottom tier of the state cascade) is not a separate export record: it lives as a `state.json` document (fileType 'json') at the root of the singleton \"Quilltap General\" mount, and therefore rides in the `documentStores` dump exactly like any other store document — but only when that mount is included in a selective document-stores export. Chat, project, and group state travel with their own entities.",
       "required": ["mountPointId", "relativePath", "fileName", "fileType", "content", "contentSha256", "plainTextLength", "lastModified"],
       "additionalProperties": false,
       "properties": {
         "mountPointId": { "$ref": "#/$defs/UUID" },
         "relativePath": { "type": "string", "minLength": 1 },
         "fileName": { "type": "string", "minLength": 1 },
-        "fileType": { "enum": ["markdown", "txt"] },
+        "fileType": { "enum": ["markdown", "txt", "json", "jsonl"] },
         "content": { "type": "string" },
         "contentSha256": { "type": "string", "minLength": 64, "maxLength": 64 },
         "plainTextLength": { "type": "integer", "minimum": 0 },

@@ -13,6 +13,7 @@ import { MemoryCascadeSettings } from '@/components/settings/chat-settings/Memor
 import { ImageDescriptionSettings } from '@/components/settings/chat-settings/ImageDescriptionSettings'
 import { AutomationSettings } from '@/components/settings/chat-settings/AutomationSettings'
 import { CustomToolsSettings } from '@/components/settings/chat-settings/CustomToolsSettings'
+import { GeneralStateSettings } from '@/components/settings/chat-settings/GeneralStateSettings'
 import { AgentModeSettings } from '@/components/settings/chat-settings/AgentModeSettings'
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
@@ -150,6 +151,10 @@ export function ChatTabContent() {
             saving={saving}
             onChange={handleCustomToolsChange}
           />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="General State" description="Instance-wide persistent state shared by every chat (bottom tier of the state cascade)" sectionId="general-state" forceOpen={activeSection === 'general-state'}>
+          <GeneralStateSettings />
         </CollapsibleCard>
 
         <CollapsibleCard title="Agent Mode" description="Configure iterative tool use with self-correction" sectionId="agent-mode" forceOpen={activeSection === 'agent-mode'}>

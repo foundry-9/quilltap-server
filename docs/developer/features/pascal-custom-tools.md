@@ -95,7 +95,7 @@ A dice-driven example:
 
 ### `roll` — the two forms
 
-**Form A — numeric range object.** Fields (all optional): `min` (default 0), `max` (default 1), `multiplier` (default 1), `offset` (default 0), `round` (default false). Each numeric field accepts either a JSON number or a `{ "$param": "<name>" }` reference to a declared numeric parameter — **`$param` references are the only indirection; no expression strings anywhere.** Raw value = uniform float in `[min, max)` from **crypto-strength randomness** (`crypto.randomInt`/`randomBytes`-derived, not `Math.random`).
+**Form A — numeric range object.** Fields (all optional): `min` (default 0), `max` (default 1), `multiplier` (default 1), `offset` (default 0), `round` (default false). Each numeric field accepts a JSON number, a `{ "$param": "<name>" }` reference to a declared numeric parameter, or a `{ "$state": "<path>", "fallback": <number> }` reference into merged persistent state — **`$param` and `$state` are the two forms of indirection; no expression strings anywhere.** A `$state` roll field requires a **numeric** fallback (load-checked in `validateRollRefs`). Raw value = uniform float in `[min, max)` from **crypto-strength randomness** (`crypto.randomInt`/`randomBytes`-derived, not `Math.random`).
 
 **Form B — dice notation string.** A string like `"3d6+2"`, `"1d20"`, `"2d10-1"`. Parsed and rolled by the **existing dice system** in `lib/tools/rng-tool.ts` — extract its dice parser/roller into a shared module (`lib/pascal/dice.ts`) and have both `rng-tool` and `run_custom` consume it, rather than duplicating (single source of truth). Raw value = the dice total. Dice form does not accept `$param` references inside the notation string (v1); if parameterized dice are needed later, that is a v2 extension.
 
@@ -132,7 +132,7 @@ Comparator keys are drawn from `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, `contains`
 
 `roll` exists because a transform moves the value away from what was drawn: a raw draw in the bottom 2% is a fumble however the multiplier has since scaled it, and only `roll` can express that. It is degenerate for the dice form (raw == total) but harmless there.
 
-**Operands** are a literal or a `{ "$param": "<name>" }` reference — the same indirection the roll fields already take, reused rather than reinvented. `{ "gte": { "$param": "difficulty" } }` is the opposed check: a test against a number the caller supplied rather than one fixed at authoring time.
+**Operands** are a literal, a `{ "$param": "<name>" }` reference, or a `{ "$state": "<path>", "fallback": <literal> }` reference — the same indirection the roll fields take, reused rather than reinvented. `{ "gte": { "$param": "difficulty" } }` is the opposed check: a test against a number the caller supplied rather than one fixed at authoring time; `{ "gte": { "$state": "encounter.difficulty", "fallback": 10 } }` tests against a number the running scene carries. A `$state` operand is typed by its fallback (`resolveOperandType`), so the same load-time type rules that catch a mistyped `$param` catch a mistyped `$state`.
 
 **Types.** Ordering comparators (`gt`/`gte`/`lt`/`lte`) demand a number on both sides. `eq`/`neq` on a `params` subject widen to strings and booleans, since a parameter need not be a number — `{ "params": { "material": { "eq": "brass" } } }`. A mismatch is a load-time rejection, not a test that quietly never fires (see [Validation rules](#validation-rules-load-time)).
 
@@ -177,9 +177,22 @@ Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-
 - `{{dice}}` — dice form only: the breakdown, e.g. `3d6+2: [4, 2, 6] + 2 = 14`. Empty string for Form A.
 - `{{params.<name>}}` — the resolved (post-clamp, post-default) value of a declared parameter.
 - `{{metadata.<key>}}` — the invoking character's metadata value for that key. Primitives render like `{{params.<name>}}`; an absent key or non-primitive value leaves the placeholder verbatim (with a debug log), the same convention as unknown placeholders.
+- `{{state.<path>}}` — a path into merged persistent state (see below). Primitives render like `{{params.<name>}}`; an absent path or non-primitive value leaves the placeholder verbatim (with a debug log) — the `{{metadata.*}}` doctrine, applied to state.
 - `{{llm}}` — the consult's output: the model's trimmed answer, or the `llm` block's `errorMessage` after a failed consult. Verbatim when the tool declares no `llm` block.
 
 Unknown placeholders are left verbatim (and logged at debug level).
+
+### `$state` — drawing on persistent state
+
+A definition may reach into the chat's persistent **state** — the four-tier cascade (chat → project → group → general) shared with the `state` tool. The reference is a closed object, `{ "$state": "<path>", "fallback": <number|string|boolean> }`, usable in every position a `{ "$param": … }` is: roll fields, comparator operands, and a parameter's `default`. Messages (and the `llm` prompt) render `{{state.<path>}}`.
+
+- **The fallback is required, and load-bearing.** It types the reference at load time (a numeric fallback makes it a number, a string a string — so `resolveOperandType` / `validateRollRefs` / the parameter-default `superRefine` type-check `$state` exactly as they do `$param`) and it guarantees run-time resolution never fails: `resolveStateValue(ref, state)` returns the value at the path **only when its `typeof` matches the fallback**, and the fallback otherwise. A run is therefore always dealable, whatever state holds. `resolveStateValue` is pure and never throws.
+- **Path syntax** is the shared `parsePath` from `@/lib/state/state-paths` (dot + bracket). Its `\w+` segments mean keys containing spaces or literal dots are unreachable by a path — a pre-existing limitation, documented here beside `$state`.
+- **Per-entrance cascade resolution.** The merged state is resolved once per run and passed as `overrides.state` into `executeCustomTool`, threaded through `resolveParams`/`coerceParam`, `resolveRollField`/`rollRange`, the `matchesWhen` → `matchesComparator`/`matchesLlmComparator`/`matchesMetadataComparator` chain, and `renderTemplate`. Each entrance scopes the group tier differently:
+  - **LLM path** (`run_custom`, `lib/tools/handlers/run-custom-handler.ts`): `resolveStateCascade` with `{ kind: 'character', characterId }` — the responding character's own groups (Knowledge's rule). Fail-soft to `{}`.
+  - **Manual popup** (`app/api/v1/chats/[id]/custom-tools/route.ts` `handleRun`): character scope when `asCharacterId` names a character, else `{ kind: 'none' }` — the same asymmetry the metadata rule uses (a run nobody made borrows no one's groups). Fail-soft to `{}`.
+  - **Workbench** (`app/api/v1/custom-tools/route.ts` preview/audit): an optional mock `state` object on the request body, exactly like the mock `metadata`; `simulateOutcomes` takes it as a trailing `state` argument (default `{}`). The proving bench exposes a **Mock state** JSON field.
+- **`persist` stays deferred.** Writing state back from a roll (the reserved v2 `persist` key) remains out of scope; `$state` is read-only. The top-level schema still tolerates unknown keys so a future `persist` file won't break older builds.
 
 ### Validation rules (load-time)
 

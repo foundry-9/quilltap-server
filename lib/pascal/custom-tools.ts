@@ -35,11 +35,13 @@ import {
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool';
 import { getErrorMessage } from '@/lib/error-utils';
+import { parsePath, getAtPath } from '@/lib/state/state-paths';
 import {
   QtapCustomToolSchema,
   collectUnknownKeys,
   formatDefinitionIssues,
   isParamRef,
+  isStateRef,
   MAX_LLM_OUTPUT_LENGTH,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
@@ -55,9 +57,32 @@ import {
   type ParamRef,
   type QtapCustomTool,
   type RollRange,
+  type StateRef,
   type Visibility,
   type When,
 } from './custom-tool.types';
+
+/**
+ * The persistent-state view a run resolves `$state` references against — the
+ * merged cascade (chat → project → group → general). Always an object; an
+ * entrance that has no state to offer passes `{}`.
+ */
+export type CustomToolState = Record<string, unknown>;
+
+/**
+ * Resolve a `$state` reference against the merged state. Pure and total: it
+ * returns the value at the path when present AND of the fallback's type, and
+ * the fallback otherwise. It never throws — the required fallback is exactly
+ * what makes a run always dealable.
+ */
+export function resolveStateValue(ref: StateRef, state: CustomToolState): number | string | boolean {
+  const found = getAtPath(state ?? {}, parsePath(ref.$state));
+  if (typeof found === typeof ref.fallback) {
+    if (typeof found === 'number') return Number.isFinite(found) ? found : ref.fallback;
+    if (typeof found === 'string' || typeof found === 'boolean') return found;
+  }
+  return ref.fallback;
+}
 import { formatDiceBreakdown, parseDiceNotation, rollNotation, type DiceNotation, type DiceRollResult } from './dice';
 
 const CONTEXT = 'pascal.custom-tools';
@@ -512,7 +537,8 @@ export interface CustomToolRunResult {
  */
 export function resolveParams(
   definition: QtapCustomTool,
-  supplied: Record<string, unknown> | null | undefined
+  supplied: Record<string, unknown> | null | undefined,
+  state: CustomToolState = {}
 ): ResolvedParams {
   const declared = definition.parameters ?? {};
   const given = supplied ?? {};
@@ -528,7 +554,7 @@ export function resolveParams(
 
   const resolved: ResolvedParams = {};
   for (const [name, spec] of Object.entries(declared)) {
-    resolved[name] = coerceParam(definition.name, name, spec, given[name]);
+    resolved[name] = coerceParam(definition.name, name, spec, given[name], state);
   }
   return resolved;
 }
@@ -537,9 +563,15 @@ function coerceParam(
   toolName: string,
   name: string,
   spec: CustomToolParameter,
-  value: unknown
+  value: unknown,
+  state: CustomToolState
 ): number | string | boolean {
-  if (value === undefined || value === null) return spec.default;
+  // An omitted parameter falls to its default, which may itself be a `$state`
+  // reference resolved against the merged state (its fallback is type-checked
+  // against this parameter's type at load time, so it always fits).
+  if (value === undefined || value === null) {
+    return isStateRef(spec.default) ? resolveStateValue(spec.default, state) : spec.default;
+  }
 
   switch (spec.type) {
     case 'number':
@@ -572,13 +604,14 @@ function clamp(value: number, min?: number, max?: number): number {
   return out;
 }
 
-/** Resolve a roll field: literal, `$param` reference, or the field's default. */
+/** Resolve a roll field: literal, `$param` reference, `$state` reference, or the field's default. */
 function resolveRollField(
   toolName: string,
   field: string,
   spec: NumberOrParamRef | undefined,
   params: ResolvedParams,
-  fallback: number
+  fallback: number,
+  state: CustomToolState
 ): number {
   if (spec === undefined) return fallback;
 
@@ -587,6 +620,18 @@ function resolveRollField(
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       throw new CustomToolRunError(
         `${toolName}: roll.${field} references "${spec.$param}", which resolved to ${JSON.stringify(value)} rather than a finite number`
+      );
+    }
+    return value;
+  }
+
+  // A `$state` roll field resolves to its (numeric, load-checked) value or its
+  // numeric fallback — never a failure, so a roll is always dealable.
+  if (isStateRef(spec)) {
+    const value = resolveStateValue(spec, state);
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new CustomToolRunError(
+        `${toolName}: roll.${field} $state reference resolved to ${JSON.stringify(value)} rather than a finite number`
       );
     }
     return value;
@@ -613,16 +658,17 @@ function cryptoUniform(min: number, max: number): number {
   return min + fraction * (max - min);
 }
 
-/** Draw the raw value for Form A, honouring `$param` bounds. */
+/** Draw the raw value for Form A, honouring `$param` and `$state` bounds. */
 function rollRange(
   definition: QtapCustomTool,
   range: RollRange,
-  params: ResolvedParams
+  params: ResolvedParams,
+  state: CustomToolState
 ): { raw: number; value: number } {
-  const min = resolveRollField(definition.name, 'min', range.min, params, 0);
-  const max = resolveRollField(definition.name, 'max', range.max, params, 1);
-  const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1);
-  const offset = resolveRollField(definition.name, 'offset', range.offset, params, 0);
+  const min = resolveRollField(definition.name, 'min', range.min, params, 0, state);
+  const max = resolveRollField(definition.name, 'max', range.max, params, 1, state);
+  const multiplier = resolveRollField(definition.name, 'multiplier', range.multiplier, params, 1, state);
+  const offset = resolveRollField(definition.name, 'offset', range.offset, params, 0, state);
 
   if (min > max) {
     throw new CustomToolRunError(
@@ -664,6 +710,12 @@ export interface OutcomeSubjects {
    * block — an `llm` test then fails soft and the table falls through.
    */
   llm?: LlmSubject;
+  /**
+   * The merged persistent state (chat → project → group → general) that
+   * `$state` comparator operands resolve against. Absent → treated as `{}`,
+   * so every `$state` operand falls to its own fallback.
+   */
+  state?: CustomToolState;
 }
 
 /** The metadata keys a run actually consulted, and what they held at the time. */
@@ -679,10 +731,15 @@ export type MetadataTested = Record<string, number | string | boolean>;
  */
 function resolveOperand(
   toolName: string,
-  operand: number | string | boolean | ParamRef,
+  operand: number | string | boolean | ParamRef | StateRef,
   params: ResolvedParams,
-  label: string
+  label: string,
+  state: CustomToolState
 ): number | string | boolean {
+  // A `$state` operand resolves against the merged state, falling back to its
+  // own (load-typed) fallback — it never throws, matching the metadata doctrine.
+  if (isStateRef(operand)) return resolveStateValue(operand, state);
+
   if (!isParamRef(operand)) return operand;
 
   const value = params[operand.$param];
@@ -723,14 +780,16 @@ function matchesComparator(
   comparator: NumericComparator | ParamComparator,
   subject: number | string | boolean,
   subjectLabel: string,
-  params: ResolvedParams
+  params: ResolvedParams,
+  state: CustomToolState
 ): boolean {
   const operandFor = (key: keyof ParamComparator): number | string | boolean =>
     resolveOperand(
       toolName,
-      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef,
+      (comparator as ParamComparator)[key] as number | string | boolean | ParamRef | StateRef,
       params,
-      `${subjectLabel} ${key}`
+      `${subjectLabel} ${key}`,
+      state
     );
 
   const order = (key: 'gt' | 'gte' | 'lt' | 'lte'): [number, number] => [
@@ -797,7 +856,8 @@ function matchesMetadataComparator(
   comparator: MetadataComparator,
   key: string,
   metadata: Record<string, unknown>,
-  params: ResolvedParams
+  params: ResolvedParams,
+  state: CustomToolState
 ): boolean {
   const decline = (reason: string): false => {
     logger.debug('Custom tool metadata test did not match', {
@@ -822,9 +882,10 @@ function matchesMetadataComparator(
   const operandFor = (comparatorKey: keyof MetadataComparator): number | string | boolean =>
     resolveOperand(
       toolName,
-      comparator[comparatorKey] as number | string | boolean | ParamRef,
+      comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef,
       params,
-      `${label} ${comparatorKey}`
+      `${label} ${comparatorKey}`,
+      state
     );
 
   for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
@@ -889,7 +950,8 @@ function matchesLlmComparator(
   toolName: string,
   comparator: LlmComparator,
   llm: LlmSubject,
-  params: ResolvedParams
+  params: ResolvedParams,
+  state: CustomToolState
 ): boolean {
   const decline = (reason: string): false => {
     logger.debug('Custom tool llm test did not match', { context: CONTEXT, tool: toolName, reason });
@@ -904,9 +966,10 @@ function matchesLlmComparator(
   const operandFor = (comparatorKey: Exclude<keyof LlmComparator, 'ok'>): number | string | boolean =>
     resolveOperand(
       toolName,
-      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef,
+      (comparator as Record<string, unknown>)[comparatorKey] as number | string | boolean | ParamRef | StateRef,
       params,
-      `the llm answer ${comparatorKey}`
+      `the llm answer ${comparatorKey}`,
+      state
     );
 
   for (const comparatorKey of ['gt', 'gte', 'lt', 'lte'] as const) {
@@ -958,10 +1021,11 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
 
   const { value, roll, params } = subjects;
   const metadata = subjects.metadata ?? {};
+  const state = subjects.state ?? {};
 
-  if (!matchesComparator(toolName, when, value, 'the rolled value', params)) return false;
+  if (!matchesComparator(toolName, when, value, 'the rolled value', params, state)) return false;
 
-  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params)) {
+  if (when.roll !== undefined && !matchesComparator(toolName, when.roll, roll, 'the raw roll', params, state)) {
     return false;
   }
 
@@ -971,11 +1035,11 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
       // Load-time validation rejects a test of an undeclared parameter.
       throw new CustomToolRunError(`${toolName}: an outcome tests "${name}", which is not a declared parameter`);
     }
-    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params)) return false;
+    if (!matchesComparator(toolName, comparator, subject, `parameter "${name}"`, params, state)) return false;
   }
 
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
-    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params)) return false;
+    if (!matchesMetadataComparator(toolName, comparator, key, metadata, params, state)) return false;
   }
 
   if (when.llm !== undefined) {
@@ -986,7 +1050,7 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
       logger.debug('Custom tool llm test did not match — no consult ran', { context: CONTEXT, tool: toolName });
       return false;
     }
-    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params)) return false;
+    if (!matchesLlmComparator(toolName, when.llm, subjects.llm, params, state)) return false;
   }
 
   return true;
@@ -1044,6 +1108,8 @@ export function renderTemplate(
     metadata?: Record<string, unknown>;
     /** The consult's result. Absent while rendering the consult's own prompt. */
     llm?: LlmSubject;
+    /** The merged persistent state, for `{{state.path}}` placeholders. */
+    state?: CustomToolState;
   }
 ): string {
   return message.replace(/\{\{([^}]+)\}\}/g, (whole, rawKey: string) => {
@@ -1077,6 +1143,24 @@ export function renderTemplate(
         context: CONTEXT,
         placeholder: whole,
         reason: v === undefined ? 'no such metadata key' : 'the key does not hold a primitive',
+      });
+      return whole;
+    }
+
+    if (key.startsWith('state.')) {
+      // `{{state.path}}` follows the `{{metadata.*}}` doctrine: render the value
+      // when the path holds a primitive, otherwise leave the placeholder as
+      // written so the hole in the sentence is visible rather than silently
+      // eaten. `state.` is stripped and the remainder is a full state path.
+      const statePath = key.slice('state.'.length);
+      const v = getAtPath(vars.state ?? {}, parsePath(statePath));
+      if (isPrimitive(v)) {
+        return typeof v === 'number' ? formatValue(v) : String(v);
+      }
+      logger.debug('Custom tool message references state it cannot render', {
+        context: CONTEXT,
+        placeholder: whole,
+        reason: v === undefined ? 'no such state path' : 'the path does not hold a primitive',
       });
       return whole;
     }
@@ -1153,9 +1237,16 @@ async function resolveLlmConsult(
 export async function executeCustomTool(
   definition: QtapCustomTool,
   suppliedParams: Record<string, unknown> | null | undefined,
-  overrides?: { private?: boolean; metadata?: Record<string, unknown>; llmInvoke?: LlmInvoker }
+  overrides?: {
+    private?: boolean;
+    metadata?: Record<string, unknown>;
+    /** Merged persistent state for `$state` refs and `{{state.path}}`. Default {}. */
+    state?: CustomToolState;
+    llmInvoke?: LlmInvoker;
+  }
 ): Promise<CustomToolRunResult> {
-  const params = resolveParams(definition, suppliedParams);
+  const state = overrides?.state ?? {};
+  const params = resolveParams(definition, suppliedParams, state);
 
   let raw: number;
   let value: number;
@@ -1183,7 +1274,7 @@ export async function executeCustomTool(
   } else {
     rollForm = 'range';
     const range = definition.roll ?? {};
-    const drawn = rollRange(definition, range, params);
+    const drawn = rollRange(definition, range, params, state);
     raw = drawn.raw;
     value = drawn.value;
   }
@@ -1194,11 +1285,11 @@ export async function executeCustomTool(
   // BEFORE the table, which may test its answer.
   let llm: LlmConsultResult | undefined;
   if (definition.llm) {
-    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata });
+    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata, state });
     llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
   }
 
-  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, ...(llm ? { llm } : {}) };
+  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, state, ...(llm ? { llm } : {}) };
   const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
   if (outcomeIndex < 0) {
     // The schema's mandatory trailing catch-all makes this unreachable.
@@ -1206,7 +1297,7 @@ export async function executeCustomTool(
   }
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, llm });
+  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, llm, state });
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   const visibility: Visibility =
@@ -1266,9 +1357,11 @@ export function simulateOutcomes(
    * branches on the answer are therefore conditional on this one answer; the
    * bench says so beside the field.
    */
-  llm?: LlmSubject
+  llm?: LlmSubject,
+  /** Mock merged state for `$state` refs. Default `{}` — every ref falls back. */
+  state: CustomToolState = {}
 ): CustomToolAuditResult {
-  const params = resolveParams(definition, suppliedParams);
+  const params = resolveParams(definition, suppliedParams, state);
 
   let parsedDice: DiceNotation | null = null;
   let rangeRoll: RollRange = {};
@@ -1295,12 +1388,12 @@ export function simulateOutcomes(
       raw = rolled.total;
       value = rolled.total;
     } else {
-      const drawn = rollRange(definition, rangeRoll, params);
+      const drawn = rollRange(definition, rangeRoll, params, state);
       raw = drawn.raw;
       value = drawn.value;
     }
 
-    const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {}, ...(llm ? { llm } : {}) };
+    const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {}, state, ...(llm ? { llm } : {}) };
     const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
     if (outcomeIndex < 0) {
       // The schema's mandatory trailing catch-all makes this unreachable.

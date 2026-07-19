@@ -55,8 +55,13 @@
             "description": "Value type of this parameter."
           },
           "default": {
-            "type": ["number", "string", "boolean"],
-            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type."
+            "description": "Required. Every parameter needs a default so a zero-argument run always works. Must match the declared type, or be a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback matches the declared type.",
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "$ref": "#/$defs/StateRef" }
+            ]
           },
           "description": {
             "type": "string",
@@ -85,7 +90,7 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "description": "Form A — a uniform float in [min, max), then transformed: value = raw * multiplier + offset, rounded last if `round` is set. Each numeric field accepts a literal number or a { \"$param\": \"name\" } reference to a declared numeric parameter.",
+          "description": "Form A — a uniform float in [min, max), then transformed: value = raw * multiplier + offset, rounded last if `round` is set. Each numeric field accepts a literal number, a { \"$param\": \"name\" } reference to a declared numeric parameter, or a { \"$state\": \"path\", \"fallback\": <number> } reference.",
           "properties": {
             "min": { "$ref": "#/$defs/NumberOrParamRef", "description": "Low bound, inclusive. Default 0." },
             "max": { "$ref": "#/$defs/NumberOrParamRef", "description": "High bound, exclusive. Default 1." },
@@ -106,7 +111,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 4000,
-          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
+          "description": "What to ask, rendered with the same placeholders an outcome message takes — {{value}}, {{roll}}, {{dice}}, {{params.name}}, {{metadata.key}}, {{state.path}} — but not {{llm}} itself. Ask for the answer shape you intend to test: a bare word, a number, a sentence."
         },
         "errorMessage": {
           "type": "string",
@@ -177,7 +182,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 1000,
-            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, or one holding a list or object, or {{llm}} on a tool with no llm block."
+            "description": "The narrative result, rendered verbatim. Supports {{value}} (final post-transform value), {{roll}} (raw pre-transform value), {{dice}} (dice breakdown, e.g. \"3d6+2: [4, 2, 6] + 2 = 14\"; empty for Form A), {{params.name}} (a resolved parameter), {{metadata.key}} (a key from the invoking character's fact sheet), {{state.path}} (a path into merged persistent state), and {{llm}} (the consult's output — the model's answer, or the llm block's errorMessage on failure). Unknown placeholders are left as written — as is a {{metadata.key}} the character lacks, a {{state.path}} that is absent or non-primitive, one holding a list or object, or {{llm}} on a tool with no llm block."
           },
           "state": {
             "enum": ["success", "partial", "failure", "info"],
@@ -189,23 +194,25 @@
   },
   "$defs": {
     "NumberOperand": {
-      "description": "A number to compare against: a literal, or a { \"$param\": \"name\" } reference to a declared numeric parameter. The reference form is how an opposed check is written — { \"gte\": { \"$param\": \"difficulty\" } } tests against a number the caller supplied rather than one fixed when the file was written.",
+      "description": "A number to compare against: a literal, a { \"$param\": \"name\" } reference to a declared numeric parameter, or a { \"$state\": \"path\", \"fallback\": <number> } reference. The reference form is how an opposed check is written — { \"gte\": { \"$param\": \"difficulty\" } } tests against a number the caller supplied rather than one fixed when the file was written.",
       "$ref": "#/$defs/NumberOrParamRef"
     },
     "AnyOperand": {
-      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, or a { \"$param\": \"name\" } reference to a declared parameter of any type.",
+      "description": "A value to compare against for eq/neq: a literal number, string, or boolean, a { \"$param\": \"name\" } reference to a declared parameter of any type, or a { \"$state\": \"path\", \"fallback\": ... } reference typed by its fallback.",
       "oneOf": [
         { "type": "number" },
         { "type": "string" },
         { "type": "boolean" },
-        { "$ref": "#/$defs/ParamRef" }
+        { "$ref": "#/$defs/ParamRef" },
+        { "$ref": "#/$defs/StateRef" }
       ]
     },
     "StringOperand": {
-      "description": "The substring to look for with contains/ncontains: a non-empty literal string, or a { \"$param\": \"name\" } reference to a declared string parameter. Non-empty because every string contains \"\". That the referenced parameter is a string is enforced when the file loads, which JSON Schema cannot express here.",
+      "description": "The substring to look for with contains/ncontains: a non-empty literal string, a { \"$param\": \"name\" } reference to a declared string parameter, or a { \"$state\": \"path\", \"fallback\": ... } reference whose fallback is a string. Non-empty because every string contains \"\". That a referenced parameter or state fallback is a string is enforced when the file loads, which JSON Schema cannot express here.",
       "oneOf": [
         { "type": "string", "minLength": 1 },
-        { "$ref": "#/$defs/ParamRef" }
+        { "$ref": "#/$defs/ParamRef" },
+        { "$ref": "#/$defs/StateRef" }
       ]
     },
     "NumericComparator": {
@@ -279,15 +286,37 @@
         "$param": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_-]{0,63}$",
-          "description": "Name of a declared parameter. The only form of indirection in the format — there are no expression strings anywhere."
+          "description": "Name of a declared parameter. One of the two forms of indirection in the format (the other is $state) — there are no expression strings anywhere."
+        }
+      }
+    },
+    "StateRef": {
+      "type": "object",
+      "required": ["$state", "fallback"],
+      "additionalProperties": false,
+      "description": "A reference into the merged persistent state (chat → project → group → general). The fallback is required and types the reference: it is what run-time resolution returns when the path is absent or holds a value of a different type, so a run can never fail on a $state reference.",
+      "properties": {
+        "$state": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dot/bracket path into merged state, e.g. \"player.health\" or \"inventory[0].name\"."
+        },
+        "fallback": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "string" },
+            { "type": "boolean" }
+          ],
+          "description": "Used whenever the path is absent or holds a value of a different type. In a roll field the fallback must be a number; a contains/ncontains operand's fallback must be a string. Enforced when the file loads."
         }
       }
     },
     "NumberOrParamRef": {
-      "description": "A literal number, or a reference to a declared parameter of type number or integer. That the referenced parameter is numeric is enforced when the file loads, which JSON Schema cannot express here.",
+      "description": "A literal number, a reference to a declared parameter of type number or integer, or a { \"$state\": \"path\", \"fallback\": <number> } reference. That the referenced parameter is numeric, or the state fallback is a number, is enforced when the file loads, which JSON Schema cannot express here.",
       "oneOf": [
         { "type": "number" },
-        { "$ref": "#/$defs/ParamRef" }
+        { "$ref": "#/$defs/ParamRef" },
+        { "$ref": "#/$defs/StateRef" }
       ]
     }
   }
