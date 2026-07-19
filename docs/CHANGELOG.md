@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Improvement: Characters are told how to write math
+
+Every character's system prompt now carries a universal math-notation note (appended in `buildSystemPrompt`, independent of the selected roleplay template) telling the model to wrap LaTeX in double-dollar `$$...$$` — the only delimiter the renderer recognizes — and not to use single-dollar `$x$`, quotes, or backticks. Without it, models defaulted to single-`$`/quote habits and their formulas rendered as literal text. The cache-determinism golden hash was updated for the new prompt content.
+
 #### Feature: Cascading state — chat → project → group → general
 
 Persistent state (Pascal's subsystem) extends from two tiers to a four-tier cascade. Merge is shallow, top-level, narrowest-wins: `{ ...general, ...group, ...project, ...chat }`.

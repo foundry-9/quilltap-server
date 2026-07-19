@@ -11,6 +11,23 @@ import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/tim
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 
 /**
+ * Universal formatting note appended to every character's system prompt,
+ * independent of the selected roleplay template. Salon messages render as
+ * Markdown with KaTeX math (see `lib/markdown/math.ts`), and the renderer only
+ * recognizes double-dollar `$$...$$` (both inline and block) — single-dollar
+ * `$x$` is deliberately disabled so ordinary prose like "$50 ... $20" isn't
+ * swallowed as math. Without this note, models default to single-`$`/`\(...\)`
+ * habits and their formulas render as literal text.
+ */
+const MATH_FORMATTING_INSTRUCTION = `[FORMATTING: MATHEMATICAL NOTATION]
+Responses render as Markdown with KaTeX math support. To display a formula, wrap the LaTeX in DOUBLE dollar signs — $$...$$ — which renders correctly both inline within a sentence and as its own centered block. Do NOT use single dollar signs ($x$), single quotes, or backticks for math; only $$...$$ is recognized.
+- Inline example: The area of a circle is $$A = \\pi r^2$$ for radius r.
+- Block example:
+$$
+\\int_0^1 x^2 \\, dx = \\frac{1}{3}
+$$`
+
+/**
  * Other participant info for multi-character system prompts.
  *
  * Phase C moved the multi-character roster out of the system prompt and into
@@ -258,6 +275,10 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   if (roleplayTemplate?.systemPrompt) {
     parts.push(processTemplate(roleplayTemplate.systemPrompt, templateContext))
   }
+
+  // Universal math-notation formatting note — applies to every character
+  // regardless of the selected roleplay template.
+  parts.push(MATH_FORMATTING_INSTRUCTION)
 
   // Tool instructions (per-turn dynamic — varies with enabled tools, danger
   // routing, provider tool support).

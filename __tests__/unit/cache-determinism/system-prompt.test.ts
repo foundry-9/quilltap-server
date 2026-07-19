@@ -101,7 +101,7 @@ describe('cache-determinism: system prompt', () => {
   it('buildSystemPrompt fixture hash matches checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS))
-      : 'cd1a16cf903c655a'
+      : 'bd27b1ca407d9901'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS))
     if (actual !== golden) {
       // Surface the new hash so the engineer can update the golden
