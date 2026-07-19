@@ -96,6 +96,8 @@ const PreviewBodySchema = z.object({
   params: z.record(z.string(), z.unknown()).nullish(),
   private: z.boolean().optional(),
   metadata: MetadataInputSchema.nullish(),
+  /** Mock merged state for `$state` refs and `{{state.path}}`. Default {}. */
+  state: z.record(z.string(), z.unknown()).nullish(),
   llm: z.union([z.strictObject({ live: z.literal(true) }), LlmSimulationSchema]).nullish(),
 });
 
@@ -103,6 +105,8 @@ const AuditBodySchema = z.object({
   definition: z.unknown(),
   params: z.record(z.string(), z.unknown()).nullish(),
   metadata: MetadataInputSchema.nullish(),
+  /** Mock merged state for `$state` refs, held fixed across every draw. Default {}. */
+  state: z.record(z.string(), z.unknown()).nullish(),
   // No `live` here: an audit is ten thousand hands, and the point of the bench
   // is that it never spends ten thousand LLM calls. The simulated answer is
   // held fixed across every draw.
@@ -196,6 +200,7 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
     const result = await executeCustomTool(definition.value, body.value.params ?? undefined, {
       private: body.value.private,
       metadata: metadata.value,
+      state: body.value.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
     logger.debug('Workbench preview rolled', {
@@ -245,7 +250,8 @@ async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextR
       body.value.params ?? undefined,
       AUDIT_RUNS,
       metadata.value,
-      llm
+      llm,
+      body.value.state ?? {}
     );
     logger.debug('Workbench audit dealt', {
       context: HANDLER,

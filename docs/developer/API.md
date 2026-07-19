@@ -2077,7 +2077,7 @@ Queue avatar regeneration for a specific character in this chat.
 
 #### `GET /api/v1/chats/[id]?action=get-state`
 
-Get chat state (merged with project state if chat belongs to a project).
+Get the merged **four-tier cascade** state (chat → project → group → general; narrower tiers win). The group tier uses the **participants-union** scope — the union across the chat's active character participants (`type === 'CHARACTER' && status !== 'removed'`) — and only merges when exactly one group applies.
 
 **Response**: `200 OK`
 
@@ -2087,13 +2087,18 @@ Get chat state (merged with project state if chat belongs to a project).
   "state": {},
   "chatState": {},
   "projectState": {},
+  "groupState": {},
+  "generalState": {},
+  "groupTier": { "status": "single", "candidates": [{ "id": "group-uuid", "name": "Alpha" }], "appliedGroupId": "group-uuid" },
   "projectId": "project-uuid"
 }
 ```
 
+`projectState`, `groupState`, and `generalState` are **omitted when empty** (the "undefined when empty" convention). `groupTier.status` is `none` (no groups), `single` (exactly one — merged, `appliedGroupId` set), or `ambiguous` (two or more — the tier is skipped from the merged view and must be edited per group).
+
 #### `PUT /api/v1/chats/[id]?action=set-state`
 
-Replace entire chat state.
+Replace the entire **chat-tier** state only.
 
 **Request Body**:
 
@@ -2106,6 +2111,48 @@ Replace entire chat state.
 #### `DELETE /api/v1/chats/[id]?action=reset-state`
 
 Reset chat state to empty object. Returns previous state.
+
+---
+
+### Group State
+
+Groups are instance-global (existence-only check, no ownership). `handleGetState` returns the group's own state with no parent tier — the cascade merge happens on the chat get-state route.
+
+#### `GET /api/v1/groups/[id]?action=get-state`
+
+Get a single group's own state.
+
+**Response**: `200 OK`
+
+```json
+{ "success": true, "state": {} }
+```
+
+#### `PUT /api/v1/groups/[id]?action=set-state`
+
+Replace the group's entire state. Body `{ "state": { ... } }`.
+
+#### `DELETE /api/v1/groups/[id]?action=reset-state`
+
+Reset the group's state to `{}`. Returns `{ "success": true, "previousState": { ... } }`.
+
+---
+
+### General State (instance-wide)
+
+The bottom tier of the state cascade. No entity row — it lives as a `state.json` document at the root of the singleton "Quilltap General" mount (`instance_settings.generalMountPointId`), seeded idempotently at startup.
+
+#### `GET /api/v1/settings/general-state`
+
+Read instance-wide general state. Returns `{ "success": true, "state": {} }` (empty `{}` when the mount is not yet provisioned).
+
+#### `PUT /api/v1/settings/general-state`
+
+Replace general state. Body `{ "state": { ... } }` (validated by `stateBodySchema`).
+
+#### `DELETE /api/v1/settings/general-state`
+
+Reset general state to `{}`. Returns `{ "success": true, "previousState": { ... } }`.
 
 ---
 

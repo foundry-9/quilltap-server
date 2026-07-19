@@ -678,7 +678,8 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   // Metadata / consult-answer eq/neq: no declared type steers the widget, so a
   // segmented literal-type picker chooses between number, text, and true/false
   // (§4.4.1). Containment needs no picker — the substring is always text.
-  const showTypePicker = typeUnknowable && !ordering && !containment && operand.kind !== 'param'
+  const showTypePicker =
+    typeUnknowable && !ordering && !containment && operand.kind !== 'param' && operand.kind !== 'state'
 
   return (
     <div className="flex items-center gap-1">
@@ -701,7 +702,14 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
         </select>
       )}
 
-      {operand.kind === 'param' ? (
+      {operand.kind === 'state' ? (
+        <span
+          className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
+          title="This operand draws from persistent state. Edit $state references in the raw JSON."
+        >
+          $state: {operand.path} → {String(operand.fallback)}
+        </span>
+      ) : operand.kind === 'param' ? (
         <select
           value={operand.name}
           onChange={(e) => setOperand({ kind: 'param', name: e.target.value })}

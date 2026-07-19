@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Feature: Cascading state — chat → project → group → general
+
+Persistent state (Pascal's subsystem) extends from two tiers to a four-tier cascade. Merge is shallow, top-level, narrowest-wins: `{ ...general, ...group, ...project, ...chat }`.
+
+- **General (instance-wide) state** is new: a `state.json` document at the root of the "Quilltap General" mount (`instance_settings.generalMountPointId`), seeded idempotently at startup (`ensureGeneralStateFile`, instrumentation PHASE 3.4b — creates `{}` when absent, never heals edited content). Accessors `readGeneralState`/`writeGeneralState` in `lib/mount-index/general-state.ts` (`{}`-graceful, warn-on-corrupt). No migration.
+- **Group state** now has an API, tool access, and UI (it already persisted via the group store overlay but was wired into nothing).
+- New shared resolver `lib/state/state-cascade.ts` (`resolveStateCascade` + `resolveGroupForContext`), replacing the two duplicated `mergeState` helpers. The group tier merges only when exactly one group applies; with 2+ it reports `ambiguous` and is skipped from the merged view (reachable only by naming a group). Group scope is the responding character's memberships for the LLM/Pascal paths and the union across active character participants for the API/UI view. Pure path helpers extracted to `lib/state/state-paths.ts`.
+- **`state` tool** gains `context: 'group' | 'general'` and an optional `group` (name or id) parameter. Fetch with no context returns the merged cascade; set/delete default to chat. Underscore user-only guard applies uniformly across all tiers.
+- **API:** chat `get-state` gains `groupState?`, `generalState?`, `groupTier`; new group `get-state`/`set-state`/`reset-state` actions; new `GET/PUT/DELETE /api/v1/settings/general-state`.
+- **UI:** `StateEditorModal` handles `chat | project | group | general`, shows inherited group/general layers and an ambiguous-groups notice; "Group State" button in the Aurora group editor; "General State" card in Settings → Chat.
+- **Pascal `$state`:** custom tools can reference persistent state via `{ "$state": "path", "fallback": <literal> }` (fallback required — types the ref at load, guarantees run-time resolution never fails) in roll fields, comparator operands, and parameter defaults, plus `{{state.path}}` in messages and the `llm` prompt. Resolved per-entrance from the merged cascade (character scope for `run_custom` and the manual popup when a character is named; a mock `state` object in the Workbench preview/audit and proving bench). `persist` (writing state back) stays deferred.
+
 #### Feature: LaTeX math rendering (KaTeX)
 
 Chat messages, help documents, and Scriptorium/file Markdown previews now typeset LaTeX math with KaTeX, on both the client renderer and the server pre-render pipeline (kept in sync). Supported delimiters: `$$...$$` inline and block, plus the `\(...\)` / `\[...\]` forms LLMs commonly emit, which are normalized to `$$` form before parsing (in a shared `lib/markdown/math.ts` helper) because CommonMark strips `\(` as a character escape. Single-dollar math (`$x$`) is deliberately disabled so prose with dollar amounts ("He slid $50 across the table") is never mangled into equations. Math inside code spans and fenced code blocks is left alone; invalid LaTeX renders the raw source in red rather than failing the message. Wide display equations scroll horizontally inside the message instead of stretching it. Server-side roleplay pattern post-processing skips KaTeX subtrees so patterns like `{thoughts}` or `*action*` can't corrupt rendered math markup; those HTML post-processing functions moved to an import-safe `lib/services/markdown-postprocess.ts` (re-exported from the service) so the new behavior is unit-testable.

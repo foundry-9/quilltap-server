@@ -39,9 +39,14 @@ export const queryKeys = {
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
   },
+  groups: {
+    all: ['groups'] as const,
+    state: (id: string) => ['groups', id, 'state'] as const,
+  },
   settings: {
     chat: ['settings', 'chat'] as const,
     textReplacements: ['settings', 'text-replacements'] as const,
+    generalState: ['settings', 'general-state'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,

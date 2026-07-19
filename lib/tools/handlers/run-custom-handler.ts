@@ -26,6 +26,7 @@ import {
   type DiscoveredCustomTool,
 } from '@/lib/pascal/custom-tools';
 import { displayTitle } from '@/lib/pascal/custom-tool.types';
+import { resolveStateCascade } from '@/lib/state/state-cascade';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildPascalResultContent, postPascalResult } from '@/lib/services/pascal/writer';
 import { postProsperoCustomToolError } from '@/lib/services/prospero-notifications/writer';
@@ -176,11 +177,37 @@ export async function executeRunCustomTool(
     }
   }
 
+  // The merged state cascade (chat → project → group → general) the run's
+  // `$state` references resolve against. Scoped to the rolling character's own
+  // groups (Knowledge's rule). Fail-soft: every `$state` ref carries a required
+  // fallback, so a run is always dealable even if state can't be read.
+  let toolState: Record<string, unknown> = {};
+  try {
+    const chat = await getRepositories().chats.findById(context.chatId);
+    if (chat) {
+      const cascade = await resolveStateCascade({
+        chat,
+        groupScope: context.characterId
+          ? { kind: 'character', characterId: context.characterId }
+          : { kind: 'none' },
+      });
+      toolState = cascade.merged;
+    }
+  } catch (error) {
+    logger.debug('run_custom: state cascade unavailable, defaulting to {}', {
+      context: CONTEXT,
+      chatId: context.chatId,
+      error: getErrorMessage(error),
+    });
+    toolState = {};
+  }
+
   let result: CustomToolRunResult;
   try {
     result = await executeCustomTool(entry.definition, parameters ?? null, {
       private: isPrivate,
       metadata,
+      state: toolState,
       // Only built when the definition wants one; the invoker resolves the
       // cheap-LLM selection fresh on each consult.
       ...(entry.definition.llm

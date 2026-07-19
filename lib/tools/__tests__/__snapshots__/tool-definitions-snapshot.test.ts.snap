@@ -1581,11 +1581,17 @@ exports[`tool definitions: derived OpenAI parameters state: parameters snapshot 
   "additionalProperties": false,
   "properties": {
     "context": {
-      "description": "Where to operate: "chat" for chat-specific state, "project" for project state. For fetch without context, returns merged state (chat values override project values).",
+      "description": "Which tier to operate on: "chat" (this conversation), "project" (its project), "group" (a group you belong to — see the "group" parameter), or "general" (instance-wide). For fetch without context, returns the merged cascade where narrower tiers win (chat over project over group over general). Set/delete without context default to "chat".",
       "enum": [
         "chat",
         "project",
+        "group",
+        "general",
       ],
+      "type": "string",
+    },
+    "group": {
+      "description": "Group name or ID; required with context "group" when the character belongs to more than one group.",
       "type": "string",
     },
     "operation": {

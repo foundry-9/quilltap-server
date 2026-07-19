@@ -49,6 +49,13 @@ export function NumberOrParamField({
           aria-label={label}
           step="any"
         />
+      ) : value.kind === 'state' ? (
+        <span
+          className={`qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}
+          title="This field draws from persistent state. Edit $state references in the raw JSON, or swap to a literal."
+        >
+          $state: {value.path} → {value.fallback}
+        </span>
       ) : (
         <select
           value={value.name}
@@ -81,7 +88,9 @@ export function NumberOrParamField({
             ? noParams
               ? 'Declare a numeric parameter first'
               : 'Use a parameter instead of a number'
-            : 'Use a literal number instead'
+            : value.kind === 'state'
+              ? 'Replace this $state reference with a literal number'
+              : 'Use a literal number instead'
         }
         aria-label={`Toggle ${label} between a literal and a parameter reference`}
       >

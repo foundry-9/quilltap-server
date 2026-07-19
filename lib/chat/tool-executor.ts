@@ -695,6 +695,7 @@ export async function executeToolCallWithContext(
         userId,
         chatId,
         projectId: context.projectId,
+        characterId,
       };
 
       const result = await executeStateTool(toolCall.arguments, stateContext);

@@ -23,6 +23,7 @@ import {
   MAX_PARAMETERS,
   MAX_TITLE_LENGTH,
   displayTitle,
+  isStateRef,
 } from '@/lib/pascal/custom-tool.types'
 import {
   MAX_DICE_COUNT,
@@ -38,6 +39,7 @@ import {
   slugFromTitle,
   type DraftIssue,
   type DraftParameter,
+  type NumberOrParamValue,
   type ToolDraft,
 } from '@/lib/pascal/tool-draft'
 import { NumberOrParamField } from './NumberOrParamField'
@@ -162,8 +164,14 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
 
   const rangeReadout = useMemo(() => {
     const r = draft.rollRange
-    const part = (value: { kind: 'literal'; text: string } | { kind: 'param'; name: string }, fallback: string) =>
-      value.kind === 'param' ? `“${value.name}”` : value.text.trim() === '' ? fallback : value.text.trim()
+    const part = (value: NumberOrParamValue, fallback: string) =>
+      value.kind === 'param'
+        ? `“${value.name}”`
+        : value.kind === 'state'
+          ? `state:${value.path}`
+          : value.text.trim() === ''
+            ? fallback
+            : value.text.trim()
 
     const min = part(r.min, '0')
     const max = part(r.max, '1')
@@ -376,7 +384,14 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
               <div className="flex items-center gap-3 flex-wrap text-sm">
                 <label className="flex items-center gap-2">
                   Default
-                  {param.type === 'boolean' ? (
+                  {isStateRef(param.defaultValue) ? (
+                    <span
+                      className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
+                      title="This default draws from persistent state. Edit $state references in the raw JSON."
+                    >
+                      $state: {param.defaultValue.$state} → {String(param.defaultValue.fallback)}
+                    </span>
+                  ) : param.type === 'boolean' ? (
                     <input
                       type="checkbox"
                       className="qt-checkbox"
