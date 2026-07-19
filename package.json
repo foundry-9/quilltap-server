@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.8.0-dev.75",
+  "version": "4.8.0-dev.76",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -85,6 +85,7 @@
     "croner": "^10.0.1",
     "jest-fetch-mock": "^3.0.3",
     "jsonrepair": "^3.14.0",
+    "katex": "^0.18.0",
     "lexical": "^0.43.0",
     "mammoth": "^1.12.0",
     "next": "^16.2.9",
@@ -98,9 +99,11 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
     "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
     "rehype-stringify": "^10.0.1",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "semver": "^7.8.5",

@@ -12,7 +12,10 @@
 import { useEffect, useMemo, useCallback, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
+import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism'
 import { QtapLink } from '@/components/qtap/QtapLink'
@@ -564,7 +567,13 @@ export default function FilePreviewText({
 
             {/* Markdown content */}
             <div className="qt-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{parsed.content}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, [remarkMath, REMARK_MATH_OPTIONS]]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownComponents}
+              >
+                {normalizeMathDelimiters(parsed.content)}
+              </ReactMarkdown>
             </div>
           </div>
         </div>

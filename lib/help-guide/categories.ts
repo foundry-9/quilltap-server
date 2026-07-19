@@ -44,6 +44,7 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
       'chat-message-actions',
       'chat-state',
       'chat-settings',
+      'math-notation',
       'answer-confirmation',
       'templates-in-chats',
       'agent-mode',

@@ -548,6 +548,16 @@
     color: inherit;
   }
 
+  /* Rendered math (KaTeX) — chat messages, help docs, and file previews.
+     Wide display equations scroll in place instead of stretching their
+     container; a little vertical padding keeps tall scripts (integrals,
+     matrices) clear of neighbouring lines. */
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.25rem 0;
+  }
+
   /* ==========================================================================
      MARKDOWN ELEMENT SPACING
      Since @tailwindcss/typography is not installed in v4, we define all

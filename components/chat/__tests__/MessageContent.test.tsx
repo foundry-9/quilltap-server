@@ -5,6 +5,8 @@ import { QtapLinkContext, type QtapLinkOpener } from '@/components/qtap/QtapLink
 
 jest.mock('remark-gfm', () => () => undefined)
 jest.mock('remark-breaks', () => () => undefined)
+jest.mock('remark-math', () => () => undefined)
+jest.mock('rehype-katex', () => () => undefined)
 jest.mock('react-syntax-highlighter', () => ({
   Prism: ({ children }: { children: React.ReactNode }) => <pre>{children}</pre>,
 }))

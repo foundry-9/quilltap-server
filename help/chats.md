@@ -151,6 +151,8 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 
 — arrives as three orderly lines, and not as one breathless run-on sentence.
 
+**A word on mathematics.** The Salon typesets LaTeX mathematics — `$$e^{i\pi}+1=0$$` between double dollar signs, or the backslashed `\(...\)` and `\[...\]` forms — into proper printed-monograph equations. Single dollar signs remain honest currency and are never mistaken for algebra. The full particulars are catalogued in [Mathematical Notation](math-notation.md).
+
 ### Viewing History
 
 Scroll up to see earlier messages in the conversation. Long chats may have:
@@ -416,6 +418,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Multi-Character Chats](chat-multi-character.md) — Conversations with multiple AI characters
 - [Turn Manager](chat-turn-manager.md) — How speaking turns work in group chats
 - [Message Actions](chat-message-actions.md) — Edit, regenerate, and manage messages
+- [Mathematical Notation](math-notation.md) — Typeset LaTeX mathematics in messages
 - [Chat Sidebar](chat-participants.md) — Managing chat participants and per-chat settings
 - [Chat Settings](chat-settings.md) — Global chat configuration
 - [Using Tools](tools-usage.md) — AI tools available during chat
