@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: Documented the `file-verify` subcommand in the CLI package README
+
+Release CLI docs pass. `packages/quilltap/README.md` was missing a section for the `file-verify` subcommand (it was the only subcommand absent from the package README; `CLI.md` and all three shell-completion scripts already covered it). Added a File Verification section describing the command, its `--all` / `--stall-ms` / `--json` flags, the top-level-only scope, and the macOS-only caveat. Docs-only; no code or CLI behavior changed this cycle.
+
 #### Fix: .qtap export no longer carries ephemeral Commonplace Book state
 
 Release backup/export completeness pass. The `.qtap` chat export spread the whole chat row, which pulled in two ephemeral per-chat fields: `commonplaceRecallHistory` (the Commonplace Book recall anti-repetition ring buffer) and `commonplaceSceneCache` (the per-target scene-state emission cache). Both are instance-local, regenerable UX state that should not travel between instances; `commonplaceRecallHistory`'s schema contract already declared it out of scope, and `commonplaceSceneCache` is now documented the same way. Both are stripped at the export writer. Instance backup/restore is unaffected and still preserves both fields. No schema change: `qtap-export.schema.json` never listed either field, and the export now matches.

@@ -278,6 +278,18 @@ quilltap migrations run --dry-run # List what would run (refuses without --dry-r
 
 `--json` works on all three. "Not yet recorded" includes migrations whose `shouldRun()` is `false` on this instance — the CLI doesn't evaluate the predicate, so it can't distinguish "would skip" from "would run."
 
+## File Verification
+
+`quilltap file-verify` force-downloads an instance's cloud-evicted (dataless) top-level data files so the databases are fully local before anything opens them. It reads each placeholder, which faults it in through the cloud provider (iCloud Drive, etc.). Safe to run repeatedly — a no-op when nothing is evicted. macOS only for now.
+
+```bash
+quilltap file-verify --instance Ignite        # Fault in only the dataless top-level files
+quilltap file-verify --instance Friday --all  # Read every top-level file, not just dataless ones
+quilltap file-verify --instance Friday --json # Machine-readable report
+```
+
+Only the **top-level** files of the data directory are considered; the `backups/` subdirectory is left alone. Flags: `--all` (read every top-level file, not just dataless ones), `--stall-ms <ms>` (treat a download as stalled after this many ms with no bytes per chunk; default 30000), `--json`. Resolves the instance via the usual `--instance` / `--data-dir` plumbing.
+
 ## Theme Management
 
 The CLI includes theme management commands:
