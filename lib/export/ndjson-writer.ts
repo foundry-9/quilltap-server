@@ -223,8 +223,20 @@ async function* streamChats(
       })
     );
 
+    // Ephemeral per-chat UX state that must not ride the portable .qtap file
+    // into another instance:
+    //   - commonplaceRecallHistory: the Commonplace Book recall anti-repetition
+    //     ring buffer (its ChatMetadataSchema contract declares it out of scope).
+    //   - commonplaceSceneCache: the per-target scene-state emission cache used
+    //     to collapse unchanged wardrobe prose; instance-local and regenerable.
+    // Both are dropped here so only durable chat data leaves the instance.
+    const {
+      commonplaceRecallHistory: _ephemeralRecallHistory,
+      commonplaceSceneCache: _ephemeralSceneCache,
+      ...chatForExport
+    } = chat;
     const chatRecord: Omit<ExportedChat, 'messages'> = {
-      ...chat,
+      ...chatForExport,
       ...(tagNames.length > 0 && { _tagNames: tagNames }),
       ...(participantInfo.length > 0 && { _participantInfo: participantInfo }),
     };

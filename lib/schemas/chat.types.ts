@@ -849,7 +849,8 @@ export const ChatMetadataSchema = z.object({
    * Courier delta) doesn't carry the same several-hundred-token wardrobe
    * prose every turn. The cache is updated only after the new whisper has
    * been durably posted. Null on chats that have not yet emitted a
-   * Commonplace Book whisper.
+   * Commonplace Book whisper. Ephemeral, instance-local, regenerable per-chat
+   * UX state — NOT part of the .qtap export.
    */
   commonplaceSceneCache: JsonSchema.nullable().optional(),
 

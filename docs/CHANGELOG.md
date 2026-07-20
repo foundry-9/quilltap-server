@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: .qtap export no longer carries ephemeral Commonplace Book state
+
+Release backup/export completeness pass. The `.qtap` chat export spread the whole chat row, which pulled in two ephemeral per-chat fields: `commonplaceRecallHistory` (the Commonplace Book recall anti-repetition ring buffer) and `commonplaceSceneCache` (the per-target scene-state emission cache). Both are instance-local, regenerable UX state that should not travel between instances; `commonplaceRecallHistory`'s schema contract already declared it out of scope, and `commonplaceSceneCache` is now documented the same way. Both are stripped at the export writer. Instance backup/restore is unaffected and still preserves both fields. No schema change: `qtap-export.schema.json` never listed either field, and the export now matches.
+
 #### Maintenance: Themed the Pascal's Workbench dialog backdrops
 
 Release `qt-*` theme-class pass. The Workbench's destination picker and save-conflict dialog used a hard-coded `bg-black/40` backdrop; both now use the standard `qt-dialog-overlay` class, so themes control the backdrop color (and the dialogs sit at the standard dialog z-index). No new `qt-*` utilities were needed; all other components changed since 4.7.0 already use themed classes.
