@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Maintenance: Themed the Pascal's Workbench dialog backdrops
+
+Release `qt-*` theme-class pass. The Workbench's destination picker and save-conflict dialog used a hard-coded `bg-black/40` backdrop; both now use the standard `qt-dialog-overlay` class, so themes control the backdrop color (and the dialogs sit at the standard dialog z-index). No new `qt-*` utilities were needed; all other components changed since 4.7.0 already use themed classes.
+
 #### Maintenance: Pruned release-scaffolding debug logging
 
 Release debug-logging pass. Removed 47 ceremonial `logger.debug` calls added during 4.8 development — happy-path "did X" narration (roster resolved, standalone document opened/saved/renamed/deleted, creation-progress stream lifecycle, merge started, home-dashboard payload build, `state.json` seeded/written, etc.) across 24 backend files in the chat, API-route, Pascal, services, and mount-index paths. Kept the ~23 diagnostic debug logs that fire in non-obvious branches (refusals, missing config/state, "did not match", dropped writes). Dropped the now-unused `logger` imports in five files and removed four empty blocks / unused vars left behind. No behavior change.
