@@ -72,10 +72,7 @@ import SaveImageDialog from './components/SaveImageDialog'
 import { TerminalPane } from './components/TerminalPane'
 import TerminalSessionPicker from './components/TerminalSessionPicker'
 import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
-import { resolveDocumentExistsForChat } from './hooks/documentModeApi'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
-import { QtapDocContext, type QtapDocOpener } from '@/components/chat/QtapDocContext'
-import type { QtapUriParts } from '@/lib/doc-edit/qtap-uri'
 import { Icon } from '@/components/ui/icon'
 import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
 
@@ -1206,39 +1203,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     await documentModeHook.openDocument(params)
   }, [documentModeHook])
 
-  // Document-Mode bridge for clickable `qtap://` links in the transcript.
-  // Existence checks are cached by (scope, mountPoint, path) for the lifetime
-  // of this chat view so repeated links to one target share a single request.
-  const qtapExistsCacheRef = useRef<Map<string, Promise<boolean>>>(new Map())
-  const qtapDocOpener = useMemo<QtapDocOpener>(() => {
-    const keyFor = (p: QtapUriParts) => `${p.scope}|${p.mountPoint ?? ''}|${p.path}`
-    return {
-      checkExists: (parts: QtapUriParts) => {
-        const cache = qtapExistsCacheRef.current
-        const key = keyFor(parts)
-        const cached = cache.get(key)
-        if (cached) return cached
-        const pending = resolveDocumentExistsForChat(id, {
-          filePath: parts.path,
-          scope: parts.scope,
-          mountPoint: parts.mountPoint,
-        })
-          .then((r) => r.exists)
-          .catch(() => false)
-        cache.set(key, pending)
-        return pending
-      },
-      open: (parts: QtapUriParts) => {
-        void documentModeHook.openDocument({
-          filePath: parts.path,
-          scope: parts.scope,
-          mountPoint: parts.mountPoint,
-          mode: 'split',
-        })
-      },
-    }
-  }, [id, documentModeHook])
-
   const handleReattributed = useCallback(async () => {
     const messageId = modals.reattributeDialogState?.messageId
     modals.setReattributeDialogState(null)
@@ -1314,7 +1278,6 @@ export function SalonView({ chatId }: SalonViewProps) {
   const isTerminalModeActive = terminalModeHook.terminalMode !== 'normal'
 
   return (
-    <QtapDocContext.Provider value={qtapDocOpener}>
     <TerminalModeContext.Provider value={terminalCtxValue}>
     <div
       className="qt-chat-layout"
@@ -1844,6 +1807,5 @@ export function SalonView({ chatId }: SalonViewProps) {
 
     </div>
     </TerminalModeContext.Provider>
-    </QtapDocContext.Provider>
   )
 }

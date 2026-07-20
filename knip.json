@@ -25,7 +25,12 @@
     "@vitest/mocker",
     "create-quilltap-theme",
     "esbuild",
-    "better-sqlite3-multiple-ciphers"
+    "better-sqlite3-multiple-ciphers",
+    "@anthropic-ai/sdk"
   ],
-  "ignoreBinaries": []
+  "ignoreBinaries": [
+    "ps",
+    "tasklist",
+    "du"
+  ]
 }

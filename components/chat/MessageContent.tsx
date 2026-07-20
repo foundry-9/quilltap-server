@@ -503,7 +503,7 @@ export default function MessageContent({
           // react-markdown's default URL sanitizer only allows http(s)/mailto/
           // etc., so it would strip `qtap://` hrefs before they reach `a()`.
           // Preserve qtap:// URIs (rendered as in-app Document-Mode links by
-          // QtapDocLink) and defer everything else to the default transform.
+          // QtapLink) and defer everything else to the default transform.
           urlTransform={(url) => (isQtapUri(url) ? url : defaultUrlTransform(url))}
           components={components}
         >

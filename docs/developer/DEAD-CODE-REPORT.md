@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-06-03
+**Last Updated**: 2026-07-20
 **Tool Used**: knip
-**Codebase**: Quilltap v4.6.0-dev.111
+**Codebase**: Quilltap v4.8.0-dev.88
 
 ---
 
@@ -12,12 +12,42 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | None flagged as of 2026-06-03. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
-| Unused Dependencies | None flagged as of 2026-06-03. Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1237 → 1170 (2026-06-03); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 754 → 727 (2026-06-03); most are intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Files | 2 remaining as of 2026-07-20, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Dependencies | None flagged as of 2026-07-20 (`@anthropic-ai/sdk` transitive-in-test added to `ignoreDependencies`). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
+| Unused Exports | ~1277 (2026-07-20); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | ~841 (2026-07-20); most are intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | ~44 (named + default pattern, low priority) |
+| Duplicate Exports | ~63 (named + default pattern, low priority) |
+
+---
+
+## 2026-07-20 — v4.8 release sweep (knip)
+
+knip flagged **3 unused files**, **1 unlisted dependency**, and **3 unlisted binaries**. The exports/types lists are the same intentional barrel/plugin/registry/schema surface documented in prior rounds (verified unchanged in character). Verified with `npx tsc --noEmit` (clean) and the full `npm run test:unit` suite (524 suites / 8717 tests passing).
+
+### Removed — superseded `QtapDocLink` Document-Mode chain
+
+`components/chat/QtapDocLink.tsx` was the original `qtap://` link renderer. It has been fully superseded by `QtapLink` (`components/qtap/QtapLink.tsx`) + `QtapLinkContext` + `QtapLinkProvider` (wired in `app-layout.tsx`), which is what `MessageContent`'s `a()` renderer actually uses. Removing the dead component orphaned its entire private support chain, all removed together:
+
+| File / location | Removed |
+|-----------------|---------|
+| `components/chat/QtapDocLink.tsx` | whole file (no importer; only a stale comment referenced it) |
+| `components/chat/QtapDocContext.tsx` | whole file — `QtapDocContext`, `useQtapDoc`, `QtapDocOpener` (only consumer was `QtapDocLink`) |
+| `app/salon/[id]/SalonView.tsx` | `qtapDocOpener` `useMemo`, `qtapExistsCacheRef`, the `QtapDocContext.Provider` wrapper, and the now-orphaned `QtapDocContext` / `QtapUriParts` / `resolveDocumentExistsForChat` imports |
+
+`resolveDocumentExistsForChat` (in `app/salon/[id]/hooks/documentModeApi.ts`) stays — it's still used by the live `QtapLinkProvider`. `components/chat/__tests__/QtapDocLink.test.tsx` was left in place: despite its filename it tests the live `QtapLink`, not the removed component. A stale comment in `MessageContent.tsx` was updated to name `QtapLink`.
+
+### knip.json — silenced legitimate false positives
+
+- **`@anthropic-ai/sdk`** added to `ignoreDependencies`. It's a transitive dependency (pulled in by the bundled Anthropic plugin) imported only by `__tests__/unit/plugins/anthropic-model-family-params.test.ts`; there is no direct root-`package.json` entry to flag. Same rationale as the existing `better-sqlite3-multiple-ciphers` entry.
+- **`ps`, `tasklist`, `du`** added to `ignoreBinaries`. These are legitimate OS binaries invoked at runtime: `ps`/`tasklist` for cross-platform liveness checks in `lib/database/backends/sqlite/instance-lock.ts`, `du` for size reporting in `scripts/build-standalone-tarball.ts`.
+
+### Investigated but KEPT — in-progress SVAR file-manager surface
+
+Both remaining flagged files belong to the actively-in-development SVAR file-manager migration (`docs/developer/features/svar-file-manager-implementation-plan.md`). They are pre-built ahead of the phase that wires them, not dead:
+
+- **`components/files/svar/SvarFilePicker.tsx`** — the Phase 4 "light costume" attach-a-file picker (replaces `FolderPicker.tsx` / `DocumentPickerModal.tsx`). Its support function `wirePickerSelection` is already exercised by `createSvarAdapter.test.ts`; only the page wiring (Phase 4) is outstanding. The Phase 3 `SvarFileManager` sibling **is** already wired (dynamic-imported by `app/scriptorium/[id]/DocumentStoreDetailView.tsx`).
+- **`components/files/svar/index.ts`** — the documented runtime-free public surface (barrel) of the SVAR adapter. Consumers and tests currently import the submodules directly, so nothing imports the barrel yet, but it is intentional API for the feature.
 
 ---
 
