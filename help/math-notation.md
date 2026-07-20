@@ -43,7 +43,11 @@ Display equations are centred and generously spaced; should one prove wider than
 
 ## A Note on Dollar Signs
 
-You may have encountered establishments where a *single* dollar sign summons mathematics. The Salon deliberately declines this convention. Writers deal in dollars rather more often than in differentials — "He slid $50 across the table, then another $20 for luck" — and it would be a poor show indeed for a character's gambling debts to arrive typeset as an equation. Single dollar signs are always ordinary prose. When you want mathematics, ask for it plainly with `$$` or the backslashed forms above.
+You may have encountered establishments where a *single* dollar sign summons mathematics. The Salon treads carefully here. Writers deal in dollars rather more often than in differentials — "He slid $50 across the table, then another $20 for luck" — and it would be a poor show indeed for a character's gambling debts to arrive typeset as an equation.
+
+So the Salon employs a discreet doorman. A single-dollar expression is admitted as mathematics **only** when its contents are unmistakably mathematical — a backslashed command such as `\pi` or `\mathcal{P}`, a subscript or superscript, or a pair of braces. Anything without such credentials — a plain sum of money, a lone letter — is waved through as ordinary prose and left exactly as written. This spares the well-behaved models, which reach for single dollars by long habit, while your gambling debts stay solvent.
+
+A bare single letter, `$K$`, carries no mathematical credentials of its own. Standing quite alone in a sentence it remains plain text — but should a properly credentialed expression appear elsewhere on the same line, the doorman infers good company and admits the bare letter too, so that `$K$` and `$\mathcal{P}$` may be introduced together in one breath. A lone letter with no such companion, or when you simply wish to be certain, is best written `$$K$$` (or given credentials of its own, as in `$K_1$`); the double-dollar `$$` and backslashed forms above are never in doubt.
 
 ## Where Mathematics Renders
 

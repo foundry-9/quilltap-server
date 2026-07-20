@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Fix: Single-dollar math from models now renders
+
+Models routinely ignore the system-prompt steering toward `$$...$$` and emit standard single-`$` inline math (`$\mathcal{P}$`, `$T_{CMB}$`), which the renderer dropped as literal text because single-dollar parsing is disabled to protect dollar-amount prose. `normalizeMathDelimiters` (shared by the client and server renderers, `lib/markdown/math.ts`) now promotes a single-`$...$` span to `$$...$$` when — and only when — its interior carries a LaTeX marker (a backslash-command, a `_`/`^` script, or braces). Currency amounts and paired prose amounts (`He slid $50 ... then $20`) carry no such marker and are left untouched; the promotion runs inside the existing code/`$$`-region skip, and a rejected pair releases its closing `$` so a leading currency amount can't consume a following formula's opening delimiter. A bare single token (`$K$`) carries no marker of its own and is promoted only when a marker span shares its line — so a symbol renders alongside the formula it belongs with, while a bare token standing alone stays literal (letter-anchored, so a lone `$5$` never qualifies). The system-prompt note (below) stays as belt-and-suspenders steering.
+
 #### Maintenance: OpenRouter plugin on @openrouter/sdk 0.13
 
 Bumped the OpenRouter provider plugin (`qtap-plugin-openrouter`) from `@openrouter/sdk` 0.12.79 to 0.13.66, matching the root. Updated `getAvailableModels` for 0.13's paginated `models.list()` (models now under `page.result.data`, iterated across pages) and narrowed the non-streaming `chat.send()` result to `ChatResult` for the new union return type. The `chat.send`/`fromChatMessages`/streaming surfaces are otherwise unchanged.
