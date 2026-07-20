@@ -193,6 +193,36 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(result.imageDescription).toContain('Beautiful scene description')
   })
 
+  it('forwards the image-description profile provider params (e.g. thinking mode) to the vision call', async () => {
+    // Regression for the direct-call forwarding fix (commit 8cf7272e): a
+    // profile's per-model settings such as DeepSeek `thinking: "disabled"` must
+    // reach provider.sendMessage, or a reasoning model burns its budget on
+    // hidden reasoning and returns empty content.
+    const reasoningProfile: ConnectionProfile = {
+      ...baseProfile,
+      parameters: { temperature: 0.3, thinking: 'disabled', reasoning_effort: 'high' },
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: reasoningProfile.id })
+    mockRepos.connections.findById.mockResolvedValue(reasoningProfile)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'Beautiful scene description',
+      finishReason: 'stop',
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    await generateImageDescription(mockFileAttachment, mockRepos, reasoningProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    const [params] = sendMessage.mock.calls[0]
+    expect(params.profileParameters).toEqual(
+      expect.objectContaining({ thinking: 'disabled', reasoning_effort: 'high' })
+    )
+  })
+
   it('reuses a generated image\'s prompt as its description without any vision call', async () => {
     mockRepos.files.findById.mockResolvedValue({
       id: 'file-1',
