@@ -31,6 +31,22 @@ import {
 type Repos = RepositoryContainer;
 
 /**
+ * Resolve a participant's character name for logging/announcements, falling
+ * back to `'Unknown'` when the participant is user-controlled (no character) or
+ * the character can't be loaded. Shared by every participant action handler.
+ */
+export async function resolveParticipantCharacterName(
+  participant: { characterId?: string | null } | null | undefined,
+  repos: Repos,
+): Promise<string> {
+  if (participant?.characterId) {
+    const character = await repos.characters.findById(participant.characterId);
+    if (character) return character.name;
+  }
+  return 'Unknown';
+}
+
+/**
  * Get enriched character data with default image
  */
 export async function getEnrichedCharacter(characterId: string, repos: Repos) {

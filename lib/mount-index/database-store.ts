@@ -25,28 +25,9 @@ import {
   emitDocumentMoved,
   emitDocumentWritten,
 } from './db-store-events';
+import { detectNativeText } from './path-utils';
 
 const logger = createServiceLogger('MountIndex:DatabaseStore');
-
-type SupportedFileType = 'markdown' | 'txt' | 'json' | 'jsonl';
-
-function detectDatabaseFileType(relativePath: string): SupportedFileType | null {
-  const ext = path.extname(relativePath).toLowerCase();
-  switch (ext) {
-    case '.md':
-    case '.markdown':
-      return 'markdown';
-    case '.txt':
-      return 'txt';
-    case '.json':
-      return 'json';
-    case '.jsonl':
-    case '.ndjson':
-      return 'jsonl';
-    default:
-      return null;
-  }
-}
 
 function normaliseRelativePath(relativePath: string): string {
   // Collapse ./ and redundant separators, reject traversal. Path-resolver
@@ -107,7 +88,7 @@ export async function writeDatabaseDocument(
 ): Promise<{ mtime: number }> {
   const repos = getRepositories();
   const rel = normaliseRelativePath(relativePath);
-  const fileType = detectDatabaseFileType(rel);
+  const fileType = detectNativeText(rel);
   if (!fileType) {
     throw new DatabaseStoreError(
       `Database-backed stores only accept text documents (.md, .markdown, .txt, .json, .jsonl, .ndjson). Got: ${path.extname(rel)}`,
@@ -222,7 +203,7 @@ export async function moveDatabaseDocument(
       'NOT_FOUND'
     );
   }
-  const fileType = detectDatabaseFileType(toRel);
+  const fileType = detectNativeText(toRel);
   if (!fileType) {
     throw new DatabaseStoreError(
       `Target path has unsupported extension: ${path.extname(toRel)}`,

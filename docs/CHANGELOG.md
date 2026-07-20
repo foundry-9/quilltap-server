@@ -4,6 +4,22 @@
 
 ### 4.8-dev
 
+#### Maintenance: Refactor pass — deduplication and single-source cleanups
+
+Behavior-preserving DRY/single-source refactors across the backend, no functional change:
+
+- `rng` tool bounds now import the shared dice constants from `lib/pascal/dice-notation.ts` instead of restating the literals.
+- `lib/memory/memory-weighting.ts` extracts `referenceTimeMs()`, sharing the `max(createdAt, lastReinforcedAt)` decay-reference calculation across its three call sites.
+- `isVisibleConversationalTurn` is exported once from `core-whisper-trigger.ts`; the byte-identical copy in `skip-signal.ts` was removed (both stay client-safe).
+- Wardrobe tool handlers share `findEquippedSlots`, `notifyWardrobeChanged`, `wardrobeItemNotFoundMessage`, and `formatWardrobeMutationResults` via `wardrobe-handler-shared.ts` instead of per-handler copies.
+- `image-generation-handler.ts` shares `buildCheapLLMConfigFromSettings` across its three cheap-LLM config blocks.
+- `message-formatter.ts` extracts `buildNamePrefixedContent`; `cheap-llm.ts` extracts `selectionFromProfile` for its three identical selection blocks.
+- `turn-manager/state.ts` extracts `advanceSpokenThisCycle`, shared by the after-message and after-skip cycle updates.
+- `vault-overlay/parsers.ts` extracts a generic `parseJsonVaultFile<T>`; the four JSON parsers delegate to it.
+- `database-store.ts` imports `detectNativeText` from `path-utils.ts` instead of keeping a duplicate file-type detector.
+- `whisper-handler.ts` resolves each participant's character once instead of re-querying to build the available-names list.
+- Chat participant action handlers share `resolveParticipantCharacterName` from `helpers.ts` instead of six copy-pasted lookups.
+
 #### Fix: Single-dollar math from models now renders
 
 Models routinely ignore the system-prompt steering toward `$$...$$` and emit standard single-`$` inline math (`$\mathcal{P}$`, `$T_{CMB}$`), which the renderer dropped as literal text because single-dollar parsing is disabled to protect dollar-amount prose. `normalizeMathDelimiters` (shared by the client and server renderers, `lib/markdown/math.ts`) now promotes a single-`$...$` span to `$$...$$` when — and only when — its interior carries a LaTeX marker (a backslash-command, a `_`/`^` script, or braces). Currency amounts and paired prose amounts (`He slid $50 ... then $20`) carry no such marker and are left untouched; the promotion runs inside the existing code/`$$`-region skip, and a rejected pair releases its closing `$` so a leading currency amount can't consume a following formula's opening delimiter. A bare single token (`$K$`) carries no marker of its own and is promoted only when a marker span shares its line — so a symbol renders alongside the formula it belongs with, while a bare token standing alone stays literal (letter-anchored, so a lone `$5$` never qualifies). The system-prompt note (below) stays as belt-and-suspenders steering.

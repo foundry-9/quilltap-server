@@ -101,6 +101,21 @@ export function formatDisplayName(name: string): string {
 }
 
 /**
+ * Prefix content with a `[Display Name] ` attribution tag, unless the content
+ * already opens with that character's tag (case-insensitive). Single source of
+ * truth for the inline speaker-attribution prefix used on both assistant and
+ * user turns.
+ */
+export function buildNamePrefixedContent(name: string, content: string): string {
+  const displayName = formatDisplayName(name)
+  const existingPrefixPattern = new RegExp(
+    `^\\[${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*`,
+    'i',
+  )
+  return existingPrefixPattern.test(content) ? content : `[${displayName}] ${content}`
+}
+
+/**
  * Message with optional name and participant info for multi-character context
  */
 export interface MultiCharacterMessage {
@@ -170,11 +185,7 @@ export function formatMessagesForProvider(
           thoughtSignature: msg.thoughtSignature ?? undefined,
         }
       }
-      const displayName = formatDisplayName(msg.name)
-      const existingPrefixPattern = new RegExp(`^\\[${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*`, 'i')
-      const prefixedContent = existingPrefixPattern.test(msg.content)
-        ? msg.content
-        : `[${displayName}] ${msg.content}`
+      const prefixedContent = buildNamePrefixedContent(msg.name, msg.content)
       return {
         role: roleForProvider,
         content: prefixedContent,
@@ -186,11 +197,7 @@ export function formatMessagesForProvider(
     // assistant turns, and system narration. The OpenAI-style `name` field is
     // a weak signal for cross-speaker attribution, so always inline the
     // [Name] prefix; if the provider also supports the name field, send both.
-    const displayName = formatDisplayName(msg.name)
-    const existingPrefixPattern = new RegExp(`^\\[${displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\s*`, 'i')
-    const prefixedContent = existingPrefixPattern.test(msg.content)
-      ? msg.content
-      : `[${displayName}] ${msg.content}`
+    const prefixedContent = buildNamePrefixedContent(msg.name, msg.content)
 
     const result: { role: 'user'; content: string; name?: string; thoughtSignature?: string } = {
       role: 'user',

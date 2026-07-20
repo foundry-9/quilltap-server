@@ -19,6 +19,7 @@ import type { Character } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import { normalizeContentBlockFormat, stripCharacterNamePrefix } from '@/lib/llm/response-normalizer'
 import { findMentionedCharacterIds } from '@/lib/chat/context/mentioned-characters'
+import { isVisibleConversationalTurn } from '@/lib/chat/context/core-whisper-trigger'
 
 /** The literal sentinel a character emits to pass its turn. */
 export const NOTHING_TO_ADD_SENTINEL = '[NOTHING TO ADD]'
@@ -218,26 +219,6 @@ export function isFirstCharacterTurn(events: ReadonlyArray<ChatEvent>): boolean 
   for (const m of events) {
     if (m.type !== 'message') continue
     if (m.role === 'ASSISTANT' && m.participantId) return false
-  }
-  return true
-}
-
-/**
- * A conversational turn visible to the responding character: a real
- * (non-Staff) USER/ASSISTANT message with content, not silent, and not a
- * whisper targeted away from this character. Mirrors the notion in
- * `lib/chat/context/core-whisper-trigger.ts`.
- */
-function isVisibleConversationalTurn(
-  m: MessageEvent,
-  respondingParticipantId: string,
-): boolean {
-  if (m.systemSender) return false
-  if (m.isSilentMessage === true) return false
-  if (typeof m.content !== 'string' || m.content.trim() === '') return false
-  const targets = m.targetParticipantIds
-  if (targets && targets.length > 0 && !targets.includes(respondingParticipantId)) {
-    return false
   }
   return true
 }

@@ -59,6 +59,25 @@ import {
 } from '@/lib/image-gen/aesthetic';
 
 /**
+ * Build the cheap-LLM config for this handler's ad-hoc LLM calls from a chat's
+ * `cheapLLMSettings`, falling back to the global default when unset. Shared by
+ * the prompt-expansion, appearance-resolution, and danger-classification paths
+ * so all three resolve the cheap model identically.
+ */
+function buildCheapLLMConfigFromSettings(
+  cheapLLMSettings: CheapLLMSettings | null | undefined,
+): CheapLLMConfig {
+  return cheapLLMSettings
+    ? {
+        strategy: cheapLLMSettings.strategy,
+        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
+        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
+        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
+      }
+    : DEFAULT_CHEAP_LLM_CONFIG;
+}
+
+/**
  * Execution context for image generation tool
  */
 export interface ImageToolExecutionContext {
@@ -618,12 +637,7 @@ async function expandPromptWithDescriptions(
     // If no override selection, use the standard cheap LLM logic
     if (!cheapLLMSelection) {
       // Build config from user settings if provided, otherwise use defaults
-      const cheapLLMConfig: CheapLLMConfig = cheapLLMSettings ? {
-        strategy: cheapLLMSettings.strategy,
-        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
-      } : DEFAULT_CHEAP_LLM_CONFIG;
+      const cheapLLMConfig = buildCheapLLMConfigFromSettings(cheapLLMSettings);
 
       const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
 
@@ -923,12 +937,7 @@ async function resolveAppearances(
       let appearanceLLMSelection = cheapLLMSelection;
       if (!appearanceLLMSelection) {
         const allProfiles = await repos.connections.findByUserId(context.userId);
-        const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
-          strategy: chatSettings.cheapLLMSettings.strategy,
-          userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-          defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-          fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-        } : DEFAULT_CHEAP_LLM_CONFIG;
+        const cheapLLMConfig = buildCheapLLMConfigFromSettings(chatSettings?.cheapLLMSettings);
 
         const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
         if (defaultProfile) {
@@ -1159,12 +1168,7 @@ async function loadSettingsAndBuildCheapLLM(
     try {
       const repos = getRepositories();
       const allProfiles = await repos.connections.findByUserId(userId);
-      const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
-        strategy: chatSettings.cheapLLMSettings.strategy,
-        userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-      } : DEFAULT_CHEAP_LLM_CONFIG;
+      const cheapLLMConfig = buildCheapLLMConfigFromSettings(chatSettings?.cheapLLMSettings);
 
       const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
       if (defaultProfile) {

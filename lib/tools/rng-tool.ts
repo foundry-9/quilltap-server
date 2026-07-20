@@ -12,6 +12,13 @@
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
+import {
+  MIN_DIE_SIDES,
+  MAX_DIE_SIDES,
+  MIN_DICE_COUNT,
+  MAX_DICE_COUNT,
+  MAX_DICE_MODIFIER,
+} from '@/lib/pascal/dice-notation';
 
 /**
  * Type of random generation to perform
@@ -32,8 +39,8 @@ export const rngToolInputSchema = z.object({
         z
           .number()
           .int()
-          .min(2)
-          .max(1000)
+          .min(MIN_DIE_SIDES)
+          .max(MAX_DIE_SIDES)
           .describe('Number of sides on the die (e.g., 6 for d6, 20 for d20)')
       ),
       z
@@ -49,8 +56,8 @@ export const rngToolInputSchema = z.object({
     z
       .number()
       .int()
-      .min(1)
-      .max(100)
+      .min(MIN_DICE_COUNT)
+      .max(MAX_DICE_COUNT)
       .describe(
         'Number of times to roll/flip (default: 1). For dice, this is like rolling multiple dice (e.g., 3 rolls of d6 = 3d6).'
       )
@@ -61,8 +68,8 @@ export const rngToolInputSchema = z.object({
     z
       .number()
       .int()
-      .min(-1000)
-      .max(1000)
+      .min(-MAX_DICE_MODIFIER)
+      .max(MAX_DICE_MODIFIER)
       .describe(
         'Flat amount added to the dice total after rolling (default: 0). Use for notation like 3d6+2 (modifier 2) or 2d10-1 (modifier -1). Ignored for flip_coin and spin_the_bottle.'
       )

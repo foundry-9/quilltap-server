@@ -15,8 +15,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
+import { findEquippedSlots } from './wardrobe-handler-shared';
 
 /**
  * Context required for wardrobe list tool execution
@@ -41,24 +41,6 @@ export class WardrobeListError extends Error {
     super(message);
     this.name = 'WardrobeListError';
   }
-}
-
-/**
- * Find every slot the item is equipped in. Slots are arrays now, so a single
- * item can occupy multiple slots (a multi-slot dress) and we want them all.
- */
-function findEquippedSlots(
-  itemId: string,
-  equippedSlots: EquippedSlots | null
-): string[] {
-  if (!equippedSlots) return [];
-  const slots: string[] = [];
-  for (const slot of WARDROBE_SLOT_TYPES) {
-    if ((equippedSlots[slot] ?? []).includes(itemId)) {
-      slots.push(slot);
-    }
-  }
-  return slots;
 }
 
 /**

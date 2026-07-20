@@ -16,7 +16,7 @@ import {
   updateParticipantSchema,
   removeParticipantSchema,
 } from '../schemas';
-import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant } from '../helpers';
+import { enrichParticipant, handleAddParticipant, handleParticipantUpdate, handleRemoveParticipant, resolveParticipantCharacterName } from '../helpers';
 import type { AuthenticatedContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/types';
@@ -57,13 +57,7 @@ export async function handleImpersonate(
     return serverError('Failed to start impersonation');
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) {
-      characterName = character.name;
-    }
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   logger.info('[Chats v1] Impersonation started', { chatId, participantId, characterName });
 
@@ -110,13 +104,7 @@ export async function handleStopImpersonate(
     });
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) {
-      characterName = character.name;
-    }
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   logger.info('[Chats v1] Impersonation stopped', { chatId, participantId, characterName });
 
@@ -166,13 +154,7 @@ export async function handleSetActiveSpeaker(
     return serverError('Failed to set active speaker');
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) {
-      characterName = character.name;
-    }
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   logger.info('[Chats v1] Active speaker set', { chatId, participantId, characterName });
 
@@ -432,11 +414,7 @@ export async function handleRebuildSystemPromptAction(
     return badRequest('System prompt rebuild is only available for LLM-controlled characters');
   }
 
-  let characterName = 'Unknown';
-  if (participant.characterId) {
-    const character = await repos.characters.findById(participant.characterId);
-    if (character) characterName = character.name;
-  }
+  const characterName = await resolveParticipantCharacterName(participant, repos);
 
   try {
     await compileIdentityStackForParticipant(chat, participantId);
@@ -473,11 +451,7 @@ export async function handleUpdateParticipantAction(
   const preStatus = preParticipant?.status || (preParticipant?.isActive ? 'active' : 'absent');
 
   // Resolve character name for logging
-  let characterName = 'Unknown';
-  if (preParticipant?.characterId) {
-    const character = await repos.characters.findById(preParticipant.characterId);
-    if (character) characterName = character.name;
-  }
+  const characterName = await resolveParticipantCharacterName(preParticipant, repos);
 
   const { participantId, ...updateFields } = validatedData;
 
@@ -527,11 +501,7 @@ export async function handleRemoveParticipantAction(
   }
 
   // Resolve character name for logging
-  let characterName = 'Unknown';
-  if (participantToRemove.characterId) {
-    const character = await repos.characters.findById(participantToRemove.characterId);
-    if (character) characterName = character.name;
-  }
+  const characterName = await resolveParticipantCharacterName(participantToRemove, repos);
   const previousStatus = participantToRemove.status || (participantToRemove.isActive ? 'active' : 'absent');
 
   const activeCharacters = chat.participants.filter((p) => p.type === 'CHARACTER' && isParticipantPresent(p.status));

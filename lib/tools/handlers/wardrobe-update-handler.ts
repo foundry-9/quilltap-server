@@ -23,6 +23,7 @@ import {
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
   resolveWardrobeItemAcrossTiers,
+  wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 import { buildWardrobeReadFailure, buildWardrobeReadOutput } from './wardrobe-read-handler';
 
@@ -75,9 +76,7 @@ export async function executeWardrobeUpdateTool(
       projectMountPointIds,
     );
     if (!item) {
-      return buildWardrobeReadFailure(
-        `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-      );
+      return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
     if (!isOwnWardrobeItem(item, context.characterId)) {

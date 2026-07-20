@@ -37,6 +37,22 @@ export interface EffectiveWeightResult {
 }
 
 /**
+ * Decay reference point for a memory: `max(createdAt, lastReinforcedAt)`.
+ *
+ * Single source of truth for the invariant that passive retrieval
+ * (`lastAccessedAt`) does NOT reset the decay clock — only creation or actual
+ * reinforcement with new information does. Every decay/age calculation in this
+ * module derives its reference time from here.
+ */
+export function referenceTimeMs(memory: Memory): number {
+  const createdTime = new Date(memory.createdAt).getTime()
+  const reinforcedTime = memory.lastReinforcedAt
+    ? new Date(memory.lastReinforcedAt).getTime()
+    : 0
+  return Math.max(createdTime, reinforcedTime)
+}
+
+/**
  * Calculate the effective weight of a memory combining importance with time decay.
  *
  * Formula:
@@ -64,11 +80,7 @@ export function calculateEffectiveWeight(
   // Use max(createdAt, lastReinforcedAt) as the reference time for decay.
   // Passive retrieval (lastAccessedAt) does NOT reset the decay timer —
   // only actual reinforcement with new information does.
-  const createdTime = new Date(memory.createdAt).getTime()
-  const reinforcedTime = memory.lastReinforcedAt
-    ? new Date(memory.lastReinforcedAt).getTime()
-    : 0
-  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const referenceTime = referenceTimeMs(memory)
 
   const daysOld = Math.max(0, (now.getTime() - referenceTime) / 86400000)
   const timeDecayFactor = Math.pow(0.5, daysOld / config.halfLifeDays)
@@ -143,11 +155,7 @@ export function defaultMinCosineForProvider(provider: string | undefined | null)
  * Used for temporal context in LLM memory injection.
  */
 export function formatRelativeAge(memory: Memory, now: Date = new Date()): string {
-  const createdTime = new Date(memory.createdAt).getTime()
-  const reinforcedTime = memory.lastReinforcedAt
-    ? new Date(memory.lastReinforcedAt).getTime()
-    : 0
-  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const referenceTime = referenceTimeMs(memory)
   const daysOld = Math.max(0, (now.getTime() - referenceTime) / 86400000)
 
   if (daysOld < 1) return 'today'
@@ -246,11 +254,7 @@ export function calculateProtectionScore(
 ): ProtectionScoreResult {
   const baseImportance = memory.reinforcedImportance ?? memory.importance
 
-  const createdTime = new Date(memory.createdAt).getTime()
-  const reinforcedTime = memory.lastReinforcedAt
-    ? new Date(memory.lastReinforcedAt).getTime()
-    : 0
-  const referenceTime = Math.max(createdTime, reinforcedTime)
+  const referenceTime = referenceTimeMs(memory)
   const daysSinceRefTime = Math.max(0, (now.getTime() - referenceTime) / 86400000)
 
   const decay = Math.pow(0.5, daysSinceRefTime / config.contentHalfLifeDays)

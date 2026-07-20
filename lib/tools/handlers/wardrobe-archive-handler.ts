@@ -17,13 +17,13 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeArchiveToolInput, WardrobeArchiveToolOutput } from '../wardrobe-archive-tool';
 import { validateWardrobeArchiveInput } from '../wardrobe-archive-tool';
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
-  recordPendingWardrobeAnnouncement,
+  notifyWardrobeChanged,
   resolveWardrobeItemAcrossTiers,
+  wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 
 export interface WardrobeArchiveToolContext {
@@ -69,9 +69,7 @@ export async function executeWardrobeArchiveTool(
       projectMountPointIds,
     );
     if (!item) {
-      return buildFailureResponse(
-        `Wardrobe item not found${item_id ? ` with ID "${item_id}"` : ''}${item_title ? ` with title "${item_title}"` : ''}`,
-      );
+      return buildFailureResponse(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
     if (!isOwnWardrobeItem(item, context.characterId)) {
@@ -92,19 +90,15 @@ export async function executeWardrobeArchiveTool(
     }
 
     if (wasEquipped) {
-      await triggerAvatarGenerationIfEnabled(repos, {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        callerContext: 'wardrobe-archive-handler',
-      });
-      await recordPendingWardrobeAnnouncement(
+      await notifyWardrobeChanged(
+        repos,
         {
           userId: context.userId,
           chatId: context.chatId,
+          characterId: context.characterId,
           pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
         },
-        { sourceContext: 'wardrobe-archive-handler', characterId: context.characterId },
+        'wardrobe-archive-handler',
       );
     }
 
