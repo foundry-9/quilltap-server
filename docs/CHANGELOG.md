@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Maintenance: Dependency updates
+
+Ran `npm update` across the root project, all packages, and all distributed plugins. Notable in-range bumps: `openai` 6.44 → 6.48, Next.js 16.2.9 → 16.2.10, TanStack Query 5.101.0 → 5.101.2, Storybook 10.4.6 → 10.5.2, plus patch bumps to katex, jsonrepair, tar, ws, tsx, eslint, postcss, playwright, and others. All 14 plugins rebuilt.
+
+`@openrouter/sdk` moved 0.12.79 → 0.13.66 (used only by the pricing fetcher). Its `models.list()` now returns a paginated async-iterable with models under `page.result.data` (was `response.data`); `fetchOpenRouterPricing` was updated to iterate pages.
+
 #### Improvement: Characters are told how to write math
 
 Every character's system prompt now carries a universal math-notation note (appended in `buildSystemPrompt`, independent of the selected roleplay template) telling the model to wrap LaTeX in double-dollar `$$...$$` — the only delimiter the renderer recognizes — and not to use single-dollar `$x$`, quotes, or backticks. Without it, models defaulted to single-`$`/quote habits and their formulas rendered as literal text. The cache-determinism golden hash was updated for the new prompt content.
