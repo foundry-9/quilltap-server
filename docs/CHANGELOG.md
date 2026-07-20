@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Docs: API.md now covers every v1 route; README documents the workspace and Pascal
+
+Release documentation-freshness pass. `docs/developer/API.md` was missing sections for a number of live `/api/v1/` routes; all are now documented, and the table of contents was updated to match. New sections: Groups (full CRUD, membership, and store-linking — previously only Group State was covered), a tiered Scenarios section (general/project/group), Character Photos, the user Photo Gallery, chat-scoped message send/stream plus the `[messageId]` actions, Text Replacement Rules, project mount-points and wardrobe, the `chats/[id]/qtap-target` streamer, and six System endpoints (home, autonomous-rooms, browse-directory, conversation-summaries, image-aesthetics, startup-status). Also documented the item endpoints for plugins, themes, and help-docs, and the wardrobe avatar-preview/transfer routes. `README.md` gained a Workspace section (the tabbed two-pane shell) and Pascal the Croupier / custom-tools coverage in the Gaming section. Docs-only; no code changed.
+
 #### Docs: Documented the `file-verify` subcommand in the CLI package README
 
 Release CLI docs pass. `packages/quilltap/README.md` was missing a section for the `file-verify` subcommand (it was the only subcommand absent from the package README; `CLI.md` and all three shell-completion scripts already covered it). Added a File Verification section describing the command, its `--all` / `--stall-ms` / `--json` flags, the top-level-only scope, and the macOS-only caveat. Docs-only; no code or CLI behavior changed this cycle.

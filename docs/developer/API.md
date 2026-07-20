@@ -33,6 +33,7 @@ API reference for Quilltap v4.3 and later.
   - [Session](#session-endpoint)
   - [User Profile](#user-profile)
   - [Chat Settings](#chat-settings)
+  - [Text Replacement Rules](#text-replacement-rules)
   - [API Keys](#api-keys)
   - [Connection Profiles](#connection-profiles)
   - [Embedding Profiles](#embedding-profiles)
@@ -47,12 +48,16 @@ API reference for Quilltap v4.3 and later.
   - [Wardrobe (Archetypes)](#wardrobe-archetypes)
   - [Character Wardrobe](#character-wardrobe)
   - [Outfit Presets](#outfit-presets)
+  - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
+  - [Photo Gallery](#photo-gallery)
   - [Chat Files](#chat-files)
   - [Chat File Operations](#chat-file-operations)
+  - [Chat qtap:// Target](#chat-qtap-target)
+  - [Chat Messages (Send & Stream)](#chat-messages-send--stream)
   - [Messages](#messages)
   - [Memories](#memories)
   - [Tags](#tags)
@@ -77,9 +82,17 @@ API reference for Quilltap v4.3 and later.
   - [LLM Tools](#llm-tools)
   - [Plugins (v1)](#plugins-v1)
   - [Projects](#projects)
+  - [Groups](#groups)
+  - [Scenarios](#scenarios)
   - [Help Docs](#help-docs)
   - [Help Chats](#help-chats)
   - [System Deployment](#system-deployment)
+  - [System Home](#system-home)
+  - [System Autonomous Rooms](#system-autonomous-rooms)
+  - [System Browse Directory](#system-browse-directory)
+  - [System Conversation Summaries](#system-conversation-summaries)
+  - [System Image Aesthetics](#system-image-aesthetics)
+  - [System Startup Status](#system-startup-status)
   - [System Plugin Initialization](#system-plugin-initialization)
   - [System Plugin Upgrades](#system-plugin-upgrades)
   - [System Pepper Vault (Deprecated)](#system-pepper-vault-deprecated)
@@ -455,6 +468,32 @@ Update the retention window. Merges with the current value and validates (intege
   "staleChatDays": 90
 }
 ```
+
+---
+
+### Text Replacement Rules
+
+Global, literal-string, word-boundary text replacements applied by the Lexical composer plugin on typed input. Rules are not user-scoped.
+
+#### `GET /api/v1/settings/text-replacements`
+
+List all replacement rules.
+
+#### `POST /api/v1/settings/text-replacements`
+
+Create a new rule.
+
+#### `POST /api/v1/settings/text-replacements?action=bulk-replace`
+
+Replace the entire rule list in one call.
+
+#### `PATCH /api/v1/settings/text-replacements/[id]`
+
+Update a single rule.
+
+#### `DELETE /api/v1/settings/text-replacements/[id]`
+
+Delete a single rule.
 
 ---
 
@@ -1463,6 +1502,22 @@ Analyze an image using a vision LLM to suggest wardrobe items.
 }
 ```
 
+#### `POST /api/v1/wardrobe/preview-avatar`
+
+Generate a one-off character avatar against an arbitrary equipped-slot snapshot (the state a wardrobe dialog is currently showing). The result is saved as a regular generated image (downloadable from the dialog) but is **not** persisted onto the character's `avatarOverrides` or any chat's `characterAvatars` — out-of-chat avatars never overwrite the canonical character avatar.
+
+**Request Body**: `{ characterId, equippedSlots, imageProfileId? }`
+
+**Response**: `{ fileId, url, mimeType, prompt }`
+
+#### `GET /api/v1/wardrobe/transfers`
+
+Return the destination options for moving or copying a wardrobe item between tiers (character vault, project stores, Quilltap General).
+
+#### `POST /api/v1/wardrobe/transfers`
+
+Move or copy one wardrobe item between wardrobe tiers.
+
 ---
 
 ### Character Wardrobe
@@ -1599,6 +1654,24 @@ Apply a preset outfit to a chat.
   }
 }
 ```
+
+---
+
+### Character Photos
+
+A character's own photo gallery, stored in the character vault's `photos/` folder (distinct from per-chat photo albums). Backed by `lib/photos/character-gallery-service.ts`.
+
+#### `GET /api/v1/characters/[id]/photos`
+
+List the photos in the character's gallery.
+
+#### `POST /api/v1/characters/[id]/photos`
+
+Upload a new photo. `multipart/form-data`: `file` (required), plus optional `caption` and `tags`.
+
+#### `DELETE /api/v1/characters/[id]/photos/[linkId]`
+
+Remove a photo from the gallery. `[linkId]` is the `doc_mount_file_links.id` returned by the list/upload endpoints. If the removed photo was the character's `defaultImageId` (or appeared in any `avatarOverrides[].imageId`), those pointers are nulled too.
 
 ---
 
@@ -2724,6 +2797,28 @@ Returns the list of photo-album targets the Salon's Save-Image dialog can offer 
 
 ---
 
+### Photo Gallery
+
+The user's personal image gallery, stored at `<userUploadsMountPointId>/photos/` and deduped by SHA-256. Backed by `lib/photos/user-gallery-service.ts`.
+
+#### `GET /api/v1/photos`
+
+List the user's gallery. Supports optional `query`, `tags`, and pagination parameters.
+
+#### `POST /api/v1/photos`
+
+Save an image (by image-v2 `FileEntry` id) to the gallery. Saving the same image twice is rejected with a clear error (SHA-256 dedupe).
+
+#### `GET /api/v1/photos/[id]`
+
+Get a single gallery entry with its link summary. `[id]` is a `doc_mount_file_links.id` (the `linkId` returned by list/save).
+
+#### `DELETE /api/v1/photos/[id]`
+
+Remove a gallery entry. Cascades to chunks; garbage collection drops the underlying file row if this was its last link.
+
+---
+
 ### Chat Files
 
 Upload and list files associated with a chat.
@@ -2832,6 +2927,50 @@ Delete a chat file and its physical storage.
   "success": true
 }
 ```
+
+---
+
+### Chat qtap:// Target
+
+#### `GET /api/v1/chats/[id]/qtap-target`
+
+Resolves a `qtap://` address through the same chat access rules as the Salon's Document Mode, then streams the raw bytes. Used by global `qtap://` image links so non-Salon surfaces (e.g. the fullscreen image viewer) can reuse chat-scoped document resolution.
+
+**Query Parameters**:
+
+| Parameter | Description |
+|-----------|-------------|
+| `scope` | The doc-edit scope the address resolves within |
+| `filePath` | The target file path inside the resolved store |
+| `mountPoint` | The mount point / store the address targets |
+
+**Response**: `200 OK` — the raw file bytes with the resolved content type. `404` if the target does not resolve.
+
+---
+
+### Chat Messages (Send & Stream)
+
+Chat-scoped message send and per-message actions. (The collection read/edit endpoints are under [Messages](#messages) below.)
+
+#### `POST /api/v1/chats/[id]/messages`
+
+Send a message and receive the streaming LLM response. Returns `text/event-stream` (SSE). HTTP concerns only — the business logic is delegated to the chat message orchestrator service.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=override-danger-flag`
+
+Override the Concierge danger flags on a message.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=resolve-external-turn`
+
+Resolve a Courier (manual / clipboard) placeholder turn by attaching the pasted reply.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=cancel-external-turn`
+
+Cancel a Courier placeholder turn: delete the message and unpause the chat.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=save-image`
+
+Save an image attached to the message into a chosen photo album.
 
 ---
 
@@ -4576,6 +4715,22 @@ Install a theme from a registry source.
 }
 ```
 
+#### `GET /api/v1/themes/[themeId]`
+
+Get metadata for a single theme.
+
+#### `GET /api/v1/themes/[themeId]?action=tokens`
+
+Get the resolved design tokens for the theme.
+
+#### `GET /api/v1/themes/[themeId]?action=export`
+
+Export the theme as a downloadable `.qtap-theme` bundle.
+
+#### `DELETE /api/v1/themes/[themeId]`
+
+Uninstall a bundle theme.
+
 ---
 
 ### Search
@@ -4947,6 +5102,22 @@ Uninstall a plugin.
 }
 ```
 
+#### `GET /api/v1/plugins/[name]`
+
+Get details for a single plugin.
+
+#### `GET /api/v1/plugins/[name]?action=get-config`
+
+Get the plugin's current configuration.
+
+#### `PUT /api/v1/plugins/[name]`
+
+Enable or disable the plugin.
+
+#### `POST /api/v1/plugins/[name]?action=set-config`
+
+Update the plugin's configuration.
+
 ---
 
 ### Projects
@@ -5070,6 +5241,131 @@ Update default tool settings for new chats in the project.
 
 When a new chat is created within a project, it inherits these default tool settings. Existing chats are not affected.
 
+#### `GET /api/v1/projects/[id]/mount-points`
+
+List the mount points (document stores) linked to a project.
+
+#### `POST /api/v1/projects/[id]/mount-points`
+
+Link a mount point to the project. Body: `{ mountPointId }`.
+
+#### `DELETE /api/v1/projects/[id]/mount-points`
+
+Unlink a mount point from the project. Body: `{ mountPointId }`.
+
+#### `GET /api/v1/projects/[id]/wardrobe`
+
+List the project's wardrobe items (the project tier of the tri-tier wardrobe model: character vault + project stores + Quilltap General), read from the project's `Wardrobe/` folder.
+
+#### `POST /api/v1/projects/[id]/wardrobe`
+
+Create a project wardrobe item. Body: `{ title, description?, types, appropriateness?, isDefault?, componentItemIds?, replace? }`.
+
+#### `GET /api/v1/projects/[id]/wardrobe/[itemId]`
+
+Fetch one project wardrobe item.
+
+#### `PUT /api/v1/projects/[id]/wardrobe/[itemId]`
+
+Update one project wardrobe item.
+
+#### `DELETE /api/v1/projects/[id]/wardrobe/[itemId]`
+
+Delete one project wardrobe item.
+
+---
+
+### Groups
+
+Character groups bundle several characters and their shared document stores. Group **state** is documented separately under [Group State](#group-state); these endpoints cover the group itself, its membership, and its linked stores.
+
+#### `GET /api/v1/groups`
+
+List all groups.
+
+#### `POST /api/v1/groups`
+
+Create a new group.
+
+#### `GET /api/v1/groups/[id]`
+
+Get group details.
+
+#### `PUT /api/v1/groups/[id]`
+
+Update a group.
+
+#### `DELETE /api/v1/groups/[id]`
+
+Delete a group.
+
+#### `GET /api/v1/groups/[id]?action=members`
+
+List the group's member characters.
+
+#### `POST /api/v1/groups/[id]?action=addMember`
+
+Add a character to the group.
+
+#### `DELETE /api/v1/groups/[id]?action=removeMember`
+
+Remove a character from the group.
+
+#### `GET /api/v1/groups/[id]?action=stores`
+
+List the document stores linked to the group.
+
+#### `POST /api/v1/groups/[id]?action=linkStore`
+
+Link a document store to the group.
+
+#### `DELETE /api/v1/groups/[id]?action=unlinkStore`
+
+Unlink a document store from the group.
+
+#### `GET /api/v1/groups/[id]/mount-points`
+
+List the mount points linked to a group.
+
+#### `POST /api/v1/groups/[id]/mount-points`
+
+Link a mount point to the group. Body: `{ mountPointId }`.
+
+#### `DELETE /api/v1/groups/[id]/mount-points`
+
+Unlink a mount point from the group. Body: `{ mountPointId }`.
+
+---
+
+### Scenarios
+
+Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+
+For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`; the bare filename (with or without `.md`) is accepted and the `Scenarios/` prefix is applied server-side. `..` segments are rejected.
+
+**General tier**
+
+- `GET /api/v1/scenarios` — list general scenarios. Tolerates the pre-migration race (returns an empty list with `mountPointId: null`).
+- `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, body }`. Rejects writes during the pre-migration window.
+- `GET /api/v1/scenarios/[scenarioPath]` — read one.
+- `PUT /api/v1/scenarios/[scenarioPath]` — update content + frontmatter.
+- `POST /api/v1/scenarios/[scenarioPath]?action=rename` — rename the file.
+- `DELETE /api/v1/scenarios/[scenarioPath]` — delete the file.
+
+**Project tier**
+
+- `GET /api/v1/projects/[id]/scenarios` · `POST /api/v1/projects/[id]/scenarios`
+- `GET`/`PUT`/`DELETE /api/v1/projects/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
+
+**Group tier**
+
+- `GET /api/v1/groups/[id]/scenarios` · `POST /api/v1/groups/[id]/scenarios`
+- `GET`/`PUT`/`DELETE /api/v1/groups/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
+
+#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>`
+
+The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
+
 ---
 
 ### Help Docs
@@ -5099,6 +5395,10 @@ Get the count of salon chats (non-help chats) for the current user.
   "count": 42
 }
 ```
+
+#### `GET /api/v1/help-docs/[id]`
+
+Get a single help document, including its rendered content.
 
 ---
 
@@ -5292,6 +5592,70 @@ Returns deployment information. This endpoint is unauthenticated as it is needed
 |-------|-------------|
 | `isUserManaged` | `true` for self-hosted deployments |
 | `isHosted` | `true` for hosted/cloud deployments (inverse of `isUserManaged`) |
+
+---
+
+### System Home
+
+#### `GET /api/v1/system/home`
+
+Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/tabbed-workspace.md`.
+
+**Response**: `200 OK` — the home dashboard data object.
+
+---
+
+### System Autonomous Rooms
+
+#### `GET /api/v1/system/autonomous-rooms`
+
+List every autonomous room owned by the authenticated user, with enough context for the Settings → System management surface to render `runState` badges, last/next run, budgets consumed, and to route into a transcript on demand. (Per-room control lives under [Autonomous Room Control](#autonomous-room-control).)
+
+---
+
+### System Browse Directory
+
+#### `GET /api/v1/system/browse-directory?path=/some/path`
+
+List the immediate subdirectories of the given path for the directory-picker UI. Returns the resolved path and its subdirectories. With no `path`, lists the user's home directory.
+
+---
+
+### System Conversation Summaries
+
+Backfill utility for the Commonplace Book's relevant-conversations retrieval.
+
+#### `POST /api/v1/system/conversation-summaries?action=regenerate`
+
+Enqueue a background job that re-mirrors every summarized chat's context summary into its participant character vaults (the files the retrieval reads). Returns immediately; the work runs in the background.
+
+#### `GET /api/v1/system/conversation-summaries?action=regenerate`
+
+Report whether a regeneration is currently in flight.
+
+---
+
+### System Image Aesthetics
+
+Read/write the instance-wide "Default Aesthetic" files behind the two editors on the Images settings tab. The doc-store file is the source of truth; the editors are views over it. Single tier — no fallback.
+
+#### `GET /api/v1/system/image-aesthetics?kind=lantern|aurora`
+
+Read the Quilltap General store's aesthetic file. `kind=lantern` → `lantern-aesthetics.md` (general/scene look); `kind=aurora` → `aurora-aesthetics.md` (how people and outfits are depicted).
+
+#### `PUT /api/v1/system/image-aesthetics?kind=lantern|aurora`
+
+Write that file — or, when the body is empty, delete it.
+
+---
+
+### System Startup Status
+
+#### `GET /api/v1/system/startup-status`
+
+Return the live state of server startup — coarse phase plus the event stream, current label, and sub-progress — to drive the loading-screen UI.
+
+**Authentication**: Not required. The loading screen runs before any session exists; the only data exposed is generic "what the server is doing right now," so no user data leaks.
 
 ---
 

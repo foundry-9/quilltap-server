@@ -159,6 +159,10 @@ Each connection profile is classified into a **model class** — Compact, Standa
 
 Agent Mode lets the AI use tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect. The Run Tool feature lets you invoke any tool directly from the chat toolbar. The plugin system means additional providers and tools can be added without waiting for us.
 
+### The Workspace
+
+Quilltap opens as a **two-pane workspace of tabs**. Chats, documents, terminals, characters, settings — each is a tab that stays live in the background, so switching between them never reloads anything, and a conversation streaming in one tab keeps going while you read a document beside it. Drag a tab into the other pane to work on two things side by side. Old bookmarks still land on the right tab without disturbing whatever else you have open.
+
 ### Projects & Document Stores
 
 Organize your work into projects with custom system prompts, file uploads, folder structures, and project-scoped scenarios. Document stores come in three flavors:
@@ -221,7 +225,9 @@ Every run is bounded and inspectable. The Host marks two pacing milestones aloud
 
 ### Gaming & Interactivity
 
-Persistent chat state for inventories, stats, scores, and any structured data. Project-level state shared across chats with per-chat overrides. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
+Persistent chat state for inventories, stats, scores, and any structured data — scoped to a single chat, a whole project, a group, or your entire instance, so a fact holds exactly as widely as it should. Cryptographically secure dice rolls (d4 to d1000), coin flips, and random participant selection with auto-detection — "I roll 2d6" actually rolls.
+
+**Pascal the Croupier** lets you build your own mechanics of chance: a named action with parameters, a roll, and a table of outcomes — a lockpicking attempt, a loot drop, a reaction check. The AI can invoke them mid-scene, and every roll is settled by Quilltap rather than the model, so a character can't narrate a failure into a win. Build them in **Pascal's Workbench**, a visual editor with a test bench that runs thousands of trial rolls so you can see the odds before you play.
 
 ### Image Generation
 
