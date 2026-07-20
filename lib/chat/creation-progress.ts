@@ -27,9 +27,6 @@
  */
 
 import { EventEmitter } from 'events';
-import { createServiceLogger } from '@/lib/logging/create-logger';
-
-const logger = createServiceLogger('Chat:CreationProgress');
 
 /** One resolved garment in a slot preview. */
 export interface OutfitPreviewEntry {
@@ -104,7 +101,6 @@ function scheduleCleanup(id: string): void {
   if (ch.cleanupTimer) clearTimeout(ch.cleanupTimer);
   ch.cleanupTimer = setTimeout(() => {
     channels().delete(id);
-    logger.debug('creation-progress channel cleaned up', { progressId: id });
   }, CLEANUP_TTL_MS);
   // Never keep the process alive just to clean up a channel.
   ch.cleanupTimer.unref?.();
@@ -123,7 +119,6 @@ export function publishCreationProgress(id: string, event: CreationProgressEvent
     ch.buffer.splice(0, ch.buffer.length - MAX_BUFFER);
   }
   ch.emitter.emit('event', event);
-  logger.debug('publishCreationProgress', { progressId: id, kind: event.kind });
 }
 
 /**
@@ -143,7 +138,6 @@ export function subscribeCreationProgress(
   }
   const replay = [...ch.buffer];
   ch.emitter.on('event', listener);
-  logger.debug('subscribeCreationProgress', { progressId: id, replayCount: replay.length });
   return {
     replay,
     unsubscribe: () => {
@@ -169,7 +163,6 @@ export function finishCreationProgress(id: string): void {
   ch.buffer.push(event);
   ch.emitter.emit('event', event);
   scheduleCleanup(id);
-  logger.debug('finishCreationProgress', { progressId: id });
 }
 
 /** Publish the terminal `error` event and schedule the channel for cleanup. */
@@ -182,7 +175,6 @@ export function failCreationProgress(id: string, message: string): void {
   ch.buffer.push(event);
   ch.emitter.emit('event', event);
   scheduleCleanup(id);
-  logger.debug('failCreationProgress', { progressId: id, message });
 }
 
 /**

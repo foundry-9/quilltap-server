@@ -126,16 +126,6 @@ export async function postPascalResult(
       pascalMeta,
     };
 
-    logger.debug('Posting Pascal outcome', {
-      context: CONTEXT,
-      chatId,
-      messageId,
-      tool: pascalMeta.tool,
-      rollForm: pascalMeta.rollForm,
-      state: pascalMeta.state,
-      invokedBy: pascalMeta.invokedBy,
-    });
-
     await repos.chats.addMessage(chatId, message);
 
     logger.info('[Pascal] Custom-tool outcome posted', {

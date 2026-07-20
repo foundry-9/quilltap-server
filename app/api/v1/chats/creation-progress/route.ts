@@ -20,9 +20,6 @@ import {
   subscribeCreationProgress,
   type CreationProgressEvent,
 } from '@/lib/chat/creation-progress';
-import { createServiceLogger } from '@/lib/logging/create-logger';
-
-const logger = createServiceLogger('Chat:CreationProgressRoute');
 
 // Streaming response — never cache, always run dynamically.
 export const dynamic = 'force-dynamic';
@@ -35,8 +32,6 @@ export const GET = createContextHandler(async (request: NextRequest): Promise<Ne
   if (!id) {
     return badRequest('Missing progress id');
   }
-
-  logger.debug('creation-progress stream opened', { progressId: id });
 
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
@@ -80,7 +75,6 @@ export const GET = createContextHandler(async (request: NextRequest): Promise<Ne
 
       // Client navigated away / closed the dialog → tear the subscription down.
       request.signal.addEventListener('abort', () => {
-        logger.debug('creation-progress stream aborted by client', { progressId: id });
         cleanup();
         safeClose(controller);
       });

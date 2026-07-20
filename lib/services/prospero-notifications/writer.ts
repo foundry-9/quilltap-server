@@ -813,12 +813,5 @@ export async function postProsperoCustomToolError(
   const opaqueContent = buildCustomToolErrorOpaqueContent(params.toolName, reason);
   const targets = params.whisper && params.callerParticipantId ? [params.callerParticipantId] : null;
 
-  logger.debug('Posting Prospero custom-tool error', {
-    context: 'prospero-notifications',
-    chatId: params.chatId,
-    toolName: params.toolName,
-    whisper: params.whisper,
-  });
-
   return postProsperoMessage(params.chatId, content, opaqueContent, 'custom-tool-error', targets);
 }

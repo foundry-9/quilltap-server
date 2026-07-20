@@ -40,13 +40,6 @@ export async function handleMergeConversation(
     return notFound('Source chat');
   }
 
-  logger.debug('[Chats v1] Merge requested', {
-    chatId,
-    sourceChatId,
-    includeCount: characterIds?.length ?? null,
-    outfitSelectionCount: outfitSelections?.length ?? 0,
-  });
-
   try {
     const mergeResult = await applyChatMerge({
       targetChatId: chatId,

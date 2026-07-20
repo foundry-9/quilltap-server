@@ -51,13 +51,11 @@ const AUDIT_RUNS = 10_000;
 // ---------------------------------------------------------------------------
 
 async function handleLibrary(): Promise<NextResponse> {
-  logger.debug('Workbench library requested', { context: HANDLER });
   const library = await buildCustomToolLibrary();
   return successResponse(library);
 }
 
 async function handleDestinations(): Promise<NextResponse> {
-  logger.debug('Workbench destinations requested', { context: HANDLER });
   const destinations = await listCustomToolDestinations();
   return successResponse(destinations);
 }
@@ -203,12 +201,6 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
       state: body.value.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
-    logger.debug('Workbench preview rolled', {
-      context: HANDLER,
-      tool: definition.value.name,
-      state: result.state,
-      outcomeIndex: result.outcomeIndex,
-    });
     return successResponse(result);
   } catch (error) {
     if (error instanceof CustomToolRunError) {
@@ -253,11 +245,6 @@ async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextR
       llm,
       body.value.state ?? {}
     );
-    logger.debug('Workbench audit dealt', {
-      context: HANDLER,
-      tool: definition.value.name,
-      runs: result.runs,
-    });
     return successResponse(result);
   } catch (error) {
     if (error instanceof CustomToolRunError) {

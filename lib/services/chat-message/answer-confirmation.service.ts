@@ -388,7 +388,6 @@ export async function runAnswerConfirmation(
   }
 
   if (check.result.consistent) {
-    logger.debug('Answer confirmation: consistent', { chatId })
     return { confirmed: true, revised: false, notes: null, revisedContent: null }
   }
 

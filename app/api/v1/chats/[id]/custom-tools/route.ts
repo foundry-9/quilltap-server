@@ -163,8 +163,6 @@ async function handleList(
   ctx: RequestContext,
   { id }: { id: string },
 ): Promise<NextResponse> {
-  logger.debug('Resolving custom-tool roster for the popup', { context: HANDLER, chatId: id });
-
   const chat = await ctx.repos.chats.findById(id);
   if (!chat) return notFound('Chat');
 
@@ -223,13 +221,6 @@ async function handleList(
       seen.add(key);
       tools.push(buildListing(entry, perspective, perspective.characterName));
     }
-
-    logger.debug('Custom tool resolves differently per character', {
-      context: HANDLER,
-      chatId: id,
-      name,
-      variants: distinct.size,
-    });
   }
 
   // Sorted by what the popup shows, not by the identity behind it — a list
@@ -237,15 +228,6 @@ async function handleList(
   tools.sort((a, b) => a.title.localeCompare(b.title) || (a.characterLabel ?? '').localeCompare(b.characterLabel ?? ''));
 
   const errors = [...errorsByKey.values()];
-
-  logger.debug('Custom-tool roster resolved for the popup', {
-    context: HANDLER,
-    chatId: id,
-    perspectives: perspectives.length,
-    toolCount: tools.length,
-    errorCount: errors.length,
-    droppedForCap: droppedForCap.size,
-  });
 
   return successResponse({
     tools,
@@ -293,14 +275,6 @@ async function handleRun(
   { id }: { id: string },
 ): Promise<NextResponse> {
   const body = runSchema.parse(await req.json());
-
-  logger.debug('Manual custom-tool run requested', {
-    context: HANDLER,
-    chatId: id,
-    tool: body.tool,
-    asCharacterId: body.asCharacterId ?? null,
-    private: body.private ?? null,
-  });
 
   const chat = await ctx.repos.chats.findById(id);
   if (!chat) return notFound('Chat');
@@ -357,14 +331,6 @@ async function handleRun(
   // sheet, every metadata test declines, and the catch-all answers, rather than
   // borrowing some arbitrary participant's secrets to decide it.
   const metadata = body.asCharacterId ? perspective.metadata : {};
-
-  logger.debug('Manual custom-tool run metadata resolved', {
-    context: HANDLER,
-    chatId: id,
-    tool: body.tool,
-    asCharacterId: body.asCharacterId ?? null,
-    keys: Object.keys(metadata),
-  });
 
   // The merged state cascade the run's `$state` references resolve against. The
   // group tier follows the same asymmetry as metadata above: it is scoped to

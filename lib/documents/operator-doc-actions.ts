@@ -268,11 +268,6 @@ export async function openDocumentFile(
     params.targetFolder,
   );
   const writeResult = await writeFileWithMtimeCheck(picked.resolved, '');
-  logger.debug('openDocumentFile: created blank document', {
-    filePath: picked.filePath,
-    scope: params.scope,
-    mountPoint: params.mountPoint,
-  });
   return {
     filePath: picked.filePath,
     displayTitle: params.title || path.basename(picked.filePath),

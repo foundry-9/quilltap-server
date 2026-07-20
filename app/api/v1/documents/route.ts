@@ -101,10 +101,6 @@ async function handleAccessibleStores(
 ): Promise<NextResponse> {
   try {
     const stores = await listAllEnabledStores(repos);
-    logger.debug('Resolved stores for standalone document picker', {
-      total: stores.length,
-      characterVaults: stores.filter(s => s.storeType === 'character').length,
-    });
     return successResponse({ stores, projectLibrary: null });
   } catch (error) {
     logger.error('Failed to resolve stores for standalone document picker', {
@@ -137,11 +133,6 @@ async function handleRecentDocuments(
       ordered.push(doc);
       if (ordered.length >= MAX_RECENT_DOCUMENTS) break;
     }
-
-    logger.debug('Resolved recent documents for standalone picker', {
-      windowSize: globalRecent.length,
-      returned: ordered.length,
-    });
 
     return successResponse({
       documents: ordered.map(doc => ({
@@ -205,13 +196,6 @@ async function handleOpenDocument(
         error: getErrorMessage(trackError),
       });
     }
-
-    logger.debug('Opened standalone document', {
-      filePath: opened.filePath,
-      scope: data.scope,
-      mountPoint: data.mountPoint,
-      isNew: opened.isNew,
-    });
 
     return successResponse({
       document: {
@@ -304,13 +288,6 @@ async function handleWriteDocument(
       mtime: data.mtime,
     });
 
-    logger.debug('Saved standalone document', {
-      filePath: data.filePath,
-      scope: data.scope,
-      mountPoint: data.mountPoint,
-      bytes: data.content.length,
-    });
-
     return successResponse({ success: true, mtime });
   } catch (error) {
     const message = getErrorMessage(error);
@@ -383,31 +360,17 @@ async function handleRenameDocument(
     return serverError(`Failed to rename document: ${message}`);
   }
 
-  logger.debug('Renamed standalone document', {
-    from: data.filePath,
-    to: newFilePath,
-    scope: data.scope,
-    mountPoint: data.mountPoint,
-  });
-
   // Keep the recent-documents history pointing at the new name. Best-effort:
   // the rename already succeeded on disk, so a tracking hiccup must not fail
   // the request. Mirrors syncChatDocumentsAfterFileMove for doc_move_file.
   try {
-    const updatedRows = await repos.chatDocuments.renameFilePathInStore(
+    await repos.chatDocuments.renameFilePathInStore(
       data.scope,
       data.mountPoint ?? null,
       data.filePath,
       newFilePath,
       newDisplayTitle,
     );
-    logger.debug('Updated recent-document tracking after standalone rename', {
-      from: data.filePath,
-      to: newFilePath,
-      scope: data.scope,
-      mountPoint: data.mountPoint,
-      updatedRows,
-    });
   } catch (trackError) {
     logger.warn('Failed to update recent-document tracking after standalone rename', {
       from: data.filePath,
@@ -457,12 +420,6 @@ async function handleDeleteDocument(
     });
     return serverError(`Failed to delete document: ${message}`);
   }
-
-  logger.debug('Deleted standalone document', {
-    filePath: data.filePath,
-    scope: data.scope,
-    mountPoint: data.mountPoint,
-  });
 
   return successResponse({ success: true });
 }

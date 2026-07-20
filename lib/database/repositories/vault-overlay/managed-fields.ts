@@ -446,11 +446,6 @@ export async function applyDocumentStoreWriteOverlay(
           descriptor.vaultPath,
           JSON.stringify(next, null, 2),
         );
-        logger.debug('Routed character metadata patch to the vault', {
-          characterId,
-          mountPointId,
-          keys: Object.keys(next),
-        });
         delete dbPatch.metadata;
         break;
       }

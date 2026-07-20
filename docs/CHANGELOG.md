@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Maintenance: Pruned release-scaffolding debug logging
+
+Release debug-logging pass. Removed 47 ceremonial `logger.debug` calls added during 4.8 development — happy-path "did X" narration (roster resolved, standalone document opened/saved/renamed/deleted, creation-progress stream lifecycle, merge started, home-dashboard payload build, `state.json` seeded/written, etc.) across 24 backend files in the chat, API-route, Pascal, services, and mount-index paths. Kept the ~23 diagnostic debug logs that fire in non-obvious branches (refusals, missing config/state, "did not match", dropped writes). Dropped the now-unused `logger` imports in five files and removed four empty blocks / unused vars left behind. No behavior change.
+
 #### Maintenance: Dead-code sweep — removed superseded qtap:// link chain
 
 Release dead-code pass (knip). Removed the original `qtap://` document-link renderer `QtapDocLink` and its private support chain (`QtapDocContext`/`useQtapDoc`, plus the `qtapDocOpener` memo and `QtapDocContext.Provider` in the Salon view). It was fully superseded by `QtapLink`/`QtapLinkContext`/`QtapLinkProvider`, which is what the message renderer already uses. No behavior change. Updated `knip.json` to ignore the transitive test-only `@anthropic-ai/sdk` dependency and the legitimate `ps`/`tasklist`/`du` runtime binaries. Kept the two in-progress SVAR file-manager files flagged by knip (pre-built ahead of their wiring phase).

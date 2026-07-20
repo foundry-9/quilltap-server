@@ -1227,29 +1227,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         .map(d => d.memoryId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
 
-      // Item F5 — structured per-turn ranking log for empirical tuning. One line
-      // per candidate (not just the selected ones) so the cosine floor and blend
-      // coefficients can be tuned against real chats. Cheap; left at debug level.
-      if (dynamicHeadResults.length > 0) {
-        const selectedIds = new Set(whisperedMemoryIds)
-        logger.debug('[ContextManager] Dynamic-head ranking', {
-          characterId: character.id,
-          chatId: chat.id,
-          query: memorySearchQuery.slice(0, 120),
-          candidates: dynamicHeadResults.map(r => ({
-            id: r.memory.id.slice(0, 8),
-            cosine: Number(r.score.toFixed(3)),
-            rawWeight: r.rawWeight !== undefined ? Number(r.rawWeight.toFixed(3)) : undefined,
-            effectiveWeight: r.effectiveWeight !== undefined ? Number(r.effectiveWeight.toFixed(3)) : undefined,
-            blendedBefore: r.recallAdjustment ? Number(r.recallAdjustment.blendedBefore.toFixed(3)) : undefined,
-            recallMultiplier: r.recallAdjustment?.multiplier,
-            recallFired: r.recallAdjustment?.fired,
-            blendedAfter: r.recallAdjustment ? Number(r.recallAdjustment.blendedAfter.toFixed(3)) : undefined,
-            selected: selectedIds.has(r.memory.id),
-          })),
-        })
-      }
-
       const sections: string[] = []
       if (archiveFormatted.content) sections.push(archiveFormatted.content)
       if (headFormatted.content) sections.push(headFormatted.content)

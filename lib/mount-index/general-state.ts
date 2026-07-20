@@ -53,9 +53,6 @@ export async function ensureGeneralStateFile(): Promise<boolean> {
   if (existing) return false;
 
   await writeDatabaseDocument(mountPointId, GENERAL_STATE_JSON_PATH, '{}');
-  logger.debug('[GeneralState] Seeded an empty state.json into the general mount', {
-    mountPointId,
-  });
   return true;
 }
 
@@ -108,8 +105,4 @@ export async function writeGeneralState(state: Record<string, unknown>): Promise
     GENERAL_STATE_JSON_PATH,
     JSON.stringify(state ?? {}, null, 2),
   );
-  logger.debug('[GeneralState] Wrote general state.json', {
-    mountPointId,
-    stateKeys: Object.keys(state ?? {}),
-  });
 }

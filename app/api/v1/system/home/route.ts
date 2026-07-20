@@ -23,7 +23,6 @@ const HANDLER = 'api.v1.system.home';
 export const GET = createAuthenticatedHandler(
   async (_req: NextRequest, ctx: AuthenticatedContext) => {
     try {
-      logger.debug(`[${HANDLER}] building home dashboard payload`, { userId: ctx.user.id });
       const data = await getHomeData(ctx.repos, {
         userId: ctx.user.id,
         fallbackName: ctx.user.name ?? null,

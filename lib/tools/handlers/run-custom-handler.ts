@@ -111,15 +111,6 @@ export async function executeRunCustomTool(
 
   const { tool: toolName, parameters, private: isPrivate } = parsed;
 
-  logger.debug('run_custom invoked', {
-    context: CONTEXT,
-    userId: context.userId,
-    chatId: context.chatId,
-    characterId: context.characterId ?? null,
-    tool: toolName,
-    hasParameters: !!parameters,
-    private: isPrivate ?? null,
-  });
 
   // Resolved fresh: a definition added or edited mid-chat is live on this call.
   const roster = await resolveCustomToolRoster({
@@ -160,12 +151,6 @@ export async function executeRunCustomTool(
     try {
       const character = await getRepositories().characters.findById(context.characterId);
       metadata = character?.metadata ?? {};
-      logger.debug('Loaded metadata for a custom-tool run', {
-        context: CONTEXT,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        keys: Object.keys(metadata),
-      });
     } catch (error) {
       const whisper = isPrivate ?? entry.definition.defaultVisibility === 'whisper';
       return reportFailure(

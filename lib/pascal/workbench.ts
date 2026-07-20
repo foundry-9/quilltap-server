@@ -9,7 +9,6 @@
  * same loaders.
  */
 
-import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
@@ -204,12 +203,6 @@ export async function buildCustomToolLibrary(): Promise<CustomToolLibraryRespons
     attachments: attachmentsOf(error.mountPointId),
   }));
 
-  logger.debug('Workbench library built', {
-    context: CONTEXT,
-    toolCount: tools.length,
-    errorCount: brokenFiles.length,
-  });
-
   return { tools, errors: brokenFiles };
 }
 
@@ -294,15 +287,6 @@ export async function listCustomToolDestinations(): Promise<CustomToolDestinatio
     .filter((mount) => !claimed.has(mount.id))
     .map(store)
     .sort((a, b) => a.mountName.localeCompare(b.mountName));
-
-  logger.debug('Workbench destinations resolved', {
-    context: CONTEXT,
-    general: general !== null,
-    projectCount: projects.length,
-    groupCount: groups.length,
-    characterCount: characters.length,
-    otherCount: other.length,
-  });
 
   return { general, projects, groups, characters, other };
 }

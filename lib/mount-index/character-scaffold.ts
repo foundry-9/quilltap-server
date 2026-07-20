@@ -96,7 +96,6 @@ export async function ensureCharacterMetadataFile(mountPointId: string): Promise
   if (existing) return false;
 
   await writeDatabaseDocument(mountPointId, METADATA_JSON_PATH, METADATA_JSON_SEED);
-  logger.debug('Seeded an empty fact sheet into a vault that had none', { mountPointId });
   return true;
 }
 

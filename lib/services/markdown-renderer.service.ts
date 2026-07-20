@@ -140,12 +140,6 @@ export async function renderMarkdownToHtml(
     // Must run before bracket escaping (which would otherwise claim `\[...\]`)
     // and mirrors the client's preprocessing chain in MessageContent.tsx.
     const mathNormalizedContent = normalizeMathDelimiters(trimmedContent);
-    if (mathNormalizedContent.includes('$$')) {
-      logger.debug('[MarkdownRenderer] Content contains math delimiters', {
-        contentLength: content.length,
-        normalized: mathNormalizedContent.length !== trimmedContent.length,
-      });
-    }
 
     // Step 3: Escape markdown inside roleplay brackets
     const escapedContent = escapeMarkdownInBrackets(mathNormalizedContent, patterns);

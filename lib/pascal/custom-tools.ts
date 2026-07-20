@@ -388,14 +388,6 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
     });
   }
 
-  logger.debug('Custom-tool roster resolved', {
-    context: CONTEXT,
-    chatId: ctx.chatId,
-    characterId: ctx.characterId ?? null,
-    toolCount: tools.size,
-    errorCount: errors.length,
-    names: [...tools.keys()],
-  });
 
   return { tools, errors, droppedForCap };
 }
@@ -429,13 +421,6 @@ export async function listAllCustomTools(): Promise<CustomToolLibrary> {
     entries.push(...found);
     errors.push(...mountErrors);
   }
-
-  logger.debug('Custom-tool library resolved', {
-    context: CONTEXT,
-    mountCount: mounts.length,
-    entryCount: entries.length,
-    errorCount: errors.length,
-  });
 
   return { entries, errors };
 }
@@ -1207,14 +1192,6 @@ async function resolveLlmConsult(
 
   const output = result.output.trim().slice(0, maxOutput).trim();
   if (output === '') return failed('the model returned an empty answer');
-
-  logger.debug('Custom tool LLM consult answered', {
-    context: CONTEXT,
-    tool: toolName,
-    provider: result.provider,
-    model: result.model,
-    outputLength: output.length,
-  });
 
   return {
     ok: true,

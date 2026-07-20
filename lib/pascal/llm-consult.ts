@@ -20,7 +20,6 @@
  * same shape as every cheap-LLM task the child already runs.
  */
 
-import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
@@ -116,16 +115,6 @@ async function consult(
 
   const maxTokens = consultMaxTokens(options?.maxOutputChars ?? MAX_LLM_OUTPUT_LENGTH);
 
-  logger.debug('Custom-tool consult dispatching', {
-    context: CONTEXT,
-    chatId: chatId ?? null,
-    provider: selection.provider,
-    model: selection.modelName,
-    dangerous,
-    promptLength: prompt.length,
-    maxOutputChars: options?.maxOutputChars ?? MAX_LLM_OUTPUT_LENGTH,
-    maxTokens,
-  });
 
   const task = await executeCheapLLMTask<string>(
     selection,

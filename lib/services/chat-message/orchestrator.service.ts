@@ -530,15 +530,6 @@ async function processMessage(
       recentlyAddressed: eligibility.recentlyAddressed,
       characterName: character.name,
     }
-    logger.debug('[TurnSkip] eligibility computed', {
-      chatId,
-      characterId: character.id,
-      participantId: characterParticipant.id,
-      offerSkip: eligibility.offerSkip,
-      mustSpeakReason: eligibility.mustSpeakReason,
-      recentlyAddressed: eligibility.recentlyAddressed,
-      summoned: options.nudge === true || options.chainSelectionReason === 'queue',
-    })
   }
 
   // ============================================================================

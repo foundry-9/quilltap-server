@@ -124,14 +124,6 @@ export async function applyChatMerge(
     return result;
   }
 
-  logger.debug('[ChatMerge] Starting merge', {
-    targetChatId,
-    sourceChatId,
-    sourceTitle: sourceChat.title ?? null,
-    sourceParticipantCount: sourceChat.participants.length,
-    targetParticipantCount: targetChat.participants.length,
-  });
-
   // Any character with a participant row in the target — regardless of status —
   // counts as "already here." Excluding removed rows too keeps us from creating
   // a duplicate participant row for a character who was previously dismissed.

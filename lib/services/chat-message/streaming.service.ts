@@ -246,12 +246,6 @@ export async function buildTools(
     try {
       const roster = await resolveCustomToolRoster(customToolContext)
       customTools = [...roster.tools.values()]
-      logger.debug('Custom-tool roster resolved for the turn', {
-        chatId: customToolContext.chatId,
-        characterId: customToolContext.characterId ?? null,
-        toolCount: customTools.length,
-        errorCount: roster.errors.length,
-      })
     } catch (rosterError) {
       // A broken vault must not take the whole turn down — the character simply
       // goes to the table without their custom tools.

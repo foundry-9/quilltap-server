@@ -15,7 +15,6 @@ import {
   ConversationChunkSchema,
 } from '@/lib/schemas/types';
 import { AbstractBaseRepository } from './base.repository';
-import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 
@@ -246,12 +245,6 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
           [new Date().toISOString(), chatId]
         );
         const cleared = Number(result?.changes ?? 0);
-        if (cleared > 0) {
-          logger.debug('[ConversationChunks] Cold-tiered chunk embeddings for chat', {
-            chatId,
-            cleared,
-          });
-        }
         return cleared;
       },
       'Error clearing chunk embeddings for chat',
