@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### Maintenance: OpenRouter plugin on @openrouter/sdk 0.13
+
+Bumped the OpenRouter provider plugin (`qtap-plugin-openrouter`) from `@openrouter/sdk` 0.12.79 to 0.13.66, matching the root. Updated `getAvailableModels` for 0.13's paginated `models.list()` (models now under `page.result.data`, iterated across pages) and narrowed the non-streaming `chat.send()` result to `ChatResult` for the new union return type. The `chat.send`/`fromChatMessages`/streaming surfaces are otherwise unchanged.
+
 #### Maintenance: Dependency updates
 
 Ran `npm update` across the root project, all packages, and all distributed plugins. Notable in-range bumps: `openai` 6.44 → 6.48, Next.js 16.2.9 → 16.2.10, TanStack Query 5.101.0 → 5.101.2, Storybook 10.4.6 → 10.5.2, plus patch bumps to katex, jsonrepair, tar, ws, tsx, eslint, postcss, playwright, and others. All 14 plugins rebuilt.

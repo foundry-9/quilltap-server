@@ -9,7 +9,7 @@
 
 import { OpenRouter } from '@openrouter/sdk';
 import { fromChatMessages } from '@openrouter/sdk/lib/chat-compat';
-import type { ChatMessages, OpenResponsesResult } from '@openrouter/sdk/models';
+import type { ChatMessages, ChatResult, OpenResponsesResult } from '@openrouter/sdk/models';
 import type {
   TextProvider,
   LLMMessage,
@@ -245,9 +245,12 @@ export class OpenRouterProvider implements TextProvider {
       requestParams.reasoning = { exclude: false };
     }
 
-    const response = await client.chat.send({
+    // Non-streaming send: @openrouter/sdk 0.13 types chat.send() as a
+    // ChatResult | EventStream union, so narrow to ChatResult here (a
+    // request without st:true always resolves to a ChatResult at runtime).
+    const response = (await client.chat.send({
       chatRequest: requestParams,
-    });
+    })) as ChatResult;
 
     const choice = response.choices[0];
     const content = choice.message.content;
@@ -745,8 +748,16 @@ export class OpenRouterProvider implements TextProvider {
         appTitle: getQuilltapUserAgent(),
       });
 
-      const response = await client.models.list();
-      const models = response.data?.map((m: any) => m.id) ?? [];
+      // @openrouter/sdk 0.13 changed models.list() to return a paginated
+      // async-iterable; the model array now lives at page.result.data (was
+      // response.data in 0.12). Iterate pages so we capture every model.
+      const pages = await client.models.list();
+      const models: string[] = [];
+      for await (const page of pages) {
+        for (const m of (page.result?.data ?? []) as Array<{ id: string }>) {
+          models.push(m.id);
+        }
+      }
       return models;
     } catch (error) {
       logger.error(
