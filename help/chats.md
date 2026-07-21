@@ -85,9 +85,11 @@ The dialog cannot be waved away while the work is underway — there would be no
 
 ### Taking a Character's Chair — "Play As"
 
-By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now offers *every* character you have added to the room — not merely those you keep on hand as personal personas — alongside any of your designated user-characters waiting in the wings.
+By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now draws its guest list strictly from the room itself — *every* character you have added to the cast is offered, and none who have not been.
 
-Choose one, and that character quietly changes hats: where the machine once spoke for them, now you do. Their connection profile is set aside (you are the author now, and need no model), and they remain in the cast under your own hand. Select **Chat as yourself** again and the character is handed back to the LLM — though you will want to assign a connection profile once more before the curtain rises.
+This is a happier arrangement than it may first appear, for the **Select Characters** roster on the left now presents the *entire* company — including those you keep as personal personas, who once kept themselves discreetly out of that list. Add whomever you mean to inhabit to the cast as you would any other, and they take their place in the Play-As dropdown alongside the rest.
+
+Choose one, and that character quietly changes hats: where the machine once spoke for them, now you do. Their connection profile is set aside (you are the author now, and need no model), and they remain in the cast under your own hand. Select **Chat as yourself** again and the character is handed back to the LLM — remaining in the room, though you will want to assign a connection profile once more before the curtain rises.
 
 One consequence follows, as surely as a headache follows a particularly long dinner party: the moment any character takes your chair, the room can no longer be made **autonomous**, for an autonomous room by its very nature keeps no human at the table. The *Make this an autonomous room* toggle greys itself out and posts a courteous note to that effect. Return the character to LLM control to restore the option.
 

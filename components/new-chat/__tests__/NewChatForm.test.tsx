@@ -228,14 +228,16 @@ const autonomousCheckbox = () =>
   screen.getByRole('checkbox', { name: /Make this an autonomous room/i })
 
 describe('NewChatForm Play As (in-place)', () => {
-  it('lists cast characters and default-user characters in the dropdown', () => {
+  it('lists only cast characters in the dropdown', () => {
     const alice = makeChar('a', 'Alice')
     const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
+    // Bob is a default-user character but is NOT in the cast, so he is absent
+    // from the dropdown — he would be added via the picker on the left instead.
     renderPlayAs([llm(alice)], [bob])
 
     const select = screen.getByLabelText('Play As (Optional)')
     const options = within(select).getAllByRole('option').map((o) => o.textContent)
-    expect(options).toEqual(['Chat as yourself', 'Alice', 'Bob'])
+    expect(options).toEqual(['Chat as yourself', 'Alice'])
   })
 
   it('flips exactly the chosen cast character to user, leaving the rest LLM', () => {
@@ -274,11 +276,13 @@ describe('NewChatForm Play As (in-place)', () => {
     expect(next[0].connectionProfileId).toBe('')
   })
 
-  it('"Chat as yourself" removes a default-user persona pulled in by the dropdown', () => {
+  it('"Chat as yourself" reverts a default-user cast member to llm', () => {
+    // Bob is a default-user character who was added to the cast from the picker
+    // and is currently the persona. Reverting hands him back to the LLM in place
+    // (he stays in the cast) rather than being removed.
     const alice = makeChar('a', 'Alice')
     const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
     const cast = [llm(alice), user(bob)]
-    // Bob is in the default-user roster, so reverting removes him entirely.
     const { setSelectedCharacters } = renderPlayAs(cast, [bob])
 
     fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
@@ -286,24 +290,10 @@ describe('NewChatForm Play As (in-place)', () => {
     })
 
     const next = applyUpdater(setSelectedCharacters, cast)
-    expect(next).toEqual([llm(alice)])
-  })
-
-  it('adds a default-user character not yet in the cast as a user entry', () => {
-    const alice = makeChar('a', 'Alice')
-    const bob = makeChar('b', 'Bob', { controlledBy: 'user' })
-    const cast = [llm(alice)]
-    const { setSelectedCharacters } = renderPlayAs(cast, [bob])
-
-    fireEvent.change(screen.getByLabelText('Play As (Optional)'), {
-      target: { value: 'b' },
-    })
-
-    const next = applyUpdater(setSelectedCharacters, cast)
     expect(next).toHaveLength(2)
-    const added = next.find((sc) => sc.character.id === 'b')!
-    expect(added.controlledBy).toBe('user')
-    expect(added.connectionProfileId).toBe('')
+    const b = next.find((sc) => sc.character.id === 'b')!
+    expect(b.controlledBy).toBe('llm')
+    expect(b.connectionProfileId).toBe('')
   })
 
   it('disables the autonomous toggle and shows the note when a user entry is present', () => {

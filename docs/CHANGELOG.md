@@ -4,6 +4,10 @@
 
 ### 4.8-dev
 
+#### New Chat: full character roster in the picker; Play As limited to the cast
+
+The "Select Characters" list in the New Chat dialog now shows every character, including default-user (user-playable-by-default) personas that were previously hidden from it. The "Play As (Optional)" dropdown in Character Customization now offers only characters that are in the cast, instead of also pulling in default-user personas that were not added. To play as a persona, add it to the cast from the picker first, then select it in Play As. Reverting a persona back to "Chat as yourself" now keeps that character in the cast under LLM control (it is no longer removed).
+
 #### Docs: API.md now covers every v1 route; README documents the workspace and Pascal
 
 Release documentation-freshness pass. `docs/developer/API.md` was missing sections for a number of live `/api/v1/` routes; all are now documented, and the table of contents was updated to match. New sections: Groups (full CRUD, membership, and store-linking — previously only Group State was covered), a tiered Scenarios section (general/project/group), Character Photos, the user Photo Gallery, chat-scoped message send/stream plus the `[messageId]` actions, Text Replacement Rules, project mount-points and wardrobe, the `chats/[id]/qtap-target` streamer, and six System endpoints (home, autonomous-rooms, browse-directory, conversation-summaries, image-aesthetics, startup-status). Also documented the item endpoints for plugins, themes, and help-docs, and the wardrobe avatar-preview/transfer routes. `README.md` gained a Workspace section (the tabbed two-pane shell) and Pascal the Croupier / custom-tools coverage in the Gaming section. Docs-only; no code changed.

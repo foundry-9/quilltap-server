@@ -234,9 +234,11 @@ export function useNewChat({
           const data = await charsRes.json()
           const all: Character[] = data.characters || []
           allCharacters = all
-          loadedCharacters = all.filter((c) => c.controlledBy !== 'user')
-          // Keep the full Character so the "Play As" dropdown can pull a
-          // default-user character into the cast without a second fetch.
+          // The picker on the left lists every character — including
+          // default-user personas — so they enter the cast the same way as
+          // anyone else and can then be chosen in the "Play As" dropdown.
+          loadedCharacters = all
+          // Still tracked separately for partner/persona seeding paths below.
           loadedUserChars = all.filter((c) => c.controlledBy === 'user')
         }
         let loadedProfiles: ConnectionProfile[] = []
