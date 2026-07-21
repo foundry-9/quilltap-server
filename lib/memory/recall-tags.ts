@@ -75,9 +75,10 @@ export type ScopePolicy = 'down-weight' | 'exclude'
  * Phase 1 wires `currentProjectId` + `scopePolicy` (items 1–2). Phase 2 adds the
  * remaining fields: `turnContext` (item 3 context steering), `presentAboutCharacterIds`
  * (item 4 participant boost), and `expandRelated` (item 5 one-hop expansion).
- * `turnTemporal` is carried for symmetry and debug logging but has no multiplier
- * of its own — temporal down-weighting (item 2) reads each memory's own
- * `temporal` tag, not the turn's guess.
+ * The episodic recall overhaul adds `turnRetrospective` (flips the temporal
+ * multipliers and suspends anti-repetition) and `occurredWithin` (time-window
+ * boost) — temporal weighting still reads each memory's own `temporal` tag,
+ * but the retrospective flag decides which direction it cuts.
  */
 export interface RecallContext {
   /** The current chat's project (`chat.projectId`), or null when project-less. */
@@ -99,9 +100,27 @@ export interface RecallContext {
   turnContext?: ContextTag | null
   /**
    * The turn's dominant `temporal` axis (same cheap-LLM guess). Carried for
-   * debug symmetry only; no multiplier consumes it today.
+   * debug logging; the retrospective flag below (not this guess) is what
+   * flips the temporal multipliers.
    */
   turnTemporal?: TemporalTag | null
+  /**
+   * True when the per-turn extraction judged this turn RETROSPECTIVE — the
+   * user (or a character) is referencing past shared events ("remember last
+   * week?"). Flips the temporal multipliers (past 0.85 → 1.15, moment
+   * 0.70 → 1.0) and suspends the anti-repetition penalty (the user is
+   * deliberately re-asking). Absent/false → historical behavior.
+   */
+  turnRetrospective?: boolean
+  /**
+   * Resolved absolute time window the turn references ("last week" →
+   * {from, to} ISO). Memories whose event time (occurredAt ?? createdAt)
+   * falls inside get a bounded boost ({@link RECALL_MULTIPLIERS}
+   * `occurredWithinWindow`). The hard-filter stage lives in
+   * `searchMemoriesSemantic`; this multiplier is the soft fallback when the
+   * filtered pool was too small. Null/absent → no window adjustment.
+   */
+  occurredWithin?: { from: string; to: string } | null
   /**
    * When true, one-hop related-memory expansion runs inside
    * `searchMemoriesSemantic` after the top hits are ranked (item 5). Capped by
@@ -145,8 +164,22 @@ export const RECALL_MULTIPLIERS = {
    * Anti-repetition — the memory was whispered in one of the last few turns of
    * this chat. A bounded penalty (never a hard exclude): a memory that is still
    * the best match keeps winning, just not trivially turn after turn.
+   * SUSPENDED on retrospective turns — a fumbled recall the user re-asks about
+   * must not bury the very memory they are trying to pin down.
    */
   recentlyWhispered: 0.6,
+  /**
+   * Retrospective turn — `temporal: past` flips from a penalty to a boost:
+   * the exact class of memory a "remember last week?" turn needs.
+   */
+  temporalPastRetrospective: 1.15,
+  /** Retrospective turn — `moment` memories stop being penalized. */
+  temporalMomentRetrospective: 1.0,
+  /**
+   * Event time falls inside the turn's resolved time window (soft fallback
+   * when the window-filtered pool was too small — see `searchMemoriesSemantic`).
+   */
+  occurredWithinWindow: 1.3,
 } as const
 
 /** Clamp on the *combined* multiplier so no single memory can explode the ranking. */
@@ -181,6 +214,9 @@ interface MemoryTagView {
   projectId?: string | null
   keywords?: readonly string[] | null
   aboutCharacterId?: string | null
+  /** ISO event time (episodic spine); write clock stands in when absent. */
+  occurredAt?: string | null
+  createdAt?: string
 }
 
 /**
@@ -252,20 +288,56 @@ export function scopeProjectMultiplier(
 }
 
 /**
- * Item 2 — temporal down-weighting.
+ * Item 2 — temporal weighting, now turn-aware (`turnTemporal` made real).
  *
- * `past` facts rarely should outrank live ones; `moment` facts are true only at a
- * single instant. Recall always runs BEFORE the current turn's extraction, so any
- * recalled `moment` memory was produced on a prior turn — the spec's "only when
- * not the producing turn" condition is therefore always satisfied on this path,
- * and the penalty applies unconditionally. `present`/`future` pass through.
+ * Default turns: `past` facts rarely should outrank live ones; `moment` facts
+ * are true only at a single instant. Recall always runs BEFORE the current
+ * turn's extraction, so any recalled `moment` memory was produced on a prior
+ * turn — the penalty applies unconditionally. `present`/`future` pass through.
+ *
+ * Retrospective turns invert the frame: the user is deliberately invoking the
+ * past, so `past` becomes a boost and `moment` stops being penalized —
+ * without this, the exact class of memory a "remember last week?" turn needs
+ * is systematically demoted at the moment it is asked for.
  */
-export function temporalMultiplier(tags: TargetingTags): RecallMultiplier {
+export function temporalMultiplier(
+  tags: TargetingTags,
+  retrospective: boolean = false,
+): RecallMultiplier {
   if (tags.temporal === 'past') {
-    return { multiplier: RECALL_MULTIPLIERS.temporalPast, fired: ['past↓'] }
+    return retrospective
+      ? { multiplier: RECALL_MULTIPLIERS.temporalPastRetrospective, fired: ['past↑retro'] }
+      : { multiplier: RECALL_MULTIPLIERS.temporalPast, fired: ['past↓'] }
   }
   if (tags.temporal === 'moment') {
-    return { multiplier: RECALL_MULTIPLIERS.temporalMoment, fired: ['moment↓'] }
+    return retrospective
+      ? { multiplier: RECALL_MULTIPLIERS.temporalMomentRetrospective, fired: ['moment·retro'] }
+      : { multiplier: RECALL_MULTIPLIERS.temporalMoment, fired: ['moment↓'] }
+  }
+  return { multiplier: 1, fired: [] }
+}
+
+/**
+ * Time-window boost — the memory's event time (occurredAt ?? createdAt) falls
+ * inside the turn's resolved retrospective window. Soft fallback companion to
+ * the hard filter in `searchMemoriesSemantic`. No window, or no parsable
+ * event time → pass through.
+ */
+export function occurredWithinMultiplier(
+  memory: MemoryTagView,
+  window: { from: string; to: string } | null | undefined,
+): RecallMultiplier {
+  if (!window) return { multiplier: 1, fired: [] }
+  const eventIso = memory.occurredAt ?? memory.createdAt
+  if (!eventIso) return { multiplier: 1, fired: [] }
+  const t = Date.parse(eventIso)
+  const from = Date.parse(window.from)
+  const to = Date.parse(window.to)
+  if (!Number.isFinite(t) || !Number.isFinite(from) || !Number.isFinite(to)) {
+    return { multiplier: 1, fired: [] }
+  }
+  if (t >= from && t <= to) {
+    return { multiplier: RECALL_MULTIPLIERS.occurredWithinWindow, fired: ['window↑'] }
   }
   return { multiplier: 1, fired: [] }
 }
@@ -321,7 +393,13 @@ export function participantMultiplier(
 export function recentlyWhisperedMultiplier(
   memory: MemoryTagView,
   recentlyWhisperedIds: ReadonlySet<string> | null | undefined,
+  suspended: boolean = false,
 ): RecallMultiplier {
+  if (suspended) {
+    // Retrospective turn: the user is deliberately re-asking. Penalizing the
+    // just-whispered memory here would bury the very entry they want.
+    return { multiplier: 1, fired: [] }
+  }
   if (memory.id && recentlyWhisperedIds && recentlyWhisperedIds.has(memory.id)) {
     return { multiplier: RECALL_MULTIPLIERS.recentlyWhispered, fired: ['repeat↓'] }
   }
@@ -354,17 +432,20 @@ export function combineRecallMultipliers(
     return { multiplier: 0, fired: scope.fired, exclude: true }
   }
 
-  const temporal = temporalMultiplier(tags)
+  const retrospective = ctx.turnRetrospective === true
+  const temporal = temporalMultiplier(tags, retrospective)
   const context = contextMultiplier(tags, ctx.turnContext)
   const participant = participantMultiplier(memory, ctx.presentAboutCharacterIds)
-  const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds)
+  const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds, retrospective)
+  const window = occurredWithinMultiplier(memory, ctx.occurredWithin)
 
   const product =
     scope.multiplier *
     temporal.multiplier *
     context.multiplier *
     participant.multiplier *
-    recent.multiplier
+    recent.multiplier *
+    window.multiplier
   const clamped = Math.max(
     MULTIPLIER_CLAMP.min,
     Math.min(MULTIPLIER_CLAMP.max, product),
@@ -372,7 +453,7 @@ export function combineRecallMultipliers(
 
   return {
     multiplier: clamped,
-    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired],
+    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired, ...window.fired],
     exclude: false,
   }
 }

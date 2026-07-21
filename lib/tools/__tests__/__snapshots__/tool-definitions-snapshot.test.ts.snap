@@ -1207,38 +1207,6 @@ exports[`tool definitions: derived OpenAI parameters listImages: parameters snap
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters memorySearch: parameters snapshot 1`] = `
-{
-  "additionalProperties": false,
-  "properties": {
-    "limit": {
-      "default": 5,
-      "description": "Maximum number of memories to retrieve. Default is 5.",
-      "maximum": 20,
-      "minimum": 1,
-      "type": "integer",
-    },
-    "minImportance": {
-      "default": 0,
-      "description": "Minimum importance score (0-1) for returned memories. Higher values return only the most important memories. Default is 0.",
-      "maximum": 1,
-      "minimum": 0,
-      "type": "number",
-    },
-    "query": {
-      "description": "What to search for in your memories. Be specific about the topic, person, event, or detail you want to recall. Examples: "user's favorite food", "their birthday", "what happened last time we talked about work", "their pet's name"",
-      "maxLength": 500,
-      "minLength": 1,
-      "type": "string",
-    },
-  },
-  "required": [
-    "query",
-  ],
-  "type": "object",
-}
-`;
-
 exports[`tool definitions: derived OpenAI parameters projectInfo: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1271,6 +1239,18 @@ exports[`tool definitions: derived OpenAI parameters readConversation: parameter
       "default": false,
       "description": "If true, returns clean conversation without any annotations. If false (default), includes all character annotations.",
       "type": "boolean",
+    },
+    "interchange_end": {
+      "description": "Last interchange to include (inclusive). Omit to read to the end.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "interchange_start": {
+      "description": "First interchange to include (1-based). Use with interchange_end to pull just the relevant slice of a long conversation instead of the whole transcript.",
+      "maximum": 9007199254740991,
+      "minimum": 1,
+      "type": "integer",
     },
   },
   "type": "object",
@@ -1403,6 +1383,12 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
 {
   "additionalProperties": false,
   "properties": {
+    "aboutCharacter": {
+      "description": "Only return memories you hold ABOUT this character (by name). Affects only the memories source.",
+      "maxLength": 100,
+      "minLength": 1,
+      "type": "string",
+    },
     "limit": {
       "default": 10,
       "description": "Maximum number of results to return across all sources. Default is 10.",
@@ -1434,6 +1420,11 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
       ],
       "type": "string",
     },
+    "since": {
+      "description": "Only return memories/conversations from this ISO date (YYYY-MM-DD) onward. Use when a time period is mentioned ("last week", "back in March") — memories filter on when the event HAPPENED, conversations on when they took place. Affects only the memories and conversations sources.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}",
+      "type": "string",
+    },
     "sources": {
       "description": "Which layers to search. Defaults to all sources if not specified. "memories" recalls your personal commonplace-book memories; "conversations" searches rendered transcripts of past chats; "documents" searches every file in every document store within the current \`scope\`; "knowledge" searches only files under a \`Knowledge/\` folder inside those same stores. Each knowledge result is tagged with its tier (character, project, or global) so you can tell whose voice it speaks in.",
       "items": {
@@ -1446,6 +1437,11 @@ exports[`tool definitions: derived OpenAI parameters searchScriptorium: paramete
         "type": "string",
       },
       "type": "array",
+    },
+    "until": {
+      "description": "Only return memories/conversations up to this ISO date (YYYY-MM-DD), inclusive. Pair with \`since\` to bracket a period.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}",
+      "type": "string",
     },
   },
   "required": [

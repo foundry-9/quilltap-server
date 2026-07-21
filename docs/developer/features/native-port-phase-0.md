@@ -280,3 +280,19 @@ the machinery to write that test now exists.
   it's the one piece whose bugs let broken ports pass.
 - Never accept Rust I haven't actually compiled and run in the sandbox; the
   compile-and-test loop is what keeps an AI-driven port honest.
+
+---
+
+## Post-audit schema additions the port must track
+
+Schema changes landed after the Phase 1 audit that the Rust core's schema and
+migration set must include (each is additive/nullable on the TS side):
+
+- **Episodic recall overhaul (4.9, `add-episodic-memory-fields-v1`):**
+  `memories.occurredAt` (TEXT, ISO event time; indexed DESC),
+  `memories.narrativeTime` (TEXT), `memories.entities` (TEXT JSON `string[]`),
+  `memories.kind` (TEXT, `'semantic' | 'episodic'`), and
+  `chats.timelineMode` (TEXT, `'realtime' | 'narrative'`, NULL = realtime).
+  Prompt-side counterparts (extraction clock, retrospective retrieval
+  multipliers, fold Timeline section, gate date guard) live in
+  `docs/developer/features/episodic-recall-overhaul.md`.

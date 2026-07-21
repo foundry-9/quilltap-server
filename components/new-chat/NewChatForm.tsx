@@ -301,12 +301,14 @@ export function NewChatForm({
       id: sc.character.id,
       name: sc.character.name,
       isUserControlled: false,
+      canChooseOutfit: sc.character.canChooseOutfit ?? false,
     }))
     if (userEntry) {
       list.push({
         id: userEntry.character.id,
         name: userEntry.character.name,
         isUserControlled: true,
+        canChooseOutfit: userEntry.character.canChooseOutfit ?? false,
       })
     }
     return list

@@ -335,6 +335,7 @@ export async function handleExtractMemoriesDryRun(
               dangerSettings,
               isDangerousChat,
               memoryExtractionLimits,
+              timelineMode: chat.timelineMode ?? 'realtime',
               dryRun: true,
             });
 

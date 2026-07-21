@@ -66,6 +66,14 @@ const updateCharacterSchema = z.object({
   systemTransparency: z.boolean().nullable().optional(),
   coreWhisperEnabled: z.boolean().nullable().optional(),
   canBeCarina: z.boolean().nullable().optional(),
+  // Vault-managed (properties.json) plain boolean — named here or the parse
+  // below would strip it before update() could route it to the vault.
+  canChooseOutfit: z.boolean().optional(),
+  // Wardrobe-permission tri-states (null = inherit global, true/false = override).
+  // Real DB columns, not vault-managed — omitting them here strips the key before
+  // it reaches update(), so the editor toggles would silently never persist.
+  canDressThemselves: z.boolean().nullable().optional(),
+  canCreateOutfits: z.boolean().nullable().optional(),
   // The freeform fact sheet (vault `metadata.json`). This schema strips unknown
   // keys, so the field has to be named here or a PUT carrying it would be
   // silently dropped before the write overlay ever saw it. Sending `metadata`

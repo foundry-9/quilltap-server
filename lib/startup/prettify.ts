@@ -248,6 +248,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-commonplace-recall-history-v1': 'Teaching the Commonplace Book not to repeat itself…',
   'migrate-extraction-knobs-to-instance-settings-v1': 'Moving extraction knobs into instance settings',
   'quantize-embeddings-v1': 'Compacting the memory-vaults so they take up less room on the shelf…',
+  'add-episodic-memory-fields-v1': 'Dating and placing your memories — the when and the where, properly filed…',
 
   // Misc / fixes
   'add-use-native-web-search-field-v1': 'Adding native-web-search flag',

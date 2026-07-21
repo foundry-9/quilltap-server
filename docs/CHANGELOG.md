@@ -4,6 +4,40 @@
 
 ### 4.8-dev
 
+#### Salon: timeline-mode switch in the chat sidebar ("The Story's Clock")
+
+The per-chat `timelineMode` flag from the episodic recall overhaul ('realtime' | 'narrative', NULL reads as realtime) previously had no UI and could only be set via the API or CLI. The chat sidebar's Chat card now has a "The Story's Clock" selector with Real time / Story time options, persisted through the existing chat PUT route (`timelineMode` was added to `updateChatSchema`). Updated `help/episodic-memory.md`, which said a switch was on its way.
+
+#### Episodic recall overhaul: memories learn when and where things happened
+
+Characters could not answer "remember that place we visited last week?" — the memory system had no concept of an episode. This overhaul adds one, end to end:
+
+- **Episodic spine (schema).** Memories gain `occurredAt` (ISO event time, distinct from the write clock), `narrativeTime` (free-text in-story time for fictional timelines), `entities` (proper nouns of the episode), and `kind` (`semantic` | `episodic`). Chats gain `timelineMode` (`realtime` | `narrative`). Migration `add-episodic-memory-fields-v1` adds the columns, indexes `occurredAt`, and backfills event time from each memory's source message (falling back to the memory's own `createdAt`). All new fields ride `.qtap` export/import.
+- **Extraction knows the clock.** The per-turn extractor now receives the current date/time and the chat's timeline mode, can emit EVENT memories (`kind: "episodic"` with `when` + `entities`, earning one extra candidate slot), and relative phrases like "last spring" are resolved server-side against the turn's timestamp. A deterministic date/proper-noun fallback fills anchors the model omits. Reinforcement can now upgrade an episodic memory's anchors when a retelling supplies better ones.
+- **Fold-time episode pass.** On the existing summary-fold cadence, a cheap-LLM pass consolidates the folded window into 0–2 coherent, dated episode records per present character, linked to that window's per-turn fragment memories for one-hop expansion. The fold summary itself gains an append-only, dated **Timeline** section (capped ~30 lines, oldest coarsened first), turning vault conversation summaries into a dated episodic archive.
+- **Time- and entity-aware retrieval.** The per-turn recall distillation additionally emits `retrospective`, an absolute `timeRange`, and `entities` (all inert on parse failure). Retrieval consumes them: a two-stage event-time window (filter first, bounded ×1.3 boost fallback — never fewer results than before), literal entity anchoring into the candidate pool, and up-to-3-probe embedding union on retrospective turns. On retrospective turns the `temporal: past` multiplier flips from 0.85 to 1.15, `moment` stops being penalized, and the anti-repetition penalty is suspended (an immediate re-ask no longer buries the memory being asked about). Vault conversation-summary search now reads `firstMessageAt`/`lastMessageAt` from frontmatter, filters/boosts by time range, and renderers print conversation dates.
+- **Recall-on-reference (fourth cadence).** A retrospective turn gets an enlarged dynamic head (600 tokens / 10 entries, up from 200/5) and a scoped mini-recap whisper (`retrospective-recall`): a dated Relevant Past Conversations list with `read_conversation` UUIDs, spam-guarded by a signature ring buffer and deduped against the standing on-fold list. Dynamic-head entries now carry `[3 days ago]`-style age labels computed from event time, plus in-story time when present.
+- **Deep-dive tools.** Removed the dead `memory-search` tool that shadowed the canonical Scriptorium `search` name. `search` gains `since`/`until` (applied to memories via `occurredAt ?? createdAt` and to conversation hits via chat timestamps) and `aboutCharacter`; memory results now return `occurredAt`, `narrativeTime`, `kind`, and the source `conversationId`. `read_conversation` gains `interchange_start`/`interchange_end` for slicing long transcripts. Tool instructions now state the anti-confabulation norm: search, then read the conversation, and say "I don't recall" rather than inventing specifics.
+- **Stop destroying episodes.** The memory-compression prompt no longer instructs dropping exact dates (it now preserves dates attached to events). The memory gate embeds a `(when: … · place: …)` anchor line and downgrades near-duplicate/reinforce decisions to insert-related when event times differ by more than 7 days — distinct occasions both persist; housekeeping's `mergeSimilar` honors the same guard. Episodic rows get a +0.10 housekeeping protection bonus.
+- **Replay harness.** New `quilltap recall-replay <chatId> [--turn N]` CLI (wrapping `POST /api/v1/chats/[id]?action=recall-replay`) replays a turn's recall and prints the full candidate table — cosine, blend, every multiplier fired, final score, head selection — old path vs. new path side by side, resolving the clock against the replayed turn's own date.
+- Also: jest now runs inside Claude Code agent worktrees (the worktree-exclusion patterns are skipped when the root itself is a worktree), and stale comments describing the old 0.4/0.6 ranking blend and pre-overhaul gate thresholds were corrected.
+
+#### New Chat: smarter per-character Starting Outfit defaults
+
+Characters gained a `canChooseOutfit` boolean in their vault `properties.json` (absent means false). It drives the default Starting Outfit selection in the New Chat dialog, which is now decided per character instead of using one blanket default:
+
+- Continuation chats still default every character to "Same as last conversation" (unchanged).
+- An LLM-controlled character with `canChooseOutfit: true` now defaults to "Let character choose".
+- Otherwise the character defaults to "Use defaults" only when they actually have a usable default outfit (at least one non-archived default wardrobe item). A character with no default outfit configured instead defaults to "Compose outfit" and opens with its section expanded.
+
+Each character's collapsed "Starting Outfit" header now shows the selected option ("Defaults", "Composed", "Dress Themselves", "Undressed", or "Same as Last") next to the name, so the choice is legible without expanding the section.
+
+`canChooseOutfit` is editable from the character's Wardrobe tab on the Aurora page (both the detail view and the edit view), as a checkbox just above the "Open wardrobe" button. It saves immediately to the vault. The character PUT route (`PUT /api/v1/characters/[id]`) now accepts the field in its request schema.
+
+#### Fix: Self-Dressing and Outfit Creation character toggles now persist
+
+The Aurora character editor's "Self-Dressing" and "Outfit Creation" dropdowns (the `canDressThemselves` and `canCreateOutfits` wardrobe-permission flags) silently failed to save. The character PUT handler validates the request body with a Zod schema that strips undeclared keys, and those two fields were never added to the schema, so their values were dropped before reaching the database — even though the UI showed a success toast. Both fields are now declared in the update schema and flow through to the character row. They are real DB columns, not vault-managed fields, so no migration or vault change was needed. The other tri-state values (`null` = inherit the global default, `true`/`false` = per-character override) are preserved.
+
 #### New Chat: full character roster in the picker; Play As limited to the cast
 
 The "Select Characters" list in the New Chat dialog now shows every character, including default-user (user-playable-by-default) personas that were previously hidden from it. The "Play As (Optional)" dropdown in Character Customization now offers only characters that are in the cast, instead of also pulling in default-user personas that were not added. To play as a persona, add it to the cast from the picker first, then select it in Play As. Reverting a persona back to "Chat as yourself" now keeps that character in the cast under LLM control (it is no longer removed).

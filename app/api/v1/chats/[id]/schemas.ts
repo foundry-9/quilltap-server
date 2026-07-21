@@ -22,6 +22,7 @@ export const updateChatSchema = z.object({
   coreWhisperInterval: z.number().int().min(1).nullish(),
   turnSkippingEnabled: z.boolean().nullish(), // "Nothing to add" turn-skipping toggle. null = enabled (default); false = disabled.
   showThinking: z.boolean().nullish(), // Per-chat thinking visibility (tri-state). DISPLAY ONLY.
+  timelineMode: z.enum(['realtime', 'narrative']).nullish(), // Which clock the chat's story keeps (episodic memory). null = realtime default.
   answerConfirmationOverride: z.enum(['ON', 'OFF']).nullish(), // Per-chat answer-confirmation override (tri-state; null = inherit project/global)
   // Layout state for the salon split panes
   documentMode: z.enum(['normal', 'split', 'focus']).optional(),

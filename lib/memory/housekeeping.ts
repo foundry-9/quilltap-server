@@ -13,7 +13,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
-import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
+import { deleteMemoriesWithUnlinkBatch, occasionsAreDistinct } from './memory-gate'
 
 import { logger } from '@/lib/logger'
 
@@ -296,6 +296,11 @@ export async function runHousekeeping(
 
           const matchMemory = memoryMap.get(match.id)
           if (!matchMemory) continue
+
+          // Episodic date guard (mirrors the write-side memory gate): two
+          // memories of the same activity on occasions > 7 days apart are
+          // distinct events — never merge them, however similar the prose.
+          if (occasionsAreDistinct(memory.occurredAt, matchMemory.occurredAt)) continue
 
           const keepCurrent =
             memory.importance > matchMemory.importance ||

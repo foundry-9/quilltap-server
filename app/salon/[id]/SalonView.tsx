@@ -1734,6 +1734,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           imageProfileId={chat?.imageProfileId}
           alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
           avatarGenerationEnabled={chat?.avatarGenerationEnabled}
+          timelineMode={chat?.timelineMode}
           conciergeOverride={chat?.conciergeOverride}
           onToolSettingsClick={modals.openToolSettings}
           onRunToolClick={modals.openRunTool}

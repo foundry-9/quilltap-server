@@ -115,7 +115,7 @@ describe('scaffoldCharacterMount', () => {
     expect(parsed).toEqual({ short: null, medium: null, long: null, complete: null });
   });
 
-  it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness', async () => {
+  it('writes properties.json with pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit', async () => {
     const repos = makeRepos();
     getRepositoriesMock.mockReturnValue(repos);
 
@@ -130,6 +130,7 @@ describe('scaffoldCharacterMount', () => {
       title: '',
       firstMessage: '',
       talkativeness: 0.5,
+      canChooseOutfit: false,
     });
   });
 

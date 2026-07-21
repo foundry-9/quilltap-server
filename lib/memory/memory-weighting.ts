@@ -8,6 +8,7 @@
 
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
+import { eventReferenceTimeMs } from './episodic'
 
 /**
  * Configuration for memory weight calculations.
@@ -153,9 +154,14 @@ export function defaultMinCosineForProvider(provider: string | undefined | null)
 /**
  * Format a memory's age as a human-readable relative time label.
  * Used for temporal context in LLM memory injection.
+ *
+ * Episodic spine: the label reads off the EVENT clock — `occurredAt` when
+ * present, else the write/reinforce clock — so "last week" means when it
+ * happened, not when it was written down. Decay (above) deliberately stays on
+ * the write clock; only the human-facing age label follows the event.
  */
 export function formatRelativeAge(memory: Memory, now: Date = new Date()): string {
-  const referenceTime = referenceTimeMs(memory)
+  const referenceTime = eventReferenceTimeMs(memory.occurredAt, referenceTimeMs(memory))
   const daysOld = Math.max(0, (now.getTime() - referenceTime) / 86400000)
 
   if (daysOld < 1) return 'today'
@@ -211,6 +217,13 @@ export interface ProtectionScoreConfig {
    * to cross the threshold. Honors the blended-score design goal of
    * "LLM opinion is one input among several, not a final verdict." */
   maxContentContribution: number
+  /** Additive bonus for `kind: 'episodic'` rows. Default: 0.10. Episodic
+   * memories carry the exact statistical profile housekeeping deletes first
+   * (low importance, low reinforcement, low graph degree) yet are the hardest
+   * to regenerate — a one-off visit never recurs to be re-extracted. The
+   * vault Timeline is the durable backstop, but the memory ROW is what
+   * per-turn retrieval actually hits, so it should be the last to go. */
+  episodicBonus: number
 }
 
 export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
@@ -223,6 +236,7 @@ export const DEFAULT_PROTECTION_CONFIG: ProtectionScoreConfig = {
   recentAccessBonus: 0.10,
   recentAccessWindowDays: 90,
   maxContentContribution: 0.40,
+  episodicBonus: 0.10,
 }
 
 export interface ProtectionScoreResult {
@@ -232,6 +246,7 @@ export interface ProtectionScoreResult {
   reinforcementBonus: number
   graphDegreeBonus: number
   recentAccessBonus: number
+  episodicBonus: number
   daysSinceRefTime: number
 }
 
@@ -283,9 +298,13 @@ export function calculateProtectionScore(
     }
   }
 
+  // Episodic protection bump: one-off dated occurrences are the first thing
+  // the retention rules would otherwise delete and the hardest to regenerate.
+  const episodicBonus = memory.kind === 'episodic' ? config.episodicBonus : 0
+
   const score = Math.min(
     1,
-    contentComponent + reinforcementBonus + graphDegreeBonus + recentAccessBonus
+    contentComponent + reinforcementBonus + graphDegreeBonus + recentAccessBonus + episodicBonus
   )
 
   return {
@@ -294,6 +313,7 @@ export function calculateProtectionScore(
     reinforcementBonus,
     graphDegreeBonus,
     recentAccessBonus,
+    episodicBonus,
     daysSinceRefTime,
   }
 }

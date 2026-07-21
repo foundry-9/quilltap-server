@@ -59,6 +59,15 @@ You'll be asked:
   - **Let character choose** — A cheap LLM peeks at the scenario and chooses something fitting (not offered to characters you're impersonating)
   - **Start undressed** — Every slot empty, for entrances best left to imagination
 
+  The dialog now settles on a sensible opening choice for each character on its own, so you need only overrule it when your taste differs:
+
+  - Carrying on from an earlier conversation? Everyone keeps to **Same as last conversation**.
+  - A character marked to choose their own attire — the `canChooseOutfit` flag in their vault `properties.json` — opens on **Let character choose**.
+  - A character with a proper default outfit on file (at least one garment marked default) opens on **Use defaults**.
+  - A character with no default outfit to speak of opens on **Compose outfit**, with their panel already unfolded so the empty slots are plain to see.
+
+  When several characters are present, each one's folded panel wears a small badge — **Defaults**, **Composed**, **Dress Themselves**, **Undressed**, or **Same as Last** — so you can read the whole cast's attire at a glance without unfolding a single panel.
+
 ## How Multi-Character Chats Work
 
 ### The Turn System

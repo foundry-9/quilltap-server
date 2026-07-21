@@ -346,6 +346,10 @@
           "type": ["boolean", "null"],
           "description": "Whether this character can create new wardrobe items mid-conversation (null = enabled by default)"
         },
+        "canChooseOutfit": {
+          "type": "boolean",
+          "description": "When true, a new chat with this character defaults its Starting Outfit to 'Let character choose'. Absent/false falls back to defaults (or Compose when there is no usable default outfit). Stored in the vault's properties.json."
+        },
         "systemTransparency": {
           "type": ["boolean", "null"],
           "description": "When true, the character may inspect 'the Staff' (self_inventory, Staff messages from Lantern/Aurora/Librarian/Prospero/Host, and character vaults) subject to chat/project settings. When null or false, those three are hidden from this character regardless of any chat/project toggle — a hard character-level override. Default null (opaque)."
@@ -417,6 +421,11 @@
           "type": ["integer", "null"],
           "minimum": 1,
           "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
+        },
+        "timelineMode": {
+          "type": ["string", "null"],
+          "enum": ["realtime", "narrative", null],
+          "description": "Which clock the chat's story runs on (episodic recall). 'realtime' (null reads as realtime): wall-clock; 'narrative': fictional timeline — extraction preserves in-story time phrases as narrativeTime."
         },
         "turnSkippingEnabled": {
           "type": ["boolean", "null"],
@@ -779,6 +788,24 @@
         "importance": { "type": "number" },
         "keywords": { "type": "array", "items": { "type": "string" } },
         "source": { "type": "string" },
+        "occurredAt": {
+          "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
+          "description": "ISO wall-clock time of the EVENT the memory records (episodic spine) — distinct from createdAt, the write clock. Durable data; always exported."
+        },
+        "narrativeTime": {
+          "type": ["string", "null"],
+          "description": "Free-text in-story time (fictional-timeline chats), e.g. 'the third night at sea'."
+        },
+        "entities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Proper nouns of the episode: places, people, named things."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["semantic", "episodic"],
+          "description": "Declared memory kind: a standing fact (semantic, default) vs. a specific dated occurrence (episodic)."
+        },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }

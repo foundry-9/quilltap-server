@@ -241,6 +241,18 @@ quilltap memory-diff <chatId> --out /tmp/diff --concurrency 8
 
 Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
 
+## Recall Replay
+
+`quilltap recall-replay <chatId>` replays a turn's memory recall against the running server and prints the candidate table twice — the pre-overhaul ranking vs. the episodic (retrospective / time-window / entity-anchored) ranking — with cosine, blend, every multiplier fired, and head selection per row. Read-only; used to tune the recall constants against real "the character forgot" turns.
+
+```bash
+quilltap recall-replay <chatId>                 # Replay the last turn
+quilltap recall-replay <chatId> --turn 42       # Replay at interchange 42 (its own clock)
+quilltap recall-replay <chatId> --json          # Raw JSON for scripting
+```
+
+Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default 25), `--port <n>` (default 3000), `--json`.
+
 ## Maintenance & Cleanup
 
 `quilltap maintenance` is the manual trigger for the retention sweeps that otherwise run on the server's daily maintenance tick. It reaps data with no bearing on characters, stories, or memories.

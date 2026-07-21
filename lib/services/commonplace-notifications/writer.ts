@@ -36,7 +36,15 @@ export type CommonplaceWhisperKind =
    * and the LLM-context strip, so the freshened list reaches both the salon UI
    * and the responding character.
    */
-  | 'relevant-conversations';
+  | 'relevant-conversations'
+  /**
+   * Recall-on-reference (fourth cadence): a scoped, dated mini-recap posted on
+   * a RETROSPECTIVE turn — the user referenced past shared events, so the
+   * Commonplace Book surfaces the relevant past conversations with dates and
+   * `read_conversation` UUIDs. Turn-specific: swept by the same sweep as the
+   * consolidated whisper (unlike `relevant-conversations`).
+   */
+  | 'retrospective-recall';
 
 /**
  * Memory content parts for a single turn's recall. Each section is the raw
@@ -69,6 +77,13 @@ export interface CommonplaceParts {
    * conversation lists ride inside `recap` at chat-start / character-join).
    */
   relevantConversations?: string;
+  /**
+   * Retrospective mini-recap (recall-on-reference): the dated, drillable
+   * conversation list emitted when the turn references past shared events.
+   * Rides in the LLM recall text and in its own `retrospective-recall`
+   * whisper — never inside the consolidated whisper body.
+   */
+  retrospectiveRecall?: string;
 }
 
 /**
@@ -83,6 +98,7 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
   const interChar = parts.interChar?.trim();
   const knowledge = parts.knowledge?.trim();
   const relevantConversations = parts.relevantConversations?.trim();
+  const retrospectiveRecall = parts.retrospectiveRecall?.trim();
 
   if (currentState) {
     sections.push(
@@ -114,6 +130,11 @@ export function buildCommonplacePersonaWhisper(parts: CommonplaceParts): string 
       `*The conversation has wandered on, and the Commonplace Book re-marks the past dialogues that now bear on the present —*\n\n${relevantConversations}`,
     );
   }
+  if (retrospectiveRecall) {
+    sections.push(
+      `*You speak of days gone by, and the Commonplace Book obligingly riffles back through its dated pages —*\n\n${retrospectiveRecall}`,
+    );
+  }
   return sections.join('\n\n').trim();
 }
 
@@ -130,6 +151,7 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   const interChar = parts.interChar?.trim();
   const knowledge = parts.knowledge?.trim();
   const relevantConversations = parts.relevantConversations?.trim();
+  const retrospectiveRecall = parts.retrospectiveRecall?.trim();
 
   if (currentState) {
     sections.push(`Here is the present state of the scene:\n\n${currentState}`);
@@ -148,6 +170,9 @@ export function buildCommonplaceLLMContext(parts: CommonplaceParts): string {
   }
   if (relevantConversations) {
     sections.push(`You also recall these past conversations that bear on the present:\n\n${relevantConversations}`);
+  }
+  if (retrospectiveRecall) {
+    sections.push(`The past is being referenced — these past conversations cover the period in question:\n\n${retrospectiveRecall}`);
   }
   return sections.join('\n\n').trim();
 }

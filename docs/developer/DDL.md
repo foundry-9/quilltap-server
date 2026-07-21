@@ -294,7 +294,7 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | manifesto | `manifesto.md` |
 | personality | `personality.md` |
 | exampleDialogues | `example-dialogues.md` |
-| pronouns, aliases, title, firstMessage, talkativeness | `properties.json` |
+| pronouns, aliases, title, firstMessage, talkativeness, canChooseOutfit | `properties.json` — `canChooseOutfit` is optional-with-default (absent hydrates as `false`), so old vaults need no backfill and no migration exists. |
 | metadata | `metadata.json` — optional; a flat object of user-authored keys with any JSON value. Absent file or unparseable content hydrates as `{}` (**not** a keystone — only `properties.json` may declare a vault broken), so old vaults need no backfill and no migration exists. A patch REPLACES the whole object rather than merging keys. |
 | physicalDescription.fullDescription | `physical-description.md` |
 | physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt | `physical-prompts.json` |
@@ -510,6 +510,7 @@ CREATE TABLE "chats" (
   "courierCheckpoints" TEXT DEFAULT NULL,
   "commonplaceSceneCache" TEXT DEFAULT NULL,
   "commonplaceRecallHistory" TEXT DEFAULT NULL,
+  "timelineMode" TEXT DEFAULT NULL,  -- added in 4.9 (add-episodic-memory-fields-v1): 'realtime' (NULL reads as realtime) | 'narrative' — which clock the chat's story runs on (episodic recall)
   -- 4.6 Private Character Rooms: budget caps, schedule, run lifecycle, and visibility
   -- (populated only when chatType = 'autonomous'; NULL on other chats)
   "budgetMaxTurns" INTEGER DEFAULT NULL,
@@ -1024,12 +1025,17 @@ CREATE TABLE "memories" (
   "lastReinforcedAt" TEXT DEFAULT NULL,
   "relatedMemoryIds" TEXT DEFAULT '[]',
   "reinforcedImportance" REAL DEFAULT 0.5,
-  "witnessedContext" TEXT DEFAULT NULL   -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
+  "witnessedContext" TEXT DEFAULT NULL,  -- added in 4.6 (add-autonomous-rooms-fields-v1): 'user_present' | 'autonomous_room' | 'manual'. NULL on legacy rows.
+  "occurredAt" TEXT DEFAULT NULL,        -- added in 4.9 (add-episodic-memory-fields-v1): ISO wall-clock EVENT time (vs createdAt, the write clock). Backfilled from the source message's createdAt, else the memory's own createdAt.
+  "narrativeTime" TEXT DEFAULT NULL,     -- added in 4.9: free-text in-story time for fictional-timeline chats ("the third night at sea")
+  "entities" TEXT DEFAULT '[]',          -- added in 4.9: JSON string[] of the episode's proper nouns (places, people, named things)
+  "kind" TEXT DEFAULT 'semantic'         -- added in 4.9: 'semantic' (standing fact) | 'episodic' (specific dated occurrence)
 );
 
 CREATE INDEX "idx_memories_characterId" ON "memories" ("characterId");
 CREATE INDEX "idx_memories_chatId" ON "memories" ("chatId");
 CREATE INDEX "idx_memories_createdAt" ON "memories" ("createdAt" DESC);
+CREATE INDEX "idx_memories_occurredAt" ON "memories" ("occurredAt" DESC);  -- added in 4.9 (episodic spine)
 CREATE INDEX "idx_memories_projectId" ON "memories" ("projectId");
 CREATE INDEX "idx_memories_reinforcedImportance" ON "memories" ("reinforcedImportance" DESC);
 ```

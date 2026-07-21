@@ -23,6 +23,7 @@ import {
   calculateReinforcedImportance,
   deleteMemoryWithUnlink,
   deleteMemoriesWithUnlinkBatch,
+  extractNovelDetails,
 } from './memory-gate'
 import {
   calculateEffectiveWeight,
@@ -30,6 +31,7 @@ import {
   defaultMinCosineForProvider,
 } from './memory-weighting'
 import { combineRecallMultipliers, RELATED_EXPANSION, type RecallContext } from './recall-tags'
+import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } from './episodic'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -176,6 +178,56 @@ async function applyNamePresenceCheck(data: CreateMemoryOptions): Promise<Create
   }
 }
 
+/** Cap on regex-derived fallback entities so noise can't flood the column. */
+const FALLBACK_ANCHOR_MAX_ENTITIES = 6
+
+/**
+ * Episodic safety net for AUTO-extracted memories: when the extractor omitted
+ * `entities` and/or `occurredAt`, derive them deterministically from the memory
+ * text via the same date/proper-noun regexes reinforcement uses
+ * ({@link extractNovelDetails}), resolving any captured date phrase against the
+ * source-message timestamp (or the write clock). Fills gaps only — a
+ * caller-supplied anchor always wins — and MANUAL memories pass through
+ * untouched (they carry the user's deliberate choices).
+ */
+function applyEpisodicFallbackAnchors(data: CreateMemoryOptions): CreateMemoryOptions {
+  if (data.source && data.source !== 'AUTO') return data
+  const needEntities = !data.entities || data.entities.length === 0
+  const needOccurredAt = !data.occurredAt
+  if (!needEntities && !needOccurredAt) return data
+
+  try {
+    const details = extractNovelDetails(data.content || '', '')
+    const next = { ...data }
+
+    if (needOccurredAt) {
+      const anchorIso = data.sourceMessageTimestamp ?? new Date().toISOString()
+      for (const detail of details) {
+        const resolved = resolveWhenPhrase(detail, anchorIso)
+        if (resolved) {
+          next.occurredAt = resolved
+          break
+        }
+      }
+    }
+
+    if (needEntities) {
+      // Proper-noun-shaped details only (skip the date/number/measure captures).
+      const entities = details
+        .filter(d => /^[A-Z]/.test(d) && !/\d/.test(d))
+        .slice(0, FALLBACK_ANCHOR_MAX_ENTITIES)
+      if (entities.length > 0) {
+        next.entities = entities
+      }
+    }
+
+    return next
+  } catch {
+    // Deterministic fallback must never block a write.
+    return data
+  }
+}
+
 /**
  * Options for memory creation
  */
@@ -216,6 +268,17 @@ export interface CreateMemoryOptions {
    * legacy (pre-4.6) and left unset.
    */
   witnessedContext?: 'user_present' | 'autonomous_room' | 'manual' | null
+  // ── Episodic spine ─────────────────────────────────────────────────────────
+  /** ISO wall-clock EVENT time (not the write clock). Callers stamp it from
+   * the source turn's message timestamp; retold events resolve their `when`
+   * phrase server-side before reaching here. */
+  occurredAt?: string | null
+  /** Free-text in-story time, for chats on a fictional timeline. */
+  narrativeTime?: string | null
+  /** Proper nouns of the episode (places, people, named things). */
+  entities?: string[]
+  /** Declared memory kind. Defaults to 'semantic'. */
+  kind?: 'semantic' | 'episodic'
 }
 
 /**
@@ -259,7 +322,7 @@ export interface SemanticSearchResult {
     multiplier: number
     /** Short labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
     fired: string[]
-    /** Blended `0.4·cosine + 0.6·weight` score before the multiplier. */
+    /** Blended ranking score (see computeRankingBlend) before the multiplier. */
     blendedBefore: number
     /** Blended score after the multiplier (the value actually sorted on). */
     blendedAfter: number
@@ -305,20 +368,35 @@ export async function createMemoryWithGate(
   // certainly mis-attributed. Collapse to a self-reference on the holder.
   data = await applyNamePresenceCheck(data)
 
+  // Episodic safety net: run the deterministic date/proper-noun regexes on
+  // FIRST WRITE (not just reinforce) so entities/occurredAt get populated even
+  // when the extractor model omits them. Only fills gaps — never overrides a
+  // caller-supplied anchor.
+  data = applyEpisodicFallbackAnchors(data)
+
+  const anchors: EpisodicAnchorView = {
+    occurredAt: data.occurredAt ?? null,
+    narrativeTime: data.narrativeTime ?? null,
+    entities: data.entities ?? [],
+  }
+
   // If gate or embedding is skipped, use the direct creation flow
   if (options.skipGate || options.skipEmbedding) {
     const memory = await createMemoryDirect(data, options)
     return { memory, action: 'SKIP_GATE' }
   }
 
-  // Run the Memory Gate — generate embedding first, then decide
+  // Run the Memory Gate — generate embedding first, then decide. The
+  // candidate's episodic anchors ride along so (a) the gate embedding carries
+  // the anchor line and (b) the >7-day date guard can split distinct occasions.
   const gateResult = await runMemoryGate(
     data.characterId,
     data.content,
     data.summary,
     data.keywords || [],
     options.userId,
-    options.embeddingProfileId
+    options.embeddingProfileId,
+    anchors
   )
 
 
@@ -346,13 +424,16 @@ export async function createMemoryWithGate(
     }
 
     case 'REINFORCE': {
-      // Boost the existing memory instead of creating a new row
+      // Boost the existing memory instead of creating a new row. The
+      // candidate's anchors ride along so a retelling that supplies better
+      // when/where anchors than the original capture can upgrade the row.
       const { memory: reinforced, novelDetails } = await reinforceMemory(
         decision.existingMemory,
         data.content,
         data.summary,
         options.userId,
-        options.embeddingProfileId
+        options.embeddingProfileId,
+        anchors
       )
       return {
         memory: reinforced,
@@ -417,6 +498,10 @@ async function createMemoryDirect(
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
     witnessedContext: data.witnessedContext ?? null,
+    occurredAt: data.occurredAt ?? null,
+    narrativeTime: data.narrativeTime ?? null,
+    entities: data.entities ?? [],
+    kind: data.kind ?? 'semantic',
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
@@ -426,10 +511,10 @@ async function createMemoryDirect(
     return memory
   }
 
-  // Generate embedding
+  // Generate embedding (anchor line included so the vector carries when/where)
   try {
     const embeddingResult = await generateEmbeddingForUser(
-      `${data.summary}\n\n${data.content}`,
+      buildMemoryEmbeddingText(data.summary, data.content, data),
       options.userId,
       options.embeddingProfileId,
       { priority: 'background' }
@@ -489,6 +574,10 @@ async function createMemoryDirectWithEmbedding(
     source: data.source || 'MANUAL',
     sourceMessageId: data.sourceMessageId || null,
     witnessedContext: data.witnessedContext ?? null,
+    occurredAt: data.occurredAt ?? null,
+    narrativeTime: data.narrativeTime ?? null,
+    entities: data.entities ?? [],
+    kind: data.kind ?? 'semantic',
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
@@ -532,10 +621,15 @@ export async function updateMemoryWithEmbedding(
     return null
   }
 
-  // Check if content changed (requires re-embedding)
+  // Check if content changed (requires re-embedding). Anchor-field changes
+  // count too — the anchor line is part of the embedded text.
   const contentChanged =
     (data.content && data.content !== existingMemory.content) ||
-    (data.summary && data.summary !== existingMemory.summary)
+    (data.summary && data.summary !== existingMemory.summary) ||
+    (data.occurredAt !== undefined && data.occurredAt !== existingMemory.occurredAt) ||
+    (data.narrativeTime !== undefined && data.narrativeTime !== existingMemory.narrativeTime) ||
+    (data.entities !== undefined &&
+      JSON.stringify(data.entities) !== JSON.stringify(existingMemory.entities ?? []))
 
   // Update the memory
   const updatedMemory = await repos.memories.updateForCharacter(characterId, memoryId, data)
@@ -547,7 +641,7 @@ export async function updateMemoryWithEmbedding(
   if (contentChanged && !options.skipEmbedding) {
     try {
       const embeddingResult = await generateEmbeddingForUser(
-        `${updatedMemory.summary}\n\n${updatedMemory.content}`,
+        buildMemoryEmbeddingText(updatedMemory.summary, updatedMemory.content, updatedMemory),
         options.userId,
         options.embeddingProfileId
       )
@@ -650,7 +744,7 @@ export async function searchMemoriesSemantic(
      * Per-turn recall context. When supplied, the targeting tags
      * (`temporal`/`scope`/`context`) and `projectId` carried on each candidate
      * are read back and turned into bounded, clamped multipliers applied to the
-     * final blended score *after* the `0.4/0.6` blend is computed (see
+     * final blended score *after* the ranking blend is computed (see
      * `lib/memory/recall-tags.ts`). Absent → ranking is byte-identical to the
      * historical behavior. The `search` tool and tests leave this off.
      */
@@ -662,6 +756,28 @@ export async function searchMemoriesSemantic(
      * alongside the importance/recency half. Absent → no inter-character filter.
      */
     aboutCharacterId?: string
+    /**
+     * Event-time window (episodic recall). Two-stage on the injector path
+     * (a `recallContext` is present): candidates are filtered to the window
+     * first; if fewer than `limit` survive, fall back to the unfiltered pool
+     * with window hits taking the bounded ×`occurredWithinWindow` boost in
+     * the multiplier loop — never fewer results than an unwindowed search.
+     * Without a `recallContext` (tool path), this is a plain hard filter.
+     */
+    occurredWithin?: { from: string; to: string } | null
+    /**
+     * Entity strings (place/person/thing names) unioned into the candidate
+     * pool via the literal `searchByContent` path, so a verbatim place name
+     * cannot be sliced off by the cosine floor. Injector-path companion to
+     * `applyLiteralPhraseBoost` (which stays tool-only).
+     */
+    entityAnchors?: readonly string[]
+    /**
+     * Additional embedding probes (retrospective turns only): each is
+     * embedded, its vector-store pool unioned with the main query's, and each
+     * memory keeps its max cosine across probes. Capped to 2 extras.
+     */
+    extraProbes?: readonly string[]
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -721,32 +837,82 @@ export async function searchMemoriesSemantic(
     }
 
     // Search vectors
-    const vectorResults = vectorStore.search(
+    let vectorResults = vectorStore.search(
       embeddingResult.embedding,
       limit * 3 // Get more results to filter
     )
+
+    // Multi-probe union (retrospective turns): embed each extra probe, union
+    // its top-K pool with the main query's, keep each memory's max cosine.
+    // Bounded cost (≤ 2 extra embeddings), gated to the turns that need it.
+    const extraProbes = (options.extraProbes ?? [])
+      .map(p => p?.trim())
+      .filter((p): p is string => !!p && p.length > 0)
+      .slice(0, 2)
+    if (extraProbes.length > 0) {
+      const byId = new Map(vectorResults.map(vr => [vr.id, vr]))
+      for (const probe of extraProbes) {
+        try {
+          const probeResult = await generateEmbeddingForUser(
+            probe,
+            options.userId,
+            options.embeddingProfileId
+          )
+          if (probeResult.embedding.length !== embeddingResult.embedding.length) continue
+          for (const vr of vectorStore.search(probeResult.embedding, limit * 3)) {
+            const existing = byId.get(vr.id)
+            if (!existing || vr.score > existing.score) {
+              byId.set(vr.id, vr)
+            }
+          }
+        } catch (probeError) {
+          logger.debug('[Memory] Extra probe embedding failed; skipping probe', {
+            characterId,
+            probe: probe.substring(0, 80),
+            error: probeError instanceof Error ? probeError.message : String(probeError),
+          })
+        }
+      }
+      vectorResults = [...byId.values()]
+    }
     const tVector = performance.now()
 
-    // Hybrid step: when literal-boost is enabled, find every memory that
-    // contains the trimmed query verbatim (case-insensitive) and explicitly
-    // union them into the candidate pool. searchByContent runs case-
-    // insensitive regex match against content+summary, so this captures all
-    // direct hits regardless of where they ranked in the vector top-K — a
-    // buried exact match cannot stay buried because the vector store's
-    // candidate cap excluded it.
+    // Hybrid step: union literal text hits into the candidate pool.
+    // searchByContent runs case-insensitive regex match against
+    // content+summary, so this captures all direct hits regardless of where
+    // they ranked in the vector top-K — a buried exact match cannot stay
+    // buried because the vector store's candidate cap excluded it. Two
+    // sources of literal phrases: the whole query (tool path,
+    // `applyLiteralPhraseBoost`) and the turn's entity anchors (injector
+    // path) — a verbatim place name must not be sliced off by the cosine floor.
     const literalPhrase = options.applyLiteralPhraseBoost
       ? getLiteralPhrase(query)
       : null
+    const anchorPhrases: string[] = []
+    if (literalPhrase) {
+      anchorPhrases.push(query.trim())
+    }
+    for (const entity of (options.entityAnchors ?? []).slice(0, 3)) {
+      const trimmed = entity?.trim()
+      if (trimmed && trimmed.length >= 2) {
+        anchorPhrases.push(trimmed)
+      }
+    }
     const literalHitIds = new Set<string>()
     let augmentedVectorResults = vectorResults
 
-    if (literalPhrase) {
-      const directHitMemories = await repos.memories.searchByContent(
-        characterId,
-        query.trim(),
-      )
-      for (const m of directHitMemories) {
-        literalHitIds.add(m.id)
+    if (anchorPhrases.length > 0) {
+      const directHitMemories: Memory[] = []
+      const directSeen = new Set<string>()
+      for (const phrase of anchorPhrases) {
+        const hits = await repos.memories.searchByContent(characterId, phrase)
+        for (const m of hits) {
+          literalHitIds.add(m.id)
+          if (!directSeen.has(m.id)) {
+            directSeen.add(m.id)
+            directHitMemories.push(m)
+          }
+        }
       }
       const inVectorPool = new Set(vectorResults.map(vr => vr.id))
       const missingDirectHits = directHitMemories.filter(
@@ -820,15 +986,45 @@ export async function searchMemoriesSemantic(
         results = results.filter(r => r.memory.aboutCharacterId === options.aboutCharacterId)
       }
 
-      // Blended ranking key: cosine (40%) + effective weight (60%). The blend
-      // itself is never modified — when a recallContext is supplied, the
-      // targeting-tag adjustments are bounded, clamped multipliers applied to
-      // this blended score *after* it is computed (see lib/memory/recall-tags.ts),
-      // so semantic relevance and recency keep their relative footing and each
-      // adjustment is auditable in isolation. No recallContext → the exact
-      // historical sort, byte-for-byte.
-      if (options.recallContext) {
-        const recallContext = options.recallContext
+      // Event-time window (episodic recall) — two-stage on the injector path:
+      // filter to the window first; if fewer than `limit` survive, fall back
+      // to the unfiltered pool and let window hits take the bounded
+      // ×occurredWithinWindow boost inside the one multiplier loop instead.
+      // Never fewer results than an unwindowed search. Tool path (no
+      // recallContext): a plain hard filter — the caller asked for a window.
+      let effectiveRecallContext = options.recallContext
+      if (options.occurredWithin) {
+        const from = Date.parse(options.occurredWithin.from)
+        const to = Date.parse(options.occurredWithin.to)
+        if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
+          const inWindow = (r: SemanticSearchResult): boolean => {
+            const t = Date.parse(r.memory.occurredAt ?? r.memory.createdAt)
+            return Number.isFinite(t) && t >= from && t <= to
+          }
+          const windowHits = results.filter(inWindow)
+          if (!options.recallContext) {
+            results = windowHits
+          } else if (windowHits.length >= limit) {
+            results = windowHits
+          } else {
+            effectiveRecallContext = {
+              ...options.recallContext,
+              occurredWithin: options.occurredWithin,
+            }
+          }
+        }
+      }
+
+      // Blended ranking key (see computeRankingBlend: RELEVANCE·cosine +
+      // PRIORITY·rawWeight). The blend itself is never modified — when a
+      // recallContext is supplied, the targeting-tag adjustments are bounded,
+      // clamped multipliers applied to this blended score *after* it is
+      // computed (see lib/memory/recall-tags.ts), so semantic relevance and
+      // recency keep their relative footing and each adjustment is auditable
+      // in isolation. No recallContext → the exact historical sort,
+      // byte-for-byte.
+      if (effectiveRecallContext) {
+        const recallContext = effectiveRecallContext
         const adjusted: SemanticSearchResult[] = []
         for (const r of results) {
           const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
@@ -1153,7 +1349,7 @@ export async function generateMissingEmbeddings(
       options.onProgress?.(processed + failed + skipped, memoriesWithoutEmbeddings.length, memory)
 
       const embeddingResult = await generateEmbeddingForUser(
-        `${memory.summary}\n\n${memory.content}`,
+        buildMemoryEmbeddingText(memory.summary, memory.content, memory),
         options.userId,
         options.embeddingProfileId,
         { priority: 'background' }

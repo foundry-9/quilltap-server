@@ -94,6 +94,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     handleSaveHelpTools,
     handleSaveCanDressThemselves,
     handleSaveCanCreateOutfits,
+    handleSaveCanChooseOutfit,
     handleSaveTimestampConfig,
     handleSaveDefaultScenario,
     handleSaveDefaultSystemPrompt,
@@ -109,6 +110,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     savingHelpTools,
     savingCanDressThemselves,
     savingCanCreateOutfits,
+    savingCanChooseOutfit,
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
@@ -218,12 +220,34 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
 
       case 'wardrobe':
         return (
-          <div className="space-y-2">
+          <div className="space-y-4">
             <p className="qt-text-small qt-text-secondary">
               The wardrobe lives in a global dialog so it travels with you —
               edit, layer, and save outfits from anywhere, including from
               inside a chat.
             </p>
+            <div className="rounded-lg border qt-border-default qt-bg-card p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={character?.canChooseOutfit ?? false}
+                  onChange={(e) => handleSaveCanChooseOutfit(e.target.checked)}
+                  disabled={savingCanChooseOutfit || !character}
+                  className="mt-1 accent-[var(--primary)]"
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="qt-text-label block">Let this character choose their opening outfit</span>
+                  <span className="qt-text-small qt-text-secondary block mt-0.5">
+                    When enabled, a new chat with this character defaults its
+                    Starting Outfit to “Let character choose” instead of their
+                    default wardrobe. You can still overrule it per chat.
+                  </span>
+                </span>
+                {savingCanChooseOutfit && (
+                  <span className="h-4 w-4 mt-1 animate-spin rounded-full qt-spinner shrink-0" />
+                )}
+              </label>
+            </div>
             <button
               type="button"
               onClick={() => wardrobeDialog?.open({ characterId: id })}

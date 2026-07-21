@@ -18,7 +18,20 @@ import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib
 import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
-import { recentlyWhisperedIdSet, appendRecallTurn } from '@/lib/memory/recall-history'
+import {
+  recentlyWhisperedIdSet,
+  appendRecallTurn,
+  appendRetroSignature,
+  parseRetroSignatures,
+} from '@/lib/memory/recall-history'
+import {
+  searchVaultConversationSummaries,
+  renderRelevantConversationsBlock,
+  READ_CONVERSATION_CALL_NOTE,
+} from '@/lib/memory/conversation-summary-search'
+
+/** Cap on entries in the retrospective mini-recap conversation list. */
+const RETRO_MINI_RECAP_MAX_ENTRIES = 5
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -28,7 +41,7 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
-import { extractVisibleConversation, stripToolArtifacts, extractMemorySearchKeywords } from '@/lib/memory/cheap-llm-tasks'
+import { extractVisibleConversation, stripToolArtifacts, extractMemorySearchKeywords, type MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
 
 // Import from extracted modules
 import {
@@ -46,6 +59,8 @@ import {
   formatCurrentSceneState,
   DYNAMIC_HEAD_TOKEN_BUDGET,
   DYNAMIC_HEAD_DEFAULT_SIZE,
+  RETRO_HEAD_TOKEN_BUDGET,
+  RETRO_HEAD_SIZE,
   type DebugMemoryInfo,
   type DebugInterCharacterMemoryInfo,
   type SceneStateEmissionEntry,
@@ -370,6 +385,13 @@ export interface BuildContextOptions {
 
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+  /**
+   * Turn-level recall signals from the proactive keyword distillation
+   * (retrospective / timeRange / entities / paraphrase). Drives the
+   * retrospective cadence: enlarged dynamic head + scoped mini-recap. When
+   * absent, the fallback distillation inside buildContext supplies them.
+   */
+  recallSignals?: MemorySearchExtraction
 
   // ============================================================================
   // Memory Recap (Chat Start / Character Join)
@@ -1090,6 +1112,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Memory IDs whispered in the dynamic head this turn — persisted to the recall
   // history ring buffer (anti-repetition, item F4) after the build completes.
   let whisperedMemoryIds: string[] = []
+  // Turn-level recall signals (retrospective / timeRange / entities) — set by
+  // the proactive path via options or by the fallback distillation; consumed
+  // by the retrospective head sizing above and the mini-recap below.
+  let turnRecallSignals: MemorySearchExtraction | null = null
   if (!skipMemories && character.id) {
     try {
       // Phase 3a/3b: two-pool architecture.
@@ -1101,15 +1127,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       // small token budget; entries already in the archive are filtered out
       // so the LLM doesn't see the same memory twice.
       const compactionGen = chat.compactionGeneration ?? 0
-      const dynamicHeadBudget = Math.min(DYNAMIC_HEAD_TOKEN_BUDGET, budget.memoryBudget)
-      const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
 
       const frozenArchive = await getOrComputeFrozenArchive(character.id, compactionGen)
-      const archiveFormatted = formatFrozenMemoryArchive(frozenArchive, archiveBudget, provider)
-      frozenArchiveCount = archiveFormatted.memoriesUsed
-
       const archiveIds = new Set(frozenArchive.map(m => m.id))
       let dynamicHeadResults: SemanticSearchResult[] = []
+
+      // Episodic recall: the turn-level recall signals. The proactive path
+      // hands them in via options; the fallback distillation below fills them
+      // when the proactive path didn't run. They drive the retrospective
+      // cadence — enlarged head here, mini-recap after the whisper assembles.
+      turnRecallSignals = options.recallSignals ?? null
 
       if (options.preSearchedMemories && options.preSearchedMemories.length > 0) {
         memoryPath = 'pre-searched'
@@ -1151,6 +1178,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               userId,
               chat.id,
               character.id,
+              {
+                nowIso: new Date().toISOString(),
+                timelineMode: chat.timelineMode ?? 'realtime',
+              },
             )
             if (distill.success && distill.result) {
               // Prefer the natural-language paraphrase as the embedding query —
@@ -1165,6 +1196,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               }
               turnContext = distill.result.context ?? null
               turnTemporal = distill.result.temporal ?? null
+              turnRecallSignals = distill.result
             }
           } catch (error) {
             logger.debug('[ContextManager] Dynamic-head keyword distillation failed; using raw query', {
@@ -1190,14 +1222,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof
         // comparand for scope: narrow gating.
         const recallSettings = await getMemoryRecallSettings()
+        const fallbackRetro = turnRecallSignals?.retrospective === true
         const recallContext: RecallContext = {
           currentProjectId: chat.projectId ?? null,
           scopePolicy: recallSettings.scopePolicy,
           turnContext,
           turnTemporal,
+          turnRetrospective: fallbackRetro,
           presentAboutCharacterIds,
           expandRelated: recallSettings.expandRelated,
           recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
+        }
+        // Retrospective multi-probe (mirrors the proactive path).
+        const extraProbes: string[] = []
+        if (fallbackRetro && turnRecallSignals) {
+          const entityProbe = (turnRecallSignals.entities ?? []).join(' ').trim()
+          if (entityProbe) extraProbes.push(entityProbe)
+          if (turnRecallSignals.paraphrase && turnRecallSignals.timeRange) {
+            extraProbes.push(
+              `${turnRecallSignals.paraphrase} (around ${turnRecallSignals.timeRange.from.slice(0, 10)} to ${turnRecallSignals.timeRange.to.slice(0, 10)})`,
+            )
+          }
         }
         const memoryResults = await searchMemoriesSemantic(
           character.id,
@@ -1206,18 +1251,35 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             userId,
             embeddingProfileId,
             // Pull a few more than the head size so the archive-overlap filter
-            // still leaves enough candidates to fill the head.
-            limit: DYNAMIC_HEAD_DEFAULT_SIZE * 3,
+            // still leaves enough candidates to fill the head. Retrospective
+            // turns run the enlarged head, so pull proportionally more.
+            limit: (fallbackRetro ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE) * 3,
             minImportance: minMemoryImportance,
             recallContext,
+            entityAnchors: turnRecallSignals?.entities,
+            occurredWithin: fallbackRetro ? (turnRecallSignals?.timeRange ?? null) : null,
+            extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
           },
         )
         dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
       }
 
+      // Recall-on-reference (fourth cadence, part 1): a retrospective turn
+      // gets an enlarged head — the turn that needs rich recall is exactly
+      // the turn that otherwise gets the smallest window. Budgets decided
+      // here, AFTER the signals are known, so the archive takes what's left.
+      const isRetrospectiveTurn = turnRecallSignals?.retrospective === true
+      const dynamicHeadBudget = Math.min(
+        isRetrospectiveTurn ? RETRO_HEAD_TOKEN_BUDGET : DYNAMIC_HEAD_TOKEN_BUDGET,
+        budget.memoryBudget,
+      )
+      const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
+      const archiveFormatted = formatFrozenMemoryArchive(frozenArchive, archiveBudget, provider)
+      frozenArchiveCount = archiveFormatted.memoriesUsed
+
       const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, {
         maxTokens: dynamicHeadBudget,
-        maxEntries: DYNAMIC_HEAD_DEFAULT_SIZE,
+        maxEntries: isRetrospectiveTurn ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE,
       })
       dynamicHeadCount = headFormatted.memoriesUsed
 
@@ -1878,11 +1940,91 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
+  // Recall-on-reference (fourth cadence, part 2): on a retrospective turn,
+  // build the scoped mini-recap — a dated, drillable Relevant Past
+  // Conversations list from the vault summaries, scoped by the turn's
+  // timeRange/entities and closed by the read_conversation call note. Spam
+  // guard: skip when a block with the same timeRange/entity signature was
+  // emitted within the last few turns (piggybacking the recall-history ring
+  // buffer), and dedup conversation IDs against the current on-fold
+  // relevant-conversations whisper. Best-effort — never blocks the turn.
+  let retrospectiveRecallContent = ''
+  let emittedRetroSignature: string | null = null
+  if (turnRecallSignals?.retrospective && character.id) {
+    try {
+      const signals = turnRecallSignals
+      const signature = [
+        signals.timeRange ? `${signals.timeRange.from}→${signals.timeRange.to}` : '∅',
+        ...(signals.entities ?? []).map(e => e.toLowerCase()).sort(),
+      ].join('|')
+      const recentSignatures = parseRetroSignatures(chat.commonplaceRecallHistory)
+      if (!recentSignatures.includes(signature)) {
+        const queryParts = [
+          signals.paraphrase ?? memorySearchQuery ?? '',
+          (signals.entities ?? []).join(', '),
+        ].filter(part => part.trim().length > 0)
+        const query = queryParts.join(' — ')
+        if (query.trim()) {
+          const matches = await searchVaultConversationSummaries({
+            characterId: character.id,
+            query,
+            userId,
+            embeddingProfileId,
+            limit: RETRO_MINI_RECAP_MAX_ENTRIES,
+            excludeConversationId: chat.id,
+            timeRange: signals.timeRange ?? null,
+          })
+          // Dedup against the standing on-fold relevant-conversations whisper
+          // for the same target — no point listing the same UUID twice.
+          const foldWhisperIds = new Set<string>()
+          try {
+            const messages = await getRepositories().chats.getMessages(chat.id)
+            const targetId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+            for (const m of messages) {
+              if (m.type !== 'message') continue
+              const msg = m as MessageEvent
+              if (msg.systemSender !== 'commonplaceBook' || msg.systemKind !== 'relevant-conversations') continue
+              const ids = msg.targetParticipantIds
+              const matchesTarget =
+                targetId === null ? ids === null || ids === undefined : Array.isArray(ids) && ids.includes(targetId)
+              if (!matchesTarget) continue
+              for (const uuid of (msg.content ?? '').matchAll(/`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`/gi)) {
+                foldWhisperIds.add(uuid[1])
+              }
+            }
+          } catch {
+            // Dedup is best-effort; a duplicate UUID listing is harmless.
+          }
+          const filtered = matches
+            .filter(m => !foldWhisperIds.has(m.conversationId))
+            .slice(0, RETRO_MINI_RECAP_MAX_ENTRIES)
+          if (filtered.length > 0) {
+            retrospectiveRecallContent = `${renderRelevantConversationsBlock(filtered)}\n\n${READ_CONVERSATION_CALL_NOTE}`
+            emittedRetroSignature = signature
+          }
+        }
+      } else {
+        logger.debug('[CommonplaceWhisper] Retrospective mini-recap suppressed (recent same-signature block)', {
+          chatId: chat.id,
+          signature,
+        })
+      }
+    } catch (retroError) {
+      logger.warn('[CommonplaceWhisper] Retrospective mini-recap failed (non-fatal)', {
+        chatId: chat.id,
+        characterId: character.id,
+        error: getErrorMessage(retroError),
+      })
+    }
+  }
+
   // Memory tail: persist a single consolidated Commonplace Book whisper to the
   // transcript (visible in the salon UI with the Commonplace Book avatar) AND
   // inline plain "you remember…" framing into the new user message body for
   // this turn's LLM call. The Staff persona stays in the transcript; the LLM
-  // receives clean second-person recall, not meta-narrative.
+  // receives clean second-person recall, not meta-narrative. The retrospective
+  // mini-recap rides the LLM recall text here but is posted as its OWN
+  // `retrospective-recall` whisper below (never inside the consolidated body).
   const cmpbParts = {
     currentState: currentStateContent || undefined,
     recap: memoryRecapContent || undefined,
@@ -1891,7 +2033,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     knowledge: knowledgeContent || undefined,
   }
   const personaWhisper = buildCommonplacePersonaWhisper(cmpbParts)
-  const llmRecallText = buildCommonplaceLLMContext(cmpbParts)
+  const llmRecallText = buildCommonplaceLLMContext({
+    ...cmpbParts,
+    retrospectiveRecall: retrospectiveRecallContent || undefined,
+  })
 
   if (personaWhisper) {
     // Persist the persona-voiced whisper. Targeted to the responding character
@@ -1939,11 +2084,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
       // Record this turn's whispered memory IDs into the recall-history ring
       // buffer so the next turn's recall can apply the anti-repetition penalty
-      // (item F4). Fire-and-forget — a write failure just means one un-penalized
-      // turn. Skipped when nothing was whispered (appendRecallTurn no-ops).
-      if (whisperedMemoryIds.length > 0) {
+      // (item F4), plus the retrospective mini-recap signature (spam guard for
+      // the fourth cadence). Fire-and-forget — a write failure just means one
+      // un-penalized turn.
+      if (whisperedMemoryIds.length > 0 || emittedRetroSignature) {
         try {
-          const nextHistory = appendRecallTurn(chat.commonplaceRecallHistory, whisperedMemoryIds)
+          let nextHistory = appendRecallTurn(chat.commonplaceRecallHistory, whisperedMemoryIds)
+          if (emittedRetroSignature) {
+            nextHistory = appendRetroSignature(nextHistory, emittedRetroSignature)
+          }
           await getRepositories().chats.update(chat.id, {
             commonplaceRecallHistory: nextHistory,
           } as unknown as Partial<typeof chat>)
@@ -1992,6 +2141,28 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           error: getErrorMessage(sweepError),
         }, sweepError as Error)
       }
+    }
+  }
+
+  // Recall-on-reference: post the mini-recap as its OWN whisper (kind
+  // `retrospective-recall`) so the salon shows the dated conversation list
+  // distinctly. Posted AFTER the consolidated sweep snapshot so it survives
+  // this turn; the next turn's sweep removes it (turn-specific by design —
+  // unlike `relevant-conversations`, which the sweep exempts).
+  if (retrospectiveRecallContent) {
+    try {
+      const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+      await postCommonplaceWhisper({
+        chatId: chat.id,
+        targetParticipantId,
+        content: buildCommonplacePersonaWhisper({ retrospectiveRecall: retrospectiveRecallContent }),
+        kind: 'retrospective-recall',
+      })
+    } catch (retroPostError) {
+      logger.warn('[CommonplaceWhisper] Failed to post retrospective-recall whisper', {
+        chatId: chat.id,
+        error: getErrorMessage(retroPostError),
+      })
     }
   }
 

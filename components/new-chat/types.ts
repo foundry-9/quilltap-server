@@ -84,6 +84,12 @@ export interface Character {
   defaultScenarioId?: string | null
   defaultSystemPromptId?: string | null
   defaultImageProfileId?: string | null
+  /**
+   * When true, a new chat with this character defaults its Starting Outfit to
+   * "Let character choose". Absent/false falls back to defaults (or Compose
+   * when there is no usable default outfit).
+   */
+  canChooseOutfit?: boolean
 }
 
 export interface ConnectionProfile {

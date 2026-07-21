@@ -27,7 +27,7 @@ import {
   invalidateCompressionCache,
   type CachedCompressionResponse,
 } from './compression-cache.service'
-import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts } from '@/lib/memory/cheap-llm-tasks'
+import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts, type MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
 import type { RecallContext } from '@/lib/memory/recall-tags'
 import { recentlyWhisperedIdSet } from '@/lib/memory/recall-history'
@@ -72,6 +72,14 @@ export interface RunPreContextPreComputeOptions {
 export interface PreContextPreComputeResult {
   cachedCompressionResponse: CachedCompressionResponse | undefined
   preSearchedMemories: SemanticSearchResult[] | undefined
+  /**
+   * The turn-level recall signals the proactive keyword distillation emitted
+   * (retrospective / timeRange / entities / paraphrase). Threaded into
+   * buildContext so the retrospective cadence (enlarged head + mini-recap)
+   * fires without re-running the distillation. Undefined when the proactive
+   * path didn't run or its extraction failed.
+   */
+  recallSignals: MemorySearchExtraction | undefined
   /** Caller MUST invoke after buildMessageContext returns (or on error)
    * to release the keep-alive interval. Idempotent. */
   stopKeepAlive: () => void
@@ -80,10 +88,12 @@ export interface PreContextPreComputeResult {
 export async function runPreContextPreCompute(
   opts: RunPreContextPreComputeOptions
 ): Promise<PreContextPreComputeResult> {
-  const [cachedCompressionResponse, preSearchedMemories] = await Promise.all([
+  const [cachedCompressionResponse, recallOutcome] = await Promise.all([
     compressionTask(opts),
     proactiveRecallTask(opts),
   ])
+  const preSearchedMemories = recallOutcome?.memories
+  const recallSignals = recallOutcome?.signals
 
   // Keep-alive pings during the upcoming buildMessageContext (especially long
   // when compression is regenerating). Only armed when compression is enabled
@@ -104,6 +114,7 @@ export async function runPreContextPreCompute(
   return {
     cachedCompressionResponse,
     preSearchedMemories,
+    recallSignals,
     stopKeepAlive: () => {
       if (keepAliveInterval) {
         clearInterval(keepAliveInterval)
@@ -153,9 +164,14 @@ async function compressionTask(
   return undefined
 }
 
+interface ProactiveRecallOutcome {
+  memories: SemanticSearchResult[] | undefined
+  signals: MemorySearchExtraction | undefined
+}
+
 async function proactiveRecallTask(
   opts: RunPreContextPreComputeOptions
-): Promise<SemanticSearchResult[] | undefined> {
+): Promise<ProactiveRecallOutcome | undefined> {
   const {
     chatId, userId, chat, character, characterParticipant,
     presentAboutCharacterIds, isContinueMode, content, existingMessages,
@@ -234,12 +250,19 @@ async function proactiveRecallTask(
     recallSelection,
     userId,
     chatId,
-    character.id
+    character.id,
+    // Episodic recall: the distillation resolves "last week" into an absolute
+    // timeRange against this clock.
+    {
+      nowIso: new Date().toISOString(),
+      timelineMode: chat.timelineMode ?? 'realtime',
+    }
   )
 
   if (!keywordResult.success || !keywordResult.result || keywordResult.result.keywords.length === 0) {
     return undefined
   }
+  const signals = keywordResult.result
 
   safeEnqueue(controller, encodeStatusEvent(encoder, {
     stage: 'recalling_memories',
@@ -258,15 +281,32 @@ async function proactiveRecallTask(
   // chat.projectId is the rename-proof comparand; the turn's temporal/context
   // guess and present-character set drive items 3–4.
   const recallSettings = await getMemoryRecallSettings()
+  const retrospective = signals.retrospective === true
   const recallContext: RecallContext = {
     currentProjectId: chat.projectId ?? null,
     scopePolicy: recallSettings.scopePolicy,
-    turnContext: keywordResult.result.context ?? null,
-    turnTemporal: keywordResult.result.temporal ?? null,
+    turnContext: signals.context ?? null,
+    turnTemporal: signals.temporal ?? null,
+    turnRetrospective: retrospective,
     presentAboutCharacterIds,
     expandRelated: recallSettings.expandRelated,
     recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
   }
+
+  // Retrospective turns: multi-probe (entity string; paraphrase + resolved
+  // date phrase) so a "remember Lighthouse Point last week?" turn probes the
+  // vector space from every angle the reference offers.
+  const extraProbes: string[] = []
+  if (retrospective) {
+    const entityProbe = (signals.entities ?? []).join(' ').trim()
+    if (entityProbe) extraProbes.push(entityProbe)
+    if (signals.paraphrase && signals.timeRange) {
+      extraProbes.push(
+        `${signals.paraphrase} (around ${signals.timeRange.from.slice(0, 10)} to ${signals.timeRange.to.slice(0, 10)})`,
+      )
+    }
+  }
+
   try {
     const memoryResults = await searchMemoriesSemantic(
       character.id,
@@ -276,11 +316,17 @@ async function proactiveRecallTask(
         limit: 20,
         minImportance: 0.3,
         recallContext,
+        // Episodic recall: entity anchoring always (a verbatim place name
+        // cannot be sliced off by the cosine floor); window + probes only on
+        // retrospective turns.
+        entityAnchors: signals.entities,
+        occurredWithin: retrospective ? (signals.timeRange ?? null) : null,
+        extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
       }
     )
 
     if (memoryResults.length > 0) {
-      return memoryResults.slice(0, 10)
+      return { memories: memoryResults.slice(0, 10), signals }
     }
   } catch (error) {
     logger.warn('Proactive memory recall: memory search failed, falling back to default', {
@@ -290,5 +336,5 @@ async function proactiveRecallTask(
     })
   }
 
-  return undefined
+  return { memories: undefined, signals }
 }

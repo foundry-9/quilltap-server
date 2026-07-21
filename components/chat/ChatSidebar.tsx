@@ -173,6 +173,8 @@ export interface ChatSidebarProps {
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
+  /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
+  timelineMode?: 'realtime' | 'narrative' | null
   /** Per-chat Concierge override ('OFF' = off-duty, null = follow global). */
   conciergeOverride?: 'OFF' | null
   onToolSettingsClick?: () => void
@@ -493,6 +495,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
             avatarGenerationEnabled={props.avatarGenerationEnabled}
+            timelineMode={props.timelineMode}
             isDangerousChat={props.isDangerousChat}
             conciergeOverride={props.conciergeOverride}
             onToolSettingsClick={props.onToolSettingsClick}
@@ -856,6 +859,7 @@ interface ChatSectionProps {
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
+  timelineMode?: 'realtime' | 'narrative' | null
   isDangerousChat?: boolean
   conciergeOverride?: 'OFF' | null
   onToolSettingsClick?: () => void
@@ -876,6 +880,7 @@ function ChatSection({
   imageProfileId,
   alertCharactersOfLanternImages,
   avatarGenerationEnabled,
+  timelineMode,
   isDangerousChat,
   conciergeOverride,
   onToolSettingsClick,
@@ -890,6 +895,7 @@ function ChatSection({
   const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
   const [conciergeSaving, setConciergeSaving] = useState(false)
+  const [timelineModeSaving, setTimelineModeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
   useEffect(() => {
@@ -997,6 +1003,34 @@ function ChatSection({
       showErrorToast(msg || 'Failed to update Lantern image announcements')
     } finally {
       setAlertImagesSaving(false)
+    }
+  }
+
+  // Which clock the chat's story keeps for episodic memory. Persisted as the
+  // explicit enum value; NULL in the record reads as 'realtime'.
+  const handleTimelineModeChange = async (value: 'realtime' | 'narrative') => {
+    try {
+      setTimelineModeSaving(true)
+      const res = await fetch(`/api/v1/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat: { timelineMode: value } }),
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
+      }
+      showSuccessToast(
+        value === 'narrative'
+          ? 'The story now keeps its own hours'
+          : 'The story is back on the clock on the wall'
+      )
+      onChatUpdated?.()
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      showErrorToast(msg || "Failed to change the story's clock")
+    } finally {
+      setTimelineModeSaving(false)
     }
   }
 
@@ -1108,6 +1142,25 @@ function ChatSection({
             </option>
           ))}
         </select>
+      </label>
+
+      {/* The Story's Clock — episodic-memory timeline mode */}
+      <label className="qt-label">
+        <span className="block mb-1">The Story&rsquo;s Clock</span>
+        <select
+          value={timelineMode === 'narrative' ? 'narrative' : 'realtime'}
+          onChange={(e) => handleTimelineModeChange(e.target.value === 'narrative' ? 'narrative' : 'realtime')}
+          disabled={timelineModeSaving}
+          className="qt-select text-sm"
+        >
+          <option value="realtime">Real time</option>
+          <option value="narrative">Story time</option>
+        </select>
+        <span className="block mt-1 qt-text-secondary text-xs">
+          {timelineMode === 'narrative'
+            ? 'The tale keeps its own hours: the Commonplace Book files memories by the story’s reckoning — the third night at sea, the eve of the coronation — rather than the calendar on the wall.'
+            : 'Memories are filed by the calendar on the wall — “last Tuesday” means the actual Tuesday. Switch to Story time if this chat runs on a fictional clock.'}
+        </span>
       </label>
 
       {/* Project */}

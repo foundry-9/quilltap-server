@@ -89,6 +89,10 @@ Force-downloads an instance's cloud-evicted (dataless) database files so they ar
 
 Diagnostic tool: dumps a chat's existing memories and dry-runs re-extraction against it **without writing anything**, so you can compare what the extractor *would* produce now against what is stored. Needs a running server (`--port`, default 3000) to reach the extraction pipeline. `--out <dir>` sets the report destination (default: cwd); `--concurrency N` bounds parallel turns (default 4, max 32).
 
+## Recall replay (`npx quilltap recall-replay <chatId>`)
+
+Episodic-recall tuning harness: replays a chat turn's memory recall against the running server and prints the full candidate table twice — the pre-overhaul ranking (episodic signals inert) and the episodic ranking (retrospective flip, time-window, entity anchors, multi-probe) — including cosine, ranking blend, every multiplier that fired, the final score, and head selection. The distillation's clock is anchored to the replayed turn's own timestamp, so historical "the character forgot" turns resolve "last week" against their own date. Read-only; nothing is persisted. Flags: `--turn <n>` (1-based interchange, default last), `--char <characterId>`, `--limit <n>` (rows per path, default 25), `--port` (default 3000), `--json`. Wraps `POST /api/v1/chats/[id]?action=recall-replay`.
+
 ## Themes CLI (`npx quilltap themes`)
 
 Manage installed theme bundles from the shell. Verbs: `list`, `install <bundle.qtap-theme>`, `validate <bundle.qtap-theme>`, `uninstall <id>`, `export <id> [--output <path>]`, `create <name>` (scaffolds via `create-quilltap-theme`), `search <query>` (across registries), `update [id]` (check for / apply updates). Registry operators also get `themes registry <list|add|remove|refresh|keygen|sign>` for managing remote registries and Ed25519 signing (`--key`/`-k`, `--name`/`-n`, `--output`/`-o`). See `npx quilltap themes --help`.

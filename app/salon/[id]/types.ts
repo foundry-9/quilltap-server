@@ -255,6 +255,8 @@ export interface Chat {
   showThinking?: boolean | null
   /** Per-chat answer-confirmation override (null = inherit project/global; 'ON'/'OFF' = explicit). */
   answerConfirmationOverride?: 'ON' | 'OFF' | null
+  /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
+  timelineMode?: 'realtime' | 'narrative' | null
   /** Image profile ID for generating images in this chat (shared by all participants) */
   imageProfileId?: string | null
   /** Whether to auto-generate character avatars when outfits change */

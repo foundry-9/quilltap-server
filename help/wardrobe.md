@@ -165,12 +165,13 @@ For models using text-block syntax, gifting uses the `recipient` attribute: `[[C
 
 ### The Wardrobe Flags
 
-Two flags on each character govern what they are permitted to do with their own clothing:
+Three flags on each character govern their clothing:
 
 - **canDressThemselves** --- When enabled (the default), the character may use `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, and `wardrobe_take_off` to browse and change their outfit during conversation. Disable this if you prefer to maintain strict authorial control over what they wear.
 - **canCreateOutfits** --- When enabled (also the default), the character may use `wardrobe_create`, `wardrobe_update`, and `wardrobe_archive` to fabricate, amend, and retire garments on the fly. This is delightful for characters with a flair for fashion, but you may wish to disable it if your character's wardrobe should remain fixed.
+- **canChooseOutfit** --- Disabled by default. When enabled, a *new* chat with this character opens with its Starting Outfit already set to **Let Character Choose**, so a character with a wardrobe worth showing off arrives dressed for the occasion without your having to flip the switch each time. It changes only the default the new-chat dialog offers; you may still overrule it for any particular chat.
 
-Both flags can be found in the character's settings on the Aurora page.
+All three flags live on the character's **Wardrobe** tab on the Aurora page — `canChooseOutfit` sits just above the "Open wardrobe" button; the other two are grouped with the character's other wardrobe permissions.
 
 ## Outfit Selection When Starting a Chat
 
@@ -180,6 +181,8 @@ When you begin a new conversation, you will be asked how to handle the character
 - **Manual** --- You hand-pick which items the character is wearing at the start of the scene
 - **Let Character Choose** --- The character examines the scenario and their own wardrobe, then selects what seems most appropriate for the occasion. This is accomplished by a discreet consultation with the AI before the conversation begins --- rather like sending one's valet ahead to assess the dress code. Should the consultation fail for any reason (a misplaced cufflink, an uncooperative telegraph), the character simply falls back to their default outfit with admirable composure.
 - **None** --- The character begins with no equipped outfit; what they wear (if anything) is left to the narrative
+
+The dialog now proposes a sensible starting choice for each character on its own, so you need only intervene when your taste differs. Continuing from an earlier conversation keeps everyone in what they last wore; a character carrying the **canChooseOutfit** flag opens on **Let Character Choose**; a character with a proper default outfit on file opens on **Default**; and a character with no default outfit to speak of opens on **Manual**, its panel already unfolded so the empty slots are plain to see. When several characters are present, each folded panel wears a small badge — **Defaults**, **Composed**, **Dress Themselves**, **Undressed**, or **Same as Last** — so the whole cast's attire reads at a glance.
 
 If you have also chosen a **Play As** character to represent yourself in the conversation, that character appears in the outfit selector too --- so you may dress your own persona alongside the cast, sparing yourself the indignity of arriving at a gala in whatever you happened to be wearing at your last engagement.
 

@@ -55,6 +55,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
+- [The Book Remembers When and Where](episodic-memory.md) — dated, placed memories and the retrospective turn
 - [When You Take the Reins Yourself](memory-playing-a-character.md) — how a character you play forms its own memories
 - [Memory Housekeeping](memory-housekeeping.md) — prunes the shelves once a character's memories grow numerous
 - [Embedding Profiles](embedding-profiles.md) — the semantic match that recall ranks on top of

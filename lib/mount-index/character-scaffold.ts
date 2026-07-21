@@ -45,6 +45,7 @@ const PROPERTIES_JSON = {
   title: '',
   firstMessage: '',
   talkativeness: 0.5,
+  canChooseOutfit: false,
 };
 
 /**

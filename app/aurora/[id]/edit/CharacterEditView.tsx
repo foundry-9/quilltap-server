@@ -85,7 +85,30 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
   } = useCharacterEdit(id)
 
   const [showWizard, setShowWizard] = useState(false)
+  const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
   const wardrobeDialog = useWardrobeDialogOptional()
+
+  // Persist the "let this character choose their opening outfit" flag (vault
+  // properties.json). Immediate save, mirroring the other per-character wardrobe
+  // toggles; on failure we re-fetch to snap the checkbox back to server truth.
+  const handleSaveCanChooseOutfit = async (enabled: boolean) => {
+    setSavingCanChooseOutfit(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canChooseOutfit: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update outfit-choice setting')
+    } catch (err) {
+      console.error('Failed to save outfit-choice setting', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      await fetchCharacter()
+      setSavingCanChooseOutfit(false)
+    }
+  }
 
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
@@ -312,13 +335,36 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
 
               case 'wardrobe':
                 return (
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     <p className="qt-text-small qt-text-secondary">
                       The wardrobe is managed in the global Wardrobe dialog so
                       you can drop in from anywhere — including from inside a
                       chat — and edit, layer, or save outfits without leaving
                       the page you&apos;re on.
                     </p>
+                    <div className="rounded-lg border qt-border-default qt-bg-card p-4">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={character?.canChooseOutfit ?? false}
+                          onChange={(e) => handleSaveCanChooseOutfit(e.target.checked)}
+                          disabled={savingCanChooseOutfit || !character}
+                          className="mt-1 accent-[var(--primary)]"
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="qt-text-label block">Let this character choose their opening outfit</span>
+                          <span className="qt-text-small qt-text-secondary block mt-0.5">
+                            When enabled, a new chat with this character defaults
+                            its Starting Outfit to “Let character choose” instead
+                            of their default wardrobe. You can still overrule it
+                            per chat.
+                          </span>
+                        </span>
+                        {savingCanChooseOutfit && (
+                          <span className="h-4 w-4 mt-1 animate-spin rounded-full qt-spinner shrink-0" />
+                        )}
+                      </label>
+                    </div>
                     <button
                       type="button"
                       onClick={() => wardrobeDialog?.open({ characterId: id })}

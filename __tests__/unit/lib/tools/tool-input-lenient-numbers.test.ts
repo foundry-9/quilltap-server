@@ -28,8 +28,8 @@ import { docWriteFileToolInputSchema } from '@/lib/tools/doc-write-file-tool'
 import { helpSearchToolInputSchema } from '@/lib/tools/help-search-tool'
 import { imageGenerationToolInputSchema } from '@/lib/tools/image-generation-tool'
 import { listImagesToolInputSchema } from '@/lib/tools/list-images-tool'
-import { memorySearchToolInputSchema } from '@/lib/tools/memory-search-tool'
 import { runSqlToolInputSchema } from '@/lib/tools/run-sql-tool'
+import { readConversationToolInputSchema } from '@/lib/tools/read-conversation-tool'
 import {
   searchScriptoriumToolInputSchema,
   searchScriptoriumBrahmaToolInputSchema,
@@ -169,23 +169,22 @@ const cases: NumericFieldCase[] = [
     expected: 10,
   },
   {
-    name: 'memory_search.limit',
-    schema: memorySearchToolInputSchema,
-    field: 'limit',
-    base: { query: 'their birthday' },
-    quoted: '5',
-    expected: 5,
-    outOfBounds: '21',
-  },
-  {
-    name: 'memory_search.minImportance',
-    schema: memorySearchToolInputSchema,
+    name: 'search.minImportance',
+    schema: searchScriptoriumToolInputSchema,
     field: 'minImportance',
     base: { query: 'their birthday' },
     // A float — llmNumber is not integer-only, and minImportance never was.
     quoted: '0.5',
     expected: 0.5,
     outOfBounds: '2',
+  },
+  {
+    name: 'read_conversation.interchange_start',
+    schema: readConversationToolInputSchema,
+    field: 'interchange_start',
+    base: {},
+    quoted: '3',
+    expected: 3,
   },
   {
     name: 'run_sql.max_rows',

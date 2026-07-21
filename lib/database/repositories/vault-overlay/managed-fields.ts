@@ -90,6 +90,7 @@ export async function readCharacterVaultManagedFields(
           snapshot.title = props.title;
           snapshot.firstMessage = props.firstMessage;
           snapshot.talkativeness = props.talkativeness;
+          snapshot.canChooseOutfit = props.canChooseOutfit;
         }
         break;
       }
@@ -224,6 +225,7 @@ export async function writeCharacterVaultManagedFields(
         title: character.title ?? null,
         firstMessage: character.firstMessage ?? null,
         talkativeness: character.talkativeness ?? 0.5,
+        canChooseOutfit: character.canChooseOutfit ?? false,
       },
       null,
       2,
@@ -404,7 +406,7 @@ export async function applyDocumentStoreWriteOverlay(
         break;
       }
       case 'properties-json': {
-        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness'] as const;
+        const propsKeys = ['pronouns', 'aliases', 'title', 'firstMessage', 'talkativeness', 'canChooseOutfit'] as const;
         const touched = propsKeys.filter((k) => k in patch);
         if (touched.length === 0) break;
         // Read-modify-write so a partial patch doesn't blow away unspecified
@@ -415,6 +417,7 @@ export async function applyDocumentStoreWriteOverlay(
           title: character.title ?? null,
           firstMessage: character.firstMessage ?? null,
           talkativeness: character.talkativeness ?? 0.5,
+          canChooseOutfit: character.canChooseOutfit ?? false,
         };
         const next: CharacterVaultProperties = {
           pronouns: 'pronouns' in patch ? (patch.pronouns ?? null) : current.pronouns,
@@ -424,6 +427,8 @@ export async function applyDocumentStoreWriteOverlay(
             'firstMessage' in patch ? (patch.firstMessage ?? null) : current.firstMessage,
           talkativeness:
             'talkativeness' in patch ? (patch.talkativeness ?? 0.5) : current.talkativeness,
+          canChooseOutfit:
+            'canChooseOutfit' in patch ? (patch.canChooseOutfit ?? false) : current.canChooseOutfit,
         };
         await writeDatabaseDocument(
           mountPointId,

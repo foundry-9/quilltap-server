@@ -28,6 +28,7 @@
  * POST /api/v1/chats/[id]?action=add-tool-result - Add tool result message
  * POST /api/v1/chats/[id]?action=queue-memories - Queue memory extraction jobs
  * POST /api/v1/chats/[id]?action=extract-memories-dry-run - Stream NDJSON dry-run of per-turn memory extraction (no persistence)
+ * POST /api/v1/chats/[id]?action=recall-replay - Replay per-turn memory recall old-path vs new-path (episodic tuning harness)
  * POST /api/v1/chats/[id]?action=rng - Execute random number generator (dice, coin, bottle)
  * POST /api/v1/chats/[id]?action=toggle-agent-mode - Toggle agent mode for this chat
  * POST /api/v1/chats/[id]?action=reclassify-danger - Reset and re-queue danger classification

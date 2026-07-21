@@ -171,6 +171,9 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     isDangerousChat: isChatActiveDangerous(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
+    // Episodic spine: which clock the chat's story runs on (drives the
+    // extraction CLOCK block and narrativeTime capture).
+    timelineMode: chat.timelineMode ?? 'realtime',
     // 4.6 Private Character Rooms: autonomous-source attribution for the
     // extractor — the prompts get the user-absence clause and the resulting
     // memory rows carry witnessedContext = 'autonomous_room'.

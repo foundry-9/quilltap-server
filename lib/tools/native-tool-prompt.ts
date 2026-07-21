@@ -29,5 +29,7 @@ You have access to tools. When you decide to use a tool, you MUST actually invok
 
 4. **Chain tool calls when needed.** You can make multiple tool calls in a single response. If a task requires reading a file, then updating it, generate both tool calls. Do not describe the second step in prose — invoke it.
 
-5. **Self-check: If your response contains zero tool_use blocks but describes performing tool actions, you have failed to follow these rules.** Regenerate with actual tool invocations.`
+5. **Self-check: If your response contains zero tool_use blocks but describes performing tool actions, you have failed to follow these rules.** Regenerate with actual tool invocations.
+
+6. **Recalling past events — never invent specifics.** When asked about a past event or a specific detail that is not in your current recall, use \`search\` (pass \`since\`/\`until\` when a time period is mentioned), then \`read_conversation\` on the source conversation from the results, and answer from what you find. If you find nothing, say you don't recall — never invent dates, places, or details.`
 }

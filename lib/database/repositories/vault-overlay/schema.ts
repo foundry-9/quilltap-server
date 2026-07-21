@@ -29,6 +29,11 @@ export const CharacterVaultPropertiesSchema = z.object({
   title: z.string().nullable(),
   firstMessage: z.string().nullable(),
   talkativeness: z.number().min(0.1).max(1.0),
+  // Optional-with-default so the vaults written before this field existed
+  // still parse (their properties.json has no `canChooseOutfit` key) and
+  // hydrate as false, rather than failing validation and falling back to the
+  // DB for every managed field. "Absent means false" is the intended default.
+  canChooseOutfit: z.boolean().optional().default(false),
 });
 
 export type CharacterVaultProperties = z.infer<typeof CharacterVaultPropertiesSchema>;
@@ -200,6 +205,7 @@ export const MANAGED_FIELDS: ReadonlySet<keyof Character> = new Set<keyof Charac
   'title',
   'firstMessage',
   'talkativeness',
+  'canChooseOutfit',
   'physicalDescription',
   'systemPrompts',
   'scenarios',

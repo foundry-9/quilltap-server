@@ -203,6 +203,16 @@ export const CharacterSchema = z.object({
   canCreateOutfits: z.boolean().nullable().optional(),
 
   /**
+   * When true, a new chat with this character defaults its Starting Outfit to
+   * "Let character choose" — the character picks their opening outfit based on
+   * the scenario rather than starting in their default wardrobe. Absent/false
+   * means the new-chat dialog falls back to defaults (or Compose, when the
+   * character has no usable default outfit). Lives in the vault's
+   * `properties.json`, not a DB column.
+   */
+  canChooseOutfit: z.boolean().default(false),
+
+  /**
    * When true, this character may inspect and access "the Staff" of personified
    * features — chat-level toggles for self_inventory, Staff messages
    * (Lantern/Aurora/Librarian/Prospero/Host announcements), and any character

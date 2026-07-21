@@ -15,7 +15,7 @@ _quilltap_complete() {
   local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
-  local top_cmds="db docs themes instances memories memory-diff logs migrations maintenance file-verify completion"
+  local top_cmds="db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
 
   # Get the subcommand (first non-option word after quilltap)
   local subcommand=""
@@ -208,6 +208,10 @@ _quilltap_complete() {
     memory-diff)
       local md_flags="--instance --data-dir --passphrase --port --concurrency --out --help"
       COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
+      ;;
+    recall-replay)
+      local rr_flags="--turn --char --limit --port --json --help"
+      COMPREPLY=($(compgen -W "$rr_flags" -- "$cur"))
       ;;
     logs)
       local logs_flags="--stream --tail -f --follow --grep \

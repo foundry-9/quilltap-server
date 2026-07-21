@@ -81,6 +81,7 @@ export interface Character {
   defaultHelpToolsEnabled?: boolean | null
   canDressThemselves?: boolean | null
   canCreateOutfits?: boolean | null
+  canChooseOutfit?: boolean
   defaultTimestampConfig?: TimestampConfig | null
   defaultScenarioId?: string | null
   defaultSystemPromptId?: string | null

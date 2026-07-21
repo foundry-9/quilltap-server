@@ -8,6 +8,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
@@ -68,6 +69,8 @@ export interface BuildMessageContextOptions {
   cachedCompressionMessageCount?: number
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
+  /** Turn-level recall signals from the proactive distillation (retrospective cadence). */
+  recallSignals?: MemorySearchExtraction
   /** Whether to generate a memory recap for this character (chat start or character join) */
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
@@ -488,6 +491,7 @@ export async function buildMessageContext(
     cachedCompressionResult,
     cachedCompressionMessageCount,
     preSearchedMemories,
+    recallSignals,
     generateMemoryRecap: requestMemoryRecap,
     uncensoredFallbackOptions,
   } = options
@@ -636,6 +640,7 @@ export async function buildMessageContext(
     cachedCompressionMessageCount,
     // Proactive memory recall
     preSearchedMemories,
+    recallSignals,
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,

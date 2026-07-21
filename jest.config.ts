@@ -6,6 +6,13 @@ const createJestConfig = nextJest({
   dir: './',
 })
 
+// When jest runs INSIDE a Claude Code agent worktree (a full checkout under
+// .claude/worktrees/), every file's absolute path contains "/.claude/", so the
+// worktree-exclusion patterns below would ignore the entire test tree. The
+// patterns exist to keep the MAIN checkout from picking up worktree copies —
+// they don't apply when the rootDir itself is a worktree.
+const isAgentWorktree = process.cwd().includes('/.claude/worktrees/')
+
 // Add any custom config to be passed to Jest
 const config: Config = {
   coverageProvider: 'v8',
@@ -64,7 +71,8 @@ const config: Config = {
     // Claude Code agent worktrees are full repo checkouts; their duplicated
     // test files must not be picked up (and their packages/plugins would
     // collide in the Haste map — see modulePathIgnorePatterns below).
-    '/\\.claude/',
+    // Skipped when jest itself runs inside a worktree (see isAgentWorktree).
+    ...(isAgentWorktree ? [] : ['/\\.claude/']),
     '/__tests__/integration/',
     '/__tests__/unit/lib/fixtures/',
   ],
@@ -73,7 +81,10 @@ const config: Config = {
     // Exclude Claude Code agent worktrees so their copies of packages/* and
     // plugins/* don't register as duplicate Haste modules ("looked up in the
     // Haste module map ... several different files") and break unrelated suites.
-    '/\\.claude/',
+    // Skipped when jest itself runs inside a worktree (a worktree contains no
+    // nested worktrees, so there is nothing to exclude — and the pattern would
+    // otherwise ignore the whole rootDir).
+    ...(isAgentWorktree ? [] : ['/\\.claude/']),
   ],
   coverageThreshold: {
     global: {

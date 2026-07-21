@@ -65,6 +65,7 @@ export async function handleGet(
           isFavorite: character.isFavorite,
           controlledBy: character.controlledBy ?? 'llm',
           canBeCarina: character.canBeCarina ?? false,
+          canChooseOutfit: character.canChooseOutfit ?? false,
           defaultConnectionProfileId: character.defaultConnectionProfileId || null,
           defaultPartnerId: character.defaultPartnerId || null,
           defaultPartnerName,

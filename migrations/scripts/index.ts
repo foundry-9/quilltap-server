@@ -357,6 +357,8 @@ import { addTurnSkippingFieldMigration } from './add-turn-skipping-field';
 import { quantizeEmbeddingsMigration } from './quantize-embeddings';
 // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
 import { addCustomToolsFieldMigration } from './add-custom-tools-field';
+// Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
+import { addEpisodicMemoryFieldsMigration } from './add-episodic-memory-fields';
 
 /**
  * All available migrations.
@@ -711,6 +713,8 @@ export const migrations: Migration[] = [
   addPascalMessageMetaMigration,
   // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
   addCustomToolsFieldMigration,
+  // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
+  addEpisodicMemoryFieldsMigration,
 ];
 
 export {
@@ -1046,5 +1050,7 @@ export {
   addPascalMessageMetaMigration,
   // Pascal's custom pseudo-tools: customTools toggle column on chat_settings
   addCustomToolsFieldMigration,
+  // Episodic recall overhaul: occurredAt/narrativeTime/entities/kind on memories + chats.timelineMode
+  addEpisodicMemoryFieldsMigration,
 };
 

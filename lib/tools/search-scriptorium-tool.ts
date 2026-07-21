@@ -55,6 +55,28 @@ export const searchScriptoriumToolInputSchema = z.object({
   )
     .default(0)
     .optional(),
+  since: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/, 'ISO date (YYYY-MM-DD) required')
+    .describe(
+      'Only return memories/conversations from this ISO date (YYYY-MM-DD) onward. Use when a time period is mentioned ("last week", "back in March") — memories filter on when the event HAPPENED, conversations on when they took place. Affects only the memories and conversations sources.'
+    )
+    .optional(),
+  until: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/, 'ISO date (YYYY-MM-DD) required')
+    .describe(
+      'Only return memories/conversations up to this ISO date (YYYY-MM-DD), inclusive. Pair with `since` to bracket a period.'
+    )
+    .optional(),
+  aboutCharacter: z
+    .string()
+    .min(1)
+    .max(100)
+    .describe(
+      'Only return memories you hold ABOUT this character (by name). Affects only the memories source.'
+    )
+    .optional(),
 })
 
 /**
@@ -77,7 +99,14 @@ export interface SearchScriptoriumResult {
     effectiveWeight?: number
     createdAt?: string
     source?: 'AUTO' | 'MANUAL'
-    // Conversation-specific
+    /** When the remembered EVENT happened (episodic spine) — distinct from createdAt (write time). */
+    occurredAt?: string | null
+    /** In-story time phrase, for fictional-timeline chats. */
+    narrativeTime?: string | null
+    /** 'semantic' | 'episodic' declared memory kind. */
+    kind?: string
+    // Conversation-specific (also set on memory hits: the memory's source
+    // conversation, callable via `read_conversation`)
     conversationId?: string
     interchangeIndex?: number
     conversationTitle?: string

@@ -20,6 +20,7 @@ export { handleGetAvatars, handleSetAvatar, handleRemoveAvatar } from './avatars
 export { handleBulkReattribute } from './bulk';
 export { handleAddToolResult, handleUpdateToolSettings } from './tools';
 export { handleQueueMemories, handleExtractMemoriesDryRun } from './memories';
+export { handleRecallReplay } from './recall-replay';
 export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';

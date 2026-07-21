@@ -865,6 +865,17 @@ export const ChatMetadataSchema = z.object({
    */
   commonplaceRecallHistory: JsonSchema.nullable().optional(),
 
+  /**
+   * Which clock this chat's story runs on (episodic recall overhaul):
+   *  - 'realtime' (the default; NULL reads as realtime): events happen at
+   *    wall-clock time, and retrospective queries ("last week") resolve
+   *    against real dates.
+   *  - 'narrative': the chat runs a fictional timeline; memory extraction
+   *    fills `narrativeTime` on episodic memories and retrospective
+   *    time-range resolution prefers in-story phrasing over wall-clock dates.
+   */
+  timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
+
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
   // Populated only when chatType === 'autonomous'; null/zero on other chats.
@@ -1175,6 +1186,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** The Commonplace Book — recall anti-repetition ring buffer (string[][]). See ChatMetadataSchema for the contract. */
   commonplaceRecallHistory: JsonSchema.nullable().optional(),
+
+  /** Timeline clock ('realtime' | 'narrative'; NULL = realtime). See ChatMetadataSchema for the contract. */
+  timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.

@@ -132,6 +132,7 @@ const VALID_VAULT_PROPS = {
   title: 'vault-title',
   firstMessage: 'vault-first',
   talkativeness: 0.8,
+  canChooseOutfit: false,
 };
 
 const VALID_VAULT_PHYSICAL_PROMPTS = {
@@ -1549,6 +1550,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: 'Detective',
       firstMessage: 'Hello there.',
       talkativeness: 0.7,
+      canChooseOutfit: false,
     });
 
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('DB desc');
@@ -1640,6 +1642,7 @@ describe('writeCharacterVaultManagedFields — sync DB → vault', () => {
       title: null,
       firstMessage: null,
       talkativeness: 0.5,
+      canChooseOutfit: false,
     });
     expect(getWrite(CHARACTER_DESCRIPTION_MD_PATH)).toBe('');
     expect(getWrite(CHARACTER_PERSONALITY_MD_PATH)).toBe('');

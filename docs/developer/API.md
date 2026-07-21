@@ -2340,6 +2340,22 @@ Queue memory extraction jobs for message pairs.
 }
 ```
 
+#### `POST /api/v1/chats/[id]?action=recall-replay`
+
+Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Reconstructs the per-turn recall distillation for a turn and runs the memory search twice — episodic signals inert (pre-overhaul path) vs. live (retrospective flip, time window, entity anchors, multi-probe) — returning both candidate tables with cosine, ranking blend, multipliers fired, final score, and head selection per row. Read-only. The distillation clock is anchored to the replayed turn's own timestamp.
+
+**Request Body** (all optional):
+
+```json
+{
+  "turnIndex": 42,
+  "characterId": "char-uuid",
+  "limit": 25
+}
+```
+
+`turnIndex` is the 1-based interchange to replay at (default: last); `characterId` defaults to the first LLM-controlled participant; `limit` caps candidate rows per path (max 100).
+
 #### `POST /api/v1/chats/[id]?action=toggle-agent-mode`
 
 Toggle agent mode for this chat, or set to inherit from project/character.

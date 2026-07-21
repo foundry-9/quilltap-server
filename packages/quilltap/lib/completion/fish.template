@@ -15,7 +15,7 @@ function __quilltap_no_subcommand
   end
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff logs migrations maintenance file-verify completion
+      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
         return 1
     end
   end
@@ -27,7 +27,7 @@ function __quilltap_using_subcommand
   set -l cmd (commandline -opc)
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff logs migrations maintenance file-verify completion
+      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
         test "$cmd[$i]" = "$target"
         return $status
     end

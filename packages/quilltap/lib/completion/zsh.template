@@ -26,6 +26,7 @@ _quilltap() {
     'instances:Register or inspect named Quilltap instances'
     'memories:Search, browse, and graph memories'
     'memory-diff:Dump existing memories and dry-run re-extraction'
+    'recall-replay:Replay a turn'\''s memory recall, old vs episodic ranking'
     'logs:Tail or print an instance log file'
     'migrations:Inspect migration status'
     'maintenance:Run retention/cleanup sweeps'
@@ -71,6 +72,9 @@ _quilltap_subcommand() {
       ;;
     memory-diff)
       _quilltap_memory_diff
+      ;;
+    recall-replay)
+      _arguments '--turn[interchange to replay]:turn:' '--char[character id]:char:' '--limit[rows per path]:limit:' '--port[server port]:port:' '--json[raw JSON output]' '--help[show help]'
       ;;
     logs)
       _quilltap_logs
