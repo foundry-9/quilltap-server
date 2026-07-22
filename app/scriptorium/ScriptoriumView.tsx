@@ -28,7 +28,12 @@ const DocumentStoreDetailView = dynamic(
   { ssr: false, loading: () => <p className="qt-section-title p-6">Loading document store…</p> }
 )
 
-export function ScriptoriumView() {
+export interface ScriptoriumViewProps {
+  /** Deep-link target: open with this store's detail shown (workspace tab only). */
+  initialStoreId?: string
+}
+
+export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   const {
     stores,
     loading,
@@ -52,12 +57,21 @@ export function ScriptoriumView() {
   // rather than navigating to /scriptorium/[id]. Outside the workspace the grid
   // routes as before.
   const inTab = useWorkspaceTabId() != null
-  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null)
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(initialStoreId ?? null)
   const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
   useEffect(() => {
     fetchStores()
   }, [fetchStores])
+
+  // A deep-link re-open refreshes the tab payload; follow it into the store.
+  // Adjusting state during render is React's sanctioned derive-from-prop-change
+  // pattern (re-renders immediately, nothing committed in between).
+  const [prevInitialStoreId, setPrevInitialStoreId] = useState(initialStoreId)
+  if (initialStoreId !== prevInitialStoreId) {
+    setPrevInitialStoreId(initialStoreId)
+    if (initialStoreId) setSelectedStoreId(initialStoreId)
+  }
 
   const handleCreate = async (data: CreateDocumentStoreData) => {
     const result = await createStore(data)

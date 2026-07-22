@@ -13,9 +13,32 @@ describe('parseHrefToIntent', () => {
     })
   })
 
-  it('does not map the salon list or new-chat (they navigate normally)', () => {
-    expect(parseHrefToIntent('/salon')).toBeNull()
+  it('maps the salon list (and legacy /chats) to the salon-list tab', () => {
+    expect(parseHrefToIntent('/salon')).toEqual({ kind: 'salon-list' })
+    expect(parseHrefToIntent('/chats')).toEqual({ kind: 'salon-list' })
+  })
+
+  it('does not map new-chat (the interceptor opens the modal instead)', () => {
     expect(parseHrefToIntent('/salon/new')).toBeNull()
+  })
+
+  it('maps detail routes to their list tab drilled into the target', () => {
+    expect(parseHrefToIntent('/prospero/p1')).toEqual({
+      kind: 'prospero',
+      payload: { projectId: 'p1' },
+    })
+    expect(parseHrefToIntent('/projects/p1')).toEqual({
+      kind: 'prospero',
+      payload: { projectId: 'p1' },
+    })
+    expect(parseHrefToIntent('/scriptorium/s1')).toEqual({
+      kind: 'scriptorium',
+      payload: { storeId: 's1' },
+    })
+    expect(parseHrefToIntent('/aurora/groups/g1')).toEqual({
+      kind: 'aurora',
+      payload: { groupId: 'g1' },
+    })
   })
 
   it('maps the singleton surfaces', () => {

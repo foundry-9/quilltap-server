@@ -21,6 +21,7 @@ export type PaneId = 'left' | 'right'
 export type TabKind =
   | 'home'
   | 'salon' // payload: { chatId: string }
+  | 'salon-list' // the all-chats list (`/salon` without a conversation)
   | 'terminal' // payload: { chatId: string; sessionId?: string } — child of a salon tab (Ariel)
   | 'document' // payload: { chatId: string; chatDocumentId: string } — child of a salon tab (Librarian)
   | 'aurora'
@@ -100,6 +101,21 @@ export function standaloneDocKey(
     return crypto.randomUUID()
   }
   return `doc-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`
+}
+
+/**
+ * Optional drill-in payloads for the list surfaces. A deep link (e.g.
+ * `/prospero/<id>`) opens the singleton tab with the target preselected; the
+ * view renders that detail in place. Absent payload = the plain list.
+ */
+export interface ProsperoTabPayload {
+  projectId?: string
+}
+export interface ScriptoriumTabPayload {
+  storeId?: string
+}
+export interface AuroraTabPayload {
+  groupId?: string
 }
 
 export interface SettingsTabPayload {

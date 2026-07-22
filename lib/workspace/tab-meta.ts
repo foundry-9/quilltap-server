@@ -25,6 +25,7 @@ export interface TabMeta {
 export const DEFAULT_TAB_META: Record<TabKind, TabMeta> = {
   home: { title: 'Home', icon: 'sparkles' },
   salon: { title: 'Conversation', icon: 'chat' },
+  'salon-list': { title: 'Chats', icon: 'chat' },
   terminal: { title: 'Terminal', icon: 'code' },
   document: { title: 'Document', icon: 'file' },
   aurora: { title: 'Characters', icon: 'characters' },

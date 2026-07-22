@@ -4,6 +4,18 @@
 
 ### 4.8-dev
 
+#### Deep links that used to escape the tabbed workspace now open as tabs
+
+Several routes still rendered the legacy full-page shell when reached by direct URL (bookmark, address bar, or an unintercepted link), instead of redirecting into the tabbed workspace like `/salon/[id]`, `/aurora`, and the other cut-over routes:
+
+- **`/salon` (the all-chats list)** had no workspace representation at all — a new `salon-list` tab kind renders `SalonListView`, and the left rail's "Chats" item and the home page's "View all" link now open it as a tab instead of navigating away (which unmounted the workspace and killed any streaming conversation).
+- **`/prospero/[id]`, `/scriptorium/[id]`, `/aurora/groups/[id]`** now redirect into their singleton list tab drilled into the target detail. The list tabs accept an optional payload (`projectId` / `storeId` / `groupId`); in-workspace links to those paths are intercepted the same way.
+- **`/aurora/[id]/view`** now redirects into a `character-view` tab (the kind existed but the intent layer never accepted it), carrying the `?tab=` sub-tab and popping the new-chat modal for `?action=chat`. Bare `/aurora/[id]` became a server-side redirect to `/view` (was a client-side flash).
+- **`/salon/new`** redirects into the workspace and pops the new-chat modal (project/character/autonomous params preserved) instead of rendering the full-page form.
+- **`/salon/[id]/terminal/[sessionId]`** redirects into the workspace, opening the conversation's Salon tab plus a child terminal tab (the Salon is the portal source for the live PTY, so the terminal tab is never an empty husk).
+
+All the old pages still render when the workspace is disabled (`NEXT_PUBLIC_WORKSPACE_TABS=0`); the affected client pages were split into server redirect wrappers plus `*PageClient` bodies.
+
 #### The streaming quill is now a themeable icon
 
 `QuillAnimation` — the quill that rocks while a reply is awaited, while tokens stream, and while a tool call is outstanding — hard-coded `<Image src="/quill.svg">` and defined its keyframes in a styled-jsx `global` block, so themes could change neither the glyph nor the motion. It now renders `<Icon name="thinking">` and carries the new `.qt-thinking-indicator` class.

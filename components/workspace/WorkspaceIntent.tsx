@@ -19,11 +19,13 @@
 import { useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWorkspace } from '@/components/providers/workspace-provider'
+import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
 import { standaloneDocKey, type DocumentStandaloneTabPayload, type TabKind } from '@/lib/workspace/types'
 
 const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
   'home',
   'salon',
+  'salon-list',
   'terminal',
   'document',
   'aurora',
@@ -41,6 +43,7 @@ const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
   'document-standalone',
   'character-new',
   'character-edit',
+  'character-view',
   'settings-wizard',
   'custom-tools',
 ])
@@ -49,6 +52,7 @@ const CHAT_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(['salon', 'terminal', 
 
 export function WorkspaceIntent() {
   const { openTab, hydrated } = useWorkspace()
+  const openNewChat = useNewChatModalOptional()?.open
   const router = useRouter()
   const searchParams = useSearchParams()
   const handledRef = useRef(false)
@@ -61,6 +65,17 @@ export function WorkspaceIntent() {
     const open = searchParams.get('open')
     if (!open || handledRef.current) return
     handledRef.current = true
+
+    // `open=new-chat` (the /salon/new redirect) is a modal, not a tab.
+    if (open === 'new-chat') {
+      openNewChat?.({
+        projectId: searchParams.get('projectId') ?? undefined,
+        characterId: searchParams.get('characterId') ?? undefined,
+        autonomous: searchParams.get('autonomous') === '1',
+      })
+      router.replace('/workspace')
+      return
+    }
 
     const kind = open as TabKind
     if (OPENABLE_KINDS.has(kind)) {
@@ -79,7 +94,19 @@ export function WorkspaceIntent() {
         payload = mountPointId || path || create ? { mountPointId, path, create } : undefined
       }
       else if (kind === 'wardrobe') payload = characterId ? { characterId } : undefined
-      else if (kind === 'character-edit') payload = characterId ? { characterId, tab } : undefined
+      else if (kind === 'character-edit' || kind === 'character-view') payload = characterId ? { characterId, tab } : undefined
+      else if (kind === 'prospero') {
+        const projectId = searchParams.get('projectId') || undefined
+        payload = projectId ? { projectId } : undefined
+      }
+      else if (kind === 'scriptorium') {
+        const storeId = searchParams.get('storeId') || undefined
+        payload = storeId ? { storeId } : undefined
+      }
+      else if (kind === 'aurora') {
+        const groupId = searchParams.get('groupId') || undefined
+        payload = groupId ? { groupId } : undefined
+      }
       else if (kind === 'document-standalone') {
         // Standalone Document Mode deep-link (the sidebar's legacy-shell path).
         const scope: DocumentStandaloneTabPayload['scope'] =
@@ -96,18 +123,31 @@ export function WorkspaceIntent() {
         } satisfies DocumentStandaloneTabPayload
       }
 
-      // Chat-bound kinds need a chatId and the character editor needs a
+      // Chat-bound kinds need a chatId and the character editor/detail needs a
       // characterId; skip opening when the required id is missing.
       const missingChatId = CHAT_KINDS.has(kind) && !chatId
-      const missingCharacterId = kind === 'character-edit' && !characterId
+      const missingCharacterId = (kind === 'character-edit' || kind === 'character-view') && !characterId
       if (!missingChatId && !missingCharacterId) {
-        openTab(kind, payload)
+        if (kind === 'terminal' && chatId) {
+          // A terminal tab is a portal fed by its Salon view — open (and mount)
+          // the conversation first, then the terminal as its child tab.
+          const salonTabId = openTab('salon', { chatId })
+          const sessionId = searchParams.get('sessionId') || undefined
+          openTab('terminal', { chatId, sessionId }, { parentTabId: salonTabId })
+        } else {
+          openTab(kind, payload)
+          // The character detail's `?action=chat` deep-link: also pop the
+          // new-chat modal with the character preselected (legacy-page parity).
+          if (kind === 'character-view' && characterId && searchParams.get('action') === 'chat') {
+            openNewChat?.({ characterId })
+          }
+        }
       }
     }
 
     // Strip the intent params; keep the resting URL clean.
     router.replace('/workspace')
-  }, [hydrated, searchParams, openTab, router])
+  }, [hydrated, searchParams, openTab, openNewChat, router])
 
   return null
 }

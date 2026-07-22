@@ -20,18 +20,32 @@ const ProjectDetailView = dynamic(
   { ssr: false, loading: () => <p className="qt-section-title p-6">Loading project…</p> }
 )
 
-export function ProsperoView() {
+export interface ProsperoViewProps {
+  /** Deep-link target: open with this project's detail shown (workspace tab only). */
+  initialProjectId?: string
+}
+
+export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   const { projects, loading, error, fetchProjects, createProject, deleteProject } = useProjects()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
   // In a workspace tab, drilling into a project renders in place (keep-alive).
   const inTab = useWorkspaceTabId() != null
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null)
   const bgStyle = useSubsystemBackgroundStyle('prospero')
 
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
+
+  // A deep-link re-open refreshes the tab payload; follow it into the project.
+  // Adjusting state during render is React's sanctioned derive-from-prop-change
+  // pattern (re-renders immediately, nothing committed in between).
+  const [prevInitialProjectId, setPrevInitialProjectId] = useState(initialProjectId)
+  if (initialProjectId !== prevInitialProjectId) {
+    setPrevInitialProjectId(initialProjectId)
+    if (initialProjectId) setSelectedProjectId(initialProjectId)
+  }
 
   const handleCreate = async (name: string, description: string | null) => {
     const result = await createProject(name, description)

@@ -1,26 +1,14 @@
-'use client'
-
 /**
- * Document Store Detail Page — thin route wrapper around
- * {@link DocumentStoreDetailView}. The view body is shared with the Scriptorium
- * workspace tab, which renders it in place (no route) for keep-alive. The route
- * owns the subsystem background; in-tab the workspace backdrop does.
+ * Document Store Detail Route — when the tabbed workspace is enabled, redirects
+ * into it with the Scriptorium tab drilled into this store; otherwise renders
+ * the legacy full-page detail via {@link DocumentStoreDetailPageClient}.
  */
 
-import { useParams, useRouter } from 'next/navigation'
-import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { DocumentStoreDetailView } from './DocumentStoreDetailView'
+import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
+import { DocumentStoreDetailPageClient } from './DocumentStoreDetailPageClient'
 
-export default function DocumentStoreDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-  const storeId = params.id as string
-  const bgStyle = useSubsystemBackgroundStyle('scriptorium')
-  return (
-    <DocumentStoreDetailView
-      storeId={storeId}
-      onBack={() => router.push('/scriptorium')}
-      style={bgStyle}
-    />
-  )
+export default async function DocumentStoreDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  redirectToWorkspaceTab('scriptorium', { storeId: id })
+  return <DocumentStoreDetailPageClient storeId={id} />
 }

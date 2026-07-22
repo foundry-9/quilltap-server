@@ -492,9 +492,18 @@ surface. The `WORKSPACE_TABS_ENABLED` flag now **defaults on** (set
 including the later editor/creator surfaces (character edit/new, image
 generation, profile, about, the provider wizard) — redirects via
 `redirectToWorkspaceTab(...)`, and `WorkspaceIntent` opens the matching tab.
-Bare detail URLs (a specific character/project/store) intentionally render
-standalone: they have no tab kind (they drill down in place inside their parent
-tab).
+
+Detail and list deep links joined the cutover later: `/salon` redirects to a
+`salon-list` tab; `/prospero/[id]`, `/scriptorium/[id]`, and
+`/aurora/groups/[id]` redirect to their singleton list tab carrying a drill-in
+payload (`projectId` / `storeId` / `groupId`) that the view follows in place;
+`/aurora/[id]/view` redirects to a `character-view` tab (with `?tab=`, and
+`?action=chat` popping the new-chat modal); `/salon/new` redirects with an
+`open=new-chat` intent that pops the new-chat modal; and
+`/salon/[id]/terminal/[sessionId]` opens the conversation's Salon tab plus a
+child terminal tab (the Salon view is the portal source for the live PTY). The
+affected client pages split into server redirect wrappers plus `*PageClient`
+legacy bodies for the flag-off path.
 
 **Phase 7 — Theming pass (`qt-*` + all six bundled themes).**
 Finalize the `qt-*` classes/tokens (reusing `qt-tab*` and `qt-doc-divider*`

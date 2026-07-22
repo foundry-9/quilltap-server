@@ -64,7 +64,12 @@ interface Character {
   }
 }
 
-export function AuroraView() {
+export interface AuroraViewProps {
+  /** Deep-link target: open with this group's editor shown (workspace tab only). */
+  initialGroupId?: string
+}
+
+export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [aiImportDialogOpen, setAIImportDialogOpen] = useState(false)
   const [resetBuiltinsDialogOpen, setResetBuiltinsDialogOpen] = useState(false)
@@ -85,12 +90,21 @@ export function AuroraView() {
   const inTab = useWorkspaceTabId() != null
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [openChatForSelected, setOpenChatForSelected] = useState(false)
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroupId ?? null)
 
   // Fetch groups on mount
   useEffect(() => {
     fetchGroups()
   }, [fetchGroups])
+
+  // A deep-link re-open refreshes the tab payload; follow it into the group.
+  // Adjusting state during render is React's sanctioned derive-from-prop-change
+  // pattern (re-renders immediately, nothing committed in between).
+  const [prevInitialGroupId, setPrevInitialGroupId] = useState(initialGroupId)
+  if (initialGroupId !== prevInitialGroupId) {
+    setPrevInitialGroupId(initialGroupId)
+    if (initialGroupId) setSelectedGroupId(initialGroupId)
+  }
 
   const queryClient = useQueryClient()
   const { data, isLoading: loading, error: loadError } = useQuery({

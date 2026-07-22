@@ -4,8 +4,8 @@
  * The inverse of the old-route redirects: when a link is clicked *inside* the
  * workspace, we open (or focus) the matching tab client-side instead of doing a
  * route navigation that would unmount and rebuild the whole workspace. Returns
- * `null` for hrefs with no tab equivalent (new-chat, the salon list, external
- * links) so those navigate normally.
+ * `null` for hrefs with no tab equivalent (new-chat — a modal, handled by the
+ * interceptor — and external links) so those navigate normally.
  *
  * @module lib/navigation/route-to-intent
  */
@@ -39,6 +39,25 @@ export function parseHrefToIntent(href: string): TabIntent | null {
     return { kind: 'salon', payload: { chatId: id } }
   }
 
+  // /prospero/<id> (or legacy /projects/<id>) — the Projects tab drilled into
+  // that project.
+  const projectMatch = path.match(/^\/(?:prospero|projects)\/([^/]+)$/)
+  if (projectMatch) {
+    return { kind: 'prospero', payload: { projectId: projectMatch[1] } }
+  }
+
+  // /scriptorium/<id> — the Scriptorium tab drilled into that store.
+  const storeMatch = path.match(/^\/scriptorium\/([^/]+)$/)
+  if (storeMatch) {
+    return { kind: 'scriptorium', payload: { storeId: storeMatch[1] } }
+  }
+
+  // /aurora/groups/<id> — the Characters tab drilled into that group's editor.
+  const groupMatch = path.match(/^\/aurora\/groups\/([^/]+)$/)
+  if (groupMatch) {
+    return { kind: 'aurora', payload: { groupId: groupMatch[1] } }
+  }
+
   // /aurora/<id>/edit (or legacy /characters/<id>/edit) — the character editor.
   // Note: a bare /aurora/<id> (which redirects to /view) has NO tab equivalent —
   // when linked to it renders in-place inside the Aurora tab — so it
@@ -67,6 +86,9 @@ export function parseHrefToIntent(href: string): TabIntent | null {
   switch (path) {
     case '/':
       return { kind: 'home' }
+    case '/salon':
+    case '/chats':
+      return { kind: 'salon-list' }
     case '/aurora':
       return { kind: 'aurora' }
     case '/aurora/new':

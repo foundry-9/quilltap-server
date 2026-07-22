@@ -20,6 +20,7 @@ import type {
 } from '@/lib/workspace/types'
 import { HomeViewContainer } from '@/components/homepage/HomeViewContainer'
 import { SalonView } from '@/app/salon/[id]/SalonView'
+import { SalonListView } from '@/app/salon/SalonListView'
 import { AuroraView } from '@/app/aurora/AuroraView'
 import { ProsperoView } from '@/app/prospero/ProsperoView'
 import { ScriptoriumView } from '@/app/scriptorium/ScriptoriumView'
@@ -43,6 +44,9 @@ import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
 import { SettingsWizardView } from '@/app/settings/wizard/SettingsWizardView'
 import { CustomToolsView } from '@/app/custom-tools/CustomToolsView'
 import type {
+  ProsperoTabPayload,
+  ScriptoriumTabPayload,
+  AuroraTabPayload,
   TerminalTabPayload,
   DocumentTabPayload,
   DocumentStandaloneTabPayload,
@@ -74,12 +78,14 @@ function renderView(tab: WorkspaceTab) {
       return <HomeViewContainer />
     case 'salon':
       return <SalonView chatId={(tab.payload as SalonTabPayload).chatId} />
+    case 'salon-list':
+      return <SalonListView />
     case 'aurora':
-      return <AuroraView />
+      return <AuroraView initialGroupId={(tab.payload as AuroraTabPayload | undefined)?.groupId} />
     case 'prospero':
-      return <ProsperoView />
+      return <ProsperoView initialProjectId={(tab.payload as ProsperoTabPayload | undefined)?.projectId} />
     case 'scriptorium':
-      return <ScriptoriumView />
+      return <ScriptoriumView initialStoreId={(tab.payload as ScriptoriumTabPayload | undefined)?.storeId} />
     case 'settings': {
       const payload = (tab.payload as SettingsTabPayload | undefined) ?? {}
       return <SettingsView tab={payload.tab} section={payload.section} />

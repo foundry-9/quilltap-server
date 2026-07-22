@@ -126,6 +126,17 @@ volume you open this way is entered into the same roll of recent documents the
 dialog consults, so it stands ready for a quick reopening next time — whether
 from the rail or from within a conversation.
 
+## Old addresses, faithfully forwarded
+
+Every address of the old, one-room-at-a-time establishment still answers the
+bell — and each now shows you in through the workspace rather than leaving you
+on the doorstep. Bookmark a conversation, a project, a document store, a
+character's dossier, or even the all-chats list (`/salon`), and calling on that
+address opens the proper tab, drilled straight down to the very thing you
+bookmarked. The address for starting a new chat (`/salon/new`) raises the
+familiar New Chat dialog over the workspace, and a terminal's old full-page
+address seats the conversation and its terminal side by side as tabs.
+
 ## A note on the Help and the Wardrobe
 
 This Help remains a floating window, so it may follow you wherever you roam and

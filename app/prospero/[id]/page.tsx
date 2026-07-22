@@ -1,17 +1,14 @@
-'use client'
-
 /**
- * Project Detail Page — thin route wrapper around {@link ProjectDetailView}.
- * The view body is shared with the Prospero workspace tab, which renders it in
- * place (no route) for keep-alive.
+ * Project Detail Route — when the tabbed workspace is enabled, redirects into
+ * it with the Prospero tab drilled into this project; otherwise renders the
+ * legacy full-page detail via {@link ProjectDetailPageClient}.
  */
 
-import { useParams, useRouter } from 'next/navigation'
-import { ProjectDetailView } from './ProjectDetailView'
+import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
+import { ProjectDetailPageClient } from './ProjectDetailPageClient'
 
-export default function ProjectDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-  const projectId = params.id as string
-  return <ProjectDetailView projectId={projectId} onBack={() => router.push('/prospero')} />
+export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  redirectToWorkspaceTab('prospero', { projectId: id })
+  return <ProjectDetailPageClient projectId={id} />
 }

@@ -1,24 +1,24 @@
-'use client'
-
 /**
- * Character Detail Page — thin route wrapper around {@link CharacterDetailView}.
- * The view body is shared with the Aurora workspace tab, which renders it in
- * place (no route) for keep-alive. Reads the `?action=chat` deep-link here.
+ * Character Detail Route — when the tabbed workspace is enabled, redirects into
+ * it as a `character-view` tab (carrying the `?tab=` / `?action=chat`
+ * deep-links); otherwise renders the legacy full-page detail via
+ * {@link ViewCharacterPageClient}.
  */
 
-import { use } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { CharacterDetailView } from './CharacterDetailView'
+import { redirectToWorkspaceTab } from '@/lib/navigation/workspace-redirect'
+import { ViewCharacterPageClient } from './ViewCharacterPageClient'
 
-export default function ViewCharacterPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  return (
-    <CharacterDetailView
-      characterId={id}
-      onBack={() => router.push('/aurora')}
-      openChatOnMount={searchParams.get('action') === 'chat'}
-    />
-  )
+export default async function ViewCharacterPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const { id } = await params
+  const sp = await searchParams
+  const tab = typeof sp.tab === 'string' ? sp.tab : undefined
+  const action = typeof sp.action === 'string' ? sp.action : undefined
+  redirectToWorkspaceTab('character-view', { characterId: id, tab, action })
+  return <ViewCharacterPageClient characterId={id} initialTab={tab} />
 }
