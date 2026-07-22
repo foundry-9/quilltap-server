@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Madman's Box: small-caps headings, and buttons that stop shouting
+
+Headings (`h1`–`h3`) used `text-transform: uppercase`, which flattened capitals and lowercase into identical glyphs — "Charles Sebold" was indistinguishable from "CHARLES SEBOLD". They now use `font-variant-caps: small-caps`, so capitals keep their full height and lowercase renders as small capitals. Raleway ships no `smcp` table (its only OpenType features are `liga`, `kern`, and `lnum`), so browsers synthesize the small caps; heading weight went 300 → 400 because synthesized small caps read light next to full-size capitals. Heading letter spacing tightened from 0.14em to 0.1em to suit the narrower glyphs.
+
+The theme's button rule was keyed to the `button` element, but most buttons in the app are `<Link>`s wearing `.qt-button`. The rule therefore uppercased only the few real `<button>` elements and left their neighbors untouched, which was visibly inconsistent within a single row — the homepage quick actions rendered "NEW PROJECT" beside "Start a Chat", and "Continue Last" would have flipped to uppercase in its disabled state. The rule is now keyed to `.qt-button` and no longer uppercases, so buttons throughout the theme render their labels as written. Theme bumped to 1.1.6.
+
 #### Salon: timeline-mode switch in the chat sidebar ("The Story's Clock")
 
 The per-chat `timelineMode` flag from the episodic recall overhaul ('realtime' | 'narrative', NULL reads as realtime) previously had no UI and could only be set via the API or CLI. The chat sidebar's Chat card now has a "The Story's Clock" selector with Real time / Story time options, persisted through the existing chat PUT route (`timelineMode` was added to `updateChatSchema`). Updated `help/episodic-memory.md`, which said a switch was on its way.
