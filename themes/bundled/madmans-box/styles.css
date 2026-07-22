@@ -686,6 +686,33 @@
 }
 
 /* ============================================================================
+   THINKING INDICATOR — the maker's mark, turning
+   Core ships a quill that rocks on its nib while a reply is awaited. This theme
+   already owns a quill: the brand mark, ringed by a circle that never quite
+   closes. So here it simply turns, all the way round and slowly — a rotor
+   idling rather than a hand writing. `thinking` is mapped to icons/brand.svg in
+   theme.json, so both are literally the same drawing; change one and you change
+   the other.
+
+   The ring is centred on (12,12) of the 24x24 viewBox — the box centre — so the
+   origin is reset from core's nib pivot, which exists for a quill drawn on the
+   diagonal and would send this one orbiting instead of spinning. Because the
+   ring's gap is off-axis, the turn stays legible at any speed: there is always
+   a break to watch go round.
+
+   Reduced motion is handled by the global rule below.
+   ============================================================================ */
+@keyframes madmans-box-thinking-turn {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+[data-theme="madmans-box"] .qt-thinking-indicator {
+  --qt-thinking-duration: 6s;
+  --qt-thinking-origin: center center;
+  animation: madmans-box-thinking-turn var(--qt-thinking-duration) linear infinite;
+}
+
+/* ============================================================================
    REDUCED MOTION
    ============================================================================ */
 @media (prefers-reduced-motion: reduce) {

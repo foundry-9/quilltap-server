@@ -4,6 +4,21 @@
 
 ### 4.8-dev
 
+#### The streaming quill is now a themeable icon
+
+`QuillAnimation` — the quill that rocks while a reply is awaited, while tokens stream, and while a tool call is outstanding — hard-coded `<Image src="/quill.svg">` and defined its keyframes in a styled-jsx `global` block, so themes could change neither the glyph nor the motion. It now renders `<Icon name="thinking">` and carries the new `.qt-thinking-indicator` class.
+
+- **New icon: `thinking`** (registry entry #85), mask mode, default asset `public/images/icons/thinking.svg` — a new 24×24 line-art quill in the existing icon style, replacing the 125 KB full-colour brand illustration at this call site. Deliberately a separate name from `brand`: a theme that swaps the brand mark for a wordmark should not find that wordmark rocking in the Salon.
+- **Mask mode means it tints.** The indicator now inherits `currentColor`, so the `qt-text-secondary` classes already present at three call sites — and the composer status strip's per-stage colours — reach it for the first time.
+- **New class `.qt-thinking-indicator`** (`_chat.css`) owns the motion, parameterized by `--qt-thinking-duration`, `--qt-thinking-easing`, `--qt-thinking-origin`, `--qt-thinking-angle-rest`, and `--qt-thinking-angle-lean`. Themes can retune those or re-declare the class for a different animation entirely.
+- **The quill now pivots on its nib rather than its centre.** `--qt-thinking-origin` defaults to `12.5% 87.5%` — (3,21) of the glyph's 24×24 viewBox, the point that would be touching the page — so the nib holds still and the feather swings above it, instead of the whole quill wobbling around its middle. At the upright extreme the tip paints ~8px above the 48px indicator's layout box; nothing clips it, and no call site needed adjusting. A theme overriding the glyph must move the origin to that glyph's own nib.
+- Added a `prefers-reduced-motion: reduce` branch, which the old animation lacked.
+- The wrapper element changed `<div>` → `<span>`, valid where the small variant renders inline inside streamed prose.
+- `QuillAnimation` gained a `label` prop (default `"Writing…"`, matching the old `alt`); the composer status strip and the pending-tool-call summary now pass `label={null}`, since both sit inside already-labelled regions and were being announced twice.
+- `@quilltap/theme-storybook` 1.0.49 lists `thinking` in its Icons story. `ICON_INVENTORY.md` gains a section on the two hooks; `THEME_PLUGIN_DEVELOPMENT.md` documents the override recipe.
+
+**Madman's Box (1.1.7) is the first theme to use both hooks.** It maps `thinking` to `icons/brand.svg` — its own quill inside a circle that never quite closes, the same drawing as the brand mark — and replaces the rock with a slow 6s linear full revolution, resetting `--qt-thinking-origin` to `center center` because that glyph's ring is centred on the box rather than pivoting from a nib. The theme's existing global reduced-motion rule already covers the new animation.
+
 #### Madman's Box: small-caps headings, and buttons that stop shouting
 
 Headings (`h1`–`h3`) used `text-transform: uppercase`, which flattened capitals and lowercase into identical glyphs — "Charles Sebold" was indistinguishable from "CHARLES SEBOLD". They now use `font-variant-caps: small-caps`, so capitals keep their full height and lowercase renders as small capitals. Raleway ships no `smcp` table (its only OpenType features are `liga`, `kern`, and `lnum`), so browsers synthesize the small caps; heading weight went 300 → 400 because synthesized small caps read light next to full-size capitals. Heading letter spacing tightened from 0.14em to 0.1em to suit the narrower glyphs.

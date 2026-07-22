@@ -238,7 +238,7 @@ export function ChatComposer({
           >
             <div className="qt-chat-response-status-icon">
               {responseStatus.stage === 'streaming' ? (
-                <QuillAnimation size="sm" />
+                <QuillAnimation size="sm" label={null} />
               ) : (
                 <svg className="w-4 h-4 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="12" cy="12" r="10" opacity="0.3" />

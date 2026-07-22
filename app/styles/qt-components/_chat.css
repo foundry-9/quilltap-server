@@ -2994,6 +2994,53 @@
   }
 
   /* ==========================================================================
+     THINKING INDICATOR
+     The quill that rocks while a response is awaited, streaming, or a tool is
+     still running (see components/chat/QuillAnimation.tsx). The GLYPH is the
+     themeable `thinking` icon; this class owns only the MOTION, so a theme can
+     retune the two independently:
+
+       - swap the glyph:   manifest `icons: { "thinking": "..." }`
+       - retune the rock:  override --qt-thinking-* below
+       - replace it whole: re-declare .qt-thinking-indicator (any animation)
+
+     The default rock sweeps between upright and the quill's natural writing
+     lean, which is why the rest angle is negative — the `thinking` glyph is
+     drawn on the diagonal, nib to the lower left.
+
+     It pivots on the NIB, not the centre: the default origin is the nib's
+     position in the default glyph, (3,21) of its 24x24 viewBox = 12.5% 87.5%.
+     The point that would be touching the page therefore stays put and the
+     feather swings above it, the way a held quill actually moves. A theme
+     shipping a differently-drawn glyph must move this origin to ITS nib —
+     otherwise the pivot lands on empty space and the whole thing orbits.
+
+     Consequence worth knowing: a quill is longer than the box is tall, so at
+     the upright extreme the feather tip paints a little above the element's
+     layout box. Nothing clips it (mask/background paint rides the transform),
+     and every call site has slack for it, but don't wrap this in an
+     overflow: hidden container.
+     ========================================================================== */
+
+  .qt-thinking-indicator {
+    animation: qt-thinking-rock var(--qt-thinking-duration, 1.2s)
+               var(--qt-thinking-easing, ease-in-out) infinite;
+    transform-origin: var(--qt-thinking-origin, 12.5% 87.5%);
+  }
+
+  @keyframes qt-thinking-rock {
+    0%, 100% { transform: rotate(var(--qt-thinking-angle-rest, -45deg)); }
+    50%      { transform: rotate(var(--qt-thinking-angle-lean, 0deg)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qt-thinking-indicator {
+      animation: none;
+      transform: rotate(var(--qt-thinking-angle-rest, -45deg));
+    }
+  }
+
+  /* ==========================================================================
      TERMINAL — IN-CHAT EMBED, POP-OUT PAGE, AND PANE SURFACES
      A terminal carries its own identity (dark by default) regardless of the
      surrounding theme's light/dark mode. Themes may re-tint these via the
