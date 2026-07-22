@@ -4,6 +4,12 @@
 
 ### 4.8-dev
 
+#### Lint: the project-name misspelling rule now checks identifiers and comments
+
+`quilltap/no-quilltap-misspelling` only visited string literals and template chunks, so a misspelled *identifier* was invisible to it. It now also visits identifiers, private identifiers, JSX names, JSX text, and comments. `eslint-quilltap-plugin.js` is exempted from its own rule in `eslint.config.mjs` — the implementation has to spell the forbidden word in order to match it — which replaces the two inline disable comments that no longer covered enough of the file.
+
+The gap had been hiding a real test bug. Two "simulate restart" blocks in `__tests__/unit/lib/startup/dbkey.test.ts` deleted a misspelled variant of the `__quilltapDbKeyState` global, so they cleared nothing and left the previous state in place; the assertions passed, but not via the restart path they described. Both now delete the real global.
+
 #### Deep links that used to escape the tabbed workspace now open as tabs
 
 Several routes still rendered the legacy full-page shell when reached by direct URL (bookmark, address bar, or an unintercepted link), instead of redirecting into the tabbed workspace like `/salon/[id]`, `/aurora`, and the other cut-over routes:

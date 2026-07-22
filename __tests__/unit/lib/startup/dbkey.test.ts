@@ -236,7 +236,7 @@ describe('Database Key Manager (dbkey)', () => {
 
       // Simulate restart
       delete process.env.ENCRYPTION_MASTER_PEPPER;
-      delete (global as Record<string, unknown>).__quilttapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
       delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
 
       const dbkey2 = await importDbKey();
@@ -251,7 +251,7 @@ describe('Database Key Manager (dbkey)', () => {
 
       // Simulate restart
       delete process.env.ENCRYPTION_MASTER_PEPPER;
-      delete (global as Record<string, unknown>).__quilttapDbKeyState;
+      delete (global as Record<string, unknown>).__quilltapDbKeyState;
       delete (global as Record<string, unknown>).__quilltapHasUserPassphrase;
 
       const dbkey2 = await importDbKey();
