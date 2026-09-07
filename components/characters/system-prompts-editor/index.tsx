@@ -6,6 +6,7 @@ import { PromptList } from './PromptList'
 import { PromptModal } from './PromptModal'
 import { ImportModal } from './ImportModal'
 import { PreviewModal } from './PreviewModal'
+import { SubpromptsSection } from './SubpromptsSection'
 
 /**
  * Main SystemPromptsEditor component for managing character system prompts
@@ -81,6 +82,10 @@ export function SystemPromptsEditor({
         onCreateClick={editor.openCreateModal}
         onImportClick={editor.openImportModal}
       />
+
+      {/* Subprompts — the smaller, per-chat instructions kept in the vault's
+          Subprompts/ folder. Listed under the primary prompts. */}
+      <SubpromptsSection characterId={characterId} characterName={characterName} />
 
       {/* Create/Edit Modal */}
       <PromptModal

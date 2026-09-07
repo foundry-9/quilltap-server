@@ -105,6 +105,7 @@ describe('tabActivationQueryKeys', () => {
     expect(tabActivationQueryKeys(tab('character-view', { characterId: 'c9' }))).toEqual([
       queryKeys.characters.detail('c9'),
       queryKeys.characters.prompts('c9'),
+      queryKeys.characters.subprompts('c9'),
       queryKeys.characters.photos('c9'),
     ])
     expect(tabActivationQueryKeys(tab('character-view'))).toEqual([])

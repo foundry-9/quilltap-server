@@ -50,6 +50,7 @@ On Anthropic, step 8 is impossible (Sonnet 4.6+ rejects a trailing `assistant` m
 
 1. `## Character Identity` — "You are {{char}}. Everything that follows defines who you are…"
 2. **Base system prompt** — the participant's `selectedSystemPromptId`, falling back to the character's `isDefault` prompt, falling back to nothing.
+2a. `## Additional Instructions` — the participant's `selectedSubpromptIds`, resolved from the character vault's `Subprompts/*.md` by the compiler and rendered as `### <title>` blocks under the wrapper "The following also apply to you in this conversation." Omitted entirely when none are selected, so the output for an unselected seat is byte-identical and no version bump was needed. Design: [character-subprompts](features/complete/character-subprompts.md).
 3. `## Character Manifesto` — `character.manifesto`, under the wrapper "The following you hold as true about yourself, without question."
 4. `## Character Personality` — `character.personality`, under the wrapper "The following is what you know about yourself. Others do not see it unless you show them."
 5. `## Character Aliases` — "You also go by: …"
@@ -101,10 +102,12 @@ It deliberately **does not name the other participants**. An inline roster is ex
 | Chat created | `compileAllIdentityStacks` |
 | Participant added / reactivated | `compileIdentityStackForParticipant` |
 | Participant `selectedSystemPromptId` changed | `compileIdentityStackForParticipant` |
+| Participant `selectedSubpromptIds` changed (order-insensitive) | `compileIdentityStackForParticipant` |
+| A subprompt file edited or deleted | `fanOutSubpromptChange` (`lib/subprompts/chat-fanout.ts`) → `compileIdentityStackForParticipant` for every live LLM seat of that character carrying it; a delete strips the id from the seat first |
 | Chat `scenarioText` changed | `compileAllIdentityStacks` |
 | Chat merge brings a participant across | `compileIdentityStackForParticipant` |
 
-**Edits to the character record itself do not invalidate anything.** Renaming a character or rewriting their personality does not fan out across their chats; that fan-out is an unbuilt design pass. Correctness is preserved by the **read-through fallback**: when the cached entry is missing or empty, `buildSystemPrompt` rebuilds from current data for that turn and does not persist it. So a stale entry is a stale *prompt*, not a broken one — worth knowing when a character edit appears not to take effect in an existing chat.
+**Edits to the character record itself do not invalidate anything** (the subprompt fan-out above is the one deliberate exception — a subprompt is per-chat input the user toggled, and the seat record would otherwise point at text that no longer exists). Renaming a character or rewriting their personality does not fan out across their chats; that fan-out is an unbuilt design pass. Correctness is preserved by the **read-through fallback**: when the cached entry is missing or empty, `buildSystemPrompt` rebuilds from current data for that turn and does not persist it. So a stale entry is a stale *prompt*, not a broken one — worth knowing when a character edit appears not to take effect in an existing chat.
 
 Compiler failures never propagate: a cache write that fails logs and returns, and the fallback covers it.
 

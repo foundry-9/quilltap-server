@@ -751,12 +751,18 @@ export function useNewChat({
         characterId: string
         connectionProfileId?: string
         selectedSystemPromptId?: string
+        selectedSubpromptIds?: string[]
         controlledBy?: 'llm' | 'user'
       }> = selectedCharacters.map((sc) => ({
         type: 'CHARACTER' as const,
         characterId: sc.character.id,
         connectionProfileId: sc.controlledBy === 'llm' ? sc.connectionProfileId : undefined,
         selectedSystemPromptId: sc.selectedSystemPromptId || undefined,
+        // Omitted when empty so a plain create stays byte-identical.
+        selectedSubpromptIds:
+          sc.controlledBy === 'llm' && sc.selectedSubpromptIds && sc.selectedSubpromptIds.length > 0
+            ? sc.selectedSubpromptIds
+            : undefined,
         controlledBy: sc.controlledBy,
       }))
 

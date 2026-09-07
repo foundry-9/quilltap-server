@@ -292,10 +292,18 @@ export async function handleParticipantUpdate(
   // recompile all stacks. Failures are non-fatal (read-through fallback).
   if (finalChat) {
     try {
-      if (
+      const promptChanged =
         participantData.selectedSystemPromptId !== undefined &&
-        oldParticipant?.selectedSystemPromptId !== participantData.selectedSystemPromptId
-      ) {
+        oldParticipant?.selectedSystemPromptId !== participantData.selectedSystemPromptId;
+      // Subprompts are baked into the stack too, so a change to the set in
+      // play recompiles the same way (order-insensitive compare).
+      const subpromptsChanged =
+        participantData.selectedSubpromptIds !== undefined &&
+        !sameIdSet(oldParticipant?.selectedSubpromptIds ?? [], participantData.selectedSubpromptIds);
+      if (promptChanged || subpromptsChanged) {
+        logger.debug('[Chats v1] Recompiling identity stack after participant prompt change', {
+          chatId, participantId, promptChanged, subpromptsChanged,
+        });
         await compileIdentityStackForParticipant(finalChat, participantId);
       }
       if (participantData.controlledBy !== undefined) {
@@ -310,6 +318,13 @@ export async function handleParticipantUpdate(
   }
 
   return { chat: finalChat || result };
+}
+
+/** Order-insensitive equality of two id lists. */
+function sameIdSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((id) => set.has(id));
 }
 
 /**

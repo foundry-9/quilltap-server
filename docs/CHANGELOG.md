@@ -4,6 +4,30 @@
 
 ### 4.10-dev
 
+#### Added: character subprompts
+
+Characters can now carry subprompts: short, optional instructions stored as Markdown files in
+the vault's root-level `Subprompts/` folder (frontmatter `title`, body = the instruction, written
+in the second person like a system prompt). The folder is created on the first write; a missing
+folder lists as empty.
+
+- Which subprompts are in play is stored per seat on the chat (`participants[].selectedSubpromptIds`).
+  Pick them from a Subprompts dropdown under each character's system-prompt selector in the New Chat
+  dialog, and from the same dropdown on the participant card in the Salon's Participants drawer.
+  Every dropdown offers "New subprompt…", which opens the Lexical editor in place and ticks the new
+  one on.
+- Manage them on the Aurora System Prompts tab, beneath the primary prompts. The AI Wizard and
+  Character Optimizer leave subprompts alone.
+- Selected subprompts render in the compiled identity stack directly after the system prompt as an
+  `## Additional Instructions` block, and in the greeting. Changing the selection recompiles the
+  seat's cached stack; editing a subprompt recompiles every chat carrying it; deleting one strips it
+  from those seats first. A seat with none selected produces a byte-identical prompt, so no builder
+  version bump.
+- A character dressing themselves in the green room sees the selected subprompts alongside their
+  dressing instructions.
+- New routes: `GET/POST /api/v1/characters/[id]/subprompts`,
+  `GET/PUT/DELETE /api/v1/characters/[id]/subprompts/[subpromptId]`.
+
 ### 4.9.2
 
 #### Fixed: a help chat's tool results now reach the model on every provider (bug 124)

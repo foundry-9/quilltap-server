@@ -39,6 +39,7 @@ import {
 import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
+import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
@@ -49,6 +50,38 @@ import type {
 } from '@/lib/chat/creation-progress';
 
 type Repos = RepositoryContainer;
+
+/**
+ * The subprompts in play for `characterId`'s LLM-controlled seat in `chatId`,
+ * resolved from the persisted participant record. `[]` when the chat or seat
+ * cannot be found, or on any read error — the outfit choice never waits on
+ * this.
+ */
+async function resolveSubpromptsForSeat(
+  repos: Repos,
+  chatId: string,
+  characterId: string,
+): Promise<SubpromptForPrompt[]> {
+  try {
+    const chat = await repos.chats.findById(chatId);
+    const seat = chat?.participants.find(
+      (p) => p.characterId === characterId && p.controlledBy !== 'user' && p.status !== 'removed',
+    );
+    const selected = seat?.selectedSubpromptIds ?? [];
+    if (selected.length === 0) return [];
+    // Loaded lazily: the subprompts module reaches into the mount-index
+    // document store, which this orchestrator otherwise never touches.
+    const { resolveSelectedSubprompts } = await import('@/lib/subprompts/subprompts');
+    return await resolveSelectedSubprompts(characterId, selected);
+  } catch (error) {
+    logger.warn('[applyOutfitSelections] Could not read subprompts for the green room — continuing without', {
+      chatId,
+      characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
 
 /**
  * How long to wait on the wardrobe LLM for one character before giving up and
@@ -383,6 +416,19 @@ export async function applyOutfitSelections(
                   });
                 }
 
+                // Subprompts ticked on for this seat ride into the green
+                // room too. The chat row is already persisted at every call
+                // site (creation, add-participant, merge), so the seat's
+                // selection is readable here. Soft-fails to none.
+                const subprompts = await resolveSubpromptsForSeat(repos, chatId, characterId);
+                if (subprompts.length > 0) {
+                  logger.debug('[applyOutfitSelections] Subprompts in play for the green room', {
+                    chatId,
+                    characterId,
+                    count: subprompts.length,
+                  });
+                }
+
                 const startedAt = Date.now();
                 const result = await withTimeout(
                   chooseLLMOutfit(
@@ -397,6 +443,7 @@ export async function applyOutfitSelections(
                     context.userId,
                     chatId,
                     characterId,
+                    subprompts,
                   ),
                   OUTFIT_LLM_TIMEOUT_MS,
                 );

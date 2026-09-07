@@ -4,6 +4,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { processCharacterTemplates, processTemplate } from '@/lib/templates/processor'
+import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 import { logger } from '@/lib/logger'
 
 interface CharacterSystemPrompt {
@@ -60,7 +61,8 @@ export async function buildChatContext(
   characterId: string,
   userCharacterId?: string,
   customScenario?: string,
-  selectedSystemPromptId?: string
+  selectedSystemPromptId?: string,
+  subprompts?: readonly SubpromptForPrompt[],
 ): Promise<ChatContext> {
   const repos = getRepositories()
 
@@ -112,6 +114,7 @@ export async function buildChatContext(
     userCharacter: userCharacter || undefined,
     scenario: resolvedScenario,
     selectedSystemPromptId,
+    subprompts,
   })
 
   // Get the system prompt content for template processing (selected or default)
@@ -172,11 +175,14 @@ function buildSystemPrompt({
   userCharacter,
   scenario,
   selectedSystemPromptId,
+  subprompts,
 }: {
   character: Character
   userCharacter?: UserCharacter
   scenario?: string | null
   selectedSystemPromptId?: string
+  /** Subprompts in play for the opener — appended right after the system prompt. */
+  subprompts?: readonly SubpromptForPrompt[]
 }): string {
   // Get the selected or default system prompt content
   const systemPromptContent = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
@@ -190,6 +196,23 @@ function buildSystemPrompt({
   })
 
   let prompt = processedCharacter.systemPrompt || ''
+
+  // Subprompts ticked on for this chat — same register as the system prompt,
+  // so they follow it directly (mirrors buildIdentityStack's placement).
+  if (subprompts && subprompts.length > 0) {
+    const templateContext = {
+      char: character.name,
+      user: userCharacter?.name || 'User',
+      description: character.description || '',
+      personality: character.personality || '',
+      scenario: scenario || '',
+      persona: userCharacter?.description || '',
+    }
+    const rendered = subprompts
+      .map((s) => `### ${s.title}\n${processTemplate(s.content, templateContext)}`)
+      .join('\n\n')
+    prompt += `\n\n## Additional Instructions\nThe following also apply to you in this conversation.\n${rendered}`
+  }
 
   // Add character identity
   prompt += `\n\nYou are roleplaying as ${character.name}.`

@@ -1814,6 +1814,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           connectionProfiles={chatControls.connectionProfiles}
           onConnectionProfileChange={chatControls.handleConnectionProfileChange}
           onSystemPromptChange={chatControls.handleSystemPromptChange}
+          onSubpromptsChange={chatControls.handleSubpromptsChange}
           onRebuildSystemPrompt={chatControls.handleRebuildSystemPrompt}
           onParticipantSettingsChange={chatControls.handleParticipantSettingsChange}
           onWhisper={handleWhisper}

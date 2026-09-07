@@ -54,6 +54,8 @@ export const updateParticipantSchema = z.object({
   connectionProfileId: z.uuid().optional(),
   imageProfileId: z.uuid().nullish(),
   selectedSystemPromptId: z.uuid().nullish(),
+  /** Replace the set of subprompts in play for this seat (ids = vault file names sans `.md`). */
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).max(100).optional(),
   displayOrder: z.number().optional(),
   isActive: z.boolean().optional(),  // Keep for backward compat
   status: z.enum(['active', 'silent', 'absent', 'removed']).optional(),  // New preferred field

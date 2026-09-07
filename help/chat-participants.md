@@ -141,6 +141,15 @@ Immediately beneath the connection profile selector, each LLM-controlled charact
 
 If you want a character to keep the same costume but change their register for an afternoon — swap them from their "Formal" variant to their "Casual" one here, and the switch takes effect with the very next line they speak.
 
+### Subprompts Dropdown
+
+Directly beneath the system prompt dropdown sits a second, smaller one labelled **Subprompts**, with a summary of how many are in play ("2 of 5 in play"). Open it and you are shown a checkbox for every [subprompt](character-subprompts.md) the character keeps in their vault's `Subprompts/` folder — the short, optional instructions that may be switched on or off for one conversation without editing the prompt itself.
+
+- **Tick or untick** any subprompt and the change takes hold at once: the chat's cached prompt is rebuilt and the character's next line is composed under the new arrangement. A toast confirms it.
+- **New subprompt…** at the foot of the list opens the editor right there in the drawer — title, instruction in Markdown, and the standing reminder to write in the second person. A subprompt created this way is ticked on for this chat automatically.
+- Each chat keeps its own selection, so the same character may be terse here and expansive elsewhere.
+- Only shown for LLM-controlled characters. A character with no subprompts on file shows "None on file" and still offers to create one.
+
 ### Rebuild System Prompt Button
 
 Tucked beside the system prompt dropdown — and present even for characters who carry no named prompts at all — is a small refresh button with a circular-arrow glyph. Press it and Quilltap will re-compile this character's system prompt for the chat from the ground up, drawing on whatever is presently inscribed on the character's record: manifesto, personality, named prompts, aliases, pronouns, and the rest of the identity pantry.

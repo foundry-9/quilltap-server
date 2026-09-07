@@ -134,6 +134,7 @@ export function useParticipants({
         // User-controlled characters use the same .character field as LLM characters
         connectionProfile: p.connectionProfile,
         selectedSystemPromptId: p.selectedSystemPromptId ?? null,
+        selectedSubpromptIds: p.selectedSubpromptIds ?? [],
       }
     })
   }, [chatParticipants])

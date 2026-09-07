@@ -76,6 +76,7 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
         ? [
             queryKeys.characters.detail(id),
             queryKeys.characters.prompts(id),
+            queryKeys.characters.subprompts(id),
             queryKeys.characters.photos(id),
           ]
         : [queryKeys.characters.all]

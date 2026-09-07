@@ -163,6 +163,7 @@ export interface ChatSidebarProps {
   connectionProfiles?: ConnectionProfileOption[]
   onConnectionProfileChange?: (participantId: string, profileId: string | null, controlledBy: 'llm' | 'user') => void
   onSystemPromptChange?: (participantId: string, promptId: string | null) => void
+  onSubpromptsChange?: (participantId: string, subpromptIds: string[]) => void
   onRebuildSystemPrompt?: (participantId: string) => void
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   chatId: string
@@ -839,6 +840,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               connectionProfiles={p.connectionProfiles}
               onConnectionProfileChange={p.onConnectionProfileChange}
               onSystemPromptChange={p.onSystemPromptChange}
+              onSubpromptsChange={p.onSubpromptsChange}
               onRebuildSystemPrompt={p.onRebuildSystemPrompt}
               onActiveChange={p.onParticipantSettingsChange
                 ? (pId, active) => p.onParticipantSettingsChange!(pId, { isActive: active })

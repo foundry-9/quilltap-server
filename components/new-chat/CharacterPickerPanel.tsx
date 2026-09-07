@@ -11,6 +11,7 @@ import type {
   SelectedCharacter,
 } from './types'
 import { USER_CONTROLLED_PROFILE } from './types'
+import { SubpromptPicker } from '@/components/subprompts'
 
 interface CharacterPickerPanelProps {
   characters: Character[]
@@ -135,6 +136,14 @@ export function CharacterPickerPanel({
     onSelectedCharactersChange((prev) =>
       prev.map((sc) =>
         sc.character.id === characterId ? { ...sc, selectedSystemPromptId: promptId } : sc
+      )
+    )
+  }
+
+  const handleSubpromptsChange = (characterId: string, ids: string[]) => {
+    onSelectedCharactersChange((prev) =>
+      prev.map((sc) =>
+        sc.character.id === characterId ? { ...sc, selectedSubpromptIds: ids } : sc
       )
     )
   }
@@ -293,6 +302,17 @@ export function CharacterPickerPanel({
                               </option>
                             ))}
                           </select>
+                        </div>
+                      )}
+                      {sc.controlledBy !== 'user' && (
+                        <div className="mt-2">
+                          <SubpromptPicker
+                            characterId={sc.character.id}
+                            characterName={sc.character.name}
+                            selectedIds={sc.selectedSubpromptIds ?? []}
+                            onChange={(ids) => handleSubpromptsChange(sc.character.id, ids)}
+                            disabled={disabled}
+                          />
                         </div>
                       )}
                     </div>

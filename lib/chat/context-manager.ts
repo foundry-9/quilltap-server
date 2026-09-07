@@ -215,6 +215,7 @@ import {
   calculateCurrentTimestamp,
 } from '@/lib/chat/timestamp-utils'
 import { getCompiledIdentityStack } from '@/lib/services/system-prompt-compiler/compiler'
+import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 
@@ -907,6 +908,16 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     ? getCompiledIdentityStack(chat, respondingParticipant.id)
     : null
 
+  // Subprompts only matter on the read-through fallback — a precompiled
+  // stack already carries them. Resolved here (async) so the synchronous
+  // builder can render them; fails soft to none.
+  const fallbackSubprompts = precompiledIdentityStack
+    ? null
+    : await resolveSelectedSubprompts(
+        character.id,
+        respondingParticipant?.selectedSubpromptIds ?? [],
+      )
+
   // Instance-wide Taboo list. `buildSystemPrompt` is synchronous by design, so
   // the read happens here and the phrases are handed down. A failure to read is
   // never worth losing the turn over — the section is style guidance.
@@ -951,6 +962,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     precompiledIdentityStack,
     tabooPhrases,
     standingInstructions,
+    subprompts: fallbackSubprompts,
   })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

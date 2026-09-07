@@ -249,6 +249,40 @@ describe('cache-determinism: system prompt', () => {
     expect(prompt).not.toContain(FIXTURE_CHARACTER.name + ' uses workspace tools')
   })
 
+  it('subprompts render under the base prompt as titled second-person blocks', () => {
+    // Subprompts are per-chat input, so they are pinned on a variant rather
+    // than the golden fixture: a seat with none selected must hash exactly
+    // as before the feature (no builder-version bump needed), and a seat with
+    // some selected gets them directly after the system prompt, template-
+    // processed, each under its own title.
+    const stack = buildIdentityStack({
+      ...FIXTURE_STACK_ARGS,
+      subprompts: [
+        { title: 'Be terse', content: 'You keep every reply under three sentences, {{char}}.' },
+        { title: 'No spoilers', content: 'You never reveal the ending.' },
+      ],
+    })
+    const base = buildIdentityStack(FIXTURE_STACK_ARGS)
+    expect(stack).toContain(
+      '## Additional Instructions\nThe following also apply to you in this conversation.\n' +
+      '### Be terse\nYou keep every reply under three sentences, Iris Volney.\n\n' +
+      '### No spoilers\nYou never reveal the ending.',
+    )
+    // Placement: after the base prompt, before the (first) author-carried block.
+    const promptIdx = stack.indexOf('You are a careful cartographer')
+    const subIdx = stack.indexOf('## Additional Instructions')
+    const personalityIdx = stack.indexOf('## Character Personality')
+    expect(promptIdx).toBeLessThan(subIdx)
+    expect(subIdx).toBeLessThan(personalityIdx)
+    // Everything outside the inserted block is untouched.
+    expect(stack.replace(/\n\n\n## Additional Instructions[\s\S]*?(?=\n\n\n## Character Personality)/, '')).toBe(base)
+  })
+
+  it('an empty subprompt list leaves the identity stack byte-identical to no option at all', () => {
+    expect(buildIdentityStack({ ...FIXTURE_STACK_ARGS, subprompts: [] })).toBe(buildIdentityStack(FIXTURE_STACK_ARGS))
+    expect(buildSystemPrompt({ ...FIXTURE_OPTIONS, subprompts: [] })).toBe(buildSystemPrompt(FIXTURE_OPTIONS))
+  })
+
   it('an empty Taboo list leaves the prompt byte-identical to no Taboo option at all', () => {
     // This is what keeps the golden above stable for every instance that never
     // touches the feature: empty ⇒ the section is omitted entirely, header and

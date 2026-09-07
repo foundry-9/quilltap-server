@@ -226,6 +226,7 @@ Each chat can have its own configuration:
 - **Image Generation** — Which image provider to use (Chat drawer of the Chat Sidebar)
 - **Connection Profiles** — Which LLM to use per participant (on each participant card in the Participants drawer)
 - **System Prompt Overrides** — Custom context per participant (on each participant card in the Participants drawer)
+- **Subprompts** — Which of a character's smaller instructions are in play (beneath the system prompt on each participant card, and in the New Chat dialog — see [Character Subprompts](character-subprompts.md))
 - **Tools** — Which AI tools are available (Chat drawer → Tools…)
 - **Project** — Which project this chat belongs to (Chat drawer)
 

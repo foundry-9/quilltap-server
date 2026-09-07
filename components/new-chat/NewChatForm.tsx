@@ -32,6 +32,7 @@ import type {
 import type { ProjectListEntry } from './hooks/useNewChat'
 import { ScenarioSelect, hasAnyScenarioOptions } from '@/components/scenario/ScenarioSelect'
 import type { ScenarioSelection } from '@/components/scenario/types'
+import { SubpromptPicker } from '@/components/subprompts'
 
 interface NewChatFormProps {
   profiles: ConnectionProfile[]
@@ -274,6 +275,15 @@ export function NewChatForm({
     )
   }
 
+  const handleSingleSubpromptsChange = (ids: string[]) => {
+    if (!singleLlm) return
+    setSelectedCharacters((prev) =>
+      prev.map((sc) =>
+        sc.character.id === singleLlm.character.id ? { ...sc, selectedSubpromptIds: ids } : sc
+      )
+    )
+  }
+
   const singleCharacterId = singleLlm?.character.id
   const characterIdForImage = singleCharacterId || selectedCharacters[0]?.character.id || undefined
 
@@ -495,6 +505,19 @@ export function NewChatForm({
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {showSingleCharacterControls && singleLlm && (
+          <div>
+            <label className="mb-2 block text-sm qt-text-primary">Subprompts</label>
+            <SubpromptPicker
+              characterId={singleLlm.character.id}
+              characterName={singleLlm.character.name}
+              selectedIds={singleLlm.selectedSubpromptIds ?? []}
+              onChange={handleSingleSubpromptsChange}
+              disabled={creating}
+            />
           </div>
         )}
 

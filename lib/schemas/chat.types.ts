@@ -603,6 +603,9 @@ export const ChatParticipantSchema = z.object({
 
   // Per-chat customization
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
+  // Ids (vault file names sans `.md`) of the character's `Subprompts/*.md`
+  // in play for this chat. Absent/empty → none. See lib/subprompts.
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).optional(),
 
   // Display and state
   displayOrder: z.number().default(0),   // For ordering in UI
@@ -643,6 +646,9 @@ export const ChatParticipantBaseSchema = z.object({
   imageProfileId: UUIDSchema.nullable().optional(),
   roleplayTemplateId: z.string().nullable().optional(),  // Roleplay template override
   selectedSystemPromptId: UUIDSchema.nullable().optional(),  // Selected system prompt from character's prompts array
+  // Ids (vault file names sans `.md`) of the character's `Subprompts/*.md`
+  // in play for this chat. Absent/empty → none. See lib/subprompts.
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).optional(),
   displayOrder: z.number().default(0),
   /** @deprecated Use `status` field instead. Kept as computed compat field (true when status is active or silent). */
   isActive: z.boolean().default(true),

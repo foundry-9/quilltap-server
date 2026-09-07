@@ -46,6 +46,7 @@ describe('queryKeysForTopic', () => {
     expect(queryKeysForTopic('characters', 'char-1')).toEqual([
       queryKeys.characters.detail('char-1'),
       queryKeys.characters.prompts('char-1'),
+      queryKeys.characters.subprompts('char-1'),
       queryKeys.characters.photos('char-1'),
     ]);
   });

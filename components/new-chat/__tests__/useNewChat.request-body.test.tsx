@@ -123,3 +123,49 @@ describe('useNewChat create request — Concierge state', () => {
     }
   )
 })
+
+describe('useNewChat create request — subprompts', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    fetchStub = installFetchStub()
+  })
+
+  async function createWithCast(cast: SelectedCharacter[]) {
+    const { result } = renderHook(() => useNewChat())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    act(() => {
+      result.current.setSelectedCharacters(cast)
+    })
+    await act(async () => {
+      await result.current.handleCreateChat()
+    })
+    return createdBody()
+  }
+
+  it('omits selectedSubpromptIds when none are ticked, so a plain create is unchanged', async () => {
+    const body = await createWithCast([ALICE])
+    const [participant] = body.participants as Array<Record<string, unknown>>
+    expect(participant).not.toHaveProperty('selectedSubpromptIds')
+  })
+
+  it('sends the ticked subprompt ids verbatim for an LLM seat', async () => {
+    const body = await createWithCast([{ ...ALICE, selectedSubpromptIds: ['terse', 'verse'] }])
+    const [participant] = body.participants as Array<Record<string, unknown>>
+    expect(participant.selectedSubpromptIds).toEqual(['terse', 'verse'])
+  })
+
+  it('never sends subprompts for a user-controlled seat', async () => {
+    const body = await createWithCast([
+      { ...ALICE, selectedSubpromptIds: ['terse'] },
+      {
+        character: { id: 'char-bob', name: 'Bob' },
+        connectionProfileId: '',
+        controlledBy: 'user',
+        selectedSubpromptIds: ['stray'],
+      },
+    ])
+    const participants = body.participants as Array<Record<string, unknown>>
+    expect(participants[0].selectedSubpromptIds).toEqual(['terse'])
+    expect(participants[1]).not.toHaveProperty('selectedSubpromptIds')
+  })
+})

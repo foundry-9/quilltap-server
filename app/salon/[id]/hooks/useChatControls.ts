@@ -461,6 +461,36 @@ export function useChatControls({
     }
   }, [chatId, fetchChat])
 
+  // Replace the set of subprompts in play for one participant. The server
+  // recompiles the cached identity stack when the set actually changes.
+  const handleSubpromptsChange = useCallback(async (
+    participantId: string,
+    subpromptIds: string[]
+  ) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${chatId}?action=update-participant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          updateParticipant: {
+            participantId,
+            selectedSubpromptIds: subpromptIds,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update subprompts')
+      }
+
+      showSuccessToast('Subprompts updated')
+      await fetchChat()
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update subprompts')
+    }
+  }, [chatId, fetchChat])
+
   // Force-rebuild the cached system-prompt prefix for one participant —
   // picks up edits made to the underlying character record (manifesto,
   // personality, named systemPrompts, etc.) since the cache was last built.
@@ -583,6 +613,7 @@ export function useChatControls({
     handleConnectionProfileChange,
     handleSystemPromptChange,
     handleRebuildSystemPrompt,
+    handleSubpromptsChange,
     handleParticipantSettingsChange,
     handleTalkativenessChange,
     handleAllLLMContinue,

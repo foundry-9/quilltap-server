@@ -112,6 +112,8 @@ export interface SelectedCharacter {
   character: Character
   connectionProfileId: string
   selectedSystemPromptId?: string | null
+  /** Ids of the character's subprompts to put in play for this chat. */
+  selectedSubpromptIds?: string[]
   controlledBy: 'llm' | 'user'
 }
 

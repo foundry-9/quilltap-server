@@ -15,6 +15,7 @@ import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardr
 import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
 import type { CheapLLMTaskResult } from './types'
+import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 import { logger } from '@/lib/logger'
 
 const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay character. Your job is to choose what a character should wear at the start of a scene, based on:
@@ -22,6 +23,7 @@ const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay cha
 - The scenario/setting description
 - The character's personality
 - The character's own dressing instructions, when provided — these describe what the character prefers to wear and under what circumstances; weigh them heavily, above general appropriateness guesses
+- Any additional instructions in play for this scene, when provided — smaller standing directions the character is following in this particular conversation; honour anything in them that bears on dress
 
 Choose items that are contextually appropriate. For example, formal wear for a business meeting, casual clothes for relaxing at home, or era-appropriate costume for a historical setting.
 
@@ -71,6 +73,10 @@ export interface LLMOutfitChoice {
  * @param selection The cheap LLM provider selection to use
  * @param userId User ID for logging
  * @param chatId Chat ID for logging
+ * @param characterId Character ID for logging
+ * @param subprompts The character's subprompts in play for this chat (second
+ *   person, like the dressing instructions) — surfaced so a standing
+ *   direction that bears on dress reaches the green room too
  * @returns Equipped slots chosen by the LLM, or failure result
  */
 export async function chooseLLMOutfit(
@@ -85,6 +91,7 @@ export async function chooseLLMOutfit(
   userId: string,
   chatId?: string,
   characterId?: string,
+  subprompts?: readonly SubpromptForPrompt[] | null,
 ): Promise<CheapLLMTaskResult<LLMOutfitChoice>> {
   if (wardrobeItems.length === 0) {
     return {
@@ -130,6 +137,11 @@ export async function chooseLLMOutfit(
     ? `\nDressing Instructions (addressed to ${characterName} in the second person — "you" is ${characterName}):\n${dressingInstructions.trim()}`
     : ''
 
+  const subpromptsNote = subprompts && subprompts.length > 0
+    ? `\nAdditional Instructions in play for this scene (addressed to ${characterName} in the second person — "you" is ${characterName}):\n` +
+      subprompts.map((s) => `### ${s.title}\n${s.content.trim()}`).join('\n\n')
+    : ''
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -137,7 +149,7 @@ export async function chooseLLMOutfit(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}${instructionsNote}
+      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}${instructionsNote}${subpromptsNote}
 
 Available Wardrobe Items:
 ${wardrobeSection}

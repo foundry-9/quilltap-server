@@ -451,7 +451,7 @@ CREATE INDEX "idx_cpd_plugin" ON "character_plugin_data"("pluginName");
 CREATE TABLE "chats" (
   "id" TEXT PRIMARY KEY,
   "userId" TEXT NOT NULL,
-  "participants" TEXT DEFAULT '[]',
+  "participants" TEXT DEFAULT '[]',  -- JSON array of ChatParticipantBase (lib/schemas/chat.types.ts); per-seat prompt choice in selectedSystemPromptId, subprompts in play in selectedSubpromptIds (vault file names sans .md) since 4.10
   "title" TEXT NOT NULL,
   "contextSummary" TEXT,
   "sillyTavernMetadata" TEXT,

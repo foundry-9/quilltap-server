@@ -52,6 +52,7 @@ API reference for Quilltap v4.3 and later.
   - [Model Classes](#model-classes)
   - [Characters](#characters)
   - [Character System Prompts](#character-system-prompts)
+  - [Character Subprompts](#character-subprompts)
   - [Character Scenarios](#character-scenarios)
   - [Character Plugin Data](#character-plugin-data)
   - [NPCs](#npcs)
@@ -1687,6 +1688,78 @@ Update a system prompt. All fields are optional.
 #### `DELETE /api/v1/characters/[id]/prompts/[promptId]`
 
 Delete a system prompt.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true
+}
+```
+
+---
+
+### Character Subprompts
+
+Subprompts are short, optional instructions stored as Markdown files in the character vault's root-level `Subprompts/` folder (frontmatter `title`, body = the instruction). A chat chooses which are in play per seat via `participants[].selectedSubpromptIds` (see chat creation and `update-participant`). The `subpromptId` is the file name without `.md`. Design: [character-subprompts](features/complete/character-subprompts.md).
+
+#### `GET /api/v1/characters/[id]/subprompts`
+
+List the character's subprompts, sorted by title. A missing `Subprompts/` folder lists as empty.
+
+**Response**: `200 OK`
+
+```json
+{
+  "subprompts": [
+    {
+      "id": "be-terse",
+      "path": "Subprompts/be-terse.md",
+      "title": "Be terse",
+      "content": "You keep every reply under three sentences unless asked for more.",
+      "updatedAt": "2026-09-07T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/characters/[id]/subprompts`
+
+Create a subprompt. Creates the `Subprompts/` folder on first use; the id is derived from the title (`-2`, `-3` on collision).
+
+**Request Body**:
+
+```json
+{
+  "title": "Be terse",
+  "content": "You keep every reply under three sentences unless asked for more."
+}
+```
+
+**Response**: `201 Created` — `{ "subprompt": { ... } }`. `409` when the character is archived; `400` on a blank title or body.
+
+#### `GET /api/v1/characters/[id]/subprompts/[subpromptId]`
+
+Read one subprompt. `404` when absent; `400` on a malformed id.
+
+#### `PUT /api/v1/characters/[id]/subprompts/[subpromptId]`
+
+Update title and/or content. The id never changes. Every chat with the subprompt in play recompiles its cached identity stack.
+
+**Request Body** (both optional):
+
+```json
+{
+  "title": "Be very terse",
+  "content": "You keep every reply to one sentence."
+}
+```
+
+**Response**: `200 OK` — `{ "subprompt": { ... } }`.
+
+#### `DELETE /api/v1/characters/[id]/subprompts/[subpromptId]`
+
+Delete a subprompt. The id is struck from every seat that had it in play, and those seats recompile.
 
 **Response**: `200 OK`
 

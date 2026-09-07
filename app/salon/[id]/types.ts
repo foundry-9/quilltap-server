@@ -192,6 +192,8 @@ export interface Participant {
   } | null
   /** Selected named system prompt from the character's systemPrompts[] array */
   selectedSystemPromptId?: string | null
+  /** Ids of the character's subprompts in play for this chat */
+  selectedSubpromptIds?: string[]
   removedAt?: string | null
   // Multi-character chat fields
   hasHistoryAccess?: boolean

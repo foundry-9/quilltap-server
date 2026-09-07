@@ -562,6 +562,10 @@ Make values more explicit and connected to behaviors:
 When faced with [situation], you will [specific response]."
 ```
 
+## Subprompts: The Smaller Instrument
+
+Only one system prompt is in play at a time. For the smaller adjustments — "be terse," "no spoilers," "we are at a funeral" — a character may also carry **subprompts**: short instructions kept as Markdown files in the vault's `Subprompts/` folder, listed beneath the primary prompts on this tab, and switched on or off per chat from the New Chat dialog or the Participants drawer. They are delivered directly after the system prompt and follow the same rule: write to the character, in the second person. See [Character Subprompts](character-subprompts.md).
+
 ## Using Prompt Templates from AI Wizard
 
 If you used the AI Wizard to generate system prompt:
@@ -589,6 +593,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Character Creation](character-creation.md) — Creating characters with prompts
 - [Editing Characters](character-editing.md) — Modifying system prompts
+- [Character Subprompts](character-subprompts.md) — Smaller instructions switched on per chat
 - [Characters Overview](characters.md) — About the character system
 - [Chats](chats.md) — Testing characters in conversation
 - [Settings: Connection Profiles](connection-profiles.md) — LLM selection affects prompts

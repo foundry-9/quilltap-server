@@ -769,6 +769,15 @@
       "properties": {
         "participantId": { "$ref": "#/$defs/UUID" },
         "type": { "const": "CHARACTER" },
+        "selectedSystemPromptId": {
+          "type": ["string", "null"],
+          "description": "Id of the character's named system prompt this seat speaks from. Null/omitted means the character's default prompt."
+        },
+        "selectedSubpromptIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "description": "Ids (vault file names sans .md) of the character's Subprompts/*.md in play for this seat. Omitted or empty means none."
+        },
         "status": {
           "enum": ["active", "silent", "absent", "removed"],
           "description": "Participation status: active (normal), silent (inner thoughts only), absent (away), removed (left chat)"

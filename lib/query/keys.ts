@@ -28,6 +28,7 @@ export const queryKeys = {
     list: (filters?: Filters) => ['characters', 'list', filters ?? {}] as const,
     detail: (id: string) => ['characters', 'detail', id] as const,
     prompts: (id: string) => ['characters', id, 'prompts'] as const,
+    subprompts: (id: string) => ['characters', id, 'subprompts'] as const,
     photos: (id: string) => ['characters', id, 'photos'] as const,
   },
   chats: {

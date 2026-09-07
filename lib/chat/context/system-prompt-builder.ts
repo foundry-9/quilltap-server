@@ -10,6 +10,7 @@ import { type ParticipantStatus } from '@/lib/schemas/types'
 import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/timestamp-utils'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
+import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -116,6 +117,14 @@ export interface BuildIdentityStackOptions {
   userCharacter?: { name: string; description: string } | null
   selectedSystemPromptId?: string | null
   scenarioText?: string | null
+  /**
+   * The character's subprompts in play for this chat (`Subprompts/*.md` in
+   * the vault, chosen per participant via `selectedSubpromptIds`), already
+   * resolved by the async caller — see `lib/subprompts`. Rendered directly
+   * after the base system prompt. Omitted or empty → no block, so the output
+   * for a chat with no selection is byte-identical to before the feature.
+   */
+  subprompts?: readonly SubpromptForPrompt[] | null
 }
 
 /**
@@ -150,7 +159,7 @@ export const IDENTITY_STACK_BUILDER_VERSION = 2
  * caching across turns within a chat.
  */
 export function buildIdentityStack(options: BuildIdentityStackOptions): string {
-  const { character, userCharacter, selectedSystemPromptId, scenarioText } = options
+  const { character, userCharacter, selectedSystemPromptId, scenarioText, subprompts } = options
   const parts: string[] = []
 
   const templateContext: TemplateContext = {
@@ -184,6 +193,17 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
   }
   if (systemPromptContent) {
     parts.push(processTemplate(systemPromptContent, templateContext))
+  }
+
+  // Subprompts — the smaller instructions ticked on for this chat. They sit
+  // right under the base prompt because they are of the same kind: stage
+  // direction addressed to the character in the second person. Each keeps
+  // its title as a sub-heading so the model can tell where one ends.
+  if (subprompts && subprompts.length > 0) {
+    const rendered = subprompts
+      .map((s) => `### ${s.title}\n${processTemplate(s.content, templateContext)}`)
+      .join('\n\n')
+    parts.push(`\n## Additional Instructions\nThe following also apply to you in this conversation.\n${rendered}`)
   }
 
   // WHY the wrappers and second person throughout: the preamble above binds
@@ -318,6 +338,12 @@ export interface BuildSystemPromptOptions {
   /** Phase H: precompiled identity-stack from `chats.compiledIdentityStacks`. */
   precompiledIdentityStack?: string | null
   /**
+   * Subprompts in play for the responding participant, resolved by the async
+   * caller. Only consulted on the read-through fallback (no precompiled
+   * stack) — a precompiled stack already has them baked in.
+   */
+  subprompts?: readonly SubpromptForPrompt[] | null
+  /**
    * Instance-wide Taboo phrases (`instance_settings['taboo']`), read by the
    * async caller and passed down because this builder is deliberately
    * synchronous. Omitting the option omits the section — which is the intended
@@ -349,6 +375,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     precompiledIdentityStack,
     tabooPhrases,
     standingInstructions,
+    subprompts,
   } = options
 
   const parts: string[] = []
@@ -359,7 +386,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   const identityStack = precompiledIdentityStack
     && precompiledIdentityStack.trim().length > 0
     ? precompiledIdentityStack
-    : buildIdentityStack({ character, userCharacter, selectedSystemPromptId, scenarioText })
+    : buildIdentityStack({ character, userCharacter, selectedSystemPromptId, scenarioText, subprompts })
 
   // Template context for the per-turn additions (roleplay template, tool
   // instructions, tool reinforcement). The {{user}}/{{scenario}}/{{persona}}

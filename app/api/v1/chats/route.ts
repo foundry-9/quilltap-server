@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
+import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
 import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
 import { pickWeightedRandom } from '@/lib/chat/turn-manager/selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
@@ -93,6 +94,8 @@ const createParticipantSchema = z.object({
   imageProfileId: z.uuid().optional(), // Legacy: kept for backwards compatibility but ignored
   controlledBy: z.enum(['llm', 'user']).optional(),
   selectedSystemPromptId: z.uuid().optional(),
+  /** Ids of the character's `Subprompts/*.md` to put in play for this chat. */
+  selectedSubpromptIds: z.array(z.string().min(1).max(120)).max(100).optional(),
 });
 
 const createChatSchema = z.object({
@@ -201,7 +204,12 @@ type BuildParticipantsResult =
   | {
       participants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[];
       tags: Set<string>;
-      firstCharacter: { characterId: string; userCharacterId?: string; selectedSystemPromptId?: string };
+      firstCharacter: {
+        characterId: string;
+        userCharacterId?: string;
+        selectedSystemPromptId?: string;
+        selectedSubpromptIds?: string[];
+      };
       firstImageProfileId: string | null;
     }
   | { error: string };
@@ -254,6 +262,7 @@ async function buildCharacterParticipant(
       connectionProfileId: isUserControlled ? null : data.connectionProfileId || null,
       imageProfileId: data.imageProfileId || null,
       selectedSystemPromptId: data.selectedSystemPromptId || null,
+      selectedSubpromptIds: isUserControlled ? [] : (data.selectedSubpromptIds ?? []),
       displayOrder,
       isActive: true,
     },
@@ -270,7 +279,12 @@ async function buildAllParticipants(
 ): Promise<BuildParticipantsResult> {
   const builtParticipants: Omit<ChatParticipantBaseInput, 'id' | 'createdAt' | 'updatedAt'>[] = [];
   const allTagIds = new Set<string>();
-  const llmCandidates: Array<{ characterId: string; selectedSystemPromptId?: string; talkativeness: number }> = [];
+  const llmCandidates: Array<{
+    characterId: string;
+    selectedSystemPromptId?: string;
+    selectedSubpromptIds?: string[];
+    talkativeness: number;
+  }> = [];
   let firstUserCharacterId: string | null = null;
   let firstImageProfileId: string | null = null;
 
@@ -297,6 +311,7 @@ async function buildAllParticipants(
       llmCandidates.push({
         characterId: participantData.characterId,
         selectedSystemPromptId: participantData.selectedSystemPromptId || undefined,
+        selectedSubpromptIds: participantData.selectedSubpromptIds,
         talkativeness: result.talkativeness ?? 0.5,
       });
     }
@@ -320,6 +335,7 @@ async function buildAllParticipants(
   const firstLLMCharacter = {
     characterId: chosen.characterId,
     selectedSystemPromptId: chosen.selectedSystemPromptId,
+    selectedSubpromptIds: chosen.selectedSubpromptIds,
     userCharacterId: firstUserCharacterId || undefined,
   };
 
@@ -1143,11 +1159,18 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       logTag: '[Chats v1]',
     },
   );
+  // The greeting is composed with the opener's subprompts in play, the same
+  // as every later turn. Resolved here (fails soft to none).
+  const openerSubprompts = await resolveSelectedSubprompts(
+    buildResult.firstCharacter.characterId,
+    buildResult.firstCharacter.selectedSubpromptIds ?? [],
+  );
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
     resolvedScenario,
-    buildResult.firstCharacter.selectedSystemPromptId
+    buildResult.firstCharacter.selectedSystemPromptId,
+    openerSubprompts,
   );
 
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
