@@ -182,7 +182,11 @@ Two situations are worth recognizing:
 
 **The other instance is genuinely running.** Stop it, and the newcomer will start normally. This is nearly always the answer.
 
-**The other instance is long gone but left its lock behind.** A process killed outright — a container stopped abruptly, a laptop closed mid-thought — has no opportunity to tidy up after itself. Quilltap can usually tell: if the lock names a process on this same machine and that process is no longer running, the lock is claimed automatically and you will never know it happened. A lock left by a *Docker container*, however, names a process inside a machine that no longer exists, and no amount of squinting from outside will confirm its demise. For that case:
+**The other instance is long gone but left its lock behind.** A process killed outright — a container stopped abruptly, a laptop closed mid-thought — has no opportunity to tidy up after itself. Quilltap can usually tell: if the lock names a process still drawing breath on this machine, it is respected; if that process is demonstrably gone, the lock is claimed automatically and you will never know it happened.
+
+The awkward case is a lock whose holder cannot be inspected at all — a Docker container names a process inside a machine that no longer exists, and no amount of squinting from outside will confirm its demise. Here Quilltap consults the **heartbeat** rather than the name: the holder stamps the lock file every minute it lives, so a stamp from moments ago means a going concern and a stamp from an hour ago means an estate to be settled. A lock that has gone quiet for five minutes is claimed; one still ticking is left strictly alone.
+
+That deference to the heartbeat also covers a subtler embarrassment. A machine's own name is not the fixed thing one assumes: macOS, absent an explicitly configured hostname, derives one afresh from whatever the network last told it, so the very same Mac may announce itself `MacBook-Pro.local` in the morning and `Mac` after it rejoins the café's Wi-Fi. Quilltap no longer takes a changed name as evidence of a changed machine — a lock is identified by the process that wrote it, not by what the network was calling the house at the time. Should a startup nonetheless be refused while you are quite certain nothing else is running, the notice will say how long remains before the lock goes stale of its own accord; waiting is the tidier course, and the commands below are the impatient one:
 
 ```bash
 # See who holds the lock, and how long since they last drew breath

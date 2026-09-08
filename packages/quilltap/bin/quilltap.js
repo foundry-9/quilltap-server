@@ -484,6 +484,39 @@ function verifyPidIsNode(pid, expectedArgv0) {
   }
 }
 
+const HEARTBEAT_FRESH_MS = 5 * 60 * 1000;
+
+/**
+ * Decide whether a lock record belongs to a live process.
+ *
+ * A hostname that differs from ours does NOT mean a different machine: macOS
+ * derives gethostname() dynamically when `scutil --get HostName` is unset, so
+ * one Mac reports e.g. "MacBook-Pro.local" and "Mac" at different times. So
+ * check PID liveness regardless of the recorded name, and fall back to
+ * heartbeat freshness for any environment rather than only for containers.
+ * See bug 126.
+ */
+function assessLock(lock, hostname) {
+  const sameHost = lock.hostname === hostname;
+  const alive = isPidAlive(lock.pid);
+  const isNode = alive ? verifyPidIsNode(lock.pid, lock.processArgv0 || '') : false;
+  const heartbeatAgeMs = lock.lastHeartbeat
+    ? Date.now() - new Date(lock.lastHeartbeat).getTime()
+    : Infinity;
+  const heartbeatFresh = heartbeatAgeMs < HEARTBEAT_FRESH_MS;
+
+  return {
+    sameHost,
+    alive,
+    isNode,
+    heartbeatAgeMs,
+    heartbeatFresh,
+    // Held by something running: a confirmed local process, or any holder
+    // still refreshing its heartbeat.
+    live: (alive && isNode) || heartbeatFresh,
+  };
+}
+
 /**
  * Handle --lock-status, --lock-clean, --lock-override commands.
  */
@@ -518,32 +551,20 @@ function handleLockCommand(dataDir, opts) {
       return;
     }
 
-    const sameHost = lock.hostname === hostname;
-    const alive = sameHost && isPidAlive(lock.pid);
-    const isNode = alive ? verifyPidIsNode(lock.pid, lock.processArgv0 || '') : false;
+    const { sameHost, alive, isNode, heartbeatAgeMs, heartbeatFresh } =
+      assessLock(lock, hostname);
 
     // Status line
     let status;
     if (alive && isNode) {
       status = '\x1b[32mACTIVE\x1b[0m (process confirmed running)';
+    } else if (heartbeatFresh) {
+      const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
+      status = `\x1b[32mACTIVE\x1b[0m (${lock.environment || 'unknown'}, heartbeat ${ageStr} ago)`;
     } else if (alive && !isNode) {
       status = '\x1b[33mSUSPECT\x1b[0m (PID alive but does not look like Quilltap — possible PID reuse)';
     } else if (!sameHost) {
-      // Different hostname — could be a container on this machine
-      const isVMOrContainer = lock.environment === 'docker';
-      const heartbeatAgeMs = lock.lastHeartbeat
-        ? Date.now() - new Date(lock.lastHeartbeat).getTime()
-        : Infinity;
-      const heartbeatFreshMs = 5 * 60 * 1000;
-
-      if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
-        const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
-        status = `\x1b[32mACTIVE (${lock.environment}, heartbeat ${ageStr} ago)\x1b[0m`;
-      } else if (isVMOrContainer) {
-        status = `\x1b[33mSTALE (${lock.environment}, no recent heartbeat)\x1b[0m — will be auto-claimed on next startup`;
-      } else {
-        status = '\x1b[33mSTALE (different host)\x1b[0m — will be auto-claimed on next startup';
-      }
+      status = `\x1b[33mSTALE (${lock.environment || 'unknown'} on ${lock.hostname}, no recent heartbeat)\x1b[0m — will be auto-claimed on next startup`;
     } else {
       status = '\x1b[31mSTALE (process dead)\x1b[0m — will be auto-claimed on next startup';
     }
@@ -551,7 +572,7 @@ function handleLockCommand(dataDir, opts) {
     console.log(`Instance Lock Status: ${status}`);
     console.log();
     console.log(`  PID:          ${lock.pid}`);
-    console.log(`  Hostname:     ${lock.hostname}${sameHost ? ' (this host)' : ' (different host)'}`);
+    console.log(`  Hostname:     ${lock.hostname}${sameHost ? ' (this host)' : ` (recorded name differs from ours: ${hostname})`}`);
     console.log(`  Environment:  ${lock.environment || 'unknown'}`);
     console.log(`  Process:      ${lock.processTitle || 'unknown'}`);
     console.log(`  Started:      ${lock.startedAt || 'unknown'}`);
@@ -599,37 +620,23 @@ function handleLockCommand(dataDir, opts) {
       return;
     }
 
-    const sameHost = lock.hostname === hostname;
-    const alive = sameHost && isPidAlive(lock.pid);
+    const { sameHost, alive, isNode, heartbeatAgeMs, heartbeatFresh } =
+      assessLock(lock, hostname);
 
-    if (alive) {
-      const isNode = verifyPidIsNode(lock.pid, lock.processArgv0 || '');
-      if (isNode) {
-        console.log(`Lock is held by a live Quilltap process (PID ${lock.pid}). Cannot clean.`);
-        console.log('Stop the running instance first, or use --lock-override to force.');
-        process.exit(1);
-      } else {
-        console.log(`Lock references PID ${lock.pid} which is alive but does NOT look like a Quilltap process.`);
-        console.log('This is likely a stale lock with a reused PID. Removing.');
-      }
+    if (alive && isNode) {
+      console.log(`Lock is held by a live Quilltap process (PID ${lock.pid}). Cannot clean.`);
+      console.log('Stop the running instance first, or use --lock-override to force.');
+      process.exit(1);
+    } else if (heartbeatFresh) {
+      const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
+      console.log(`Lock is still being refreshed (heartbeat ${ageStr} ago) — its holder is alive. Cannot clean.`);
+      console.log('Stop the running instance first, or use --lock-override to force.');
+      process.exit(1);
+    } else if (alive && !isNode) {
+      console.log(`Lock references PID ${lock.pid} which is alive but does NOT look like a Quilltap process.`);
+      console.log('This is likely a stale lock with a reused PID. Removing.');
     } else if (!sameHost) {
-      // Different hostname — check if it's a container with a recent heartbeat
-      const isVMOrContainer = lock.environment === 'docker';
-      const heartbeatAgeMs = lock.lastHeartbeat
-        ? Date.now() - new Date(lock.lastHeartbeat).getTime()
-        : Infinity;
-      const heartbeatFreshMs = 5 * 60 * 1000;
-
-      if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
-        const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
-        console.log(`Lock is held by a live ${lock.environment} instance (heartbeat ${ageStr} ago). Cannot clean.`);
-        console.log('Stop the other instance first, or use --lock-override to force.');
-        process.exit(1);
-      } else if (isVMOrContainer) {
-        console.log(`Lock was held by ${lock.environment} (${lock.hostname}) with no recent heartbeat. Removing stale lock.`);
-      } else {
-        console.log(`Lock was held by a different host (${lock.hostname}). Removing stale lock.`);
-      }
+      console.log(`Lock was held by ${lock.environment || 'unknown'} on ${lock.hostname} with no recent heartbeat. Removing stale lock.`);
     } else {
       console.log(`Lock was held by PID ${lock.pid} which is no longer running. Removing stale lock.`);
     }

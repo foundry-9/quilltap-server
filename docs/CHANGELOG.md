@@ -4,6 +4,33 @@
 
 ### 4.10-dev
 
+#### Fixed: a hostname change no longer makes the app shut its own database down (bug 126)
+
+The instance lock's heartbeat checked every 60 seconds whether it still owned the lock by comparing
+the recorded hostname against a freshly read `os.hostname()`. On macOS that value is not stable: when
+`scutil --get HostName` is unset, which is the default, the system derives the name dynamically and
+reports something like `MacBook-Pro.local` at one moment and `Mac` at the next, switching on Wi-Fi
+reconnects, sleep/wake, VPN changes and DHCP lease renewals. The heartbeat read the change as another
+process taking the database, closed its connections and exited. Under the Electron shell the server
+is not restarted, so the window stayed open over a dead backend: the home dashboard rendered nothing
+while an already-open Salon tab kept drawing from its cache, which made it look like a UI problem.
+Every recorded occurrence logged an identical PID with only the hostname differing.
+
+- Lock ownership is now a snapshot taken when the lock is written — PID plus the acquisition
+  timestamp — and the heartbeat compares against that. Both fields are overwritten by any process
+  that takes the lock, so a real takeover is still detected immediately. Hostname is a label only.
+- Acquisition no longer claims a lock just because the recorded hostname differs. A differing name
+  cannot distinguish another machine from this one after a rename, so the decision is made on
+  heartbeat freshness for every environment rather than only for Docker. This closes a case where
+  two processes on one machine could both open the same database.
+- A process whose machine was renamed now releases its own lock on exit instead of leaving a stale
+  file behind, and a lock taken by manual override starts a heartbeat.
+- The lock-loss shutdown now runs the same ordered teardown as SIGTERM and SIGINT, registered by
+  the SQLite client. It previously used a dynamic `require` that did not resolve in the bundled
+  standalone server, so it threw instead of closing anything and the WAL was left unmerged.
+- `quilltap db --lock-status` no longer reports a running app as `STALE (different host)`, and
+  `--lock-clean` refuses to delete a lock whose heartbeat is still being refreshed.
+
 #### Added: character progressions
 
 Characters can now carry progressions: named spans of time with a start, an end, and rules for how

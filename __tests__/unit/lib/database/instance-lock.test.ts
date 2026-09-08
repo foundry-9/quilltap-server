@@ -111,6 +111,8 @@ describe('Instance Lock Manager', () => {
     // Reset globals
     globalThis.__quilltapInstanceLockPath = undefined;
     globalThis.__quilltapInstanceHeartbeatInterval = undefined;
+    globalThis.__quilltapInstanceLockOwner = undefined;
+    globalThis.__quilltapInstanceLockShutdownHandler = undefined;
 
     // Patch setInterval to return an object with unref() (fake timers return a primitive number)
     const origSetInterval = globalThis.setInterval;
@@ -359,19 +361,110 @@ describe('Instance Lock Manager', () => {
       expect(mockFs.writeFileSync).toHaveBeenCalled();
     });
 
-    it('should claim lock for non-VM different hostname', () => {
-      const content = createMockLockContent({
-        pid: 99999,
-        hostname: 'other-host',
-        environment: 'local',
-        lastHeartbeat: new Date().toISOString(),
-      });
-      (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
+    // Bug 126: a differing hostname is not proof of a differing machine, so a
+    // fresh heartbeat must win over the name regardless of environment. The
+    // old code claimed any non-docker foreign-hostname lock outright, which
+    // would hand a second process the database of a live sibling whose OS
+    // hostname had merely changed underneath it.
+    it('should refuse a different hostname with a fresh heartbeat, whatever the environment', () => {
+      for (const environment of ['local', 'electron', 'docker']) {
+        const content = createMockLockContent({
+          pid: 99999,
+          hostname: 'other-host',
+          environment,
+          lastHeartbeat: new Date().toISOString(),
+        });
+        (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
 
+        expect(() => instanceLock.acquireInstanceLock(LOCK_PATH)).toThrow(
+          instanceLock.InstanceLockError
+        );
+      }
+    });
+
+    it('should claim a different hostname with a stale heartbeat, whatever the environment', () => {
+      for (const environment of ['local', 'electron', 'docker']) {
+        (mockFs.writeFileSync as jest.Mock).mockClear();
+        const content = createMockLockContent({
+          pid: 99999,
+          hostname: 'other-host',
+          environment,
+          lastHeartbeat: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+        });
+        (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
+
+        instanceLock.acquireInstanceLock(LOCK_PATH);
+
+        expect(mockFs.writeFileSync).toHaveBeenCalled();
+      }
+    });
+  });
+
+  // ==========================================================================
+  // Heartbeat ownership (bug 126)
+  // ==========================================================================
+
+  describe('heartbeat ownership', () => {
+    /** Acquire cleanly, then run exactly one heartbeat tick. */
+    function acquireThenTick(lockOnDisk: () => LockFileContent): void {
+      (mockFs.readFileSync as jest.Mock).mockImplementation(() => {
+        const enoent = new Error('ENOENT') as NodeJS.ErrnoException;
+        enoent.code = 'ENOENT';
+        throw enoent;
+      });
       instanceLock.acquireInstanceLock(LOCK_PATH);
 
-      // Non-VM different hostname is always treated as stale
-      expect(mockFs.writeFileSync).toHaveBeenCalled();
+      (mockFs.readFileSync as jest.Mock).mockImplementation(() =>
+        JSON.stringify(lockOnDisk())
+      );
+      jest.advanceTimersByTime(60_000);
+    }
+
+    /** The lock record this process just wrote, as it sits on disk. */
+    function ourLockOnDisk(): LockFileContent {
+      const written = (mockFs.writeSync as jest.Mock).mock.calls.at(-1)?.[1] as string;
+      return JSON.parse(written) as LockFileContent;
+    }
+
+    it('should not shut down when only the OS hostname has changed', () => {
+      const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => {
+        throw new Error('process.exit should not be called');
+      }) as never);
+
+      // Same PID, same startedAt — only the name the OS reports has moved.
+      acquireThenTick(() => ({ ...ourLockOnDisk(), hostname: 'renamed-host' }));
+      jest.advanceTimersByTime(1000); // past the 500ms shutdown delay
+
+      expect(exitSpy).not.toHaveBeenCalled();
+      // ...and it kept heartbeating rather than standing down.
+      expect(mockFs.renameSync).toHaveBeenCalledWith(LOCK_PATH + '.tmp', LOCK_PATH);
+      exitSpy.mockRestore();
+    });
+
+    it('should shut down when another process has genuinely taken the lock', () => {
+      const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+
+      acquireThenTick(() => ({
+        ...ourLockOnDisk(),
+        pid: 99999,
+        startedAt: new Date(Date.now() + 1000).toISOString(),
+      }));
+      jest.advanceTimersByTime(1000); // past the 500ms shutdown delay
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      exitSpy.mockRestore();
+    });
+
+    it('should close the database through the registered shutdown handler', () => {
+      const exitSpy = jest.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const shutdown = jest.fn();
+      instanceLock.registerInstanceLockShutdownHandler(shutdown);
+
+      acquireThenTick(() => ({ ...ourLockOnDisk(), pid: 99999 }));
+      jest.advanceTimersByTime(1000);
+
+      expect(shutdown).toHaveBeenCalled();
+      exitSpy.mockRestore();
     });
   });
 
@@ -420,10 +513,31 @@ describe('Instance Lock Manager', () => {
       expect(() => instanceLock.releaseInstanceLock(LOCK_PATH)).not.toThrow();
     });
 
-    it('should skip release when owned by different hostname', () => {
+    it('should still release when only the hostname has changed (bug 126)', () => {
+      // Our own lock, written before the OS renamed the machine. Refusing to
+      // release it here is what left stale locks behind on a clean quit.
+      const enoent = new Error('ENOENT') as NodeJS.ErrnoException;
+      enoent.code = 'ENOENT';
+      (mockFs.readFileSync as jest.Mock).mockImplementation(() => { throw enoent; });
+      (mockFs.openSync as jest.Mock).mockReturnValue(42);
+      instanceLock.acquireInstanceLock(LOCK_PATH);
+
+      const written = JSON.parse(
+        (mockFs.writeSync as jest.Mock).mock.calls.at(-1)?.[1] as string
+      );
+      (mockFs.readFileSync as jest.Mock).mockReturnValue(
+        JSON.stringify({ ...written, hostname: 'renamed-host' })
+      );
+
+      instanceLock.releaseInstanceLock(LOCK_PATH);
+
+      expect(mockFs.unlinkSync).toHaveBeenCalledWith(LOCK_PATH);
+    });
+
+    it('should skip release when the lock record is another process\'s', () => {
       const content = createMockLockContent({
-        pid: process.pid,
-        hostname: 'other-host',
+        pid: 99999,
+        startedAt: '2020-01-01T00:00:00.000Z',
       });
       (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
 
@@ -577,11 +691,12 @@ describe('Instance Lock Manager', () => {
       (mockFs.openSync as jest.Mock).mockReturnValue(42);
 
       instanceLock.acquireInstanceLock(LOCK_PATH);
-      jest.clearAllMocks();
 
-      // Now set up readFileSync to return our content for release
-      const content = createMockLockContent({ pid: process.pid, hostname: 'test-host' });
-      (mockFs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(content));
+      // Release must see the record we actually wrote — ownership is decided
+      // by PID plus acquisition timestamp, not by a matching hostname.
+      const written = (mockFs.writeSync as jest.Mock).mock.calls.at(-1)?.[1] as string;
+      jest.clearAllMocks();
+      (mockFs.readFileSync as jest.Mock).mockReturnValue(written);
 
       instanceLock.releaseActiveInstanceLock();
 

@@ -12,7 +12,7 @@ import { applySqlcipherKey } from './sqlcipher-key';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { closeMountIndexSQLiteClient } from './mount-index-client';
-import { releaseActiveInstanceLock } from './instance-lock';
+import { releaseActiveInstanceLock, registerInstanceLockShutdownHandler } from './instance-lock';
 
 // ============================================================================
 // Singleton State
@@ -282,6 +282,13 @@ export function setupSQLiteShutdownHandlers(): void {
 
   process.on('SIGTERM', handleShutdown);
   process.on('SIGINT', handleShutdown);
+
+  // The lock heartbeat exits the process if it loses the lock; give it the
+  // same ordered teardown so the WAL is checkpointed on the way out. It calls
+  // inward rather than requiring this module back, because the dynamic
+  // `require('./client')` it used before did not survive bundling into the
+  // standalone server and threw instead of closing anything (bug 126).
+  registerInstanceLockShutdownHandler(handleShutdown);
 
   process.on('uncaughtException', (error) => {
     if (isRecoverableContentParseError(error)) {

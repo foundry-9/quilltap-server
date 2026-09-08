@@ -11,7 +11,13 @@
  * Design decisions:
  * - Uses PID-in-file rather than OS-level flock() because network mounts and
  *   bind mounts do not reliably propagate POSIX file locks.
- * - Hostname field disambiguates PIDs across container boundaries.
+ * - Hostname is a human-readable label only. It is NOT proof of machine
+ *   identity: macOS derives gethostname() dynamically when `scutil --get
+ *   HostName` is unset, so one Mac reports "MacBook-Pro.local" and "Mac" at
+ *   different times, flipping on Wi-Fi reconnect, sleep/wake, VPN and DHCP
+ *   renewal. Ownership is decided by the snapshot taken when we wrote the
+ *   lock (PID + startedAt); liveness of a foreign lock is decided by
+ *   heartbeat freshness. See bug 126.
  * - All operations are synchronous because better-sqlite3's Database
  *   constructor is synchronous.
  * - Module state uses globalThis for Next.js HMR safety.
@@ -82,6 +88,8 @@ export class InstanceLockError extends Error {
 declare global {
   var __quilltapInstanceLockPath: string | undefined;
   var __quilltapInstanceHeartbeatInterval: ReturnType<typeof setInterval> | undefined;
+  var __quilltapInstanceLockOwner: LockOwnership | undefined;
+  var __quilltapInstanceLockShutdownHandler: (() => void) | undefined;
 }
 
 function getActiveLockPath(): string | null {
@@ -92,11 +100,103 @@ function setActiveLockPath(p: string | null): void {
   globalThis.__quilltapInstanceLockPath = p ?? undefined;
 }
 
+/**
+ * Identity of the lock record this process wrote, captured at write time.
+ *
+ * The heartbeat compares the lock file against this snapshot rather than
+ * against freshly-read process/OS values, so an OS-level hostname change
+ * cannot make a process mistake its own lock for someone else's.
+ */
+export interface LockOwnership {
+  pid: number;
+  hostname: string;
+  startedAt: string;
+}
+
+function getLockOwner(): LockOwnership | null {
+  return globalThis.__quilltapInstanceLockOwner ?? null;
+}
+
+/** Record that `content` is the lock record we just wrote. */
+function rememberLockOwner(content: LockFileContent): void {
+  globalThis.__quilltapInstanceLockOwner = {
+    pid: content.pid,
+    hostname: content.hostname,
+    startedAt: content.startedAt,
+  };
+}
+
+function forgetLockOwner(): void {
+  globalThis.__quilltapInstanceLockOwner = undefined;
+}
+
+/**
+ * Is the on-disk lock still the record this process wrote?
+ *
+ * Compares PID and the acquisition timestamp, both of which any process
+ * taking the lock overwrites with its own values. Deliberately does NOT
+ * compare hostname: `os.hostname()` is not stable over a process's lifetime
+ * (see the module header), and a hostname change is not evidence of takeover.
+ */
+function isStillOurLock(content: LockFileContent): boolean {
+  const owner = getLockOwner();
+  if (!owner) {
+    // No snapshot (lock adopted across an HMR boundary) — PID is all we have.
+    return content.pid === process.pid;
+  }
+  return content.pid === owner.pid && content.startedAt === owner.startedAt;
+}
+
+/**
+ * Register the callback that closes database connections when the lock is
+ * lost. `client.ts` owns the correct shutdown order and already imports this
+ * module, so it registers inward rather than being required outward — a
+ * dynamic `require('./client')` here does not survive bundling into the
+ * standalone server, which left the database un-checkpointed on exit.
+ */
+export function registerInstanceLockShutdownHandler(handler: () => void): void {
+  globalThis.__quilltapInstanceLockShutdownHandler = handler;
+}
+
 // ============================================================================
 // Lock Heartbeat
 // ============================================================================
 
 const HEARTBEAT_INTERVAL_MS = 60_000; // 60 seconds
+
+/**
+ * How long a lock's heartbeat may go unrefreshed before the holder is
+ * presumed dead. Generous relative to HEARTBEAT_INTERVAL_MS so a process
+ * merely paused (laptop asleep, long synchronous migration) is not evicted.
+ */
+const HEARTBEAT_FRESH_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Close databases and exit after losing the lock.
+ *
+ * Delegates to the handler `client.ts` registered with us; without one we
+ * still exit rather than keep writing to a database another process owns.
+ */
+function shutdownAfterLockLoss(): void {
+  // Short delay so the log entry above reaches disk before we exit.
+  setTimeout(() => {
+    const handler = globalThis.__quilltapInstanceLockShutdownHandler;
+    if (handler) {
+      try {
+        handler();
+      } catch (closeErr) {
+        moduleLogger.error('Error closing database during lock-loss shutdown', {
+          error: closeErr instanceof Error ? closeErr.message : String(closeErr),
+        });
+      }
+    } else {
+      moduleLogger.error(
+        'No shutdown handler registered — exiting without closing the database cleanly',
+      );
+    }
+    process.exit(1);
+  }, 500);
+}
 
 /**
  * Start a periodic heartbeat that updates the lock file's lastHeartbeat timestamp.
@@ -119,57 +219,36 @@ export function startLockHeartbeat(lockPath: string): void {
           lockPath,
         });
         stopLockHeartbeat();
-
-        setTimeout(() => {
-          try {
-            const { closeSQLiteClient } = require('./client');
-            const { closeLLMLogsSQLiteClient } = require('./llm-logs-client');
-            closeLLMLogsSQLiteClient();
-            closeSQLiteClient();
-          } catch (closeErr) {
-            moduleLogger.error('Error closing database during lock-loss shutdown', {
-              error: closeErr instanceof Error ? closeErr.message : String(closeErr),
-            });
-          }
-          process.exit(1);
-        }, 500);
+        shutdownAfterLockLoss();
         return;
       }
 
-      // Verify the lock is still ours
-      if (content.pid !== process.pid || content.hostname !== os.hostname()) {
+      // Verify the lock is still the record we wrote. Hostname is logged for
+      // diagnostics but is NOT part of the test — see the module header.
+      if (!isStillOurLock(content)) {
         moduleLogger.error('Instance lock lost — another process has taken over the database. Shutting down.', {
           lockPath,
           lockPid: content.pid,
           lockHostname: content.hostname,
+          lockStartedAt: content.startedAt,
           lockEnvironment: content.environment,
           ourPid: process.pid,
           ourHostname: os.hostname(),
+          ourStartedAt: getLockOwner()?.startedAt,
         });
         stopLockHeartbeat();
 
         // Close the database and exit to prevent corruption.
-        // Use a short delay to let the log entry flush.
-        setTimeout(() => {
-          try {
-            // Dynamic require to avoid circular dependency
-            const { closeSQLiteClient } = require('./client');
-            const { closeLLMLogsSQLiteClient } = require('./llm-logs-client');
-            closeLLMLogsSQLiteClient();
-            closeSQLiteClient();
-          } catch (closeErr) {
-            moduleLogger.error('Error closing database during lock-loss shutdown', {
-              error: closeErr instanceof Error ? closeErr.message : String(closeErr),
-            });
-          }
-          process.exit(1);
-        }, 500);
+        shutdownAfterLockLoss();
         return;
       }
 
-      // Update the heartbeat timestamp
+      // Update the heartbeat timestamp. Also refresh the recorded hostname so
+      // the file keeps a useful label even when the OS name has since changed.
       content.lastHeartbeat = new Date().toISOString();
+      content.hostname = os.hostname();
       writeLockFile(lockPath, content);
+      rememberLockOwner(content);
 
       moduleLogger.debug('Lock heartbeat updated', { lockPath, lastHeartbeat: content.lastHeartbeat });
     } catch (error) {
@@ -458,6 +537,7 @@ function claimStaleLock(lockPath: string, existing: LockFileContent, reason: str
   content = addHistoryEntry(content, 'stale-claimed', `Claimed by PID ${process.pid}`);
 
   writeLockFile(lockPath, content);
+  rememberLockOwner(content);
   setActiveLockPath(lockPath);
 
   moduleLogger.info('Instance lock acquired after stale claim', {
@@ -496,6 +576,7 @@ export function acquireInstanceLock(lockPath: string): void {
         fs.closeSync(fd);
       }
 
+      rememberLockOwner(withHistory);
       setActiveLockPath(lockPath);
       moduleLogger.info('Instance lock acquired', {
         lockPath,
@@ -535,6 +616,7 @@ export function acquireInstanceLock(lockPath: string): void {
     updated.processTitle = process.title;
     updated.processArgv0 = process.argv[0] || '';
     writeLockFile(lockPath, updated);
+    rememberLockOwner(updated);
     setActiveLockPath(lockPath);
 
     moduleLogger.debug('Instance lock re-acquired (same PID)', {
@@ -551,36 +633,44 @@ export function acquireInstanceLock(lockPath: string): void {
     return;
   }
 
-  // Different hostname — could be a container on the same physical machine
-  // sharing the data directory via a bind mount. We can't check PID liveness
-  // across PID namespaces, so use the heartbeat:
-  // - Recent heartbeat (< 5 min) → treat as live, refuse access
-  // - Stale or missing heartbeat → likely dead, claim it
+  // Different hostname. This does NOT establish that the lock belongs to a
+  // different machine: it is equally likely to be this same machine under a
+  // changed OS hostname (see the module header), in which case a live sibling
+  // process holds the lock and claiming it would corrupt the database — the
+  // exact outcome this module exists to prevent.
+  //
+  // Since we cannot tell the two cases apart by name, and cannot check PID
+  // liveness across a PID namespace, decide on the heartbeat alone:
+  // - Recent heartbeat (< HEARTBEAT_FRESH_MS) → someone live holds it, refuse
+  // - Stale or missing heartbeat → holder is gone, claim it
   if (!sameHost) {
-    const isContainer = existing.environment === 'docker';
     const heartbeatAgeMs = existing.lastHeartbeat
       ? Date.now() - new Date(existing.lastHeartbeat).getTime()
       : Infinity;
-    const heartbeatFreshMs = 5 * 60 * 1000; // 5 minutes
 
-    if (isContainer && heartbeatAgeMs < heartbeatFreshMs) {
-      // Lock holder is a container with a recent heartbeat — treat as live
+    if (heartbeatAgeMs < HEARTBEAT_FRESH_MS) {
+      const envLabel = existing.environment === 'docker' ? 'Docker container'
+        : existing.environment === 'electron' ? 'Electron app'
+        : 'local server';
+
       throw new InstanceLockError(
-        `Another Quilltap instance (Docker container, PID ${existing.pid} on ${existing.hostname}) ` +
+        `Another Quilltap instance (${envLabel}, PID ${existing.pid} on ${existing.hostname}) ` +
         `is already using this database (last heartbeat ${Math.round(heartbeatAgeMs / 1000)}s ago). ` +
-        `Stop the other instance or use the lock override to force access.`,
+        `If no other instance is running, this machine's hostname may have changed ` +
+        `since the lock was taken (now: ${os.hostname()}); wait ` +
+        `${Math.ceil((HEARTBEAT_FRESH_MS - heartbeatAgeMs) / 1000)}s for the lock to go stale, ` +
+        `or use the lock override to force access.`,
         existing,
         lockPath
       );
     }
 
-    // No recent heartbeat or not a container — treat as stale
-    const staleReason = isContainer
-      ? `${existing.environment} lock from ${existing.hostname} has no recent heartbeat ` +
-        `(last: ${existing.lastHeartbeat || 'never'}, age: ${Math.round(heartbeatAgeMs / 1000)}s)`
-      : `Different hostname (lock: ${existing.hostname}, current: ${os.hostname()})`;
-
-    claimStaleLock(lockPath, existing, staleReason);
+    claimStaleLock(
+      lockPath,
+      existing,
+      `Lock from ${existing.hostname} (${existing.environment}) has no recent heartbeat ` +
+      `(last: ${existing.lastHeartbeat || 'never'}, age: ${Math.round(heartbeatAgeMs / 1000)}s)`
+    );
     return;
   }
 
@@ -614,13 +704,15 @@ export function releaseInstanceLock(lockPath: string): void {
       return;
     }
 
-    if (existing.pid !== process.pid || existing.hostname !== os.hostname()) {
+    if (!isStillOurLock(existing)) {
       moduleLogger.warn('Lock file not owned by this process, skipping release', {
         lockPath,
         lockPid: existing.pid,
         lockHostname: existing.hostname,
+        lockStartedAt: existing.startedAt,
         ourPid: process.pid,
         ourHostname: os.hostname(),
+        ourStartedAt: getLockOwner()?.startedAt,
       });
       return;
     }
@@ -637,6 +729,8 @@ export function releaseInstanceLock(lockPath: string): void {
         error: unlinkError instanceof Error ? unlinkError.message : String(unlinkError),
       });
     }
+
+    forgetLockOwner();
 
     moduleLogger.info('Instance lock released', {
       lockPath,
@@ -733,6 +827,7 @@ export function overrideInstanceLock(lockPath: string): void {
   content.processArgv0 = process.argv[0] || '';
 
   writeLockFile(lockPath, content);
+  rememberLockOwner(content);
   setActiveLockPath(lockPath);
 
   moduleLogger.info('Instance lock overridden', {
@@ -740,6 +835,10 @@ export function overrideInstanceLock(lockPath: string): void {
     pid: process.pid,
     previousPid: existing.pid,
   });
+
+  // An overridden lock still needs a heartbeat: freshness is what tells other
+  // machines the holder is alive, so a silent lock reads as abandoned.
+  startLockHeartbeat(lockPath);
 }
 
 // ============================================================================
