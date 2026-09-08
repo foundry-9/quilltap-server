@@ -7,6 +7,7 @@ import { PromptModal } from './PromptModal'
 import { ImportModal } from './ImportModal'
 import { PreviewModal } from './PreviewModal'
 import { SubpromptsSection } from './SubpromptsSection'
+import { ProgressionsSection } from '@/components/characters/progressions/ProgressionsSection'
 
 /**
  * Main SystemPromptsEditor component for managing character system prompts
@@ -86,6 +87,12 @@ export function SystemPromptsEditor({
       {/* Subprompts — the smaller, per-chat instructions kept in the vault's
           Subprompts/ folder. Listed under the primary prompts. */}
       <SubpromptsSection characterId={characterId} characterName={characterName} />
+
+      {/* Progressions — the timed conditions this character carries, kept
+          under one reserved key in the vault's metadata.json. A sibling of the
+          subprompts above: both are things attached to the character rather
+          than prose fields of them, and both are read at the top of a turn. */}
+      <ProgressionsSection characterId={characterId} characterName={characterName} />
 
       {/* Create/Edit Modal */}
       <PromptModal
