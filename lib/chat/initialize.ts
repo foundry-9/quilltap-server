@@ -6,6 +6,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { processCharacterTemplates, processTemplate } from '@/lib/templates/processor'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
 import { logger } from '@/lib/logger'
+import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
 
 interface CharacterSystemPrompt {
   id: string
@@ -212,6 +213,24 @@ function buildSystemPrompt({
       .map((s) => `### ${s.title}\n${processTemplate(s.content, templateContext)}`)
       .join('\n\n')
     prompt += `\n\n## Additional Instructions\nThe following also apply to you in this conversation.\n${rendered}`
+  }
+
+  // Character progressions — the timed conditions this character is carrying.
+  // The opener should know she is pregnant, so the report is FORCED here: a
+  // greeting has no turn history to derive a cadence from, and `force` is what
+  // "report everything, once" means to the engine.
+  //
+  // This is the greeting's own flat builder, NOT the cached identity stack, so
+  // a per-turn clock landing here costs no cache: the opener is composed once
+  // and never rebuilt. Anywhere else, progressions ride the uncached trailing
+  // tail — see `lib/progressions/prompt-section.ts`.
+  const progressionsSection = buildProgressionsSection({
+    character,
+    nowMs: Date.now(),
+    force: true,
+  })
+  if (progressionsSection) {
+    prompt += `\n\n${progressionsSection}`
   }
 
   // Add character identity

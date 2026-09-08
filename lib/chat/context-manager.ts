@@ -152,7 +152,7 @@ import {
   resolveTieredMountPool,
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool'
-import type { MessageEvent } from '@/lib/schemas/types'
+import type { ChatEvent, MessageEvent } from '@/lib/schemas/types'
 import { getOrComputeFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import {
   filterMessagesByHistoryAccess,
@@ -203,6 +203,7 @@ import {
   resolveCoreWhisperConfig,
 } from '@/lib/services/aurora-notifications/core-whisper'
 import { shouldFireCoreWhisper } from '@/lib/chat/context/core-whisper-trigger'
+import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
 import {
   postHostTimestampAnnouncement,
   buildTimestampContent,
@@ -2150,6 +2151,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // the person who grew from them. Identity grounds the speaker; memory then
   // situates them in the moment. Do not reorder these two blocks without
   // re-reading docs/feature-requests/aurora-core-whisper.md first.
+  //
+  // Two per-turn cadences are derived from this chat's history rather than
+  // stored: Aurora's Core whisper (below) and character progressions (further
+  // down). Both want the same event list, so it is read at most once per turn
+  // and memoised here — a second `getMessages` for the same rows would be a
+  // read nobody asked for.
+  let chatEventsForCadence: ChatEvent[] | null = null
+  const loadChatEventsForCadence = async (): Promise<ChatEvent[]> => {
+    chatEventsForCadence ??= await getRepositories().chats.getMessages(chat.id)
+    return chatEventsForCadence
+  }
+
   let coreWhisperLLMContext = ''
   if (respondingParticipant && !isContinueMode) {
     try {
@@ -2160,7 +2173,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         userChatSettings?.coreWhisper ?? null,
       )
       if (coreCfg.enabled) {
-        const eventsForTrigger = await getRepositories().chats.getMessages(chat.id)
+        const eventsForTrigger = await loadChatEventsForCadence()
         const decision = shouldFireCoreWhisper({
           events: eventsForTrigger,
           respondingParticipantId: respondingParticipant.id,
@@ -2572,6 +2585,26 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // never breaks the turn; the chat-load GET runs the same sweep for idle rooms.
   await surfaceOperatorMailForChat(chat.id, chat.participants)
 
+  // Character progressions: the timed conditions this character is carrying —
+  // a pregnancy, a recharging cannon, a fermentation. Derived from the wall
+  // clock and reported on each progression's own cadence, which is walked out
+  // of this chat's history rather than stored (`lib/progressions/`). Pure
+  // reads on this path: no writes, so an autonomous turn in the forked job
+  // child runs it exactly as the parent does.
+  //
+  // Continue mode is skipped deliberately — the model is finishing its own
+  // sentence, and the Core whisper above skips there for the same reason.
+  let progressionsLLMContext = ''
+  if (!isContinueMode) {
+    progressionsLLMContext = buildProgressionsSection({
+      character,
+      events: respondingParticipant ? await loadChatEventsForCadence() : undefined,
+      respondingParticipantId: respondingParticipant?.id ?? null,
+      nowMs: Date.now(),
+      timezone: options.timezone,
+    })
+  }
+
   // "Nothing to add" turn-skipping: build the ephemeral Turn note when the
   // orchestrator has decided this character may pass. Injected as a trailing
   // context section on the new user message when there is one, or as its own
@@ -2593,6 +2626,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     if (coreWhisperLLMContext) trailingContextSections.push(coreWhisperLLMContext)
     if (llmRecallText) trailingContextSections.push(llmRecallText)
     if (suparnaMailLLMContext) trailingContextSections.push(suparnaMailLLMContext)
+    if (progressionsLLMContext) trailingContextSections.push(progressionsLLMContext)
     if (turnSkipInstruction) trailingContextSections.push(turnSkipInstruction)
     const composedUserContent = trailingContextSections.length > 0
       ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
@@ -2604,14 +2638,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       name: newUserMsgName,
       metadata: { isUserTurn: true },
     })
-  } else if (turnSkipInstruction) {
-    // Chained / continue turns carry no new user message, so the note can't
-    // ride as a trailing section above. Push it as its own trailing user
-    // message (same off-scene/timestamp pattern) so the model sees it this
-    // turn. Anthropic 4.6+ rejects role=assistant tails, so 'user' is required.
+  } else if (turnSkipInstruction || progressionsLLMContext) {
+    // Chained / continue turns carry no new user message, so neither the note
+    // nor the progressions report can ride as a trailing section above. Push
+    // them as their own trailing user message (same off-scene/timestamp
+    // pattern) so the model sees them this turn, in the same order they would
+    // have taken there. Anthropic 4.6+ rejects role=assistant tails, so 'user'
+    // is required.
+    const trailingOnly = [progressionsLLMContext, turnSkipInstruction].filter(Boolean)
     contextMessages.push({
       role: 'user',
-      content: turnSkipInstruction,
+      content: trailingOnly.join('\n\n---\n\n'),
     })
   }
 
