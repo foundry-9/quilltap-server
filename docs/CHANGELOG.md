@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Docs: plan for character progressions
+
+Added `docs/developer/features/character-progressions.md`: a plan for timed, in-progress
+character properties (a pregnancy with a due date, a weapon recharging over ten minutes). Each one
+is stored under a reserved `progressions` key in the vault's `metadata.json` with a published JSON
+schema, and on every prompted turn the character is told elapsed time, remaining time and percent
+complete, deterministically, in the unit and at the cadence the entry declares. The report lives in
+the uncached per-turn tail of the prompt, never in the cached system block. Pascal custom tools gain
+a `progress.<id>.<field>` read subject and gate, a `{{now}}` reference, and `progress.*` effect
+targets so a roll can re-arm a countdown. Includes an Aurora editor card and a phased task list.
+No code changes yet.
+
 #### Added: character subprompts
 
 Characters can now carry subprompts: short, optional instructions stored as Markdown files in
