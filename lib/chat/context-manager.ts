@@ -2596,9 +2596,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // sentence, and the Core whisper above skips there for the same reason.
   let progressionsLLMContext = ''
   if (!isContinueMode) {
-    progressionsLLMContext = buildProgressionsSection({
+    progressionsLLMContext = await buildProgressionsSection({
       character,
-      events: respondingParticipant ? await loadChatEventsForCadence() : undefined,
+      // A thunk, not a list: a character carrying no progressions — very
+      // nearly all of them — must not pay for a history read they will never
+      // consult.
+      ...(respondingParticipant ? { loadEvents: loadChatEventsForCadence } : {}),
       respondingParticipantId: respondingParticipant?.id ?? null,
       nowMs: Date.now(),
       timezone: options.timezone,

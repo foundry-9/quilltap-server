@@ -23,6 +23,12 @@
  */
 
 import { z } from 'zod';
+import {
+  PROGRESSION_ID_PATTERN,
+  WRITABLE_PROGRESSION_FIELDS,
+  isWritableProgressionField,
+  type WritableProgressionField,
+} from '@/lib/progressions/schema';
 import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation';
 import { parsePath } from '@/lib/state/state-paths';
 import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
@@ -394,6 +400,23 @@ export type LlmComparator = z.infer<typeof LlmComparatorSchema>;
 const MetadataKeySchema = z.string().min(1);
 
 /**
+ * A key into the derived progress sheet: `"<id>.<field>"`, where `<id>` is a
+ * progression identifier and `<field>` one of the engine's derived fields.
+ *
+ * Unlike a metadata key, this vocabulary is the FORMAT's rather than the
+ * user's, so the shape can be checked at load time. What still cannot be
+ * checked is whether this character carries that progression, or whether the
+ * field exists on it — those are facts about a character the definition has
+ * never met, and they fail soft exactly as an absent metadata key does.
+ */
+const ProgressKeySchema = z
+  .string()
+  .regex(
+    /^[a-z][a-z0-9_-]{0,63}\.[a-zA-Z]+$/,
+    'must be "<progression id>.<field>" — e.g. "cannon.complete"'
+  );
+
+/**
  * A comparator in an availability gate. The same eight keys as everywhere else,
  * but every operand is a LITERAL.
  *
@@ -432,12 +455,25 @@ export type GateComparator = z.infer<typeof GateComparatorSchema>;
  * later build can add a second one without re-shaping every file already
  * written.
  */
-export const ToolGateSchema = z.strictObject({
-  metadata: z
-    .record(MetadataKeySchema, GateComparatorSchema)
-    .refine((tests) => Object.keys(tests).length > 0, { message: 'must test at least one metadata key' })
-    .describe("Test the invoking character's metadata.json, keyed by metadata key. All tests must hold."),
-});
+export const ToolGateSchema = z
+  .strictObject({
+    metadata: z
+      .record(MetadataKeySchema, GateComparatorSchema)
+      .optional()
+      .describe("Test the invoking character's metadata.json, keyed by metadata key. All tests must hold."),
+    progress: z
+      .record(ProgressKeySchema, GateComparatorSchema)
+      .optional()
+      .describe(
+        "Test the invoking character's timed progressions, keyed \"<id>.<field>\" — e.g. { \"cannon.complete\": " +
+          '{ "eq": true } }. Derived fresh from the wall clock at roster time. A progression the character does ' +
+          'not carry does not match.'
+      ),
+  })
+  .refine(
+    (gate) => Object.keys(gate.metadata ?? {}).length + Object.keys(gate.progress ?? {}).length > 0,
+    { message: 'must test at least one metadata key or progress field' }
+  );
 
 export type ToolGate = z.infer<typeof ToolGateSchema>;
 
@@ -458,6 +494,14 @@ const WHEN_SUBJECTS_SHAPE = {
     .record(MetadataKeySchema, MetadataComparatorSchema)
     .optional()
     .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
+  progress: z
+    .record(ProgressKeySchema, MetadataComparatorSchema)
+    .optional()
+    .describe(
+      'Test the invoking character\'s timed progressions, keyed "<id>.<field>" — percent, complete, remainingMs, ' +
+        'state and the rest, derived from the wall clock at run start. A progression the character does not carry ' +
+        'does not match, exactly as an absent metadata key does not.'
+    ),
   llm: LlmComparatorSchema.optional().describe(
     "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
   ),
@@ -469,13 +513,15 @@ function testsSomething(when: {
   llm?: unknown;
   params?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  progress?: Record<string, unknown>;
 }): boolean {
   return (
     hasComparator(when as Record<string, unknown>) ||
     when.roll !== undefined ||
     when.llm !== undefined ||
     (when.params !== undefined && Object.keys(when.params).length > 0) ||
-    (when.metadata !== undefined && Object.keys(when.metadata).length > 0)
+    (when.metadata !== undefined && Object.keys(when.metadata).length > 0) ||
+    (when.progress !== undefined && Object.keys(when.progress).length > 0)
   );
 }
 
@@ -506,7 +552,8 @@ function testsSomething(when: {
 export const WhenObjectSchema = z
   .strictObject(WHEN_SUBJECTS_SHAPE)
   .refine(testsSomething, {
-    message: 'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, or a non-empty `metadata`',
+    message:
+      'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, `metadata`, or `progress`',
   });
 
 export type WhenObject = z.infer<typeof WhenObjectSchema>;
@@ -561,7 +608,7 @@ export const EffectWhenSchema = z
   })
   .refine((when) => testsSomething(when) || when.outcome !== undefined, {
     message:
-      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, or a non-empty `metadata`',
+      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, `metadata`, or `progress`',
   });
 
 export type EffectWhen = z.infer<typeof EffectWhenSchema>;
@@ -582,8 +629,9 @@ export const CustomToolEffectSchema = z.strictObject({
     .min(1)
     .max(MAX_EFFECT_TARGET_LENGTH)
     .describe(
-      'Where to write: "state.<path>" (tiered persistent state, written at the tier where the key already lives) ' +
-        'or "metadata.<key>" (the rolling character\'s fact sheet).'
+      'Where to write: "state.<path>" (tiered persistent state, written at the tier where the key already lives), ' +
+        '"metadata.<key>" (the rolling character\'s fact sheet), or "progress.<id>.<field>" (one of their timed ' +
+        'progressions — writing an id nobody authored creates it; write true to "progress.<id>.remove" to delete it).'
     ),
   value: z
     .union([
@@ -594,7 +642,8 @@ export const CustomToolEffectSchema = z.strictObject({
     .describe(
       'What to write. A JSON number or boolean is a literal. A JSON string is ALWAYS an expression — quote literal ' +
         "prose inside it (\"'broken pick'\"). Expressions take arithmetic, +-concatenation, parentheses, and {{ref}} " +
-        'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{params.x}}, {{metadata.key}}, {{state.path}}).'
+        'substitution ({{value}}, {{roll}}, {{dice}}, {{llm}}, {{now}}, {{params.x}}, {{metadata.key}}, ' +
+        '{{state.path}}, {{progress.id.field}}).'
     ),
 });
 
@@ -603,7 +652,8 @@ export type CustomToolEffect = z.infer<typeof CustomToolEffectSchema>;
 /** A parsed effect target, with the raw text kept for records and messages. */
 export type EffectTarget =
   | { kind: 'state'; path: Array<string | number>; raw: string }
-  | { kind: 'metadata'; key: string; raw: string };
+  | { kind: 'metadata'; key: string; raw: string }
+  | { kind: 'progress'; id: string; field: WritableProgressionField; raw: string };
 
 /**
  * Parse an effect's `target`. The single parser for the syntax — validation,
@@ -617,6 +667,15 @@ export type EffectTarget =
  * - `metadata.<key>` — the remainder is taken WHOLE as the key. Metadata keys
  *   are the user's vocabulary, so dots inside the key are fine precisely
  *   because it is not path-parsed.
+ * - `progress.<id>.<field>` — a field of one of the rolling character's timed
+ *   progressions. Unlike a metadata key, BOTH halves are the format's own
+ *   vocabulary and both are checked here: the id against the progression
+ *   identifier rule, the field against the closed writable set (which includes
+ *   the `remove` pseudo-field — write `true` to delete the progression).
+ *   Writing an id nobody authored CREATES the progression, so there is nothing
+ *   to check about existence; what would be a silent no-op is a `quantity`
+ *   written whole, or a `percent` written at all, and both are rejected here
+ *   with the field list in the reason.
  */
 export function parseEffectTarget(
   target: string
@@ -637,6 +696,34 @@ export function parseEffectTarget(
     return { ok: true, target: { kind: 'state', path, raw: target } };
   }
 
+  // Checked BEFORE `metadata.`, which it does not prefix-collide with, but
+  // ordering it first keeps the two user-facing families adjacent below.
+  if (target.startsWith('progress.')) {
+    const rest = target.slice('progress.'.length);
+    const dot = rest.indexOf('.');
+    if (dot <= 0 || dot === rest.length - 1) {
+      return {
+        ok: false,
+        reason: 'must name "progress.<progression id>.<field>" — e.g. "progress.cannon.endTime"',
+      };
+    }
+    const id = rest.slice(0, dot);
+    const field = rest.slice(dot + 1);
+    if (!PROGRESSION_ID_PATTERN.test(id)) {
+      return {
+        ok: false,
+        reason: `writes progression "${id}", which is not a valid id — lowercase, starting with a letter, then letters, digits, _ or - (at most 64)`,
+      };
+    }
+    if (!isWritableProgressionField(field)) {
+      return {
+        ok: false,
+        reason: `writes "${field}", which is not a writable progression field — use one of ${WRITABLE_PROGRESSION_FIELDS.join(', ')}`,
+      };
+    }
+    return { ok: true, target: { kind: 'progress', id, field, raw: target } };
+  }
+
   if (target.startsWith('metadata.')) {
     const key = target.slice('metadata.'.length);
     if (key.length === 0) {
@@ -645,7 +732,7 @@ export function parseEffectTarget(
     return { ok: true, target: { kind: 'metadata', key, raw: target } };
   }
 
-  return { ok: false, reason: 'must start with "state." or "metadata."' };
+  return { ok: false, reason: 'must start with "state.", "metadata." or "progress."' };
 }
 
 /** Default visibility for a tool's result. */

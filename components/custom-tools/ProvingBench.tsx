@@ -10,7 +10,7 @@
  * bench posts nothing and writes nothing.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
@@ -24,6 +24,7 @@ import {
 import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
 import { formatValue } from '@/lib/pascal/expressions'
 import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
+import { flattenProgressions } from '@/lib/progressions/engine'
 import { definitionFromDraft, gateFromConditions, type ToolDraft } from '@/lib/pascal/tool-draft'
 import {
   CustomToolParamsForm,
@@ -110,6 +111,48 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
   )
 
   const testsMetadata = draft.outcomes.some((o) => o.conditions.some((c) => c.subject.kind === 'metadata'))
+
+  /**
+   * The clock the derived-progressions panel reads.
+   *
+   * Held in state and advanced by an interval rather than read during render:
+   * `Date.now()` in a render body is impure, and React is entitled to re-run a
+   * render whenever it likes. The interval runs only while a hand-typed sheet
+   * is in play, so a bench with no progressions on it costs nothing.
+   */
+  const [benchNowMs, setBenchNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (sheet.mode !== 'manual') return
+    // The interval alone, with no priming call: the first tick lands within a
+    // second, and setting state straight from an effect body is the render
+    // loop nobody wants.
+    const timer = setInterval(() => setBenchNowMs(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [sheet.mode])
+
+  /**
+   * The progress sheet a hand-typed fact sheet derives to, at THIS instant.
+   *
+   * Shown read-only under the sheet so the author can see `cannon.percent`
+   * before rolling, rather than working it out from two ISO timestamps in
+   * their head. A character-backed sheet lives on the server, so the bench
+   * declines to guess at it — the same line the gate verdict already draws.
+   *
+   * Derived on every render on purpose: it is a live clock, and a stale
+   * "42% complete" beside an advancing recharge would be a worse lie than no
+   * panel at all.
+   */
+  const derivedProgress = useMemo(() => {
+    if (sheet.mode !== 'manual') return null
+    try {
+      const parsed: unknown = JSON.parse(sheet.text)
+      const flattened = flattenProgressions(parsed, benchNowMs)
+      return Object.keys(flattened).length > 0 ? flattened : null
+    } catch {
+      return null
+    }
+  }, [sheet, benchNowMs])
 
   /**
    * The draft's availability gate, in the shape {@link evaluateToolGate} takes.
@@ -292,8 +335,9 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
       <section className="qt-card p-3 space-y-2">
         <h3 className="qt-card-title text-sm">The fact sheet</h3>
         <p className="qt-hint">
-          Metadata tests read the invoking character&rsquo;s <code>metadata.json</code>. Lend the bench a sheet, or it
-          rolls as nobody in particular.
+          Metadata tests read the invoking character&rsquo;s <code>metadata.json</code>, and{' '}
+          <code>progress</code> tests read the <code>progressions</code> key inside it. Lend the bench a sheet, or
+          it rolls as nobody in particular.
         </p>
         <div className="flex rounded overflow-hidden border w-fit" role="radiogroup" aria-label="Fact sheet mode">
           <button
@@ -352,6 +396,23 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
             </p>
           )}
 
+        {derivedProgress && (
+          <div className="space-y-1">
+            <p className="text-xs qt-text-secondary">
+              Progressions derived from this sheet, as of now — what a <code>progress</code> test or{' '}
+              <code>{'{{progress.…}}'}</code> would read this second:
+            </p>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 font-mono text-xs">
+              {Object.entries(derivedProgress).map(([key, value]) => (
+                <div key={key} className="contents">
+                  <dt className="qt-text-secondary">{key}</dt>
+                  <dd className="qt-text truncate">{String(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+
         {draftGate && (
           <GateVerdictLine
             /* A hand-typed sheet is right here, so the verdict is live. A
@@ -359,7 +420,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
                back with a roll — the bench never guesses at a vault. */
             verdict={
               sheet.mode === 'manual' && manualSheetError === null
-                ? evaluateToolGate(draftGate, benchMetadata() as Record<string, unknown>)
+                ? evaluateToolGate(draftGate, benchMetadata() as Record<string, unknown>, derivedProgress)
                 : (rolls[0]?.gate ?? null)
             }
           />

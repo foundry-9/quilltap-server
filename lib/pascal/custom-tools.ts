@@ -73,6 +73,7 @@ import { evaluateExpression, formatValue, parseExpression, type ExprValue } from
 
 export { formatValue };
 import { compareOrdered, isPrimitive, metadataComparatorHolds } from './metadata-match';
+import { flattenProgressions, type ProgressPrimitive } from '@/lib/progressions/engine';
 import { evaluateToolGate, hasToolGate } from './tool-gate';
 
 /**
@@ -405,6 +406,13 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
     return sheet;
   };
 
+  // The invoker's progressions, derived from that same sheet. One clock
+  // reading for the whole roster resolution, so two gates cannot disagree
+  // about whether the cannon has finished charging.
+  const rosterNowMs = Date.now();
+  const invokerProgress = async (): Promise<Record<string, ProgressPrimitive>> =>
+    flattenProgressions(await invokerMetadata(), rosterNowMs);
+
   for (const { tier, mountPointId } of orderedMounts(pool)) {
     const { found, errors: mountErrors } = await loadToolsFromMount(mountPointId, tier);
     errors.push(...mountErrors);
@@ -425,7 +433,13 @@ export async function resolveCustomToolRoster(ctx: RosterContext): Promise<Custo
       // tombstone ("suppress this name for novices") is simply both keys at
       // once, and reads exactly as it says.
       if (hasToolGate(entry.definition)) {
-        const verdict = evaluateToolGate(entry.definition, await invokerMetadata());
+        const verdict = evaluateToolGate(
+          entry.definition,
+          await invokerMetadata(),
+          entry.definition.availableWhen?.progress || entry.definition.withheldWhen?.progress
+            ? await invokerProgress()
+            : undefined
+        );
         if (!verdict.available) {
           logger.debug('Custom tool withheld by its availability gate', {
             context: CONTEXT,
@@ -787,6 +801,15 @@ export interface OutcomeSubjects {
    */
   metadata?: Record<string, unknown>;
   /**
+   * The invoking character's timed progressions, FLATTENED to the primitive
+   * sheet `flattenProgressions` produces — `"cannon.percent"`, `"cannon.complete"`
+   * and the rest, derived from one `nowMs` taken at run start. Absent (or `{}`)
+   * when nobody in particular rolled, or when they carry no progressions; every
+   * `progress` test then fails and the catch-all answers, exactly as it does
+   * for a metadata key the character lacks.
+   */
+  progress?: Record<string, ProgressPrimitive>;
+  /**
    * The LLM consult's result. Absent when the definition declares no `llm`
    * block — an `llm` test then fails soft and the table falls through.
    */
@@ -913,21 +936,23 @@ function matchesMetadataComparator(
   toolName: string,
   comparator: MetadataComparator,
   key: string,
-  metadata: Record<string, unknown>,
+  sheet: Record<string, unknown>,
   params: ResolvedParams,
-  state: CustomToolState
+  state: CustomToolState,
+  /** Which sheet is being read, for the operand label and the debug log. */
+  subject: 'metadata' | 'progress' = 'metadata'
 ): boolean {
-  return metadataComparatorHolds(comparator, key, metadata, {
+  return metadataComparatorHolds(comparator, key, sheet, {
     resolveOperand: (comparatorKey) =>
       resolveOperand(
         toolName,
         comparator[comparatorKey] as number | string | boolean | ParamRef | StateRef,
         params,
-        `metadata "${key}" ${comparatorKey}`,
+        `${subject} "${key}" ${comparatorKey}`,
         state
       ),
     onDecline: (reason) =>
-      logger.debug('Custom tool metadata test did not match', {
+      logger.debug(`Custom tool ${subject} test did not match`, {
         context: CONTEXT,
         tool: toolName,
         key,
@@ -1025,6 +1050,7 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
 
   const { value, roll, params } = subjects;
   const metadata = subjects.metadata ?? {};
+  const progress = subjects.progress ?? {};
   const state = subjects.state ?? {};
 
   if (!matchesComparator(toolName, when, value, 'the rolled value', params, state)) return false;
@@ -1044,6 +1070,15 @@ export function matchesWhen(when: When, subjects: OutcomeSubjects, toolName = 'c
 
   for (const [key, comparator] of Object.entries(when.metadata ?? {})) {
     if (!matchesMetadataComparator(toolName, comparator, key, metadata, params, state)) return false;
+  }
+
+  // The derived progress sheet reads through the SAME fail-soft table as
+  // metadata — one semantics, no second comparison code — differing only in
+  // which sheet it looks in and what it calls the subject in the log.
+  for (const [key, comparator] of Object.entries(when.progress ?? {})) {
+    if (!matchesMetadataComparator(toolName, comparator, key, progress, params, state, 'progress')) {
+      return false;
+    }
   }
 
   if (when.llm !== undefined) {
@@ -1066,6 +1101,12 @@ export interface EffectSubjects extends OutcomeSubjects {
   outcome: { state: OutcomeState; index: number };
   /** Dice breakdown for `{{dice}}` in expressions — a string, '' for Form A. */
   dice: string;
+  /**
+   * Epoch milliseconds at run start, for `{{now}}` in an effect expression —
+   * the idiom `{{now}} + 600000` re-arms a countdown ten minutes out without
+   * the format needing a date grammar.
+   */
+  now: number;
 }
 
 /**
@@ -1194,6 +1235,13 @@ export interface PlaceholderSubjects {
   dice: string;
   params: ResolvedParams;
   metadata?: Record<string, unknown>;
+  /** The flattened progress sheet, for `{{progress.<id>.<field>}}`. */
+  progress?: Record<string, ProgressPrimitive>;
+  /**
+   * Epoch milliseconds at run start, for `{{now}}` — ONE value for the whole
+   * run, so two effects in the same file that both say `{{now}}` agree.
+   */
+  now?: number;
   /** The consult's result. Absent while rendering the consult's own prompt. */
   llm?: LlmSubject;
   /** The merged persistent state, for `{{state.path}}` placeholders. */
@@ -1222,6 +1270,10 @@ export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSu
       return vars.params[ref.name];
     case 'metadata':
       return vars.metadata?.[ref.key];
+    case 'progress':
+      return vars.progress?.[`${ref.id}.${ref.field}`];
+    case 'now':
+      return vars.now;
     case 'state':
       // `state.` is stripped and the remainder is a full state path.
       return getAtPath(vars.state ?? {}, parsePath(ref.path));
@@ -1257,6 +1309,16 @@ export function renderTemplate(message: string, vars: PlaceholderSubjects): stri
           placeholder: whole,
           reason: v === undefined ? 'no such metadata key' : 'the key does not hold a primitive',
         });
+        break;
+      case 'progress':
+        logger.debug('Custom tool message references a progression the character cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: 'the character carries no such progression, or it has no such field',
+        });
+        break;
+      case 'now':
+        logger.debug('Custom tool message references {{now}} with no run clock to render', { context: CONTEXT });
         break;
       case 'state':
         logger.debug('Custom tool message references state it cannot render', {
@@ -1383,6 +1445,15 @@ export async function executeCustomTool(
   overrides?: {
     private?: boolean;
     metadata?: Record<string, unknown>;
+    /**
+     * The flattened progress sheet, derived by the ENTRANCE from the same
+     * metadata snapshot it hands in above, against one `nowMs` taken at run
+     * start. Derived there rather than here so the sheet and `{{now}}` are the
+     * same clock reading the entrance's effect applier will later stamp with.
+     */
+    progress?: Record<string, ProgressPrimitive>;
+    /** Epoch milliseconds at run start, for `{{now}}`. Defaults to `Date.now()`. */
+    now?: number;
     /** Merged persistent state for `$state` refs and `{{state.path}}`. Default {}. */
     state?: CustomToolState;
     llmInvoke?: LlmInvoker;
@@ -1399,27 +1470,31 @@ export async function executeCustomTool(
   const diceBreakdown = dice ? formatDiceBreakdown(dice) : '';
 
   const metadata = overrides?.metadata ?? {};
+  const progress = overrides?.progress ?? {};
+  // One clock reading for the whole run: two effects that both say {{now}}
+  // must agree, and a run's start is the honest instant for both.
+  const now = overrides?.now ?? Date.now();
 
   // The consult runs AFTER the roll — its prompt may quote the draw — and
   // BEFORE the table, which may test its answer.
   let llm: LlmConsultResult | undefined;
   if (definition.llm) {
-    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata, state });
+    const prompt = renderTemplate(definition.llm.prompt, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, state });
     llm = await resolveLlmConsult(definition.name, definition.llm, prompt, overrides?.llmInvoke);
   }
 
-  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, state, ...(llm ? { llm } : {}) };
+  const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, progress, state, ...(llm ? { llm } : {}) };
   const outcomeIndex = pickOutcome(definition, subjects);
   const outcome = definition.outcomes[outcomeIndex];
 
-  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, llm, state });
+  const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, llm, state });
   const metadataTested = collectMetadataTested(outcome.when, metadata);
 
   // F1 — the chip label, rendered AFTER the outcome is chosen so it may quote
   // everything the message may. This is the one render site; both entrances
   // copy the result, so the chip and the bubble header can never drift.
   const chipLabel = definition.chipLabel
-    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, metadata, llm, state })
+    ? renderTemplate(definition.chipLabel, { value, roll: raw, dice: diceBreakdown, params, metadata, progress, now, llm, state })
     : undefined;
 
   // F3 — effects, resolved pure against the finished run. Nothing is written
@@ -1428,6 +1503,7 @@ export async function executeCustomTool(
     ...subjects,
     outcome: { state: outcome.state, index: outcomeIndex },
     dice: diceBreakdown,
+    now,
   };
   const effects =
     definition.effects && definition.effects.length > 0
@@ -1497,7 +1573,14 @@ export function simulateOutcomes(
    */
   llm?: LlmSubject,
   /** Mock merged state for `$state` refs. Default `{}` — every ref falls back. */
-  state: CustomToolState = {}
+  state: CustomToolState = {},
+  /**
+   * The mock progress sheet, held fixed across every draw. The bench derives
+   * it from the typed fact sheet at one instant, so an audit of a table that
+   * branches on `cannon.complete` is conditional on that one clock reading —
+   * the same caveat the bench already states for a pretend consult.
+   */
+  progress: Record<string, ProgressPrimitive> = {}
 ): CustomToolAuditResult {
   const params = resolveParams(definition, suppliedParams, state);
   const roll = prepareRoll(definition);
@@ -1510,7 +1593,15 @@ export function simulateOutcomes(
   for (let i = 0; i < runs; i++) {
     const { raw, value } = drawRoll(definition, roll, params, state);
 
-    const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {}, state, ...(llm ? { llm } : {}) };
+    const subjects: OutcomeSubjects = {
+      value,
+      roll: raw,
+      params,
+      metadata: metadata ?? {},
+      progress,
+      state,
+      ...(llm ? { llm } : {}),
+    };
     hits[pickOutcome(definition, subjects)] += 1;
 
     if (value < valueMin) valueMin = value;

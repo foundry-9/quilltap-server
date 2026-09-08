@@ -157,7 +157,7 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
               </label>
               {effect.target.trim() === '' && (
                 <span className="flex gap-1">
-                  {(['state.', 'metadata.'] as const).map((prefix) => (
+                  {(['state.', 'metadata.', 'progress.'] as const).map((prefix) => (
                     <button
                       key={prefix}
                       type="button"
@@ -167,7 +167,9 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
                       title={
                         prefix === 'state.'
                           ? 'Write into tiered persistent state, at the tier where the key already lives'
-                          : "Write onto the rolling character's own fact sheet (metadata.json)"
+                          : prefix === 'metadata.'
+                            ? "Write onto the rolling character's own fact sheet (metadata.json)"
+                            : 'Adjust one of the rolling character\u2019s timed progressions — progress.<id>.<field>. An id nobody authored is created; write true to progress.<id>.remove to delete one.'
                       }
                     >
                       {prefix}

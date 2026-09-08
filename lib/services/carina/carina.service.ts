@@ -585,7 +585,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     // from). It rides on the USER message rather than the system one: this
     // single system block carries the Anthropic cache breakpoint at index 0,
     // and a per-turn clock inside it would bisect the cache on every query.
-    const progressionsSection = buildProgressionsSection({
+    const progressionsSection = await buildProgressionsSection({
       character: answerer,
       nowMs: Date.now(),
       force: true,

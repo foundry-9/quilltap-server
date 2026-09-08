@@ -122,6 +122,8 @@ export type ConditionSubject =
   | { kind: 'roll' }
   | { kind: 'param'; name: string }
   | { kind: 'metadata'; key: string }
+  /** A derived field of one of the character's timed progressions, keyed `<id>.<field>`. */
+  | { kind: 'progress'; key: string }
   /** The LLM consult's answer. */
   | { kind: 'llm' }
   /** Whether the LLM consult succeeded — serializes to the comparator's `ok` key. */
@@ -171,7 +173,12 @@ export type GateMode = 'none' | 'available' | 'withheld';
  */
 export interface DraftGateCondition {
   id: string;
-  /** The metadata key this test reads. */
+  /**
+   * Which sheet this test reads. `metadata` is the character's own fact
+   * sheet; `progress` is the derived progression sheet, keyed `<id>.<field>`.
+   */
+  subject: 'metadata' | 'progress';
+  /** The key this test reads, in that subject's own vocabulary. */
   key: string;
   comparator: ComparatorKey;
   operand: LiteralOperand;
@@ -352,6 +359,10 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
     conditions.push(...comparatorToConditions({ kind: 'metadata', key }, comparator));
   }
 
+  for (const [key, comparator] of Object.entries(when.progress ?? {})) {
+    conditions.push(...comparatorToConditions({ kind: 'progress', key }, comparator));
+  }
+
   if (when.llm !== undefined) {
     // `ok` is not a comparator key, so it gets its own chip kind; the loop
     // below only walks COMPARATOR_KEYS and never sees it.
@@ -371,26 +382,35 @@ export function conditionsFromWhen(when: WhenObject): DraftCondition[] {
 
 /**
  * Flatten an availability gate into chips. Key order inside one comparator
- * follows {@link COMPARATOR_KEYS}; metadata keys follow the object's own order.
+ * follows {@link COMPARATOR_KEYS}; keys follow the object's own order, and
+ * `metadata` tests precede `progress` ones so a round trip is stable.
  */
 export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
   const conditions: DraftGateCondition[] = [];
 
-  for (const [key, comparator] of Object.entries(gate.metadata)) {
-    for (const comparatorKey of COMPARATOR_KEYS) {
-      const operand = (comparator as Record<string, unknown>)[comparatorKey];
-      if (operand === undefined) continue;
-      conditions.push({
-        id: nextDraftId('gate'),
-        key,
-        comparator: comparatorKey,
-        operand:
-          typeof operand === 'number'
-            ? { kind: 'number', text: numberText(operand) }
-            : typeof operand === 'boolean'
-              ? { kind: 'boolean', value: operand }
-              : { kind: 'string', text: String(operand) },
-      });
+  const subjects: Array<['metadata' | 'progress', Record<string, unknown> | undefined]> = [
+    ['metadata', gate.metadata],
+    ['progress', gate.progress],
+  ];
+
+  for (const [subject, tests] of subjects) {
+    for (const [key, comparator] of Object.entries(tests ?? {})) {
+      for (const comparatorKey of COMPARATOR_KEYS) {
+        const operand = (comparator as Record<string, unknown>)[comparatorKey];
+        if (operand === undefined) continue;
+        conditions.push({
+          id: nextDraftId('gate'),
+          subject,
+          key,
+          comparator: comparatorKey,
+          operand:
+            typeof operand === 'number'
+              ? { kind: 'number', text: numberText(operand) }
+              : typeof operand === 'boolean'
+                ? { kind: 'boolean', value: operand }
+                : { kind: 'string', text: String(operand) },
+        });
+      }
     }
   }
 
@@ -406,6 +426,7 @@ export function gateConditionsFromGate(gate: ToolGate): DraftGateCondition[] {
  */
 export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate | undefined {
   const metadata: Record<string, Record<string, unknown>> = {};
+  const progress: Record<string, Record<string, unknown>> = {};
 
   for (const condition of conditions) {
     const key = condition.key.trim();
@@ -423,11 +444,18 @@ export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate |
       operand = condition.operand.text;
     }
 
-    metadata[key] = metadata[key] ?? {};
-    metadata[key][condition.comparator] = operand;
+    // A chip saved before the progress subject existed carries no `subject`;
+    // metadata is what it always meant.
+    const sheet = condition.subject === 'progress' ? progress : metadata;
+    sheet[key] = sheet[key] ?? {};
+    sheet[key][condition.comparator] = operand;
   }
 
-  return Object.keys(metadata).length > 0 ? ({ metadata } as ToolGate) : undefined;
+  const gate: Record<string, unknown> = {};
+  if (Object.keys(metadata).length > 0) gate.metadata = metadata;
+  if (Object.keys(progress).length > 0) gate.progress = progress;
+
+  return Object.keys(gate).length > 0 ? (gate as ToolGate) : undefined;
 }
 
 /**
@@ -655,6 +683,7 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
   const roll: Record<string, unknown> = {};
   const params: Record<string, Record<string, unknown>> = {};
   const metadata: Record<string, Record<string, unknown>> = {};
+  const progress: Record<string, Record<string, unknown>> = {};
   const llm: Record<string, unknown> = {};
 
   for (const condition of conditions) {
@@ -692,12 +721,20 @@ export function whenFromConditions(conditions: DraftCondition[]): WhenObject | u
         metadata[key][condition.comparator] = operand;
         break;
       }
+      case 'progress': {
+        const key = condition.subject.key;
+        if (!key) continue;
+        progress[key] = progress[key] ?? {};
+        progress[key][condition.comparator] = operand;
+        break;
+      }
     }
   }
 
   if (Object.keys(roll).length > 0) when.roll = roll;
   if (Object.keys(params).length > 0) when.params = params;
   if (Object.keys(metadata).length > 0) when.metadata = metadata;
+  if (Object.keys(progress).length > 0) when.progress = progress;
   if (Object.keys(llm).length > 0) when.llm = llm;
 
   return Object.keys(when).length > 0 ? (when as WhenObject) : undefined;
@@ -910,6 +947,11 @@ function auditPlaceholders(
       case 'value':
       case 'roll':
       case 'metadata':
+      // `progress.<id>.<field>` and `{{now}}` are always resolvable at run
+      // time — the sheet is derived, not authored — so neither can be
+      // warned about from the draft the way an undeclared parameter can.
+      case 'progress':
+      case 'now':
         break;
       case 'dice':
         if (draft.rollForm !== 'dice') {
@@ -983,6 +1025,10 @@ function validateCondition(
   // Subject completeness.
   if (condition.subject.kind === 'metadata' && condition.subject.key.trim() === '') {
     issues.push(err(where, 'a metadata condition needs a key'));
+    return;
+  }
+  if (condition.subject.kind === 'progress' && !/^[a-z][a-z0-9_-]{0,63}\.[a-zA-Z]+$/.test(condition.subject.key.trim())) {
+    issues.push(err(where, 'a progress condition needs a key shaped "<progression id>.<field>" — e.g. cannon.complete'));
     return;
   }
   if ((condition.subject.kind === 'llm' || condition.subject.kind === 'llm-ok') && !draft.llmEnabled) {
@@ -1205,6 +1251,10 @@ export function subjectValueType(
       return target ? valueTypeOf(target.type) : null;
     }
     case 'metadata':
+    // A progression the definition has never met: whether this character
+    // carries `cannon` at all, let alone what `cannon.percent` holds, is
+    // unknowable from the file — the same fail-soft position metadata is in.
+    case 'progress':
       return null;
     case 'llm':
       // The answer's type is the model's business — unknowable here, like a
@@ -1252,6 +1302,8 @@ export function conditionSlotKey(condition: Pick<DraftCondition, 'subject' | 'co
       return `param:${subject.name}:${condition.comparator}`;
     case 'metadata':
       return `metadata:${subject.key}:${condition.comparator}`;
+    case 'progress':
+      return `progress:${subject.key}:${condition.comparator}`;
     case 'llm':
       return `llm:${condition.comparator}`;
     case 'llm-ok':

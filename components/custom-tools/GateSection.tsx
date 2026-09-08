@@ -81,7 +81,13 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
     setDuplicateNotice(null)
     setConditions([
       ...draft.gateConditions,
-      { id: nextDraftId('new-gate'), key: '', comparator: 'eq', operand: { kind: 'boolean', value: true } },
+      {
+        id: nextDraftId('new-gate'),
+        subject: 'metadata',
+        key: '',
+        comparator: 'eq',
+        operand: { kind: 'boolean', value: true },
+      },
     ])
   }
 
@@ -109,8 +115,8 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
         <div>
           <h2 className="qt-card-title text-sm">Who may reach for it</h2>
           <p className="qt-hint">
-            Tested before the deal, against the invoking character&rsquo;s <code>metadata.json</code> — the only thing
-            known before a roll exists.
+            Tested before the deal, against the invoking character&rsquo;s <code>metadata.json</code> or their timed
+            progressions — the only things known before a roll exists.
           </p>
         </div>
         <div className="flex rounded overflow-hidden border" role="radiogroup" aria-label="Availability">
@@ -203,15 +209,31 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
 
   return (
     <div className={`flex items-center gap-1 flex-wrap rounded border px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}>
+      <select
+        value={condition.subject}
+        onChange={(e) => onChange({ ...condition, subject: e.target.value as DraftGateCondition['subject'] })}
+        disabled={disabled}
+        className="qt-select qt-select-sm w-28 shrink-0"
+        aria-label="Gate subject"
+        title="Which sheet this test reads: the character's own metadata.json, or their derived progressions."
+      >
+        <option value="metadata">metadata</option>
+        <option value="progress">progress</option>
+      </select>
+
       <input
         type="text"
         value={condition.key}
         onChange={(e) => onChange({ ...condition, key: e.target.value })}
-        placeholder="key on the character's fact sheet"
+        placeholder={condition.subject === 'progress' ? 'cannon.complete' : "key on the character's fact sheet"}
         disabled={disabled}
         className={`qt-input w-44 text-sm ${condition.key.trim() === '' ? 'qt-input-error' : ''}`}
-        aria-label="Metadata key"
-        title="The invoking character's fact sheet — a key the character lacks never matches."
+        aria-label={condition.subject === 'progress' ? 'Progress key' : 'Metadata key'}
+        title={
+          condition.subject === 'progress'
+            ? 'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry never matches.'
+            : "The invoking character's fact sheet — a key the character lacks never matches."
+        }
       />
 
       <select

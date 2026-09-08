@@ -110,7 +110,7 @@ export async function buildChatContext(
   const resolvedScenario = customScenario || undefined
 
   // Build system prompt
-  const systemPrompt = buildSystemPrompt({
+  const systemPrompt = await buildSystemPrompt({
     character,
     userCharacter: userCharacter || undefined,
     scenario: resolvedScenario,
@@ -171,7 +171,7 @@ function getSelectedOrDefaultSystemPrompt(character: Character, selectedSystemPr
   return getDefaultSystemPrompt(character)
 }
 
-function buildSystemPrompt({
+async function buildSystemPrompt({
   character,
   userCharacter,
   scenario,
@@ -184,7 +184,10 @@ function buildSystemPrompt({
   selectedSystemPromptId?: string
   /** Subprompts in play for the opener — appended right after the system prompt. */
   subprompts?: readonly SubpromptForPrompt[]
-}): string {
+  // Async only because the progressions chokepoint is: it may walk a chat's
+  // history for a cadence, which a greeting never needs (it forces the
+  // report) but which the one shared entry point must be able to do.
+}): Promise<string> {
   // Get the selected or default system prompt content
   const systemPromptContent = getSelectedOrDefaultSystemPrompt(character, selectedSystemPromptId)
 
@@ -224,7 +227,7 @@ function buildSystemPrompt({
   // a per-turn clock landing here costs no cache: the opener is composed once
   // and never rebuilt. Anywhere else, progressions ride the uncached trailing
   // tail — see `lib/progressions/prompt-section.ts`.
-  const progressionsSection = buildProgressionsSection({
+  const progressionsSection = await buildProgressionsSection({
     character,
     nowMs: Date.now(),
     force: true,

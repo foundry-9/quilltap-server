@@ -19,7 +19,6 @@ jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }))
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { logger } = require('@/lib/logger') as { logger: Record<string, jest.Mock> }
 
 const ME = '00000000-0000-0000-0000-000000000001'
@@ -73,31 +72,31 @@ describe('buildProgressionsSection — the empty-is-identical guarantee', () => 
     ['an undefined character', undefined],
   ]
 
-  it.each(cases)('returns the empty string for %s', (_label, subject) => {
-    expect(buildProgressionsSection({ character: subject as never, nowMs: START })).toBe('')
+  it.each(cases)('returns the empty string for %s', async (_label, subject) => {
+    expect(await buildProgressionsSection({ character: subject as never, nowMs: START })).toBe('')
   })
 
-  it('returns the empty string for a character with no metadata at all', () => {
-    expect(buildProgressionsSection({ character: { id: CHARACTER_ID }, nowMs: START })).toBe('')
+  it('returns the empty string for a character with no metadata at all', async () => {
+    expect(await buildProgressionsSection({ character: { id: CHARACTER_ID }, nowMs: START })).toBe('')
   })
 
-  it('returns the empty string for metadata carrying no progressions key', () => {
+  it('returns the empty string for metadata carrying no progressions key', async () => {
     expect(
-      buildProgressionsSection({ character: { id: CHARACTER_ID, metadata: { faction: 'x' } }, nowMs: START })
+      await buildProgressionsSection({ character: { id: CHARACTER_ID, metadata: { faction: 'x' } }, nowMs: START })
     ).toBe('')
   })
 
-  it('returns the empty string for an empty progressions record', () => {
-    expect(buildProgressionsSection({ character: character({}), nowMs: START })).toBe('')
+  it('returns the empty string for an empty progressions record', async () => {
+    expect(await buildProgressionsSection({ character: character({}), nowMs: START })).toBe('')
   })
 
-  it('returns the empty string when every progression declines this turn', () => {
+  it('returns the empty string when every progression declines this turn', async () => {
     const events = [myTurn('2026-09-08T14:01:00.000Z')]
     // 1h cadence, same clock hour as the last turn, and no state change.
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: character({ pregnancy: PREGNANCY }),
-        events,
+        loadEvents: async () => events,
         respondingParticipantId: ME,
         nowMs: Date.parse('2026-09-08T14:30:00Z'),
       })
@@ -105,9 +104,45 @@ describe('buildProgressionsSection — the empty-is-identical guarantee', () => 
   })
 })
 
+describe('buildProgressionsSection — the history read', () => {
+  it('never loads events for a character carrying no progressions', async () => {
+    const loadEvents = jest.fn(async () => [])
+    await buildProgressionsSection({
+      character: { id: CHARACTER_ID, metadata: { faction: 'Ordo Aurum' } },
+      loadEvents,
+      respondingParticipantId: ME,
+      nowMs: START,
+    })
+    expect(loadEvents).not.toHaveBeenCalled()
+  })
+
+  it('never loads events on a forced build — a greeting has no history to consult', async () => {
+    const loadEvents = jest.fn(async () => [])
+    await buildProgressionsSection({
+      character: character({ cannon: CANNON }),
+      loadEvents,
+      respondingParticipantId: ME,
+      nowMs: START,
+      force: true,
+    })
+    expect(loadEvents).not.toHaveBeenCalled()
+  })
+
+  it('loads them exactly once when a cadence actually needs them', async () => {
+    const loadEvents = jest.fn(async () => [myTurn('2026-09-08T14:01:00.000Z')])
+    await buildProgressionsSection({
+      character: character({ cannon: CANNON, pregnancy: PREGNANCY }),
+      loadEvents,
+      respondingParticipantId: ME,
+      nowMs: START + 2 * MINUTE,
+    })
+    expect(loadEvents).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('buildProgressionsSection — the block', () => {
-  it('opens with the wrapper sentence and lists one dashed line per reporting entry', () => {
-    const section = buildProgressionsSection({
+  it('opens with the wrapper sentence and lists one dashed line per reporting entry', async () => {
+    const section = await buildProgressionsSection({
       character: character({ cannon: CANNON, pregnancy: { ...PREGNANCY, reportFrequency: 'turn' } }),
       nowMs: START + 2 * MINUTE + 10_000,
       force: true,
@@ -118,8 +153,8 @@ describe('buildProgressionsSection — the block', () => {
     for (const line of lines.slice(1)) expect(line.startsWith('- ')).toBe(true)
   })
 
-  it('renders the spec’s two worked examples verbatim', () => {
-    const section = buildProgressionsSection({
+  it('renders the spec’s two worked examples verbatim', async () => {
+    const section = await buildProgressionsSection({
       character: character({ cannon: CANNON, pregnancy: { ...PREGNANCY, reportFrequency: 'turn' } }),
       nowMs: Date.parse('2026-12-22T00:00:00Z'),
       force: true,
@@ -131,8 +166,8 @@ describe('buildProgressionsSection — the block', () => {
     expect(section).toContain('- Cannon recharge: complete;')
   })
 
-  it('orders entries by id, so the block is stable across turns', () => {
-    const section = buildProgressionsSection({
+  it('orders entries by id, so the block is stable across turns', async () => {
+    const section = await buildProgressionsSection({
       character: character({ zeppelin: { ...CANNON, name: 'Zeppelin' }, anchor: { ...CANNON, name: 'Anchor' } }),
       nowMs: START + MINUTE,
       force: true,
@@ -140,8 +175,8 @@ describe('buildProgressionsSection — the block', () => {
     expect(section.indexOf('Anchor')).toBeLessThan(section.indexOf('Zeppelin'))
   })
 
-  it('carries no Staff persona and no timestamp of its own', () => {
-    const section = buildProgressionsSection({
+  it('carries no Staff persona and no timestamp of its own', async () => {
+    const section = await buildProgressionsSection({
       character: character({ cannon: CANNON }),
       nowMs: START + MINUTE,
       force: true,
@@ -152,15 +187,15 @@ describe('buildProgressionsSection — the block', () => {
     )
   })
 
-  it('renders {{start}} in the timezone it is handed', () => {
+  it('renders {{start}} in the timezone it is handed', async () => {
     const withStart = { ...CANNON, reportTemplate: 'begins {{start}}' }
-    const utc = buildProgressionsSection({
+    const utc = await buildProgressionsSection({
       character: character({ cannon: withStart }),
       nowMs: START + MINUTE,
       force: true,
       timezone: 'UTC',
     })
-    const tokyo = buildProgressionsSection({
+    const tokyo = await buildProgressionsSection({
       character: character({ cannon: withStart }),
       nowMs: START + MINUTE,
       force: true,
@@ -171,15 +206,15 @@ describe('buildProgressionsSection — the block', () => {
 })
 
 describe('buildProgressionsSection — cadence', () => {
-  it('honours the cadence when events and a participant are supplied', () => {
+  it('honours the cadence when events and a participant are supplied', async () => {
     const hourly = character({ pregnancy: PREGNANCY })
     const events = [myTurn('2026-09-08T14:01:00.000Z')]
 
     // Same clock hour → silent.
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: hourly,
-        events,
+        loadEvents: async () => events,
         respondingParticipantId: ME,
         nowMs: Date.parse('2026-09-08T14:50:00Z'),
       })
@@ -187,31 +222,31 @@ describe('buildProgressionsSection — cadence', () => {
 
     // Next clock hour → reported.
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: hourly,
-        events,
+        loadEvents: async () => events,
         respondingParticipantId: ME,
         nowMs: Date.parse('2026-09-08T15:01:00Z'),
       })
     ).toContain('You are')
   })
 
-  it('reports everything on a character’s very first turn in a room', () => {
+  it('reports everything on a character’s very first turn in a room', async () => {
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: character({ pregnancy: PREGNANCY }),
-        events: [],
+        loadEvents: async () => [],
         respondingParticipantId: ME,
         nowMs: Date.parse('2026-09-08T14:50:00Z'),
       })
     ).toContain('You are')
   })
 
-  it('force bypasses the cadence even when the history says otherwise', () => {
+  it('force bypasses the cadence even when the history says otherwise', async () => {
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: character({ pregnancy: PREGNANCY }),
-        events: [myTurn('2026-09-08T14:01:00.000Z')],
+        loadEvents: async () => [myTurn('2026-09-08T14:01:00.000Z')],
         respondingParticipantId: ME,
         nowMs: Date.parse('2026-09-08T14:50:00Z'),
         force: true,
@@ -219,20 +254,20 @@ describe('buildProgressionsSection — cadence', () => {
     ).toContain('You are')
   })
 
-  it('reports everything when no events are supplied — a greeting has no history', () => {
+  it('reports everything when no events are supplied — a greeting has no history', async () => {
     expect(
-      buildProgressionsSection({ character: character({ pregnancy: PREGNANCY }), nowMs: START })
+      await buildProgressionsSection({ character: character({ pregnancy: PREGNANCY }), nowMs: START })
     ).toContain('You are')
   })
 
-  it('silences an onComplete "once" entry on the turn after its completion', () => {
+  it('silences an onComplete "once" entry on the turn after its completion', async () => {
     const once = character({ cannon: { ...CANNON, onComplete: 'once' } })
     // Last turn was already past the end, so the completion has been announced.
     const events = [myTurn('2026-09-08T14:11:00.000Z')]
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: once,
-        events,
+        loadEvents: async () => events,
         respondingParticipantId: ME,
         nowMs: START + 12 * MINUTE,
       })
@@ -241,8 +276,8 @@ describe('buildProgressionsSection — cadence', () => {
 })
 
 describe('buildProgressionsSection — fail-soft', () => {
-  it('drops a malformed entry, keeps the rest, and warns naming the character and id', () => {
-    const section = buildProgressionsSection({
+  it('drops a malformed entry, keeps the rest, and warns naming the character and id', async () => {
+    const section = await buildProgressionsSection({
       character: character({ cannon: CANNON, broken: { ...CANNON, endTime: '2026-09-08T13:00:00Z' } }),
       nowMs: START + MINUTE,
       force: true,
@@ -255,9 +290,9 @@ describe('buildProgressionsSection — fail-soft', () => {
     )
   })
 
-  it('returns the empty string rather than throwing when every entry is malformed', () => {
+  it('returns the empty string rather than throwing when every entry is malformed', async () => {
     expect(
-      buildProgressionsSection({
+      await buildProgressionsSection({
         character: character({ 'Not An Id': CANNON }),
         nowMs: START,
         force: true,
@@ -265,18 +300,18 @@ describe('buildProgressionsSection — fail-soft', () => {
     ).toBe('')
   })
 
-  it('survives metadata that is not an object at all', () => {
+  it('survives metadata that is not an object at all', async () => {
     for (const metadata of ['text', 42, [], null]) {
-      expect(() =>
+      await expect(
         buildProgressionsSection({ character: { id: CHARACTER_ID, metadata }, nowMs: START })
-      ).not.toThrow()
+      ).resolves.toBe('')
     }
   })
 
-  it('debug-logs the per-progression decision and cadence reason', () => {
-    buildProgressionsSection({
+  it('debug-logs the per-progression decision and cadence reason', async () => {
+    await buildProgressionsSection({
       character: character({ cannon: CANNON }),
-      events: [],
+      loadEvents: async () => [],
       respondingParticipantId: ME,
       nowMs: START + MINUTE,
     })

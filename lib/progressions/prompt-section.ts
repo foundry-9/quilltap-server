@@ -24,6 +24,12 @@
  * caller pushes nothing — the empty-is-identical guarantee every trailing
  * section keeps, and the reason a character with no progressions sees a prompt
  * indistinguishable from one built before this feature existed.
+ *
+ * That guarantee extends to the READ: `loadEvents` is a thunk, called only
+ * once a character is known to carry at least one progression. A character
+ * carrying none costs this feature exactly nothing — not a query, not a row —
+ * which is the overwhelmingly common case and the one a per-turn addition has
+ * no business taxing.
  */
 
 import { logger } from '@/lib/logger';
@@ -46,8 +52,11 @@ export const PROGRESSIONS_SECTION_HEADER = 'Time-bound conditions you are carryi
 export interface BuildProgressionsSectionParams {
   /** The responding character, hydrated — `metadata` comes from the read overlay. */
   character: { id: string; metadata?: unknown } | null | undefined;
-  /** This chat's events, for the cadence walk. Ignored when `force` is set. */
-  events?: ChatEvent[];
+  /**
+   * This chat's events, for the cadence walk — as a THUNK, so a character with
+   * no progressions never triggers the read. Ignored when `force` is set.
+   */
+  loadEvents?: () => Promise<ChatEvent[]>;
   /** The responding participant, whose own last turn sets the cadence. */
   respondingParticipantId?: string | null;
   /** The wall clock, injected. */
@@ -67,8 +76,10 @@ export interface BuildProgressionsSectionParams {
  * reports. Never throws: a character's timed conditions are a garnish on a
  * turn, and no malformed entry may cost them the turn itself.
  */
-export function buildProgressionsSection(params: BuildProgressionsSectionParams): string {
-  const { character, events, respondingParticipantId, nowMs, timezone, force = false } = params;
+export async function buildProgressionsSection(
+  params: BuildProgressionsSectionParams,
+): Promise<string> {
+  const { character, loadEvents, respondingParticipantId, nowMs, timezone, force = false } = params;
 
   if (!character) return '';
 
@@ -89,9 +100,9 @@ export function buildProgressionsSection(params: BuildProgressionsSectionParams)
     // forced build skips the walk entirely — there is no history to consult on
     // a greeting, and `null` is what "report everything" means to the engine.
     const lastTurnMs =
-      force || !events || !respondingParticipantId
+      force || !loadEvents || !respondingParticipantId
         ? null
-        : findLastOwnTurnMs(events, respondingParticipantId);
+        : findLastOwnTurnMs(await loadEvents(), respondingParticipantId);
 
     const lines: string[] = [];
     const decisions: Array<{ id: string; state: string; reason: ReportReason }> = [];
