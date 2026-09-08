@@ -50,6 +50,24 @@ Consider leaving it off when:
 - **Secrecy is part of the scene.** A chat meant to surface what one character *doesn't* know about another loses its point if every vault is an open book.
 - **You haven't yet vetted the other characters' vaults** for contents you'd rather not have a stranger thumbing through. The toggle is a blunt instrument — it opens *all* present participants' vaults at once, not a selected subset.
 
+## One Reserved Key in the Fact Sheet
+
+Every vault carries a `metadata.json` — the character's **fact sheet** — and
+until recently every key in it was yours, freeform, and never checked. That
+remains true of all but one. The key `progressions` now holds the character's
+timed spans (a gestation, a recharging weapon, a fuse) and *is* validated for
+shape; see **[Progressions](character-progressions.md)** for what belongs in
+it and the editor that spares you writing it by hand.
+
+Two things follow that are worth knowing when vaults are shared. The file is
+an ordinary vault document, so a peer with reading access can see what a
+character is carrying — which is entirely the point of sharing, but is worth a
+thought before you share a vault holding a condition somebody was meant to
+keep quiet. And a character with **system transparency** may edit
+`metadata.json` in their *own* vault through the `doc_*` tools, progressions
+included. Shared Vaults does not widen that: a peer's fact sheet stays
+read-only like every other file of theirs.
+
 ## Read-Only Is Meant Read-Only
 
 The boundary is enforced in two coordinated places:
@@ -64,6 +82,7 @@ This means you may use Shared Vaults as freely as you like without worrying that
 - [Multi-Character Chats](chat-multi-character.md) — How characters share a chat in the first place
 - [Document Editing Tools](document-editing-tools.md) — Details of the `doc_*` tool family
 - [Mount Points](mount-points.md) — How vaults and document stores are configured
+- [Progressions](character-progressions.md) — The one reserved key in `metadata.json`
 - [Chats Overview](chats.md) — General chat settings and state
 
 ## In-Chat Navigation

@@ -1,6 +1,6 @@
 # Feature: Character Progressions — timed properties reported per turn
 
-**Status:** Planned.
+**Status:** Implemented (v4.10-dev, 2026-09-08). All six phases shipped; the checklists below are retained as the record of what was built.
 **Owner subsystems:** Aurora (character data — the vault's `metadata.json`), the per-turn context builder (`lib/chat/context-manager.ts`), and Pascal the Croupier (`lib/pascal/`, which reads and writes them).
 **Implementation note:** This spec is written to be executed by Claude Code with minimal further design input. Where a choice existed, it has been made — see [Design Decisions](#design-decisions-resolved). Follow CLAUDE.md standing rules throughout (changelog, help docs, debug logging on every touched backend path, export round-tripping, tool chokepoints, `npx tsc`). Plan in the most capable model; the phases below are written so that Phases 0, 2, 3 and 4 can each be delegated to a cheaper agent with this document as the whole brief.
 
@@ -295,51 +295,51 @@ Debug logs on every new backend path, via the built-in logger: per turn, the res
 
 ### Phase 0 — schema + engine (pure; delegable)
 
-- [ ] `lib/progressions/schema.ts` — Zod schemas, constants, `IsoDateTimeSchema`, `endTime > startTime` refine, id pattern, cadence regex.
-- [ ] `lib/progressions/engine.ts` — `parseProgressions`, `deriveProgression`, `formatSpan`, `shouldReportProgression`, `renderProgressionReport`, default-template composition, `flattenProgressions`, `inferIncrement`.
-- [ ] `public/schemas/qtap-progression.schema.json` + agreement test.
-- [ ] Tests (`__tests__/unit/lib/progressions/`): schema accept/reject matrix; `formatSpan` per unit; derivation at before/at/after start and end (percent uncapped, clamped, quantity current); cadence rule table incl. `null` last turn, `updatedAt` forcing, state transitions, `once` silencing, `increment` ticks, period buckets across a bucket edge; rendering with and without description/percent/quantity, custom template, unknown placeholder verbatim; `flattenProgressions` field set.
+- [x] `lib/progressions/schema.ts` — Zod schemas, constants, `IsoDateTimeSchema`, `endTime > startTime` refine, id pattern, cadence regex.
+- [x] `lib/progressions/engine.ts` — `parseProgressions`, `deriveProgression`, `formatSpan`, `shouldReportProgression`, `renderProgressionReport`, default-template composition, `flattenProgressions`, `inferIncrement`.
+- [x] `public/schemas/qtap-progression.schema.json` + agreement test.
+- [x] Tests (`__tests__/unit/lib/progressions/`): schema accept/reject matrix; `formatSpan` per unit; derivation at before/at/after start and end (percent uncapped, clamped, quantity current); cadence rule table incl. `null` last turn, `updatedAt` forcing, state transitions, `once` silencing, `increment` ticks, period buckets across a bucket edge; rendering with and without description/percent/quantity, custom template, unknown placeholder verbatim; `flattenProgressions` field set.
 
 ### Phase 1 — prompt integration
 
-- [ ] `lib/chat/context/core-whisper-trigger.ts` — `findLastOwnTurnMs` (exported, tested).
-- [ ] `lib/progressions/prompt-section.ts` — `buildProgressionsSection` (logs; the chokepoint).
-- [ ] `lib/chat/context-manager.ts` — compute after Suparṇā mail, push before the turn-skip note (`:2592-2600`); the `else if` branch (`:2603`); skip on `isContinueMode`.
-- [ ] `lib/chat/initialize.ts` greeting builder — forced report after subprompts.
-- [ ] `lib/services/carina/carina.service.ts` — forced report appended to the user question.
-- [ ] Tests: `__tests__/unit/cache-determinism/system-prompt.test.ts` — assert block 1 is byte-identical with progressions present (the negative guarantee); context-manager test for placement/order and the empty-is-identical case; greeting and Carina append tests; eval `cache-stability.test.ts` still green.
+- [x] `lib/chat/context/core-whisper-trigger.ts` — `findLastOwnTurnMs` (exported, tested).
+- [x] `lib/progressions/prompt-section.ts` — `buildProgressionsSection` (logs; the chokepoint).
+- [x] `lib/chat/context-manager.ts` — compute after Suparṇā mail, push before the turn-skip note (`:2592-2600`); the `else if` branch (`:2603`); skip on `isContinueMode`.
+- [x] `lib/chat/initialize.ts` greeting builder — forced report after subprompts.
+- [x] `lib/services/carina/carina.service.ts` — forced report appended to the user question.
+- [x] Tests: `__tests__/unit/cache-determinism/system-prompt.test.ts` — assert block 1 is byte-identical with progressions present (the negative guarantee); context-manager test for placement/order and the empty-is-identical case; greeting and Carina append tests; eval `cache-stability.test.ts` still green.
 
 ### Phase 2 — Pascal reads (delegable)
 
-- [ ] `placeholders.ts` (`progress`, `now`), `custom-tool.types.ts` (`WhenObjectSchema.progress`, gate subject), `custom-tools.ts` (`OutcomeSubjects.progress`, `now`, `matchesWhen` branch via `metadataComparatorHolds`, `renderTemplate` families), `tool-gate.ts` (progress sheet), `metadata-match.ts` (no change expected — verify), `tool-vocabulary.ts` (`progress`, `progressWrites`).
-- [ ] Both entrances + Workbench route derive the sheet from the run-start snapshot with one `nowMs`.
-- [ ] `run-custom-tool.ts` preamble sentence; snapshot `-u`.
-- [ ] `qtap-custom-tool.schema.json` mirror (`progress` in `When`, gates, effect targets) + agreement corpus.
-- [ ] Tests: when/gate/template/expression matrix incl. absent id, absent field, wrong-type comparator, `$param` operands, `{{now}}` arithmetic.
+- [x] `placeholders.ts` (`progress`, `now`), `custom-tool.types.ts` (`WhenObjectSchema.progress`, gate subject), `custom-tools.ts` (`OutcomeSubjects.progress`, `now`, `matchesWhen` branch via `metadataComparatorHolds`, `renderTemplate` families), `tool-gate.ts` (progress sheet), `metadata-match.ts` (no change expected — verify), `tool-vocabulary.ts` (`progress`, `progressWrites`).
+- [x] Both entrances + Workbench route derive the sheet from the run-start snapshot with one `nowMs`.
+- [x] `run-custom-tool.ts` preamble sentence; snapshot `-u`.
+- [x] `qtap-custom-tool.schema.json` mirror (`progress` in `When`, gates, effect targets) + agreement corpus.
+- [x] Tests: when/gate/template/expression matrix incl. absent id, absent field, wrong-type comparator, `$param` operands, `{{now}}` arithmetic.
 
 ### Phase 3 — Pascal writes (delegable; depends on 2)
 
-- [ ] `parseEffectTarget` progress branch + writable-field list + `remove`.
-- [ ] `side-effects.ts` — fold into `metadataNext.progressions`, create-with-defaults, time normalisation, post-validation drop, `updatedAt` stamp.
-- [ ] Manual-route asymmetry preserved; Workbench dry-run shows the writes.
-- [ ] Tests: create/update/remove; ISO and epoch inputs; invalid result dropped and roll stands; single character write; job-child (buffered proxy) path; `pascalMeta.effects` entries.
+- [x] `parseEffectTarget` progress branch + writable-field list + `remove`.
+- [x] `side-effects.ts` — fold into `metadataNext.progressions`, create-with-defaults, time normalisation, post-validation drop, `updatedAt` stamp.
+- [x] Manual-route asymmetry preserved; Workbench dry-run shows the writes.
+- [x] Tests: create/update/remove; ISO and epoch inputs; invalid result dropped and roll stands; single character write; job-child (buffered proxy) path; `pascalMeta.effects` entries.
 
 ### Phase 4 — Aurora editor + Workbench UI (delegable)
 
-- [ ] `components/characters/progressions/` section + modal; wired into the edit page; RMW save; archived read-only; realtime refetch.
-- [ ] Workbench: subject/target/placeholder affordances; bench derived list.
-- [ ] Component tests with `renderWithQuery`; payload-shape test for the PUT body (spreads other metadata keys untouched).
+- [x] `components/characters/progressions/` section + modal; wired into the edit page; RMW save; archived read-only; realtime refetch.
+- [x] Workbench: subject/target/placeholder affordances; bench derived list.
+- [x] Component tests with `renderWithQuery`; payload-shape test for the PUT body (spreads other metadata keys untouched).
 
 ### Phase 5 — docs
 
-- [ ] `help/character-progressions.md` (new; `url: /aurora/:id/edit`, In-Chat Navigation `help_navigate(url: "/aurora/:id/edit")`; steampunk voice): what a progression is, the two worked examples, cadence semantics in plain terms including the silent-turn approximation and fixed-length months, the placeholder legend, `onComplete`, hand-editing `metadata.json` with the schema link, and that the LLM cannot set them.
-- [ ] `help/custom-tools.md` and `help/pascals-workbench.md` — the `progress` subject, `{{now}}`, effect targets and the create-on-write defaults, the `remove` pseudo-field.
-- [ ] `help/shared-character-vaults.md` — `metadata.json` now has one reserved key.
-- [ ] `help/character-editing.md` — link to the new page.
-- [ ] `docs/developer/PROMPT_ARCHITECTURE.md` §9 (new trailing section, order), §13 (Carina, greeting, `self_inventory` gap), §15 (key files).
-- [ ] `docs/developer/features/complete/character-metadata-json.md` — Correction: reserved key; the "no prompt injection" statement now reads "raw metadata is never injected; the derived progression report is the one sanctioned reader." Same amendment to the normative doc comment at `lib/schemas/character.types.ts:172-185`.
-- [ ] `docs/developer/features/pascal-custom-tools.md` — `progress` row in the subject table, `{{now}}` and `{{progress.*}}` in Templating, effect targets.
-- [ ] `docs/developer/DDL.md`, `docs/CHANGELOG.md` (plain voice), CLAUDE.md chokepoint bullet, `.claude/commands/update-documentation.md` (new help page), `docs/developer/API.md` (no new routes — note the PUT `metadata` usage only if the doc enumerates fields).
+- [x] `help/character-progressions.md` (new; `url: /aurora/:id/edit`, In-Chat Navigation `help_navigate(url: "/aurora/:id/edit")`; steampunk voice): what a progression is, the two worked examples, cadence semantics in plain terms including the silent-turn approximation and fixed-length months, the placeholder legend, `onComplete`, hand-editing `metadata.json` with the schema link, and that the LLM cannot set them.
+- [x] `help/custom-tools.md` and `help/pascals-workbench.md` — the `progress` subject, `{{now}}`, effect targets and the create-on-write defaults, the `remove` pseudo-field.
+- [x] `help/shared-character-vaults.md` — `metadata.json` now has one reserved key.
+- [x] `help/character-editing.md` — link to the new page.
+- [x] `docs/developer/PROMPT_ARCHITECTURE.md` §9 (new trailing section, order), §13 (Carina, greeting, `self_inventory` gap), §15 (key files).
+- [x] `docs/developer/features/complete/character-metadata-json.md` — Correction: reserved key; the "no prompt injection" statement now reads "raw metadata is never injected; the derived progression report is the one sanctioned reader." Same amendment to the normative doc comment at `lib/schemas/character.types.ts:172-185`.
+- [x] `docs/developer/features/pascal-custom-tools.md` — `progress` row in the subject table, `{{now}}` and `{{progress.*}}` in Templating, effect targets.
+- [x] `docs/developer/DDL.md`, `docs/CHANGELOG.md` (plain voice), CLAUDE.md chokepoint bullet, `.claude/commands/update-documentation.md` (new help page), `docs/developer/API.md` (no new routes — note the PUT `metadata` usage only if the doc enumerates fields).
 
 ## Verification (live, on the V4test instance — never Friday)
 

@@ -119,6 +119,7 @@ Written bare like that, the comparisons are about the rolled value. Four other t
 | `roll` | the raw number, *before* it |
 | `params` | what the tool was actually called with, by parameter name |
 | `metadata` | what the *character doing the rolling* carries on their fact sheet |
+| `progress` | how far along one of that character's timed **progressions** is |
 | `llm` | what the consulted oracle answered, if the tool keeps one — see below |
 
 So *"the value exceeded 1, and the scale was set past 12"* is written:
@@ -164,6 +165,44 @@ The same quiet non-match covers every way a sheet can decline to answer:
 - **`null` cannot be tested.** There is no way to write `{ "eq": null }`, and that is deliberate: an empty key and an absent one both simply fail to match, which spares you having to decide which of the two you meant.
 
 One consequence worth stating plainly: because a row only wins when its metadata tests *held*, a metadata branch is silent in the failure direction. It cannot tell you *why* a character fell through. If a table isn't behaving, check the sheet, not the tool.
+
+#### Asking how far along something is — `progress`
+
+A character may be carrying **[progressions](character-progressions.md)**: named
+spans of time with a beginning and an ending — a recharging cannon, a
+gestation, a fuse. `progress` asks after one, keyed `"<identifier>.<field>"`:
+
+```json
+{ "when": { "progress": { "cannon.complete": { "eq": true } } },
+  "message": "The coils are full. The gun speaks.", "state": "success" }
+```
+
+Every field is worked out fresh from the clock at the moment of the roll —
+nothing is stored and nothing can go stale:
+
+| Field | What it holds |
+|---|---|
+| `complete`, `started` | true or false |
+| `state` | `pending`, `active`, or `complete` |
+| `percent` | a number, and **not** capped at 100 — a fortnight overdue reads well past it, which is a fact a table may reasonably branch on |
+| `elapsedMs`, `remainingMs` | milliseconds; `remainingMs` goes *negative* once the ending is past |
+| `startTime`, `endTime` | milliseconds since the epoch, so they order and add like any other number |
+| `elapsed`, `remaining` | the phrased spans — *2 minutes, 10 seconds* |
+| `name` | the progression's display name |
+| `quantity` | the current amount, when the progression fills one |
+
+The comparisons are the same eight, ANDed the same way, and `{ "$param": … }`
+operands work here too. And the fail-soft rule is exactly the metadata rule,
+for exactly the metadata reason: **a character who carries no such
+progression simply does not match.** A tool file is written long before it
+meets a character, and cannot know which of them keep a cannon. A table
+branching on `cannon.complete` must still deal sensibly to the person who has
+never owned a gun, and your catch-all is where you say what that means. A
+field name that doesn't exist declines the same way.
+
+The one thing `progress` will *not* do is let the model set a due date. There
+is no tool for it, and there is no `progress` subject on the `state` tool.
+Only you and Pascal's own server-side writes touch a progression.
 
 #### Drawing on persistent state — `$state`
 
@@ -224,9 +263,13 @@ Six things may be dropped into a `message`:
 | `{{params.bonus}}` | a parameter, as it was actually used — after defaulting and clamping |
 | `{{metadata.faction}}` | a key from the roller's fact sheet |
 | `{{state.weather.wind}}` | a path into persistent state (the four-tier cascade) |
+| `{{progress.cannon.percent}}` | a field of one of the roller's timed progressions |
+| `{{now}}` | the moment the run began, in milliseconds since the epoch |
 | `{{llm}}` | what the oracle answered — or, after a failed consult, your `errorMessage`, word for word |
 
-Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object. The placeholder stands there in the sentence looking conspicuous, which is the point: it tells you exactly which key is missing, where an empty space would merely leave you puzzled. If a message leans on `{{metadata.faction}}`, gate its row on `faction` and let the catch-all speak for the factionless.
+Anything else in braces is left exactly as you typed it — as is a `{{metadata.…}}` naming a key the roller hasn't got, or one holding a list or an object, or a `{{progress.…}}` naming a progression they aren't carrying.
+
+`{{now}}` is fixed for the whole run: two effects that both quote it agree to the millisecond, which is what makes `{{now}} + 600000` a sound way to say "ten minutes hence" without the format needing a date grammar of its own. The placeholder stands there in the sentence looking conspicuous, which is the point: it tells you exactly which key is missing, where an empty space would merely leave you puzzled. If a message leans on `{{metadata.faction}}`, gate its row on `faction` and let the catch-all speak for the factionless.
 
 ```json
 {
@@ -298,7 +341,54 @@ A roll can now leave a mark. A tool may carry an `effects` array — up to sixte
 Each effect has three parts:
 
 - **`when`** — optional; omit it and the effect fires on every run. It takes everything an outcome's `when` takes, plus one subject only an effect can ask about: `outcome`, the winning row's state — `{ "outcome": { "eq": "failure" } }` fires only on a failure, `{ "neq": "success" }` on anything short of one.
-- **`target`** — where to write. `state.<path>` reaches into the persistent-state cascade, and the write lands **at the tier where the key already lives** — a counter kept in project state stays in project state — defaulting to the chat (the most local ledger) for a key found nowhere. `metadata.<key>` writes onto the rolling character's `metadata.json`; the part after `metadata.` is taken whole, dots and all. Keys beginning with an underscore are yours alone, and no tool may write them — see *[Chat State](chat-state.md)*.
+- **`target`** — where to write. `state.<path>` reaches into the persistent-state cascade, and the write lands **at the tier where the key already lives** — a counter kept in project state stays in project state — defaulting to the chat (the most local ledger) for a key found nowhere. `metadata.<key>` writes onto the rolling character's `metadata.json`; the part after `metadata.` is taken whole, dots and all. `progress.<id>.<field>` adjusts one of their timed [progressions](character-progressions.md), described just below. Keys beginning with an underscore are yours alone, and no tool may write them — see *[Chat State](chat-state.md)*.
+
+### Adjusting a progression
+
+`progress.<identifier>.<field>` is how a tool re-arms a countdown. The classic
+case is a gun that has just been fired:
+
+```json
+"effects": [
+  { "when": { "outcome": { "eq": "success" } },
+    "target": "progress.cannon.startTime", "value": "{{now}}" },
+  { "when": { "outcome": { "eq": "success" } },
+    "target": "progress.cannon.endTime",   "value": "{{now}} + 600000" }
+]
+```
+
+Pair that with the `availableWhen` gate above and the whole cycle looks after
+itself: the tool vanishes from the roster the instant it fires, and returns
+ten minutes later.
+
+The fields you may write are `name`, `description`, `startTime`, `endTime`,
+`timeIncrement`, `percentageReport`, `reportFrequency`, `onComplete`,
+`reportTemplate`, `quantity.total`, `quantity.unit`, `quantity.precision` —
+and the pseudo-field **`remove`**, where writing `true` deletes the
+progression outright. Anything else (`percent`, say, which is worked out
+rather than kept) is refused when the file loads, with the list of what you
+may write instead.
+
+Four conveniences worth knowing:
+
+- **Times take either form.** A number is read as milliseconds since the epoch
+  — which is what `{{now}} + 600000` evaluates to — and a string is read as an
+  ISO instant. Both are filed as ISO, so the vault stays legible.
+- **Writing to an identifier nobody authored creates it**, sensibly furnished:
+  named for its identifier, beginning now, ending an hour hence, and *spoken
+  in* a unit inferred from however long the span turns out to be. A tool may
+  therefore start a countdown no human wrote in advance.
+- **Effects see each other.** They apply in file order against one working
+  copy, so writing `endTime` before `startTime` is perfectly sound.
+- **The character is told at once.** Every progression a run touches is
+  stamped as freshly changed, so the next turn reports it whatever its cadence
+  says — a re-armed cannon does not wait an hour to be mentioned.
+
+And should the writes leave a progression the format cannot accept — an ending
+that now falls before its beginning — *that progression's* writes are dropped
+and its previous state restored. The roll still stands and Pascal still
+announces; a mistyped countdown has never been worth sinking a hand that was
+already dealt.
 - **`value`** — what to write. A JSON number or `true`/`false` is stored as it stands. A JSON **string is always an expression**: a little closed arithmetic of `+ − × ÷`, parentheses, quoted text, and the same `{{…}}` references a message takes — `"{{value}} * 2"`, `"'rolled ' + {{dice}}"`.
 
 **The one trap, stated in bold so you meet it here and not in a rejection badge: literal prose must be quoted *inside* the expression.**
@@ -351,7 +441,16 @@ Two optional keys settle it, and only one of them may appear in a file:
 - **`availableWhen`** — offer this tool *only* to a character whose fact sheet passes every test in it.
 - **`withheldWhen`** — the mirror: keep it *from* a character whose sheet passes every test in it.
 
-The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subject can only ever be `metadata` — a character's fact sheet is the one thing they carry into the room — and why the values compared against must be plain literals rather than `{ "$param": … }` or `{ "$state": … }` references. There is nothing yet for those to refer to.
+The tests are written exactly as an outcome's `metadata` clause is, and several of them AND together. What is different is *when* they are asked: before the deal, before there is a roll or a parameter or an oracle's answer to speak of. That is why the subjects can only ever be `metadata` and `progress` — a character's fact sheet, and the timed spans derived from it, are what they carry into the room — and why the values compared against must be plain literals rather than `{ "$param": … }` or `{ "$state": … }` references. There is nothing yet for those to refer to.
+
+`progress` in a gate is the whole recharging-weapon arrangement in one line:
+
+```json
+{ "availableWhen": { "progress": { "cannon.complete": { "eq": true } } } }
+```
+
+While the coils are filling, `fire_cannon` is not on the roster at all. The
+moment they are full, it is. Nobody had to remember to enable anything.
 
 **A withheld tool is not merely greyed out. It is not there.** The model is never told it exists, the composer's run dialog does not list it, and `run_custom` will not run it if the model asks for it by name. (The gate is asked of each character severally, so a tool withheld from *your* character but offered to another still appears in your own dialog — labelled with the character it would run as. See *Whose fact sheet* below.) There is nothing to be tempted by, which is the humane arrangement: a tool a character can see and cannot use is an invitation to spend a turn being refused.
 
