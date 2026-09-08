@@ -38,6 +38,7 @@ import {
   type LlmSubject,
 } from '@/lib/pascal/custom-tools';
 import { evaluateToolGate, hasToolGate } from '@/lib/pascal/tool-gate';
+import { flattenProgressions } from '@/lib/progressions/engine';
 import { buildCustomToolLlmInvoker } from '@/lib/pascal/llm-consult';
 import { buildCustomToolLibrary, listCustomToolDestinations } from '@/lib/pascal/workbench';
 import { CharacterVaultUnavailableError } from '@/lib/database/repositories/vault-overlay/schema';
@@ -228,10 +229,19 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
     llmInvoke = async () => ({ ok: false, reason: 'a simulated failure, as the bench requested' });
   }
 
+  // The bench derives its progress sheet from the hand-typed fact sheet at
+  // one instant, exactly as a live run derives it from a hydrated one. No new
+  // field: the mock sheet already accepts any JSON, so a typed `progressions`
+  // block simply works.
+  const benchNowMs = Date.now();
+  const progress = flattenProgressions(metadata, benchNowMs);
+
   try {
     const result = await executeCustomTool(definition, body.params ?? undefined, {
       private: body.private,
       metadata,
+      progress,
+      now: benchNowMs,
       state: body.state ?? {},
       ...(llmInvoke ? { llmInvoke } : {}),
     });
@@ -241,7 +251,11 @@ async function handlePreview(req: NextRequest, ctx: RequestContext): Promise<Nex
     // been dealt it", which a roll alone could never reveal.
     return successResponse({
       ...result,
-      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata) } : {}),
+      ...(hasToolGate(definition) ? { gate: evaluateToolGate(definition, metadata, progress) } : {}),
+      // The derived sheet the roll actually saw, so the bench can show the
+      // author `cannon.percent` beside the outcome rather than leaving them to
+      // work it out from two ISO timestamps.
+      ...(Object.keys(progress).length > 0 ? { progress } : {}),
     });
   } catch (error) {
     return benchRefusal(error, 'preview', definition.name);
@@ -275,7 +289,10 @@ async function handleAudit(req: NextRequest, ctx: RequestContext): Promise<NextR
       AUDIT_RUNS,
       metadata,
       llm,
-      body.state ?? {}
+      body.state ?? {},
+      // Held fixed across every draw, like the pretend consult: an audit that
+      // advanced the clock ten thousand times would not be an audit.
+      flattenProgressions(metadata, Date.now())
     );
     return successResponse(result);
   } catch (error) {

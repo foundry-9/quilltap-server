@@ -283,6 +283,40 @@ describe('cache-determinism: system prompt', () => {
     expect(buildSystemPrompt({ ...FIXTURE_OPTIONS, subprompts: [] })).toBe(buildSystemPrompt(FIXTURE_OPTIONS))
   })
 
+  /**
+   * Character progressions are a per-turn clock. If one ever reached block 1
+   * the cache would be bisected on every single turn, this suite's golden
+   * would drift on the wall clock, and the 30-turn stability eval would go
+   * red. The feature is built as a TRAILING per-turn section for exactly that
+   * reason, and neither `IDENTITY_STACK_BUILDER_VERSION` nor
+   * `PROMPT_CACHE_STRUCTURE_VERSION` is bumped by it.
+   *
+   * This is the negative guarantee, asserted rather than assumed: a character
+   * carrying progressions hashes exactly as one carrying none.
+   */
+  it('a character carrying progressions leaves block 1 byte-identical', () => {
+    const carrying: Character = {
+      ...FIXTURE_CHARACTER,
+      metadata: {
+        faction: 'Ordo Aurum',
+        progressions: {
+          cannon: {
+            name: 'Cannon recharge',
+            startTime: '2026-09-08T14:00:00Z',
+            endTime: '2026-09-08T14:10:00Z',
+            timeIncrement: 'minute',
+          },
+        },
+      },
+    }
+    expect(buildSystemPrompt({ ...FIXTURE_OPTIONS, character: carrying })).toBe(
+      buildSystemPrompt(FIXTURE_OPTIONS),
+    )
+    expect(buildIdentityStack({ ...FIXTURE_STACK_ARGS, character: carrying })).toBe(
+      buildIdentityStack(FIXTURE_STACK_ARGS),
+    )
+  })
+
   it('an empty Taboo list leaves the prompt byte-identical to no Taboo option at all', () => {
     // This is what keeps the golden above stable for every instance that never
     // touches the feature: empty ⇒ the section is omitted entirely, header and

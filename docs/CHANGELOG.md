@@ -4,6 +4,56 @@
 
 ### 4.10-dev
 
+#### Added: character progressions
+
+Characters can now carry progressions: named spans of time with a start, an end, and rules for how
+often to report on them. A pregnancy that began on 1 August and is due 1 May; a cannon that takes
+ten minutes to recharge; a fermentation that finishes in three weeks. On every prompted turn
+Quilltap computes elapsed time, remaining time and percentage from the wall clock and appends a
+second-person report to the character's prompt, so the model never has to do the arithmetic or
+remember that time has passed.
+
+- Stored under one reserved `progressions` key in the character vault's `metadata.json`. Every
+  other key stays freeform. Validated at the point of use rather than at hydration: a malformed
+  entry is dropped alone with a warning and the rest survive. Published JSON schema at
+  `public/schemas/qtap-progression.schema.json`; no migration.
+- Each entry declares the unit its report speaks in (`second` through `year`) and a cadence: every
+  turn, whenever the whole-unit count ticks over, or at most once per wall-clock period (`1h`,
+  `30s`, `2d`). An entry the user or a tool has just changed reports on the next turn regardless,
+  as does one that has just started or finished.
+- Spans render as whole units plus a remainder in the next finer unit ("20 weeks, 3 days"). Months
+  and years are fixed-length (30.436875 and 365.2425 days), so the arithmetic is deterministic and
+  calendar-free.
+- Optional per-entry description, quantity (`0.3/1.0 MJ`), and report template with placeholders
+  (`{{elapsed}}`, `{{remaining}}`, `{{percent}}`, `{{quantity}}`, and others). An unknown
+  placeholder renders as written.
+- The report is a trailing per-turn section, after Suparṇā's mail and before the turn-skip note.
+  It never enters the cached system block, so prompt caching is unaffected and no builder version
+  is bumped. It is not persisted as a message. The greeting builder and Carina both append a forced
+  report; continue turns skip it.
+- Cadence is derived from the character's own last turn in the chat rather than stored, so the
+  prompt path performs no writes. A character who is prompted but does not speak can hear a
+  period-cadence entry once more inside the same period; this is documented.
+- Pascal custom tools gain a `progress` read subject (`when.progress`, availability gates) keyed
+  `"<id>.<field>"`, `{{progress.<id>.<field>}}` and `{{now}}` placeholders, and
+  `progress.<id>.<field>` effect targets. A tool can be withheld until a recharge completes and
+  re-arm it on a successful roll with `{{now}}` and `{{now}} + 600000`. Writing to an unknown id
+  creates the progression; `remove` deletes one. Progress writes fold into the existing single
+  character metadata write. A result the schema refuses is rolled back and the roll still stands.
+- `metadata.progressions` and `metadata.progressions.*` are refused as effect
+  targets when a tool file loads. An effect writes a primitive, so the former
+  would replace the whole reserved object with a string, bypassing the
+  progressions validation and rollback; the latter would write a literal key
+  named `progressions.cannon` and touch no progression.
+- The model cannot set its own progression: there is no LLM tool for it, and the `state` tool has
+  no access. Only the user and Pascal's server-side effects write them.
+- New Progressions card on the Aurora character edit page (System Prompts tab) with an editor for
+  each entry and a live preview of the line the character will read. Archived characters are
+  read-only.
+- Pascal's Workbench gains the `progress` condition subject, the `progress.` effect-target prefix,
+  the `{{now}}` and `{{progress.…}}` insert options, and a live list of what a hand-typed fact
+  sheet's progressions derive to.
+
 #### Docs: plan for character progressions
 
 Added `docs/developer/features/character-progressions.md`: a plan for timed, in-progress

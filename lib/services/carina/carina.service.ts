@@ -62,6 +62,7 @@ import { postCarinaResponse } from './writer';
 import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
+import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
 const MAX_TOOL_ITERATIONS = 5;
@@ -579,11 +580,25 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       systemPrompt += `\n\n${memoryRecall}`;
     }
 
+    // Character progressions — the answerer's own timed conditions, forced
+    // (a Carina call is a one-shot with no turn history to derive a cadence
+    // from). It rides on the USER message rather than the system one: this
+    // single system block carries the Anthropic cache breakpoint at index 0,
+    // and a per-turn clock inside it would bisect the cache on every query.
+    const progressionsSection = await buildProgressionsSection({
+      character: answerer,
+      nowMs: Date.now(),
+      force: true,
+    });
+    const questionWithProgressions = progressionsSection
+      ? `${question}\n\n---\n\n${progressionsSection}`
+      : question;
+
     const priorExchanges = await loadPriorCarinaExchanges(repos, chatId, answerer.id);
     let currentMessages: StreamOptions['messages'] = [
       { role: 'system', content: systemPrompt },
       ...priorExchanges,
-      { role: 'user', content: question },
+      { role: 'user', content: questionWithProgressions },
     ];
 
     // 5. Build the chat's tool slate, minus `ask_carina` (recursion guard).

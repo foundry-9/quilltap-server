@@ -79,6 +79,16 @@ export interface CustomToolReferences {
   stateWrites?: string[]
   /** Metadata keys this tool's effects may WRITE on the rolling character. Absent on older servers. */
   metadataWrites?: string[]
+  /**
+   * Progression IDS this tool reads — ids rather than `<id>.<field>` keys, so
+   * the panel says "consults your cannon" and never edges toward the odds the
+   * roster deliberately withholds. Absent on older servers.
+   */
+  progress?: string[]
+  /** Progression ids this tool's effects may WRITE. Absent on older servers. */
+  progressWrites?: string[]
+  /** The tool quotes `{{now}}`. Absent on older servers. */
+  now?: boolean
 }
 
 /** A runnable tool in the resolved roster. */
@@ -828,6 +838,9 @@ function referenceRows(tool: CustomTool): ReferenceRow[] {
   if (refs.llm) {
     rows.push({ placeholder: '{{llm}}', meaning: "the oracle's answer to the question this tool poses" })
   }
+  if (refs.now) {
+    rows.push({ placeholder: '{{now}}', meaning: 'the moment the run began, to the millisecond' })
+  }
 
   for (const name of refs.params) {
     rows.push({
@@ -869,11 +882,16 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
   const writes = [
     ...(tool.references?.stateWrites ?? []).map((path) => `state.${path}`),
     ...(tool.references?.metadataWrites ?? []).map((key) => `metadata.${key}`),
+    ...(tool.references?.progressWrites ?? []).map((id) => `progress.${id}`),
   ]
+  // Progressions get their own sentences rather than a placeholder row: the
+  // interesting claim is WHICH timed condition the tool consults or adjusts,
+  // not which of its dozen derived fields the author happened to quote.
+  const readsProgress = tool.references?.progress ?? []
 
   // A tool that quotes nothing and writes nothing gets no panel. An empty list
   // under a heading promising a list is worse than the heading's absence.
-  if (rows.length === 0 && writes.length === 0) return null
+  if (rows.length === 0 && writes.length === 0 && readsProgress.length === 0) return null
 
   return (
     <details className="rounded-lg qt-border p-5" open>
@@ -907,6 +925,19 @@ function ToolReferencePanel({ tool }: Readonly<{ tool: CustomTool }>) {
             : readsMetadata
               ? 'A metadata key the character does not have simply leaves its placeholder standing.'
               : 'A state path that has never been set simply leaves its placeholder standing.'}
+        </p>
+      )}
+
+      {readsProgress.length > 0 && (
+        <p className="text-xs qt-text-secondary mt-4 leading-relaxed">
+          It consults your timed progressions:{' '}
+          {readsProgress.map((id, i) => (
+            <span key={id}>
+              {i > 0 && ', '}
+              <code className="font-mono qt-text">{id}</code>
+            </span>
+          ))}
+          . A progression you are not carrying simply does not match.
         </p>
       )}
 

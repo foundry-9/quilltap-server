@@ -126,6 +126,7 @@ If `$param` substitution yields `min > max`, or any substituted value is non-fin
 | the raw roll | `roll: { … }` | the raw pre-transform draw |
 | a parameter | `params: { <name>: { … } }` | the resolved (post-default, post-clamp) parameter |
 | the invoker's metadata | `metadata: { <key>: { … } }` | one key of the invoking character's `metadata.json` fact sheet |
+| the invoker's progressions | `progress: { "<id>.<field>": { … } }` | one derived field of one of that character's timed [progressions](./character-progressions.md) |
 | the LLM consult | `llm: { … }` | the consult's answer (comparator keys) and/or its success (`ok`) — see [The `llm` consult](#the-llm-consult) |
 
 Comparator keys are drawn from `gt`, `gte`, `lt`, `lte`, `eq`, `neq`, `contains`, `ncontains`, and AND together, so `>= 0.30 && <= 0.60` is `{ "gte": 0.30, "lte": 0.60 }`. Bare keys mean the value, which is what makes the extension **backward compatible** — every definition written before `roll`/`params` existed still means exactly what it meant. (`contains`/`ncontains` are string comparators, so the bare-value and `roll` subjects — always numbers — do not take them.) `"value > 1 && params.scale > 12"` is:
@@ -182,6 +183,8 @@ Evaluation lives in `matchesWhen(when, subjects, toolName)` (`lib/pascal/custom-
 - `{{params.<name>}}` — the resolved (post-clamp, post-default) value of a declared parameter.
 - `{{metadata.<key>}}` — the invoking character's metadata value for that key. Primitives render like `{{params.<name>}}`; an absent key or non-primitive value leaves the placeholder verbatim (with a debug log), the same convention as unknown placeholders.
 - `{{state.<path>}}` — a path into merged persistent state (see below). Primitives render like `{{params.<name>}}`; an absent path or non-primitive value leaves the placeholder verbatim (with a debug log) — the `{{metadata.*}}` doctrine, applied to state.
+- `{{progress.<id>.<field>}}` — a derived field of one of the invoker's timed progressions. The key splits at the FIRST dot (unlike `metadata.`, whose remainder is taken whole, because both halves here are the format's own vocabulary rather than the user's). Every field is a primitive, so rendering follows `{{params.<name>}}`; a progression the character does not carry, or a field that does not exist, leaves the placeholder verbatim with a debug log.
+- `{{now}}` — epoch milliseconds at **run start**, one value for the whole run. Two effects that both quote it agree to the millisecond, which is what makes `{{now}} + 600000` a sound way to express "ten minutes hence" without the format growing a date grammar.
 - `{{llm}}` — the consult's output: the model's trimmed answer, or the `llm` block's `errorMessage` after a failed consult. Verbatim when the tool declares no `llm` block.
 
 Unknown placeholders are left verbatim (and logged at debug level).
@@ -229,7 +232,7 @@ The roster for a chat is resolved through the existing five-tier pool (`characte
 
 A tier decides *which* definition of a name an invoker gets. A gate decides whether they are offered one at all. Both clauses are optional, at most one may appear in a file (enforced at load, since they are not complements and the Workbench's single control cannot represent both), and a definition declaring neither is offered to everyone — which is every file written before 4.8.
 
-- **Subject: `metadata`, and only `metadata`.** The gate is answered *before* the deal, so there is no roll, no resolved parameters, and no consult to test. Operands are therefore literals: `$param` and `$state` are load-time rejections here, because neither has anything to refer to yet.
+- **Subjects: `metadata` and `progress`.** The gate is answered *before* the deal, so there is no roll, no resolved parameters, and no consult to test. What a character carries into the room is their fact sheet — and, derived from the reserved `progressions` key inside it against the wall clock, their timed spans. Operands are therefore literals: `$param` and `$state` are load-time rejections here, because neither has anything to refer to yet. `availableWhen: { progress: { "cannon.complete": { "eq": true } } }` is the whole weapon-recharge case, and it costs no reads: the roster already holds the invoker's metadata, so the sheet is derived from what is in hand.
 - **Semantics are the outcome table's, verbatim.** `lib/pascal/metadata-match.ts` holds the one fail-soft comparison table; `matchesMetadataComparator` (roll time) and `evaluateToolGate` (roster time) are both thin wrappers over it, differing only in operand resolution and logging. A second copy of those rules would drift the moment either side gained a comparator.
 - **Fail-soft cuts opposite ways, which is why both clauses exist.** A key the character lacks never matches, so an empty sheet fails every `availableWhen` (fail-closed) and satisfies no `withheldWhen` (fail-open). `withheldWhen: {x: {eq: true}}` is therefore *not* `availableWhen: {x: {neq: true}}` — they differ precisely on the character with no `x`.
 - **A gated-out definition makes no claim on its name** — not even a tombstone — so a farther tier may still deal one. That is the useful arrangement: a character's vault holds the variant written for characters like them, the General store holds the plain fallback. Contrast `disabled`, which stays absolute. The gate is evaluated *before* `disabled` for this reason: a gated tombstone only tombstones for the characters it names.
@@ -494,3 +497,75 @@ Load-time validation failures do not error at run time; they simply keep the too
 13. **Character metadata is a fourth test subject** (added post-ship; full design in [character `metadata.json`](complete/character-metadata-json.md)): same comparators and `$param` operands as `params`, shape-only load-time validation, fail-soft run-time misses (absent/non-primitive/mistyped keys decline the row, never throw), a `{{metadata.<key>}}` template family, `pascalMeta.metadataTested` in the roll record, and a roster that says only that the sheet *may* be consulted — never which keys or values exist.
 14. **The LLM consult is a fifth test subject, and its failure is an outcome, not an error** (added post-ship; see [The `llm` consult](#the-llm-consult)). The author supplies the failure's words (`errorMessage`, required), the run never fails because the oracle went quiet, and the technical reason stays out of the fiction. The provider call arrives through an injected `llmInvoke` seam so the core stays testable and the audit stays free; answer comparisons are deliberately forgiving (trim, case-insensitive eq, numeric coercion for ordering) because the subject is a model's prose, not a declared value.
 15. **`contains`/`ncontains` are substring comparators, not a grammar** (added post-ship; see [Containment](#when--comparators-not-expressions)). Two more AND-composed keys rather than any pattern language: no regex, no globs, nothing to parse or inject. Per-context strictness follows each subject's `eq` precedent — exact and case-sensitive on `params`/`metadata`, trimmed case-insensitive on `llm` — and the operand is a non-empty string literal or a `$param` to a string parameter, so an outcome can ask whether one input appears inside another (or inside the consult's answer).
+
+
+## Addition — the `progress` family (v4.10, 2026-09-08)
+
+[Character Progressions](./character-progressions.md) adds a fourth read
+subject and a third effect target, both shaped deliberately like `metadata` so
+the semantics table below them is reused rather than reimplemented.
+
+**Reads.** `when.progress`, and the gate's `progress`, are keyed
+`"<id>.<field>"` and evaluate through **`metadataComparatorHolds`** unchanged
+against a flattened sheet: `flattenProgressions(metadata, nowMs)` produces
+`"cannon.percent" → 22`, `"cannon.complete" → false`, and so on, every value a
+primitive so the existing fail-soft comparison table applies verbatim. A
+progression the character does not carry, or a field that does not exist,
+declines the row exactly as an absent metadata key does — same doctrine, same
+reason: a tool file is written before it meets a character. Load-time
+validation is the metadata-shallow kind plus one thing metadata cannot have:
+the key's *shape* is the format's own, so `"<id>.<field>"` is checked, while
+whether this character carries that progression stays unknowable.
+
+Times come out of the sheet as **epoch milliseconds**, not ISO strings, so
+ordering comparators and `{{now}} + 600000` arithmetic work on them. `percent`
+is **uncapped** — a fortnight overdue reads well past 100, which is a fact a
+table may reasonably branch on.
+
+Every entrance derives the sheet from the metadata snapshot it already read at
+run start, against **one** `nowMs` shared with `{{now}}` and with the applier's
+`updatedAt` stamp, so a run cannot see one instant and record another.
+
+**Writes.** `parseEffectTarget` gains a third branch,
+`progress.<id>.<field>`, checking the id against the progression identifier
+rule and the field against a closed writable set (`name`, `description`,
+`startTime`, `endTime`, `timeIncrement`, `percentageReport`,
+`reportFrequency`, `onComplete`, `reportTemplate`, `quantity.total`,
+`quantity.unit`, `quantity.precision`, plus the pseudo-field `remove`) — all
+at **load** time, with the field list in the rejection.
+
+The applier folds these into the same `metadataNext` copy a `metadata.<key>`
+effect uses, because `progressions` lives inside `metadata.json`: **one
+character write still lands**, and the job-child contract (one whole-object
+replace, no read-your-writes) is untouched. Writing a field of an id nobody
+authored *creates* the progression with defaults and an increment inferred from
+the resulting span; times accept epoch ms or ISO and normalise to ISO;
+effects see each other through the local copy, so `endTime` then `startTime`
+is sound. After every effect is folded, each touched entry is re-validated —
+one the schema refuses has its writes dropped and its pre-run entry restored,
+with a `warn`, **and the roll still stands**. Pascal announces either way.
+
+**The reserved key is barred from the `metadata.` branch.** `parseEffectTarget`
+refuses `metadata.progressions` and `metadata.progressions.*` at load time. An
+effect's value is an `ExprValue` — always a primitive — so the former would
+replace the whole progressions object with a string, bypassing both
+`ProgressionSchema` post-validation and the rollback, and `parseProgressions`
+would then read the wreckage fail-soft as `{}`: total, silent data loss with
+only a debug-level trace. The latter is refused because a metadata key is taken
+WHOLE, so it would mint a literal `"progressions.cannon"` key and touch no
+progression at all — not what anyone writing it means.
+
+**One parser for the `"<id>.<field>"` shape.** `parseProgressKey`
+(`lib/progressions/schema.ts`) is shared by `ProgressKeySchema` and the
+Workbench's `validateDraft`, so the progression-identifier rule is stated once
+rather than in three places. Note that its per-mistake messages surface through
+the Workbench but NOT through `when.progress`: Zod reports a record-key failure
+as its own "Invalid key in record" and discards the refinement's message, so
+there the issue path names the offending key instead. The agreement is asserted
+in both directions in `__tests__/unit/lib/pascal/custom-tools-progress.test.ts`.
+
+**What Pascal deliberately cannot do.** There is no `progress_set` LLM tool
+and no `state`-tool access to progressions: a model setting its own due date is
+exactly the fudge Pascal exists to prevent. And there is no scheduling — a
+progression completing fires nothing; completion is observed at the next
+prompt (the report) or the next roster resolution (a gate).

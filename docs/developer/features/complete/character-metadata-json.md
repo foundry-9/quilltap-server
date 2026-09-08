@@ -198,3 +198,40 @@ The `run_custom` tool description (dynamic roster injection) must **not** enumer
 9. **The roster never enumerates metadata.** Keys and values are per-character and potentially secret; the model learns only that tables may consult the sheet. `revealOdds` continues to govern whether a specific table's conditions (including metadata clauses) render.
 10. **Generation systems are excluded by audit, not by accident.** The field is user-driven; the spec makes the exclusion an explicit checklist item because a generic managed-field enumeration could otherwise sweep it into LLM-editable surfaces.
 11. **Tool-writes-metadata deferred.** Testing is v1; mutation belongs with custom-tools `persist` in v2 where write authority and job-child buffering get designed once, together.
+
+## Correction — `progressions` is a reserved key (v4.10, 2026-09-08)
+
+This document states, above, that `metadata.json` has **no reserved keys and
+no schema to satisfy**. That is no longer true, in exactly one place.
+
+[Character Progressions](../character-progressions.md) reserves the top-level
+key **`progressions`** and validates its shape (`lib/progressions/schema.ts` is
+the runtime source of truth; `public/schemas/qtap-progression.schema.json`
+mirrors it for editors). Every other key stays freeform, unvalidated and
+entirely the user's, exactly as this spec describes.
+
+The reservation was taken rather than a second file because Pascal's one
+character-scoped store *is* `metadata.json`: its snapshot is already hydrated
+at run start, its effects already commit through one whole-object replace, and
+its `.qtap` round trip is already done. A second file would have needed a
+second hydration path, a second write path and a second export path for no
+gain.
+
+Three consequences for readers of this document:
+
+- **Design decision 6 stands unamended.** Hydration is still shape-agnostic
+  and still fail-soft to `{}`; the metadata parser was not touched. Validation
+  happens at the *point of use* — `parseProgressions` drops a malformed entry
+  alone, with a `warn` naming the character and the id, and keeps the rest. A
+  broken progression never hollows a character or fails a turn. There is still
+  no migration and no backfill: the key appears on first write.
+- **"It is never injected into a prompt" now reads: raw metadata is never
+  injected; the derived progression report is the one sanctioned reader.** The
+  report is second-person prose computed from the wall clock —"you are 20
+  weeks along" — and rides the uncached per-turn tail, never system block 1.
+  The stored object itself still never reaches a model. The same amendment is
+  made to the normative doc comment at `lib/schemas/character.types.ts`.
+- **Design decision 11, "tool-writes-metadata deferred", is partly
+  discharged.** Pascal effects may now write `progress.<id>.<field>`, folded
+  into the same `metadataNext` copy as a `metadata.<key>` effect, so the single
+  character write and the job-child contract are both untouched.

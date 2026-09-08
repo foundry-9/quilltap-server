@@ -87,6 +87,7 @@ const RUN_CUSTOM_PREAMBLE = [
   'An outcome table may also consult your own character\'s metadata, so the same tool can deal differently to different characters.',
   'Some tools additionally pose a question to a separate model mid-run and let its answer steer the outcome; that consult happens server-side too, and you never speak for it.',
   'Some tools record side effects when they run — adjusting the scene\'s persistent state or the rolling character\'s own records, server-side, as part of the roll.',
+  'Some tools consult, or adjust, the rolling character\'s timed progressions — recharges, gestations, countdowns — server-side; you cannot set one yourself.',
   '',
   'Available tools:',
 ].join('\n');

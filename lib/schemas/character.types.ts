@@ -177,11 +177,19 @@ export const CharacterSchema = z.object({
    * character, so `character.metadata?.["key"]` needs no null gymnastics;
    * null/undefined and `{}` mean the same thing to a reader.
    *
-   * Driven user-side and user-side only. It is never injected into a prompt,
-   * and no generation system (create-character, summon-from-lore, the
-   * optimizer) may invent or populate it. Its consumer is Pascal: outcome
-   * tables test `when.metadata.<key>`. A transparent character can read and
-   * edit the file through the ordinary doc_* tools, like any vault document.
+   * Driven user-side and user-side only. No generation system
+   * (create-character, summon-from-lore, the optimizer) may invent or populate
+   * it. Its consumer is Pascal: outcome tables test `when.metadata.<key>`. A
+   * transparent character can read and edit the file through the ordinary
+   * doc_* tools, like any vault document.
+   *
+   * **Raw metadata is never injected into a prompt.** The one sanctioned
+   * reader is the derived character-progressions report: the reserved
+   * `progressions` key (validated by `lib/progressions/schema.ts` — the only
+   * reserved key; every other key stays freeform) is turned into a
+   * second-person line by `lib/progressions/prompt-section.ts` and appended to
+   * the uncached per-turn tail. The stored object itself still never reaches a
+   * model.
    */
   metadata: JsonSchema.nullable().optional(),
   isFavorite: z.boolean().default(false),

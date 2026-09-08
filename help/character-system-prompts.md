@@ -566,6 +566,8 @@ When faced with [situation], you will [specific response]."
 
 Only one system prompt is in play at a time. For the smaller adjustments — "be terse," "no spoilers," "we are at a funeral" — a character may also carry **subprompts**: short instructions kept as Markdown files in the vault's `Subprompts/` folder, listed beneath the primary prompts on this tab, and switched on or off per chat from the New Chat dialog or the Participants drawer. They are delivered directly after the system prompt and follow the same rule: write to the character, in the second person. See [Character Subprompts](character-subprompts.md).
 
+Below both of those sits a third card, **Progressions** — not instructions at all, but things the character is *carrying*: a gestation, a recharging weapon, a countdown. Quilltap works out how far along each one is and tells the character so at the top of their turn. See [Progressions](character-progressions.md).
+
 ## Using Prompt Templates from AI Wizard
 
 If you used the AI Wizard to generate system prompt:
@@ -594,6 +596,7 @@ Characters with help tools enabled can navigate directly to this page:
 - [Character Creation](character-creation.md) — Creating characters with prompts
 - [Editing Characters](character-editing.md) — Modifying system prompts
 - [Character Subprompts](character-subprompts.md) — Smaller instructions switched on per chat
+- [Progressions](character-progressions.md) — Timed spans reported to the character each turn, listed on this same tab
 - [Characters Overview](characters.md) — About the character system
 - [Chats](chats.md) — Testing characters in conversation
 - [Settings: Connection Profiles](connection-profiles.md) — LLM selection affects prompts

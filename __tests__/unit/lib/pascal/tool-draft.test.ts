@@ -290,6 +290,43 @@ describe('validateDraft', () => {
     expect(issues.some((i) => i.where.section === 'identity')).toBe(true)
   })
 
+  /**
+   * The Workbench is where the shared `parseProgressKey`'s per-mistake
+   * messages actually reach a person: through `when.progress` they are lost to
+   * Zod's own "Invalid key in record". So this is the surface worth asserting
+   * the wording on.
+   */
+  describe('a progress condition key', () => {
+    function draftWithProgressKey(key: string) {
+      const draft = newDraft()
+      draft.name = 'probe'
+      draft.description = 'x'
+      draft.outcomes[0].message = 'm'
+      draft.outcomes[0].conditions = [
+        { id: 'a', subject: { kind: 'progress', key }, comparator: 'eq', operand: { kind: 'boolean', value: true } },
+      ]
+      return validateDraft(draft).filter((i) => i.severity === 'error')
+    }
+
+    it('accepts a well-formed one', () => {
+      expect(draftWithProgressKey('cannon.complete')).toEqual([])
+    })
+
+    it('says specifically that no field was named', () => {
+      expect(draftWithProgressKey('cannon').some((i) => i.message.includes('names no field'))).toBe(true)
+    })
+
+    it('says specifically that the id is not an id', () => {
+      expect(
+        draftWithProgressKey('Cannon.complete').some((i) => i.message.includes('not a progression id'))
+      ).toBe(true)
+    })
+
+    it('rejects a blank key', () => {
+      expect(draftWithProgressKey('').length).toBeGreaterThan(0)
+    })
+  })
+
   it('blocks duplicate subject+comparator pairs but not distinct metadata keys', () => {
     const draft = newDraft()
     draft.name = 'dup'

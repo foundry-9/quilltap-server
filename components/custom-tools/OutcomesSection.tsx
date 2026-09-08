@@ -67,6 +67,8 @@ function subjectSelectValue(subject: ConditionSubject): string {
       return `param:${subject.name}`
     case 'metadata':
       return 'metadata'
+    case 'progress':
+      return 'progress'
     case 'llm':
       return 'llm'
     case 'llm-ok':
@@ -420,6 +422,8 @@ function describeSlot(condition: Pick<DraftCondition, 'subject' | 'comparator'>)
       return `A row can test ${label} on "${condition.subject.name}" only once.`
     case 'metadata':
       return `A row can test ${label} on metadata "${condition.subject.key}" only once.`
+    case 'progress':
+      return `A row can test ${label} on progress "${condition.subject.key}" only once.`
     case 'llm':
       return `A row can test ${label} on the consult's answer only once.`
     case 'llm-ok':
@@ -467,7 +471,7 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
       if (!p.name) return false
       // A substring must be text whatever the subject turns out to hold.
       if (containment) return p.type === 'string'
-      if (subject.kind === 'metadata' || subject.kind === 'llm') {
+      if (subject.kind === 'metadata' || subject.kind === 'progress' || subject.kind === 'llm') {
         // With the subject's type unknown, no reference can be ruled
         // incompatible — ordering still demands a number, though.
         return !ordering || p.type === 'number' || p.type === 'integer'
@@ -483,6 +487,7 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     if (value === 'value') nextSubject = { kind: 'value' }
     else if (value === 'roll') nextSubject = { kind: 'roll' }
     else if (value === 'metadata') nextSubject = { kind: 'metadata', key: subject.kind === 'metadata' ? subject.key : '' }
+    else if (value === 'progress') nextSubject = { kind: 'progress', key: subject.kind === 'progress' ? subject.key : '' }
     else if (value === 'llm') nextSubject = { kind: 'llm' }
     else if (value === 'llm-ok') nextSubject = { kind: 'llm-ok' }
     else nextSubject = { kind: 'param', name: value.slice('param:'.length) }
@@ -530,6 +535,9 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
             </option>
           ))}
         <option value="metadata">Metadata…</option>
+        <option value="progress" title="A derived field of one of the character's timed progressions">
+          Progress…
+        </option>
         {draft.llmEnabled && (
           <>
             <option value="llm" title="What the consulted model answered">
@@ -555,6 +563,19 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         />
       )}
 
+      {subject.kind === 'progress' && (
+        <input
+          type="text"
+          value={subject.key}
+          onChange={(e) => onChange({ ...condition, subject: { kind: 'progress', key: e.target.value } })}
+          placeholder="cannon.complete"
+          disabled={disabled}
+          className={`qt-input w-44 text-sm ${subject.key.trim() === '' ? 'qt-input-error' : ''}`}
+          aria-label="Progress key"
+          title={'A progression of the invoking character, keyed "<id>.<field>" — percent, complete, remainingMs, state, started, elapsedMs, startTime, endTime, name, elapsed, remaining, quantity. A progression they do not carry simply doesn\u2019t match.'}
+        />
+      )}
+
       <select
         value={condition.comparator}
         onChange={(e) => handleComparatorChange(e.target.value as ComparatorKey)}
@@ -577,7 +598,7 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         onChange={onChange}
       />
 
-      {subject.kind === 'metadata' && (ordering || containment) && (
+      {(subject.kind === 'metadata' || subject.kind === 'progress') && (ordering || containment) && (
         <span
           className="text-xs qt-text-secondary"
           title={
@@ -634,7 +655,10 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   const operand = condition.operand
   const ordering = ORDERING_KEYS.has(condition.comparator)
   const containment = CONTAINMENT_KEYS.has(condition.comparator)
-  const typeUnknowable = condition.subject.kind === 'metadata' || condition.subject.kind === 'llm'
+  const typeUnknowable =
+    condition.subject.kind === 'metadata' ||
+    condition.subject.kind === 'progress' ||
+    condition.subject.kind === 'llm'
 
   const setOperand = (next: ConditionOperand) => onChange({ ...condition, operand: next })
 
@@ -767,6 +791,24 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
     else setMenuOpen(false)
   }
 
+  const insertProgressField = () => {
+    // Same suggestion rule as metadata: offer back a progress key this tool
+    // already tests, because that is the one the author demonstrably means.
+    const testedKeys = new Set<string>()
+    for (const o of draft.outcomes) {
+      for (const condition of o.conditions) {
+        if (condition.subject.kind === 'progress' && condition.subject.key.trim() !== '') {
+          testedKeys.add(condition.subject.key)
+        }
+      }
+    }
+    const suggestion = [...testedKeys][0] ?? 'cannon.percent'
+
+    const key = window.prompt('Progress field to render, as "<progression id>.<field>":', suggestion)
+    if (key && key.trim() !== '') insertAtCursor(`{{progress.${key.trim()}}}`)
+    else setMenuOpen(false)
+  }
+
   /** Placeholders present in the text, for the visibility strip. */
   const placeholders = [...outcome.message.matchAll(PLACEHOLDER_PATTERN)].map((m) => m[0])
 
@@ -808,6 +850,11 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
                   <MenuItem key={p.id} label={`Parameter: ${p.name}`} onClick={() => insertAtCursor(`{{params.${p.name}}}`)} />
                 ))}
               <MenuItem label="Metadata key…" onClick={insertMetadataKey} />
+              <MenuItem label="Progress field…" onClick={insertProgressField} />
+              <MenuItem
+                label="Now (epoch ms)"
+                onClick={() => insertAtCursor('{{now}}')}
+              />
               {draft.llmEnabled && (
                 <MenuItem label="Consult answer" onClick={() => insertAtCursor('{{llm}}')} />
               )}
