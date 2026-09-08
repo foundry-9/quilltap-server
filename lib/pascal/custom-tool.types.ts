@@ -25,8 +25,10 @@
 import { z } from 'zod';
 import {
   PROGRESSION_ID_PATTERN,
+  PROGRESSIONS_METADATA_KEY,
   WRITABLE_PROGRESSION_FIELDS,
   isWritableProgressionField,
+  parseProgressKey,
   type WritableProgressionField,
 } from '@/lib/progressions/schema';
 import { MAX_DIE_SIDES, MIN_DIE_SIDES, parseDiceNotation } from './dice-notation';
@@ -409,12 +411,13 @@ const MetadataKeySchema = z.string().min(1);
  * field exists on it — those are facts about a character the definition has
  * never met, and they fail soft exactly as an absent metadata key does.
  */
-const ProgressKeySchema = z
-  .string()
-  .regex(
-    /^[a-z][a-z0-9_-]{0,63}\.[a-zA-Z]+$/,
-    'must be "<progression id>.<field>" — e.g. "cannon.complete"'
-  );
+const ProgressKeySchema = z.string().superRefine((key, ctx) => {
+  // Delegated rather than re-expressed: `parseProgressKey` is the one place
+  // the "<id>.<field>" shape and the progression-identifier rule live, so this
+  // schema and the Workbench's condition validator cannot drift apart.
+  const parsed = parseProgressKey(key);
+  if (!parsed.ok) ctx.addIssue({ code: 'custom', message: parsed.reason });
+});
 
 /**
  * A comparator in an availability gate. The same eight keys as everywhere else,
@@ -728,6 +731,23 @@ export function parseEffectTarget(
     const key = target.slice('metadata.'.length);
     if (key.length === 0) {
       return { ok: false, reason: 'names no metadata key after "metadata."' };
+    }
+    // The reserved key is not writable through this door. An effect's value is
+    // always a PRIMITIVE, so `metadata.progressions` would replace the whole
+    // progressions object with a string or a number — wiping every timed span
+    // the character carries, past the schema validation and the rollback that
+    // guard the `progress.` path, and fail-soft enough on the next read that
+    // nobody would notice. `metadata.progressions.cannon` is refused for the
+    // adjacent reason: a metadata key is taken WHOLE, so that writes a
+    // literal key named "progressions.cannon" and touches no progression at
+    // all, which is not what anyone writing it means.
+    if (key === PROGRESSIONS_METADATA_KEY || key.startsWith(`${PROGRESSIONS_METADATA_KEY}.`)) {
+      return {
+        ok: false,
+        reason:
+          `writes the reserved "${PROGRESSIONS_METADATA_KEY}" key through "metadata." — ` +
+          'use "progress.<id>.<field>" instead, which is validated and rolled back on a bad result',
+      };
     }
     return { ok: true, target: { kind: 'metadata', key, raw: target } };
   }

@@ -545,6 +545,25 @@ is sound. After every effect is folded, each touched entry is re-validated —
 one the schema refuses has its writes dropped and its pre-run entry restored,
 with a `warn`, **and the roll still stands**. Pascal announces either way.
 
+**The reserved key is barred from the `metadata.` branch.** `parseEffectTarget`
+refuses `metadata.progressions` and `metadata.progressions.*` at load time. An
+effect's value is an `ExprValue` — always a primitive — so the former would
+replace the whole progressions object with a string, bypassing both
+`ProgressionSchema` post-validation and the rollback, and `parseProgressions`
+would then read the wreckage fail-soft as `{}`: total, silent data loss with
+only a debug-level trace. The latter is refused because a metadata key is taken
+WHOLE, so it would mint a literal `"progressions.cannon"` key and touch no
+progression at all — not what anyone writing it means.
+
+**One parser for the `"<id>.<field>"` shape.** `parseProgressKey`
+(`lib/progressions/schema.ts`) is shared by `ProgressKeySchema` and the
+Workbench's `validateDraft`, so the progression-identifier rule is stated once
+rather than in three places. Note that its per-mistake messages surface through
+the Workbench but NOT through `when.progress`: Zod reports a record-key failure
+as its own "Invalid key in record" and discards the refinement's message, so
+there the issue path names the offending key instead. The agreement is asserted
+in both directions in `__tests__/unit/lib/pascal/custom-tools-progress.test.ts`.
+
 **What Pascal deliberately cannot do.** There is no `progress_set` LLM tool
 and no `state`-tool access to progressions: a model setting its own due date is
 exactly the fudge Pascal exists to prevent. And there is no scheduling — a

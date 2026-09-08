@@ -58,6 +58,7 @@ import {
   type WhenObject,
 } from './custom-tool.types';
 import { parseDiceNotation } from './dice-notation';
+import { parseProgressKey } from '@/lib/progressions/schema';
 import { parseExpression } from './expressions';
 import { escapeRegex } from '@/lib/utils/regex';
 
@@ -1027,9 +1028,15 @@ function validateCondition(
     issues.push(err(where, 'a metadata condition needs a key'));
     return;
   }
-  if (condition.subject.kind === 'progress' && !/^[a-z][a-z0-9_-]{0,63}\.[a-zA-Z]+$/.test(condition.subject.key.trim())) {
-    issues.push(err(where, 'a progress condition needs a key shaped "<progression id>.<field>" — e.g. cannon.complete'));
-    return;
+  if (condition.subject.kind === 'progress') {
+    // Same parser the load-time schema uses, so the form and the loader agree
+    // about what a progress key is — and the author reads the specific reason
+    // rather than one generic sentence covering four different mistakes.
+    const parsed = parseProgressKey(condition.subject.key.trim());
+    if (!parsed.ok) {
+      issues.push(err(where, `a progress condition ${parsed.reason}`));
+      return;
+    }
   }
   if ((condition.subject.kind === 'llm' || condition.subject.kind === 'llm-ok') && !draft.llmEnabled) {
     issues.push(err(where, 'tests the LLM consult, but the consult is not enabled'));

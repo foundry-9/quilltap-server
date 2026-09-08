@@ -389,6 +389,16 @@ that now falls before its beginning — *that progression's* writes are dropped
 and its previous state restored. The roll still stands and Pascal still
 announces; a mistyped countdown has never been worth sinking a hand that was
 already dealt.
+
+One door is deliberately barred: **`metadata.progressions` is refused when the
+file loads.** An effect's value is always a single plain value, so writing to
+the reserved key that way would replace every progression the character has
+with a lone string — around the validation, around the restoration above, and
+quietly enough that nobody would notice until a report went missing. Write
+`progress.<id>.<field>` instead, which is the door with the locks on it.
+(`metadata.progressions.cannon` is refused too, for a nearby reason: metadata
+keys are taken whole, so that would file a key *named* `progressions.cannon`
+and leave the cannon entirely alone.)
 - **`value`** — what to write. A JSON number or `true`/`false` is stored as it stands. A JSON **string is always an expression**: a little closed arithmetic of `+ − × ÷`, parentheses, quoted text, and the same `{{…}}` references a message takes — `"{{value}} * 2"`, `"'rolled ' + {{dice}}"`.
 
 **The one trap, stated in bold so you meet it here and not in a rejection badge: literal prose must be quoted *inside* the expression.**

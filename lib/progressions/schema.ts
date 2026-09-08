@@ -172,6 +172,39 @@ export type Progressions = z.infer<typeof ProgressionsSchema>;
 export const PROGRESSIONS_METADATA_KEY = 'progressions';
 
 /**
+ * Split a `"<id>.<field>"` progress key into its halves, or say why it is not
+ * one. The single parser for that shape: Pascal's read schema
+ * (`ProgressKeySchema`), the Workbench's condition validator, and anything
+ * that follows all come through here, so the identifier rule lives in exactly
+ * one place and cannot drift between them.
+ *
+ * The `<field>` half is checked for shape only, deliberately — which derived
+ * fields exist is the engine's business, and an unknown one fails soft at run
+ * time exactly as an absent metadata key does. What IS worth catching at load
+ * time is a key that names no id or no field at all.
+ */
+export function parseProgressKey(
+  key: string,
+): { ok: true; id: string; field: string } | { ok: false; reason: string } {
+  const dot = key.indexOf('.');
+  if (dot < 0) {
+    return { ok: false, reason: `"${key}" names no field — write "<progression id>.<field>", e.g. "cannon.complete"` };
+  }
+  const id = key.slice(0, dot);
+  const field = key.slice(dot + 1);
+  if (!PROGRESSION_ID_PATTERN.test(id)) {
+    return {
+      ok: false,
+      reason: `"${id}" is not a progression id — lowercase, starting with a letter, then letters, digits, _ or - (at most 64)`,
+    };
+  }
+  if (!/^[a-zA-Z]+$/.test(field)) {
+    return { ok: false, reason: `"${field}" is not a progression field name` };
+  }
+  return { ok: true, id, field };
+}
+
+/**
  * The fields a Pascal effect may write, plus the `remove` pseudo-field. Kept
  * here beside the schema so the writable set and the schema can never drift.
  */

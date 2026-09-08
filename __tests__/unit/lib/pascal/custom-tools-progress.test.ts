@@ -21,6 +21,7 @@ import { evaluateToolGate } from '@/lib/pascal/tool-gate'
 import { collectToolVocabulary } from '@/lib/pascal/tool-vocabulary'
 import { classifyPlaceholder } from '@/lib/pascal/placeholders'
 import { flattenProgressions, UNIT_MS } from '@/lib/progressions/engine'
+import { parseProgressKey } from '@/lib/progressions/schema'
 
 const START = Date.parse('2026-09-08T14:00:00Z')
 
@@ -209,6 +210,64 @@ describe('the progress subject at load time', () => {
     expect(() =>
       withWhen({ progress: {} })
     ).toThrow()
+  })
+})
+
+/**
+ * The one parser behind both the load-time schema and the Workbench's
+ * condition validator. It exists so the progression-identifier rule lives in a
+ * single place — it used to be written out three times, which is exactly how
+ * two of them drift.
+ *
+ * Its per-mistake messages reach an author through the Workbench (and any
+ * other direct caller). They do NOT reach one through `when.progress`: Zod
+ * reports a record-KEY failure as its own "Invalid key in record" and discards
+ * the refinement's message, so there the path names the offending key instead.
+ * Asserted here rather than assumed, so nobody later "fixes" the schema to
+ * surface a message it cannot surface.
+ */
+describe('parseProgressKey', () => {
+  it('splits a well-formed key', () => {
+    expect(parseProgressKey('cannon.complete')).toEqual({ ok: true, id: 'cannon', field: 'complete' })
+  })
+
+  it('splits at the FIRST dot, so a dotted field is the field', () => {
+    expect(parseProgressKey('cannon.a.b')).toMatchObject({ ok: false })
+  })
+
+  it('says specifically that no field was named', () => {
+    const parsed = parseProgressKey('cannon')
+    expect(parsed.ok).toBe(false)
+    if (parsed.ok) throw new Error('unreachable')
+    expect(parsed.reason).toContain('names no field')
+  })
+
+  it('says specifically that the id is not an id', () => {
+    const parsed = parseProgressKey('Cannon.complete')
+    expect(parsed.ok).toBe(false)
+    if (parsed.ok) throw new Error('unreachable')
+    expect(parsed.reason).toContain('not a progression id')
+  })
+
+  it('rejects an empty id and an empty field', () => {
+    expect(parseProgressKey('.complete').ok).toBe(false)
+    expect(parseProgressKey('cannon.').ok).toBe(false)
+  })
+
+  it('agrees with the schema on every specimen', () => {
+    // The two must never diverge — that is the whole point of the shared
+    // parser, and this is the assertion that keeps it true.
+    for (const key of ['cannon.complete', 'a.b', 'cannon', 'Cannon.complete', 'cannon.', '.complete', 'a.b.c']) {
+      const viaParser = parseProgressKey(key).ok
+      const viaSchema = QtapCustomToolSchema.safeParse({
+        ...BASE,
+        outcomes: [
+          { when: { progress: { [key]: { eq: true } } }, message: '-', state: 'info' },
+          { when: true, message: '-', state: 'info' },
+        ],
+      }).success
+      expect(viaSchema).toBe(viaParser)
+    }
   })
 })
 
@@ -401,6 +460,43 @@ describe('parseEffectTarget — the progress branch', () => {
     expect(parsed.ok).toBe(false)
     if (parsed.ok) throw new Error('unreachable')
     expect(parsed.reason).toContain('progress.')
+  })
+
+  /**
+   * The reserved key is not writable through the `metadata.` door.
+   *
+   * An effect's value is always a primitive, so `metadata.progressions` would
+   * replace the whole progressions object with a string — wiping every span
+   * the character carries, past the validation and rollback that guard the
+   * `progress.` path, and fail-soft enough on the next read that nobody would
+   * notice. Caught at LOAD time, where the author can still be told why.
+   */
+  it('refuses to write the reserved progressions key through "metadata."', () => {
+    const parsed = parseEffectTarget('metadata.progressions')
+    expect(parsed.ok).toBe(false)
+    if (parsed.ok) throw new Error('unreachable')
+    expect(parsed.reason).toContain('reserved')
+    expect(parsed.reason).toContain('progress.<id>.<field>')
+  })
+
+  it('refuses a dotted metadata key under the reserved one, which would touch no progression', () => {
+    // Metadata keys are taken WHOLE, so this writes a literal key named
+    // "progressions.cannon" — never the cannon. Refused because nobody who
+    // writes it means that.
+    expect(parseEffectTarget('metadata.progressions.cannon').ok).toBe(false)
+  })
+
+  it('rejects the reserved-key write at LOAD time, not at run time', () => {
+    expect(rejection({ ...BASE, effects: [{ target: 'metadata.progressions', value: 1 }] })).toContain(
+      'reserved'
+    )
+  })
+
+  it('still allows a metadata key that merely starts with the same letters', () => {
+    expect(parseEffectTarget('metadata.progressionsNotes')).toMatchObject({
+      ok: true,
+      target: { kind: 'metadata', key: 'progressionsNotes' },
+    })
   })
 
   it('leaves the state and metadata branches untouched', () => {

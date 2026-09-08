@@ -40,6 +40,11 @@ remember that time has passed.
   re-arm it on a successful roll with `{{now}}` and `{{now}} + 600000`. Writing to an unknown id
   creates the progression; `remove` deletes one. Progress writes fold into the existing single
   character metadata write. A result the schema refuses is rolled back and the roll still stands.
+- `metadata.progressions` and `metadata.progressions.*` are refused as effect
+  targets when a tool file loads. An effect writes a primitive, so the former
+  would replace the whole reserved object with a string, bypassing the
+  progressions validation and rollback; the latter would write a literal key
+  named `progressions.cannon` and touch no progression.
 - The model cannot set its own progression: there is no LLM tool for it, and the `state` tool has
   no access. Only the user and Pascal's server-side effects write them.
 - New Progressions card on the Aurora character edit page (System Prompts tab) with an editor for
