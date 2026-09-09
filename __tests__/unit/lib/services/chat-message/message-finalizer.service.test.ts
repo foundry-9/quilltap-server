@@ -77,6 +77,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     (result: { nextSpeakerId: string | null; reason?: string }) =>
       result.nextSpeakerId === null || result.reason === 'user_turn',
   ),
+  // The cycle rotation is resolved before the speaker pick; these tests assert
+  // on the reported next speaker, so it stands in as "no rotation on file".
+  resolveCycleOrder: jest.fn().mockResolvedValue([]),
 }))
 
 const createMockRepos = () => ({

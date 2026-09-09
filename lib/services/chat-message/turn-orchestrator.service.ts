@@ -6,6 +6,7 @@ import {
   isAllLLMChat,
   shouldPauseForAllLLM,
   isUserDrivenSeat,
+  resolveCycleOrder,
 } from '@/lib/chat/turn-manager'
 import type { Character, MessageEvent } from '@/lib/schemas/types'
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -105,6 +106,7 @@ export async function shouldChainNext(
     participants: freshChat.participants,
     userParticipantId,
     spokenThisCycleParticipantIds: freshChat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: freshChat.cycleOrderParticipantIds,
   })
 
   // Check all-LLM pause thresholds
@@ -176,6 +178,10 @@ export async function shouldChainNext(
         }
       }
     }
+
+    // Draw the cycle's rotation if this turn starts one, so the whole chain —
+    // and every other reader — follows one order instead of each re-rolling.
+    turnState.cycleOrder = await resolveCycleOrder(repos, freshChat, charactersMap, turnState)
 
     const result = selectNextSpeaker(
       freshChat.participants,

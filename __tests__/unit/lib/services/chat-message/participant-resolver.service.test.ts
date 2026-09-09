@@ -66,6 +66,8 @@ const buildChat = (participants: ChatParticipantBase[], spokenJson: string | nul
 const buildRepos = (characters: Map<string, Character>, messages: unknown[] = []) => ({
   chats: {
     getMessages: jest.fn().mockResolvedValue(messages),
+    // The resolver draws and stores the cycle's rotation before picking.
+    update: jest.fn().mockResolvedValue(undefined),
   },
   characters: {
     findById: jest.fn((id: string) => Promise.resolve(characters.get(id) ?? null)),

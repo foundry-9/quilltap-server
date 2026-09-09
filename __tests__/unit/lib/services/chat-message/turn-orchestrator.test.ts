@@ -27,6 +27,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
   isUserDrivenSeat: (p: { id?: string; controlledBy?: string } | null | undefined, ids?: readonly string[] | null) =>
     p?.controlledBy === 'user' || (Array.isArray(ids) && !!p?.id && ids.includes(p.id)),
+  // The cycle rotation is resolved before every selection; these tests are about
+  // the chain guards, so it stands in as "no rotation on file".
+  resolveCycleOrder: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({

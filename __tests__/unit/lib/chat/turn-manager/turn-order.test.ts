@@ -5,7 +5,8 @@
  * - Generating participant placed first
  * - Next speaker from selection result
  * - Queue entries in order
- * - Eligible participants sorted by talkativeness
+ * - Still-to-come participants in the cycle's drawn rotation (talkativeness
+ *   sort only as the fallback when no rotation is on file)
  * - User persona placement
  * - Already-spoken participants
  * - Inactive participants at end with null position
@@ -61,6 +62,7 @@ function createTurnState(overrides: Partial<TurnState> = {}): TurnState {
     currentTurnParticipantId: null,
     queue: [],
     lastSpeakerId: null,
+    cycleOrder: [],
     ...overrides,
   }
 }
@@ -424,5 +426,88 @@ describe('computePredictedTurnOrder', () => {
       expect(result).toHaveLength(1)
       expect(result[0].participantId).toBe('alice')
     })
+  })
+})
+
+describe('computePredictedTurnOrder — the drawn rotation', () => {
+  it('orders the rest of the cycle by the rotation, not by talkativeness', () => {
+    // Talkativeness would sort these loudest-first: alice, bob, carol. The
+    // rotation says otherwise, and the rotation is what will actually happen.
+    const participants = [
+      createCharacter('alice', 'Alice', 0.9),
+      createCharacter('bob', 'Bob', 0.6),
+      createCharacter('carol', 'Carol', 0.2),
+    ]
+
+    const result = computePredictedTurnOrder({
+      participants,
+      turnState: createTurnState({ cycleOrder: ['carol', 'alice', 'bob'] }),
+      turnSelectionResult: null,
+      isGenerating: false,
+      respondingParticipantId: null,
+      userParticipantId: null,
+    })
+
+    expect(result.map(e => e.participantId)).toEqual(['carol', 'alice', 'bob'])
+    expect(result.map(e => e.position)).toEqual([1, 2, 3])
+  })
+
+  it('keeps the seat now generating at the head, with the rotation behind it', () => {
+    const participants = [
+      createCharacter('alice', 'Alice', 0.9),
+      createCharacter('bob', 'Bob', 0.6),
+      createCharacter('carol', 'Carol', 0.2),
+    ]
+
+    const result = computePredictedTurnOrder({
+      participants,
+      turnState: createTurnState({ cycleOrder: ['carol', 'bob'], lastSpeakerId: 'alice' }),
+      turnSelectionResult: null,
+      isGenerating: true,
+      respondingParticipantId: 'alice',
+      userParticipantId: null,
+    })
+
+    expect(result.map(e => e.participantId)).toEqual(['alice', 'carol', 'bob'])
+    expect(result[0].status).toBe('generating')
+    expect(result[1].status).toBe('eligible')
+  })
+
+  it('puts a seat the rotation never dealt in behind those it did', () => {
+    const participants = [
+      createCharacter('alice', 'Alice', 0.9), // loudest, but not in the rotation
+      createCharacter('bob', 'Bob', 0.6),
+      createCharacter('carol', 'Carol', 0.2),
+    ]
+
+    const result = computePredictedTurnOrder({
+      participants,
+      turnState: createTurnState({ cycleOrder: ['carol', 'bob'] }),
+      turnSelectionResult: null,
+      isGenerating: false,
+      respondingParticipantId: null,
+      userParticipantId: null,
+    })
+
+    expect(result.map(e => e.participantId)).toEqual(['carol', 'bob', 'alice'])
+  })
+
+  it('falls back to the talkativeness sort with no rotation on file', () => {
+    const participants = [
+      createCharacter('carol', 'Carol', 0.2),
+      createCharacter('alice', 'Alice', 0.9),
+      createCharacter('bob', 'Bob', 0.6),
+    ]
+
+    const result = computePredictedTurnOrder({
+      participants,
+      turnState: createTurnState(),
+      turnSelectionResult: null,
+      isGenerating: false,
+      respondingParticipantId: null,
+      userParticipantId: null,
+    })
+
+    expect(result.map(e => e.participantId)).toEqual(['alice', 'bob', 'carol'])
   })
 })

@@ -238,6 +238,8 @@ export interface Chat {
   allLLMPauseTurnCount?: number
   /** JSON-encoded array of participantIds that have spoken in the current rotation cycle */
   spokenThisCycleParticipantIds?: string
+  /** JSON-encoded rotation for the current cycle: who has yet to speak, in order */
+  cycleOrderParticipantIds?: string
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode?: boolean
   /** Document Mode layout state: normal (chat only), split (chat + document), focus (document only) */

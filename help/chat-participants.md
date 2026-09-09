@@ -63,7 +63,7 @@ When collapsed, the sidebar shows:
 
 **Mini Avatars:**
 - Small circular avatars for each participant
-- Stacked vertically on the right edge, sorted by predicted turn order
+- Stacked vertically on the right edge, sorted by turn order
 - Shows current speaker with glowing border
 - Turn position badges on all active participants (color-coded by status)
 - Status overlay icons on avatars indicate non-active states (silent, absent) so you can see at a glance who's participating even with the sidebar collapsed
@@ -383,12 +383,12 @@ Adds characters to an ordered speaking list:
 
 ### Turn Order Badges
 
-Position badges on each participant show their predicted turn order:
+Position badges on each participant show the cycle's running order — drawn before the cycle begins, so the numbers are a schedule rather than a forecast (see [The Running Order](chat-turn-manager.md#the-running-order)):
 
 - **Green pulsing** — Currently generating (#1)
 - **Green static** — Next speaker
 - **Blue** — Queued to speak
-- **Neutral** — Eligible, sorted by talkativeness
+- **Neutral** — Still to come, in the order they will speak
 - **Amber** — Your turn position
 - **Dimmed** — Already spoke this cycle
 - **No badge** — Absent or removed participant

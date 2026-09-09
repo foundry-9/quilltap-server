@@ -10,6 +10,7 @@ import { stripCharacterNamePrefix, truncateAtForeignSpeaker, normalizeContentBlo
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
+  resolveCycleOrder,
   getActiveCharacterParticipants,
   isUsersTurn,
 } from '@/lib/chat/turn-manager'
@@ -669,6 +670,7 @@ export async function calculateNextSpeaker(
     participants: chat.participants,
     userParticipantId,
     spokenThisCycleParticipantIds: freshChat?.spokenThisCycleParticipantIds ?? chat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: freshChat?.cycleOrderParticipantIds ?? chat.cycleOrderParticipantIds,
   })
 
   const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
@@ -684,6 +686,15 @@ export async function calculateNextSpeaker(
       }
     }
   }
+
+  // Draw the cycle's rotation if this answer spent the last one, so the "who is
+  // next" this reports is the same seat the chain will actually call on.
+  turnState.cycleOrder = await resolveCycleOrder(
+    repos,
+    { id: chatId, participants: chat.participants },
+    charactersMap,
+    turnState,
+  )
 
   const nextSpeakerResult = selectNextSpeaker(
     chat.participants,

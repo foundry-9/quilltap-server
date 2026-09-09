@@ -501,6 +501,7 @@ CREATE TABLE "chats" (
   "answerConfirmationOverride" TEXT DEFAULT NULL,  -- per-chat answer-confirmation override: NULL = inherit (project override, then global); 'ON'/'OFF' = force the Salon consistency check on/off. Added by add-answer-confirmation-columns-v2.
   "turnQueue" TEXT DEFAULT '[]',
   "spokenThisCycleParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds that have spoken in the current rotation cycle (includes user-controlled characters)
+  "cycleOrderParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds still to speak this cycle, in order. Drawn once per cycle (talkativeness-weighted, sampled without replacement) by resolveCycleOrder; struck from as each seat speaks. Empty = cycle spent, next selection draws afresh. Added by add-cycle-order-column-v1.
   "sceneState" TEXT DEFAULT NULL,
   "renderedMarkdown" TEXT DEFAULT NULL,
   "equippedOutfit" TEXT DEFAULT NULL,  -- JSON map { [characterId]: { top: [], bottom: [], footwear: [], accessories: [], hair: [] } }, each slot an array of wardrobe item ids (layering order significant). Unconstrained JSON: rows written before a slot existed simply lack the key and parse with an empty array.

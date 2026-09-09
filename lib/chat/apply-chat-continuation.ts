@@ -9,7 +9,7 @@
  *   2. Replay the carryover window — the most recent Librarian summary plus
  *      every later message — into the new chat, with participant IDs remapped
  *      by characterId.
- *   3. Replicate turn state (isPaused, turnQueue, lastTurnParticipantId,
+ *   3. Replicate turn state (isPaused, turnQueue, cycle rotation, lastTurnParticipantId,
  *      activeTypingParticipantId, impersonatingParticipantIds,
  *      allLLMPauseTurnCount), again with participant ID remapping.
  *   4. Post a Host bubble at the tail of the source chat linking to the new
@@ -213,6 +213,10 @@ async function replicateTurnState(
     sourceChat.spokenThisCycleParticipantIds,
     'spokenThisCycleParticipantIds',
   );
+  const newCycleOrder = remapJsonIdArray(
+    sourceChat.cycleOrderParticipantIds,
+    'cycleOrderParticipantIds',
+  );
 
   const newImpersonating = (sourceChat.impersonatingParticipantIds || [])
     .map((id) => participantMap.get(id))
@@ -226,6 +230,7 @@ async function replicateTurnState(
     allLLMPauseTurnCount: sourceChat.allLLMPauseTurnCount ?? 0,
     turnQueue: newTurnQueue,
     spokenThisCycleParticipantIds: newSpokenThisCycle,
+    cycleOrderParticipantIds: newCycleOrder,
   };
 
   await repos.chats.update(newChatId, update);

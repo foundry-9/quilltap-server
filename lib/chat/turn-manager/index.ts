@@ -22,10 +22,22 @@ export {
   updateTurnStateAfterMessage,
   computeSpokenThisCycleAfterMessage,
   computeSpokenThisCycleAfterSkip,
+  computeCycleOrderAfterMessage,
+  computeCycleOrderAfterSkip,
 } from './state';
 
 // Turn selection
 export { selectNextSpeaker, selectNextSpeakerAfterUserMessage } from './selection';
+
+// Cycle rotation — drawn once per cycle, then followed
+export {
+  parseCycleOrder,
+  cycleCandidates,
+  drawCycleOrder,
+  pickFromCycleOrder,
+  resolveCycleOrder,
+} from './cycle-order';
+export type { CycleOrderChat, CycleOrderRepos } from './cycle-order';
 
 // "Nothing to add" turn-skipping — shared pure logic
 export {

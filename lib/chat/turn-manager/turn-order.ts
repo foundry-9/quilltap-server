@@ -1,12 +1,19 @@
 /**
  * Turn Order Computation
  *
- * Computes a predicted turn order for display in the participant sidebar.
+ * Computes the turn order for display in the participant sidebar.
  * This is display-only logic — it does NOT affect the actual turn selection algorithm.
  *
  * The ordering reflects who is currently generating, who is next, who is queued,
- * who is eligible, and who has already spoken this cycle. Inactive participants
- * are placed at the end with no position number.
+ * who is still to come in this cycle's rotation, and who has already spoken.
+ * Inactive participants are placed at the end with no position number.
+ *
+ * Positions below the queue used to be a *guess* — everyone still eligible,
+ * sorted by talkativeness, because the next pick had not been made yet and could
+ * not be known. Since the whole cycle is now drawn up front
+ * (`chat.cycleOrderParticipantIds`, see `cycle-order.ts`), `turnState.cycleOrder`
+ * gives the real sequence and the sidebar shows it. The talkativeness sort
+ * survives only as the fallback for a chat with no rotation on file yet.
  */
 
 import type { TurnState, TurnSelectionResult } from './types';
@@ -117,23 +124,39 @@ export function computePredictedTurnOrder(options: ComputeTurnOrderOptions): Tur
   const activeParticipants = participants.filter(p => isParticipantPresent(p.status || 'active'));
   const inactiveParticipants = participants.filter(p => !isParticipantPresent(p.status || 'active'));
 
-  // 4. Eligible participants (active, not spoken this cycle, not last speaker, not user)
-  // Sort by talkativeness descending
-  const eligible = activeParticipants
-    .filter(p => {
-      if (placed.has(p.id)) return false;
-      if (p.id === userParticipantId) return false; // User handled separately
-      if (turnState.spokenSinceUserTurn.includes(p.id)) return false;
-      if (p.id === turnState.lastSpeakerId) return false;
-      // Must be LLM-controlled (or undefined type CHARACTER)
-      if (p.controlledBy === 'user') return false;
-      return true;
-    })
-    .sort((a, b) => {
-      const talkA = a.character?.talkativeness ?? 0.5;
-      const talkB = b.character?.talkativeness ?? 0.5;
-      return talkB - talkA; // Descending
-    });
+  // 4. Still to come this cycle. With a drawn rotation these are in the order
+  // they will actually speak; without one (a chat whose cycle has not started,
+  // or a client whose row predates the rotation) they fall back to the old
+  // talkativeness-descending guess.
+  //
+  // The user's own seat holds a place in the rotation, but it is positioned in
+  // step 5 rather than here, so it keeps its distinct `user-turn` styling.
+  const stillToCome = activeParticipants.filter(p => {
+    if (placed.has(p.id)) return false;
+    if (p.id === userParticipantId) return false; // User handled separately
+    if (turnState.spokenSinceUserTurn.includes(p.id)) return false;
+    if (p.id === turnState.lastSpeakerId) return false;
+    // Must be LLM-controlled (or undefined type CHARACTER)
+    if (p.controlledBy === 'user') return false;
+    return true;
+  });
+
+  const rotationIndex = new Map<string, number>();
+  // Absent on a turn state built before the rotation existed — read as "none".
+  (turnState.cycleOrder ?? []).forEach((id, index) => rotationIndex.set(id, index));
+
+  const eligible = [...stillToCome].sort((a, b) => {
+    const aRank = rotationIndex.get(a.id);
+    const bRank = rotationIndex.get(b.id);
+    // Anyone in the rotation comes before anyone who is not (a latecomer whose
+    // seat the current cycle never dealt in).
+    if (aRank !== undefined && bRank !== undefined) return aRank - bRank;
+    if (aRank !== undefined) return -1;
+    if (bRank !== undefined) return 1;
+    const talkA = a.character?.talkativeness ?? 0.5;
+    const talkB = b.character?.talkativeness ?? 0.5;
+    return talkB - talkA; // Descending
+  });
 
   for (const p of eligible) {
     addEntry(p.id, 'eligible');

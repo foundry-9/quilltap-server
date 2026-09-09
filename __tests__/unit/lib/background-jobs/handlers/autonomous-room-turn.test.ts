@@ -30,6 +30,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
   selectNextSpeaker: jest.fn(),
   calculateTurnStateFromHistory: jest.fn(),
   getActiveCharacterParticipants: jest.fn(),
+  // The cycle rotation is resolved before the speaker pick; these tests drive
+  // `selectNextSpeaker` directly, so it stands in as "no rotation on file".
+  resolveCycleOrder: jest.fn().mockResolvedValue([]),
 }))
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueAutonomousRoomTurn: jest.fn(),

@@ -13,6 +13,7 @@ import {
   computeSkipEligibility,
   detectSkipSentinel,
   computeSpokenThisCycleAfterSkip,
+  computeCycleOrderAfterSkip,
   qualifiesForTurnSkipping,
   findActiveUserParticipant,
   isUserDrivenSeat,
@@ -1828,6 +1829,7 @@ async function maybePauseForUserSeatTurn(
     chat.turnQueue,
     posterSeat.id,
     chat.impersonatingParticipantIds,
+    chat.cycleOrderParticipantIds,
   )
   const nextSeat = next.nextSpeakerId
     ? chat.participants.find(p => p.id === next.nextSpeakerId)
@@ -1975,9 +1977,18 @@ async function handleTurnSkip(params: {
         freshChat.participants,
         freshChat.spokenThisCycleParticipantIds,
       )
+      const orderUpdate = computeCycleOrderAfterSkip(
+        characterParticipant.id,
+        freshChat.cycleOrderParticipantIds,
+      )
       const updatePayload: Record<string, unknown> = { updatedAt: new Date().toISOString() }
       if (cycleUpdate !== null) {
         updatePayload.spokenThisCycleParticipantIds = cycleUpdate
+      }
+      if (orderUpdate !== null) {
+        // A pass spends the turn: the character leaves this cycle's rotation
+        // exactly as a spoken line would have taken them out of it.
+        updatePayload.cycleOrderParticipantIds = orderUpdate
       }
       await repos.chats.update(chatId, updatePayload)
     }

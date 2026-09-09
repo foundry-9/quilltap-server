@@ -13,6 +13,7 @@ import {
   getActiveCharacterParticipants,
   selectNextSpeaker,
   calculateTurnStateFromHistory,
+  resolveCycleOrder,
   isUserDrivenSeat,
   getPresentCharacterSeats,
 } from '@/lib/chat/turn-manager'
@@ -151,7 +152,18 @@ export async function resolveRespondingParticipant(
         participants: chat.participants,
         userParticipantId,
         spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+        cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
       })
+
+      // Draw over the WHOLE room (user seats hold places in a rotation), then
+      // pick the earliest LLM seat in it below — the human's own seats are
+      // simply passed over when the question is "who answers this post".
+      turnState.cycleOrder = await resolveCycleOrder(
+        repos,
+        { id: chat.id, participants: chat.participants },
+        charactersMap,
+        turnState,
+      )
 
       const selection = selectNextSpeaker(
         llmCandidates,

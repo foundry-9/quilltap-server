@@ -85,9 +85,11 @@ The **Turn Manager** controls this cycle. See [Turn Manager](chat-turn-manager.m
 The next speaker is determined by:
 
 1. **Manual Queue** — If you've queued a character, they speak next
-2. **Talkativeness** — Characters with higher talkativeness are more likely to speak
+2. **The Running Order** — Drawn once at the start of each cycle and then followed; talkativeness governs that draw, so a talkative character lands early far more often than a quiet one
 3. **Recent Speakers** — Characters who just spoke are skipped
 4. **Completion Check** — Once all have spoken, it's your turn
+
+Because the order is settled before the cycle begins, the numbered positions in the Participants drawer are the sequence that will actually occur. See [The Running Order](chat-turn-manager.md#the-running-order).
 
 ### Keeping a Character to Their Own Turn
 

@@ -61,10 +61,10 @@ The Turn Manager selects the next speaker in this order:
    - If you've manually queued someone, they speak next
    - Queue is first-in-first-out (FIFO)
 
-2. **Weighted Random Selection**
-   - Among eligible characters (those who haven't spoken this cycle)
-   - Based on talkativeness weights
-   - Higher talkativeness = higher chance of being selected
+2. **The Cycle's Running Order**
+   - Drawn once when the cycle begins, then followed to the letter
+   - Talkativeness decides the draw, not each individual turn
+   - See [The Running Order](#the-running-order) below
 
 3. **Your Turn**
    - When no eligible characters remain
@@ -92,6 +92,21 @@ Each character has a talkativeness setting (0 to 1):
 - **1.0** — Very talkative, speaks as often as possible
 
 The selection formula considers all eligible characters' weights. A character with weight 0.8 is roughly four times more likely to be selected than one with weight 0.2.
+
+### The Running Order
+
+Quilltap draws up the evening's running order in advance, the way a decent host settles the seating before the guests arrive rather than deciding at each course who shall speak next.
+
+When a cycle begins, the Turn Manager draws the **whole order at once** — every character present, arranged into a sequence, with the talkativeness weights above governing the draw. That order is then written down and followed, seat by seat, until everyone has had their turn. Only when the cycle wraps is a fresh order drawn.
+
+**What this means for you:**
+
+- **The sidebar tells the truth.** The numbered positions are the sequence that will actually happen, not a polite guess at it. Position 3 means third.
+- **Your talkativeness settings work exactly as before.** They govern the draw instead of governing each pick, which comes to the same thing over a conversation — a talkative character still lands early far more often than a reticent one.
+- **The order holds for the cycle.** Adjust a character's talkativeness mid-cycle and the current order carries on unbothered; your change takes effect at the next draw.
+- **A latecomer waits at the back.** A character who joins a scene already under way is added to the end of the current order, and is dealt in properly when the next one is drawn.
+- **Departures cost nothing.** A character who leaves, or is archived, is simply passed over when their place comes up.
+- **Nudge and Queue still jump the line.** A summoned character speaks at once, and is then struck from the remaining order so they do not speak twice in one cycle.
 
 ## Manual Turn Control
 
@@ -157,20 +172,20 @@ The selection formula considers all eligible characters' weights. A character wi
 
 ### Turn Order Display
 
-The participant sidebar shows a **predicted turn order** for all participants. Each participant has a numbered position badge indicating when they're expected to speak:
+The participant sidebar shows the **turn order** for all participants. Each participant has a numbered position badge saying when they will speak:
 
 **Position Badges:**
 
 1. **Generating (green, pulsing)** — Currently generating a response (#1 during generation)
 2. **Next (green, static)** — Selected as the next speaker
 3. **Queued (blue)** — Manually queued to speak
-4. **Eligible (neutral)** — Available to speak this cycle, sorted by talkativeness
+4. **Eligible (neutral)** — Still to come this cycle, in the order they will actually speak
 5. **Your Turn (amber)** — Indicates the user's position in the cycle
 6. **Spoken (dimmed)** — Already spoke this cycle
 7. **Silent (no badge, muted)** — Present but observing silently, still receives turns
 8. **Absent (no badge, dimmed)** — Away from the scene, turns skipped entirely
 
-Participants are automatically sorted in the sidebar by their predicted turn position, so you can see at a glance who's speaking, who's next, and who has already spoken.
+Participants are automatically sorted in the sidebar by their turn position, so you can see at a glance who's speaking, who follows, and who has already had their say. Since [the running order](#the-running-order) is drawn for the whole cycle before it begins, those positions are a schedule rather than a forecast.
 
 ### Interrupt/Stop Button
 
@@ -195,9 +210,9 @@ The UI shows turn status in several ways:
 - Blue position badge with queue position
 - Queue position visible in both expanded and collapsed sidebar
 
-**Eligible Characters:**
-- Neutral position badge with predicted position
-- Sorted by talkativeness (higher talkativeness = earlier position)
+**Characters Still to Come:**
+- Neutral position badge with their place in the cycle
+- Ordered by the running order drawn at the start of the cycle
 
 **Silent Characters:**
 - Muted appearance with "Silent" badge

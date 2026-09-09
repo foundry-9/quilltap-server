@@ -800,6 +800,14 @@ export const ChatMetadataSchema = z.object({
    * spoken at least once). Cleared automatically when the cycle completes.
    */
   spokenThisCycleParticipantIds: z.string().default('[]'),
+  /**
+   * The rotation drawn for the current cycle: participants who have yet to
+   * speak, in the order they will, as a JSON array of participant IDs. Drawn
+   * once per cycle by `resolveCycleOrder` (weighted by talkativeness, sampled
+   * without replacement) and struck from as each seat takes its turn; an empty
+   * list means the cycle is spent and the next selection draws a fresh one.
+   */
+  cycleOrderParticipantIds: z.string().default('[]'),
 
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
@@ -1164,6 +1172,14 @@ export const ChatMetadataBaseSchema = z.object({
    * spoken at least once). Cleared automatically when the cycle completes.
    */
   spokenThisCycleParticipantIds: z.string().default('[]'),
+  /**
+   * The rotation drawn for the current cycle: participants who have yet to
+   * speak, in the order they will, as a JSON array of participant IDs. Drawn
+   * once per cycle by `resolveCycleOrder` (weighted by talkativeness, sampled
+   * without replacement) and struck from as each seat takes its turn; an empty
+   * list means the cycle is spent and the next selection draws a fresh one.
+   */
+  cycleOrderParticipantIds: z.string().default('[]'),
   /** Whether composition mode is enabled (Enter = newline, Ctrl/Cmd+Enter = submit) */
   documentEditingMode: z.boolean().default(false),
 

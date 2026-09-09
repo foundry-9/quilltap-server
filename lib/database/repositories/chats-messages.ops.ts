@@ -18,7 +18,10 @@ import { QueryFilter, SortSpec } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { safeQuery } from './safe-query';
-import { computeSpokenThisCycleAfterMessage } from '@/lib/chat/turn-manager';
+import {
+  computeSpokenThisCycleAfterMessage,
+  computeCycleOrderAfterMessage,
+} from '@/lib/chat/turn-manager';
 import {
   isCharacterAuthoredMessage,
   CHARACTER_AUTHORED_MESSAGE_FILTER,
@@ -348,6 +351,17 @@ export class ChatMessagesOps {
         if (cycleUpdate !== null) {
           updateData.spokenThisCycleParticipantIds = cycleUpdate;
         }
+        // Strike this speaker from the cycle's drawn rotation. Pure bookkeeping:
+        // drawing the next rotation needs talkativeness and happens lazily at
+        // the following selection (`resolveCycleOrder`), for which an emptied
+        // list is the signal.
+        const orderUpdate = computeCycleOrderAfterMessage(
+          validated,
+          chat.cycleOrderParticipantIds,
+        );
+        if (orderUpdate !== null) {
+          updateData.cycleOrderParticipantIds = orderUpdate;
+        }
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
       return validated;
@@ -399,15 +413,25 @@ export class ChatMessagesOps {
         // wraps the cycle mid-stream still lands on the right final state.
         let currentSpoken = chat.spokenThisCycleParticipantIds;
         let spokenChanged = false;
+        let currentOrder = chat.cycleOrderParticipantIds;
+        let orderChanged = false;
         for (const msg of validated) {
           const next = computeSpokenThisCycleAfterMessage(msg, chat.participants, currentSpoken);
           if (next !== null) {
             currentSpoken = next;
             spokenChanged = true;
           }
+          const nextOrder = computeCycleOrderAfterMessage(msg, currentOrder);
+          if (nextOrder !== null) {
+            currentOrder = nextOrder;
+            orderChanged = true;
+          }
         }
         if (spokenChanged) {
           updateData.spokenThisCycleParticipantIds = currentSpoken;
+        }
+        if (orderChanged) {
+          updateData.cycleOrderParticipantIds = currentOrder;
         }
         await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }

@@ -18,6 +18,9 @@ import {
   findUserParticipant,
   getSelectionExplanation,
   computeSpokenThisCycleAfterSkip,
+  computeCycleOrderAfterSkip,
+  parseCycleOrder,
+  resolveCycleOrder,
   computeSkipEligibility,
   qualifiesForTurnSkipping,
   isUsersTurn,
@@ -72,11 +75,13 @@ export async function handleTurnAction(
     participants: chat.participants,
     userParticipantId,
     spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
   });
 
-  // Pre-computed cycle update for skipUserTurn — written below alongside
+  // Pre-computed cycle updates for skipUserTurn — written below alongside
   // the turn queue.
   let skipCycleUpdate: string | null | undefined = undefined;
+  let skipOrderUpdate: string | null | undefined = undefined;
 
   switch (turnAction) {
     case 'nudge':
@@ -145,6 +150,12 @@ export async function handleTurnAction(
           }
         }
       }
+      // A skipped seat leaves the cycle's rotation exactly as a posted message
+      // would take it out — the turn was theirs and it has been used.
+      skipOrderUpdate = computeCycleOrderAfterSkip(participantId!, chat.cycleOrderParticipantIds);
+      if (skipOrderUpdate !== null && skipOrderUpdate !== undefined) {
+        turnState = { ...turnState, cycleOrder: parseCycleOrder(skipOrderUpdate) };
+      }
       turnState = { ...turnState, lastSpeakerId: participantId! };
       // Post a Host turn-pass record so human passes feed the same stall guard
       // as LLM passes — but only in chats where turn-skipping applies. In a
@@ -173,6 +184,16 @@ export async function handleTurnAction(
     }
   }
 
+  // `query` is read-only in every other respect, but a spent rotation still has
+  // to be redrawn for the answer to mean anything — and drawing it here is what
+  // lets the sidebar show the cycle to come rather than a guess at it.
+  turnState.cycleOrder = await resolveCycleOrder(
+    repos,
+    { id: chatId, participants: chat.participants },
+    charactersMap,
+    turnState,
+  );
+
   const nextSpeakerResult = selectNextSpeaker(chat.participants, charactersMap, turnState, userParticipantId, chat.impersonatingParticipantIds);
 
   // Persist turn queue and last turn participant for state-modifying actions
@@ -183,6 +204,13 @@ export async function handleTurnAction(
     };
     if (turnAction === 'skipUserTurn' && skipCycleUpdate !== null && skipCycleUpdate !== undefined) {
       updatePayload.spokenThisCycleParticipantIds = skipCycleUpdate;
+    }
+    if (turnAction === 'skipUserTurn' && skipOrderUpdate !== undefined) {
+      // Persist the post-resolve rotation, not the raw consumption: if skipping
+      // this seat spent the cycle, `resolveCycleOrder` has already drawn the next
+      // one into `turnState.cycleOrder`, and writing the emptied list back over
+      // it would throw that draw away.
+      updatePayload.cycleOrderParticipantIds = JSON.stringify(turnState.cycleOrder);
     }
     await repos.chats.update(chatId, updatePayload);
   }
@@ -209,6 +237,7 @@ export async function handleTurnAction(
     },
     state: {
       queue: turnState.queue,
+      cycleOrder: turnState.cycleOrder,
     },
   };
 

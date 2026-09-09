@@ -23,6 +23,15 @@ export interface TurnState {
 
   /** Last speaker (cannot speak again unless nudged/queued, except if only character) */
   lastSpeakerId: string | null;
+
+  /**
+   * The rotation drawn for the current cycle: the participants who have yet to
+   * speak, in the order they will. Sourced from `chat.cycleOrderParticipantIds`,
+   * drawn and persisted by `resolveCycleOrder` (`cycle-order.ts`), and struck
+   * from as each seat speaks. Empty means "no rotation on file" — selection
+   * falls back to picking one at a time.
+   */
+  cycleOrder: string[]; // participantId[]
 }
 
 /**
@@ -33,7 +42,7 @@ export interface TurnSelectionResult {
   nextSpeakerId: string | null;
 
   /** Reason for the selection (for debugging) */
-  reason: 'queue' | 'weighted_selection' | 'only_character' | 'user_turn' | 'cycle_complete';
+  reason: 'queue' | 'cycle_order' | 'weighted_selection' | 'only_character' | 'user_turn' | 'cycle_complete';
 
   /** Whether the cycle is complete (all characters have spoken) */
   cycleComplete: boolean;
@@ -73,4 +82,11 @@ export interface CalculateTurnStateOptions {
    * Defaults to `'[]'` when omitted (fresh cycle).
    */
   spokenThisCycleParticipantIds?: string;
+
+  /**
+   * Persisted JSON-encoded rotation for the current cycle — who has yet to
+   * speak, in order. Comes from `chat.cycleOrderParticipantIds`. Defaults to
+   * `'[]'` when omitted, which selection reads as "draw one".
+   */
+  cycleOrderParticipantIds?: string;
 }

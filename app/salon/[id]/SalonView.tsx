@@ -750,6 +750,7 @@ export function SalonView({ chatId }: SalonViewProps) {
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
       spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
+      cycleOrderParticipantIds: chat?.cycleOrderParticipantIds,
     })
 
     setTurnState(newTurnState)
@@ -781,7 +782,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
 
     setTurnSelectionResult(result)
-  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds])
+  }, [messages, participantsWithImpersonation.participantsAsBase, participantsWithImpersonation.userParticipantId, participantsWithImpersonation.charactersMap, chat?.lastTurnParticipantId, chat?.spokenThisCycleParticipantIds, chat?.cycleOrderParticipantIds])
 
   // --- Handle scroll-to-message from memory provenance navigation ---
   useEffect(() => {

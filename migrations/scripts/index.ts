@@ -386,6 +386,8 @@ import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders'
 import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
 // Message route trail: routeTrail column on chat_messages (every model tried, in order)
 import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
+// Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
+import { addCycleOrderColumnMigration } from './add-cycle-order-column-v1';
 
 /**
  * All available migrations.
@@ -774,6 +776,8 @@ export const migrations: Migration[] = [
   realignFileEntrySha256Migration,
   // Message route trail: routeTrail column on chat_messages (every model tried, in order)
   addRouteTrailMessageColumnMigration,
+  // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
+  addCycleOrderColumnMigration,
 ];
 
 export {
@@ -1141,5 +1145,7 @@ export {
   realignFileEntrySha256Migration,
   // Message route trail: routeTrail column on chat_messages (every model tried, in order)
   addRouteTrailMessageColumnMigration,
+  // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
+  addCycleOrderColumnMigration,
 };
 

@@ -4,6 +4,34 @@
 
 ### 4.10-dev
 
+#### Changed: a multi-character chat draws its speaking order once per cycle
+
+The rotation for a cycle is now decided up front and kept. When a cycle begins, the turn manager
+draws the whole order — a talkativeness-weighted permutation of the present character seats,
+sampled without replacement — stores it on the chat, and follows it seat by seat until the cycle
+wraps, at which point it draws a new one. Previously each turn made its own weighted pick from
+whoever had not yet spoken, so the order could not be known before it happened.
+
+The distribution of rotations is unchanged: drawing the permutation up front and drawing it one
+element at a time are the same successive-sampling procedure. What changes is that the order is
+knowable in advance, so the sidebar's Participants list shows the real sequence instead of the
+talkativeness-sorted guess it used to display below the queue. Position 3 now means third.
+
+Stored as `chats.cycleOrderParticipantIds` (added by `add-cycle-order-column-v1`): the participants
+who have yet to speak this cycle, in order. It is consumed at the same write chokepoints that
+advance `spokenThisCycleParticipantIds` — a message landing, a skipped user turn, an LLM's "nothing
+to add" pass — and drawn by `resolveCycleOrder` (`lib/chat/turn-manager/cycle-order.ts`), the single
+writer, which every server path that asks "who is next" now calls first: the chain loop, the
+first-responder resolver, the message finalizer, `?action=turn`, and the autonomous-room handler.
+The client reads the stored order and never draws one.
+
+Mid-cycle cast changes are repaired rather than redrawn: a departed seat or archived character is
+skipped when the order is read, and a character who joins mid-cycle is appended to the back and
+dealt in properly at the next draw. A one-character chat stores no rotation. Selection keeps the old
+one-at-a-time weighted pick as its fallback for any chat with no rotation on file yet, so existing
+conversations carry on without a migration of their turn state. The manual queue still jumps the
+line, and a summoned character is struck from the remaining order so they do not speak twice.
+
 #### Added: the Salon chat gallery
 
 The **Gallery** button in a chat's Organize drawer now opens a grid of every image in the

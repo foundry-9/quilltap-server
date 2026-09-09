@@ -53,6 +53,8 @@ export function getSelectionExplanation(result: TurnSelectionResult): string {
   switch (result.reason) {
     case 'queue':
       return 'Selected from queue (manually nudged/queued)';
+    case 'cycle_order':
+      return "Next in this cycle's drawn rotation";
     case 'weighted_selection':
       return 'Selected by weighted random based on talkativeness';
     case 'only_character':

@@ -26,6 +26,7 @@ import { handleSendMessage } from '@/lib/services/chat-message/orchestrator.serv
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
+  resolveCycleOrder,
   getActiveCharacterParticipants,
 } from '@/lib/chat/turn-manager';
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary';
@@ -590,7 +591,17 @@ export async function handleAutonomousRoomTurn(job: BackgroundJob): Promise<void
     // Autonomous rooms have no user participant by definition.
     userParticipantId: null,
     spokenThisCycleParticipantIds: chat.spokenThisCycleParticipantIds,
+    cycleOrderParticipantIds: chat.cycleOrderParticipantIds,
   });
+  // Draw this cycle's rotation if the last one is spent. The write buffers
+  // through IPC like every other write in a job child — the parent commits it,
+  // and this turn uses the returned order in memory regardless.
+  turnState.cycleOrder = await resolveCycleOrder(
+    repos,
+    { id: chatId, participants: chat.participants },
+    charactersMap,
+    turnState,
+  );
   const selection = selectNextSpeaker(chat.participants, charactersMap, turnState, null);
 
   if (!selection.nextSpeakerId) {
