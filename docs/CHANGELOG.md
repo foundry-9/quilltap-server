@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Docs: filed bug 128 — the Salon's memory count goes stale and disarms its own delete button
+
+The sidebar's `Delete Memories (n)` count is read once, when the chat mounts, and nothing refreshes
+it. Memories are written afterwards by background extraction jobs, so a chat opened before its first
+memory exists — which is every new chat — reads `(0)` for as long as the tab stays open. The tabbed
+workspace hides an inactive pane with CSS instead of unmounting it, which is what lets a streaming
+Salon survive a tab switch and also removes the reload that used to correct the number by accident.
+The delete handler then returns early on a count of zero and the button carries no disabled state,
+so clicking it does nothing at all: no confirmation, no toast, no log line. Measured on a chat
+holding 59 memories that the sidebar reported as none. The filed plan adds a `memories` realtime
+topic published from the memory job types, subscribes the sidebar to it, and disables the button at
+zero rather than letting it absorb the click. Not yet implemented.
+
 #### Docs: plan for the message route trail
 
 Added `docs/developer/features/message-route-trail.md`, a plan for recording every connection
