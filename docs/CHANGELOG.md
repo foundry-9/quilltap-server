@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### Docs: plan for the message route trail
+
+Added `docs/developer/features/message-route-trail.md`, a plan for recording every connection
+profile tried for an assistant reply and showing the list under the avatar in the Salon: first
+tried at the top, failures struck through and marked with an X emoji when the provider fell over
+on its own or with a no-entry emoji when it refused on content grounds, and the answering model
+last. Covers the nullable `routeTrail` JSON column on `chat_messages` (NULL when nothing failed),
+the single recording chokepoint at the existing failover and Concierge reroute sites, the SSE
+`done` payload, rendering, export schema, migration, tests, and help. Not yet implemented.
+
 #### Fixed: a hostname change no longer makes the app shut its own database down (bug 126)
 
 The instance lock's heartbeat checked every 60 seconds whether it still owned the lock by comparing
