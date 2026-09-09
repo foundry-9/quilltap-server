@@ -546,9 +546,18 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Pre-rendered HTML
   if (prev.message.renderedHtml !== next.message.renderedHtml) return false
 
-  // `message.routeTrail` deliberately has NO check here. It is written once when
-  // the message is saved and never mutated afterwards, so a deep compare would
-  // cost every row a walk of an array that cannot have changed. Don't add one.
+  // Route trail: an O(1) identity check, normalised so undefined and null agree
+  // (an untrailed row is `null` from the chat-GET projection and `?? null` from
+  // the optimistic push, but a Staff bubble surfaced mid-turn may carry neither).
+  // Every path that persists a trail also emits the same value on its own `done`
+  // event, so a row should never render untrailed and then acquire one — this is
+  // here so that if some future path ever does, the badge is not stuck on the
+  // plain provider/model badge. It costs a re-render per refetch only for the
+  // rare message that HAS a trail.
+  //
+  // Never widen this into a deep compare: the trail is immutable once saved, so
+  // walking the array could only ever confirm what identity already told us.
+  if ((prev.message.routeTrail ?? null) !== (next.message.routeTrail ?? null)) return false
 
   // Character data
   if (prev.character?.id !== next.character?.id) return false

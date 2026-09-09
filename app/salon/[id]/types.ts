@@ -31,9 +31,10 @@ export interface Message {
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName?: string | null
   /** Every connection profile tried for this turn, in the order tried, with why each one
-   *  stepped aside. NULL/undefined unless the turn had at least one failure — in which case
-   *  the avatar shows the plain provider/model badge, exactly as before. The last entry
-   *  always agrees with `provider`/`modelName`. Set once at save; never mutated. */
+   *  stepped aside. NULL/undefined unless the turn had at least one failure; when it is
+   *  null the avatar falls back to the plain provider/model badge, exactly as before, and
+   *  when it is a non-empty array the avatar renders the call sheet instead. The last
+   *  entry always agrees with `provider`/`modelName`. Set once at save; never mutated. */
   routeTrail?: RouteAttempt[] | null
   /** Target participant IDs for whisper messages (null = public, array = private) */
   targetParticipantIds?: string[] | null
