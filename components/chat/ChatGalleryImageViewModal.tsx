@@ -221,15 +221,12 @@ export default function ChatGalleryImageViewModal({
             height={400}
           />
         ) : (
-          <>
-            { }
-            <img
-              src={entry.url}
-              alt={entry.filename}
-              className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
-              onError={() => setImageMissing(true)}
-            />
-          </>
+          <img
+            src={entry.url}
+            alt={entry.filename}
+            className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
+            onError={() => setImageMissing(true)}
+          />
         )}
       </div>
 

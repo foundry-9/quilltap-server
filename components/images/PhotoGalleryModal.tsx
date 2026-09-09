@@ -355,7 +355,6 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
           className="relative w-full h-full overflow-hidden rounded hover:ring-2 hover:ring-ring focus:ring-2 focus:ring-ring focus:outline-none transition-all"
           title={entry.filename}
         >
-          { }
           <img
             src={entry.url}
             alt={entry.filename}
@@ -439,15 +438,12 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
             className="w-full h-full absolute inset-0 !p-2"
           />
         ) : (
-          <>
-            { }
-            <img
-              src={src}
-              alt={image.filename}
-              className="w-full h-full object-cover"
-              onError={() => setMissingImages((prev) => new Set(prev).add(image.id))}
-            />
-          </>
+          <img
+            src={src}
+            alt={image.filename}
+            className="w-full h-full object-cover"
+            onError={() => setMissingImages((prev) => new Set(prev).add(image.id))}
+          />
         )}
       </Container>
     )
