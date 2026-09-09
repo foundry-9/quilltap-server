@@ -11,7 +11,7 @@ import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
   resolveCycleOrder,
-  getActiveCharacterParticipants,
+  loadRoomCharacters,
   isUsersTurn,
 } from '@/lib/chat/turn-manager'
 import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
@@ -673,19 +673,12 @@ export async function calculateNextSpeaker(
     cycleOrderParticipantIds: freshChat?.cycleOrderParticipantIds ?? chat.cycleOrderParticipantIds,
   })
 
-  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants)
-  const charactersMap = new Map<string, Character>()
-
-  for (const p of activeCharacterParticipants) {
-    if (p.characterId) {
-      const char = p.id === characterParticipant.id
-        ? character
-        : await repos.characters.findById(p.characterId)
-      if (char) {
-        charactersMap.set(p.characterId, char)
-      }
-    }
-  }
+  // Every present seat, user-driven ones included — the rotation is drawn from
+  // their talkativeness. The character who just spoke is seeded from the copy
+  // already in hand rather than re-read.
+  const charactersMap = await loadRoomCharacters(repos, chat.participants, {
+    preloaded: [character],
+  })
 
   // Draw the cycle's rotation if this answer spent the last one, so the "who is
   // next" this reports is the same seat the chain will actually call on.

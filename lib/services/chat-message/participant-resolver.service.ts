@@ -16,6 +16,7 @@ import {
   resolveCycleOrder,
   isUserDrivenSeat,
   getPresentCharacterSeats,
+  loadRoomCharacters,
 } from '@/lib/chat/turn-manager'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type {
@@ -135,12 +136,11 @@ export async function resolveRespondingParticipant(
       characterParticipant = llmCandidates[0]
     } else {
       // Build characters map (talkativeness lives on the character record).
-      const charactersMap = new Map<string, Character>()
-      for (const p of llmCandidates) {
-        if (!p.characterId) continue
-        const char = await repos.characters.findById(p.characterId)
-        if (char) charactersMap.set(p.characterId, char)
-      }
+      // Built over the WHOLE room, not just `llmCandidates`: the draw below is a
+      // rotation of every seat, so a user-driven seat's talkativeness has to be
+      // visible to it. The pick itself stays LLM-only via the argument to
+      // `selectNextSpeaker`.
+      const charactersMap = await loadRoomCharacters(repos, chat.participants)
 
       const messages = await repos.chats.getMessages(chat.id)
       const messageEvents = messages.filter(
@@ -268,22 +268,18 @@ export async function loadAllParticipantData(
   primaryCharacter: Character
 ): Promise<AllParticipantsData> {
 
-  const participantCharacters = new Map<string, Character>()
-
-  // Load all characters
-  for (const p of chat.participants) {
-    if (p.type === 'CHARACTER' && p.characterId && isParticipantPresent(p.status)) {
-      if (p.characterId === primaryCharacter.id) {
-        // Reuse already-loaded character
-        participantCharacters.set(p.characterId, primaryCharacter)
-      } else {
-        const char = await repos.characters.findById(p.characterId)
-        if (char) {
-          participantCharacters.set(p.characterId, char)
-        }
-      }
-    }
-  }
+  // The same room map the turn paths build, for the same reason it is batched:
+  // one vault overlay for the whole cast instead of one per seat. The responding
+  // character is seeded from the copy already loaded rather than re-read.
+  //
+  // A character whose vault is unreadable is absent from the map rather than
+  // throwing the turn, which is the policy the rest of the per-turn context path
+  // already follows (see `findNamesByIds`): a shelved vault costs the prompt that
+  // character's contribution, not the whole reply. Every consumer of this map
+  // looks its entries up defensively.
+  const participantCharacters = await loadRoomCharacters(repos, chat.participants, {
+    preloaded: [primaryCharacter],
+  })
 
   return { participantCharacters }
 }

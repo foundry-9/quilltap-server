@@ -6,7 +6,11 @@ jest.mock('@/lib/chat/connection-resolver', () => ({
   resolveConnectionProfile: jest.fn(() => 'conn-1'),
 }))
 
-import { resolveRespondingParticipant, getRoleplayTemplate } from '@/lib/services/chat-message/participant-resolver.service'
+import {
+  resolveRespondingParticipant,
+  getRoleplayTemplate,
+  loadAllParticipantData,
+} from '@/lib/services/chat-message/participant-resolver.service'
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import type { ChatMetadataBase, ChatParticipantBase, Character } from '@/lib/schemas/types'
 
@@ -71,6 +75,11 @@ const buildRepos = (characters: Map<string, Character>, messages: unknown[] = []
   },
   characters: {
     findById: jest.fn((id: string) => Promise.resolve(characters.get(id) ?? null)),
+    // The room's character map is one batched read. Like the real `findByIds`,
+    // this returns only the rows it could resolve.
+    findByIds: jest.fn((ids: string[]) =>
+      Promise.resolve(ids.map(id => characters.get(id)).filter((c): c is Character => !!c)),
+    ),
   },
   connections: {
     findById: jest.fn().mockResolvedValue({ id: 'conn-1', apiKeyId: null }),
@@ -248,5 +257,90 @@ describe('getRoleplayTemplate — project/user default precedence', () => {
 
     expect(result).toBeNull()
     expect(update).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('loadAllParticipantData', () => {
+  it('loads the whole present cast in one batched read', async () => {
+    const participants = [
+      makeCharParticipant('p1', 'char-1'),
+      makeCharParticipant('p2', 'char-2'),
+      makeCharParticipant('p3', 'char-3', { controlledBy: 'user' }),
+    ]
+    const characters = new Map([
+      ['char-1', makeChar('char-1')],
+      ['char-2', makeChar('char-2')],
+      ['char-3', makeChar('char-3')],
+    ])
+    const repos = buildRepos(characters) as unknown as {
+      characters: { findById: jest.Mock; findByIds: jest.Mock }
+    }
+
+    const { participantCharacters } = await loadAllParticipantData(
+      repos as never,
+      buildChat(participants),
+      characters.get('char-1')!,
+    )
+
+    expect(participantCharacters.size).toBe(3)
+    expect(repos.characters.findByIds).toHaveBeenCalledTimes(1)
+    // The per-seat read is what this replaced.
+    expect(repos.characters.findById).not.toHaveBeenCalled()
+  })
+
+  it('reuses the responding character instead of re-reading it', async () => {
+    const participants = [makeCharParticipant('p1', 'char-1')]
+    // Deliberately absent from the repo: only the preloaded copy can satisfy it.
+    const repos = buildRepos(new Map())
+
+    const primary = makeChar('char-1')
+    const { participantCharacters } = await loadAllParticipantData(
+      repos as never,
+      buildChat(participants),
+      primary,
+    )
+
+    expect(participantCharacters.get('char-1')).toBe(primary)
+  })
+
+  it('skips seats that are not present', async () => {
+    const participants = [
+      makeCharParticipant('p1', 'char-1'),
+      makeCharParticipant('p-left', 'char-2', { status: 'departed' }),
+    ]
+    const characters = new Map([
+      ['char-1', makeChar('char-1')],
+      ['char-2', makeChar('char-2')],
+    ])
+    const repos = buildRepos(characters)
+
+    const { participantCharacters } = await loadAllParticipantData(
+      repos as never,
+      buildChat(participants),
+      characters.get('char-1')!,
+    )
+
+    expect([...participantCharacters.keys()]).toEqual(['char-1'])
+  })
+
+  it('omits a character whose vault is unreadable rather than failing the turn', async () => {
+    const participants = [
+      makeCharParticipant('p1', 'char-1'),
+      makeCharParticipant('p2', 'char-shelved'),
+    ]
+    // The batched list overlay drops a character whose vault is unavailable,
+    // where the old per-seat `findById` threw and took the whole reply with it.
+    const characters = new Map([['char-1', makeChar('char-1')]])
+    const repos = buildRepos(characters)
+
+    const { participantCharacters } = await loadAllParticipantData(
+      repos as never,
+      buildChat(participants),
+      characters.get('char-1')!,
+    )
+
+    expect(participantCharacters.has('char-1')).toBe(true)
+    expect(participantCharacters.has('char-shelved')).toBe(false)
   })
 })

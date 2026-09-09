@@ -2,13 +2,13 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
-  getActiveCharacterParticipants,
+  loadRoomCharacters,
   isAllLLMChat,
   shouldPauseForAllLLM,
   isUserDrivenSeat,
   resolveCycleOrder,
 } from '@/lib/chat/turn-manager'
-import type { Character, MessageEvent } from '@/lib/schemas/types'
+import type { MessageEvent } from '@/lib/schemas/types'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ProcessMessageResult } from './types'
 import {
@@ -165,20 +165,13 @@ export async function shouldChainNext(
     await repos.chats.update(chatId, { turnQueue: JSON.stringify(turnQueue) })
   }
 
+  // Every present seat, user-driven ones included: their talkativeness has to
+  // reach the draw below, and their archived state has to reach the filter.
+  // One batched read serves both the selection and the name lookups after it.
+  const charactersMap = await loadRoomCharacters(repos, freshChat.participants)
+
   if (!nextParticipantId && selectionReason !== 'queue') {
     // Use turn selection algorithm
-    const activeCharacterParticipants = getActiveCharacterParticipants(freshChat.participants)
-    const charactersMap = new Map<string, Character>()
-
-    for (const p of activeCharacterParticipants) {
-      if (p.characterId) {
-        const char = await repos.characters.findById(p.characterId)
-        if (char) {
-          charactersMap.set(p.characterId, char)
-        }
-      }
-    }
-
     // Draw the cycle's rotation if this turn starts one, so the whole chain —
     // and every other reader — follows one order instead of each re-rolling.
     turnState.cycleOrder = await resolveCycleOrder(repos, freshChat, charactersMap, turnState)
@@ -216,11 +209,9 @@ export async function shouldChainNext(
     // human is impersonating (Bug 44 overlay — `controlledBy` still `'llm'`)
     // pauses the chain just like a genuine user seat, so the operator types
     // the character's line instead of the model generating it.
-    let characterName: string | undefined
-    if (nextParticipant.characterId) {
-      const char = await repos.characters.findById(nextParticipant.characterId)
-      if (char) characterName = char.name
-    }
+    const characterName = nextParticipant.characterId
+      ? charactersMap.get(nextParticipant.characterId)?.name
+      : undefined
     return {
       chain: false,
       reason: 'user_turn',
@@ -230,11 +221,9 @@ export async function shouldChainNext(
   }
 
   // Find character name for logging/events
-  let characterName = 'Unknown'
-  if (nextParticipant.characterId) {
-    const char = await repos.characters.findById(nextParticipant.characterId)
-    if (char) characterName = char.name
-  }
+  const characterName = (nextParticipant.characterId
+    ? charactersMap.get(nextParticipant.characterId)?.name
+    : undefined) ?? 'Unknown'
 
   logger.info('[TurnOrchestrator] Chain decision: continue', {
     chatId,

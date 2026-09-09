@@ -4,6 +4,41 @@
 
 ### 4.10-dev
 
+#### Fixed: a user-controlled character's talkativeness now counts in the speaking order
+
+Talkativeness on a character you drive yourself had no effect on the rotation. The six server paths
+that pick a speaker each built their own `characterId -> Character` map first, and four of them
+built it from `getActiveCharacterParticipants`, which returns LLM-controlled seats only. A seat you
+control was therefore missing from the map, so the draw fell back to the 0.5 default for it unless
+the seat carried a per-chat talkativeness override, and an archived character on such a seat was
+never filtered out of the rotation. The help text has always said talkativeness applies to user
+characters; now it does. This predates the cycle-order change — the old one-at-a-time pick had the
+same blind spot — but it matters more now that the whole rotation is drawn from those weights at
+once.
+
+The six hand-rolled loops are replaced by one helper, `loadRoomCharacters`
+(`lib/chat/turn-manager/room-characters.ts`), which builds the map over `getPresentCharacterSeats`
+— every present character seat, whoever drives it. `loadAllParticipantData`, which builds the same
+map for prompt construction rather than for selection, now uses it too.
+
+It is also fewer queries. The loops called `repos.characters.findById` per seat, and each of those
+overlays one character's vault with eleven queries plus the row read; the helper calls `findByIds`
+once, which overlays the whole room in a single batch whatever the seat count. A four-seat room
+goes from roughly 48 queries per selection to 12.
+
+Failure handling changes with it. `findById` throws `CharacterVaultUnavailableError` when a
+character's vault is unreadable, which used to throw straight out of speaker selection and take the
+turn — and the read-only `?action=turn` request behind the participant sidebar — with it. The
+batched read logs and drops such a character instead, which is what the consumers were already
+written for: a seat whose character is missing from the map stays in the rotation at the default
+weight rather than silently vanishing from the room. On the prompt path the same change means a
+shelved vault costs the prompt that character's contribution rather than failing the whole reply,
+which is the policy `findNamesByIds` already applied there.
+
+`GET /api/v1/chats/[id]?action=turn` also stops reporting a user-driven seat as `nextSpeakerName:
+null` and `participant.name: "Unknown"`, since that seat's character is now in the map it reads
+names from. Filed as bug 131.
+
 #### Changed: a multi-character chat draws its speaking order once per cycle
 
 The rotation for a cycle is now decided up front and kept. When a cycle begins, the turn manager

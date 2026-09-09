@@ -39,6 +39,10 @@ export {
 } from './cycle-order';
 export type { CycleOrderChat, CycleOrderRepos } from './cycle-order';
 
+// Room characters — the one batched read behind every talkativeness map
+export { loadRoomCharacters } from './room-characters';
+export type { RoomCharacterRepos, LoadRoomCharactersOptions } from './room-characters';
+
 // "Nothing to add" turn-skipping — shared pure logic
 export {
   NOTHING_TO_ADD_SENTINEL,

@@ -22,7 +22,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     participantTurnCounts: new Map(),
   }),
   selectNextSpeaker: jest.fn().mockReturnValue({ nextSpeakerId: null, reason: 'no_speakers' }),
-  getActiveCharacterParticipants: jest.fn().mockReturnValue([]),
+  // The room's character map is loaded once per selection; these tests drive
+  // `selectNextSpeaker` directly, so it stands in as "no characters resolved".
+  loadRoomCharacters: jest.fn().mockResolvedValue(new Map()),
   isAllLLMChat: jest.fn().mockReturnValue(false),
   shouldPauseForAllLLM: jest.fn().mockReturnValue(false),
   isUserDrivenSeat: (p: { id?: string; controlledBy?: string } | null | undefined, ids?: readonly string[] | null) =>
@@ -81,7 +83,11 @@ describe('turn-orchestrator.service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (turnManager.selectNextSpeaker as jest.Mock).mockReturnValue({ nextSpeakerId: null, reason: 'no_speakers' });
-    (turnManager.getActiveCharacterParticipants as jest.Mock).mockReturnValue([]);
+    // Mirrors the default `repos.characters` row above: the room map is where
+    // the chain decision now reads its character name from.
+    (turnManager.loadRoomCharacters as jest.Mock).mockResolvedValue(
+      new Map([['char-llm-1', { id: 'char-llm-1', name: 'TestChar' }]]),
+    );
     (turnManager.isAllLLMChat as jest.Mock).mockReturnValue(false);
   });
 
@@ -164,7 +170,6 @@ describe('turn-orchestrator.service', () => {
       repos.chats.findById.mockResolvedValue(createMockChat({
         participants: [llmParticipant],
       }));
-      (turnManager.getActiveCharacterParticipants as jest.Mock).mockReturnValue([llmParticipant]);
       (turnManager.selectNextSpeaker as jest.Mock).mockReturnValue({ nextSpeakerId: 'llm-1', reason: 'round_robin' });
 
       const result = await shouldChainNext(repos as any, 'chat-1', 'user-p', 0, Date.now());
@@ -178,7 +183,6 @@ describe('turn-orchestrator.service', () => {
       repos.chats.findById.mockResolvedValue(createMockChat({
         participants: [llmParticipant, userParticipant],
       }));
-      (turnManager.getActiveCharacterParticipants as jest.Mock).mockReturnValue([llmParticipant]);
       (turnManager.selectNextSpeaker as jest.Mock).mockReturnValue({ nextSpeakerId: 'user-p-1', reason: 'round_robin' });
 
       const result = await shouldChainNext(repos as any, 'chat-1', 'user-p-1', 0, Date.now());
@@ -207,12 +211,14 @@ describe('turn-orchestrator.service', () => {
       expect(result.reason).not.toBe('max_time');
     });
 
-    it('chain decision includes characterName from character lookup', async () => {
+    it('chain decision includes characterName from the room character map', async () => {
       const repos = createMockRepos();
       repos.chats.findById.mockResolvedValue(createMockChat({
         turnQueue: JSON.stringify(['llm-1']),
       }));
-      repos.characters.findById.mockResolvedValue({ id: 'char-llm-1', name: 'Alice' });
+      (turnManager.loadRoomCharacters as jest.Mock).mockResolvedValue(
+        new Map([['char-llm-1', { id: 'char-llm-1', name: 'Alice' }]]),
+      );
 
       const result = await shouldChainNext(repos as any, 'chat-1', 'user-p', 0, Date.now());
       expect(result.chain).toBe(true);

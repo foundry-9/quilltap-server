@@ -72,7 +72,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     reason: 'round_robin',
     cycleComplete: false,
   }),
-  getActiveCharacterParticipants: jest.fn((participants: unknown[]) => participants),
+  // The room's character map is loaded once per selection; these tests assert on
+  // the reported next speaker, so it stands in as "no characters resolved".
+  loadRoomCharacters: jest.fn().mockResolvedValue(new Map()),
   isUsersTurn: jest.fn(
     (result: { nextSpeakerId: string | null; reason?: string }) =>
       result.nextSpeakerId === null || result.reason === 'user_turn',

@@ -10,7 +10,7 @@ import { handleSendMessage } from '@/lib/services/chat-message/orchestrator.serv
 import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
-  getActiveCharacterParticipants,
+  loadRoomCharacters,
 } from '@/lib/chat/turn-manager'
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
@@ -29,7 +29,9 @@ jest.mock('@/lib/services/chat-message/orchestrator.service', () => ({
 jest.mock('@/lib/chat/turn-manager', () => ({
   selectNextSpeaker: jest.fn(),
   calculateTurnStateFromHistory: jest.fn(),
-  getActiveCharacterParticipants: jest.fn(),
+  loadRoomCharacters: jest.fn(),
+  // Still used by the run-start announcement, which this handler calls into.
+  getActiveCharacterParticipants: jest.fn((participants: unknown[]) => participants),
   // The cycle rotation is resolved before the speaker pick; these tests drive
   // `selectNextSpeaker` directly, so it stands in as "no rotation on file".
   resolveCycleOrder: jest.fn().mockResolvedValue([]),
@@ -45,7 +47,7 @@ const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRep
 const mockHandleSendMessage = handleSendMessage as jest.MockedFunction<typeof handleSendMessage>
 const mockSelectNextSpeaker = selectNextSpeaker as jest.MockedFunction<typeof selectNextSpeaker>
 const mockCalculateTurnStateFromHistory = calculateTurnStateFromHistory as jest.MockedFunction<typeof calculateTurnStateFromHistory>
-const mockGetActiveCharacterParticipants = getActiveCharacterParticipants as jest.MockedFunction<typeof getActiveCharacterParticipants>
+const mockLoadRoomCharacters = loadRoomCharacters as jest.MockedFunction<typeof loadRoomCharacters>
 const mockEnqueueAutonomousRoomTurn = enqueueAutonomousRoomTurn as jest.MockedFunction<typeof enqueueAutonomousRoomTurn>
 const mockCheckAndGenerateSummaryIfNeeded = checkAndGenerateSummaryIfNeeded as jest.MockedFunction<typeof checkAndGenerateSummaryIfNeeded>
 
@@ -155,7 +157,9 @@ const drainableStream = () => ({
 beforeEach(() => {
   jest.clearAllMocks()
   mockHandleSendMessage.mockResolvedValue(drainableStream() as never)
-  mockGetActiveCharacterParticipants.mockImplementation(((participants: Array<{ id: string }>) => participants) as never)
+  // The handler only reads talkativeness / archived state out of this map; these
+  // tests drive `selectNextSpeaker` directly, so an empty map is enough.
+  mockLoadRoomCharacters.mockResolvedValue(new Map())
   mockCalculateTurnStateFromHistory.mockReturnValue({} as never)
   mockSelectNextSpeaker.mockReturnValue({ nextSpeakerId: 'p1', reason: 'next', cycleComplete: false } as never)
   mockEnqueueAutonomousRoomTurn.mockResolvedValue('job-next')

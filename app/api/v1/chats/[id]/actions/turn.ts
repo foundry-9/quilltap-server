@@ -14,7 +14,7 @@ import {
   addToQueue,
   removeFromQueue,
   getQueuePosition,
-  getActiveCharacterParticipants,
+  loadRoomCharacters,
   findUserParticipant,
   getSelectionExplanation,
   computeSpokenThisCycleAfterSkip,
@@ -29,7 +29,7 @@ import {
 import { postHostTurnPassAnnouncement } from '@/lib/services/host-notifications/writer';
 import { turnActionSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
-import type { ChatMetadata, MessageEvent, Character } from '@/lib/schemas/types';
+import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 
 /**
@@ -173,16 +173,10 @@ export async function handleTurnAction(
     }
   }
 
-  const activeCharacterParticipants = getActiveCharacterParticipants(chat.participants);
-  const charactersMap = new Map<string, Character>();
-  for (const p of activeCharacterParticipants) {
-    if (p.characterId) {
-      const char = await repos.characters.findById(p.characterId);
-      if (char) {
-        charactersMap.set(p.characterId, char);
-      }
-    }
-  }
+  // Every present seat, user-driven ones included. Besides feeding the draw its
+  // talkativeness, this is what lets the response name a user seat instead of
+  // reporting the human's own character as `null` / "Unknown".
+  const charactersMap = await loadRoomCharacters(repos, chat.participants);
 
   // `query` is read-only in every other respect, but a spent rotation still has
   // to be redrawn for the answer to mean anything — and drawing it here is what

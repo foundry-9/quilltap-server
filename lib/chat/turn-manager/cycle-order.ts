@@ -22,6 +22,13 @@
  *     needs the characters map, which is why it lives here and not in the
  *     repository layer.
  *
+ * **The characters map must cover the whole room.** Build it with
+ * {@link ./room-characters}.`loadRoomCharacters`, never by hand from
+ * `getActiveCharacterParticipants` — that helper returns LLM-controlled seats
+ * only, and a seat missing from the map is weighted at the 0.5 default and
+ * never checked for `archivedAt`. A map built that way silently ignores the
+ * talkativeness of every character the human drives.
+ *
  * `selectNextSpeaker` treats the order as an overlay: it takes the first usable
  * id from the order, and falls back to the old one-at-a-time weighted pick when
  * the order is empty or stale. The client never draws or persists — it reads

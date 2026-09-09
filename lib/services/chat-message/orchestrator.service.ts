@@ -19,6 +19,7 @@ import {
   isUserDrivenSeat,
   selectNextSpeakerAfterUserMessage,
   getPresentCharacterSeats,
+  loadRoomCharacters,
 } from '@/lib/chat/turn-manager'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
@@ -1814,12 +1815,7 @@ async function maybePauseForUserSeatTurn(
   if (userDrivenSeatCount < 2) return null
 
   // Talkativeness lives on the character record — build the weight map.
-  const charactersMap = new Map<string, Character>()
-  for (const p of activeChars) {
-    if (!p.characterId) continue
-    const char = await repos.characters.findById(p.characterId)
-    if (char) charactersMap.set(p.characterId, char)
-  }
+  const charactersMap = await loadRoomCharacters(repos, chat.participants)
 
   const next = selectNextSpeakerAfterUserMessage(
     chat.participants,
