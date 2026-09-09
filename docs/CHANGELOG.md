@@ -4,6 +4,41 @@
 
 ### 4.10-dev
 
+#### Fixed bug 128: the Salon's memory count went stale and disarmed its own delete button
+
+The sidebar's Delete Memories count was read once, by a mount-only effect, and nothing ever read it
+again. Memories are written afterwards by background jobs in the forked child, turn after turn, and
+the tabbed workspace keeps a hidden Salon pane mounted for the life of the session — so a chat opened
+before its first memory landed read `Delete Memories (0)` indefinitely, over a chat holding dozens.
+`handleDeleteChatMemories` then early-returned on that false zero, absorbing the click with no
+confirmation, no toast and no log line.
+
+Added a `memories` realtime topic: declared in `realtime.types.ts`, keyed by
+`queryKeys.memories.chatCount(chatId)`, mapped in `topic-map.ts` and added to
+`ALL_REALTIME_PREFIXES`, and published from `topicsForCompletedJob` for the five memory job types
+plus `publishRealtime` at the two parent-side delete paths (the route's chat-scoped hint and the
+`memory-gate` deletion chokepoint's collection-wide one). It is the first topic whose `id` is not the
+changed row's own primary key — it is scoped by `chatId` — which is why `memories` is deliberately
+absent from `REPOSITORY_TOPICS`: `firstIdArg` would publish a memory id under a chat-scoped topic and
+every subscriber would filter it out.
+
+The subscription lives in `useChatData`, the hook that owns the count, rather than at the Salon call
+site, so a future consumer cannot forget it; `useRealtimeTopic` also fires on socket open, so a
+reconnect re-reads for free and no poll is added. The count fetch gained `cache: 'no-store'`, matching
+its siblings. The button is now `disabled` at zero, and the confirmation re-reads the count from the
+server immediately before it opens, so the dialog can never quote a stale number and a socket that was
+down does not cost the user the action. Step 5 of the bug's plan (the identical `chatPhotoCount`
+shape) stays superseded by the Salon chat gallery plan.
+
+#### Fixed bug 127: the progressions card printed raw markup when two entries were unreadable
+
+`ProgressionsSection` built its list of unreadable progression ids by joining them with a literal
+`</code>, <code>` inside a JSX expression. The join produces a string, React escapes it, and the
+sentence telling a user their vault is damaged handed them raw markup instead. One bad entry rendered
+perfectly — the join had nothing to join — which is why the suite never saw it. The ids are now
+rendered as elements, the same map-with-separator shape `CustomToolRunDialog` already uses. Output for
+a single id is unchanged character for character.
+
 #### Docs: retired twelve shipped feature specs to `features/complete/`
 
 Moved twelve feature documents from `docs/developer/features/` into

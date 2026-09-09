@@ -51,6 +51,7 @@ import {
 } from '@/lib/instance-settings';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 
@@ -1082,6 +1083,12 @@ async function handleDeleteByChatId(
   }
 
   const { deleted } = await deleteMemoriesByChatIdWithVectors(chatId);
+
+  logger.debug('[Memories API] Deleted every memory for a chat', { chatId, deleted });
+
+  // The gate already published a collection-wide hint; this one is chat-scoped,
+  // which is what the Salon sidebar's count subscribes by.
+  publishRealtime('memories', chatId);
 
   return NextResponse.json({
     success: true,
