@@ -198,6 +198,8 @@ count on the very refetch meant to correct it.
 
 ### Step 5 — the adjacent surface, same change
 
+> **Superseded (2026-09-08).** `fetchChatPhotoCount` reads `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still return zero. The count moves onto the chat-gallery query instead — see [salon-chat-gallery.md](../features/salon-chat-gallery.md) and the bug it files for the dead action. Steps 1–4 stand.
+
 `chatPhotoCount` in the same hook has the identical shape: read once at mount,
 refreshed only by three explicit call sites in `ChatModals.tsx`. A Lantern
 image or a generated avatar landing from a background job leaves the Gallery

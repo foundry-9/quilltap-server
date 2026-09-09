@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Docs: plan for the Salon chat gallery
+
+Added `docs/developer/features/salon-chat-gallery.md`, a plan for a Gallery in the Salon sidebar's
+Organize drawer that lists every image in a conversation — uploads, tool-generated images,
+dialog-generated images, story backgrounds, Aurora avatar repaints, the cast's portraits, images
+re-shown from an album, and images referenced in message text — with Save (through the same album
+picker the message toolbar's bookmark uses) and Download on each. Covers a single server-side
+enumerator, a `?action=gallery` read, a chat-scoped `?action=save-image` twin of the message-scoped
+one, `?download=1` on the image routes, a realtime-gated query key, the UI, tests, and help. Records
+two defects found while mapping: the sidebar's existing Gallery button never appears because its
+count reads a `?action=files` action that does not exist, and images generated from the Generate
+Image dialogs are never linked to their chat. Bug 128's step 5 is marked superseded by this plan.
+Not yet implemented.
+
 #### Docs: filed bug 128 — the Salon's memory count goes stale and disarms its own delete button
 
 The sidebar's `Delete Memories (n)` count is read once, when the chat mounts, and nothing refreshes
