@@ -51,7 +51,6 @@ import {
 } from '@/lib/instance-settings';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { publishRealtime } from '@/lib/realtime/bus';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 
@@ -1084,11 +1083,14 @@ async function handleDeleteByChatId(
 
   const { deleted } = await deleteMemoriesByChatIdWithVectors(chatId);
 
+  // No publish here. This path runs through `deleteMemoriesWithUnlinkBatch`,
+  // and the memory-gate chokepoint already announces `memories` collection-wide
+  // — which a chat-scoped subscriber takes, since `useRealtimeTopic`'s id filter
+  // only discards an event that names a *different* id. A second, chat-scoped
+  // hint would cost every subscriber a duplicate refetch, and would fire on the
+  // one case where the gate correctly stays silent: a chat with no memories,
+  // where nothing was deleted and nothing changed.
   logger.debug('[Memories API] Deleted every memory for a chat', { chatId, deleted });
-
-  // The gate already published a collection-wide hint; this one is chat-scoped,
-  // which is what the Salon sidebar's count subscribes by.
-  publishRealtime('memories', chatId);
 
   return NextResponse.json({
     success: true,

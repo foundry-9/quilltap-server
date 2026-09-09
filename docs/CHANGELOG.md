@@ -16,9 +16,8 @@ confirmation, no toast and no log line.
 Added a `memories` realtime topic: declared in `realtime.types.ts`, keyed by
 `queryKeys.memories.chatCount(chatId)`, mapped in `topic-map.ts` and added to
 `ALL_REALTIME_PREFIXES`, and published from `topicsForCompletedJob` for the five memory job types
-plus `publishRealtime` at the two parent-side delete paths (the route's chat-scoped hint and the
-`memory-gate` deletion chokepoint's collection-wide one). It is the first topic whose `id` is not the
-changed row's own primary key — it is scoped by `chatId` — which is why `memories` is deliberately
+plus `publishRealtime` at the `memory-gate` deletion chokepoint, which every delete path runs
+through. It is the first topic whose `id` is not the changed row's own primary key — it is scoped by `chatId` — which is why `memories` is deliberately
 absent from `REPOSITORY_TOPICS`: `firstIdArg` would publish a memory id under a chat-scoped topic and
 every subscriber would filter it out.
 
