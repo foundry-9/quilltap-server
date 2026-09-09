@@ -83,3 +83,15 @@ npx jest __tests__/unit/lib/llm/moderation-finish-reason.test.ts
 In V4test: send something a moderated provider will refuse and confirm the
 Salon names the provider, the model and the finish reason rather than
 suggesting a retry.
+
+### Since (v4.10)
+
+The refusal is no longer only in the error text. Where the turn *did* eventually
+produce a reply — the Concierge rerouted to an uncensored profile, or an
+understudy stood in — the refusing profile now appears on the saved message's
+[route trail](../../features/complete/message-route-trail.md), struck through and
+marked 🚫 under the avatar, with hover text saying whether the refusal was stated
+(`evidence: 'finish-reason'`, this bug's own `isModerationFinishReason` test) or
+inferred from an empty body on a Concierge-flagged turn. The error text this bug
+fixed is still what a *wholly* failed turn shows; the trail is what a rescued one
+leaves behind.

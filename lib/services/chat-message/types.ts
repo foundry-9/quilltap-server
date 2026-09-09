@@ -11,6 +11,7 @@ import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { DangerousContentSettings, ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
 
 /**
  * Context passed through the message handling pipeline
@@ -356,6 +357,19 @@ export interface StreamingState {
    */
   nextTurnSeq?: number
   hasStartedStreaming: boolean
+  /**
+   * Every attempt for this turn that did NOT answer, in the order tried.
+   * Written only by `route-trail.ts` — never push here directly.
+   */
+  routeFailures: RouteAttempt[]
+  /**
+   * How `effectiveProfile` came to hold the turn. Set beside every
+   * `effectiveProfile` swap (via `setRouteVia`) so the composed trail labels
+   * the answering row honestly. Initialised to 'primary' — or 'concierge' when
+   * the Concierge's pre-call reroute installed the profile before anything was
+   * tried.
+   */
+  routeVia: RouteAttemptVia
 }
 
 /**

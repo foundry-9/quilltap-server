@@ -232,7 +232,7 @@ function MessageRowInner({
           <MessageDesktopAvatar
             messageAvatar={messageAvatar}
             dangerous={isDangerousChat}
-            badge={{ provider: message.provider, modelName: message.modelName }}
+            badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
           />
         )}
         <div className="qt-chat-message-body group">
@@ -278,7 +278,7 @@ function MessageRowInner({
         <MessageDesktopAvatar
           messageAvatar={messageAvatar}
           dangerous={isDangerousChat}
-          badge={{ provider: message.provider, modelName: message.modelName }}
+          badge={{ provider: message.provider, modelName: message.modelName, routeTrail: message.routeTrail }}
         />
       )}
       <div className="qt-chat-message-body group">
@@ -545,6 +545,10 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // Pre-rendered HTML
   if (prev.message.renderedHtml !== next.message.renderedHtml) return false
+
+  // `message.routeTrail` deliberately has NO check here. It is written once when
+  // the message is saved and never mutated afterwards, so a deep compare would
+  // cost every row a walk of an array that cannot have changed. Don't add one.
 
   // Character data
   if (prev.character?.id !== next.character?.id) return false

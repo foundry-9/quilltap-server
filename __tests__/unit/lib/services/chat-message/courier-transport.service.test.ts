@@ -80,6 +80,8 @@ const baseStreaming = {
   rawResponse: null,
   thoughtSignature: undefined,
   hasStartedStreaming: false,
+  routeFailures: [],
+  routeVia: 'primary',
 } as any
 
 describe('courier-transport.service', () => {

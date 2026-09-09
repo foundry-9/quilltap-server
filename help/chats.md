@@ -493,6 +493,41 @@ See [Using Tools](tools-usage.md) for tool details.
 - Try different search terms
 - Check recently deleted if available
 
+## The Call Sheet Beneath the Avatar
+
+Beneath each reply's portrait you will find a modest little placard naming the provider and model
+that supplied it. Most of the time that is one line, and one line is the whole story: the model you
+appointed was asked, and the model you appointed answered.
+
+Occasionally it is a list. When that happens, the list is a *call sheet* — every model that was
+asked for that reply, in the order they were asked, from the first name at the top to the one that
+finally obliged at the bottom.
+
+- **A line struck through and marked ❌** was asked and could not oblige on its own account: it
+  timed out, refused the connection, ran out of rate limit, could not be found, produced nothing
+  at all, or had no usable key to its name. Nothing to do with what you wrote.
+- **A line struck through and marked 🚫** declined on grounds of *content*. The provider's own
+  moderation reached for the smelling salts. That is the provider's decision, not Quilltap's, and
+  asking again in the same words will fetch the same answer.
+- **The unmarked line at the bottom** is the one that actually wrote the reply. It is the same
+  placard you see on every ordinary message.
+
+**Hover any line** and it will introduce itself properly: the profile's own name — useful when you
+keep three OpenAI profiles and need to tell them apart — its provider and model, how it came to be
+asked (first on the call sheet, asked a second time, sent by the Concierge, standing in as the
+understudy, or drafted from the company by tier), and precisely what became of it. Where a refusal
+was *inferred* rather than stated outright, the hover text says so, so you know which sort of
+evidence you are looking at.
+
+A reply with no list under it had no trouble at all. Nothing is hidden by its absence; there was
+simply nothing to record.
+
+Two footnotes, for tidiness. When the Concierge reroutes a chat to an uncensored profile *before*
+anything is asked, the original profile earns no line — it was never put the question, and the
+danger badge already announces the reroute. And when the same profile is asked twice in a row (the
+usual remedy for a reply that arrives empty), the two attempts share one line, whose hover text
+will tell you it answered on the second try.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

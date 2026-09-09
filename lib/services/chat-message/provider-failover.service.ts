@@ -50,6 +50,7 @@ import {
   flushReasoningSegment,
 } from './streaming.service'
 import type { StreamingState } from './types'
+import { recordRouteFailure, setRouteVia, classifyEmptyBody, viaOf } from './route-trail'
 
 const logger = createServiceLogger('ProviderFailover')
 
@@ -143,6 +144,18 @@ export async function attemptEmptyResponseRecovery({
     return flags()
   }
 
+  // The call that opened this recovery produced nothing. Record it on the
+  // turn's route trail once, here, while `state.rawResponse` still holds the
+  // finish reason that tells a stated refusal from a plain empty body —
+  // `resetStreamingBuffersForSwap` clears it further down the chain.
+  //
+  // `state.routeVia` is whatever the effective profile already was: 'primary'
+  // normally, 'concierge' when the Concierge's *pre-call* reroute installed
+  // this profile before anything was tried.
+  const openingVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+  recordRouteFailure(state, state.effectiveProfile, state.routeVia, openingVerdict.outcome,
+    openingVerdict.trigger, openingVerdict.detail, openingVerdict.evidence)
+
   if (!contentWasFlaggedDangerous) {
     sameProviderRetryAttempted = true
     triedProfileIds.push(state.effectiveProfile.id)
@@ -176,6 +189,7 @@ export async function attemptEmptyResponseRecovery({
       })
 
       if (state.fullResponse.trim().length > 0) {
+        setRouteVia(state, 'retry')
         logger.info('[EmptyResponse] Same-provider retry succeeded', {
           chatId,
           provider: state.effectiveProfile.provider,
@@ -183,6 +197,12 @@ export async function attemptEmptyResponseRecovery({
           responseLength: state.fullResponse.length,
         })
       } else {
+        // Classify BEFORE anything downstream resets the buffers: the finish
+        // reason that tells a refusal from a plain empty body lives in
+        // `state.rawResponse`, which `resetStreamingBuffersForSwap` clears.
+        const retryVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+        recordRouteFailure(state, state.effectiveProfile, 'retry', retryVerdict.outcome,
+          retryVerdict.trigger, retryVerdict.detail, retryVerdict.evidence)
         logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
           chatId,
           provider: state.effectiveProfile.provider,
@@ -190,9 +210,12 @@ export async function attemptEmptyResponseRecovery({
         })
       }
     } catch (retryError) {
+      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+      recordRouteFailure(state, state.effectiveProfile, 'retry', 'failed',
+        classifyFallbackTrigger(retryError) ?? 'provider-error', retryMessage)
       logger.error('[EmptyResponse] Same-provider retry failed', {
         chatId,
-        error: retryError instanceof Error ? retryError.message : String(retryError),
+        error: retryMessage,
       })
     }
   }
@@ -211,6 +234,10 @@ export async function attemptEmptyResponseRecovery({
       sameProviderRetryAttempted,
     })
 
+    // Held outside the try so a throw from the reroute's own call can still be
+    // attributed to the profile it was made against, rather than vanishing.
+    let rerouteProfile: ConnectionProfile | null = null
+
     try {
       const routeResult = await resolveProviderForDangerousContent(
         state.effectiveProfile,
@@ -224,6 +251,7 @@ export async function attemptEmptyResponseRecovery({
 
       if (routeResult.rerouted && routeResult.connectionProfile.id === state.effectiveProfile.id) {
       } else if (routeResult.rerouted) {
+        rerouteProfile = routeResult.connectionProfile
         triedProfileIds.push(routeResult.connectionProfile.id)
 
         safeEnqueue(controller, encodeStatusEvent(encoder, {
@@ -266,6 +294,7 @@ export async function attemptEmptyResponseRecovery({
         if (state.fullResponse.trim().length > 0) {
           state.effectiveProfile = routeResult.connectionProfile
           state.effectiveApiKey = routeResult.apiKey
+          setRouteVia(state, 'concierge')
 
           logger.info('[DangerousContent] Uncensored retry succeeded', {
             chatId,
@@ -274,6 +303,15 @@ export async function attemptEmptyResponseRecovery({
             responseLength: state.fullResponse.length,
           })
         } else {
+          // Record it from `routeResult.connectionProfile`, NOT from `state`:
+          // the swap above only happens on success, so an uncensored profile
+          // that comes back empty is otherwise absent from every record — and
+          // this row is precisely the one the user asked for. Classified here,
+          // before the chain walk below resets the buffers.
+          const uncensoredVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
+          recordRouteFailure(state, routeResult.connectionProfile, 'concierge',
+            uncensoredVerdict.outcome, uncensoredVerdict.trigger,
+            uncensoredVerdict.detail, uncensoredVerdict.evidence)
           logger.error('[DangerousContent] Both safe and uncensored providers returned empty', {
             chatId,
             safeProvider: connectionProfile.provider,
@@ -284,9 +322,14 @@ export async function attemptEmptyResponseRecovery({
         }
       }
     } catch (retryError) {
+      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError)
+      if (rerouteProfile) {
+        recordRouteFailure(state, rerouteProfile, 'concierge', 'failed',
+          classifyFallbackTrigger(retryError) ?? 'provider-error', retryMessage)
+      }
       logger.error('[DangerousContent] Uncensored retry failed', {
         chatId,
-        error: retryError instanceof Error ? retryError.message : String(retryError),
+        error: retryMessage,
       })
     }
   }
@@ -593,6 +636,7 @@ async function walkFallbackChain(
         reason: keyResolution.reason,
       })
       attempts.push(recordAttempt(understudy, 'auth', new Error(keyResolution.reason)))
+      recordRouteFailure(state, understudy, viaOf(candidate.kind), 'failed', 'auth', keyResolution.reason)
       continue
     }
 
@@ -623,7 +667,9 @@ async function walkFallbackChain(
       })
     } catch (understudyError) {
       const understudyTrigger = classifyFallbackTrigger(understudyError) ?? 'provider-error'
+      const understudyMessage = understudyError instanceof Error ? understudyError.message : String(understudyError)
       attempts.push(recordAttempt(understudy, understudyTrigger, understudyError))
+      recordRouteFailure(state, understudy, viaOf(candidate.kind), 'failed', understudyTrigger, understudyMessage)
       logger.warn('[Failover] Understudy also failed', {
         chatId,
         understudyId: understudy.id,
@@ -639,6 +685,12 @@ async function walkFallbackChain(
 
     if (state.fullResponse.trim().length === 0) {
       attempts.push(recordAttempt(understudy, 'empty-response', new Error('empty response')))
+      // Classified HERE, before the next iteration's `resetStreamingBuffersForSwap`
+      // wipes `state.rawResponse` — that is where the finish reason lives, and
+      // it is the only thing that tells a stated refusal from a blank body.
+      const understudyVerdict = classifyEmptyBody(state, context.dangerous)
+      recordRouteFailure(state, understudy, viaOf(candidate.kind), understudyVerdict.outcome,
+        understudyVerdict.trigger, understudyVerdict.detail, understudyVerdict.evidence)
       logger.warn('[Failover] Understudy returned an empty response', {
         chatId,
         understudyId: understudy.id,
@@ -650,6 +702,7 @@ async function walkFallbackChain(
 
     state.effectiveProfile = understudy
     state.effectiveApiKey = keyResolution.apiKey
+    setRouteVia(state, viaOf(candidate.kind))
 
     logger.info('[Failover] Understudy answered', {
       chatId,
@@ -727,6 +780,8 @@ export async function attemptHardErrorFailover(
     return { recovered: false, attempts: [], tierPickWasOffered: false }
   }
 
+  const failureMessage = error instanceof Error ? error.message : String(error)
+
   logger.warn('[Failover] Primary call failed; walking the fallback chain', {
     chatId,
     profileId: state.effectiveProfile.id,
@@ -734,8 +789,13 @@ export async function attemptHardErrorFailover(
     model: state.effectiveProfile.modelName,
     trigger,
     purpose: context.purpose,
-    error: error instanceof Error ? error.message : String(error),
+    error: failureMessage,
   })
+
+  // The failure that opens the chain is the trail's first row. `state.routeVia`
+  // is whatever the effective profile already was — 'primary' normally,
+  // 'concierge' when the Concierge's pre-call reroute had already swapped it.
+  recordRouteFailure(state, state.effectiveProfile, state.routeVia, 'failed', trigger, failureMessage)
 
   return walkFallbackChain(opts, recordAttempt(state.effectiveProfile, trigger, error))
 }

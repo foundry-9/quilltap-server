@@ -164,6 +164,32 @@ export const ChatMessageRowSchema = z.object({
     invokedBy: z.enum(['llm', 'user']),
     callerParticipantId: UUIDSchema.optional(),
   }).nullable().optional(),
+  // The route trail: every connection profile tried for this turn, in order,
+  // with why each one stepped aside. NULL unless the turn had at least one
+  // failure — a one-entry trail says nothing provider/modelName don't.
+  // This row schema describes what is STORED; the gate on the way in is
+  // ChatEventSchema (lib/schemas/chat.types.ts), which addMessage parses
+  // against — a field declared there but not here still persists, since this
+  // shape only tells the backend that routeTrail is a JSON column. Kept in
+  // lockstep anyway: it is the account of the column a reader will consult.
+  // via = how the profile came to be asked; outcome = 'answered' | 'failed'
+  // (fell over on its own) | 'refused' (declined on content grounds);
+  // trigger = the engine's failure class; evidence = how a refusal was
+  // established ('finish-reason' stated by the provider, 'inferred' from an
+  // empty body on a Concierge-flagged turn); detail = a short reason, capped
+  // at 200 chars, never the full error body. The last entry always agrees with
+  // this row's provider/modelName. ASSISTANT rows only.
+  routeTrail: z.array(z.object({
+    profileId: UUIDSchema,
+    profileName: z.string(),
+    provider: z.string(),
+    modelName: z.string(),
+    via: z.enum(['primary', 'retry', 'concierge', 'understudy', 'tier-pick']),
+    outcome: z.enum(['answered', 'failed', 'refused']),
+    trigger: z.enum(['auth', 'rate-limit', 'network', 'model-missing', 'provider-error', 'empty-response', 'moderation-refusal']).optional(),
+    evidence: z.enum(['finish-reason', 'inferred']).optional(),
+    detail: z.string().max(200).optional(),
+  })).nullable().optional(),
   // The Courier: when non-null, this row is a placeholder for a manual /
   // clipboard turn awaiting a pasted reply. Cleared on resolve.
   pendingExternalPrompt: z.string().nullable().optional(),
