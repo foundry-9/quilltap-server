@@ -28,9 +28,11 @@ Pass any handle the character happens to be holding — the uuid from a Libraria
 
 The answer is usually instantaneous and costs nothing at all, because the description has generally been written already:
 
-1. **A description filed at upload.** Every image the user uploads into a chat is described on arrival by the configured vision profile, and that account is kept on the file itself.
-2. **The prompt that made it.** For an image Quilltap generated, the commissioning prompt is the most faithful description available, and it is free for the asking.
-3. **A fresh look.** Only when neither exists does the tool send the picture to the vision profile — and the result is filed, so the next character to ask is served from step 1.
+1. **The prompt that made it.** For an image Quilltap generated — a Lantern backdrop, an Aurora portrait, a `generate_image` commission — the commissioning prompt is the most faithful description available, and it is free for the asking. It is consulted first, ahead of anything else filed on the picture; should the file also carry a description of its own, that comes along too, marked *On file*.
+2. **A description filed at upload.** Every image the user uploads into a chat is described on arrival by the configured vision profile, and that account is kept on the file itself.
+3. **A fresh look.** Only when neither exists does the tool send the picture to the vision profile — and the result is filed, so the next character to ask is served from step 2.
+
+Earlier editions of the house stamped a label onto every generated picture — "Story background for: *such-and-such*", or "*Name* — wardrobe portrait" — in the very slot the tool reads as a description, and served it as one. A character asking what a backdrop showed was told the title of the conversation. Those labels are no longer written, existing ones are cleared when the house next opens, and the prompt now takes precedence regardless.
 
 A character whose own eyes read pictures (a vision-capable model, handed the image directly with the message) does not strictly need this — but may still call it, and often should, when they want the particulars set down in words rather than merely glimpsed.
 

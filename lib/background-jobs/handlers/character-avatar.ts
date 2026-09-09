@@ -446,7 +446,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         filename: originalFilename,
         content: buffer,
         contentType: mimeType,
-        description: `${character.name} — wardrobe portrait`,
       });
       storageKey = written.storageKey;
       storedMimeType = written.storedMimeType;
@@ -501,7 +500,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       generationPrompt: prompt,
       generationModel: effectiveImageProfile.modelName,
       generationRevisedPrompt: imageData.revisedPrompt || null,
-      description: `${character.name} — wardrobe portrait`,
+      // No label here — see the matching note in story-background.ts (bug 132).
+      description: null,
       tags: [payload.characterId],
       storageKey,
       projectId: fileProjectId,

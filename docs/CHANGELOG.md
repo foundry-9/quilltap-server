@@ -4,6 +4,34 @@
 
 ### 4.10-dev
 
+#### Fixed: `describe_image` on a generated picture returned its label, not a description
+
+The story-background job stored `Story background for: <scene or chat title>` and the
+wardrobe-portrait job stored `<Name> — wardrobe portrait` in the `description` column of every
+image they produced, on both the `files` row and its Scriptorium link. `describe_image` served
+whatever sat in that column before it would read the generation prompt or spend a vision call, so
+a character asking what a backdrop showed was told the chat title. Bug 132.
+
+Three changes:
+
+- Neither job writes the label any more. `description` is left null; the generation prompt and
+  revised prompt were already stored beside it and are the account of record.
+- `describe_image` now prefers the generation prompt over a stored description, the same order
+  `runGenerateImageDescription` (the blind-model attachment fallback) has always used. When both
+  exist the stored description is returned too, as `stored_description` and an `On file:` line in
+  the formatted text, so a human-written or vision-written description is never hidden behind the
+  prompt. This also covers a `.qtap` import from an older export that still carries a label.
+- A new migration, `clear-generated-image-placeholder-descriptions-v1`, clears the two label
+  shapes already on disk: `files.description` to NULL on `source = 'GENERATED'` rows, and
+  `doc_mount_file_links.description` to its `''` default on image links. Real descriptions,
+  uploads, and non-image links are untouched. An unreadable mount index degrades the link sweep
+  to a warning rather than failing the migration.
+
+Files: `lib/tools/handlers/doc-edit/photo-handlers.ts`, `lib/tools/describe-image-tool.ts`,
+`lib/background-jobs/handlers/story-background.ts`,
+`lib/background-jobs/handlers/character-avatar.ts`,
+`migrations/scripts/clear-generated-image-placeholder-descriptions.ts`, `help/keep-image-tools.md`.
+
 #### Fixed: a user-controlled character's talkativeness now counts in the speaking order
 
 Talkativeness on a character you drive yourself had no effect on the rotation. The six server paths

@@ -911,7 +911,6 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         content: buffer,
         contentType: mimeType,
         subfolder: 'generated',
-        description: `Story background for: ${payload.sceneContext || chat.title}`,
       });
       storageKey = written.storageKey;
       storedMimeType = written.storedMimeType;
@@ -954,7 +953,11 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       generationPrompt: finalPrompt,
       generationModel: activeImageProfile.modelName,
       generationRevisedPrompt: imageData.revisedPrompt || null,
-      description: `Story background for: ${payload.sceneContext || chat.title}`,
+      // No label here. `description` is what describe_image and the blind-model
+      // fallback read as "what this picture shows"; a stub such as "Story
+      // background for: <title>" shadowed the prompt above and the vision
+      // path behind it (bug 132). The prompt is the account of record.
+      description: null,
       tags: [],
       storageKey,
       projectId: folderProjectId,

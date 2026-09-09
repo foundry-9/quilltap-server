@@ -473,8 +473,9 @@ export async function handleAttachImage(
 //
 // Resolves any handle a character might be holding (image-v2 file uuid,
 // generate_image id, Librarian catalogue handle, or an album link uuid) to a
-// FileEntry, then answers with the best description available, spending a
-// vision call only when there isn't one. See bug 92 for why this exists: the
+// FileEntry, then answers with the best description available — the prompt
+// that generated it, else the description on file — spending a vision call
+// only when there is neither. See bug 92 for why this exists: the
 // photo tools were all custodial, so models reached for attach_image to look
 // at things and were told to file them instead.
 // ============================================================================
@@ -534,32 +535,49 @@ export async function handleDescribeImage(
 
   const respond = (
     description: string,
-    source: DescribeImageOutput['source']
+    source: DescribeImageOutput['source'],
+    storedDescription?: string
   ) => {
     logger.info('Described image for character', {
       fileEntryId: entry.id,
       characterId: context.characterId,
       source,
       descriptionLength: description.length,
+      hasStoredDescription: Boolean(storedDescription),
     });
+    const formattedText = storedDescription
+      ? `${entry.originalFilename}:\n\n${description}\n\nOn file: ${storedDescription}`
+      : `${entry.originalFilename}:\n\n${description}`;
     return {
       success: true,
-      result: { ...base, description, source },
-      formattedText: `${entry.originalFilename}:\n\n${description}`,
+      result: {
+        ...base,
+        description,
+        source,
+        ...(storedDescription ? { stored_description: storedDescription } : {}),
+      },
+      formattedText,
     };
   };
 
-  // 1. A description stored at upload time — the common case, and free.
-  const stored = entry.description?.trim();
+  const stored = entry.description?.trim() || undefined;
+
+  // 1. Quilltap generated it, so the prompt that made it is the most faithful
+  //    account available, and free. It outranks whatever sits in `description`
+  //    because that column has held labels rather than descriptions ("Story
+  //    background for: <title>", bug 132) — and an import from an older export
+  //    can still carry one. Same ordering as `runGenerateImageDescription`
+  //    (`lib/chat/file-attachment-fallback.ts`). A stored description is not
+  //    thrown away: it rides along as `stored_description`.
+  const prompt = entry.generationRevisedPrompt?.trim() || entry.generationPrompt?.trim();
+  if (prompt) return respond(prompt, 'generation-prompt', stored);
+
+  // 2. A description stored at upload time — the common case for uploads, and
+  //    also free.
   if (stored) return respond(stored, 'stored-description');
 
-  // 2. Quilltap generated it, so the prompt that made it is the most faithful
-  //    account available, and also free.
-  const prompt = entry.generationRevisedPrompt?.trim() || entry.generationPrompt?.trim();
-  if (prompt) return respond(prompt, 'generation-prompt');
-
   // 3. Nothing on file: describe it now. This persists onto the FileEntry and
-  //    its blank links, so the next caller lands in case 1.
+  //    its blank links, so the next caller lands in case 2.
   const repos = getRepositories();
   const { autoDescribeChatImageAttachment } = await import('@/lib/photos/auto-describe-attachment');
   const result = await autoDescribeChatImageAttachment({

@@ -388,6 +388,8 @@ import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
 import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
 // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
 import { addCycleOrderColumnMigration } from './add-cycle-order-column-v1';
+// Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
+import { clearGeneratedImagePlaceholderDescriptionsMigration } from './clear-generated-image-placeholder-descriptions';
 
 /**
  * All available migrations.
@@ -778,6 +780,8 @@ export const migrations: Migration[] = [
   addRouteTrailMessageColumnMigration,
   // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
   addCycleOrderColumnMigration,
+  // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
+  clearGeneratedImagePlaceholderDescriptionsMigration,
 ];
 
 export {
@@ -1147,5 +1151,7 @@ export {
   addRouteTrailMessageColumnMigration,
   // Fixed rotation: cycleOrderParticipantIds column on chats (the cycle's drawn speaking order)
   addCycleOrderColumnMigration,
+  // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
+  clearGeneratedImagePlaceholderDescriptionsMigration,
 };
 

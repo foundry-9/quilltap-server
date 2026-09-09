@@ -184,6 +184,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'realign-file-entry-sha256-v1': 'Matching each picture to its fingerprint, so nothing goes missing on the shelves…',
   'add-route-trail-message-column-v1': 'Pinning the call sheet to every reply, so you may see who was asked…',
   'add-cycle-order-column-v1': 'Drawing up the running order, so your cast knows who follows whom…',
+  'clear-generated-image-placeholder-descriptions-v1': 'Peeling the placeholder labels off your pictures, so they may be looked at properly…',
   'add-profile-supports-image-upload-field-v1': 'Adding image-upload support to connection profiles',
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
   'add-connection-profile-max-tokens-field-v1': 'Adding max-tokens to connection profiles',
