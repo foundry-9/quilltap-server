@@ -3,6 +3,7 @@
  *
  * Serves files stored in the local filesystem backend through the API with proper authentication.
  * GET /api/v1/files/proxy/:key - Download a file by storage key
+ * GET /api/v1/files/proxy/:key?download=1 - …as an attachment rather than inline
  *
  * This route provides access to files managed by the centralized file storage system.
  * It verifies user authentication and ownership before serving the file.
@@ -14,7 +15,7 @@ import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { FileContentMissingError } from '@/lib/file-storage/errors';
-import { buildContentDisposition } from '@/lib/api/content-disposition';
+import { buildContentDisposition, dispositionFor } from '@/lib/api/content-disposition';
 
 /**
  * GET /api/v1/files/proxy/[...key]
@@ -68,7 +69,11 @@ async function handleGet(
       headers: {
         'Content-Type': fileEntry.mimeType,
         'Content-Length': buffer.length.toString(),
-        'Content-Disposition': buildContentDisposition(fileEntry.originalFilename, 'inline'),
+        // `?download=1` saves rather than renders; see lib/api/content-disposition.
+        'Content-Disposition': buildContentDisposition(
+          fileEntry.originalFilename,
+          dispositionFor(request)
+        ),
         'Cache-Control': 'public, max-age=31536000, immutable',
         // Allow embedding in same-origin iframes (for file preview modal)
         'X-Frame-Options': 'SAMEORIGIN',

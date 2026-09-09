@@ -108,17 +108,19 @@ produce a lying label on a dead button.
 
 ### 1. The count is read once, at mount, and nothing ever reads it again
 
-`fetchChatMemoryCount` (`useChatData.ts:105`) is a `useCallback` keyed on
+`fetchChatMemoryCount` (`useChatData.ts:91`) is a `useCallback` keyed on
 `chatId`, and its only caller is the initialization effect in `SalonView.tsx`:
 
 ```ts
 useEffect(() => {
   fetchChat()
   fetchChatSettings()
-  fetchChatPhotoCount()
   fetchChatMemoryCount()
-}, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
+}, [fetchChat, fetchChatSettings, fetchChatMemoryCount])
 ```
+
+(As filed, the effect carried a `fetchChatPhotoCount()` beside it, with the
+identical shape. That one has since been retired outright — see step 5.)
 
 Every dependency is stable for a given `chatId`, so the effect runs exactly
 once per mount. Memories, meanwhile, are written by `MEMORY_EXTRACTION` and
@@ -261,7 +263,7 @@ count on the very refetch meant to correct it.
 
 ### Step 5 — the adjacent surface, same change
 
-> **Superseded (2026-09-08).** `fetchChatPhotoCount` reads `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still return zero. The count moves onto the chat-gallery query instead — see [salon-chat-gallery.md](../features/salon-chat-gallery.md) and the bug it files for the dead action. Steps 1–4 stand.
+> **Superseded, and done (2026-09-09).** `fetchChatPhotoCount` read `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still have returned zero — that was [bug 129](bug-129-gallery-button-never-appears.md). The count moved onto the chat-gallery query instead: `chatPhotoCount` and `fetchChatPhotoCount` are gone from `useChatData` entirely, replaced by `useChatGallery`'s `total` on `queryKeys.chats.gallery(chatId)`, which rides the `chats` row of the topic map. See [salon-chat-gallery.md](../../features/complete/salon-chat-gallery.md). Steps 1–4, for the memory count, landed on their own — see the **FIXED** note at the head of this file.
 
 `chatPhotoCount` in the same hook has the identical shape: read once at mount,
 refreshed only by three explicit call sites in `ChatModals.tsx`. A Lantern

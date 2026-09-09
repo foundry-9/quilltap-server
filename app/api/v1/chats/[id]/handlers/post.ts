@@ -50,6 +50,7 @@ import {
   handleSendMail,
   handleMergeConversation,
   handleSetScenario,
+  handleSaveGalleryImage,
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -96,6 +97,7 @@ const CHAT_POST_ACTIONS = [
   'send-mail',
   'merge-conversation',
   'scenario',
+  'save-image',
 ] as const;
 
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
@@ -164,6 +166,7 @@ export async function handlePost(
     'send-mail': () => handleSendMail(req, chatId, chat, ctx),
     'merge-conversation': () => handleMergeConversation(req, chatId, chat, ctx),
     scenario: () => handleSetScenario(req, chatId, ctx),
+    'save-image': () => handleSaveGalleryImage(req, chatId, ctx),
   };
 
   return actionHandlers[action]();

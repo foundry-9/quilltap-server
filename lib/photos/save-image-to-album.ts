@@ -20,6 +20,7 @@
  */
 
 import { extname } from 'node:path';
+import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getRepositories } from '@/lib/repositories/factory';
@@ -39,6 +40,23 @@ import {
 } from './keep-image-markdown';
 import { chunkAndInsertExtractedText } from './chunk-extracted-text';
 import { buildPhotosRelativePath, isPhotosRelativePath, PHOTOS_FOLDER } from './photos-paths';
+
+/**
+ * The request body both Salon save-image routes accept — the message-scoped
+ * one on the ribbon and the chat-scoped one on the gallery. One schema, so the
+ * two doors onto {@link saveImageToAlbum} cannot drift.
+ *
+ * `fileId` is deliberately a plain string rather than a uuid: it may be a
+ * `files.id` *or* a `doc_mount_file_links.id`, and the service resolves either.
+ */
+export const SaveImageRequestSchema = z.object({
+  fileId: z.string().min(1, 'fileId is required'),
+  mountPointId: z.string().min(1, 'mountPointId is required'),
+  caption: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+export type SaveImageRequest = z.infer<typeof SaveImageRequestSchema>;
 
 export interface SaveImageAttribution {
   /** Display name of whoever is saving (character name, user persona name, or "Quilltap"). */

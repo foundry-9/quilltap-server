@@ -195,6 +195,8 @@ The same image saved twice into the same album is politely refused — you'll se
 
 This is the operator-facing twin of the characters' own `keep_image` tool; everything an LLM can preserve, you can now preserve too.
 
+The same dialog has a second door. The ribbon's bookmark can only reach an image pinned beneath a message, and a great many of a conversation's pictures — a backdrop the Lantern painted quietly, a character's standing portrait — are pinned beneath nothing at all. The **Gallery** in the sidebar's Organize drawer lays out every picture in the conversation and offers this same album picker on each of them. See [The Chat Gallery](chat-gallery.md).
+
 ### Reattribute Message (Multi-Character)
 
 Change which character "said" a message:

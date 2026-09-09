@@ -50,6 +50,7 @@ export { handleAnnouncementPreview } from './announcement-preview';
 export { handleSendMail } from './send-mail';
 export { handleMergeConversation } from './merge';
 export { handleGetMailbox } from './mailbox';
+export { handleSaveGalleryImage } from './save-image';
 export { handleGetPhotoAlbums } from './photo-albums';
 export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';
 export { handleGetGroupStores } from './group-stores';

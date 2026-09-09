@@ -46,6 +46,7 @@ import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@
 // Import extracted hooks
 import {
   useChatData,
+  useChatGallery,
   useTurnManagement,
   useMessageActions,
   useFileAttachments,
@@ -108,9 +109,17 @@ export function SalonView({ chatId }: SalonViewProps) {
 
   // --- Core data hook ---
   const chatDataHook = useChatData(id)
-  const { chat, messages, loading, error, chatSettings, swipeStates, chatPhotoCount, chatMemoryCount } = chatDataHook
+  const { chat, messages, loading, error, chatSettings, swipeStates, chatMemoryCount } = chatDataHook
   const { setChat, setMessages, setSwipeStates } = chatDataHook
-  const { fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount } = chatDataHook
+  const { fetchChat, fetchChatSettings, fetchChatMemoryCount } = chatDataHook
+
+  // --- The chat gallery ---
+  // One read backs both the sidebar's `Gallery (N)` and the grid the modal
+  // draws. It rides the `chats` realtime topic, so a Lantern backdrop or an
+  // Aurora repaint landing from a background job updates the number with no
+  // poll; `invalidateChatGallery` is for the images this client itself put in
+  // the conversation, which the server has no hint to publish for.
+  const { total: chatGalleryTotal, invalidate: invalidateChatGallery } = useChatGallery(id)
 
   // --- Story background ---
   // When the backdrop URL changes (active regeneration poll or passive SWR revalidation), refresh
@@ -802,9 +811,8 @@ export function SalonView({ chatId }: SalonViewProps) {
   useEffect(() => {
     fetchChat()
     fetchChatSettings()
-    fetchChatPhotoCount()
     fetchChatMemoryCount()
-  }, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
+  }, [fetchChat, fetchChatSettings, fetchChatMemoryCount])
 
   // When a TerminalEmbed reports its PTY has exited, refresh the chat so the
   // new Ariel close announcement appears inline.
@@ -1699,7 +1707,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           setMessages={setMessages}
           setChat={(fn) => setChat(fn as any)}
           fetchChat={fetchChat}
-          fetchChatPhotoCount={fetchChatPhotoCount}
+          invalidateChatGallery={invalidateChatGallery}
           setAttachedFiles={setAttachedFiles}
           modalImage={modals.modalImage}
           setModalImage={modals.setModalImage}
@@ -1765,12 +1773,15 @@ export function SalonView({ chatId }: SalonViewProps) {
               isOpen={!!saveImageTarget}
               onClose={() => setSaveImageTarget(null)}
               chatId={id}
-              messageId={saveImageTarget.messageId}
+              target={{
+                kind: 'message',
+                messageId: saveImageTarget.messageId,
+                fileId: saveImageTarget.attachmentId,
+              }}
               attachments={attachments}
-              initialAttachmentId={saveImageTarget.attachmentId}
               onSaved={(info) => {
                 showSuccessToast(`Saved to ${info.mountPoint}`)
-                void fetchChatPhotoCount()
+                invalidateChatGallery()
               }}
             />
           )
@@ -1866,7 +1877,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           onStateClick={modals.openStateEditor}
           onContinueChatClick={modals.openContinueChat}
           onMergeConversationClick={modals.openMergeConversation}
-          chatPhotoCount={chatPhotoCount}
+          galleryCount={chatGalleryTotal}
           onGalleryClick={modals.openGallery}
           isAutonomousRoom={chat?.chatType === 'autonomous'}
           onEditEnclaveClick={modals.openEditEnclave}

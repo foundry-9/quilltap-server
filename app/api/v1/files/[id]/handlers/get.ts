@@ -14,5 +14,5 @@ export async function handleGet(
     return handleGetThumbnail(request, ctx, fileId);
   }
 
-  return handleDownloadFile(ctx, fileId);
+  return handleDownloadFile(ctx, fileId, request);
 }

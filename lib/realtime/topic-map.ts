@@ -60,6 +60,10 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             queryKeys.chats.detail(id),
             queryKeys.chats.state(id),
             queryKeys.chats.background(id),
+            // The story-background and avatar jobs already publish
+            // `{topic:'chats', id: chatId}` on completion, so a Lantern
+            // backdrop or an Aurora repaint refreshes the gallery for free.
+            queryKeys.chats.gallery(id),
           ]
         : [queryKeys.chats.all]
 

@@ -78,3 +78,52 @@ export async function triggerUrlDownload(url: string, filename: string): Promise
   link.click();
   document.body.removeChild(link);
 }
+
+/**
+ * Append `?download=1` to a URL the app serves inline, so the response comes
+ * back as an `attachment`.
+ *
+ * Preserves whatever query the URL already carries, and is a no-op if the flag
+ * is already there.
+ */
+export function withDownloadFlag(url: string): string {
+  if (/[?&]download=(1|true)(&|$)/.test(url)) return url;
+  const [withoutHash, hash] = splitHash(url);
+  const separator = withoutHash.includes('?') ? '&' : '?';
+  return `${withoutHash}${separator}download=1${hash}`;
+}
+
+function splitHash(url: string): [string, string] {
+  const index = url.indexOf('#');
+  return index === -1 ? [url, ''] : [url.slice(0, index), url.slice(index)];
+}
+
+/**
+ * Download an image the app is serving inline.
+ *
+ * Asks the route for an `attachment` disposition and hands the URL — not the
+ * bytes — to {@link triggerUrlDownload}. That is the difference that matters
+ * for a 4K story background: the Electron shell streams it through
+ * `will-download` straight to disk, where {@link downloadFetchedFile} would
+ * first buffer the whole thing into renderer memory as a Blob. In the browser
+ * it is a plain anchor click, and the server's own Content-Disposition names
+ * the file.
+ *
+ * {@link downloadFetchedFile} remains the right call where the bytes are
+ * genuinely wanted in hand — copying an image to the clipboard, for instance.
+ */
+export async function downloadImageUrl(url: string, filename: string): Promise<void> {
+  console.debug('[download-utils] Downloading image by URL', { url, filename });
+  await triggerUrlDownload(withDownloadFlag(url), filename);
+}
+
+/**
+ * {@link downloadImageUrl} for a chat-gallery entry, which already carries the
+ * URL its bytes are served from and the name they should be saved under.
+ */
+export async function downloadGalleryEntry(entry: {
+  url: string;
+  filename: string;
+}): Promise<void> {
+  await downloadImageUrl(entry.url, entry.filename);
+}

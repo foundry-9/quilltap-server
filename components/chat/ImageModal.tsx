@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
-import { triggerDownload } from '@/lib/download-utils'
+import { downloadImageUrl } from '@/lib/download-utils'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { Icon } from '@/components/ui/icon'
 
@@ -56,9 +56,10 @@ export default function ImageModal({
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(src)
-      const blob = await response.blob()
-      await triggerDownload(blob, filename)
+      // The URL, not the bytes: `?download=1` makes the route answer with an
+      // `attachment` disposition, so the Electron shell streams a 4K backdrop
+      // to disk through `will-download` rather than through renderer memory.
+      await downloadImageUrl(src, filename)
     } catch (error) {
       console.error('Failed to download image:', { error: error instanceof Error ? error.message : String(error) })
     }

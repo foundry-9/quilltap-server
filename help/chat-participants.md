@@ -15,7 +15,7 @@ Each drawer attends to a different aspect of running the conversation:
 - **Participants** — the cast of characters, who's speaking, who's queued, and every dial for tuning their behaviour. (This page treats that drawer in considerable detail; the rest are sketched briefly below with cross-references.)
 - **Chat** — the per-chat dials. Agent Mode, Roleplay Template, Project assignment, Image Provider, Lantern announcements, automatic avatar generation, and the gateways to the Tools and Run Tool modals. Regenerate Background lives here too, when story backgrounds are switched on.
 - **Visibility** — only present in multi-character chats. Two toggles: **All Whispers** (show or hide private asides) and **Shared Vaults** (whether characters may read one another's vaults).
-- **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and Gallery (when there are photos to display).
+- **Organize** — the chat as an object. Copy ID, Rename, State editor, Continue Elsewhere, Export, and the Gallery, which is always present and holds every picture in the conversation.
 - **Edit Content** — the heavier instruments. Replace, Bulk Replace, Re-extract Memories, and Delete Memories.
 
 Only one drawer stands open at a time, in the manner of a well-mannered campaign desk; opening another closes the previous. Participants is open by default whenever the sidebar is expanded.
@@ -483,7 +483,7 @@ The chat as an object, rather than a conversation:
 - **State…** — open the chat state editor; see [Chat State](chat-state.md)
 - **Continue Elsewhere** — fork this conversation into a new chat with a different scenario or project
 - **Export** — download a SillyTavern-compatible export of the chat
-- **Gallery** — opens the photo gallery; appears only when there are pictures to display
+- **Gallery** — opens the chat gallery: every picture in the conversation, whatever brought it there — backdrops the Lantern painted, portraits Aurora repainted, the cast's standing portraits, pictures a character summoned or brought out of an album, photographs you uploaded, and pictures woven into the prose. Each one can be saved to a photo album or downloaded as a proper file. Always present; the count beside it is the tally. See [The Chat Gallery](chat-gallery.md)
 
 ### Edit Content
 

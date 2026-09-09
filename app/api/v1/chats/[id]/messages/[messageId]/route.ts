@@ -25,8 +25,12 @@ import {
   type MemoryChatSettings,
 } from '@/lib/services/chat-message/memory-trigger.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { saveImageToAlbum, SaveImageToAlbumError } from '@/lib/photos/save-image-to-album';
-import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
+import {
+  saveImageToAlbum,
+  SaveImageToAlbumError,
+  SaveImageRequestSchema,
+} from '@/lib/photos/save-image-to-album';
+import { resolveSaveAttribution } from '@/lib/photos/save-attribution';
 
 /**
  * Handle overriding danger flags on a message
@@ -274,13 +278,6 @@ async function handleCancelExternalTurn(
   }
 }
 
-const saveImageSchema = z.object({
-  fileId: z.string().uuid('fileId must be a UUID'),
-  mountPointId: z.string().uuid('mountPointId must be a UUID'),
-  caption: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-});
-
 /**
  * Save an image attachment from a chat message into a chosen photo album.
  * Mirrors the LLM `keep_image` tool but lets the human operator pick any
@@ -294,7 +291,7 @@ async function handleSaveImage(
 ) {
   try {
     const body = await req.json().catch(() => ({}));
-    const parsed = saveImageSchema.safeParse(body);
+    const parsed = SaveImageRequestSchema.safeParse(body);
     if (!parsed.success) {
       return badRequest(parsed.error.issues.map((i) => i.message).join('; '));
     }
@@ -316,47 +313,10 @@ async function handleSaveImage(
       return badRequest('Image is not attached to this message');
     }
 
-    // Decide attribution. If the chosen mount point is a participant's
-    // character vault, attribute the save to that character (matching the
-    // LLM keep_image flow). Otherwise attribute it to the human operator —
-    // preferring the actively-impersonated user character's name when one
-    // exists.
-    let attribution: { name: string; id: string | null; role: 'character' | 'user' } | null = null;
-    for (const participant of chat.participants) {
-      if (participant.type !== 'CHARACTER' || !participant.characterId) continue;
-      const vault = await getCharacterVaultStore(participant.characterId);
-      if (!vault || vault.mountPointId !== mountPointId) continue;
-      const character = await repos.characters.findById(participant.characterId);
-      attribution = {
-        name: character?.name ?? vault.mountPointName,
-        id: participant.characterId,
-        role: 'character',
-      };
-      break;
-    }
-
-    if (!attribution) {
-      let userPersonaName: string | null = null;
-      let userPersonaId: string | null = null;
-      const activeTypingId = chat.activeTypingParticipantId ?? null;
-      const activeParticipant = activeTypingId
-        ? chat.participants.find((p) => p.id === activeTypingId && p.controlledBy === 'user')
-        : undefined;
-      const fallbackParticipant = chat.participants.find((p) => p.controlledBy === 'user');
-      const userParticipant = activeParticipant ?? fallbackParticipant;
-      if (userParticipant?.characterId) {
-        const character = await repos.characters.findById(userParticipant.characterId);
-        if (character?.name) {
-          userPersonaName = character.name;
-          userPersonaId = character.id;
-        }
-      }
-      attribution = {
-        name: userPersonaName ?? user.name ?? 'Quilltap',
-        id: userPersonaId ?? user.id ?? null,
-        role: 'user',
-      };
-    }
+    // Who the save is attributed to — the one rule, shared with the
+    // gallery's chat-scoped twin so both doors write the same byline into the
+    // kept-image sidecar.
+    const attribution = await resolveSaveAttribution(chat, mountPointId, user, repos);
 
     const saved = await saveImageToAlbum({
       mountPointId,

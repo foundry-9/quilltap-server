@@ -45,6 +45,12 @@ export const queryKeys = {
     photoAlbums: (id: string) => ['chats', id, 'photo-albums'] as const,
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
+    /**
+     * Every image in one conversation, from `?action=gallery`. Also the source
+     * of the sidebar's `Gallery (N)` count — the count and the grid are one
+     * answer, which is what stops them disagreeing (bug 129).
+     */
+    gallery: (id: string) => ['chats', id, 'gallery'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the

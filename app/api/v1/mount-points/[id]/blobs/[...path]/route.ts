@@ -2,6 +2,7 @@
  * Mount Points API v1 — Blob Item Endpoint
  *
  * GET    /api/v1/mount-points/[id]/blobs/*  — Stream blob bytes
+ *   `?download=1` serves them as an attachment rather than inline.
  * DELETE /api/v1/mount-points/[id]/blobs/*  — Remove a blob
  * PATCH  /api/v1/mount-points/[id]/blobs/*  — Update the blob's description
  *
@@ -20,7 +21,7 @@ import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
-import { buildContentDisposition } from '@/lib/api/content-disposition';
+import { buildContentDisposition, dispositionFor } from '@/lib/api/content-disposition';
 import { deleteDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
@@ -41,9 +42,11 @@ function mimeForDocument(doc: { fileType?: string }): string {
 }
 
 export const GET = createContextParamsHandler<Params>(
-  async (_req: NextRequest, { repos }: RequestContext, { id, path }) => {
+  async (req: NextRequest, { repos }: RequestContext, { id, path }) => {
     try {
       const relativePath = joinPath(path);
+      // `?download=1` saves rather than renders; see lib/api/content-disposition.
+      const disposition = dispositionFor(req);
       const meta = await repos.docMountBlobs.findByMountPointAndPath(id, relativePath);
       if (meta) {
         const data = await repos.docMountBlobs.readData(meta.id);
@@ -65,7 +68,7 @@ export const GET = createContextParamsHandler<Params>(
             // the bytes actually served here.
             'Content-Disposition': buildContentDisposition(
               relativePath.split('/').pop() || meta.originalFileName || 'file',
-              'inline'
+              disposition
             ),
             'Cache-Control': 'private, max-age=3600',
             'X-Blob-Sha256': meta.sha256,
@@ -87,7 +90,7 @@ export const GET = createContextParamsHandler<Params>(
           'Content-Length': String(bytes.length),
           'Content-Disposition': buildContentDisposition(
             relativePath.split('/').pop() || 'document',
-            'inline'
+            disposition
           ),
           'Cache-Control': 'private, max-age=3600',
           'X-Blob-Sha256': doc.contentSha256,

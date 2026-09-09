@@ -39,6 +39,8 @@
  * POST /api/v1/chats/[id]?action=render-conversation - Queue Scriptorium render with full re-embed
  * POST /api/v1/chats/[id]?action=announcement - Post an ad-hoc announcement bubble
  * POST /api/v1/chats/[id]?action=scenario - Change (or clear) the chat's scenario mid-conversation
+ * POST /api/v1/chats/[id]?action=save-image - Save any image in the chat's gallery to a photo album
+ * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  * POST /api/v1/chats/[id]?action=send-mail - Post a letter as a player-character (The Post Office)
  * GET /api/v1/chats/[id]?action=mailbox&characterId=… - List a player-character's mailbox letters
  * PATCH /api/v1/chats/[id]?action=turn - Persist turn state (lastTurnParticipantId)
