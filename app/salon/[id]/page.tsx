@@ -5,7 +5,7 @@
  * SSE streaming hooks and virtualized message list, which must not be touched —
  * is extracted so it can also render kept-alive as a workspace tab. When the
  * tabbed workspace is enabled, this route redirects into it for the chat.
- * See `docs/developer/features/tabbed-workspace.md`.
+ * See `docs/developer/features/complete/tabbed-workspace.md`.
  */
 
 import { SalonView } from './SalonView'

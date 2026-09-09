@@ -2,7 +2,7 @@
  * Z.AI `reasoning_effort` — model gating + default-`high` behavior.
  *
  * Covers the decisions in
- * docs/developer/features/z-ai-reasoning-effort-plan.md: the glm-5.2-and-newer
+ * docs/developer/features/complete/z-ai-reasoning-effort-plan.md: the glm-5.2-and-newer
  * gate (`supportsReasoningEffort`) and the provider's default-`high`/skip logic
  * in `applyProfileParameters` (exercised through `sendMessage`, whose request
  * body we capture from the mocked OpenAI client).

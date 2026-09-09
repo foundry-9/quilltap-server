@@ -166,7 +166,7 @@ On continue / nudge / chained autonomous turns there is no new user message, so 
 
 ### 9a. Character progressions
 
-A **progression** is a named span of time on a character — a gestation, a recharging weapon, a fuse — stored under the reserved `progressions` key in the vault's `metadata.json`. Every prompted turn, the engine derives elapsed / remaining / percent from `Date.now()`, decides from the entry's own cadence whether *this* turn mentions it, and renders a second-person line. Design of record: [features/character-progressions.md](features/character-progressions.md); user documentation: `help/character-progressions.md`.
+A **progression** is a named span of time on a character — a gestation, a recharging weapon, a fuse — stored under the reserved `progressions` key in the vault's `metadata.json`. Every prompted turn, the engine derives elapsed / remaining / percent from `Date.now()`, decides from the entry's own cadence whether *this* turn mentions it, and renders a second-person line. Design of record: [features/character-progressions.md](features/complete/character-progressions.md); user documentation: `help/character-progressions.md`.
 
 Three properties matter to this document:
 

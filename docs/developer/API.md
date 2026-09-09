@@ -6398,7 +6398,7 @@ Returns deployment information. This endpoint is unauthenticated as it is needed
 
 #### `GET /api/v1/system/home`
 
-Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/tabbed-workspace.md`.
+Returns the home dashboard payload for the client-rendered workspace home tab: greeting name, the "continue last" chat id, recent chats, active projects, and characters. The server-rendered `/` route computes the same payload directly through the shared `home-data` service, so this endpoint exists for the workspace tab to fetch it client-side. See `docs/developer/features/complete/tabbed-workspace.md`.
 
 **Response**: `200 OK` — the home dashboard data object.
 

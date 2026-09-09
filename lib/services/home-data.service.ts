@@ -6,7 +6,7 @@
  * Extracted from `app/page.tsx` so it can feed both the server-rendered `/`
  * route and the client-fetched workspace home tab
  * (`/api/v1/system/home` → `HomeViewContainer`). See
- * `docs/developer/features/tabbed-workspace.md`.
+ * `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module lib/services/home-data.service
  */

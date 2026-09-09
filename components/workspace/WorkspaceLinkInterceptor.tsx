@@ -4,7 +4,7 @@
  * WorkspaceLinkInterceptor — one delegated click handler that keeps the whole
  * app's links keep-alive-safe inside the workspace.
  *
- * The keep-alive constraint (see `docs/developer/features/tabbed-workspace.md`)
+ * The keep-alive constraint (see `docs/developer/features/complete/tabbed-workspace.md`)
  * forbids navigating to an old route while in the workspace: the route change
  * redirects back to `/workspace` and **remounts the entire workspace**, which
  * tears down a streaming Salon (its EventSource) and any in-flight async UI.

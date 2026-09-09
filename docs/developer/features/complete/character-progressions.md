@@ -22,7 +22,7 @@ Progressions live in the character's `metadata.json` so that **Pascal's custom t
 
 ## Storage — a reserved key in `metadata.json`
 
-Progressions are stored under **one reserved top-level key, `progressions`,** in the character vault's `metadata.json` (the file introduced by [character-metadata-json.md](complete/character-metadata-json.md)). The value is an object keyed by progression id:
+Progressions are stored under **one reserved top-level key, `progressions`,** in the character vault's `metadata.json` (the file introduced by [character-metadata-json.md](character-metadata-json.md)). The value is an object keyed by progression id:
 
 ```json
 {
@@ -54,7 +54,7 @@ Progressions are stored under **one reserved top-level key, `progressions`,** in
 }
 ```
 
-**Why a reserved key rather than a new file or a DB column.** The user's requirement is that Pascal's tools read and change this data, and Pascal's one character-scoped store *is* `metadata.json`: its snapshot is already hydrated at run start, its effects already commit through one whole-object replace, and its `.qtap` round-trip is already done. A second file would need a second hydration path, a second write path and a second export path for no gain. The [metadata spec's](complete/character-metadata-json.md) "no reserved keys" statement is **amended** by this feature: `progressions` is reserved, and its shape is validated. Every other key stays freeform. Record that amendment as a "Correction" paragraph in that document when this lands.
+**Why a reserved key rather than a new file or a DB column.** The user's requirement is that Pascal's tools read and change this data, and Pascal's one character-scoped store *is* `metadata.json`: its snapshot is already hydrated at run start, its effects already commit through one whole-object replace, and its `.qtap` round-trip is already done. A second file would need a second hydration path, a second write path and a second export path for no gain. The [metadata spec's](character-metadata-json.md) "no reserved keys" statement is **amended** by this feature: `progressions` is reserved, and its shape is validated. Every other key stays freeform. Record that amendment as a "Correction" paragraph in that document when this lands.
 
 **Why a record keyed by id, not an array.** Pascal addresses a progression by name in a tool file written before the character exists (`progress.cannon.complete`); a stable id decouples that address from the display `name`, which the user may edit freely.
 
@@ -162,7 +162,7 @@ Rules, in order; the first that applies wins:
 6. `reportFrequency === 'increment'` → report iff `floor(elapsedAt(now) / unitMs) !== floor(elapsedAt(lastTurnMs) / unitMs)`.
 7. `<n><unit>` → report iff `floor(now / periodMs) !== floor(lastTurnMs / periodMs)` (epoch-anchored wall-clock buckets).
 
-Why no stored "last reported" timestamp: it would be a write on every prompted turn for `turn`-cadence progressions, it would race the participant-JSON whole-column replace, and in the forked job child it could not be read back within the same job (no read-your-writes — [BACKGROUND_JOBS_CHILD.md](../BACKGROUND_JOBS_CHILD.md)). The history-derived rule has **one known approximation**, to be documented in the help page: a character who is prompted but does not speak (a "nothing to add" pass) has no new own message, so a period-cadence progression can be mentioned again on their next prompt inside the same period. That is over-reporting by at most one turn per silent turn, and it is the honest trade for zero writes.
+Why no stored "last reported" timestamp: it would be a write on every prompted turn for `turn`-cadence progressions, it would race the participant-JSON whole-column replace, and in the forked job child it could not be read back within the same job (no read-your-writes — [BACKGROUND_JOBS_CHILD.md](../../BACKGROUND_JOBS_CHILD.md)). The history-derived rule has **one known approximation**, to be documented in the help page: a character who is prompted but does not speak (a "nothing to add" pass) has no new own message, so a period-cadence progression can be mentioned again on their next prompt inside the same period. That is over-reporting by at most one turn per silent turn, and it is the honest trade for zero writes.
 
 ### The clock
 
@@ -172,7 +172,7 @@ Why no stored "last reported" timestamp: it would be a write on every prompted t
 
 ### Where — the uncached trailing section
 
-**Never in system block 1.** The identity stack and `buildSystemPrompt` are the cached prefix ([PROMPT_ARCHITECTURE.md](../PROMPT_ARCHITECTURE.md) §1, §4); a per-turn clock inside them would bisect the cache, break the golden hash in `__tests__/unit/cache-determinism/system-prompt.test.ts` and the 30-turn stability eval in `__tests__/eval/cache-stability/cache-stability.test.ts`. `IDENTITY_STACK_BUILDER_VERSION` and `PROMPT_CACHE_STRUCTURE_VERSION` are **not** bumped by this feature.
+**Never in system block 1.** The identity stack and `buildSystemPrompt` are the cached prefix ([PROMPT_ARCHITECTURE.md](../../PROMPT_ARCHITECTURE.md) §1, §4); a per-turn clock inside them would bisect the cache, break the golden hash in `__tests__/unit/cache-determinism/system-prompt.test.ts` and the 30-turn stability eval in `__tests__/eval/cache-stability/cache-stability.test.ts`. `IDENTITY_STACK_BUILDER_VERSION` and `PROMPT_CACHE_STRUCTURE_VERSION` are **not** bumped by this feature.
 
 The report is a **trailing per-turn section** (§9), computed in `buildContext` (`lib/chat/context-manager.ts:686`) and pushed into `trailingContextSections` at `:2592-2600`, in this order: Aurora Core → Commonplace Book recall → Suparṇā mail → **progressions** → turn-skip note. It is plain second-person prose with no Staff persona and **is not persisted as a message**: it is recomputed every turn, and a transcript whisper per turn for a `turn`-cadence weapon would be noise. (The `self_inventory` builder's known fidelity gap — it omits Taboo — now also omits this; note it in §13 of the architecture doc.)
 

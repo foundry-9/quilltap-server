@@ -7,14 +7,14 @@ Status: **implemented**. Extends [pascal-custom-tools.md](./pascal-custom-tools.
 Three improvements to Pascal's table, prompted by real use:
 
 1. **Renamable chips.** The Salon chip (and announcement header) labels every `custom-tool-result` with the tool's static title. A tool that does many different things per run — an agent dispatcher, a generator — wants a per-run label ("Agent lambda — Jackie", not just "Agent lambda"), and the natural author of that label is often the model itself, prompted by the tool.
-2. **Markdown breakage in the bubble.** `buildPascalResultContent` ([lib/services/pascal/writer.ts:72](../../../lib/services/pascal/writer.ts)) emits `🎲 **Title** — message` as a single Markdown line. An outcome message that begins with a block token (`- `, `#`, `1.`, `>`, a fence) is no longer at the start of a line, so it renders as inline text glued to the bold title: `**Agent lambda** — - Jackie (3 nodes)`.
+2. **Markdown breakage in the bubble.** `buildPascalResultContent` ([lib/services/pascal/writer.ts:72](../../../../lib/services/pascal/writer.ts)) emits `🎲 **Title** — message` as a single Markdown line. An outcome message that begins with a block token (`- `, `#`, `1.`, `>`, a fence) is no longer at the start of a line, so it renders as inline text glued to the bold title: `**Agent lambda** — - Jackie (3 nodes)`.
 3. **Side effects.** Tools can *read* tiered state (`$state`, `{{state.path}}`) and character metadata, but nothing a roll concludes can be written back. Authors want a roll to record consequences — increment a counter, mark a flag, note a fact on the rolling character's sheet — without asking the model to make a separate, fudgeable `state` call. This ships the schema room reserved as `persist` in "Deferred to v2".
 
 ## Doctrine changes (read first)
 
 ### Expression evaluation arrives, narrowly
 
-The definition-schema header ([lib/pascal/custom-tool.types.ts:12-16](../../../lib/pascal/custom-tool.types.ts)) and the Security constraints section of the parent spec both state the v1 doctrine: **no expression evaluation, anywhere** — comparator objects and two closed reference forms, "no string grammar to parse, so there is nothing to inject into."
+The definition-schema header ([lib/pascal/custom-tool.types.ts:12-16](../../../../lib/pascal/custom-tool.types.ts)) and the Security constraints section of the parent spec both state the v1 doctrine: **no expression evaluation, anywhere** — comparator objects and two closed reference forms, "no string grammar to parse, so there is nothing to inject into."
 
 This feature amends that doctrine deliberately and narrowly:
 
@@ -37,7 +37,7 @@ Everywhere in this feature — chip labels and effect expressions — references
 
 ### Schema
 
-New optional top-level field on `QtapCustomToolSchema` ([custom-tool.types.ts:551](../../../lib/pascal/custom-tool.types.ts), after `title`):
+New optional top-level field on `QtapCustomToolSchema` ([custom-tool.types.ts:551](../../../../lib/pascal/custom-tool.types.ts), after `title`):
 
 ```ts
 export const MAX_CHIP_LABEL_LENGTH = 160; // template text cap; UI truncates the rendered result via CSS
@@ -47,30 +47,30 @@ chipLabel: z.string().min(1).max(MAX_CHIP_LABEL_LENGTH).optional()
 ```
 
 - Add `'chipLabel'` to `KNOWN_TOP_LEVEL_KEYS` (:965).
-- Mirror in [public/schemas/qtap-custom-tool.schema.json](../../../public/schemas/qtap-custom-tool.schema.json); extend the agreement-test corpus (`__tests__/unit/lib/pascal/custom-tool-definition.test.ts`).
+- Mirror in [public/schemas/qtap-custom-tool.schema.json](../../../../public/schemas/qtap-custom-tool.schema.json); extend the agreement-test corpus (`__tests__/unit/lib/pascal/custom-tool-definition.test.ts`).
 - No new load-time reference rule — unknown placeholders stay verbatim at run time (the `renderTemplate` doctrine); the Workbench adds a *warning* pass only.
 
 ### Rendering — once, in the core
 
-`executeCustomTool` ([custom-tools.ts:1233](../../../lib/pascal/custom-tools.ts)) renders `chipLabel` via `renderTemplate` (:1105) **after** outcome selection, with the same subjects as the outcome message, and returns it on `CustomToolRunResult` as `chipLabel?: string`. Both entrances copy `result.chipLabel` — one render site, no drift. `simulateOutcomes` ignores it (labels contribute nothing to hit rates).
+`executeCustomTool` ([custom-tools.ts:1233](../../../../lib/pascal/custom-tools.ts)) renders `chipLabel` via `renderTemplate` (:1105) **after** outcome selection, with the same subjects as the outcome message, and returns it on `CustomToolRunResult` as `chipLabel?: string`. Both entrances copy `result.chipLabel` — one render site, no drift. `simulateOutcomes` ignores it (labels contribute nothing to hit rates).
 
 ### Carriage — `pascalMeta.chipLabel`
 
 `pascalMeta` is a JSON TEXT column, so **no migration**. Keep the two schemas in lockstep:
 
-- [lib/schemas/chat.types.ts:365](../../../lib/schemas/chat.types.ts) — `chipLabel: z.string().optional()`, doc-comment: rendered at roll time; absent on older rows; readers fall back to `toolTitle`, then `tool`.
-- [lib/database/repositories/chats-messages.ops.ts:120](../../../lib/database/repositories/chats-messages.ops.ts) — same field.
+- [lib/schemas/chat.types.ts:365](../../../../lib/schemas/chat.types.ts) — `chipLabel: z.string().optional()`, doc-comment: rendered at roll time; absent on older rows; readers fall back to `toolTitle`, then `tool`.
+- [lib/database/repositories/chats-messages.ops.ts:120](../../../../lib/database/repositories/chats-messages.ops.ts) — same field.
 
 Both pascalMeta writer sites set it (spread only when present):
 
-- LLM entrance: [lib/tools/handlers/run-custom-handler.ts](../../../lib/tools/handlers/run-custom-handler.ts) (~:232).
-- Manual route: [app/api/v1/chats/[id]/custom-tools/route.ts](../../../app/api/v1/chats/[id]/custom-tools/route.ts) (~:516).
+- LLM entrance: [lib/tools/handlers/run-custom-handler.ts](../../../../lib/tools/handlers/run-custom-handler.ts) (~:232).
+- Manual route: [app/api/v1/chats/[id]/custom-tools/route.ts](../../../../app/api/v1/chats/[id]/custom-tools/route.ts) (~:516).
 
-Also: `public/schemas/qtap-export.schema.json` (`pascalMeta.properties`) and the pascalMeta prose in [DDL.md](../DDL.md) (~:723).
+Also: `public/schemas/qtap-export.schema.json` (`pascalMeta.properties`) and the pascalMeta prose in [DDL.md](../../DDL.md) (~:723).
 
 ### Display
 
-`getSystemKindDisplayLabel` ([system-message-labels.ts:163](../../../app/salon/%5Bid%5D/components/system-message-labels.ts)) precedence becomes:
+`getSystemKindDisplayLabel` ([system-message-labels.ts:163](../../../../app/salon/%5Bid%5D/components/system-message-labels.ts)) precedence becomes:
 
 ```ts
 const named = message.pascalMeta?.chipLabel?.trim()
@@ -103,7 +103,7 @@ No snapshot-test change from F1 alone.
 
 ## F2 — Paragraph break between title and output
 
-`buildPascalResultContent` ([writer.ts:69-75](../../../lib/services/pascal/writer.ts)) changes from a one-liner to a heading paragraph:
+`buildPascalResultContent` ([writer.ts:69-75](../../../../lib/services/pascal/writer.ts)) changes from a one-liner to a heading paragraph:
 
 ```ts
 export interface BuildPascalResultContentParams {
@@ -125,7 +125,7 @@ Touch points:
 
 - Both callers pass `chipLabel: result.chipLabel` (run-custom-handler, manual route).
 - `__tests__/unit/lib/services/pascal/writer.test.ts` — exact-string assertions become the two-line form; add cases for chipLabel-as-header and for messages beginning with `- ` / `#`.
-- **ProvingBench** `MiniPascalBubble` ([ProvingBench.tsx:584-586](../../../components/custom-tools/ProvingBench.tsx)) carries an independent copy of the concatenation — replace with a header `<p>` plus a separate message block, using `roll.chipLabel ?? title`.
+- **ProvingBench** `MiniPascalBubble` ([ProvingBench.tsx:584-586](../../../../components/custom-tools/ProvingBench.tsx)) carries an independent copy of the concatenation — replace with a header `<p>` plus a separate message block, using `roll.chipLabel ?? title`.
 - Parent spec: the canonical bubble example (~:298) and the "`🎲 **Title** —` prefix is a label, not a voice" paragraph (~:308).
 - **Persisted messages are frozen at post time** — old one-line bubbles remain one-liners, and that is correct (same doctrine as title edits).
 - `packages/theme-storybook`'s Pascal chat story shows the old form; updating it triggers the package version-bump/publish hard-stop — **deferred to the next storybook release**, noted here so it isn't lost.
@@ -219,7 +219,7 @@ The help doc and the Workbench hint must show the quoted form prominently.
 
 **Target syntax** — shared parser `parseEffectTarget` (in `custom-tool.types.ts`, used by validation, the applier, and the Workbench):
 
-- `state.<path>` — remainder parsed by `parsePath` from [lib/state/state-paths.ts](../../../lib/state/state-paths.ts). Empty path, or a **first segment starting with `_`**, is rejected: the underscore guard from the `state` tool ([state-handler.ts:175](../../../lib/tools/handlers/state-handler.ts)) — those keys are user-only and no AI-adjacent path may write them. Enforced at load time *and* re-checked at apply time.
+- `state.<path>` — remainder parsed by `parsePath` from [lib/state/state-paths.ts](../../../../lib/state/state-paths.ts). Empty path, or a **first segment starting with `_`**, is rejected: the underscore guard from the `state` tool ([state-handler.ts:175](../../../../lib/tools/handlers/state-handler.ts)) — those keys are user-only and no AI-adjacent path may write them. Enforced at load time *and* re-checked at apply time.
 - `metadata.<key>` — remainder taken **whole** as the key (user vocabulary; dots inside the key are fine precisely because it is not path-parsed).
 - Anything else → rejected ("target must start with `state.` or `metadata.`").
 
@@ -265,11 +265,11 @@ export async function applyCustomToolEffects(params: {
 
 Behavior (normative):
 
-1. **State tier resolution — "write where it lives."** For each state effect, find the tier whose *top-level* first path segment already exists, searching in cascade-precedence order **chat → project → group → general** — the project tier only when the cascade has a `projectId`, the group tier **only when `groupTier.status === 'single'`** (the exactly-one rule, [state-cascade.ts](../../../lib/state/state-cascade.ts)). Found nowhere → **default to the chat tier** (most local, least blast radius).
+1. **State tier resolution — "write where it lives."** For each state effect, find the tier whose *top-level* first path segment already exists, searching in cascade-precedence order **chat → project → group → general** — the project tier only when the cascade has a `projectId`, the group tier **only when `groupTier.status === 'single'`** (the exactly-one rule, [state-cascade.ts](../../../../lib/state/state-cascade.ts)). Found nowhere → **default to the chat tier** (most local, least blast radius).
 2. **Batched writes — one per touched store.** Accumulate all state effects into local copies of the cascade's per-tier objects using `setAtPath`, then issue at most one `repos.chats.update(chatId, {state})`, one `repos.projects.update(projectId, {state})`, one `repos.groups.update(appliedGroupId, {state})`, one `writeGeneralState(state)`. Sequential effects in one run see each other's values **via the local copies** — deterministic in-run ordering, never a store re-read.
-3. **Job-child safe.** Every write goes through the buffered `getRepositories()` proxy; the cascade and metadata snapshot are read once at run start and never re-read — no read-your-writes anywhere ([BACKGROUND_JOBS_CHILD.md](../BACKGROUND_JOBS_CHILD.md) contract).
+3. **Job-child safe.** Every write goes through the buffered `getRepositories()` proxy; the cascade and metadata snapshot are read once at run start and never re-read — no read-your-writes anywhere ([BACKGROUND_JOBS_CHILD.md](../../BACKGROUND_JOBS_CHILD.md) contract).
 4. **Underscore guard re-checked** at apply time (defense in depth); violation → skip + warn.
-5. **Metadata effects** apply only when `characterId` is non-null: shallow key-set on the snapshot, then one `repos.characters.update(characterId, { metadata: next })` — the vault overlay's whole-object replace ([managed-fields.ts:441](../../../lib/database/repositories/vault-overlay/managed-fields.ts)) is exactly this read-modify-write contract. No character → skip fail-soft.
+5. **Metadata effects** apply only when `characterId` is non-null: shallow key-set on the snapshot, then one `repos.characters.update(characterId, { metadata: next })` — the vault overlay's whole-object replace ([managed-fields.ts:441](../../../../lib/database/repositories/vault-overlay/managed-fields.ts)) is exactly this read-modify-write contract. No character → skip fail-soft.
 6. **Never throws.** Each store write is individually try/caught (this covers `CharacterVaultUnavailableError` when a vault disappears mid-run); failures log `warn` and drop those effects from the applied list. The roll already happened; Pascal still announces.
 7. Returns the applied list for `pascalMeta.effects`.
 
@@ -282,7 +282,7 @@ Both entrances restructure their cascade block to retain the **whole** `StateCas
 
 Ordering/failure semantics: **effects apply before the Pascal post; if the post then fails, the effects stand** (they happened — the existing "outcome could not be posted" failure path still tells the model). A throw inside `executeCustomTool` means **no** effects were applied.
 
-**Workbench preview/audit never applies.** `handlePreview` in [app/api/v1/custom-tools/route.ts](../../../app/api/v1/custom-tools/route.ts) already spreads `...result`, so `effects` (resolved, dry) and `chipLabel` ride out with no route change; `handleAudit` ignores them.
+**Workbench preview/audit never applies.** `handlePreview` in [app/api/v1/custom-tools/route.ts](../../../../app/api/v1/custom-tools/route.ts) already spreads `...result`, so `effects` (resolved, dry) and `chipLabel` ride out with no route change; `handleAudit` ignores them.
 
 ### 3.6 pascalMeta, export, DDL
 
@@ -301,7 +301,7 @@ Plus `qtap-export.schema.json` (pascalMeta properties) and the DDL.md prose. **T
 
 ### 3.7 LLM roster description
 
-[lib/tools/run-custom-tool.ts](../../../lib/tools/run-custom-tool.ts):
+[lib/tools/run-custom-tool.ts](../../../../lib/tools/run-custom-tool.ts):
 
 - One sentence in `RUN_CUSTOM_PREAMBLE`: some tools record side effects when they run — adjusting the scene's persistent state or the rolling character's own records, server-side, as part of the roll.
 - Per tool in `buildRunCustomDescription`, when `revealOdds !== false` and `effects` is present: one line, **targets only** (vocabulary, not values or conditions): `    Side effects: writes state.encounter.count, metadata.ansibleTool`. Under `revealOdds: false`, nothing beyond the preamble sentence — the odds stay hidden, and so do the consequences; the *human* popup still sees the targets via the vocabulary (consistent with the definition being the user's own file).
@@ -309,7 +309,7 @@ Plus `qtap-export.schema.json` (pascalMeta properties) and the DDL.md prose. **T
 
 ### 3.8 Vocabulary
 
-[lib/pascal/tool-vocabulary.ts](../../../lib/pascal/tool-vocabulary.ts):
+[lib/pascal/tool-vocabulary.ts](../../../../lib/pascal/tool-vocabulary.ts):
 
 - Scan effect `value` expression strings (and `chipLabel`) with `collectPlaceholders` — the `{{...}}` pattern matches expression refs verbatim.
 - Walk effect `when.metadata` keys into `found.metadata` like the outcome loop.

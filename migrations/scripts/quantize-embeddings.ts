@@ -16,7 +16,7 @@
  *
  * ONE-WAY: recovering exact Float32 afterwards requires re-embedding from
  * source text. Operators should take a physical backup before upgrading
- * across this migration (see docs/developer/features/db-size-reduction-spec.md §6).
+ * across this migration (see docs/developer/features/complete/db-size-reduction-spec.md §6).
  *
  * NULLing/rewriting only frees pages inside the file — run
  * `npx quilltap db optimize` (VACUUM) afterwards to shrink the file itself.

@@ -1,8 +1,8 @@
 # Character archive, rehydration, and export fidelity
 
-> **Status:** Largely implemented; design revised. The operative document is the
-> [implementation spec](character-archive-spec.md) — Deliverable A and the archive core
-> (schema, guards, prune, encryption) have shipped; surfaces (B3) and rehydration (B4) remain.
+> **Status:** COMPLETE (2026-08-10); design revised. The operative document is the
+> [implementation spec](character-archive-spec.md) — Deliverable A, the archive core
+> (schema, guards, prune, encryption), the surfaces (B3) and rehydration (B4) have all shipped.
 > **Revision (2026-08-10, spec §4.2a): archiving prunes the vault in place rather than
 > deleting it.** The managed-field documents, the avatar and its link row, and the wardrobe
 > stay live, so a tombstone is a fully readable character page and every id old chats

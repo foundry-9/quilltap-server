@@ -6,7 +6,7 @@
  *     recent chats, active projects, characters) for the client-rendered
  *     workspace home tab. The server-rendered `/` route computes the same
  *     payload directly via the shared service. See
- *     `docs/developer/features/tabbed-workspace.md`.
+ *     `docs/developer/features/complete/tabbed-workspace.md`.
  */
 
 import { NextRequest } from 'next/server';

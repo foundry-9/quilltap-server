@@ -4,6 +4,24 @@
 
 ### 4.10-dev
 
+#### Docs: retired twelve shipped feature specs to `features/complete/`
+
+Moved twelve feature documents from `docs/developer/features/` into
+`docs/developer/features/complete/` after verifying each against the code: character
+progressions, Pascal custom tools, custom-tool enhancements, custom-tool run presets, the tabbed
+workspace, archived scenarios and wardrobe items, the character archive spec and its parent
+export-fidelity design, the DB size-reduction spec, the four-tier state cascade, Scriptorium
+per-document policy frontmatter, and the Z.AI `reasoning_effort` plan. Relative links inside the
+moved files were re-anchored one directory deeper, and inbound references were repointed: 29 source
+comments plus `API.md` for the tabbed workspace, `CLAUDE.md`, `PROMPT_ARCHITECTURE.md` and the
+update-documentation index for progressions, `bugs.md` and bug 52 for the archive spec, the
+quantize-embeddings migration for the DB spec, and the Z.AI plugin test. Two stale status lines were
+corrected in place: the Scriptorium policy spec still said "not yet implemented", and the character
+archive design still said its surfaces and rehydration remained. Three implemented specs were left
+in place because their own completion gates ask for manual verification first: composer smart
+typography (two manual matrices), the episodic recall overhaul (constant tuning via
+`quilltap recall-replay`), and the Commonplace Book relevance fix (empirical tuning).
+
 #### Docs: plan for the Salon chat gallery
 
 Added `docs/developer/features/salon-chat-gallery.md`, a plan for a Gallery in the Salon sidebar's

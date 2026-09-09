@@ -57,7 +57,7 @@ v5 drift catch-up if B slips.
 ## 1. WP A1 — file the avatar bug
 
 **Done (2026-08-09):** filed as
-[Bug 52](../bugs/fixed/bug-52-avatar-import-dangling.md) with its index row in
+[Bug 52](../../bugs/fixed/bug-52-avatar-import-dangling.md) with its index row in
 `docs/developer/bugs.md`. For the record:
 
 - **Symptom:** importing a `characters` .qtap into another instance yields a faceless character.

@@ -8,7 +8,7 @@
  * (not unmounted) when it is not its pane's active tab. Because no view ever
  * changes its React parent — moving a tab between panes only changes a CSS
  * column — the keep-alive constraint holds and a streaming Salon survives every
- * tab switch and the split. See `docs/developer/features/tabbed-workspace.md`.
+ * tab switch and the split. See `docs/developer/features/complete/tabbed-workspace.md`.
  *
  * @module components/workspace/WorkspaceHost
  */

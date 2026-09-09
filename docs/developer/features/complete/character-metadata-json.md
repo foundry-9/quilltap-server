@@ -204,7 +204,7 @@ The `run_custom` tool description (dynamic roster injection) must **not** enumer
 This document states, above, that `metadata.json` has **no reserved keys and
 no schema to satisfy**. That is no longer true, in exactly one place.
 
-[Character Progressions](../character-progressions.md) reserves the top-level
+[Character Progressions](./character-progressions.md) reserves the top-level
 key **`progressions`** and validates its shape (`lib/progressions/schema.ts` is
 the runtime source of truth; `public/schemas/qtap-progression.schema.json`
 mirrors it for editors). Every other key stays freeform, unvalidated and

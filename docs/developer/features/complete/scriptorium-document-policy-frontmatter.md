@@ -1,6 +1,10 @@
 # Scriptorium per-document policy frontmatter (`embed`, `character_read`, `character_write`)
 
-> **Status:** Plan for Claude Code to execute. Not yet implemented.
+> **Status:** IMPLEMENTED. Kept as the design record — the coercion rules in §4 and the
+> existence-leak rule are the contract the code holds to. The policy parser lives in
+> `lib/doc-edit/document-policy.ts`; the read/write gates in
+> `lib/tools/handlers/doc-edit/shared.ts`, applied by the `doc_` text and document-UI handlers;
+> the `embed` flag is honoured by `lib/mount-index/scanner.ts` and `lib/doc-edit/reindex-file.ts`.
 > **Author of plan:** Ariadne (research/scoping pass), for Charlie.
 > **Scope:** Add three per-document policy flags, declared in a mounted markdown file's YAML frontmatter, that govern (a) whether the document is embedded for semantic retrieval, (b) whether any LLM character may *read* it via `doc_` tools or RAG, and (c) whether any LLM character may *mutate* it via `doc_` tools.
 

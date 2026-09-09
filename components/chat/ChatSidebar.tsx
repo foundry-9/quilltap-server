@@ -50,7 +50,7 @@ const WIDTH_KEY_STEP = 16
  * chat (sidebar ~MIN_WIDTH + chat MIN_CHAT_WIDTH). In a narrow pane the sidebar
  * therefore defaults to the mini strip and expands as a click-away overlay
  * instead of squeezing the chat. In a wide/full pane it behaves exactly as
- * before. See `docs/developer/features/tabbed-workspace.md`.
+ * before. See `docs/developer/features/complete/tabbed-workspace.md`.
  */
 const NARROW_PANE_WIDTH = 640
 

@@ -2,7 +2,7 @@
 
 - **Target release:** 4.8.0
 - **Status:** Shipped — Phases 0–8 complete; flag on by default as of 4.8-dev (`NEXT_PUBLIC_WORKSPACE_TABS=0` to opt out)
-- **Decision record:** [ADR-0001: Tabbed workspace routing model](../decisions/ADR-0001-tabbed-workspace-routing.md)
+- **Decision record:** [ADR-0001: Tabbed workspace routing model](../../decisions/ADR-0001-tabbed-workspace-routing.md)
 
 ## Summary
 
