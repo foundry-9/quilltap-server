@@ -25,6 +25,7 @@ import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { rawQuery } from '@/lib/database/manager'
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
+import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
 
 // =============================================================================
@@ -544,6 +545,12 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
   if (neighbours.length >= SINGLE_DELETE_NEIGHBOUR_WARN) {
     logger.warn('[MemoryGate] deleteMemoryWithUnlink touched an unusually large neighbour set', logFields)
   }
+  logger.debug('[MemoryGate] deleteMemoryWithUnlink complete', logFields)
+
+  // Collection-wide: this takes a memory id, not a chat id, so there is no
+  // narrower hint to give. A no-op from the job child by design — the parent
+  // chokepoints announce a child's deletions.
+  if (deleted) publishRealtime('memories')
 
   return deleted
 }
@@ -623,6 +630,11 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
   if (neighboursTouched >= BATCH_DELETE_NEIGHBOUR_WARN) {
     logger.warn('[MemoryGate] deleteMemoriesWithUnlinkBatch touched an unusually large neighbour set', logFields)
   }
+  logger.debug('[MemoryGate] deleteMemoriesWithUnlinkBatch complete', logFields)
+
+  // Collection-wide for the same reason as the single-ID path, and doubly so:
+  // a batch can span several chats.
+  if (deleted > 0) publishRealtime('memories')
 
   return deleted
 }

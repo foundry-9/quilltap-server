@@ -242,9 +242,9 @@ politely for the cadence rather than being announced on the next turn; add
 one yourself if you want it heard immediately.
 
 An entry we cannot read is **dropped, alone**. The rest of the character's
-progressions carry on, the character carries on, and the card says which
-entry is being skipped. A single mistyped date has never yet been worth
-losing a character over.
+progressions carry on, the character carries on, and the card names each entry
+it is skipping — one name or a dozen, set out plainly and separated by commas.
+A single mistyped date has never yet been worth losing a character over.
 
 ## Related Topics
 

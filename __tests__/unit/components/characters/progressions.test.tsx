@@ -118,6 +118,42 @@ describe('ProgressionsSection — the list', () => {
     expect(await screen.findByText(/could not be read/)).toBeInTheDocument()
     expect(screen.getByText('Cannon recharge')).toBeInTheDocument()
   })
+
+  /**
+   * Bug 127. The id list was built by joining the ids with a literal
+   * `</code>, <code>` inside a JSX expression — a string, which React escapes,
+   * so the sentence telling a user their vault is damaged handed them raw
+   * markup. One id hid it completely: the join has nothing to join, and the
+   * surrounding tags are real JSX. So both cases are pinned, and the
+   * single-id one is what keeps the fix from being a copy change.
+   */
+  it('names a single unreadable entry without leaking markup', async () => {
+    stubCharacter({ progressions: { cannon: CANNON, broken: { ...CANNON, endTime: '2019-01-01T00:00:00Z' } } })
+    renderSection()
+
+    const line = await screen.findByText(/could not be read/)
+    expect(line.textContent).toContain('being skipped: broken. Editing the file')
+    expect(line.textContent).not.toContain('</code>')
+  })
+
+  it('names several unreadable entries as separate code elements, not escaped markup', async () => {
+    stubCharacter({
+      progressions: {
+        cannon: CANNON,
+        broken: { ...CANNON, endTime: '2019-01-01T00:00:00Z' },
+        other: { ...CANNON, endTime: '2018-01-01T00:00:00Z' },
+      },
+    })
+    renderSection()
+
+    const line = await screen.findByText(/could not be read/)
+    // The escaped output is exactly a string containing this literal.
+    expect(line.textContent).not.toContain('</code>')
+    expect(line.textContent).toContain('being skipped: broken, other.')
+
+    const ids = Array.from(line.querySelectorAll('code')).map((el) => el.textContent)
+    expect(ids).toEqual(expect.arrayContaining(['broken', 'other']))
+  })
 })
 
 describe('ProgressionsSection — archived characters are tombstones', () => {
