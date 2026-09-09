@@ -975,17 +975,19 @@ async function resolveAppearances(
           );
           resolvedAppearances = resolutionResult.appearances;
 
-          // Determine if uncensored image provider is available
-          const hasUncensoredImageProvider = Boolean(
-            dangerSettings.uncensoredImageProfileId
-          );
+          // This handler classifies each prompt and reroutes on the spot, but
+          // only under AUTO_ROUTE — under DETECT_ONLY a dangerous appearance
+          // stays on the moderated provider and must be sanitized (bug 133).
+          const routesDangerousToUncensored =
+            dangerSettings.mode === 'AUTO_ROUTE' &&
+            Boolean(dangerSettings.uncensoredImageProfileId);
 
           // Sanitize appearances through the Concierge
           resolvedAppearances = await sanitizeAppearancesIfNeeded(
             resolvedAppearances,
             dangerSettings,
             isDangerousChat,
-            hasUncensoredImageProvider,
+            routesDangerousToUncensored,
             appearanceLLMSelection,
             context.userId,
             context.chatId

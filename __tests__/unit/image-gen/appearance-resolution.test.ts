@@ -518,8 +518,8 @@ describe('Appearance Resolution Module', () => {
       })
     })
 
-    describe('Sanitization skipped for dangerous chat with uncensored provider', () => {
-      it('should return unchanged when isDangerousChat=true and hasUncensoredImageProvider=true', async () => {
+    describe('Sanitization skipped for dangerous chat routed to uncensored', () => {
+      it('should return unchanged when isDangerousChat=true and the scene routes uncensored', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOnSettings,
@@ -632,7 +632,7 @@ describe('Appearance Resolution Module', () => {
         expect(result[0].clothingDescription).toBe('') // Cleared
       })
 
-      it('should NOT sanitize when dangerous but uncensored provider available', async () => {
+      it('should NOT sanitize when dangerous and the scene routes uncensored', async () => {
         mockClassifyContent.mockResolvedValue({
           isDangerous: true,
           score: 0.9,
@@ -643,7 +643,7 @@ describe('Appearance Resolution Module', () => {
           sampleAppearances,
           dangerOnSettings,
           false,
-          true, // hasUncensoredImageProvider
+          true, // routesDangerousToUncensored
           testSelection,
           testUserId,
           testChatId
@@ -651,6 +651,41 @@ describe('Appearance Resolution Module', () => {
 
         expect(mockSanitizeAppearance).not.toHaveBeenCalled()
         expect(result).toBe(sampleAppearances)
+      })
+
+      // Bug 133. The fourth argument used to be "an uncensored profile is
+      // configured", which is a different question from "this scene is going
+      // there". Story backgrounds never route up front, so a moderated chat
+      // handed raw "naked, barefoot" appearance text straight to the crafter.
+      it('should sanitize a moderated scene even when an uncensored profile exists elsewhere', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [
+            {
+              characterId: 'char-1',
+              appearanceText: 'A young woman with red hair wearing casual clothes',
+            },
+          ],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          dangerOnSettings,
+          false, // moderated chat
+          false, // ...and this scene is NOT routed to the uncensored provider
+          testSelection,
+          testUserId,
+          testChatId
+        )
+
+        expect(mockSanitizeAppearance).toHaveBeenCalled()
+        expect(result[0].wasSanitized).toBe(true)
       })
 
       it('should only sanitize changed appearances', async () => {

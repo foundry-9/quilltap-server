@@ -408,7 +408,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         resolvedAppearances,
         dangerSettings,
         isDangerousChat,
-        hasUncensoredImageProvider,
+        // Story backgrounds never route up front — only `uncensoredImageTarget`
+        // scenes actually reach the uncensored provider (bug 133).
+        uncensoredImageTarget,
         cheapLLMSelection,
         job.userId,
         payload.chatId
@@ -682,7 +684,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     // moderation, the Concierge has a second door: retry with the configured
     // uncensored image profile. Mirrors the appearance-resolution and
     // prompt-crafting fallbacks above.
-    const reroute = isImageModerationError(error)
+    //
+    // The door is barred for a chat the user left moderated (bug 133). A
+    // background nobody asked for is the wrong place to discover an uncensored
+    // provider, and treating a refusal as licence to try a franker one lets the
+    // provider's moderation *promote* the chat — the ratchet pointing exactly
+    // the wrong way. A flagged chat's prompt was already crafted candidly, so
+    // it is resent as-is rather than escalated.
+    const moderationRejection = isImageModerationError(error);
+    const rerouteAllowed = moderationRejection && isDangerousChat;
+    const reroute = rerouteAllowed
       ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, job.userId)
       : null;
 
@@ -691,7 +702,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         context: 'background-jobs.story-background',
         jobId: job.id,
         error: errorMessage,
-        moderationRejection: isImageModerationError(error),
+        moderationRejection,
+        rerouteAllowed,
+        isDangerousChat,
         hasUncensoredImageProvider,
       }, error as Error);
       throw new Error(`Image generation failed: ${errorMessage}`);
@@ -707,58 +720,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       originalError: errorMessage,
     });
 
-    // The prompt that just got rejected was crafted for a moderated provider,
-    // so unless the chat was already flagged it carries the cinematic-
-    // concealment guidance. The reroute target accepts adult content, so
-    // re-craft candidly rather than sending a needlessly draped scene to a
-    // provider that never asked for one. Best-effort: any failure keeps the
-    // prompt we already have, so the reroute still happens.
-    let rerouteBasePrompt = finalPrompt!;
-    if (!uncensoredImageTarget && cheapLLMSelection) {
-      try {
-        const recraftResult = await craftStoryBackgroundPrompt(
-          {
-            sceneContext,
-            characters: characterDescriptions,
-            provider: reroute.profile.provider,
-            sceneAesthetic,
-            characterAesthetic,
-            depictionGuidelines,
-            uncensoredImageTarget: true,
-          },
-          uncensoredLLMSelection ?? cheapLLMSelection,
-          job.userId,
-          payload.chatId
-        );
-        if (recraftResult.success && recraftResult.result) {
-          // A fresh prompt needs the step-9b enumeration pass re-run over it —
-          // the one applied above belongs to the prompt we are replacing.
-          rerouteBasePrompt = appendMissingCharacterEnumerations(
-            recraftResult.result,
-            nonParticipantCharacters,
-          ).prompt;
-          logger.info('[StoryBackground] Re-crafted prompt candidly for the uncensored reroute target', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            promptLengthBefore: finalPrompt!.length,
-            promptLengthAfter: rerouteBasePrompt.length,
-            usedUncensoredCrafter: Boolean(uncensoredLLMSelection),
-          });
-        } else {
-          logger.warn('[StoryBackground] Candid re-craft for the reroute target returned nothing, reusing the concealed prompt', {
-            context: 'background-jobs.story-background',
-            jobId: job.id,
-            error: recraftResult.error,
-          });
-        }
-      } catch (recraftError) {
-        logger.warn('[StoryBackground] Candid re-craft for the reroute target failed, reusing the concealed prompt', {
-          context: 'background-jobs.story-background',
-          jobId: job.id,
-          error: getErrorMessage(recraftError),
-        });
-      }
-    }
+    // The reroute is gated on the chat already being flagged, so the prompt
+    // that just got rejected was crafted with `uncensoredImageTarget` set —
+    // candid already. It goes to the reroute target as-is; there is nothing
+    // left to un-drape, and re-crafting here is how a moderated chat used to
+    // get escalated (bug 133).
+    const rerouteBasePrompt = finalPrompt!;
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();

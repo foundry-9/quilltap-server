@@ -141,9 +141,13 @@ The Lantern's story backgrounds hold a second, separate courtesy. By default the
 
 That courtesy is now conditional. When a chat is marked dangerous **and** you have an uncensored image profile configured, the picture is already headed for a door that does not moderate, so the crafter describes the scene plainly instead. Previously the concealment applied regardless, and an uncensored provider received a scene needlessly draped for a provider it was never going to see.
 
-The same holds on a reroute: if a standard provider rejects a finished image for moderation and the Concierge sends it to your uncensored profile, the prompt is re-crafted candidly for that provider rather than forwarded unchanged.
+The same holds on a reroute — but only for a chat already marked. If a standard provider rejects a finished image for moderation and the chat is Flagged or Uncensored, the Concierge sends the picture on to your uncensored profile with the prompt exactly as drafted; it was drafted candidly to begin with, and there is nothing left to un-drape.
 
-If no uncensored image profile is configured, concealment applies as before — the character appearance descriptions are additionally sanitized in that case, since there is nowhere else for the image to go.
+**A moderated chat is never carried through that door.** Where the chat is Safe, a moderation refusal ends the matter: the backdrop is simply not made, and the log records the refusal. This is deliberate. A story background is a courtesy nobody requested, and a provider's refusal is testimony that a scene was *too* frank — poor grounds on which to go and find a franker provider. For a season the Concierge reasoned the other way about, treating a refusal as evidence that the draft had been needlessly coy, and redrafted it plainly for the uncensored profile: a chat you had deliberately left moderated received, on that account alone, the boldest picture the house could produce. He has been spoken to.
+
+If a moderated chat's backdrop is refused and you would rather have had the picture, the remedy is to say so — set the chat **Flagged** or **Uncensored** with the per-chat switch below — rather than to leave the decision with a provider's safety filter.
+
+Concealment applies as before to every chat that is not headed for the uncensored profile, and the character appearance descriptions are sanitized alongside it. Note the distinction: what matters is whether *this* picture is going through the uncensored door, not whether such a door exists somewhere in your settings. A configured uncensored profile does nothing for a Safe chat's backdrop, and used to be mistaken for a licence to leave its appearance descriptions unsanitized.
 
 ### Both conditions, and how they are commonly missed
 

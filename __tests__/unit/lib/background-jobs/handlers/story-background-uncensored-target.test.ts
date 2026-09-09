@@ -6,9 +6,11 @@
  * prompt crafter did not, so an uncensored provider still received a scene with
  * a sheet draped over it.
  *
- * Also locks the moderation-reroute path: a prompt crafted for a moderated
- * provider that the provider then rejects is re-crafted candidly for the
- * reroute target rather than resent as-is.
+ * Also locks the moderation-reroute path (bug 133): the post-hoc reroute is
+ * available only to a chat already flagged dangerous. A moderated chat whose
+ * background the provider rejects fails the job rather than being escalated to
+ * an uncensored provider, and a flagged chat's prompt — candid already — is
+ * resent as-is rather than re-crafted.
  *
  * Scaffolding mirrors story-background-sha256.test.ts: subject import first,
  * bare jest.mock() factories, behaviour wired in beforeEach.
@@ -31,6 +33,10 @@ import {
   resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service'
 import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
+import {
+  resolveCharacterAppearances,
+  sanitizeAppearancesIfNeeded,
+} from '@/lib/image-gen/appearance-resolution'
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = () => ({
@@ -97,23 +103,47 @@ const mockDeriveScene = jest.mocked(deriveSceneContext)
 const mockIsModerationError = jest.mocked(isImageModerationError)
 const mockResolveReroute = jest.mocked(resolveUncensoredImageProfileForReroute)
 const mockWriteLantern = jest.mocked(writeLanternBackgroundToMountStore)
+const mockResolveAppearances = jest.mocked(resolveCharacterAppearances)
+const mockSanitizeAppearances = jest.mocked(sanitizeAppearancesIfNeeded)
 
 const SELECTION = {
   provider: 'openai', modelName: 'm', connectionProfileId: 'p1', isLocal: false,
 } as never
 
-function makeJob() {
+function makeJob(characterIds: string[] = []) {
   return {
     id: 'job-1',
     userId: USER,
     payload: {
       chatId: CHAT_ID,
-      characterIds: [],
+      characterIds,
       imageProfileId: 'profile-1',
       sceneContext: 'the morning after',
       projectId: null,
     },
   } as never
+}
+
+const CHARACTER = {
+  id: 'char-1',
+  name: 'Amy',
+  physicalDescription: 'a young woman',
+  pronouns: { subject: 'she', object: 'her', possessive: 'her' },
+}
+
+const APPEARANCE = {
+  characterId: 'char-1',
+  characterName: 'Amy',
+  physicalDescription: 'a young woman',
+  physicalDescriptionName: 'Default',
+  clothingDescription: 'naked, barefoot, wearing pearls',
+  clothingSource: 'narrative',
+  wasSanitized: false,
+}
+
+/** The `routesDangerousToUncensored` argument of the sanitization call. */
+function sanitizeRoutesFlag(): boolean {
+  return mockSanitizeAppearances.mock.calls[0][3] as boolean
 }
 
 /** The `uncensoredImageTarget` flag on the nth craft call. */
@@ -184,6 +214,10 @@ beforeEach(() => {
   mockCraftPrompt.mockResolvedValue({ success: true, result: CONCEALED_PROMPT } as never)
   mockIsModerationError.mockReturnValue(false)
   mockResolveReroute.mockResolvedValue(null as never)
+  mockResolveAppearances.mockResolvedValue({
+    appearances: [APPEARANCE], llmResolved: true,
+  } as never)
+  mockSanitizeAppearances.mockImplementation(async (a: never) => a)
 
   mockCreateImageProvider.mockImplementation(() => ({
     generateImage: jest.fn().mockResolvedValue({
@@ -274,6 +308,44 @@ describe('story-background handler — uncensoredImageTarget', () => {
   })
 })
 
+describe('story-background handler — appearance sanitization gate', () => {
+  /** Put a character in the job so appearance resolution actually runs. */
+  function withCharacter() {
+    const repos = mockGetRepositories() as unknown as Record<string, unknown>
+    mockGetRepositories.mockReturnValue({
+      ...repos,
+      characters: {
+        findById: jest.fn().mockResolvedValue(CHARACTER),
+        findByUserId: jest.fn().mockResolvedValue([CHARACTER]),
+      },
+    } as never)
+  }
+
+  // Bug 133. The handler used to hand sanitization "an uncensored profile is
+  // configured", but story backgrounds never route up front — so a moderated
+  // chat's raw "naked, barefoot" appearance text sailed past the sanitizer and
+  // into a prompt crafter working for a provider that promptly refused it.
+  it('asks the sanitizer about routing, not about mere configuration', async () => {
+    markDangerous(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(false) // ...but this chat is moderated
+    withCharacter()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(mockSanitizeAppearances).toHaveBeenCalledTimes(1)
+    expect(sanitizeRoutesFlag()).toBe(false)
+  })
+
+  it('leaves a flagged chat bound for the uncensored provider accurate', async () => {
+    markDangerous(true)
+    withCharacter()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(sanitizeRoutesFlag()).toBe(true)
+  })
+})
+
 describe('story-background handler — moderation reroute', () => {
   /** First provider instance rejects for moderation; the reroute target accepts. */
   function rejectThenReroute() {
@@ -299,43 +371,43 @@ describe('story-background handler — moderation reroute', () => {
     })
   }
 
-  it('re-crafts the prompt candidly before resending to the uncensored provider', async () => {
+  // Bug 133. A moderated chat's rejected background used to be re-crafted
+  // candidly and resent to the uncensored provider, so the provider's refusal
+  // promoted a chat the user deliberately left moderated.
+  it('does not reroute a moderated chat, failing the job instead', async () => {
     rejectThenReroute()
-    mockCraftPrompt
-      .mockResolvedValueOnce({ success: true, result: CONCEALED_PROMPT } as never)
-      .mockResolvedValueOnce({ success: true, result: CANDID_PROMPT } as never)
+
+    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(
+      /Image generation failed/,
+    )
+
+    expect(mockResolveReroute).not.toHaveBeenCalled()
+    expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
+    expect(craftTargetFlag(0)).toBe(false)
+  })
+
+  it('does not reroute a dangerous chat with no uncensored image profile', async () => {
+    markDangerous(false)
+    rejectThenReroute()
+    mockResolveReroute.mockResolvedValue(null as never)
+
+    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(
+      /Image generation failed/,
+    )
+  })
+
+  it('resends the already-candid prompt for a flagged chat, without re-crafting', async () => {
+    markDangerous(true)
+    rejectThenReroute()
+    mockCraftPrompt.mockResolvedValue({ success: true, result: CANDID_PROMPT } as never)
 
     await handleStoryBackgroundGeneration(makeJob())
 
-    expect(mockCraftPrompt).toHaveBeenCalledTimes(2)
-    expect(craftTargetFlag(0)).toBe(false)
-    expect(craftTargetFlag(1)).toBe(true)
+    // One craft, made candidly up front — the reroute has nothing to un-drape.
+    expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
+    expect(craftTargetFlag(0)).toBe(true)
 
     const sent = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
     expect(sent.prompt).toContain(CANDID_PROMPT)
-    expect(sent.prompt).not.toContain('sheet draped')
-  })
-
-  it('falls back to the already-crafted prompt when the candid re-craft fails', async () => {
-    rejectThenReroute()
-    mockCraftPrompt
-      .mockResolvedValueOnce({ success: true, result: CONCEALED_PROMPT } as never)
-      .mockRejectedValueOnce(new Error('cheap LLM unavailable'))
-
-    await handleStoryBackgroundGeneration(makeJob())
-
-    // The reroute still happens — a failed re-craft must not lose the image.
-    const sent = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
-    expect(sent.prompt).toContain(CONCEALED_PROMPT)
-  })
-
-  it('does not re-craft when the prompt was already crafted candidly', async () => {
-    markDangerous(true)
-    rejectThenReroute()
-
-    await handleStoryBackgroundGeneration(makeJob())
-
-    expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
-    expect(craftTargetFlag(0)).toBe(true)
   })
 })
