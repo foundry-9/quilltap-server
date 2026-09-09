@@ -14,6 +14,8 @@ When you click an image in the Salon — any image: one a character has just sum
 
 If the image has already been saved to your gallery, the system politely declines the second saving and tells you so. (One link per image is plenty.)
 
+There is a second route, for the pictures that never had a message to hang beneath — the backdrops the Lantern painted quietly, the cast's standing portraits. The **Gallery** in a chat's sidebar (Organize drawer) lays out every picture in that conversation and offers the same album picker on each. See [The Chat Gallery](chat-gallery.md).
+
 ## What you'll see when you visit
 
 The gallery presents your photographs as a tidy grid of thumbnails. Each thumbnail bears a small badge: `1 link`, `3 links`, and so on. That number tells you in how many places the image is presently hard-linked — your own gallery, of course, but also any character's photo album that has independently kept the same picture, plus any chat attachments still pointing at the same bytes.

@@ -7,7 +7,7 @@
 | **Severity** | **Medium** — nothing errors and nothing is lost, but the sidebar states a falsehood about the user's data (0 where 59 stand), and the destructive control it labels early-returns on that falsehood: clicking **Delete Memories (0)** does nothing at all, with no confirmation, no toast, and no log line |
 | **Who it bites** | anyone who opens a chat before its memories exist — which is *every new chat*, since extraction is a background job that lands a minute or two after the first turn. The tabbed workspace makes it permanent: a Salon tab is hidden by CSS, never unmounted, so the mount effect that reads the count never runs again for the life of the tab |
 | **Provenance** | Reported against the live Friday instance, chat `27961b14-ae98-46bf-ba1e-9f0ec13bb103` ("Damp Curtains and Cold Water"). Confirmed end to end: the DB holds 59 rows, `GET /api/v1/memories?chatId=…` answers `{"memoryCount":59}`, and a **fresh** load of the same chat in the same running build renders `Delete Memories (59)`. The user's screenshot of the long-lived tab reads `(0)` |
-| **Defect site** | `app/salon/[id]/hooks/useChatData.ts:105` (`fetchChatMemoryCount`, called once), `app/salon/[id]/SalonView.tsx:801-807` (the mount-only effect), `app/salon/[id]/hooks/useMemoryActions.ts:18` (the `chatMemoryCount === 0` early return) |
+| **Defect site** | `app/salon/[id]/hooks/useChatData.ts:91` (`fetchChatMemoryCount`, called once), `app/salon/[id]/SalonView.tsx:811-815` (the mount-only effect), `app/salon/[id]/hooks/useMemoryActions.ts:18` (the `chatMemoryCount === 0` early return). *(Line numbers refreshed 2026-09-09, after the chat gallery removed the sibling `fetchChatPhotoCount` from the same hook — see step 5.)* |
 | **v5 status** | **Not yet assessed.** The port carries its own Salon sidebar; if it reads a count once at mount and gates a destructive action on it, it inherits this whole |
 | **Index** | [bugs.md](../bugs.md) |
 
@@ -45,17 +45,19 @@ produce a lying label on a dead button.
 
 ### 1. The count is read once, at mount, and nothing ever reads it again
 
-`fetchChatMemoryCount` (`useChatData.ts:105`) is a `useCallback` keyed on
+`fetchChatMemoryCount` (`useChatData.ts:91`) is a `useCallback` keyed on
 `chatId`, and its only caller is the initialization effect in `SalonView.tsx`:
 
 ```ts
 useEffect(() => {
   fetchChat()
   fetchChatSettings()
-  fetchChatPhotoCount()
   fetchChatMemoryCount()
-}, [fetchChat, fetchChatSettings, fetchChatPhotoCount, fetchChatMemoryCount])
+}, [fetchChat, fetchChatSettings, fetchChatMemoryCount])
 ```
+
+(As filed, the effect carried a `fetchChatPhotoCount()` beside it, with the
+identical shape. That one has since been retired outright — see step 5.)
 
 Every dependency is stable for a given `chatId`, so the effect runs exactly
 once per mount. Memories, meanwhile, are written by `MEMORY_EXTRACTION` and
@@ -198,7 +200,7 @@ count on the very refetch meant to correct it.
 
 ### Step 5 — the adjacent surface, same change
 
-> **Superseded (2026-09-08).** `fetchChatPhotoCount` reads `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still return zero. The count moves onto the chat-gallery query instead — see [salon-chat-gallery.md](../features/salon-chat-gallery.md) and the bug it files for the dead action. Steps 1–4 stand.
+> **Superseded, and done (2026-09-09).** `fetchChatPhotoCount` read `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still have returned zero — that was [bug 129](fixed/bug-129-gallery-button-never-appears.md). The count moved onto the chat-gallery query instead: `chatPhotoCount` and `fetchChatPhotoCount` are gone from `useChatData` entirely, replaced by `useChatGallery`'s `total` on `queryKeys.chats.gallery(chatId)`, which rides the `chats` row of the topic map. See [salon-chat-gallery.md](../features/complete/salon-chat-gallery.md). **Steps 1–4, for the memory count, still stand and are still open.**
 
 `chatPhotoCount` in the same hook has the identical shape: read once at mount,
 refreshed only by three explicit call sites in `ChatModals.tsx`. A Lantern

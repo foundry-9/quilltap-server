@@ -1,15 +1,26 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { RequestContext } from '@/lib/api/middleware';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { FileContentMissingError } from '@/lib/file-storage/errors';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { buildContentDisposition } from '../shared';
+import { dispositionFor } from '@/lib/api/content-disposition';
 
+/**
+ * Serve a file's bytes.
+ *
+ * `?download=1` switches the Content-Disposition from `inline` to
+ * `attachment`, so the browser saves rather than renders and the Electron
+ * shell streams through its `will-download` handler instead of the renderer
+ * buffering a 4K image into a Blob. Nothing else about the response changes.
+ */
 export async function handleDownloadFile(
   ctx: RequestContext,
-  fileId: string
+  fileId: string,
+  request?: NextRequest
 ): Promise<NextResponse> {
+  const disposition = dispositionFor(request);
   try {
     const fileEntry = await ctx.repos.files.findById(fileId);
     if (!fileEntry) {
@@ -27,7 +38,7 @@ export async function handleDownloadFile(
       headers: {
         'Content-Type': fileEntry.mimeType,
         'Content-Length': buffer.length.toString(),
-        'Content-Disposition': buildContentDisposition(fileEntry.originalFilename, 'inline'),
+        'Content-Disposition': buildContentDisposition(fileEntry.originalFilename, disposition),
         'Cache-Control': 'public, max-age=31536000, immutable',
         'X-Frame-Options': 'SAMEORIGIN',
         'Content-Security-Policy': "frame-ancestors 'self'",

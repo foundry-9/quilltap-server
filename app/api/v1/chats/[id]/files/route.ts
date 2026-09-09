@@ -21,6 +21,7 @@ import { nativeTextAttachmentMime } from '@/lib/mount-index/path-utils';
 import type { RepositoryContainer } from '@/lib/database/repositories';
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import type { FileAttachment } from '@/lib/llm/base';
+import { resolveMessageAttachmentEntries } from '@/lib/photos/chat-gallery';
 
 /**
  * POST /api/v1/chats/[id]/files - Upload a file or link an existing file
@@ -459,65 +460,41 @@ export const GET = createContextParamsHandler<{ id: string }>(
       }));
 
       // Mount-file attachments are recorded only on Librarian announcement
-      // messages (no link table). Walk the chat's messages and collect any
-      // attachment ids that resolve through doc_mount_files.
+      // messages (no link table). The walk that resolves them lives in
+      // `lib/photos/chat-gallery.ts` alongside the chat gallery's own passes,
+      // so this listing and the gallery can never disagree about which
+      // attachments a message carries.
       const seenIds = new Set(allFiles.map((f) => f.id));
-      try {
-        const events = await repos.chats.getMessages(chatId);
-        for (const event of events) {
-          if (event.type !== 'message') continue;
-          const ids = Array.isArray(event.attachments) ? event.attachments : [];
-          for (const attachmentId of ids) {
-            if (seenIds.has(attachmentId)) continue;
-            // Try as a link id (modern) or fall back to file id.
-            let mountLink = await repos.docMountFileLinks.findByIdWithContent(attachmentId);
-            if (!mountLink) {
-              const links = await repos.docMountFileLinks.findByFileId(attachmentId);
-              mountLink = links[0] ?? null;
-            }
-            if (!mountLink) continue;
-            const blob = await repos.docMountBlobs.findByFileId(mountLink.fileId);
-            if (blob) {
-              const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
-              allFiles.push({
-                id: mountLink.id,
-                filename: mountLink.originalFileName ?? mountLink.fileName,
-                filepath: url,
-                mimeType: blob.storedMimeType,
-                size: blob.sizeBytes,
-                url,
-                createdAt: event.createdAt,
-                type: 'mountFile',
-              });
-              seenIds.add(mountLink.id);
-              continue;
-            }
-            // No blob → native-text document (Bug 38). Surface it from the
-            // document row so the attached markdown shows in the chat file list.
-            const textMime = nativeTextAttachmentMime(mountLink.relativePath);
-            if (!textMime) continue;
-            const document = await repos.docMountDocuments.findByFileId(mountLink.fileId);
-            if (!document) continue;
-            const url = `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`;
-            allFiles.push({
-              id: mountLink.id,
-              filename: mountLink.originalFileName ?? mountLink.fileName,
-              filepath: url,
-              mimeType: textMime,
-              size: mountLink.fileSizeBytes,
-              url,
-              createdAt: event.createdAt,
-              type: 'mountFile',
-            });
-            seenIds.add(mountLink.id);
-          }
-        }
-      } catch (err) {
-        logger.warn('[Chats v1 Files] Failed to enumerate mount-file attachments', {
+      // A message read that fails costs the mount-file attachments and nothing
+      // else; the linked files are already in hand and are the better half of
+      // the answer. This listing has always degraded rather than 500'd here.
+      const events = await repos.chats.getMessages(chatId).catch((err: unknown) => {
+        logger.warn('[Chats v1 Files] Failed to read messages for attachment walk', {
           chatId,
           error: err instanceof Error ? err.message : String(err),
         });
+        return [];
+      });
+      const mountAttachments = await resolveMessageAttachmentEntries(events, repos, {
+        skipIds: seenIds,
+      });
+      for (const attachment of mountAttachments) {
+        allFiles.push({
+          id: attachment.id,
+          filename: attachment.filename,
+          filepath: attachment.url,
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+          url: attachment.url,
+          createdAt: attachment.createdAt,
+          type: 'mountFile',
+        });
       }
+      logger.debug('[Chats v1 Files] Resolved mount-file attachments', {
+        chatId,
+        linkedFiles: seenIds.size,
+        mountAttachments: mountAttachments.length,
+      });
 
       // Sort by creation time, newest first
       allFiles.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

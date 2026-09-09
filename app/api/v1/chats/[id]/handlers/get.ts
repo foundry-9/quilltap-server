@@ -8,6 +8,7 @@
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
+ * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,6 +30,7 @@ import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
 } from '@/lib/photos/photo-link-summary';
+import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
@@ -213,6 +215,29 @@ export async function handleGet(
     } catch (error) {
       logger.error('[Chats v1] Failed to get story background', { chatId }, error instanceof Error ? error : undefined);
       return serverError('Failed to get story background');
+    }
+  }
+
+  // Handle gallery action — every image in the conversation, whatever made it.
+  // The nine sources and their dedup live in `lib/photos/chat-gallery.ts`; this
+  // route only answers with what the enumerator found.
+  if (action === 'gallery') {
+    try {
+      const chat = await repos.chats.findById(chatId);
+      if (!chat) {
+        return notFound('Chat');
+      }
+
+      const gallery = await getChatGallery(chatId, repos);
+      logger.debug('[Chats v1] Gallery listed', {
+        chatId,
+        total: gallery.total,
+        counts: gallery.counts,
+      });
+      return NextResponse.json(gallery);
+    } catch (error) {
+      logger.error('[Chats v1] Failed to list chat gallery', { chatId }, error instanceof Error ? error : undefined);
+      return serverError('Failed to list chat gallery');
     }
   }
 

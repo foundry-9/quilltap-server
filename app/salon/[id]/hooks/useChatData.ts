@@ -16,7 +16,6 @@ export function useChatData(chatId: string) {
   const [error, setError] = useState<string | null>(null)
   const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
   const [swipeStates, setSwipeStates] = useState<Record<string, SwipeState>>({})
-  const [chatPhotoCount, setChatPhotoCount] = useState(0)
   const [chatMemoryCount, setChatMemoryCount] = useState(0)
 
   const fetchChatSettings = useCallback(async () => {
@@ -89,19 +88,6 @@ export function useChatData(chatId: string) {
     }
   }, [chatId])
 
-  const fetchChatPhotoCount = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/v1/chats/${chatId}?action=files`, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        const imageCount = (data.files || []).filter((f: { mimeType: string }) => f.mimeType.startsWith('image/')).length
-        setChatPhotoCount(imageCount)
-      }
-    } catch (err) {
-      console.error('Failed to fetch chat photo count:', { error: err instanceof Error ? err.message : String(err) })
-    }
-  }, [chatId])
-
   const fetchChatMemoryCount = useCallback(async () => {
     try {
       const res = await fetch(`/api/v1/memories?chatId=${chatId}`)
@@ -125,13 +111,10 @@ export function useChatData(chatId: string) {
     setChatSettings,
     swipeStates,
     setSwipeStates,
-    chatPhotoCount,
-    setChatPhotoCount,
     chatMemoryCount,
     setChatMemoryCount,
     fetchChat,
     fetchChatSettings,
-    fetchChatPhotoCount,
     fetchChatMemoryCount,
   }
 }

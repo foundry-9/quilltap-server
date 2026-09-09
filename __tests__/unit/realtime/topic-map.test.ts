@@ -34,7 +34,21 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.detail('chat-1'),
       queryKeys.chats.state('chat-1'),
       queryKeys.chats.background('chat-1'),
+      queryKeys.chats.gallery('chat-1'),
     ]);
+  });
+
+  it('refreshes the chat gallery on the chats topic', () => {
+    // The story-background and avatar jobs publish `{topic:'chats', id}` when
+    // they finish, and that is the whole realtime path the gallery has — no
+    // topic of its own, so this row is what keeps the count honest.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.chats.gallery('chat-1'),
+    );
+    // A hint for another chat must not touch this one's gallery.
+    expect(queryKeysForTopic('chats', 'chat-2')).not.toContainEqual(
+      queryKeys.chats.gallery('chat-1'),
+    );
   });
 
   it('sweeps the namespace when the event carries no id', () => {

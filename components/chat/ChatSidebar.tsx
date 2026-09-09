@@ -220,7 +220,8 @@ export interface ChatSidebarProps {
   onStateClick?: () => void
   onContinueChatClick?: () => void
   onMergeConversationClick?: () => void
-  chatPhotoCount?: number
+  /** How many images the chat's gallery holds — `total` from `useChatGallery`. */
+  galleryCount?: number
   onGalleryClick?: () => void
   /** True when this chat is an autonomous room ("enclave") — gates the Edit Enclave control. */
   isAutonomousRoom?: boolean
@@ -568,7 +569,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             onStateClick={props.onStateClick}
             onContinueChatClick={props.onContinueChatClick}
             onMergeConversationClick={props.onMergeConversationClick}
-            chatPhotoCount={props.chatPhotoCount}
+            galleryCount={props.galleryCount}
             onGalleryClick={props.onGalleryClick}
             isAutonomousRoom={props.isAutonomousRoom}
             onEditEnclaveClick={props.onEditEnclaveClick}
@@ -1547,7 +1548,7 @@ interface OrganizeSectionProps {
   onStateClick?: () => void
   onContinueChatClick?: () => void
   onMergeConversationClick?: () => void
-  chatPhotoCount?: number
+  galleryCount?: number
   onGalleryClick?: () => void
   isAutonomousRoom?: boolean
   onEditEnclaveClick?: () => void
@@ -1559,7 +1560,7 @@ function OrganizeSection({
   onStateClick,
   onContinueChatClick,
   onMergeConversationClick,
-  chatPhotoCount = 0,
+  galleryCount = 0,
   onGalleryClick,
   isAutonomousRoom = false,
   onEditEnclaveClick,
@@ -1660,15 +1661,19 @@ function OrganizeSection({
         <span>Export Markdown</span>
       </button>
 
-      {chatPhotoCount > 0 && onGalleryClick && (
+      {/* Unconditional, deliberately. Gating this on a count is what hid the
+          gallery for months (bug 129) — and a chat with a cast is never empty
+          anyway, since the participants' own portraits put the total above
+          zero. The modal's empty state covers the case that cannot arise. */}
+      {onGalleryClick && (
         <button
           type="button"
           onClick={onGalleryClick}
           className="qt-tool-palette-button"
-          title="View gallery"
+          title="Every image in this conversation"
         >
           <Icon name="image" className="w-4 h-4" />
-          <span>Gallery ({chatPhotoCount})</span>
+          <span>Gallery ({galleryCount})</span>
         </button>
       )}
     </div>

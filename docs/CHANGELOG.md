@@ -4,6 +4,84 @@
 
 ### 4.10-dev
 
+#### Added: the Salon chat gallery
+
+The **Gallery** button in a chat's Organize drawer now opens a grid of every image in the
+conversation, whatever produced it: uploads and library links, `generate_image` output, images from
+either Generate Image entry point, story backgrounds the Lantern painted (including superseded
+ones), Aurora avatar repaints (likewise), pictures re-shown from a photo album, files the Librarian
+attached from a document store, the cast's standing portraits, and images referenced only by a
+Markdown link in message prose. Previously the listing covered the first six and the button never
+appeared at all (bug 129).
+
+One server-side enumerator, `lib/photos/chat-gallery.ts`, is the single place that knows all nine
+sources; the `/chats/[id]/files` listing now shares its message-attachment walk rather than keeping
+a second copy. It answers on `GET /api/v1/chats/[id]?action=gallery` with entries, per-source
+counts, and a total. Each entry carries whether its id is a `files.id` or a
+`doc_mount_file_links.id`, which source it came from, whether it is the background the chat is
+currently showing or the avatar a character is currently wearing, and whether the chat owns the
+record well enough to delete it. Entries are deduped by content hash and sorted newest first, with
+standing portraits at the end.
+
+The grid has a filter chip per source with its count (chips for empty sources are hidden, and the
+row disappears entirely when everything came from one place), a `current` badge on the background
+and avatars presently in play, and Save / Download / Delete on hover. Delete appears only where the
+chat minted the record — never a portrait, a kept album image, an inline reference, or the
+background and avatar currently on display. The modal now renders through a portal to the document
+body, so it is not trapped under the toolbar inside the tabbed workspace.
+
+Save opens the same album dialog the message toolbar's bookmark opens — the full album list, the
+caption field, the duplicate notice. Because half the gallery has no message to be attached to, it
+posts to a new chat-scoped `POST /api/v1/chats/[id]?action=save-image` whose guard is gallery
+membership rather than message attachment; both routes share one Zod body schema, one attribution
+resolver (`lib/photos/save-attribution.ts`), and one album service. The message route's behaviour is
+unchanged except that `ALREADY_SAVED` now reads as a duplicate notice in the dialog. The detail
+view's two hard-wired "first character" album buttons are removed in favour of that dialog, and it
+gains a provenance line and a Jump-to-message link.
+
+The sidebar's `Gallery (N)` count and the grid are now one TanStack Query read
+(`queryKeys.chats.gallery`), which rides the existing `chats` realtime topic — so a Lantern backdrop
+or an Aurora repaint landing from a background job updates the number with no poll. `chatPhotoCount`
+and `fetchChatPhotoCount` are gone from `useChatData`.
+
+New help page `help/chat-gallery.md`; `chat-participants.md`, `chat-message-actions.md` and
+`photo-gallery.md` updated to point at it.
+
+#### Changed: image routes accept `?download=1`
+
+`GET /api/v1/files/[id]`, `GET /api/v1/files/proxy/[...key]` and
+`GET /api/v1/mount-points/[id]/blobs/[...path]` now honour `?download=1` (or `download=true`) by
+serving `Content-Disposition: attachment` instead of `inline`. Nothing else about the response
+changes — content type, length, cache headers and `X-Blob-Sha256` are all as before, and a
+non-ASCII filename still carries its RFC 5987 `filename*`.
+
+The client helpers `downloadImageUrl` / `downloadGalleryEntry` in `lib/download-utils.ts` append the
+flag and hand the URL to `triggerUrlDownload` rather than fetching the bytes into a Blob first. In
+the Electron shell that streams a 4K story background straight to disk through `will-download`
+instead of through renderer memory. `ImageModal` and the gallery's detail view both use it;
+`downloadFetchedFile` remains for the copy-to-clipboard path, which genuinely needs the bytes.
+
+#### Fixed: the Salon sidebar's Gallery button appears (bug 129)
+
+It never had. `fetchChatPhotoCount` fetched `/api/v1/chats/{id}?action=files`, and the chat GET does
+not dispatch a `files` action — an unrecognised action is not rejected, it falls through to the
+whole-chat payload, so the request answered `200`, `data.files` was `undefined`, and the count that
+gated the button was zero on every read. The working listing was one path segment away at
+`/api/v1/chats/[id]/files`, which the gallery modal itself called correctly once something managed
+to open it. The counter is deleted rather than repaired: the number now comes from the chat-gallery
+query, and the button has no gate at all. This supersedes step 5 of bug 128, which would have
+re-read the same dead action.
+
+#### Fixed: `POST /api/v1/images?action=generate` can be told which chat asked (bug 130)
+
+The route built `linkedTo` from tags alone and had no `chatId` in its schema, so an image made
+through it was linked to its tags and to no conversation, and invisible to every
+`files.findByLinkedTo(chatId)` read. It now accepts an optional `chatId` and folds it into `linkedTo`
+beside the tag ids, deduped so a caller passing both a `CHAT` tag and `chatId` does not link it
+twice. Latent rather than live: the Salon's Generate Image dialogs post to
+`/api/v1/image-profiles/[id]?action=generate`, which has always passed the chat through, and no
+caller in the app used the collection route.
+
 #### Docs: retired twelve shipped feature specs to `features/complete/`
 
 Moved twelve feature documents from `docs/developer/features/` into

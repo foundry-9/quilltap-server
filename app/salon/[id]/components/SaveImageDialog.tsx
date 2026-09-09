@@ -3,10 +3,18 @@
 /**
  * SaveImageDialog — operator-facing "save this attached image" picker.
  *
- * Opens from the per-message Save Image toolbar button. Fetches the list
- * of candidate photo albums for the chat (chat participants' vaults, the
- * project album, linked document stores, Quilltap General), then POSTs
- * the chosen target to the save-image action on the message route.
+ * Opens from two doors: the per-message Save Image toolbar button, and the
+ * chat gallery's Save. Fetches the list of candidate photo albums for the chat
+ * (chat participants' vaults, the project album, linked document stores,
+ * Quilltap General), then POSTs the chosen album to whichever save-image action
+ * matches the door it came from.
+ *
+ * The two differ only in the route they post to. The message route's guard —
+ * *is this image attached to this message* — is a real invariant there, and
+ * half the gallery has no message at all (a Lantern backdrop posted with alerts
+ * off, a participant's standing portrait), so the gallery posts to a
+ * chat-scoped twin whose guard is *is this image in this chat's gallery*.
+ * Everything the reader sees is identical.
  *
  * Mirrors the LLM `keep_image` save path under the hood — see
  * `lib/photos/save-image-to-album.ts`.
@@ -29,15 +37,25 @@ interface AlbumOption {
   isDefault?: boolean
 }
 
+/**
+ * Which door the dialog was opened from, and therefore which route it posts
+ * to. `fileId` is the image selected when it opened; the in-dialog picker can
+ * move it when a message carries several.
+ */
+export type SaveImageTarget =
+  | { kind: 'message'; messageId: string; fileId: string }
+  | { kind: 'chat'; fileId: string }
+
 interface SaveImageDialogProps {
   isOpen: boolean
   onClose: () => void
   chatId: string
-  messageId: string
-  /** All image attachments on the message. The dialog picks the first by default. */
+  target: SaveImageTarget
+  /**
+   * Candidate images for the in-dialog picker — every image attachment on the
+   * message, for the ribbon. The gallery passes the one entry it opened on.
+   */
   attachments: MessageAttachment[]
-  /** Pre-selected attachment id (from the toolbar click). When omitted, first image is used. */
-  initialAttachmentId?: string | null
   onSaved?: (info: { mountPoint: string; relativePath: string }) => void
 }
 
@@ -52,9 +70,8 @@ export function SaveImageDialog({
   isOpen,
   onClose,
   chatId,
-  messageId,
+  target,
   attachments,
-  initialAttachmentId,
   onSaved,
 }: Readonly<SaveImageDialogProps>) {
   const imageAttachments = useMemo(
@@ -63,7 +80,7 @@ export function SaveImageDialog({
   )
 
   const [selectedAttachmentId, setSelectedAttachmentId] = useState<string>(() =>
-    initialAttachmentId ?? imageAttachments[0]?.id ?? ''
+    target.fileId || imageAttachments[0]?.id || ''
   )
   const [albums, setAlbums] = useState<AlbumOption[] | null>(null)
   const [selectedMountPointId, setSelectedMountPointId] = useState<string>('')
@@ -116,25 +133,38 @@ export function SaveImageDialog({
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch(
-        `/api/v1/chats/${chatId}/messages/${messageId}?action=save-image`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileId: selectedAttachment.id,
-            mountPointId: selectedMountPointId,
-            caption: caption.trim() ? caption.trim() : undefined,
-          }),
-        }
-      )
+      // The two doors, and the only difference between them.
+      const url = target.kind === 'message'
+        ? `/api/v1/chats/${chatId}/messages/${target.messageId}?action=save-image`
+        : `/api/v1/chats/${chatId}?action=save-image`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId: selectedAttachment.id,
+          mountPointId: selectedMountPointId,
+          caption: caption.trim() ? caption.trim() : undefined,
+        }),
+      })
       const body = (await res.json().catch(() => ({}))) as {
         error?: string
+        code?: string
+        keptAt?: string
+        relativePath?: string
         data?: { mountPoint?: string; relativePath?: string }
         mountPoint?: string
-        relativePath?: string
       }
       if (!res.ok) {
+        // The album already holds these bytes. That is an answer, not a
+        // failure, and it deserves to be said in those words.
+        if (res.status === 409 || body.code === 'ALREADY_SAVED') {
+          const when = body.keptAt ? new Date(body.keptAt).toLocaleDateString() : null
+          throw new Error(
+            when
+              ? `That picture is already in this album — it was filed there on ${when}.`
+              : 'That picture is already in this album.'
+          )
+        }
         throw new Error(body.error || `Save failed (${res.status})`)
       }
       const info = {
@@ -148,7 +178,7 @@ export function SaveImageDialog({
     } finally {
       setSubmitting(false)
     }
-  }, [selectedAttachment, selectedMountPointId, chatId, messageId, caption, onSaved, onClose])
+  }, [selectedAttachment, selectedMountPointId, chatId, target, caption, onSaved, onClose])
 
   const groupedAlbums = useMemo(() => {
     if (!albums) return null

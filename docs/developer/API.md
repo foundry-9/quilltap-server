@@ -3287,6 +3287,127 @@ Returns the list of photo-album targets the Salon's Save-Image dialog can offer 
 
 ---
 
+### Chat Gallery
+
+Every image that exists in one conversation, whatever produced it, and a save
+that works on all of them. Backed by the single enumerator in
+`lib/photos/chat-gallery.ts` — nothing else re-derives "which images are in
+this chat". Design of record:
+[salon-chat-gallery.md](features/complete/salon-chat-gallery.md).
+
+#### `GET /api/v1/chats/[id]?action=gallery`
+
+List the chat's images across all nine ways one reaches a conversation:
+uploads and library links, `generate_image` output, images from either Generate
+Image entry point, `attach_image` re-shows of kept album pictures, Librarian
+attaches from a document store, Lantern story backgrounds (including superseded
+ones), Aurora avatar repaints (likewise), the cast's standing portraits, and
+images referenced only by a Markdown `![](…)` in message prose.
+
+Entries are deduped by content hash where known and by `(idKind, id)`
+otherwise, and sorted newest first; a standing portrait carries its character's
+`createdAt`, so portraits land at the end of the roll.
+
+**Response**: `200 OK`
+
+```json
+{
+  "entries": [
+    {
+      "id": "file-uuid",
+      "idKind": "file",
+      "url": "/api/v1/files/file-uuid",
+      "filename": "a-backdrop.webp",
+      "mimeType": "image/webp",
+      "size": 214512,
+      "width": 1024,
+      "height": 1024,
+      "sha256": "…",
+      "createdAt": "2026-09-05T18:22:01.000Z",
+      "source": "story-background",
+      "characterId": null,
+      "characterName": null,
+      "messageId": null,
+      "isCurrent": true,
+      "deletable": false,
+      "linkSummary": { "count": 1, "linkers": [] }
+    }
+  ],
+  "counts": {
+    "story-background": 3,
+    "avatar": 2,
+    "portrait": 2,
+    "generated": 4,
+    "attachment": 1,
+    "kept": 1,
+    "inline": 0
+  },
+  "total": 13
+}
+```
+
+- **`idKind`** — `"file"` for a `files.id`, `"link"` for a
+  `doc_mount_file_links.id`. Both species appear in `attachments`, in
+  `chats.characterAvatars` and in `characters.defaultImageId`, so every
+  consumer must branch on this rather than guess. `DELETE /api/v1/chat-files/[id]`
+  accepts only the `"file"` species.
+- **`source`** — one of `story-background`, `avatar`, `portrait`, `generated`,
+  `attachment`, `kept`, `inline`.
+- **`isCurrent`** — the background the chat is showing, or the avatar a
+  character is presently wearing. Superseded backgrounds and repaints stay on
+  the roll; this is what tells them apart.
+- **`deletable`** — true only where the chat itself minted the record: sources
+  `attachment`, `generated`, `story-background` and `avatar`, with
+  `idKind: "file"`, and never the one currently on display. A portrait belongs
+  to its character; a kept or inline image belongs to an album or a vault.
+
+**Errors**: `404` when the chat does not exist; `500` when the enumerator
+fails (never a silently empty roll).
+
+#### `POST /api/v1/chats/[id]?action=save-image`
+
+Save any image in the chat's gallery into a chosen photo album — the
+chat-scoped twin of
+`POST /api/v1/chats/[id]/messages/[messageId]?action=save-image`. Same body,
+same album service (`lib/photos/save-image-to-album.ts`), same attribution rule
+(`lib/photos/save-attribution.ts`). The difference is the guard: the message
+route asks whether the image is attached to that message, and half the gallery
+has no message at all, so this route asks whether the image is in this chat's
+gallery.
+
+**Request**:
+
+```json
+{
+  "fileId": "file-uuid-or-link-uuid",
+  "mountPointId": "mp-uuid",
+  "caption": "The drawing room, after the rain",
+  "tags": ["estate", "interior"]
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "saved": true,
+  "mountPoint": "Amelia",
+  "relativePath": "photos/2026-09-05T18-22-01.000Z-the-drawing-room.webp",
+  "linkId": "link-uuid",
+  "keptAt": "2026-09-09T11:04:00.000Z",
+  "fileId": "file-uuid",
+  "sha256": "…"
+}
+```
+
+**Errors**: `400` when the body is malformed, when `fileId` names no image in
+this chat's gallery, or on any album error other than a duplicate; `404` when
+the chat does not exist; **`409`** when the album already holds these bytes,
+with `code: "ALREADY_SAVED"`, `relativePath` and `keptAt` naming the existing
+copy.
+
+---
+
 ### Photo Gallery
 
 The user's personal image gallery, stored at `<userUploadsMountPointId>/photos/` and deduped by SHA-256. Backed by `lib/photos/user-gallery-service.ts`.
@@ -4019,8 +4140,21 @@ Download a file by ID. Returns the file content with appropriate headers.
 **Query Parameters**:
 - `action=thumbnail` - Get thumbnail for images
 - `size` - Thumbnail size (default 150, max 300)
+- `download=1` - Serve as an `attachment` rather than `inline` (see below)
 
 **Response**: File binary with `Content-Type` and `Content-Disposition` headers.
+
+**`?download=1`** — the three routes that serve image bytes (`/files/[id]`,
+`/files/proxy/[...key]`, `/mount-points/[id]/blobs/[...path]`) answer
+`Content-Disposition: inline` by default, because the Salon embeds them in
+`<img>` tags. Passing `download=1` (or `download=true`) switches that one header
+to `attachment`; everything else about the response — content type, length,
+cache headers, `X-Blob-Sha256` — is unchanged, and a non-ASCII filename still
+carries its RFC 5987 `filename*`. It exists so the client can hand a URL to
+`triggerUrlDownload` instead of fetching the bytes into a Blob: in the Electron
+shell that streams a 4K story background to disk through `will-download` rather
+than through renderer memory. Client helpers: `downloadImageUrl` /
+`downloadGalleryEntry` in `lib/download-utils.ts`.
 
 Returns `404` both when the row is absent and when the row exists but its content does not — a dangling pointer into a deleted mount point or a storage key with nothing behind it. That condition is permanent, so the client should fall back rather than retry. `500` is reserved for reads that genuinely failed (permissions, corruption, a backend that is down). The same rule applies to `GET /api/v1/files/proxy/[...key]`.
 
@@ -4645,6 +4779,9 @@ Upload a blob via `multipart/form-data`. Thin adapter over the canonical `storeM
 Stream blob bytes. The catch-all `[...path]` segment carries the blob's `relativePath` so Markdown references like `![alt](images/avatar.webp)` resolve directly against this URL. If no blob matches, the endpoint falls back to `doc_mount_documents` so text documents (Markdown, txt, JSON, JSONL) can also be served from the same path.
 
 Response headers include `Content-Type`, `Content-Length`, `Cache-Control: private, max-age=3600`, and `X-Blob-Sha256`.
+
+**Query Parameters**:
+- `download=1` - Serve as an `attachment` rather than `inline`. Every other header, `X-Blob-Sha256` and the cache policy included, is unchanged. See [`GET /api/v1/files/[id]`](#get-apiv1filesid) for why.
 
 #### `PATCH /api/v1/mount-points/[id]/blobs/[...path]`
 
@@ -6618,10 +6755,13 @@ Serves files stored in the local filesystem through the API with authentication 
 
 Download a file by storage key. The key is the path segments of the file's storage key.
 
+**Query Parameters**:
+- `download=1` - Serve as an `attachment` rather than `inline`. See [`GET /api/v1/files/[id]`](#get-apiv1filesid) for why.
+
 **Response**: File binary with appropriate headers:
 - `Content-Type` - File MIME type
 - `Content-Length` - File size
-- `Content-Disposition` - Inline with filename (supports RFC 5987 for Unicode filenames)
+- `Content-Disposition` - `inline` with filename by default, `attachment` under `?download=1` (supports RFC 5987 for Unicode filenames)
 - `Cache-Control` - `public, max-age=31536000, immutable`
 
 **Error Responses**:

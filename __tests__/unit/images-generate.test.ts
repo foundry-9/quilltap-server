@@ -438,4 +438,131 @@ describe('POST /api/v1/images?action=generate', () => {
       'sk-test-api-key'
     )
   })
+
+  // ---------------------------------------------------------------------
+  // Bug 130 — the chat that asked for the image must reach `linkedTo`, so
+  // every chat-scoped read (the chat file listing, the chat gallery, the
+  // stale-chat collapse sweep) can see it.
+  // ---------------------------------------------------------------------
+
+  const CHAT_UUID = '11111111-2222-4333-8444-555555555555'
+
+  function armSuccessfulGeneration() {
+    mockGetServerSession.mockResolvedValueOnce({
+      user: { id: 'test-user-id', email: 'test@example.com' },
+    } as any)
+
+    mockConnectionsRepo.findById.mockResolvedValueOnce({
+      id: VALID_UUID,
+      userId: 'test-user-id',
+      name: 'Test Profile',
+      provider: 'OPENAI',
+      modelName: 'dall-e-3',
+      parameters: {},
+      isDefault: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      apiKeyId: 'test-key-id',
+      baseUrl: null,
+    } as any)
+    mockConnectionsRepo.findApiKeyById.mockResolvedValueOnce({
+      id: 'test-key-id',
+      userId: 'test-user-id',
+      provider: 'OPENAI',
+      label: 'Test Key',
+      key_value: 'sk-test-api-key',
+      isActive: true,
+      lastUsed: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any)
+
+    mockCreateImageProvider.mockReturnValueOnce({
+      generateImage: jest.fn().mockResolvedValueOnce({
+        images: [
+          {
+            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            mimeType: 'image/png',
+          },
+        ],
+        raw: {},
+      }),
+    })
+
+    mockImagesRepo.create.mockResolvedValueOnce({
+      id: 'test-image-id',
+      userId: 'test-user-id',
+      originalFilename: 'test.png',
+      mimeType: 'image/png',
+      size: 67,
+      width: null,
+      height: null,
+      source: 'GENERATED',
+      generationPrompt: 'a portrait',
+      generationModel: 'dall-e-3',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      tags: [],
+      storageKey: 'users/test-user-id/images/test-image-id/test.png',
+    } as any)
+  }
+
+  function linkedToOfCreatedFile(): string[] {
+    const call = (mockRepos.files.create as jest.Mock).mock.calls.at(-1)
+    return (call?.[0] as { linkedTo?: string[] })?.linkedTo ?? []
+  }
+
+  it('links a generated image to the chat that asked for it', async () => {
+    armSuccessfulGeneration()
+
+    const response = await POST(createMockRequest({
+      prompt: 'a portrait',
+      profileId: VALID_UUID,
+      chatId: CHAT_UUID,
+    }))
+
+    expect(response.status).toBe(201)
+    expect(linkedToOfCreatedFile()).toEqual([CHAT_UUID])
+  })
+
+  it('links the chat exactly once when it also arrives as a CHAT tag', async () => {
+    armSuccessfulGeneration()
+
+    const response = await POST(createMockRequest({
+      prompt: 'a portrait',
+      profileId: VALID_UUID,
+      chatId: CHAT_UUID,
+      tags: [{ tagType: 'CHAT', tagId: CHAT_UUID }],
+    }))
+
+    expect(response.status).toBe(201)
+    expect(linkedToOfCreatedFile()).toEqual([CHAT_UUID])
+  })
+
+  it('keeps tag ids in linkedTo alongside the chat', async () => {
+    armSuccessfulGeneration()
+
+    const response = await POST(createMockRequest({
+      prompt: 'a portrait',
+      profileId: VALID_UUID,
+      chatId: CHAT_UUID,
+      tags: [{ tagType: 'CHARACTER', tagId: 'char-1' }],
+    }))
+
+    expect(response.status).toBe(201)
+    expect(linkedToOfCreatedFile()).toEqual(['char-1', CHAT_UUID])
+  })
+
+  it('leaves linkedTo to the tags alone when no chat is named', async () => {
+    armSuccessfulGeneration()
+
+    const response = await POST(createMockRequest({
+      prompt: 'a portrait',
+      profileId: VALID_UUID,
+      tags: [{ tagType: 'CHARACTER', tagId: 'char-1' }],
+    }))
+
+    expect(response.status).toBe(201)
+    expect(linkedToOfCreatedFile()).toEqual(['char-1'])
+  })
 })

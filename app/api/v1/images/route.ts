@@ -44,6 +44,15 @@ const importFromUrlSchema = z.object({
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
   profileId: z.uuid(),
+  /**
+   * The chat that asked for the image, when one did. Folded into the new
+   * file's `linkedTo` beside the tag ids so a chat-scoped read
+   * (`files.findByLinkedTo(chatId)` — the chat file listing, the chat
+   * gallery, the stale-chat collapse sweep) can see it. Matches the
+   * contract the sibling entry point already keeps
+   * (`POST /api/v1/image-profiles/[id]?action=generate`). See bug 130.
+   */
+  chatId: z.uuid().optional(),
   tags: z
     .array(
       z.object({
@@ -178,7 +187,7 @@ export const POST = createContextHandler(async (request, { user, repos }) => {
 
 async function handleGenerateImage(request: NextRequest, user: { id: string }, repos: any): Promise<NextResponse> {
   const body = await request.json();
-  const { prompt, profileId, tags, options = {} } = generateImageSchema.parse(body);
+  const { prompt, profileId, chatId, tags, options = {} } = generateImageSchema.parse(body);
 
   // Load and validate connection profile
   let profile = await repos.connections.findById(profileId);
@@ -295,8 +304,19 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
   // Generate images
   const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);
 
-  // Build linkedTo from tags
-  const linkedTo = tags?.map(t => t.tagId) || [];
+  // Build linkedTo from the tags plus the chat that asked for the image.
+  // Deduped: a caller passing both a CHAT tag and `chatId` must not link the
+  // same id twice, which would double every inherited tag downstream.
+  const linkedTo = Array.from(new Set([
+    ...(tags?.map(t => t.tagId) ?? []),
+    ...(chatId ? [chatId] : []),
+  ]));
+  logger.debug('[Images v1] Generate: resolved linkedTo', {
+    profileId,
+    chatId: chatId ?? null,
+    tagCount: tags?.length ?? 0,
+    linkedToCount: linkedTo.length,
+  });
 
   // Store generated images as files
   const savedImages = await Promise.all(
