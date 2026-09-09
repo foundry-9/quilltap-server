@@ -39,6 +39,7 @@ import {
   type StreamOptions,
 } from './streaming.service'
 import { saveAssistantMessage } from './message-finalizer.service'
+import { buildRouteTrail } from './route-trail'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { attemptHardErrorFailover } from './provider-failover.service'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
@@ -101,7 +102,11 @@ export function makePreservePartialOnError(
         streaming.effectiveProfile.modelName,
         undefined,
         streaming.reasoningContent,
-        streaming.reasoningSegments
+        streaming.reasoningSegments,
+        undefined,
+        // A preserved partial is still this turn's record: whoever fell over
+        // before it belongs on the call sheet. Null when nothing did.
+        buildRouteTrail(streaming, { chatId, messageId: preGeneratedAssistantMessageId })
       )
       logger.info('Preserved partial streamed response after upstream error', {
         chatId,

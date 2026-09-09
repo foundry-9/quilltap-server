@@ -435,6 +435,10 @@ export async function handleGet(
             renderedHtml,
             provider: event.provider || null,
             modelName: event.modelName || null,
+            // The turn's call sheet — every profile tried, in order. Null on
+            // nearly every message (nothing failed), in which case the Salon
+            // renders the plain provider/model badge exactly as before.
+            routeTrail: event.routeTrail || null,
             targetParticipantIds: event.targetParticipantIds || null,
             isSilentMessage: event.isSilentMessage || null,
             systemSender: event.systemSender || null,

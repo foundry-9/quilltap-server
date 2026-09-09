@@ -4,6 +4,40 @@
 
 ### 4.10-dev
 
+#### Message route trail: every model tried, in order, under the avatar
+
+An assistant message now keeps the route trail — every connection profile tried for the turn, in
+the order tried, with why each one stepped aside — and renders it as a list under the avatar,
+first tried at the top, the one that answered at the bottom. Before this, the badge showed only
+the profile that answered, so a turn the primary timed out on, was rate-limited on, or was
+refused on looked exactly like a turn that went through on the first ask.
+
+- **Stored** in a new nullable JSON column `routeTrail` on `chat_messages`
+  (`add-route-trail-message-column-v1`). Each entry records the profile's id, name, provider and
+  model, how it came to be asked (`primary`, `retry`, `concierge`, `understudy`, `tier-pick`),
+  what became of it (`answered`, `failed`, `refused`), the fallback engine's trigger class, how a
+  refusal was established (`finish-reason` or `inferred`), and a short reason capped at 200
+  characters. `provider` and `modelName` stay authoritative for who answered; the trail's last
+  entry always agrees with them.
+- **NULL when nothing failed**, which is nearly every message. A one-entry trail would say nothing
+  the existing columns already say, and assistant rows are the largest table in the instance. There
+  is no backfill: an old message has no trail, and its badge renders exactly as before.
+- **Shown** as one row per profile. A row that fell over on its own — timeout, network, auth, rate
+  limit, missing model, 5xx, an empty body with no stated reason, no usable API key — is struck
+  through and marked ❌. A row the provider refused on content grounds is struck through and marked
+  🚫. The row that answered has no mark and no strike, so a single-row trail is
+  pixel-identical to the old badge. Hovering a row names the profile, the provider and model, how
+  it came to be asked, and what happened. Adjacent rows for the same profile collapse into one
+  ("answered on the second try").
+- **Rides the `.qtap` export** with the message; `qtap-export.schema.json` carries the shape. An
+  imported trail's `profileId` is deliberately not remapped — a stale id in a historical record is
+  the truth of what happened, and nothing dereferences it.
+- **Theme authors:** the list has no `qt-*` hook of its own yet. Target it through
+  `[aria-label="Models tried for this reply"]`.
+
+Mobile has no avatar badge, so it has no trail either. Tool-only turns write no provider
+attribution today and get none here.
+
 #### Fixed bug 128: the Salon's memory count went stale and disarmed its own delete button
 
 The sidebar's Delete Memories count was read once, by a mount-only effect, and nothing ever read it

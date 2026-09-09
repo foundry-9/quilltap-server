@@ -168,7 +168,8 @@ function projectMessageForNewChat(
     //   (LLM-call telemetry, bound to the old chat's API spend)
     // - debugMemoryLogs, thoughtSignature, recoveryType, renderedHtml
     //   (per-message debug/recovery state that doesn't transfer)
-    // - provider, modelName (the new chat may be on a different connection)
+    // - provider, modelName, routeTrail (the new chat may be on a different
+    //   connection, and the old turn's call sheet is the old turn's business)
     // - summaryAnchor (compactionGeneration is bogus in the new chat — its
     //   summarisation lifecycle starts fresh)
   };

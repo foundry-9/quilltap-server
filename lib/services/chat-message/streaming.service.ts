@@ -20,6 +20,7 @@ import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schema
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('StreamingService')
 
@@ -636,6 +637,10 @@ export function encodeDoneEvent(
     emptyResponseReason?: string
     provider?: string
     modelName?: string
+    /** The turn's route trail — every profile tried, in order — so the client's
+     *  optimistic assistant push carries it without a refetch. Null (the common
+     *  case) when nothing failed. */
+    routeTrail?: RouteAttempt[] | null
     isSilentMessage?: boolean
     /** The Courier: signals that this done event closes a parked placeholder turn,
      * not an actual streamed response. The Salon should skip its optimistic

@@ -459,6 +459,13 @@ Nor is the arrangement sticky. A successful fallback applies to that one call an
 no other: your next message tries the profile you actually chose, so a passing
 outage heals itself without you having to go and undo anything.
 
+And the transcript now keeps a record of it. Where an understudy stood in, the
+reply's placard becomes a short list beneath the avatar — every profile that was
+asked, in the order asked, the ones that could not oblige struck through and
+marked, the one that answered plain at the bottom. Hover any line and it names
+the profile, what it was, how it came to be asked, and what became of it. A reply
+with no list under it had no trouble at all.
+
 ### Naming an understudy
 
 Open a profile for editing and find the **Fallback** section, just below Model

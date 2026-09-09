@@ -204,6 +204,14 @@ What does work:
 
 Note that a refusal may concern an *image* you have attached quite as readily as anything written. If a vision model has been declining a picture, its reason will now say so rather than leaving you to guess at a blank reply.
 
+A refusal also leaves its mark on the reply that eventually arrived. Where the Concierge sent the
+turn on to an uncensored profile after a refusal, the placard beneath the avatar becomes a short
+list: the profile that declined, struck through and marked 🚫, above the one that obliged. Hover
+the marked line and it will tell you whether the provider *stated* the refusal — naming its own
+`finish_reason` — or whether it merely returned nothing on a turn the Concierge had already
+flagged, in which case the refusal is inferred rather than testified to. See
+[Chats Overview](chats.md) for the whole of that little placard.
+
 ### When the Turn Is Carrying a Picture
 
 A reroute swaps the model but keeps the conversation already assembled — and if the profile you began the turn with reads pictures, that assembly has a picture *in* it, in the raw. Hand that bundle to a substitute that reads only words and the gateway will not even trouble the model with it: it returns a flat refusal of its own, the character says nothing at all, and the whole rescue is spent before it starts. This was, for a time, precisely what happened, and with a faultlessly configured pair of profiles on either side of the swap.

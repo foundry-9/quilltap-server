@@ -36,6 +36,13 @@ jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
   resolveProviderForDangerousContent: (...args: any[]) => mockResolveProviderForDangerousContent(...args),
 }))
 
+const mockIsModerationFinishReason = jest.fn((_r?: string | null) => false)
+
+jest.mock('@/lib/llm/moderation-finish-reason', () => ({
+  describeModerationRefusal: jest.fn(() => null),
+  isModerationFinishReason: (r?: string | null) => mockIsModerationFinishReason(r),
+}))
+
 // The reroute re-runs the attachment decision against the profile it actually
 // ends up calling (bug 106). Only the describer is stubbed; the predicate that
 // decides *whether* to describe is the real one, since that is the half the
@@ -52,6 +59,9 @@ const {
   attemptEmptyResponseRecovery,
   getEmptyResponseReason,
 } = require('@/lib/services/chat-message/provider-failover.service') as typeof import('@/lib/services/chat-message/provider-failover.service')
+
+const { buildRouteTrail } =
+  require('@/lib/services/chat-message/route-trail') as typeof import('@/lib/services/chat-message/route-trail')
 
 const makeStream = (chunks: Array<Record<string, unknown>>) => (async function* () {
   for (const chunk of chunks) {
@@ -90,6 +100,8 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     }
 
     const result = await attemptEmptyResponseRecovery({
@@ -151,6 +163,8 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     }
 
     const result = await attemptEmptyResponseRecovery({
@@ -189,6 +203,8 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     }
 
     const result = await attemptEmptyResponseRecovery({
@@ -254,6 +270,8 @@ describe('provider-failover.service', () => {
       rawResponse: null,
       thoughtSignature: undefined,
       hasStartedStreaming: false,
+      routeFailures: [],
+      routeVia: 'primary' as const,
     })
 
     const repos = {
@@ -411,5 +429,178 @@ describe('provider-failover.service', () => {
       sameProviderRetryAttempted: false,
       contentWasFlaggedDangerous: true,
     })).toContain('Concierge flagged this content as dangerous')
+  })
+})
+
+/**
+ * The route trail left on the message by the empty-response recovery: who was
+ * asked, in what order, and on what evidence a refusal was called.
+ */
+describe('provider-failover.service — the route trail', () => {
+  const encoder = new TextEncoder()
+  const controller = { enqueue: jest.fn() } as any
+  const baseProfile = {
+    id: 'safe-1',
+    name: 'Safe Profile',
+    provider: 'OPENAI',
+    modelName: 'gpt-4.1',
+    isDangerousCompatible: false,
+  } as any
+  const uncensoredProfile = {
+    id: 'unc-1',
+    name: 'Uncensored Profile',
+    provider: 'LOCAL',
+    modelName: 'llama-uncensored',
+    isDangerousCompatible: true,
+  } as any
+
+  const freshState = (overrides: Record<string, unknown> = {}) => ({
+    fullResponse: '',
+    effectiveProfile: baseProfile,
+    effectiveApiKey: 'sk-safe',
+    usage: null,
+    cacheUsage: null,
+    attachmentResults: null,
+    rawResponse: null,
+    thoughtSignature: undefined,
+    hasStartedStreaming: false,
+    routeFailures: [],
+    routeVia: 'primary' as const,
+    ...overrides,
+  })
+
+  const recover = (state: any, over: Record<string, unknown> = {}) => attemptEmptyResponseRecovery({
+    state,
+    toolMessagesLength: 0,
+    contentWasFlaggedDangerous: false,
+    dangerSettings: { mode: 'OFF', uncensoredTextProfileId: 'unc-1' } as any,
+    connectionProfile: baseProfile,
+    formattedMessages: [{ role: 'user', content: 'Hello' }],
+    modelParams: {},
+    actualTools: [],
+    useNativeWebSearch: false,
+    userId: 'user-1',
+    chatId: 'chat-1',
+    character: { id: 'char-1', name: 'Alice' } as any,
+    controller,
+    encoder,
+    preGeneratedAssistantMessageId: 'msg-1',
+    ...over,
+  } as any)
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockIsModerationFinishReason.mockReturnValue(false)
+  })
+
+  it('writes nothing when the turn produced an answer of its own', async () => {
+    const state = freshState({ fullResponse: 'All is well.' })
+
+    await recover(state)
+
+    expect(buildRouteTrail(state)).toBeNull()
+  })
+
+  it('records the empty primary, then the same-profile retry that answered', async () => {
+    mockStreamMessage.mockReturnValueOnce(makeStream([
+      { content: 'Recovered reply' },
+      { done: true, rawResponse: { retry: 1 } },
+    ]))
+    const state = freshState()
+
+    await recover(state)
+
+    expect(state.routeVia).toBe('retry')
+    expect(buildRouteTrail(state)).toEqual([
+      expect.objectContaining({
+        profileId: 'safe-1', via: 'primary', outcome: 'failed', trigger: 'empty-response',
+      }),
+      expect.objectContaining({
+        profileId: 'safe-1', via: 'retry', outcome: 'answered',
+      }),
+    ])
+  })
+
+  it('calls an empty body on a flagged turn a refusal, inferred, and credits the Concierge\'s stand-in', async () => {
+    mockStreamMessage.mockReturnValueOnce(makeStream([
+      { content: 'Uncensored reply' },
+      { done: true, rawResponse: { retry: 'uncensored' } },
+    ]))
+    ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
+      rerouted: true,
+      connectionProfile: uncensoredProfile,
+      apiKey: 'sk-uncensored',
+      reason: 'rerouted to uncensored profile',
+    })
+    const state = freshState()
+
+    await recover(state, {
+      contentWasFlaggedDangerous: true,
+      dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+    })
+
+    expect(state.routeVia).toBe('concierge')
+    expect(buildRouteTrail(state)).toEqual([
+      expect.objectContaining({
+        profileId: 'safe-1', via: 'primary', outcome: 'refused',
+        trigger: 'moderation-refusal', evidence: 'inferred',
+      }),
+      expect.objectContaining({
+        profileId: 'unc-1', profileName: 'Uncensored Profile', via: 'concierge', outcome: 'answered',
+      }),
+    ])
+  })
+
+  it('names the uncensored profile even when it too comes back empty', async () => {
+    // Same-profile retry, then the uncensored reroute — both silent.
+    mockStreamMessage
+      .mockReturnValueOnce(makeStream([{ done: true, rawResponse: { retry: 'same' } }]))
+      .mockReturnValueOnce(makeStream([{ done: true, rawResponse: { retry: 'uncensored' } }]))
+    ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
+      rerouted: true,
+      connectionProfile: uncensoredProfile,
+      apiKey: 'sk-uncensored',
+      reason: 'rerouted to uncensored profile',
+    })
+    const state = freshState()
+
+    await recover(state, {
+      dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+    })
+
+    // The existing code never swaps `effectiveProfile` for an uncensored
+    // profile that answers nothing, so this row is the ONLY record of it.
+    expect(state.effectiveProfile.id).toBe('safe-1')
+    expect(state.routeFailures.map((a: any) => [a.profileName, a.via, a.outcome])).toEqual([
+      ['Safe Profile', 'primary', 'failed'],
+      ['Safe Profile', 'retry', 'failed'],
+      ['Uncensored Profile', 'concierge', 'failed'],
+    ])
+  })
+
+  it('takes a provider\'s stated moderation stop as a refusal on the evidence of the finish reason', async () => {
+    mockIsModerationFinishReason.mockReturnValue(true)
+    const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+    await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+
+    expect(state.routeFailures[0]).toMatchObject({
+      outcome: 'refused',
+      trigger: 'moderation-refusal',
+      evidence: 'finish-reason',
+      detail: 'finish_reason: content_filter',
+    })
+  })
+
+  it('carries `via: concierge` on the opening row when the pre-call reroute had already swapped the profile', async () => {
+    mockStreamMessage.mockReturnValueOnce(makeStream([
+      { content: 'Recovered reply' },
+      { done: true },
+    ]))
+    const state = freshState({ effectiveProfile: uncensoredProfile, routeVia: 'concierge' as const })
+
+    await recover(state)
+
+    expect(state.routeFailures[0]).toMatchObject({ profileId: 'unc-1', via: 'concierge' })
   })
 })

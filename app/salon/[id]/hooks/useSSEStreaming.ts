@@ -7,6 +7,7 @@ import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import { findActiveUserParticipant, isAllLLMChat } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
 
@@ -75,6 +76,10 @@ interface SSEEvent {
   }
   provider?: string
   modelName?: string
+  /** The turn's route trail on the done event — every profile tried, in order —
+   *  so the optimistic assistant push carries the call sheet without a refetch.
+   *  Absent/null (the common case) when nothing failed. */
+  routeTrail?: RouteAttempt[] | null
   /**
    * What the provider plugin managed to put on the wire. `failed` entries are
    * attachments the model never received — surfaced as a warning toast on the
@@ -885,6 +890,7 @@ export function useSSEStreaming({
             participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            routeTrail: data.routeTrail ?? null,
             isSilentMessage: data.isSilentMessage || undefined,
             reasoningContent: data.reasoningContent ?? null,
             reasoningSegments: data.reasoningSegments ?? null,
@@ -924,6 +930,7 @@ export function useSSEStreaming({
             participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            routeTrail: data.routeTrail ?? null,
             isSilentMessage: data.isSilentMessage || undefined,
             reasoningContent: data.reasoningContent ?? null,
             reasoningSegments: data.reasoningSegments ?? null,
@@ -1077,6 +1084,7 @@ export function useSSEStreaming({
               participantId: resolvedParticipantId,
               provider: data.provider || null,
               modelName: data.modelName || null,
+              routeTrail: data.routeTrail ?? null,
               isSilentMessage: data.isSilentMessage || undefined,
               reasoningContent: data.reasoningContent ?? null,
               reasoningSegments: data.reasoningSegments ?? null,
@@ -1103,6 +1111,7 @@ export function useSSEStreaming({
             participantId: resolvedParticipantId,
             provider: data.provider || null,
             modelName: data.modelName || null,
+            routeTrail: data.routeTrail ?? null,
             reasoningContent: data.reasoningContent ?? null,
             reasoningSegments: data.reasoningSegments ?? null,
           }

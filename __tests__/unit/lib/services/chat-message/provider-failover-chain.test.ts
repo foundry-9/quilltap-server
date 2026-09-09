@@ -31,12 +31,17 @@ jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
   resolveProviderForDangerousContent: jest.fn(),
 }))
 
+const mockIsModerationFinishReason = jest.fn<(r: string | null | undefined) => boolean>(() => false)
+
 jest.mock('@/lib/llm/moderation-finish-reason', () => ({
   describeModerationRefusal: jest.fn(() => null),
+  isModerationFinishReason: (r: string | null | undefined) => mockIsModerationFinishReason(r),
 }))
 
 const { attemptHardErrorFailover } =
   require('@/lib/services/chat-message/provider-failover.service') as typeof import('@/lib/services/chat-message/provider-failover.service')
+const { buildRouteTrail } =
+  require('@/lib/services/chat-message/route-trail') as typeof import('@/lib/services/chat-message/route-trail')
 
 import { APIKeyError, TokenLimitError } from '@/lib/llm/errors'
 import type { ConnectionProfile } from '@/lib/schemas/types'
@@ -63,6 +68,7 @@ function makeState(profile: ConnectionProfile, overrides: Partial<StreamingState
     fullResponse: '', effectiveProfile: profile, effectiveApiKey: 'primary-key',
     usage: null, cacheUsage: null, attachmentResults: null, rawResponse: null,
     hasStartedStreaming: false,
+    routeFailures: [], routeVia: 'primary',
     ...overrides,
   } as StreamingState
 }
@@ -273,5 +279,149 @@ describe('attemptHardErrorFailover', () => {
     })
 
     expect(result.tierPickWasOffered).toBe(false)
+  })
+})
+
+/**
+ * The route trail the walk leaves on the message: who was asked, in what order,
+ * and why each one stepped aside. Distinct from `FallbackChainResult.attempts`,
+ * which is the per-walk transient that feeds the error text.
+ */
+describe('attemptHardErrorFailover — the route trail', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockIsModerationFinishReason.mockReturnValue(false)
+  })
+
+  it('records the primary\'s failure and the understudy\'s answer', async () => {
+    const primary = makeProfile({ fallbackProfileId: 'p-understudy' })
+    const understudy = makeProfile({ id: 'p-understudy', name: 'Understudy', provider: 'OPENAI', modelName: 'gpt-5' })
+    const state = makeState(primary)
+
+    mockStreamMessageImpl.mockImplementation(
+      streamYielding([{ content: 'The understudy speaks.' }, { done: true }]) as never
+    )
+
+    await attemptHardErrorFailover({
+      ...baseOpts(state, makeRepos([primary, understudy])),
+      error: new APIKeyError('ANTHROPIC'),
+    })
+
+    expect(buildRouteTrail(state)).toEqual([
+      expect.objectContaining({
+        profileId: 'p-primary', profileName: 'Primary', provider: 'ANTHROPIC',
+        modelName: 'claude-sonnet', via: 'primary', outcome: 'failed', trigger: 'auth',
+      }),
+      expect.objectContaining({
+        profileId: 'p-understudy', profileName: 'Understudy', provider: 'OPENAI',
+        modelName: 'gpt-5', via: 'understudy', outcome: 'answered',
+      }),
+    ])
+  })
+
+  it('keeps the trail\'s last entry in step with who the message will be attributed to', async () => {
+    const primary = makeProfile({ fallbackProfileId: 'p-understudy' })
+    const understudy = makeProfile({ id: 'p-understudy', name: 'Understudy', provider: 'OPENAI', modelName: 'gpt-5' })
+    const state = makeState(primary)
+
+    mockStreamMessageImpl.mockImplementation(
+      streamYielding([{ content: 'ok' }, { done: true }]) as never
+    )
+
+    await attemptHardErrorFailover({
+      ...baseOpts(state, makeRepos([primary, understudy])),
+      error: new APIKeyError('ANTHROPIC'),
+    })
+
+    const trail = buildRouteTrail(state)!
+    const last = trail[trail.length - 1]
+    expect(last.provider).toBe(state.effectiveProfile.provider)
+    expect(last.modelName).toBe(state.effectiveProfile.modelName)
+  })
+
+  it('walks past a failing understudy to a tier pick, listing all three', async () => {
+    const primary = makeProfile({ fallbackProfileId: 'p-understudy', allowTierFallback: true })
+    const understudy = makeProfile({ id: 'p-understudy', name: 'Understudy', provider: 'OPENAI' })
+    const spare = makeProfile({ id: 'p-spare', name: 'Spare', provider: 'GOOGLE' })
+    const state = makeState(primary)
+
+    mockStreamMessageImpl
+      .mockImplementationOnce((() => { throw new Error('503 Service Unavailable') }) as never)
+      .mockImplementationOnce(streamYielding([{ content: 'Third time lucky.' }, { done: true }]) as never)
+
+    await attemptHardErrorFailover({
+      ...baseOpts(state, makeRepos([primary, understudy, spare])),
+      error: new APIKeyError('ANTHROPIC'),
+    })
+
+    expect(buildRouteTrail(state)!.map((a) => [a.profileName, a.via, a.outcome])).toEqual([
+      ['Primary', 'primary', 'failed'],
+      ['Understudy', 'understudy', 'failed'],
+      ['Spare', 'tier-pick', 'answered'],
+    ])
+  })
+
+  it('records a key-less understudy as an auth failure carrying the resolver\'s reason', async () => {
+    const primary = makeProfile({ fallbackProfileId: 'p-understudy', allowTierFallback: true })
+    const understudy = makeProfile({ id: 'p-understudy', name: 'Understudy', apiKeyId: null })
+    const spare = makeProfile({ id: 'p-spare', name: 'Spare', provider: 'GOOGLE' })
+    const state = makeState(primary)
+
+    mockStreamMessageImpl.mockImplementation(
+      streamYielding([{ content: 'The spare speaks.' }, { done: true }]) as never
+    )
+
+    await attemptHardErrorFailover({
+      ...baseOpts(state, makeRepos([primary, understudy, spare])),
+      error: new APIKeyError('ANTHROPIC'),
+    })
+
+    const keyless = buildRouteTrail(state)!.find((a) => a.profileName === 'Understudy')!
+    expect(keyless).toMatchObject({ outcome: 'failed', trigger: 'auth', via: 'understudy' })
+    expect(typeof keyless.detail).toBe('string')
+    expect(keyless.detail!.length).toBeGreaterThan(0)
+  })
+
+  it('reads a provider\'s moderation finish reason as a refusal, with stated evidence', async () => {
+    const primary = makeProfile({ fallbackProfileId: 'p-understudy' })
+    const understudy = makeProfile({ id: 'p-understudy', name: 'Understudy' })
+    const state = makeState(primary)
+
+    mockStreamMessageImpl.mockImplementation(
+      streamYielding([{ done: true, rawResponse: { choices: [{ finish_reason: 'content_filter' }] } }]) as never
+    )
+    // Only the understudy's empty body is classified here; the primary threw.
+    mockIsModerationFinishReason.mockReturnValue(true)
+
+    await attemptHardErrorFailover({
+      ...baseOpts(state, makeRepos([primary, understudy])),
+      error: new APIKeyError('ANTHROPIC'),
+    })
+
+    // Nobody answered, so the trail is only ever read by the log — but it still
+    // has to name every profile that was asked.
+    expect(buildRouteTrail(state)!.map((a) => [a.profileName, a.outcome])).toEqual([
+      ['Primary', 'failed'],
+      ['Understudy', 'refused'],
+      // The composed "answered" row is the un-swapped primary: nobody answered.
+      ['Primary', 'answered'],
+    ])
+    expect(state.routeFailures[1]).toMatchObject({
+      outcome: 'refused', trigger: 'moderation-refusal', evidence: 'finish-reason',
+      detail: 'finish_reason: content_filter',
+    })
+  })
+
+  it('writes nothing at all when the failure was never fallback-eligible', async () => {
+    const primary = makeProfile({ fallbackProfileId: 'p-understudy' })
+    const understudy = makeProfile({ id: 'p-understudy', name: 'Understudy' })
+    const state = makeState(primary)
+
+    await attemptHardErrorFailover({
+      ...baseOpts(state, makeRepos([primary, understudy])),
+      error: new TokenLimitError('ANTHROPIC', 210311, 200000),
+    })
+
+    expect(buildRouteTrail(state)).toBeNull()
   })
 })
