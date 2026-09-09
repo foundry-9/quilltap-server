@@ -32,6 +32,7 @@ export const ALL_REALTIME_PREFIXES: readonly QueryKeyPrefix[] = [
   queryKeys.projects.all,
   queryKeys.characters.all,
   queryKeys.mountPoints.all,
+  queryKeys.memories.all,
 ]
 
 /**
@@ -80,6 +81,12 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             queryKeys.characters.photos(id),
           ]
         : [queryKeys.characters.all]
+
+    case 'memories':
+      // Scoped by chat id, not by memory id — see REALTIME_TOPICS. The bare
+      // topic sweeps the namespace, which is what a batch delete spanning
+      // several chats has to fall back to.
+      return id ? [queryKeys.memories.chatCount(id)] : [queryKeys.memories.all]
 
     case 'mountPoints':
       // No per-store detail key exists yet; the namespace prefix is the

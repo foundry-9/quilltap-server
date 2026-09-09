@@ -1083,6 +1083,15 @@ async function handleDeleteByChatId(
 
   const { deleted } = await deleteMemoriesByChatIdWithVectors(chatId);
 
+  // No publish here. This path runs through `deleteMemoriesWithUnlinkBatch`,
+  // and the memory-gate chokepoint already announces `memories` collection-wide
+  // — which a chat-scoped subscriber takes, since `useRealtimeTopic`'s id filter
+  // only discards an event that names a *different* id. A second, chat-scoped
+  // hint would cost every subscriber a duplicate refetch, and would fire on the
+  // one case where the gate correctly stays silent: a chat with no memories,
+  // where nothing was deleted and nothing changed.
+  logger.debug('[Memories API] Deleted every memory for a chat', { chatId, deleted });
+
   return NextResponse.json({
     success: true,
     chatId,

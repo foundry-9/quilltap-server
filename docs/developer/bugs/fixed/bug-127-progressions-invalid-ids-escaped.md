@@ -2,16 +2,33 @@
 
 | | |
 |---|---|
-| **Status** | Open. Filed from the v5 port (P4.D170, the SPA half of character progressions), where the line was being transcribed and the join did not survive reading |
+| **Status** | Fixed in v4 (2026-09-09). Filed from the v5 port (P4.D170, the SPA half of character progressions), where the line was being transcribed and the join did not survive reading |
 | **Found** | 2026-09-08 |
+| **Fixed** | 2026-09-09 |
 | **Severity** | Low (cosmetic, and only on a fault path) — but it is the sentence that tells someone their vault is damaged, so it is read at exactly the moment they are least able to shrug it off |
 | **Who it bites** | any character whose `metadata.json` carries **two or more** unparseable `progressions` entries. One bad entry renders perfectly; the defect is invisible until the second |
 | **Provenance** | Found by inspection while transcribing the component for the port, then **measured** against this repo's own React 19.2.8 with `react-dom/server` — not inferred from reading the JSX |
 | **Defect site** | `components/characters/progressions/ProgressionsSection.tsx:132` — `<code>{invalidIds.join('</code>, <code>')}</code>` |
-| **v5 status** | **Deliberate divergence, recorded.** v5 renders the ids as separate `<code>` elements joined by `, ` — byte-identical output for one id, correct markup for several. Pinned by two specs in `apps/web/src/app/progressions/progressions-section.spec.ts`; the component's own comment and the `m6-screen-parity.md` row both name it. ⚠ **No oracle compares this line** (it is browser-only markup, and the SPA's differentials are the schema corpora), so nothing on the v5 side trips when v4 converges — the retirement is manual, off this row, in whichever drift catch-up absorbs the fix |
-| **Index** | [bugs.md](../bugs.md) |
+| **Fix site** | `components/characters/progressions/ProgressionsSection.tsx` — the ids render as elements via the map-with-separator shape `CustomToolRunDialog` already uses; two pins in `__tests__/unit/components/characters/progressions.test.tsx` |
+| **v5 status** | **Convergence owed.** v4 has now adopted v5's shape, so the divergence below is retired — the two render identically for every id count. Kept here because ⚠ **no oracle compares this line**, so nothing on the v5 side tripped when v4 converged; the row is the manual record. *(Prior text: **Deliberate divergence, recorded.*** v5 renders the ids as separate `<code>` elements joined by `, ` — byte-identical output for one id, correct markup for several. Pinned by two specs in `apps/web/src/app/progressions/progressions-section.spec.ts`; the component's own comment and the `m6-screen-parity.md` row both name it. ⚠ **No oracle compares this line** (it is browser-only markup, and the SPA's differentials are the schema corpora), so nothing on the v5 side trips when v4 converges — the retirement is manual, off this row, in whichever drift catch-up absorbs the fix.)* |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-09-09).** The ids are rendered as elements rather than as
+markup inside a string. `invalidIds.map((id, i) => <span key={id}>{i > 0 && ', '}<code>{id}</code></span>)`
+is the same map-with-separator shape `CustomToolRunDialog` already uses for its
+write-target and progression lists, so this is the house pattern rather than a
+new one — and the surrounding paragraph, singular/plural triple included, did
+not move.
+
+Both cases are pinned in
+`__tests__/unit/components/characters/progressions.test.tsx`. The two-id case
+asserts the rendered text contains no `</code>` and that the DOM carries a
+`<code>` element per id; the one-id case asserts the sentence reads
+`being skipped: broken. Editing the file` exactly, which is what makes this a
+fix rather than a copy change. Reverting the component leaves the two-id pin
+red and the one-id pin green — the asymmetry the bug is about.
 
 ## Symptom
 

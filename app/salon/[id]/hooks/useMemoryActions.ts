@@ -15,12 +15,31 @@ interface UseMemoryActionsParams {
 
 export function useMemoryActions({ chatId, chatMemoryCount, setChatMemoryCount, chat }: UseMemoryActionsParams) {
   const handleDeleteChatMemories = useCallback(async () => {
-    if (chatMemoryCount === 0) {
+    // Re-read before confirming. The rendered count is a subscription that a
+    // dropped socket can leave behind, and a stale zero used to swallow this
+    // click outright — no dialog, no toast, no log line. Ask the server, so
+    // the dialog can never quote a number that is no longer true and a socket
+    // that was down does not cost the user the action.
+    let count = chatMemoryCount
+    try {
+      const countRes = await fetch(`/api/v1/memories?chatId=${chatId}`, { cache: 'no-store' })
+      if (countRes.ok) {
+        const countData = await countRes.json()
+        count = countData.memoryCount || 0
+        setChatMemoryCount(count)
+      }
+    } catch {
+      // Fall through on the rendered count: a failed probe is not a reason to
+      // refuse a delete the user asked for.
+    }
+
+    if (count === 0) {
+      showErrorToast('This chat has no memories to delete')
       return
     }
 
     const confirmed = await showConfirmation(
-      `Delete all ${chatMemoryCount} memories created from this chat? This action cannot be undone.`
+      `Delete all ${count} memories created from this chat? This action cannot be undone.`
     )
 
     if (!confirmed) {
