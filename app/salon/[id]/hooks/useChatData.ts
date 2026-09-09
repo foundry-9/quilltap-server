@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { useRealtimeTopic } from '@/hooks/useRealtime'
 import type { Chat, ChatSettings, Message } from '../types'
 
 export interface SwipeState {
@@ -90,7 +91,9 @@ export function useChatData(chatId: string) {
 
   const fetchChatMemoryCount = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/memories?chatId=${chatId}`)
+      // `no-store`, matching its siblings in this hook: a cached 200 would hand
+      // back the stale count on the very refetch meant to correct it.
+      const res = await fetch(`/api/v1/memories?chatId=${chatId}`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setChatMemoryCount(data.memoryCount || 0)
@@ -99,6 +102,17 @@ export function useChatData(chatId: string) {
       console.error('Failed to fetch chat memory count:', { error: err instanceof Error ? err.message : String(err) })
     }
   }, [chatId])
+
+  // The count is read once at mount, and memories land minutes later — from
+  // MEMORY_EXTRACTION and friends in the forked child, turn after turn. The
+  // workspace keeps a hidden Salon tab mounted for the life of the session, so
+  // without a path by which the server can say "this changed", the number
+  // beside the Delete Memories button stays frozen at whatever was true when
+  // the tab opened. It lives here rather than at the call site because this is
+  // the hook that owns the count: a consumer cannot forget to subscribe.
+  // `useRealtimeTopic` also fires on socket open, so a reconnect after a sleep
+  // re-reads for free, and the offline fallback is the next mount — no poll.
+  useRealtimeTopic('memories', fetchChatMemoryCount, chatId)
 
   return {
     chat,

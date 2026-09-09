@@ -70,6 +70,19 @@ export function topicsForCompletedJob(
     case 'WARDROBE_OUTFIT_ANNOUNCEMENT':
       return [{ topic: 'chats', id: str(payload, 'chatId') }];
 
+    case 'MEMORY_EXTRACTION':
+    case 'INTER_CHARACTER_MEMORY':
+    case 'CARINA_MEMORY_EXTRACTION':
+    case 'MEMORY_REGENERATE_CHAT':
+      // Every one of these carries `chatId` on its payload, which is what the
+      // Salon sidebar's count is scoped by.
+      return [{ topic: 'memories', id: str(payload, 'chatId') }];
+
+    case 'MEMORY_HOUSEKEEPING':
+      // Character-scoped: prunes across every chat that character was in, so
+      // the hint is collection-wide by necessity.
+      return [{ topic: 'memories' }];
+
     case 'CONVERSATION_RENDER':
       // A rendered conversation lands in a document store; the Scriptorium and
       // the character conversations tab both watch that.
@@ -111,6 +124,12 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   mountPoints: ['mountPointId', 'id'],
   autonomousRooms: [],
   jobs: [],
+  // Deliberately empty, and `memories` is deliberately absent from
+  // REPOSITORY_TOPICS: a memories hint is scoped by *chat* id, while
+  // `firstIdArg` would hand back `memories.delete(memoryId)`'s positional
+  // memory id. Every chat-scoped subscriber would then filter that hint out —
+  // coverage that reaches nobody, which is worse than none.
+  memories: [],
 };
 
 /**

@@ -56,6 +56,18 @@ describe('queryKeysForTopic', () => {
     expect(queryKeysForTopic('characters')).toEqual([queryKeys.characters.all]);
   });
 
+  /**
+   * Bug 128. The `memories` id is a *chat* id, not a memory id — the Salon
+   * sidebar's count is the only subscriber, and a memory's own id would mean
+   * nothing to it.
+   */
+  it('narrows a memories event to the count for that chat', () => {
+    expect(queryKeysForTopic('memories', 'chat-1')).toEqual([
+      queryKeys.memories.chatCount('chat-1'),
+    ]);
+    expect(queryKeysForTopic('memories')).toEqual([queryKeys.memories.all]);
+  });
+
   it('scopes character events to that character', () => {
     expect(queryKeysForTopic('characters', 'char-1')).toEqual([
       queryKeys.characters.detail('char-1'),

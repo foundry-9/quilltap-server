@@ -129,8 +129,14 @@ export function ProgressionsSection({ characterId, characterName }: Readonly<Pro
         <p className="qt-text-small qt-text-destructive">
           {invalidIds.length === 1 ? 'One entry in' : `${invalidIds.length} entries in`} this
           character&rsquo;s <code>metadata.json</code> could not be read and {invalidIds.length === 1 ? 'is' : 'are'}{' '}
-          being skipped: <code>{invalidIds.join('</code>, <code>')}</code>. Editing the file directly is the way to
-          mend {invalidIds.length === 1 ? 'it' : 'them'}.
+          being skipped:{' '}
+          {invalidIds.map((id, i) => (
+            <span key={id}>
+              {i > 0 && ', '}
+              <code>{id}</code>
+            </span>
+          ))}
+          . Editing the file directly is the way to mend {invalidIds.length === 1 ? 'it' : 'them'}.
         </p>
       )}
 

@@ -1741,8 +1741,13 @@ function EditContentSection({
         <button
           type="button"
           onClick={onDeleteChatMemoriesClick}
+          disabled={chatMemoryCount === 0}
           className="qt-tool-palette-button qt-tool-palette-button-danger"
-          title="Delete chat memories"
+          title={
+            chatMemoryCount === 0
+              ? 'This chat has laid down no memories yet'
+              : 'Delete chat memories'
+          }
         >
           <Icon name="trash" className="w-4 h-4" />
           <span>Delete Memories ({chatMemoryCount})</span>

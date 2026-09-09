@@ -184,9 +184,20 @@ Everything in §5 landed. The differences worth knowing:
   WebSocket upgrades, so without it any page on any origin could open a socket against a localhost
   instance. A missing or `null` `Origin` is allowed (non-browser clients aren't the threat model).
 
-- **A `memories` topic was planned and dropped.** `lib/query/keys.ts` has no memories namespace, so a
-  topic naming one would have mapped to nothing. `REALTIME_TOPICS` ships with six: `jobs`,
-  `autonomousRooms`, `chats`, `projects`, `characters`, `mountPoints`.
+- **A `memories` topic was planned and dropped, then added back by bug 128.** At the time
+  `lib/query/keys.ts` had no memories namespace, so a topic naming one would have mapped to nothing,
+  and `REALTIME_TOPICS` shipped with six: `jobs`, `autonomousRooms`, `chats`, `projects`,
+  `characters`, `mountPoints`. The namespace arrived later, and the missing topic became a defect the
+  other way round — not a stray poll but *no refresh path at all*, which froze the Salon sidebar's
+  memory count at whatever was true when the tab opened and disarmed the Delete Memories button it
+  labelled. `memories` is now the seventh topic, and it is the first one whose `id` is **not the
+  changed row's own primary key**: it is scoped by `chatId`, because the count beside that button is
+  the only subscriber and a memory's own id would mean nothing to it. That is why `memories` is
+  deliberately absent from `REPOSITORY_TOPICS` — `firstIdArg` returns a positional first argument, so
+  `memories.delete(memoryId)` would publish a memory id under a chat-scoped topic and every subscriber
+  would filter the hint out. A hint that reaches nobody is worse than none, because it looks like
+  coverage. Wiring the write-batch path would first need `firstIdArg` taught to refuse a positional id
+  for such topics.
 
 - **Phase 5's entity topics arrived with Phase 4, not after it**, because `topicsForCompletedJob`
   (job type + payload → hints) turned out to be the cheapest way to serve several Phase 4 consumers at

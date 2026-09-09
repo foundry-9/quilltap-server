@@ -2,16 +2,79 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed in v4 (2026-09-09) |
 | **Found** | 2026-09-08 |
+| **Fixed** | 2026-09-09 |
 | **Severity** | **Medium** — nothing errors and nothing is lost, but the sidebar states a falsehood about the user's data (0 where 59 stand), and the destructive control it labels early-returns on that falsehood: clicking **Delete Memories (0)** does nothing at all, with no confirmation, no toast, and no log line |
 | **Who it bites** | anyone who opens a chat before its memories exist — which is *every new chat*, since extraction is a background job that lands a minute or two after the first turn. The tabbed workspace makes it permanent: a Salon tab is hidden by CSS, never unmounted, so the mount effect that reads the count never runs again for the life of the tab |
 | **Provenance** | Reported against the live Friday instance, chat `27961b14-ae98-46bf-ba1e-9f0ec13bb103` ("Damp Curtains and Cold Water"). Confirmed end to end: the DB holds 59 rows, `GET /api/v1/memories?chatId=…` answers `{"memoryCount":59}`, and a **fresh** load of the same chat in the same running build renders `Delete Memories (59)`. The user's screenshot of the long-lived tab reads `(0)` |
-| **Defect site** | `app/salon/[id]/hooks/useChatData.ts:91` (`fetchChatMemoryCount`, called once), `app/salon/[id]/SalonView.tsx:811-815` (the mount-only effect), `app/salon/[id]/hooks/useMemoryActions.ts:18` (the `chatMemoryCount === 0` early return). *(Line numbers refreshed 2026-09-09, after the chat gallery removed the sibling `fetchChatPhotoCount` from the same hook — see step 5.)* |
+| **Defect site** | `app/salon/[id]/hooks/useChatData.ts:105` (`fetchChatMemoryCount`, called once), `app/salon/[id]/SalonView.tsx:801-807` (the mount-only effect), `app/salon/[id]/hooks/useMemoryActions.ts:18` (the `chatMemoryCount === 0` early return) |
+| **Fix site** | `lib/schemas/realtime.types.ts` (the `memories` topic), `lib/query/keys.ts` (`memories.chatCount`), `lib/realtime/topic-map.ts`, `lib/realtime/job-topics.ts`, `lib/memory/memory-gate.ts` (the one parent-side delete publish), `app/salon/[id]/hooks/useChatData.ts` (the subscription and `no-store`), `components/chat/ChatSidebar.tsx` (`disabled` at zero) and `app/salon/[id]/hooks/useMemoryActions.ts` (the pre-confirmation re-read) |
 | **v5 status** | **Not yet assessed.** The port carries its own Salon sidebar; if it reads a count once at mount and gates a destructive action on it, it inherits this whole |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-09-09).** Both defects, as planned — with one deliberate
+change of address.
+
+Steps 1 and 2 landed as written. `memories` is the seventh entry in
+`REALTIME_TOPICS`, keyed by `queryKeys.memories.chatCount(chatId)`, mapped in
+`topic-map.ts` and appended to `ALL_REALTIME_PREFIXES` so the reconnect
+catch-up sweep covers it. `topicsForCompletedJob` announces it for the four
+chat-scoped memory job types (each reading `chatId` off its own payload) and
+collection-wide for `MEMORY_HOUSEKEEPING`, which prunes across every chat a
+character was in. Deletes publish from **one** place, not the plan's two: the
+`memory-gate` chokepoint, collection-wide in both `deleteMemoryWithUnlink` and
+`deleteMemoriesWithUnlinkBatch`, which take memory ids and have no chat to
+name. Every delete path runs through it.
+
+The plan's route-side `publishRealtime('memories', chatId)` was written and
+then removed, on a review finding that proved correct on inspection.
+`handleDeleteByChatId` calls `deleteMemoriesByChatIdWithVectors`, which calls
+the gate's batch — so the gate had already announced the change. And the second
+hint was not merely redundant: `useRealtimeTopic`'s filter is
+`if (id && event.id && event.id !== id) return`, so a **collection-wide event
+carries no `event.id` and reaches every chat-scoped subscriber anyway**. The
+chat-scoped publish bought no narrowing and cost every subscriber a duplicate
+refetch. Worse, it was strictly wrong at the one edge the gate handles
+correctly: `deleteMemoriesByChatIdWithVectors` returns early when the chat has
+no memories, so the gate stays silent — while the route published a hint saying
+something had changed when nothing had.
+
+The plan's *other* route publish site does not exist at all —
+`DELETE /api/v1/memories` accepts `chatId` and nothing else, and the
+message-ids code nearby is a **read** (`memoryCount` for a swipe group), not a
+delete.
+
+`memories` is deliberately absent from `REPOSITORY_TOPICS`, for the reason the
+plan gives, and `TOPIC_ID_FIELDS` carries the `memories: []` row it needs to
+typecheck with the comment explaining why the emptiness is load-bearing rather
+than an omission. A pin asserts `memories.delete(memoryId)` yields no hint.
+
+**Step 3 moved from `SalonView` into `useChatData`.** The plan put
+`useRealtimeTopic('memories', fetchChatMemoryCount, id)` beside the
+initialization effect in `SalonView`; it lives instead in the hook that owns
+the count, three lines from the fetcher it invalidates. Two reasons. The first
+is encapsulation: a hook that hands out a number and no way for the server to
+invalidate it is the defect, and a consumer cannot forget a subscription it
+does not have to make. The second is that it makes the regression pin real —
+the plan asks for *a `useChatData` test*, and with the subscription at the call
+site no such test could fail when someone removed it. `useRealtimeTopic` still
+fires `onChange` on socket open, so a reconnect after a sleep re-reads for
+free, and no poll was added. `fetchChatMemoryCount` gained `cache: 'no-store'`,
+matching its three siblings.
+
+Step 4 landed as written, with no new CSS: `.qt-tool-palette-button:disabled`
+already carries the treatment, so the button takes `disabled={chatMemoryCount
+=== 0}` and a title that says why. `handleDeleteChatMemories` re-reads the
+count from the server immediately before `showConfirmation` and confirms
+against that number, falling through to the rendered one if the probe fails —
+a failed probe is not a reason to refuse a delete the user asked for. The bare
+`return` at zero became an explicit toast, so even the true-zero case now says
+something rather than swallowing the click.
+
+Step 5 stays **superseded**, as its own note records.
 
 ## Symptom
 
@@ -200,7 +263,7 @@ count on the very refetch meant to correct it.
 
 ### Step 5 — the adjacent surface, same change
 
-> **Superseded, and done (2026-09-09).** `fetchChatPhotoCount` read `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still have returned zero — that was [bug 129](fixed/bug-129-gallery-button-never-appears.md). The count moved onto the chat-gallery query instead: `chatPhotoCount` and `fetchChatPhotoCount` are gone from `useChatData` entirely, replaced by `useChatGallery`'s `total` on `queryKeys.chats.gallery(chatId)`, which rides the `chats` row of the topic map. See [salon-chat-gallery.md](../features/complete/salon-chat-gallery.md). **Steps 1–4, for the memory count, still stand and are still open.**
+> **Superseded, and done (2026-09-09).** `fetchChatPhotoCount` read `/api/v1/chats/{id}?action=files`, an action that does not exist, so re-reading it on the `chats` topic would still have returned zero — that was [bug 129](bug-129-gallery-button-never-appears.md). The count moved onto the chat-gallery query instead: `chatPhotoCount` and `fetchChatPhotoCount` are gone from `useChatData` entirely, replaced by `useChatGallery`'s `total` on `queryKeys.chats.gallery(chatId)`, which rides the `chats` row of the topic map. See [salon-chat-gallery.md](../../features/complete/salon-chat-gallery.md). Steps 1–4, for the memory count, landed on their own — see the **FIXED** note at the head of this file.
 
 `chatPhotoCount` in the same hook has the identical shape: read once at mount,
 refreshed only by three explicit call sites in `ChatModals.tsx`. A Lantern

@@ -494,6 +494,17 @@ The heavier instruments — best wielded with deliberation:
 - **Re-extract Memories** — re-run the Commonplace Book extractor across the chat
 - **Delete Memories** — remove this chat's memories from the Commonplace Book (with a count of how many would go)
 
+The count on that last button keeps its own counsel and revises it as the
+evening wears on. Memories are laid down a minute or two behind the
+conversation, by the Commonplace Book's extractor working quietly in the back
+office, so a chat opened before its first memory was written begins at nought
+and climbs from there without any prompting from you — no reload, no leaving
+the tab and returning. Should the tally genuinely stand at nought, the button
+declines the invitation and greys itself out rather than accepting a click and
+doing nothing with it; hover over it and it will say as much. And the number
+quoted in the confirmation is always freshly asked for at the moment you press,
+never the one that happened to be painted on the button.
+
 ## Sidebar Behavior
 
 ### Responsiveness
