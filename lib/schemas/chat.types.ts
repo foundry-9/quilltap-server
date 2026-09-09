@@ -165,6 +165,59 @@ export const SystemSenderEnum = z.enum([
 ]);
 export type SystemSender = z.infer<typeof SystemSenderEnum>;
 
+/**
+ * How a connection profile came to be asked for a turn.
+ *
+ * - `primary` — the profile the chat was configured with (or the one the
+ *   Concierge's *pre-call* reroute installed before anything was tried).
+ * - `retry` — the same profile, asked a second time after an empty body.
+ * - `concierge` — the uncensored profile the Concierge sent the turn to after
+ *   the first answer came back empty.
+ * - `understudy` — the profile's own named `fallbackProfileId`.
+ * - `tier-pick` — a stand-in the fallback engine drafted from the company.
+ */
+export const RouteAttemptViaEnum = z.enum(['primary', 'retry', 'concierge', 'understudy', 'tier-pick']);
+export type RouteAttemptVia = z.infer<typeof RouteAttemptViaEnum>;
+
+/**
+ * What became of one attempt. `failed` means the profile fell over on its own
+ * (timeout, auth, rate limit, 5xx, an empty body with no stated reason);
+ * `refused` means it declined on content grounds.
+ */
+export const RouteAttemptOutcomeEnum = z.enum(['answered', 'failed', 'refused']);
+export type RouteAttemptOutcome = z.infer<typeof RouteAttemptOutcomeEnum>;
+
+/**
+ * One call (or one skipped-before-calling candidate) against one connection
+ * profile, as recorded on an assistant message's `routeTrail`.
+ *
+ * `profileId` is stored for the record and is never dereferenced by the UI: a
+ * profile can be deleted, and an imported trail may name one that never
+ * existed in this instance. The name and model are what a reader needs.
+ */
+export const RouteAttemptSchema = z.object({
+  profileId: UUIDSchema,
+  profileName: z.string(),
+  provider: z.string(),
+  modelName: z.string(),
+  via: RouteAttemptViaEnum,
+  outcome: RouteAttemptOutcomeEnum,
+  /**
+   * The engine's trigger class for a failure or refusal; absent when answered.
+   *
+   * Duplicates `FallbackTrigger` (`lib/llm/fallback/types.ts`) BY VALUE on
+   * purpose: this module is client-safe and the engine's is not. A parity
+   * assertion in `__tests__/unit/lib/llm/fallback/engine.test.ts` keeps the two
+   * unions identical, so a new trigger cannot be added to one alone.
+   */
+  trigger: z.enum(['auth', 'rate-limit', 'network', 'model-missing', 'provider-error', 'empty-response', 'moderation-refusal']).optional(),
+  /** How a refusal was established: the provider said so, or it was inferred from an empty body on a Concierge-flagged turn. */
+  evidence: z.enum(['finish-reason', 'inferred']).optional(),
+  /** Short human-readable reason, ≤ 200 chars (the error message truncated, or the finish reason). Never the full error body. */
+  detail: z.string().max(200).optional(),
+});
+export type RouteAttempt = z.infer<typeof RouteAttemptSchema>;
+
 export const MessageEventSchema = z.object({
   type: z.literal('message'),
   id: UUIDSchema,
@@ -216,6 +269,20 @@ export const MessageEventSchema = z.object({
   provider: z.string().nullable().optional(),
   /** Model name that generated this message (e.g., 'gpt-4o', 'claude-sonnet-4-20250514') */
   modelName: z.string().nullable().optional(),
+  /**
+   * The route trail: every connection profile tried for this turn, in the order
+   * tried, with why each one stepped aside. Rendered as the list under the
+   * avatar, first tried at the top.
+   *
+   * **NULL unless the turn had at least one failure.** A trail of length one
+   * says nothing `provider`/`modelName` don't already say, and assistant rows
+   * are the largest table in the instance — so the common turn writes nothing
+   * and the renderer treats NULL as "the badge, exactly as before".
+   *
+   * `provider`/`modelName` stay authoritative for *who answered*; the trail's
+   * last entry always agrees with them. ASSISTANT rows only.
+   */
+  routeTrail: RouteAttemptSchema.array().nullable().optional(),
   /**
    * Answer-confirmation result. true = consistent (or successfully revised),
    * false = character affirmed a flagged answer unchanged, null = the check

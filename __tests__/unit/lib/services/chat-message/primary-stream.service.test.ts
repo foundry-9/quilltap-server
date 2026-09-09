@@ -110,6 +110,8 @@ function makeStreaming(overrides: Partial<Record<string, unknown>> = {}) {
     rawResponse: null,
     thoughtSignature: undefined,
     hasStartedStreaming: false,
+    routeFailures: [],
+    routeVia: 'primary',
     ...overrides,
   } as any
 }

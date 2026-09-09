@@ -1,6 +1,6 @@
 # Feature: Message route trail — every model tried, in order, under the avatar
 
-**Status:** Planned (2026-09-08). Not started.
+**Status:** Implemented (2026-09-09). Shipped as described below; the deviations are recorded in [As built](#as-built) at the foot of this document.
 **Owner subsystems:** the Salon's message row (`app/salon/[id]/components/message-row/`), the chat-message services (`lib/services/chat-message/`), the provider fallback engine (`lib/llm/fallback/`, read-only here), and the Concierge's empty-response reroute (`provider-failover.service.ts`).
 **Implementation note:** This spec is written to be executed by Claude Code with minimal further design input. Where a choice existed, it has been made — see [Design decisions](#design-decisions-resolved). Follow CLAUDE.md standing rules throughout (changelog, help docs, debug logging on every touched backend path, export round-tripping, `npx tsc`, `npm run lint`). Plan in the most capable model; Phases 0, 2, 3 and 4 are each written so a cheaper agent can take them with this document as the whole brief. Phase 1 touches the failover seam and should stay with the planning model.
 
@@ -219,49 +219,49 @@ New component **`components/ui/RouteTrailBadge.tsx`**:
 
 ### Phase 0 — schema and storage (delegable)
 
-- [ ] `RouteAttemptSchema` + `routeTrail` on `MessageEventSchema` (`lib/schemas/chat.types.ts`).
-- [ ] Row schema entry in `chats-messages.ops.ts`; `Message.routeTrail` in `app/salon/[id]/types.ts`.
-- [ ] Migration `add-route-trail-message-column-v1` + three registrations in `index.ts` + pretty label in `prettify.ts`.
-- [ ] `DDL.md` chat_messages block; `qtap-export.schema.json` message properties.
-- [ ] `npx tsc` clean; `npm run lint` clean (the spelling sweep covers the migration label).
+- [x] `RouteAttemptSchema` + `routeTrail` on `MessageEventSchema` (`lib/schemas/chat.types.ts`).
+- [x] Row schema entry in `chats-messages.ops.ts`; `Message.routeTrail` in `app/salon/[id]/types.ts`.
+- [x] Migration `add-route-trail-message-column-v1` + three registrations in `index.ts` + pretty label in `prettify.ts`.
+- [x] `DDL.md` chat_messages block; `qtap-export.schema.json` message properties.
+- [x] `npx tsc` clean; `npm run lint` clean (the spelling sweep covers the migration label).
 
 ### Phase 1 — recording (planning model)
 
-- [ ] `StreamingState.routeFailures` / `routeVia`, initialised at every construction site.
-- [ ] `lib/services/chat-message/route-trail.ts` with the four functions above, debug logs on each.
-- [ ] Every recording site in the table, each with the "before reset" comment where it applies.
-- [ ] `routeVia = 'concierge'` after a pre-call reroute in the orchestrator.
-- [ ] `saveAssistantMessage` parameter threaded from every caller; `encodeDoneEvent` field; `finalizeMessageResponse` passes both.
-- [ ] Trigger-union parity assertion in `engine.test.ts`.
+- [x] `StreamingState.routeFailures` / `routeVia`, initialised at every construction site.
+- [x] `lib/services/chat-message/route-trail.ts` with the four functions above, debug logs on each.
+- [x] Every recording site in the table, each with the "before reset" comment where it applies.
+- [x] `routeVia = 'concierge'` after a pre-call reroute in the orchestrator.
+- [x] `saveAssistantMessage` parameter threaded from every caller; `encodeDoneEvent` field; `finalizeMessageResponse` passes both.
+- [x] Trigger-union parity assertion in `engine.test.ts`.
 
 ### Phase 2 — rendering (delegable)
 
-- [ ] `lib/chat/route-trail-display.ts` (client-safe) with glyphs, collapse, tooltip text.
-- [ ] `components/ui/RouteTrailBadge.tsx`; `MessageDesktopAvatar` branch; `MessageRow` prop pass-through; `useSSEStreaming` copies from `done`.
-- [ ] Check the three-row case visually on V4test (below) in light and dark and in the Madman's Box theme.
+- [x] `lib/chat/route-trail-display.ts` (client-safe) with glyphs, collapse, tooltip text.
+- [x] `components/ui/RouteTrailBadge.tsx`; `MessageDesktopAvatar` branch; `MessageRow` prop pass-through; `useSSEStreaming` copies from `done`.
+- [x] Check the three-row case visually on V4test (below) in light and dark and in the Madman's Box theme.
 
 ### Phase 3 — tests (delegable)
 
 Follow the Jest mock conventions (global `jest`, subject-imports-first, bare factories).
 
-- [ ] `__tests__/unit/lib/services/chat-message/provider-failover-chain.test.ts` — trail contents for: hard error → understudy answers (`[primary failed/network, understudy answered]`); hard error → understudy fails → tier pick answers; key-less understudy skipped (`failed/auth`, detail = reason); understudy empty with `finish_reason: content_filter` → `refused`, `evidence: finish-reason`; chain exhausted → `buildRouteTrail` still lists every failure (used only by the log).
-- [ ] `provider-failover.service.test.ts` — empty → retry answers (`[primary failed/empty-response, …]` and `routeVia === 'retry'`); empty on a flagged turn → uncensored answers (`[primary refused/inferred, uncensored answered via concierge]`); uncensored also empty then understudy answers (three rows, the uncensored one present); no failure → `buildRouteTrail` returns null.
-- [ ] `message-finalizer.service.test.ts` — `saveAssistantMessage` persists `routeTrail`; `done` event carries it; last entry's provider/model equal the message's `provider`/`modelName`.
-- [ ] `lib/chat/__tests__/route-trail-display.test.ts` — collapse of adjacent same-profile rows keeps order and last outcome; non-adjacent same-profile rows do not collapse; tooltip strings for each `via` × `outcome`.
-- [ ] `RouteTrailBadge` render test — order top-down, `<s>` only on failed/refused, glyph per outcome, `aria-label`s, single-row trail renders one un-struck row.
-- [ ] `useSSEStreaming` — `done` with `routeTrail` lands on the optimistic message (extend one of the existing `useSSEStreaming-*.test.ts` files).
-- [ ] Export-schema fixture: a message with a trail validates against `qtap-export.schema.json`; a bundle without the field imports as NULL.
-- [ ] Autonomous-turn test: a trailed message written through the child proxy round-trips.
+- [x] `__tests__/unit/lib/services/chat-message/provider-failover-chain.test.ts` — trail contents for: hard error → understudy answers (`[primary failed/network, understudy answered]`); hard error → understudy fails → tier pick answers; key-less understudy skipped (`failed/auth`, detail = reason); understudy empty with `finish_reason: content_filter` → `refused`, `evidence: finish-reason`; chain exhausted → `buildRouteTrail` still lists every failure (used only by the log).
+- [x] `provider-failover.service.test.ts` — empty → retry answers (`[primary failed/empty-response, …]` and `routeVia === 'retry'`); empty on a flagged turn → uncensored answers (`[primary refused/inferred, uncensored answered via concierge]`); uncensored also empty then understudy answers (three rows, the uncensored one present); no failure → `buildRouteTrail` returns null.
+- [x] `message-finalizer.service.test.ts` — `saveAssistantMessage` persists `routeTrail`; `done` event carries it; last entry's provider/model equal the message's `provider`/`modelName`.
+- [x] `lib/chat/__tests__/route-trail-display.test.ts` — collapse of adjacent same-profile rows keeps order and last outcome; non-adjacent same-profile rows do not collapse; tooltip strings for each `via` × `outcome`.
+- [x] `RouteTrailBadge` render test — order top-down, `<s>` only on failed/refused, glyph per outcome, `aria-label`s, single-row trail renders one un-struck row.
+- [x] `useSSEStreaming` — `done` with `routeTrail` lands on the optimistic message (extend one of the existing `useSSEStreaming-*.test.ts` files).
+- [x] Export-schema fixture: a message with a trail validates against `qtap-export.schema.json`; a bundle without the field imports as NULL.
+- [x] Autonomous-turn test: a trailed message written through the child proxy round-trips.
 
 ### Phase 4 — docs (delegable)
 
-- [ ] `docs/CHANGELOG.md` under the current dev version, plain American English: what is stored, what is shown, the two glyphs, NULL when nothing failed, the theme-hook note.
-- [ ] `help/chats.md` (url `/salon`): a section on the list under the avatar — what the strike and the two marks mean, that hovering names the profile and the reason, and that a reply with no list had no trouble. Quilltap voice; the "call sheet" image fits. Keep its `help_navigate` call matching its `url`.
-- [ ] `help/connection-profiles.md`, "The Understudies: Fallback": one paragraph saying the transcript now shows who was asked before the understudy answered.
-- [ ] `help/dangerous-content.md`: one paragraph beside the provider-refusal section saying a refusal now leaves a 🚫 mark on the reply the uncensored profile eventually gave.
-- [ ] `docs/developer/features/complete/provider-fallback.md`: a "See also" line pointing here; move this file to `complete/` with an "As built" section when done.
-- [ ] `docs/developer/API.md` if it lists message fields.
-- [ ] Bug 93's write-up (`docs/developer/bugs/fixed/`) gains a pointer: the refusal is now visible on the message, not only in the error text.
+- [x] `docs/CHANGELOG.md` under the current dev version, plain American English: what is stored, what is shown, the two glyphs, NULL when nothing failed, the theme-hook note.
+- [x] `help/chats.md` (url `/salon`): a section on the list under the avatar — what the strike and the two marks mean, that hovering names the profile and the reason, and that a reply with no list had no trouble. Quilltap voice; the "call sheet" image fits. Keep its `help_navigate` call matching its `url`.
+- [x] `help/connection-profiles.md`, "The Understudies: Fallback": one paragraph saying the transcript now shows who was asked before the understudy answered.
+- [x] `help/dangerous-content.md`: one paragraph beside the provider-refusal section saying a refusal now leaves a 🚫 mark on the reply the uncensored profile eventually gave.
+- [x] `docs/developer/features/complete/provider-fallback.md`: a "See also" line pointing here; move this file to `complete/` with an "As built" section when done.
+- [x] `docs/developer/API.md` if it lists message fields.
+- [x] Bug 93's write-up (`docs/developer/bugs/fixed/`) gains a pointer: the refusal is now visible on the message, not only in the error text.
 
 ### Verification on V4test
 
@@ -284,3 +284,69 @@ Follow the Jest mock conventions (global `jest`, subject-imports-first, bare fac
 - **Do not remap `profileId` on import.** It is a historical reference, not a live one.
 - **Keep `provider` / `modelName` as the answer of record.** Nothing new should read the trail to find who answered.
 - **The trigger enum is duplicated on purpose** (client-safe schema vs. server engine). The parity test is what keeps them honest; write it.
+
+## As built
+
+Shipped in v4.10-dev as specified. Six things are worth recording because they
+are not in the plan above.
+
+**Two extra recording sites.** The spec's table lists the empty-response sites
+by their *empty* outcomes. Both local retries can also *throw*, so
+`attemptEmptyResponseRecovery` records a `failed` row from each `catch` too: the
+same-profile retry's (`via: 'retry'`) and the uncensored reroute's
+(`via: 'concierge'`). The latter needs the reroute's profile, which is resolved
+*inside* the `try`, so `rerouteProfile` is hoisted above it and set the moment
+the reroute is decided — otherwise a throw from the uncensored call would leave
+no row at all, which is the exact hole the feature exists to close.
+
+**The read path had to be widened.** `app/api/v1/chats/[id]/handlers/get.ts`
+projects messages field-by-field rather than passing rows through, so
+`routeTrail` is listed there explicitly. Without it the trail rode the `done`
+event and then vanished on the next reload — the one failure mode the SSE test
+cannot see.
+
+**`saveAssistantMessage` takes the trail as its last positional parameter**,
+after `confirmation`. Both callers pass it: `finalizeMessageResponse` (from
+`buildRouteTrail(streaming, …)`) and `makePreservePartialOnError` in
+`primary-stream.service.ts`, which builds NULL on the common path but correctly
+records a failover that happened before the stream died.
+
+**`apply-chat-continuation` does not copy the trail**, alongside `provider` and
+`modelName`, which it already declined to copy. A change of venue is a new
+chat on possibly a different connection; the old turn's call sheet is the old
+turn's business. Noted in that file's "Intentionally NOT copied" list.
+
+**Tooltip wording** follows the spec's register but fixed the phrases:
+`first on the call sheet`, `asked again on the same profile`, `sent by the
+Concierge`, `stood in as the understudy`, `drafted from the company by tier`;
+then `answered` / `answered on the second try` / `fell over: <trigger>
+(<detail>)` / `refused on content grounds[ — inferred] (<detail>)`.
+
+**The trigger-union parity assertion** is two tests rather than one: a pair of
+total identity functions between `FallbackTrigger` and
+`NonNullable<RouteAttempt['trigger']>` (either direction failing to compile
+means one union grew), plus a runtime sweep of every engine trigger through
+`RouteAttemptSchema.shape.trigger`.
+
+### Where the tests live
+
+| What | File |
+|---|---|
+| Chain walk: trail contents, key-less understudy, stated refusal, ineligible failure | `__tests__/unit/lib/services/chat-message/provider-failover-chain.test.ts` |
+| Empty response: retry, inferred refusal, the uncensored profile that answered nothing, pre-call reroute | `__tests__/unit/lib/services/chat-message/provider-failover.service.test.ts` |
+| Persistence, the `done` event, the last-entry invariant | `__tests__/unit/lib/services/chat-message/message-finalizer.service.test.ts` |
+| Collapse + tooltip wording | `lib/chat/__tests__/route-trail-display.test.ts` |
+| Rendering: order, strikes, glyphs, labels | `__tests__/unit/components/ui/RouteTrailBadge.test.tsx` |
+| The trail landing on the optimistic message | `__tests__/unit/hooks/useSSEStreaming-route-trail.test.tsx` |
+| Export schema + the import gate (including the 200-char cap) | `__tests__/unit/lib/export/route-trail-export-schema.test.ts` |
+| The child proxy shipping a trailed message over IPC | `__tests__/unit/background-jobs/child-repositories-proxy.test.ts` |
+| Trigger-union parity | `__tests__/unit/lib/llm/fallback/engine.test.ts` |
+
+### Still to do
+
+The [V4test verification](#verification-on-v4test) above is a manual pass
+against a live instance with a dead endpoint, and has not been run — this branch
+was built without one. Everything it checks has automated coverage except the
+two visual items: the three-row layout in the desktop avatar column (light,
+dark, and Madman's Box) and the `.qtap` export → fresh-instance import round
+trip end to end.

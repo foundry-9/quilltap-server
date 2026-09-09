@@ -30,7 +30,9 @@ import {
   TokenLimitError,
 } from '@/lib/llm/errors'
 import type { ConnectionProfile } from '@/lib/schemas/types'
-import type { FallbackContext } from '@/lib/llm/fallback'
+import type { FallbackContext, FallbackTrigger } from '@/lib/llm/fallback'
+import { RouteAttemptSchema } from '@/lib/schemas/chat.types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 const {
   buildFallbackChain,
@@ -359,5 +361,34 @@ describe('summarizeFallbackAttempts', () => {
 
   it('is empty when nothing was attempted', () => {
     expect(summarizeFallbackAttempts([], false)).toBe('')
+  })
+})
+
+/**
+ * `RouteAttemptSchema.trigger` (lib/schemas/chat.types.ts) duplicates
+ * `FallbackTrigger` by value, because the schema module is client-safe and this
+ * engine's module is not. Nothing at runtime keeps them together, so this is
+ * what does: a new trigger added to one and not the other fails to compile.
+ */
+describe('the route trail duplicates FallbackTrigger by value', () => {
+  it('holds exactly the same string union in both directions', () => {
+    type Engine = FallbackTrigger
+    type Schema = NonNullable<RouteAttempt['trigger']>
+    // Two total assignments — either direction failing means one union grew.
+    const engineToSchema: (t: Engine) => Schema = (t) => t
+    const schemaToEngine: (t: Schema) => Engine = (t) => t
+    expect(engineToSchema('moderation-refusal')).toBe('moderation-refusal')
+    expect(schemaToEngine('moderation-refusal')).toBe('moderation-refusal')
+  })
+
+  it('lists every engine trigger in the schema enum, so the column can store any of them', () => {
+    const engineTriggers: FallbackTrigger[] = [
+      'auth', 'rate-limit', 'network', 'model-missing',
+      'provider-error', 'empty-response', 'moderation-refusal',
+    ]
+    for (const trigger of engineTriggers) {
+      expect(RouteAttemptSchema.shape.trigger.safeParse(trigger).success).toBe(true)
+    }
+    expect(RouteAttemptSchema.shape.trigger.safeParse('made-up').success).toBe(false)
   })
 })

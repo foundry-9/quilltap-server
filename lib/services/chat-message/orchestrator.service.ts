@@ -529,6 +529,13 @@ async function processMessage(
     thoughtSignature: undefined,
     reasoningContent: undefined,
     hasStartedStreaming: false,
+    // The route trail starts empty and is written only by route-trail.ts.
+    routeFailures: [],
+    // The Concierge's *pre-call* reroute swapped the profile before anything
+    // was tried, so the original gets no row — but the profile now holding the
+    // turn was sent by the Concierge, and the trail should say so if it in turn
+    // fails and an understudy answers.
+    routeVia: dangerState.effectiveProfile.id !== connectionProfile.id ? 'concierge' : 'primary',
   }
 
   // Get roleplay template

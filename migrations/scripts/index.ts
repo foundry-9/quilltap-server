@@ -384,6 +384,8 @@ import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-messa
 import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
 // files.sha256 must name the bytes on disk, not the pre-transcode input (bug 117)
 import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
+// Message route trail: routeTrail column on chat_messages (every model tried, in order)
+import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-column-v1';
 
 /**
  * All available migrations.
@@ -770,6 +772,8 @@ export const migrations: Migration[] = [
   collapseDuplicateFoldersMigration,
   // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
   realignFileEntrySha256Migration,
+  // Message route trail: routeTrail column on chat_messages (every model tried, in order)
+  addRouteTrailMessageColumnMigration,
 ];
 
 export {
@@ -1135,5 +1139,7 @@ export {
   collapseDuplicateFoldersMigration,
   // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
   realignFileEntrySha256Migration,
+  // Message route trail: routeTrail column on chat_messages (every model tried, in order)
+  addRouteTrailMessageColumnMigration,
 };
 

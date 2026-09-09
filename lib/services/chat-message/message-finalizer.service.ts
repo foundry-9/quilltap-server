@@ -35,6 +35,8 @@ import {
 import { triggerAsyncCompression } from './compression-cache.service'
 import { detectAndConvertRngPatterns } from './rng-pattern-detector.service'
 import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
+import { buildRouteTrail } from './route-trail'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('MessageFinalizer')
 
@@ -259,6 +261,10 @@ export async function finalizeMessageResponse({
     allowCrossCharacterVaultReads: chat.allowCrossCharacterVaultReads === true,
   }
 
+  // The call sheet for this turn: null unless something stepped aside. Composed
+  // here, at the one place that knows the turn is over and who answered.
+  const routeTrail = buildRouteTrail(streaming, { chatId, messageId: assistantMessageId })
+
   await saveAssistantMessage(
     repos,
     chatId,
@@ -276,7 +282,8 @@ export async function finalizeMessageResponse({
     whisperContext,
     reasoningContent,
     rebasedReasoning,
-    { confirmed, confirmationRevised, confirmationNotes, confirmationOriginalContent }
+    { confirmed, confirmationRevised, confirmationNotes, confirmationOriginalContent },
+    routeTrail
   )
 
   // Surface the resolved confirmation state to the live client (badge +, on a
@@ -437,6 +444,9 @@ export async function finalizeMessageResponse({
     turn: turnInfo,
     provider: effectiveProfile.provider,
     modelName: effectiveProfile.modelName,
+    // Ride the done event so the client's optimistic message carries the trail
+    // without waiting for the post-turn fetchChat().
+    routeTrail,
     isSilentMessage: characterParticipant.status === 'silent' || undefined,
     // Reasoning ("thinking") for the optimistic client push — DISPLAY ONLY.
     reasoningContent: reasoningContent || null,
@@ -566,7 +576,10 @@ export async function saveAssistantMessage(
     confirmationRevised?: boolean | null
     confirmationNotes?: string | null
     confirmationOriginalContent?: string | null
-  }
+  },
+  // The turn's route trail — every profile tried, in order. NULL (the common
+  // case) when nothing failed; see buildRouteTrail in ./route-trail.
+  routeTrail?: RouteAttempt[] | null
 ): Promise<string> {
   // A check "ran" whenever a verdict (incl. null) was assigned. Persisted as a
   // real 1 so a reload can tell "unverified" from "never checked" (both leave
@@ -592,6 +605,7 @@ export async function saveAssistantMessage(
     participantId: characterParticipant.id,
     provider: provider || null,
     modelName: modelName || null,
+    routeTrail: routeTrail ?? null,
     isSilentMessage: characterParticipant.status === 'silent' || null,
     // Only include confirmation keys that were actually resolved, so an
     // untouched turn writes no confirmation fields at all.

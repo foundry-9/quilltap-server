@@ -176,6 +176,8 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: 'thought-1',
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
@@ -278,6 +280,8 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
@@ -361,6 +365,8 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
@@ -447,6 +453,8 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [],
@@ -521,6 +529,8 @@ describe('message-finalizer.service', () => {
         rawResponse: { provider: 'raw' },
         thoughtSignature: undefined,
         hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
       },
       compression: {
         existingMessages: [
@@ -555,5 +565,155 @@ describe('message-finalizer.service', () => {
     })
 
     expect(rngHandler.executeRngTool).toHaveBeenCalled()
+  })
+})
+
+/**
+ * The route trail on the way out: what `saveAssistantMessage` writes, what the
+ * `done` event carries, and the invariant that ties the trail's last entry to
+ * the columns every existing reader consults.
+ */
+describe('message-finalizer.service — the route trail', () => {
+  const understudy = { id: 'profile-2', name: 'Anthropic Sonnet', provider: 'ANTHROPIC', modelName: 'claude-sonnet-5' }
+
+  const TRAIL = [
+    {
+      profileId: 'profile-1', profileName: 'OpenAI gpt-4.1', provider: 'OPENAI', modelName: 'gpt-4.1',
+      via: 'primary' as const, outcome: 'failed' as const, trigger: 'network' as const,
+      detail: 'Connection error.',
+    },
+    {
+      profileId: 'profile-2', profileName: 'Anthropic Sonnet', provider: 'ANTHROPIC', modelName: 'claude-sonnet-5',
+      via: 'understudy' as const, outcome: 'answered' as const,
+    },
+  ]
+
+  const finalizeWith = (streamingOverrides: Record<string, unknown>, repos: ReturnType<typeof createMockRepos>, controller: { enqueue: jest.Mock }) =>
+    finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: ['Al'], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: false,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-trail',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller: controller as any,
+      encoder: new TextEncoder(),
+      streaming: {
+        fullResponse: 'A reply, at length.',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: null,
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
+        ...streamingOverrides,
+      } as any,
+      compression: {
+        existingMessages: [],
+        content: 'Hello there',
+        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: { enabled: false } as any,
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' }, autoDetectRng: false } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('saveAssistantMessage persists a trail it is handed', async () => {
+    const repos = createMockRepos()
+
+    await saveAssistantMessage(
+      repos as any, 'chat-1',
+      { id: 'char-1', name: 'Alice' }, { id: 'participant-1', status: 'active' },
+      'Final response', null, null, undefined, [], [],
+      'assistant-1', 'ANTHROPIC', 'claude-sonnet-5',
+      undefined, null, null, undefined,
+      TRAIL,
+    )
+
+    expect(repos.chats.addMessage).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      provider: 'ANTHROPIC',
+      modelName: 'claude-sonnet-5',
+      routeTrail: TRAIL,
+    }))
+  })
+
+  it('saveAssistantMessage writes NULL when it is handed no trail', async () => {
+    const repos = createMockRepos()
+
+    await saveAssistantMessage(
+      repos as any, 'chat-1',
+      { id: 'char-1', name: 'Alice' }, { id: 'participant-1', status: 'active' },
+      'Final response', null, null, undefined, [], [],
+      'assistant-1', 'OPENAI', 'gpt-4.1',
+    )
+
+    expect(repos.chats.addMessage).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      routeTrail: null,
+    }))
+  })
+
+  it('composes the trail from the turn\'s failures, persists it, and sends it on the done event', async () => {
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() }
+
+    await finalizeWith({
+      effectiveProfile: understudy as any,
+      routeVia: 'understudy',
+      routeFailures: [TRAIL[0]],
+    }, repos, controller)
+
+    const saved = repos.chats.addMessage.mock.calls[0][1] as any
+    expect(saved.routeTrail).toEqual(TRAIL)
+    // The columns every existing reader consults still name who answered, and
+    // the trail's last entry agrees with them.
+    expect(saved.provider).toBe('ANTHROPIC')
+    expect(saved.modelName).toBe('claude-sonnet-5')
+    const last = saved.routeTrail[saved.routeTrail.length - 1]
+    expect(last.provider).toBe(saved.provider)
+    expect(last.modelName).toBe(saved.modelName)
+
+    expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: 'assistant-trail',
+      routeTrail: TRAIL,
+    }))
+  })
+
+  it('leaves the trail NULL on a turn where nothing stepped aside', async () => {
+    const repos = createMockRepos()
+    const controller = { enqueue: jest.fn() }
+
+    await finalizeWith({}, repos, controller)
+
+    expect((repos.chats.addMessage.mock.calls[0][1] as any).routeTrail).toBeNull()
+    expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({ routeTrail: null }))
   })
 })

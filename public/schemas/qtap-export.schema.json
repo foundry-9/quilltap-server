@@ -928,6 +928,25 @@
             "invokedBy": { "type": "string", "enum": ["llm", "user"], "description": "Whether the model reached for the tool or the user ran it themselves." },
             "callerParticipantId": { "type": "string", "description": "Participant who rolled, when there was one." }
           }
+        },
+        "routeTrail": {
+          "type": ["array", "null"],
+          "description": "The route trail: every connection profile tried for this assistant turn, in the order tried, with why each one stepped aside. NULL on every message whose turn had no failure — a one-entry trail says nothing the provider/modelName fields do not, and those stay authoritative for who answered (the trail's last entry always agrees with them). ASSISTANT rows only. `profileId` is a historical reference and is NOT remapped on import: it may name a profile that does not exist in the importing instance, which is fine because the trail is display-only and nothing dereferences it.",
+          "items": {
+            "type": "object",
+            "required": ["profileId", "profileName", "provider", "modelName", "via", "outcome"],
+            "properties": {
+              "profileId": { "type": "string", "description": "Connection profile that was asked. Historical — never remapped on import, and never dereferenced by the UI." },
+              "profileName": { "type": "string", "description": "The profile's name at the time of the turn. Users name their own profiles, so this is what tells three OpenAI profiles apart." },
+              "provider": { "type": "string", "description": "Provider the profile spoke to (e.g. 'openai', 'anthropic')." },
+              "modelName": { "type": "string", "description": "Model that was asked." },
+              "via": { "type": "string", "enum": ["primary", "retry", "concierge", "understudy", "tier-pick"], "description": "How this profile came to be asked: 'primary' = the configured profile (or the one the Concierge's pre-call reroute installed); 'retry' = the same profile asked again after an empty body; 'concierge' = the uncensored profile the Concierge sent the turn to; 'understudy' = the profile's own named fallbackProfileId; 'tier-pick' = a stand-in the fallback engine drafted from the company." },
+              "outcome": { "type": "string", "enum": ["answered", "failed", "refused"], "description": "'answered' = this profile wrote the message; 'failed' = it fell over on its own (timeout, auth, rate limit, 5xx, an empty body with no stated reason); 'refused' = it declined on content grounds." },
+              "trigger": { "type": "string", "enum": ["auth", "rate-limit", "network", "model-missing", "provider-error", "empty-response", "moderation-refusal"], "description": "The fallback engine's failure class. Absent on the entry that answered." },
+              "evidence": { "type": "string", "enum": ["finish-reason", "inferred"], "description": "How a refusal was established: 'finish-reason' = the provider reported a moderation stop; 'inferred' = an empty body on a turn the Concierge had flagged. Absent unless outcome is 'refused'." },
+              "detail": { "type": "string", "maxLength": 200, "description": "Short human-readable reason — the error message truncated, or the finish reason. Never the full error body." }
+            }
+          }
         }
       }
     },
