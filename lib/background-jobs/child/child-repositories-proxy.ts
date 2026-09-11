@@ -191,6 +191,10 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'memories.updateForCharacter': 'write',
   // chats
   'chats.updateMessage': 'write',
+  // The transcript counter's bump and its realtime hint. A write, so the parent
+  // replays it on its RW connection; the child's own publish would be a no-op
+  // anyway. Callers discard the return.
+  'chats.announceTranscriptChange': 'write',
   // background jobs
   'backgroundJobs.cancelByType': 'write',
   'backgroundJobs.createBatch': 'write',

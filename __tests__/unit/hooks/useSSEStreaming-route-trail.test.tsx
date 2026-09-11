@@ -90,6 +90,7 @@ function setup(frames: Array<Record<string, unknown>>) {
       activeTypingParticipantId: null,
       impersonatingParticipantIds: [],
       fetchChat: jest.fn(async () => {}),
+      clearProvisionalMessages: jest.fn(),
       scrollOnUserMessage: jest.fn(),
       scrollOnStreamComplete: jest.fn(),
       setAttachedFiles: jest.fn(),

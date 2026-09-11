@@ -1,8 +1,8 @@
 # The Salon transcript as a subscribed read — demoting SSE to display-only
 
-> **Status:** Proposed (2026-09-11). Not implemented. Written to be argued with before any code moves.
+> **Status:** Implemented (2026-09-11). Phases 0–2 landed together; Phase 3's two defects are filed as bugs 135 and 136 rather than fixed here, as §5 directs. Deviations in §8.
 > **Scope:** How a message — any message — reaches an open Salon tab. Today there is exactly one path, the read loop of the `POST /api/v1/messages` fetch, and it is both the transport *and* the authority. This plan makes the socket-hinted re-read authoritative and demotes the SSE stream to a display-only overlay for the turn currently in flight. The turn manager is untouched: people still take turns, and the server still decides whose turn it is.
-> **Prerequisite reading:** [realtime-updates.md](complete/realtime-updates.md) (the design of record for the hint bus — its decisions 1, 4 and 8 are load-bearing here), [tanstack-query-migration.md](complete/tanstack-query-migration.md), and [BACKGROUND_JOBS_CHILD.md](../BACKGROUND_JOBS_CHILD.md).
+> **Prerequisite reading:** [realtime-updates.md](realtime-updates.md) (the design of record for the hint bus — its decisions 1, 4 and 8 are load-bearing here), [tanstack-query-migration.md](tanstack-query-migration.md), and [BACKGROUND_JOBS_CHILD.md](../../BACKGROUND_JOBS_CHILD.md).
 
 ---
 
@@ -73,7 +73,7 @@ Add `queryKeys.chats.messages(id)` and a read the Salon owns, then add that key 
 
 The open question worth deciding before implementation is **how the read answers "unchanged" cheaply**. The recommendation is a `transcriptVersion` integer on the chat row, bumped at the same funnel that publishes, with `GET /api/v1/messages?chatId=&knownVersion=N` returning either `{unchanged: true}` or `{version, messages}`. It is exact under appends, edits *and* deletions — which a naive `since=<timestamp>` cursor is not, and this transcript genuinely deletes rows (the Commonplace whisper sweep) and mutates them (swipes, regenerate, `dangerFlags`). Timestamps also tie in practice: this chat has message pairs 41 ms and 5 ms apart.
 
-The cost is a column, which per the standing conventions means a migration (with its pretty-label and progress reporting), a [DDL.md](../DDL.md) update, and a decision about whether it belongs in `.qtap` export (it should not — it is derived bookkeeping, and import should simply start it at zero).
+The cost is a column, which per the standing conventions means a migration (with its pretty-label and progress reporting), a [DDL.md](../../DDL.md) update, and a decision about whether it belongs in `.qtap` export (it should not — it is derived bookkeeping, and import should simply start it at zero).
 
 Keyset pagination (`since=(createdAt, id)`) is deliberately **not** in v1. With a conditional read the common case is already cheap, and paginating a transcript that must also reflect deletions is a materially harder problem. Revisit only if measurement demands it.
 
@@ -125,4 +125,136 @@ Two pieces of state need explicit care, because today they are recomputed wholes
 
 ## 8. Deviations from this plan
 
-To be filled in as it is implemented, per house practice.
+Filled in on implementation (2026-09-11). Decisions 1–7 stand as written; the
+phases landed as one change because Phase 0's amplification cost was never
+worth shipping on its own once §4.2 was understood.
+
+**1. No `queryKeys.chats.messages`, and no `topic-map` row.** §4.2 called for
+both. The Salon's transcript is not a TanStack query and did not become one —
+it is a `useState` array with a dozen imperative setters from the SSE path, and
+converting it would have been a larger and riskier change than the delivery
+problem warranted. `queryKeysForTopic` exists to translate a topic into the
+TanStack keys it invalidates; a key no `useQuery` reads is a row that
+invalidates nothing. The subscription is carried by `useRealtimeTopic('chats',
+refreshTranscript, chatId)` in `useChatData`, exactly as the memory count
+beside it already does — the precedent §3 cites. Revisit both if the transcript
+ever moves onto Query.
+
+**2. The transcript read is an `?action=` on the existing collection endpoint,
+not a new shape for the bare `GET`.** §4.2 wrote it as
+`GET /api/v1/messages?chatId=&knownVersion=N`. That endpoint already has a
+consumer — the wardrobe dialog's default-character resolver
+(`components/layout/left-sidebar/sidebar-footer.tsx:66`) reads its raw
+`{messages}` — so the conditional read went in as
+`?action=transcript`, per the house action-dispatch pattern, and the plain
+listing is unchanged.
+
+**3. The projection was extracted rather than re-implemented.** The plan did
+not say where the transcript rows come from. The Salon's rows are not stored
+events: they carry resolved attachments (uploaded files *and* Scriptorium mount
+files), server-side pre-rendered HTML under the chat's template and typography
+settings, and off-scene author cards for announcement and Carina bubbles whose
+author is not a participant. Building a second copy of that in the new endpoint
+would have been precisely the drift decision 1 exists to prevent, so the block
+moved out of `app/api/v1/chats/[id]/handlers/get.ts` into
+`lib/chat/transcript-projection.ts` and both readers call it. The chat GET also
+now returns `transcriptVersion`, so the mount read seeds the counter.
+
+**4. `offSceneCharacters` rides with the transcript.** Not anticipated by the
+plan, and necessary: an announcement bubble or a Carina answer by a non-
+participant has no avatar without its card, so a re-read that delivered the
+bubble and not the card would render a blank.
+
+**5. Provisional matching needed a second pass.** §4.3 proposed matching on the
+`temp-` id prefix and the `turnStart` participant id. The prefix marks a bubble
+but cannot match it to a row; role-and-text matching covers a plain line and a
+pending tool row exactly, but *not* an attachment send — the bubble shows
+`[Attached: plan.png]` while the server stores the bare prose, or "Please look
+at the attached file(s)." when there was no prose. So a second pass matches a
+bubble against a row of the same role that was not in the previous display and
+is no older than the bubble. A bubble for a send that never persisted at all
+(a 400, a chat that vanished) has no row coming and is swept by
+`clearProvisionalMessages()` at the turn boundary.
+
+**6. Swipe selection is carried by id, not index.** §4.3 required only that a
+refetch "preserve the operator's current selection". Preserving the *index*
+would move the selection whenever a regenerate appends a variant or a delete
+removes one, so the selected variant's id is what is carried, with "newest" as
+the fallback when that variant is gone.
+
+**7. The scroll anchor is held by object identity rather than by measurement.**
+§4.3 lists the scroll anchor as state needing explicit care. Rather than
+capture and restore a scroll offset, `reconcileTranscript` reuses the previous
+object for every row that did not change and returns the very array it was
+given when nothing changed at all — so React bails out of the render and the
+virtualizer never remeasures. The risk §6 names is addressed by there being
+nothing to re-anchor.
+
+**8. Ordering got a tiebreak (§6's fourth risk).** The display sort is
+`createdAt`, then the row's position in the server's own response. Without the
+second key a batch written in one call — which shares a timestamp outright —
+leaves the client free to disagree with the read it just performed, and to
+disagree differently on the next one.
+
+**9. Two window events moved onto the cheap read.** `quilltap:terminal-exited`
+and `quilltap:chat-update` in `SalonView` refetched the whole chat to pick up
+one new message; they now call `refreshTranscript()`, which usually answers
+"unchanged" because the write that raised them already published its hint.
+
+**10. Phase 3 was filed, not fixed** — as §5 directs. Bug 135
+(`userStoppedStreamRef`) and bug 136 (the silent `sending` guard).
+
+### Settled in review (2026-09-11)
+
+The first review round found the counter's concurrency, and the fix changed
+where it lives. Recorded here because §4.2 describes only "an integer on the
+chat row", and the difference is load-bearing.
+
+**11. `transcriptVersion` is a column, but not a field.** §4.2's counter, read
+into the chat entity and written with the rest of its bookkeeping, is not safe.
+Every repository update goes through `_update`, which re-reads the row and
+writes *all* of it back from that snapshot — so two messages landing together
+both compute `snapshot + 1`, and a tab that read between them is afterwards told
+"unchanged" and never shown the second. Any unrelated chat-row write (a pause, a
+rename) can rewind it the same way.
+
+So the column is deliberately **absent from `ChatMetadataSchema`**. Zod strips
+what it does not declare, which means no `update()` can carry it and
+`SET v = v + 1` — the atomic `$inc` in
+`ChatMessagesOps.announceTranscriptChange` — is its only writer. Reading it is
+`ChatsRepository.getTranscriptVersion`, straight off the row. Keeping it out of
+the entity also retires the `.qtap` special-casing §4.2 anticipated: a field the
+export layer never sees needs no omission, and an import starts at zero because
+the column simply isn't in the bundle.
+
+**12. The funnel was not the whole funnel.** `ChatSearchOps.replaceInMessages`
+rewrites message rows directly, outside add/update/delete — a search-and-replace
+would have left every open tab being told "unchanged" while the text under it
+changed. It now announces like everything else, which is why
+`announceTranscriptChange` is public.
+
+**13. Version and rows are read as a pair, version first.** Both readers take
+the counter *before* projecting. The pair must never claim a version newer than
+the rows beside it, or the next conditional read answers "unchanged" for a
+message the tab never received; too old only ever costs a redundant read. In the
+chat GET this also steps around the terminal reconciliation and operator-mail
+sweep, either of which can post a message after the chat row was loaded.
+
+**14. A provisional bubble is retired only on the word of a read that came
+back.** The turn-boundary sweep used to be unconditional, so a send whose
+error-path read *also* failed lost the operator's only visible copy of a line
+the server had in fact persisted. The sweep is now held over and performed by
+the next successful read, after reconciliation has had its say.
+
+**15. Provisional matching is bounded on both sides, and only new rows count.**
+Both passes now require a row the previous display did not already hold — an
+older identical line further up the transcript could otherwise retire a bubble
+whose own row had not landed — and the clock-slack window bounds drift in either
+direction, so a later turn's row cannot claim a pending bubble either. A
+server-minted correlation id echoed on the stream would be stronger still, and
+is the thing to reach for if this heuristic is ever observed to misfire.
+
+**16. Swipe state keeps its object identity too.** Reconciliation returned a
+fresh swipe map on every read, which scheduled a state update and undid the
+no-render fast path the message array had just earned. It now hands back the
+caller's own map when no group, selection or variant order moved.

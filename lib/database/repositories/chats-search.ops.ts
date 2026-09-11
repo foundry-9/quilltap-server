@@ -241,6 +241,12 @@ export class ChatSearchReplaceOps {
       // Note: We intentionally don't update chat.updatedAt here since message edits
       // are not considered "new messages" for sorting purposes
 
+      // But it IS a transcript change, and this is the one message-writing path
+      // that doesn't go through the add/update/delete funnel. Without this, an
+      // open Salon tab would go on being told "unchanged" while every line it
+      // is displaying had its text rewritten underneath it.
+      await this.messagesOps.announceTranscriptChange(chatId);
+
       logger.info('Replaced text in messages', { chatId, updatedCount });
       return updatedCount;
     }, 'Failed to replace text in messages', { chatId });

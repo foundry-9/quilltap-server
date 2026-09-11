@@ -3666,6 +3666,52 @@ Get messages for a chat.
 }
 ```
 
+#### `GET /api/v1/messages?chatId=[id]&action=transcript&knownVersion=[n]`
+
+The Salon's authoritative transcript read — the same projection embedded in
+`GET /api/v1/chats/[id]` (attachments resolved, simple messages pre-rendered to
+HTML, off-scene author cards included), built by the one shared module
+`lib/chat/transcript-projection.ts`.
+
+A realtime `{topic:'chats', id}` hint drives it, and the point of the endpoint
+is that it can decline to answer at length. `knownVersion` is the chat's
+`transcriptVersion` as the caller last saw it; when the counter still agrees the
+response is just `{ unchanged: true, version }`. Omit `knownVersion` (or pass a
+stale one) to get the whole transcript.
+
+**Query Parameters**:
+- `chatId` (required) - Chat ID
+- `action=transcript` (required for this shape)
+- `knownVersion` (optional) - the `transcriptVersion` the caller already has
+
+**Response (unchanged)**: `200 OK`
+
+```json
+{ "unchanged": true, "version": 42 }
+```
+
+**Response (changed)**: `200 OK`
+
+```json
+{
+  "unchanged": false,
+  "version": 43,
+  "messages": [
+    {
+      "id": "msg-uuid",
+      "role": "ASSISTANT",
+      "content": "Hello! How can I help?",
+      "participantId": "participant-uuid",
+      "attachments": [],
+      "renderedHtml": "<p>Hello! How can I help?</p>",
+      "createdAt": "2025-01-19T10:00:00.000Z"
+    }
+  ],
+  "offSceneCharacters": [],
+  "count": 1
+}
+```
+
 #### `POST /api/v1/messages?chatId=[id]`
 
 Send a message and get streaming response.

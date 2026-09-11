@@ -26,6 +26,7 @@ import {
   isCharacterAuthoredMessage,
   CHARACTER_AUTHORED_MESSAGE_FILTER,
 } from '@/lib/chat/chat-activity';
+import { publishRealtime } from '@/lib/realtime/bus';
 
 /**
  * Schema for individual chat message rows in SQLite
@@ -236,6 +237,79 @@ export class ChatMessagesOps {
   }
 
   /**
+   * Announce that this chat's transcript changed.
+   *
+   * The single announcement point, and two halves that must never drift apart:
+   * an atomic bump of the chat's `transcriptVersion` — the counter an open
+   * Salon tab hands back so the server can answer "unchanged" without
+   * serializing the conversation — and the `{topic:'chats', id}` hint that
+   * tells it to ask. Publishing without bumping would be answered "unchanged"
+   * and the change would never reach the display.
+   *
+   * **The bump is a raw `$inc`, and the column is deliberately absent from
+   * `ChatMetadataSchema`.** Both halves of that matter. Every repository update
+   * rewrites the *whole* validated row from a snapshot it read moments earlier,
+   * so a counter carried in the schema could be rewound by any concurrent
+   * chat-row write — two messages landing together would leave the counter
+   * where a tab that read in between already thinks it is, and the second
+   * message would never appear. Zod strips what it does not declare, so no
+   * `update` can touch this column and `SET v = v + 1` is the only writer.
+   * Read it back with `ChatsRepository.getTranscriptVersion`.
+   *
+   * `publishRealtime` is a no-op in the forked job child by construction
+   * (`lib/realtime/bus.ts`), and a child's buffered `chats.*` writes are
+   * replayed by the parent, which is what runs this method — so the hint fires
+   * exactly once per change in both worlds, with no double-publish to reason
+   * about. (The child's committed write batch announces the same topic from
+   * `topicsForWriteBatch`; hints are idempotent and the bus coalesces them.)
+   *
+   * Public because the funnel is not quite the whole story: the
+   * search-and-replace path (`ChatSearchOps.replaceInMessages`) rewrites
+   * message rows directly, and a transcript change is a transcript change.
+   *
+   * @param chatId The chat whose transcript changed.
+   */
+  async announceTranscriptChange(chatId: string): Promise<void> {
+    await safeQuery(async () => {
+      const collection = await this.ctx.getCollection();
+      await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $inc: { transcriptVersion: 1 } } as never,
+      );
+      return true;
+    }, 'Failed to bump transcript version', { chatId }, false);
+
+    logger.debug('Transcript change announced', { chatId });
+    publishRealtime('chats', chatId);
+  }
+
+  /**
+   * Commit a transcript change: write the chat-row bookkeeping this message
+   * write computed, then announce the change.
+   *
+   * The counter is bumped separately and atomically by
+   * {@link announceTranscriptChange}, never folded into `updateData` — see
+   * there for why that separation is the point rather than an inefficiency.
+   *
+   * @param chatId The chat whose transcript changed.
+   * @param chat The chat row as already loaded by the caller, or null when it
+   *   no longer exists — in which case there is no bookkeeping to write, but
+   *   the change is still announced.
+   * @param updateData Any other chat-row bookkeeping this write computed
+   *   (message count, cycle state, `lastMessageAt`).
+   */
+  private async commitTranscriptChange(
+    chatId: string,
+    chat: ChatMetadata | null,
+    updateData: Record<string, unknown> = {},
+  ): Promise<void> {
+    if (chat && Object.keys(updateData).length > 0) {
+      await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
+    }
+    await this.announceTranscriptChange(chatId);
+  }
+
+  /**
    * Get all messages for a chat
    */
   async getMessages(chatId: string): Promise<ChatEvent[]> {
@@ -331,12 +405,11 @@ export class ChatMessagesOps {
       // message row but not conversational activity, and must not resurrect a
       // quiet chat at the top of the list.
       const chat = await this.ctx.findById(chatId);
+      const updateData: Record<string, unknown> = {};
       if (chat) {
         const allMessages = await this.getMessages(chatId);
         const isActualMessage = validated.type === 'message';
-        const updateData: Record<string, unknown> = {
-          messageCount: this.countVisibleMessages(allMessages),
-        };
+        updateData.messageCount = this.countVisibleMessages(allMessages);
         if (isCharacterAuthoredMessage(validated)) {
           updateData.lastMessageAt = now;
         }
@@ -362,8 +435,8 @@ export class ChatMessagesOps {
         if (orderUpdate !== null) {
           updateData.cycleOrderParticipantIds = orderUpdate;
         }
-        await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
+      await this.commitTranscriptChange(chatId, chat, updateData);
       return validated;
     }, 'Failed to add message to chat', { chatId });
   }
@@ -397,12 +470,11 @@ export class ChatMessagesOps {
       // the batch actually carried character-authored content, while
       // `updatedAt` moves for any message row.
       const chat = await this.ctx.findById(chatId);
+      const updateData: Record<string, unknown> = {};
       if (chat) {
         const allMessages = await this.getMessages(chatId);
         const hasActualMessages = validated.some(m => m.type === 'message');
-        const updateData: Record<string, unknown> = {
-          messageCount: this.countVisibleMessages(allMessages),
-        };
+        updateData.messageCount = this.countVisibleMessages(allMessages);
         if (validated.some(isCharacterAuthoredMessage)) {
           updateData.lastMessageAt = now;
         }
@@ -433,8 +505,8 @@ export class ChatMessagesOps {
         if (orderChanged) {
           updateData.cycleOrderParticipantIds = currentOrder;
         }
-        await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
       }
+      await this.commitTranscriptChange(chatId, chat, updateData);
       return validated;
     }, 'Failed to add messages to chat', { chatId });
   }
@@ -461,6 +533,10 @@ export class ChatMessagesOps {
           { id: messageId } as QueryFilter,
           { $set: validated } as any
         );
+        // An edited row is a transcript change: swipes, regenerate, a typo fix
+        // and a danger reclassification all land here, and an open tab must be
+        // told to look again.
+        await this.announceTranscriptChange(chatId);
         return validated;
       } else {
         // Legacy data compatibility: Update in embedded array
@@ -488,6 +564,7 @@ export class ChatMessagesOps {
             },
           } as any
         );
+        await this.announceTranscriptChange(chatId);
         return validated;
       }
     }, 'Failed to update message in chat', { chatId, messageId }, null);
@@ -588,16 +665,19 @@ export class ChatMessagesOps {
 
       if (removed > 0) {
         const chat = await this.ctx.findById(chatId);
+        const updateData: Record<string, unknown> = {};
         if (chat) {
           const allMessages = await this.getMessages(chatId);
           // Deleting the newest character-authored message must walk
           // `lastMessageAt` *backwards*, not leave it pointing at a row that no
           // longer exists — recompute from what survives.
-          await this.ctx.update(chatId, {
-            messageCount: this.countVisibleMessages(allMessages),
-            lastMessageAt: await this.getLastPlayedMessageAt(chatId),
-          } as Partial<ChatMetadata>);
+          updateData.messageCount = this.countVisibleMessages(allMessages);
+          updateData.lastMessageAt = await this.getLastPlayedMessageAt(chatId);
         }
+        // A swept Commonplace whisper is a transcript change too — the reason
+        // the version counter beats a `since=<timestamp>` cursor, which cannot
+        // see a deletion at all.
+        await this.commitTranscriptChange(chatId, chat, updateData);
         logger.info('Messages deleted from chat', { chatId, removed, requested: messageIds.length });
       }
 
@@ -631,12 +711,10 @@ export class ChatMessagesOps {
 
       // Reset metadata
       const chat = await this.ctx.findById(chatId);
-      if (chat) {
-        await this.ctx.update(chatId, {
-          messageCount: 0,
-          lastMessageAt: null,
-        });
-      }
+      await this.commitTranscriptChange(chatId, chat, {
+        messageCount: 0,
+        lastMessageAt: null,
+      });
 
       logger.info('Messages cleared for chat', { chatId });
       return true;

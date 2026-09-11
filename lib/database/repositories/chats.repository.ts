@@ -506,6 +506,32 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
     return this.messagesOps.deleteMessagesByIds(chatId, messageIds);
   }
 
+  /**
+   * Announce that this chat's transcript changed — bump the counter, publish
+   * the hint. Every message write already ends here; callers outside this
+   * repository need it only if they rewrite message rows some other way.
+   */
+  async announceTranscriptChange(chatId: string): Promise<void> {
+    return this.messagesOps.announceTranscriptChange(chatId);
+  }
+
+  /**
+   * The chat's transcript counter, or 0 when it has never changed.
+   *
+   * Read straight off the row rather than through the entity schema, because
+   * the column is deliberately not part of it — see
+   * `ChatMessagesOps.announceTranscriptChange` for why keeping it out is what
+   * makes the counter safe against concurrent writers.
+   */
+  async getTranscriptVersion(chatId: string): Promise<number> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter);
+      const version = (row as { transcriptVersion?: unknown } | null)?.transcriptVersion;
+      return typeof version === 'number' ? version : 0;
+    }, 'Failed to read transcript version', { chatId }, 0);
+  }
+
   // ============================================================================
   // SEARCH AND REPLACE OPERATIONS (delegated to ChatSearchReplaceOps)
   // ============================================================================

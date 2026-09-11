@@ -229,6 +229,15 @@ Everything in §5 landed. The differences worth knowing:
 - **`docs/developer/features/complete/tanstack-query-migration.md`'s fence held.** The Salon's SSE
   transport was not touched.
 
+- **Later (2026-09-11): the `chats` topic gained the Salon transcript.** The write funnel for every
+  message in the system now publishes `{topic:'chats', id}`, and `useChatData` subscribes to it — so
+  a reply persisted while a tab's SSE stream was gone reaches the display on the hint instead of
+  waiting for a reload. It amends nothing here: the socket still carries a hint and never a message
+  body, and the read it drives is a conditional REST read gated on a `transcriptVersion` counter
+  bumped in the same write. The subscription is a `useRealtimeTopic` call rather than a
+  `topic-map` row, because the Salon's transcript is not a TanStack query. Design of record:
+  [salon-realtime-transcript.md](salon-realtime-transcript.md).
+
 ### Verified
 
 Unit: bus coalescing, topic-map dispatch (including unknown-topic tolerance), `useNow` boundary

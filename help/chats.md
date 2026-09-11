@@ -528,6 +528,48 @@ danger badge already announces the reroute. And when the same profile is asked t
 usual remedy for a reply that arrives empty), the two attempts share one line, whose hover text
 will tell you it answered on the second try.
 
+## The Room Keeps Itself Current
+
+A conversation you have open is no longer a photograph taken the moment you
+opened it. It is a room with a bell-pull in it.
+
+Whenever anything is written into a chat — a reply, a whisper, an announcement
+from one of the staff, a line edited or a note swept away — the house rings
+through to every window presently looking in on that room, and each of them
+steps over to have another look. You need do nothing. The new line simply
+appears where it belongs.
+
+What this buys you, in plain terms:
+
+- **A reply cannot be lost to a dropped connection.** Previously the only road
+  a reply travelled was the live wire opened when you pressed Send; if that wire
+  was cut — you wandered off to another tab, the machine dozed, the network
+  hiccuped during a long thirty-second composition — the reply was written down
+  in the ledger quite correctly and never reached your eyes until you reloaded.
+  Now the wire carries the typing, and the ledger carries the truth.
+- **The incidentals arrive when they arrive.** Aurora's note that a portrait has
+  been repainted, the Lantern's word that a new backdrop is hung, the
+  Commonplace Book's murmured recollection, Suparṇā's announcement of the post —
+  all of these are written by staff working in the back rooms, on their own
+  schedule. They now appear the moment they are set down, rather than only if
+  they happened to catch the same wire your own turn was riding.
+- **A chat left open in a background tab stays current.** Come back to it an hour
+  later and it is up to date, not frozen at the hour you left.
+- **Two windows on one conversation agree.** Open the same chat twice — a second
+  browser window, another device on the same instance — and a line typed in one
+  appears in the other.
+
+The bell-pull is a *hint* and nothing more: it says "something has changed here",
+never what. Your window then asks the house properly, and — this is the thrifty
+part — it mentions which edition of the transcript it already holds. If nothing
+has in fact changed since, the house says so in a word and spares everyone the
+recitation. A busy turn may ring the bell four or five times over; it costs four
+or five words, not four or five transcripts.
+
+If the bell should fail — the connection to the house drops — nothing is lost.
+The moment it is restored, every open window re-reads as a matter of course, and
+reopening the chat has always been, and remains, a complete remedy.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

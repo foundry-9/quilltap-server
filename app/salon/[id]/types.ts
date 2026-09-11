@@ -223,6 +223,12 @@ export interface Chat {
     image?: string | null
   }
   messages: Message[]
+  /**
+   * The transcript counter as of this read. Seeds the conditional re-read a
+   * realtime `chats` hint drives: the tab hands it back and the server answers
+   * "unchanged" without serializing the conversation again.
+   */
+  transcriptVersion?: number
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId?: string | null
   /** Whether auto-responses are paused in multi-character chats */
