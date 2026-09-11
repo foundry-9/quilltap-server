@@ -16,8 +16,7 @@ import { getFilePath } from '@/lib/api/middleware/file-path';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
-import { enrichParticipantDetail, getCharacterDetail } from '@/lib/services/chat-enrichment.service';
-import { renderMarkdownToHtml, canPreRenderMessage } from '@/lib/services/markdown-renderer.service';
+import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
@@ -32,7 +31,6 @@ import {
 } from '@/lib/photos/photo-link-summary';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
-import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types';
 
 /**
  * GET handler for individual chat
@@ -300,6 +298,14 @@ export async function handleGet(
     // author cards — is projected by the one module the conditional re-read
     // (`GET /api/v1/messages?chatId=…&action=transcript`) also uses, so the two
     // reads of the same conversation cannot drift apart.
+    //
+    // The counter is read here rather than taken from `chatMetadata`, which was
+    // loaded before the terminal reconciliation and the operator-mail sweep
+    // above — both of which can post a message. Reading it now, still before
+    // the projection, keeps the version no newer than the rows it is handed out
+    // with: too old only ever costs the tab a redundant read, while too new
+    // would have it answered "unchanged" for a message it never received.
+    const transcriptVersion = await repos.chats.getTranscriptVersion(chatId);
     const { messages, offSceneCharacters } = await projectChatTranscript(
       chatId,
       chatMetadata,
@@ -366,7 +372,7 @@ export async function handleGet(
       // The counter that came back with this transcript. The Salon keeps it and
       // hands it to `?action=transcript` on the next realtime hint, which is how
       // an unchanged conversation is answered without being serialized again.
-      transcriptVersion: chatMetadata.transcriptVersion ?? 0,
+      transcriptVersion,
       projectId: chatMetadata.projectId || null,
       projectName,
       // The scene in force. Projected so the sidebar's scenario picker can open

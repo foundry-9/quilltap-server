@@ -30,7 +30,7 @@ import { scrubUserAgent } from '@/lib/utils/user-agent';
  * The lightweight listing: stored `type === 'message'` events, unprojected.
  * The Salon's own read is `?action=transcript` below.
  */
-async function handleListMessages(req: NextRequest, { repos }: RequestContext): Promise<NextResponse> {
+async function handleListMessages(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
   const { searchParams } = req.nextUrl;
   const chatId = searchParams.get('chatId');
 
@@ -40,7 +40,10 @@ async function handleListMessages(req: NextRequest, { repos }: RequestContext): 
 
   try {// Verify chat ownership
     const chat = await repos.chats.findById(chatId);
-    if (!chat) {
+    if (!chat || chat.userId !== user.id) {
+      // `notFound` rather than `forbidden`, matching the per-message endpoints:
+      // a chat this account does not own should not be distinguishable from one
+      // that does not exist.
       return notFound('Chat');
     }
 
@@ -88,11 +91,16 @@ async function handleTranscript(req: NextRequest, { user, repos }: RequestContex
 
   try {
     const chat = await repos.chats.findById(chatId);
-    if (!chat) {
+    if (!chat || chat.userId !== user.id) {
       return notFound('Chat');
     }
 
-    const version = chat.transcriptVersion ?? 0;
+    // Read the counter *before* projecting. The pairing the caller stores must
+    // never claim a version newer than the rows beside it: a version read after
+    // the projection could have moved on, and the tab would then be answered
+    // "unchanged" for a write it has not seen. Reading first can only cost an
+    // extra round trip later, which is the harmless direction.
+    const version = await repos.chats.getTranscriptVersion(chatId);
     const knownVersionParam = searchParams.get('knownVersion');
     const knownVersion = knownVersionParam === null ? null : Number(knownVersionParam);
 

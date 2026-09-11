@@ -421,6 +421,51 @@ describe('useChatData — the transcript', () => {
     expect(transcriptReads().length - before).toBe(2)
   })
 
+  it('holds the sweep when no read backs it up, and takes it on the next one', async () => {
+    // The send path sweeps at the turn boundary. If the error-path read failed
+    // too, the server may well have persisted the line and the bubble is the
+    // operator's only copy of it — so the sweep waits for a read that came back.
+    const { result } = renderHook(() => useChatData(CHAT_ID))
+    await act(async () => {
+      await result.current.fetchChat()
+    })
+
+    act(() => {
+      result.current.setMessages((prev) => [
+        ...prev,
+        {
+          id: 'temp-user-1757595111111',
+          role: 'USER',
+          content: 'a send during an outage',
+          createdAt: '2026-09-11T12:50:00.000Z',
+        },
+      ])
+    })
+
+    // The network is down: the turn's own read fails, then the sweep is asked for.
+    fetchMock.mockImplementation(() => Promise.reject(new Error('offline')))
+    await act(async () => {
+      await result.current.fetchChat()
+    })
+    act(() => {
+      result.current.clearProvisionalMessages()
+    })
+    expect(result.current.messages.map((m) => m.id)).toContain('temp-user-1757595111111')
+
+    // The network returns and the transcript does not carry the line.
+    stubTranscript()
+    transcript = { version: 9, messages: transcript.messages }
+    await act(async () => {
+      await result.current.refreshTranscript()
+    })
+
+    await waitFor(() =>
+      expect(result.current.messages.map((m) => m.id)).toEqual([
+        '47a3a91d-0000-4000-8000-000000000001',
+      ]),
+    )
+  })
+
   it('sweeps a bubble that never persisted at all', async () => {
     const { result } = renderHook(() => useChatData(CHAT_ID))
     await act(async () => {

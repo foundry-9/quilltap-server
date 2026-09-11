@@ -65,6 +65,30 @@ function sameRow(a: Message, b: Message): boolean {
 }
 
 /**
+ * Are two swipe maps the same map — same groups, same selection, same variants?
+ *
+ * Only the parts the renderer reads: the group set, each group's selected index
+ * and total, and the ids of its variants in order. Two maps that agree on all
+ * of that are interchangeable on screen, so the older object can be kept and
+ * the re-render skipped.
+ */
+function sameSwipeStates(
+  a: Record<string, SwipeState>,
+  b: Record<string, SwipeState>,
+): boolean {
+  const groups = Object.keys(b)
+  if (groups.length !== Object.keys(a).length) return false
+  return groups.every((groupId) => {
+    const before = a[groupId]
+    const after = b[groupId]
+    if (!before) return false
+    if (before.current !== after.current || before.total !== after.total) return false
+    if (before.messages.length !== after.messages.length) return false
+    return before.messages.every((m, i) => m.id === after.messages[i].id)
+  })
+}
+
+/**
  * Order the display rows the way the server does.
  *
  * `createdAt` first, then the row's position in the server's own response as
@@ -127,10 +151,16 @@ function collapseSwipeGroups(
 }
 
 /**
- * How far a provisional bubble's clock may run ahead of the row that answers
- * it. The bubble is stamped in the browser and the row on the server — the same
- * machine in a self-hosted instance, but not necessarily the same millisecond,
- * and a slow POST widens the gap the other way.
+ * How far apart a provisional bubble's clock and the clock on the row that
+ * answers it may be, in either direction. The bubble is stamped in the browser
+ * and the row on the server — the same machine in a self-hosted instance, but
+ * not necessarily the same millisecond, and a slow POST widens the gap the
+ * other way.
+ *
+ * Bounded on *both* sides deliberately. An unbounded upper edge would let any
+ * later same-role row — a second tab's send, the next turn's line — claim a
+ * bubble whose own row has not landed yet, and the operator would watch their
+ * line vanish and come back.
  */
 const PROVISIONAL_CLOCK_SLACK_MS = 60_000
 
@@ -140,20 +170,22 @@ const PROVISIONAL_CLOCK_SLACK_MS = 60_000
  * The server mints the real id, so there is nothing to match on directly. Two
  * passes, strongest signal first:
  *
- *   1. **Same role, same text.** Exact for a pending tool row and for a plain
- *      typed line.
- *   2. **Same role, newly arrived, not older than the bubble.** The fallback
- *      the first pass needs, because an optimistic user bubble does *not*
- *      always read the same as its persisted row: a send with attachments shows
- *      `[Attached: …]` and stores the bare prose, and a send that is nothing but
- *      attachments stores "Please look at the attached file(s)." A USER row that
- *      was not in the previous display and is no older than the bubble is the
- *      send we just made.
+ *   1. **Newly arrived, same role, same text.** Exact for a pending tool row
+ *      and for a plain typed line.
+ *   2. **Newly arrived, same role, stamped within the clock slack.** The
+ *      fallback the first pass needs, because an optimistic user bubble does
+ *      *not* always read the same as its persisted row: a send with attachments
+ *      shows `[Attached: …]` and stores the bare prose, and a send that is
+ *      nothing but attachments stores "Please look at the attached file(s)."
  *
- * Each authoritative row absorbs at most one bubble, so sending the same line
- * twice in a row doesn't silently swallow the second one, and running the exact
- * pass to completion first keeps two tabs sending at once from stealing each
- * other's match.
+ * "Newly arrived" gates *both* passes — only a row the previous display did not
+ * already hold may answer a bubble. Without it an older, identical line further
+ * up the transcript could retire a bubble whose own row has not landed yet,
+ * which is the flicker this whole overlay exists to avoid. Each authoritative
+ * row absorbs at most one bubble, so sending the same line twice in a row
+ * doesn't silently swallow the second one, and running the exact pass to
+ * completion first keeps two tabs sending at once from stealing each other's
+ * match.
  */
 function survivingProvisionals(previous: Message[], authoritative: Message[]): Message[] {
   const provisionals = previous.filter(isProvisionalMessage)
@@ -170,17 +202,23 @@ function survivingProvisionals(previous: Message[], authoritative: Message[]): M
     matched.add(bubble)
   }
 
+  const isNewRowOfSameRole = (bubble: Message) => (row: Message) =>
+    row.role === bubble.role && !previousIds.has(row.id)
+
   for (const bubble of provisionals) {
-    claim(bubble, (row) => row.role === bubble.role && row.content.trim() === bubble.content.trim())
+    const isNew = isNewRowOfSameRole(bubble)
+    claim(bubble, (row) => isNew(row) && row.content.trim() === bubble.content.trim())
   }
 
   for (const bubble of provisionals) {
     if (matched.has(bubble)) continue
+    const isNew = isNewRowOfSameRole(bubble)
     const bubbleTime = new Date(bubble.createdAt).getTime()
-    claim(bubble, (row) =>
-      row.role === bubble.role &&
-      !previousIds.has(row.id) &&
-      new Date(row.createdAt).getTime() >= bubbleTime - PROVISIONAL_CLOCK_SLACK_MS)
+    claim(bubble, (row) => {
+      if (!isNew(row)) return false
+      const drift = Math.abs(new Date(row.createdAt).getTime() - bubbleTime)
+      return drift <= PROVISIONAL_CLOCK_SLACK_MS
+    })
   }
 
   return provisionals.filter((bubble) => !matched.has(bubble))
@@ -226,6 +264,11 @@ export function reconcileTranscript(
 
   return {
     messages: identical ? previous : [...merged, ...stillPending],
-    swipeStates,
+    // Hand back the caller's own swipe-state object when nothing about the
+    // groups moved. The array above already bails out of the render when the
+    // rows are unchanged; a freshly-built swipe map would schedule the update
+    // anyway and undo it, which is exactly the re-render a hint storm must not
+    // cost.
+    swipeStates: sameSwipeStates(previousSwipeStates, swipeStates) ? previousSwipeStates : swipeStates,
   }
 }

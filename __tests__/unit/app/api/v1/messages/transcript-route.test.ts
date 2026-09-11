@@ -57,13 +57,16 @@ function transcriptRequest(knownVersion?: number, chatId: string = CHAT_ID) {
   return { nextUrl: { searchParams: params } } as any
 }
 
-function setChat(chat: Record<string, unknown> | null) {
+function setChat(chat: Record<string, unknown> | null, version = 5) {
   mockCtx = {
     user: { id: OWNER_ID },
     repos: {
       chats: {
         findById: jest.fn().mockResolvedValue(chat),
         getMessages: jest.fn().mockResolvedValue([]),
+        // Read off the row, not through the entity schema — the column is
+        // deliberately outside it so no chat-row write can rewind the counter.
+        getTranscriptVersion: jest.fn().mockResolvedValue(version),
       },
     },
   }
@@ -75,7 +78,7 @@ beforeEach(() => {
     messages: [{ id: 'm1', role: 'ASSISTANT', content: 'As you like.' }],
     offSceneCharacters: [],
   })
-  setChat({ id: CHAT_ID, userId: OWNER_ID, transcriptVersion: 5 })
+  setChat({ id: CHAT_ID, userId: OWNER_ID })
 })
 
 describe('transcript action', () => {
@@ -106,9 +109,35 @@ describe('transcript action', () => {
   })
 
   it('treats a chat row with no counter yet as version 0', async () => {
-    setChat({ id: CHAT_ID, userId: OWNER_ID })
+    setChat({ id: CHAT_ID, userId: OWNER_ID }, 0)
     const res: any = await GET(transcriptRequest(0))
     expect(res.body).toEqual({ unchanged: true, version: 0 })
+  })
+
+  it('reads the counter before projecting, never after', async () => {
+    // The pair handed to a tab must never claim a version newer than the rows
+    // beside it, or the next conditional read answers "unchanged" for a message
+    // it never received. Too old only costs a redundant read.
+    const order: string[] = []
+    setChat({ id: CHAT_ID, userId: OWNER_ID })
+    mockCtx.repos.chats.getTranscriptVersion = jest.fn(async () => {
+      order.push('version')
+      return 7
+    })
+    projectChatTranscript.mockImplementation(async () => {
+      order.push('project')
+      return { messages: [], offSceneCharacters: [] }
+    })
+
+    await GET(transcriptRequest())
+    expect(order).toEqual(['version', 'project'])
+  })
+
+  it('404s a chat owned by someone else without saying it exists', async () => {
+    setChat({ id: CHAT_ID, userId: 'someone-else' })
+    const res: any = await GET(transcriptRequest(5))
+    expect(res).toMatchObject({ __kind: 'notFound' })
+    expect(projectChatTranscript).not.toHaveBeenCalled()
   })
 
   it('carries the off-scene author cards the renderer needs for an avatar', async () => {
@@ -134,6 +163,13 @@ describe('transcript action', () => {
 })
 
 describe('the plain listing still answers', () => {
+  it('404s a chat owned by someone else', async () => {
+    setChat({ id: CHAT_ID, userId: 'someone-else' })
+    const req = { nextUrl: { searchParams: new URLSearchParams({ chatId: CHAT_ID }) } } as any
+    const res: any = await GET(req)
+    expect(res).toMatchObject({ __kind: 'notFound' })
+  })
+
   it('returns stored message events when no action is given', async () => {
     mockCtx.repos.chats.getMessages.mockResolvedValue([
       { type: 'message', id: 'm1', content: 'hi' },

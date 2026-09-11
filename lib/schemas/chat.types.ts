@@ -757,16 +757,16 @@ export const ChatMetadataSchema = z.object({
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
-  /**
-   * Monotonic transcript counter. Bumped by the message funnel
-   * (`chats-messages.ops.ts`) on every add, edit, delete and clear, alongside
-   * the `publishRealtime('chats', id)` hint that tells open Salon tabs to look
-   * again. It is what makes the transcript read conditional: a tab hands back
-   * the version it last saw and the server answers "unchanged" without
-   * serializing a line of it. Derived bookkeeping — never exported, and an
-   * import starts it at zero.
-   */
-  transcriptVersion: z.number().default(0),
+  // NOTE: the `chats` table also carries a `transcriptVersion` column, and it is
+  // deliberately NOT declared here. Every repository update rewrites the whole
+  // validated row from a snapshot it read moments earlier, so a counter inside
+  // this schema could be rewound by any concurrent chat-row write — which is
+  // precisely the "answered unchanged while a message is missing" failure the
+  // counter exists to prevent. Keeping it out of the schema means Zod strips it
+  // from every write, so the column is touched only by the atomic `$inc` in
+  // `ChatMessagesOps.announceTranscriptChange`. Read it with
+  // `ChatsRepository.getTranscriptVersion`. See DDL.md and
+  // docs/developer/features/complete/salon-realtime-transcript.md.
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
   /**
@@ -1156,8 +1156,16 @@ export const ChatMetadataBaseSchema = z.object({
   /** Last participant whose turn it was (null = user's turn). Used to restore turn state when returning to chat. */
   lastTurnParticipantId: UUIDSchema.nullable().optional(),
   messageCount: z.number().default(0),
-  /** Monotonic transcript counter. See ChatMetadataSchema for details. */
-  transcriptVersion: z.number().default(0),
+  // NOTE: the `chats` table also carries a `transcriptVersion` column, and it is
+  // deliberately NOT declared here. Every repository update rewrites the whole
+  // validated row from a snapshot it read moments earlier, so a counter inside
+  // this schema could be rewound by any concurrent chat-row write — which is
+  // precisely the "answered unchanged while a message is missing" failure the
+  // counter exists to prevent. Keeping it out of the schema means Zod strips it
+  // from every write, so the column is touched only by the atomic `$inc` in
+  // `ChatMessagesOps.announceTranscriptChange`. Read it with
+  // `ChatsRepository.getTranscriptVersion`. See DDL.md and
+  // docs/developer/features/complete/salon-realtime-transcript.md.
   lastMessageAt: TimestampSchema.nullable().optional(),
   lastRenameCheckInterchange: z.number().default(0),
   /** Triple-gate summarization tracking. See ChatMetadataSchema for details. */

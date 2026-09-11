@@ -203,3 +203,58 @@ one new message; they now call `refreshTranscript()`, which usually answers
 
 **10. Phase 3 was filed, not fixed** — as §5 directs. Bug 135
 (`userStoppedStreamRef`) and bug 136 (the silent `sending` guard).
+
+### Settled in review (2026-09-11)
+
+The first review round found the counter's concurrency, and the fix changed
+where it lives. Recorded here because §4.2 describes only "an integer on the
+chat row", and the difference is load-bearing.
+
+**11. `transcriptVersion` is a column, but not a field.** §4.2's counter, read
+into the chat entity and written with the rest of its bookkeeping, is not safe.
+Every repository update goes through `_update`, which re-reads the row and
+writes *all* of it back from that snapshot — so two messages landing together
+both compute `snapshot + 1`, and a tab that read between them is afterwards told
+"unchanged" and never shown the second. Any unrelated chat-row write (a pause, a
+rename) can rewind it the same way.
+
+So the column is deliberately **absent from `ChatMetadataSchema`**. Zod strips
+what it does not declare, which means no `update()` can carry it and
+`SET v = v + 1` — the atomic `$inc` in
+`ChatMessagesOps.announceTranscriptChange` — is its only writer. Reading it is
+`ChatsRepository.getTranscriptVersion`, straight off the row. Keeping it out of
+the entity also retires the `.qtap` special-casing §4.2 anticipated: a field the
+export layer never sees needs no omission, and an import starts at zero because
+the column simply isn't in the bundle.
+
+**12. The funnel was not the whole funnel.** `ChatSearchOps.replaceInMessages`
+rewrites message rows directly, outside add/update/delete — a search-and-replace
+would have left every open tab being told "unchanged" while the text under it
+changed. It now announces like everything else, which is why
+`announceTranscriptChange` is public.
+
+**13. Version and rows are read as a pair, version first.** Both readers take
+the counter *before* projecting. The pair must never claim a version newer than
+the rows beside it, or the next conditional read answers "unchanged" for a
+message the tab never received; too old only ever costs a redundant read. In the
+chat GET this also steps around the terminal reconciliation and operator-mail
+sweep, either of which can post a message after the chat row was loaded.
+
+**14. A provisional bubble is retired only on the word of a read that came
+back.** The turn-boundary sweep used to be unconditional, so a send whose
+error-path read *also* failed lost the operator's only visible copy of a line
+the server had in fact persisted. The sweep is now held over and performed by
+the next successful read, after reconciliation has had its say.
+
+**15. Provisional matching is bounded on both sides, and only new rows count.**
+Both passes now require a row the previous display did not already hold — an
+older identical line further up the transcript could otherwise retire a bubble
+whose own row had not landed — and the clock-slack window bounds drift in either
+direction, so a later turn's row cannot claim a pending bubble either. A
+server-minted correlation id echoed on the stream would be stronger still, and
+is the thing to reach for if this heuristic is ever observed to misfire.
+
+**16. Swipe state keeps its object identity too.** Reconciliation returned a
+fresh swipe map on every read, which scheduled a state update and undid the
+no-render fast path the message array had just earned. It now hands back the
+caller's own map when no group, selection or variant order moved.

@@ -237,15 +237,24 @@ export class ChatMessagesOps {
   }
 
   /**
-   * Commit a transcript change: fold the `transcriptVersion` bump into the
-   * chat-row update this write was already making, then announce the change.
+   * Announce that this chat's transcript changed.
    *
-   * The two halves belong together and must never drift apart. The counter is
-   * what makes the Salon's hinted re-read *conditional* — a tab hands back the
-   * version it last saw and the server answers "unchanged" without serializing
-   * a line of the conversation — so a hint published without a bump would be
-   * answered "unchanged" and the change would never reach the display. Every
-   * path in this class that adds, edits, deletes or clears a message ends here.
+   * The single announcement point, and two halves that must never drift apart:
+   * an atomic bump of the chat's `transcriptVersion` — the counter an open
+   * Salon tab hands back so the server can answer "unchanged" without
+   * serializing the conversation — and the `{topic:'chats', id}` hint that
+   * tells it to ask. Publishing without bumping would be answered "unchanged"
+   * and the change would never reach the display.
+   *
+   * **The bump is a raw `$inc`, and the column is deliberately absent from
+   * `ChatMetadataSchema`.** Both halves of that matter. Every repository update
+   * rewrites the *whole* validated row from a snapshot it read moments earlier,
+   * so a counter carried in the schema could be rewound by any concurrent
+   * chat-row write — two messages landing together would leave the counter
+   * where a tab that read in between already thinks it is, and the second
+   * message would never appear. Zod strips what it does not declare, so no
+   * `update` can touch this column and `SET v = v + 1` is the only writer.
+   * Read it back with `ChatsRepository.getTranscriptVersion`.
    *
    * `publishRealtime` is a no-op in the forked job child by construction
    * (`lib/realtime/bus.ts`), and a child's buffered `chats.*` writes are
@@ -254,29 +263,50 @@ export class ChatMessagesOps {
    * about. (The child's committed write batch announces the same topic from
    * `topicsForWriteBatch`; hints are idempotent and the bus coalesces them.)
    *
+   * Public because the funnel is not quite the whole story: the
+   * search-and-replace path (`ChatSearchOps.replaceInMessages`) rewrites
+   * message rows directly, and a transcript change is a transcript change.
+   *
+   * @param chatId The chat whose transcript changed.
+   */
+  async announceTranscriptChange(chatId: string): Promise<void> {
+    await safeQuery(async () => {
+      const collection = await this.ctx.getCollection();
+      await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $inc: { transcriptVersion: 1 } } as never,
+      );
+      return true;
+    }, 'Failed to bump transcript version', { chatId }, false);
+
+    logger.debug('Transcript change announced', { chatId });
+    publishRealtime('chats', chatId);
+  }
+
+  /**
+   * Commit a transcript change: write the chat-row bookkeeping this message
+   * write computed, then announce the change.
+   *
+   * The counter is bumped separately and atomically by
+   * {@link announceTranscriptChange}, never folded into `updateData` — see
+   * there for why that separation is the point rather than an inefficiency.
+   *
    * @param chatId The chat whose transcript changed.
    * @param chat The chat row as already loaded by the caller, or null when it
-   *   no longer exists — in which case there is nothing to bump, but the hint
-   *   still flies so collection-level readers hear about it.
+   *   no longer exists — in which case there is no bookkeeping to write, but
+   *   the change is still announced.
    * @param updateData Any other chat-row bookkeeping this write computed
-   *   (message count, cycle state, `lastMessageAt`), written in the same update.
+   *   (message count, cycle state, `lastMessageAt`).
    */
   private async commitTranscriptChange(
     chatId: string,
     chat: ChatMetadata | null,
     updateData: Record<string, unknown> = {},
   ): Promise<void> {
-    if (chat) {
-      await this.ctx.update(chatId, {
-        ...updateData,
-        transcriptVersion: (chat.transcriptVersion ?? 0) + 1,
-      } as Partial<ChatMetadata>);
+    if (chat && Object.keys(updateData).length > 0) {
+      await this.ctx.update(chatId, updateData as Partial<ChatMetadata>);
     }
-    logger.debug('Transcript change committed', {
-      chatId,
-      transcriptVersion: chat ? (chat.transcriptVersion ?? 0) + 1 : null,
-    });
-    publishRealtime('chats', chatId);
+    await this.announceTranscriptChange(chatId);
   }
 
   /**
@@ -506,7 +536,7 @@ export class ChatMessagesOps {
         // An edited row is a transcript change: swipes, regenerate, a typo fix
         // and a danger reclassification all land here, and an open tab must be
         // told to look again.
-        await this.commitTranscriptChange(chatId, await this.ctx.findById(chatId));
+        await this.announceTranscriptChange(chatId);
         return validated;
       } else {
         // Legacy data compatibility: Update in embedded array
@@ -534,7 +564,7 @@ export class ChatMessagesOps {
             },
           } as any
         );
-        await this.commitTranscriptChange(chatId, await this.ctx.findById(chatId));
+        await this.announceTranscriptChange(chatId);
         return validated;
       }
     }, 'Failed to update message in chat', { chatId, messageId }, null);

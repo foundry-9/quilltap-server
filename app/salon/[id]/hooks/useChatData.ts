@@ -64,6 +64,19 @@ export function useChatData(chatId: string) {
   const readInFlightRef = useRef(false)
   const readAgainRef = useRef(false)
 
+  /**
+   * Whether the last authoritative read actually succeeded.
+   *
+   * The turn-boundary sweep leans on this. Retiring an optimistic bubble is
+   * only safe on the word of a read that came back: if the read failed, the
+   * server may well have persisted the line, and dropping the bubble would take
+   * the operator's only visible copy of it off the screen.
+   */
+  const lastReadOkRef = useRef(false)
+
+  /** A sweep that was asked for while no successful read backed it up. */
+  const sweepPendingRef = useRef(false)
+
   // Both setters resolve against the ref and update it *synchronously*, rather
   // than resolving inside a React updater. A hinted re-read can land in the
   // same tick as an optimistic push, and reconciliation has to be handed the
@@ -100,6 +113,19 @@ export function useChatData(chatId: string) {
   }, [setMessages, setSwipeStates])
 
   /**
+   * Would applying a response carrying `version` walk the transcript backwards?
+   *
+   * `fetchChat` and the hinted read run independently and can overlap, so
+   * either may come back after a newer one has already been applied. Rows
+   * without their version are meaningless together, so the pair is taken or
+   * dropped whole.
+   */
+  const isStaleVersion = useCallback((version: unknown): boolean => {
+    const applied = transcriptVersionRef.current
+    return typeof version === 'number' && applied !== null && version < applied
+  }, [])
+
+  /**
    * Drop every provisional bubble still on screen.
    *
    * The turn boundary's broom. Reconciliation retires a bubble the moment the
@@ -109,8 +135,33 @@ export function useChatData(chatId: string) {
    * the POST landed — where there is no row coming and the bubble would
    * otherwise sit in the transcript forever, showing the operator a line that
    * is not in the room. The send path calls this once the turn is over.
+   *
+   * It sweeps only on the word of a read that came back. The error path that
+   * calls this has just tried a read of its own, and if *that* failed too then
+   * a bubble on screen may well be a line the server did persist — dropping it
+   * would take the operator's only copy with it. So the sweep is held over
+   * instead, and the next successful read performs it once reconciliation has
+   * had its say.
    */
   const clearProvisionalMessages = useCallback(() => {
+    if (!lastReadOkRef.current) {
+      sweepPendingRef.current = true
+      return
+    }
+    sweepPendingRef.current = false
+    setMessages((prev) => (prev.some(isProvisionalMessage) ? prev.filter((m) => !isProvisionalMessage(m)) : prev))
+  }, [setMessages])
+
+  /**
+   * Perform a sweep that was held over for want of a successful read.
+   *
+   * Called at the end of every authoritative read that came back, after
+   * reconciliation — so a bubble whose row did land is already gone, and only
+   * one that truly has no row behind it is swept.
+   */
+  const runPendingSweep = useCallback(() => {
+    if (!sweepPendingRef.current) return
+    sweepPendingRef.current = false
     setMessages((prev) => (prev.some(isProvisionalMessage) ? prev.filter((m) => !isProvisionalMessage(m)) : prev))
   }, [setMessages])
 
@@ -120,11 +171,21 @@ export function useChatData(chatId: string) {
       if (!res.ok) throw new Error('Failed to fetch chat')
       const data = await res.json()
       setChat(data.chat)
-      transcriptVersionRef.current = typeof data.chat?.transcriptVersion === 'number'
-        ? data.chat.transcriptVersion
-        : null
-      applyTranscriptRows((data.chat?.messages ?? []) as Message[])
+      lastReadOkRef.current = true
+
+      // The chat object is always the newer answer for its own fields, but its
+      // transcript half may not be: a hinted read can have applied a higher
+      // version while this request was out, and re-applying older rows would
+      // undo it.
+      if (!isStaleVersion(data.chat?.transcriptVersion)) {
+        transcriptVersionRef.current = typeof data.chat?.transcriptVersion === 'number'
+          ? data.chat.transcriptVersion
+          : null
+        applyTranscriptRows((data.chat?.messages ?? []) as Message[])
+      }
+      runPendingSweep()
     } catch (err) {
+      lastReadOkRef.current = false
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setLoading(false)
@@ -134,7 +195,7 @@ export function useChatData(chatId: string) {
       // recovery a tab whose first load failed is going to get.
       hasTranscriptRef.current = true
     }
-  }, [chatId, applyTranscriptRows])
+  }, [chatId, applyTranscriptRows, isStaleVersion, runPendingSweep])
 
   /**
    * One conditional round trip. The body {@link refreshTranscript} runs; call
@@ -149,16 +210,20 @@ export function useChatData(chatId: string) {
       const res = await fetch(`/api/v1/messages?${query.toString()}`, { cache: 'no-store' })
       if (!res.ok) return
       const data = (await res.json()) as TranscriptResponse
-      if (data.unchanged) return
+      lastReadOkRef.current = true
+      if (data.unchanged) {
+        runPendingSweep()
+        return
+      }
 
       // A read that overlapped a newer one — a `fetchChat` that landed while
       // this was out — must not walk the transcript backwards.
-      const applied = transcriptVersionRef.current
-      if (typeof data.version === 'number' && applied !== null && data.version < applied) return
+      if (isStaleVersion(data.version)) return
 
       transcriptVersionRef.current = typeof data.version === 'number' ? data.version : null
       hasTranscriptRef.current = true
       applyTranscriptRows(data.messages ?? [])
+      runPendingSweep()
 
       // Announcement bubbles and Carina answers can be authored by someone who
       // isn't a participant; without their card the renderer has no avatar to
@@ -170,11 +235,12 @@ export function useChatData(chatId: string) {
     } catch (err) {
       // A failed re-read is not a failed conversation: the next hint, the
       // socket's own reconnect catch-up, or the next mount will try again.
+      lastReadOkRef.current = false
       console.error('Failed to refresh chat transcript:', {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-  }, [chatId, applyTranscriptRows])
+  }, [chatId, applyTranscriptRows, isStaleVersion, runPendingSweep])
 
   /**
    * Re-read the transcript, conditionally.

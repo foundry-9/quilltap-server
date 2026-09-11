@@ -114,6 +114,9 @@ describe('chats [id] GET handler', () => {
         chats: {
           findById: jest.fn().mockResolvedValue(chatMetadata),
           getMessages: jest.fn().mockResolvedValue([assistantMessage]),
+          // The transcript counter is read off the row, not through the entity
+          // schema — see ChatMessagesOps.announceTranscriptChange.
+          getTranscriptVersion: jest.fn().mockResolvedValue(0),
         },
         files: {
           findByLinkedTo: jest.fn().mockResolvedValue([]),

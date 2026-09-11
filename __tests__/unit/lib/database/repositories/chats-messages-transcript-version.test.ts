@@ -13,6 +13,11 @@
  * without a hint would sit in the database until something else happened to
  * trigger a read — which is exactly the bug this feature exists to close.
  *
+ * The bump must also be an atomic `SET v = v + 1` rather than a read-then-write
+ * of a snapshot. Two messages landing together would otherwise both compute the
+ * same next value, and a tab that read in between would be told "unchanged" for
+ * the second one — the very failure this counter exists to prevent.
+ *
  * Design of record: docs/developer/features/complete/salon-realtime-transcript.md
  */
 
@@ -31,11 +36,14 @@ const MESSAGE_ID = '00000000-0000-4000-8000-000000000001'
 
 let rows: Record<string, unknown>[]
 let updates: Array<Partial<ChatMetadata>>
+/** Every `updateOne` issued against the `chats` row itself. */
+let chatRowWrites: Array<Record<string, unknown>>
 
 /** `null` stands for a chat row that predates the counter column. */
 function makeOps(startingVersion: number | null = 7): ChatMessagesOps {
   rows = []
   updates = []
+  chatRowWrites = []
   publishRealtime.mockClear()
 
   const messagesCollection = {
@@ -58,6 +66,13 @@ function makeOps(startingVersion: number | null = 7): ChatMessagesOps {
     }),
   }
 
+  const chatCollection = {
+    updateOne: jest.fn(async (_filter: unknown, update: Record<string, unknown>) => {
+      chatRowWrites.push(update)
+      return {}
+    }),
+  }
+
   const ctx: ChatOpsContext = {
     findById: jest.fn(async () => ({
       id: CHAT_ID,
@@ -68,7 +83,7 @@ function makeOps(startingVersion: number | null = 7): ChatMessagesOps {
       updates.push(data)
       return null
     }),
-    getCollection: jest.fn(async () => messagesCollection as never),
+    getCollection: jest.fn(async () => chatCollection as never),
     getMessagesCollection: jest.fn(async () => messagesCollection as never),
     isSQLiteBackend: () => true,
     generateId: () => MESSAGE_ID,
@@ -89,16 +104,23 @@ function msg(overrides: Record<string, unknown> = {}): ChatEvent {
   } as unknown as ChatEvent
 }
 
-/** The version every metadata patch in this write carried, latest last. */
-function bumpedVersions(): Array<number | undefined> {
-  return updates.map((u) => (u as { transcriptVersion?: number }).transcriptVersion)
+/** Every atomic counter bump this write issued, in order. */
+function bumps(): Array<Record<string, unknown>> {
+  return chatRowWrites
+    .map((w) => (w as { $inc?: Record<string, unknown> }).$inc)
+    .filter((inc): inc is Record<string, unknown> => Boolean(inc))
+}
+
+/** No metadata patch may carry the counter — Zod would strip it anyway. */
+function metadataPatchesCarryingVersion(): number {
+  return updates.filter((u) => 'transcriptVersion' in (u as Record<string, unknown>)).length
 }
 
 describe('the funnel bumps and announces together', () => {
   it('addMessage', async () => {
     const ops = makeOps()
     await ops.addMessage(CHAT_ID, msg())
-    expect(bumpedVersions()).toEqual([8])
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }])
     expect(publishRealtime).toHaveBeenCalledWith('chats', CHAT_ID)
   })
 
@@ -110,7 +132,7 @@ describe('the funnel bumps and announces together', () => {
     ])
     // One bump for the batch, not one per row: the tab asks "has this changed?",
     // not "by how much".
-    expect(bumpedVersions()).toEqual([8])
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }])
     expect(publishRealtime).toHaveBeenCalledTimes(1)
   })
 
@@ -119,9 +141,10 @@ describe('the funnel bumps and announces together', () => {
     await ops.addMessage(CHAT_ID, msg())
     publishRealtime.mockClear()
     updates.length = 0
+    chatRowWrites.length = 0
 
     await ops.updateMessage(CHAT_ID, MESSAGE_ID, { content: 'edited' } as Partial<ChatEvent>)
-    expect(bumpedVersions()).toEqual([8])
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }])
     expect(publishRealtime).toHaveBeenCalledWith('chats', CHAT_ID)
   })
 
@@ -136,9 +159,10 @@ describe('the funnel bumps and announces together', () => {
     await ops.addMessage(CHAT_ID, msg())
     publishRealtime.mockClear()
     updates.length = 0
+    chatRowWrites.length = 0
 
     await ops.deleteMessagesByIds(CHAT_ID, [MESSAGE_ID])
-    expect(bumpedVersions()).toEqual([8])
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }])
     expect(publishRealtime).toHaveBeenCalledWith('chats', CHAT_ID)
   })
 
@@ -151,13 +175,29 @@ describe('the funnel bumps and announces together', () => {
   it('clearMessages', async () => {
     const ops = makeOps()
     await ops.clearMessages(CHAT_ID)
-    expect(bumpedVersions()).toEqual([8])
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }])
     expect(publishRealtime).toHaveBeenCalledWith('chats', CHAT_ID)
   })
 
-  it('starts a chat that has never carried a counter at 1', async () => {
-    const ops = makeOps(null)
+  it('never writes the counter through a metadata patch', async () => {
+    // The column is deliberately outside ChatMetadataSchema, so a repository
+    // update — which rewrites the whole validated row from a snapshot it read
+    // moments earlier — cannot rewind it. A patch carrying the counter would
+    // mean that protection had been given up.
+    const ops = makeOps()
     await ops.addMessage(CHAT_ID, msg())
-    expect(bumpedVersions()).toEqual([1])
+    expect(metadataPatchesCarryingVersion()).toBe(0)
+  })
+
+  it('bumps relative to the stored value, never to a snapshot it read', async () => {
+    // Two writes landing together must leave the counter two ahead, not one.
+    // Computing `snapshot + 1` twice would leave a tab that read in between
+    // being told "unchanged" for the second message.
+    const ops = makeOps()
+    await Promise.all([
+      ops.addMessage(CHAT_ID, msg()),
+      ops.addMessage(CHAT_ID, msg({ id: '00000000-0000-4000-8000-000000000009' })),
+    ])
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }, { transcriptVersion: 1 }])
   })
 })

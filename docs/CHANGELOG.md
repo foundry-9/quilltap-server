@@ -38,12 +38,26 @@ a row for it, matched on role and text first and on "a new row of the same role,
 bubble" second (an attachment send stores different text than it displays). A send that never
 persisted at all is swept at the turn boundary instead of sitting in the transcript forever.
 
+The counter is a `chats` column but deliberately not a field on the chat entity. Every repository
+update rewrites the whole validated row from a snapshot it read moments earlier, so a counter inside
+the schema could be rewound by any concurrent chat-row write — two messages landing together would
+leave it where a tab that read in between already thinks it is, and that tab would never be shown
+the second one. Zod strips what it does not declare, so no `update()` can touch the column and
+`SET v = v + 1` is its only writer. Being outside the entity also keeps it out of `.qtap` exports
+and backups without any special-casing, and an import starts at zero because it simply isn't in the
+bundle.
+
+Search-and-replace announces too. `replaceInMessages` rewrites message rows directly, outside the
+add/update/delete funnel; without an announcement an open Salon would go on being told "unchanged"
+while every line it displayed had its text rewritten underneath it.
+
 Also in this change: the transcript projection — attachments, pre-rendered HTML, off-scene author
 cards — moved out of the chat GET handler into `lib/chat/transcript-projection.ts`, so the mount
-read and the conditional re-read cannot drift apart. `transcriptVersion` is not exported to `.qtap`
-(it describes one instance's writes) and an import starts it at zero. The terminal's `chat-update`
-and `terminal-exited` browser events now use the cheap transcript read instead of refetching the
-whole chat.
+read and the conditional re-read cannot drift apart. Both readers take the counter before projecting,
+so the version handed to a tab is never newer than the rows beside it. The transcript endpoints now
+verify chat ownership, matching the per-message endpoints. The terminal's `chat-update` and
+`terminal-exited` browser events now use the cheap transcript read instead of refetching the whole
+chat.
 
 Filed while implementing, not fixed here: bug 135 (`userStoppedStreamRef` is written four times and
 read nowhere, so Stop and Pause gate nothing) and bug 136 (a send refused because one is already in

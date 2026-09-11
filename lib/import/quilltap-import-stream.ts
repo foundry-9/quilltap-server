@@ -265,10 +265,7 @@ export async function assembleExportFromStream(
 
       case 'chat': {
         const chatRec = record as QtapRecord & { kind: 'chat' };
-        // The counter is not in the bundle by design (see ExportedChatRecord) —
-        // it describes the writes of the instance that produced the file. Every
-        // chat starts this instance's transcript counter at zero.
-        const exported: ExportedChat = { ...chatRec.data, transcriptVersion: 0, messages: [] };
+        const exported: ExportedChat = { ...chatRec.data, messages: [] };
         chatsById.set(exported.id, exported);
         chatOrder.push(exported.id);
         break;
