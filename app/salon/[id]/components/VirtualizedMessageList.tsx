@@ -37,7 +37,8 @@ interface VirtualizedMessageListProps {
   swipeStates: Record<string, SwipeState>
   setSwipeStates: React.Dispatch<React.SetStateAction<Record<string, SwipeState>>>
   // Appearance
-  chatSettings: ChatSettings | null
+  /** `undefined` while the settings query is in flight; every read below defaults. */
+  chatSettings: ChatSettings | null | undefined
   roleplayRenderingPatterns: RenderingPattern[] | undefined
   roleplayDialogueDetection: DialogueDetection | null | undefined
   // Multi-char

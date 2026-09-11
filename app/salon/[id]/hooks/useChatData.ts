@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react'
 import { useRealtimeTopic } from '@/hooks/useRealtime'
-import type { Chat, ChatSettings, Message } from '../types'
+import type { Chat, Message } from '../types'
 
 export interface SwipeState {
   current: number
@@ -15,28 +15,8 @@ export function useChatData(chatId: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [chatSettings, setChatSettings] = useState<ChatSettings | null>(null)
   const [swipeStates, setSwipeStates] = useState<Record<string, SwipeState>>({})
   const [chatMemoryCount, setChatMemoryCount] = useState(0)
-
-  const fetchChatSettings = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/settings/chat', { cache: 'no-store' })
-      if (!res.ok) {
-        const errorBody = await res.text().catch(() => 'Unable to read response body')
-        throw new Error(`Failed to fetch chat settings: ${res.status} ${res.statusText} - ${errorBody}`)
-      }
-      const data = await res.json()
-      setChatSettings(data)
-    } catch (err) {
-      console.error('Failed to fetch chat settings', {
-        error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      })
-      // Use default settings if fetch fails
-      setChatSettings({ id: '', userId: '', avatarDisplayMode: 'ALWAYS', avatarDisplayStyle: 'CIRCULAR', tagStyles: {}, createdAt: '', updatedAt: '' })
-    }
-  }, [])
 
   const fetchChat = useCallback(async () => {
     try {
@@ -121,14 +101,11 @@ export function useChatData(chatId: string) {
     setMessages,
     loading,
     error,
-    chatSettings,
-    setChatSettings,
     swipeStates,
     setSwipeStates,
     chatMemoryCount,
     setChatMemoryCount,
     fetchChat,
-    fetchChatSettings,
     fetchChatMemoryCount,
   }
 }

@@ -30,20 +30,25 @@ function args(over: Partial<ShouldRehearseArgs> = {}): ShouldRehearseArgs {
   }
 }
 
-describe('the gate reads a LIVE setting', () => {
-  it('SalonView takes the setting from useChatSettingsQuery, not the mount-only fetch', () => {
-    // Bug 134: `useChatData.fetchChatSettings` runs once on mount, and a
-    // workspace tab keeps the Salon mounted indefinitely — so a toggle flipped
-    // in the Settings tab would never reach an open chat. The gate must read
-    // through the TanStack query, whose key the settings mutation invalidates.
-    const source = readFileSync(
-      join(__dirname, '..', '..', 'SalonView.tsx'),
-      'utf8',
-    )
-    expect(source).toContain('const { data: liveChatSettings } = useChatSettingsQuery()')
-    expect(source).toContain('liveChatSettings?.impersonationVoiceRewrite')
-    // The stale reader must not creep back in for this field.
-    expect(source).not.toContain('chatSettings?.impersonationVoiceRewrite')
+describe('every chat setting the Salon reads is LIVE', () => {
+  // Bug 134: `useChatData` used to fetch `/api/v1/settings/chat` once, from the
+  // mount effect, into `useState`. A workspace tab keeps a Salon mounted for the
+  // life of the session, so that value was a snapshot of whenever the tab was
+  // opened and no dial flipped in the Settings tab ever reached the open chat.
+  // Every read now goes through the TanStack query, whose key the settings
+  // mutation invalidates.
+  const salonView = readFileSync(join(__dirname, '..', '..', 'SalonView.tsx'), 'utf8')
+  const chatData = readFileSync(join(__dirname, '..', 'useChatData.ts'), 'utf8')
+
+  it('SalonView takes its settings from useChatSettingsQuery', () => {
+    expect(salonView).toContain('const { data: chatSettings } = useChatSettingsQuery()')
+    expect(salonView).toContain('chatSettings?.impersonationVoiceRewrite')
+  })
+
+  it('the mount-only fetch is gone, and cannot be called back', () => {
+    expect(salonView).not.toContain('fetchChatSettings')
+    expect(chatData).not.toContain('chatSettings')
+    expect(chatData).not.toContain('/api/v1/settings/chat')
   })
 })
 

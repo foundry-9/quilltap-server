@@ -111,9 +111,19 @@ export function SalonView({ chatId }: SalonViewProps) {
 
   // --- Core data hook ---
   const chatDataHook = useChatData(id)
-  const { chat, messages, loading, error, chatSettings, swipeStates, chatMemoryCount } = chatDataHook
+  const { chat, messages, loading, error, swipeStates, chatMemoryCount } = chatDataHook
   const { setChat, setMessages, setSwipeStates } = chatDataHook
-  const { fetchChat, fetchChatSettings, fetchChatMemoryCount } = chatDataHook
+  const { fetchChat, fetchChatMemoryCount } = chatDataHook
+
+  // --- Chat settings ---
+  // Every settings read in this component goes through the TanStack query, and
+  // never through a fetch of its own. The workspace renders a Salon tab once and
+  // hides it with `display: none`, so a mounted chat can outlive a dozen visits
+  // to the Settings tab; a value read at mount would be a snapshot of whenever
+  // the tab was opened. Saving a dial writes this key through `setQueryData`
+  // and invalidates it, which TanStack delivers to every mounted observer —
+  // a hidden tab included — so an open chat follows the change live (bug 134).
+  const { data: chatSettings } = useChatSettingsQuery()
 
   // --- The chat gallery ---
   // One read backs both the sidebar's `Gallery (N)` and the grid the modal
@@ -578,13 +588,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   // attribute this message to a seat the human is *impersonating*, the draft
   // goes to that character's own model for a restatement the operator reviews
   // before anything posts. Owner-persona seats are deliberately out of scope.
-  // Read through the TanStack query, NOT `chatSettings` from `useChatData` —
-  // that one is a one-shot fetch on mount, and a workspace tab keeps the Salon
-  // mounted indefinitely, so a toggle flipped in the Settings tab would never
-  // reach an open chat. The query key is invalidated by the settings mutation
-  // and refetched on tab activation, so the gate follows the setting live.
-  const { data: liveChatSettings } = useChatSettingsQuery()
-  const impersonationVoiceEnabled = liveChatSettings?.impersonationVoiceRewrite ?? false
+  const impersonationVoiceEnabled = chatSettings?.impersonationVoiceRewrite ?? false
   const rehearsalTarget = useMemo(() => {
     const p = speakingSeat
     if (!p?.character) return null
@@ -859,9 +863,8 @@ export function SalonView({ chatId }: SalonViewProps) {
   // --- Initialization effects ---
   useEffect(() => {
     fetchChat()
-    fetchChatSettings()
     fetchChatMemoryCount()
-  }, [fetchChat, fetchChatSettings, fetchChatMemoryCount])
+  }, [fetchChat, fetchChatMemoryCount])
 
   // When a TerminalEmbed reports its PTY has exited, refresh the chat so the
   // new Ariel close announcement appears inline.

@@ -125,6 +125,14 @@ All changes are saved automatically. You need not hunt for a "Save" button --- m
 - **On next chat:** Connection profile changes, plugin enablement
 - **On next operation:** Image generation profile, embedding profile changes
 
+"Immediately" is meant without asterisk, and includes conversations *already in
+progress in another tab*. Adjust a Chat preference here --- auto-scroll, the
+display of a model's thinking, token counts, the inspector button, story
+backgrounds --- and switch back to a chat you left open an hour ago: it will
+have adopted your new arrangement while its back was turned, without losing a
+word of a reply still arriving. There is no need to close the conversation and
+open it again, and never was meant to be.
+
 ## Navigating from the Old Foundry Routes
 
 If you have bookmarks or links to the old `/foundry` subsystem pages, they will automatically redirect to the appropriate Settings tab. No link left behind, as they say.

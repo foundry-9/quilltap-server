@@ -4,6 +4,33 @@
 
 ### 4.10-dev
 
+#### Fixed: a chat setting changed while a Salon tab was open never reached it (bug 134)
+
+Flipping a Settings → Chat dial — auto-scroll, thinking display, token display, the LLM inspector
+button, story backgrounds — did not affect a chat already open in another workspace tab. The chat
+kept the old value until it was reloaded or closed and reopened. The setting itself saved
+correctly; a newly opened chat honoured it.
+
+`SalonView` read its settings from `useChatData`, which fetched `/api/v1/settings/chat` once from
+the mount effect into `useState`. That was fine when a Salon was a page and navigating to Settings
+unmounted it. The tabbed workspace renders every tab at once and hides the inactive ones with
+`display: none`, so a backgrounded Salon never unmounts and never re-runs the effect — the value
+was a snapshot of whenever the tab was opened.
+
+Every settings read in the Salon now goes through `useChatSettingsQuery`, the same shared query the
+composer plugins already used. Saving a dial invalidates that key, which TanStack delivers to every
+mounted observer including a hidden tab, so an open chat follows the change without remounting (and
+without interrupting a stream). `fetchChatSettings` and the `chatSettings` state are gone from
+`useChatData`. The Salon's own duplicate `ChatSettings` interface, plus the four sub-shapes it
+referenced, are now re-exports of `components/settings/chat-settings/types` — one declaration of the
+row instead of two. The memory-cascade "remember my choice" write also invalidates the key, which
+it never did.
+
+Files: `app/salon/[id]/SalonView.tsx`, `app/salon/[id]/hooks/useChatData.ts`,
+`app/salon/[id]/types.ts`, `app/salon/[id]/hooks/useMessageActions.ts`,
+`app/salon/[id]/components/VirtualizedMessageList.tsx`,
+`app/salon/[id]/hooks/__tests__/useImpersonationVoice.test.ts`.
+
 #### Fixed: both voice rehearsals were logged as chat summaries
 
 `mapTaskTypeToLogType` is a closed allowlist, and an unmapped task type falls through to

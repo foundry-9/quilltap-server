@@ -1,4 +1,3 @@
-import type { TagVisualStyle } from '@/lib/schemas/types'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 export interface MessageAttachment {
@@ -303,55 +302,28 @@ export interface Chat {
   }>
 }
 
-export type MemoryCascadeAction = 'DELETE_MEMORIES' | 'KEEP_MEMORIES' | 'REGENERATE_MEMORIES' | 'ASK_EVERY_TIME'
+/**
+ * Chat-settings shapes the Salon renders with, re-exported from the settings
+ * module rather than re-declared here. See the note on `ChatSettings` below.
+ */
+export type {
+  MemoryCascadeAction,
+  MemoryCascadePreferences,
+  TokenDisplaySettings,
+  StoryBackgroundsSettings,
+  DangerousContentSettings,
+} from '@/components/settings/chat-settings/types'
 
-export interface MemoryCascadePreferences {
-  onMessageDelete: MemoryCascadeAction
-  onSwipeRegenerate: MemoryCascadeAction
-}
-
-export interface TokenDisplaySettings {
-  showPerMessageTokens: boolean
-  showPerMessageCost: boolean
-  showChatTotals: boolean
-  showSystemEvents: boolean
-}
-
-export interface StoryBackgroundsSettings {
-  enabled: boolean
-  defaultImageProfileId?: string | null
-}
-
-export interface DangerousContentSettings {
-  mode: 'OFF' | 'DETECT_ONLY' | 'AUTO_ROUTE'
-  threshold: number
-  scanTextChat: boolean
-  scanImagePrompts: boolean
-  scanImageGeneration: boolean
-  displayMode: 'SHOW' | 'BLUR' | 'COLLAPSE'
-  showWarningBadges: boolean
-}
-
-export interface ChatSettings {
-  id: string
-  userId: string
-  avatarDisplayMode: 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
-  avatarDisplayStyle?: 'CIRCULAR' | 'RECTANGULAR'
-  tagStyles?: Record<string, TagVisualStyle>
-  memoryCascadePreferences?: MemoryCascadePreferences
-  tokenDisplaySettings?: TokenDisplaySettings
-  llmLoggingSettings?: { enabled?: boolean; verboseMode?: boolean; retentionDays?: number }
-  storyBackgroundsSettings?: StoryBackgroundsSettings
-  dangerousContentSettings?: DangerousContentSettings
-  /** Global defaults for showing reasoning models' thinking. DISPLAY ONLY. */
-  thinkingDisplay?: { defaultVisible: boolean; defaultCollapsed: boolean }
-  /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom). DISPLAY ONLY. */
-  autoScrollOnResponseComplete?: boolean
-  /** Whether a line typed while impersonating a character is first restated by that character's own model, for review, before it posts. */
-  impersonationVoiceRewrite?: boolean
-  createdAt: string
-  updatedAt: string
-}
+/**
+ * The instance's chat-settings row, as the Salon reads it.
+ *
+ * A re-export, not a copy. This file used to carry its own leaner declaration,
+ * and a second declaration is how two readers of the same endpoint come to
+ * disagree: the Salon's snapshot and the composer's live query described the
+ * same row in different words, so nothing flagged that one of them had gone
+ * stale (bug 134). There is one shape, and it is the settings module's.
+ */
+export type { ChatSettings } from '@/components/settings/chat-settings/types'
 
 export interface AttachedFile {
   id: string

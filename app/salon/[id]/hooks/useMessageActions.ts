@@ -1,10 +1,12 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
+import { queryKeys } from '@/lib/query/keys'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 
 /** Info returned when delete requires memory cascade confirmation */
@@ -29,6 +31,7 @@ export function useMessageActions(
   messagesEndRef: React.RefObject<HTMLDivElement>,
   chatSettings?: ChatSettings | null,
 ) {
+  const queryClient = useQueryClient()
   // State for memory cascade dialog
   const [memoryCascadeConfirmation, setMemoryCascadeConfirmation] = useState<MemoryCascadeConfirmation | null>(null)
   const startEdit = (message: Message) => {
@@ -136,6 +139,11 @@ export function useMessageActions(
             },
           }),
         })
+        // The settings row this hook reads from is the shared query, so the
+        // remembered choice has to be published there too — otherwise "don't
+        // ask me again" holds for this dialog and is forgotten by the next one
+        // until something else refetches (bug 134, write side).
+        await queryClient.invalidateQueries({ queryKey: queryKeys.settings.chat })
       } catch {
         // Don't fail if settings update fails
       }
