@@ -393,6 +393,8 @@ import { clearGeneratedImagePlaceholderDescriptionsMigration } from './clear-gen
 // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
 import { addImpersonationVoiceRewriteFieldMigration } from './add-impersonation-voice-rewrite-field';
 import { addTranscriptVersionColumnMigration } from './add-transcript-version-column-v1';
+import { addFileGenerationKeyColumnMigration } from './add-file-generation-key-column-v1';
+import { collapseDuplicateAvatarRollsMigration } from './collapse-duplicate-avatar-rolls-v1';
 
 /**
  * All available migrations.
@@ -789,6 +791,10 @@ export const migrations: Migration[] = [
   addImpersonationVoiceRewriteFieldMigration,
   // Salon transcript as a subscribed read: transcriptVersion counter column on chats
   addTranscriptVersionColumnMigration,
+  // Avatar configuration cache: generationKey column + index on files
+  addFileGenerationKeyColumnMigration,
+  // Avatar configuration cache: one image per character per configuration
+  collapseDuplicateAvatarRollsMigration,
 ];
 
 export {
@@ -1164,5 +1170,9 @@ export {
   addImpersonationVoiceRewriteFieldMigration,
   // Salon transcript as a subscribed read: transcriptVersion counter column on chats
   addTranscriptVersionColumnMigration,
+  // Avatar configuration cache: generationKey column + index on files
+  addFileGenerationKeyColumnMigration,
+  // Avatar configuration cache: one image per character per configuration
+  collapseDuplicateAvatarRollsMigration,
 };
 

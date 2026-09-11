@@ -212,6 +212,13 @@ export interface CharacterAvatarGenerationPayload {
    * not match what the character is actually wearing in the chat.
    */
   equippedSlotsOverride?: EquippedSlots | null;
+  /**
+   * Reroll: skip the avatar configuration cache and generate unconditionally,
+   * rebinding the configuration's cache key to the new image. Set by the manual
+   * regenerate button; automatic wardrobe-change triggers leave it unset so a
+   * configuration that has already been drawn costs nothing to re-enter.
+   */
+  force?: boolean;
 }
 
 /**

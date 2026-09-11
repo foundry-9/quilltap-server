@@ -4,6 +4,46 @@
 
 ### 4.10-dev
 
+#### Character avatars are cached per configuration
+
+A character wearing the same outfit no longer costs a fresh image every time. The avatar prompt is
+built from deterministic inputs only, so the prompt plus the built image-generation parameters
+(provider, profile, model, LoRAs, options, size) hash to a `generationKey` stored on the `files`
+row. Before generating, the avatar job looks that key up; if a matching image is found and its bytes
+still exist, it is reused and the job stops there — skipping the Concierge classification call, the
+image call, the WebP conversion and the file write. Put the coat back on later and the same portrait
+comes back.
+
+The **Regenerate Avatar** button now behaves as a reroll. It sets `force`, which bypasses the lookup,
+generates a new image, and rebinds the key to it, so the new portrait becomes the one that outfit
+returns from then on. It affects that character in that outfit only — the character's own default
+portrait is a separate image and is not touched.
+
+Generated avatars are now always stored in the character's vault, whether or not the chat belongs to
+a project. Project-context avatars no longer show up in that project's file tree; existing files keep
+their storage location and still display. One consequence: a character whose vault is missing or
+broken now gets no avatar at all, where before a project chat could still produce one.
+
+A cache hit posts no Lantern announcement, since nothing was generated. The avatar still updates in
+the Salon as usual.
+
+#### Migration: duplicate avatar rolls are collapsed
+
+`collapse-duplicate-avatar-rolls-v1` brings existing avatars into the cache. Avatar rows are grouped
+by prompt and model; the newest row in each group survives and receives the cache key, and the rest
+are deleted — the `files` row plus the stored image, chunks and links. Every reference to a deleted
+row is repointed to the survivor: `chats.characterAvatars`, `characters.avatarOverrides`, and
+chat message attachments, including the file uuid the Lantern quotes inline in its announcement text.
+
+This is destructive and visible. The duplicates were not redundant copies of the same image; they
+were separate generations of the same prompt. Chats that displayed one of the deleted rolls now
+display the surviving one instead, and this cannot be undone. On the instance it was measured
+against, 1786 avatar rows collapsed to 889, freeing about 141 MB. Rows with no generation prompt are
+skipped, and a group with only one row keeps it and gains a key.
+
+`add-file-generation-key-column-v1` runs first and adds the nullable `files.generationKey` column and
+its index.
+
 #### The Salon transcript is now a subscribed read
 
 A message written into a chat now reaches every open tab on that chat, whether or not the tab was

@@ -574,14 +574,15 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 **Setting Options:**
 
 - **Enable Avatar Generation** — Toggle per-conversation avatar generation on or off. Available both when creating a new chat and (as **Auto-generate Character Avatars**) in the Chat Sidebar's **Chat** drawer during active conversations.
-- **Regenerate Avatar** — In the Chat Sidebar's **Participants** drawer, click the refresh button on any character's portrait to queue a new avatar. Useful after outfit changes or when the muse simply failed to capture the right likeness the first time.
+- **Regenerate Avatar** — In the Chat Sidebar's **Participants** drawer, click the refresh button on any character's portrait to commission a fresh sitting when the muse has failed to capture the right likeness. The new picture *replaces* the one filed for the ensemble the character is presently wearing, and it is the one brought out whenever they wear those clothes again; the last drawn is the one that stands. The character's own standing portrait, worn everywhere outside this conversation, is a separate commission and is not disturbed.
 
 **How it works:**
 
 1. When enabled on chat creation, avatars are generated for all LLM-controlled characters as soon as the chat begins
 2. When toggled on during an active chat, generation is queued for all LLM characters
 3. Avatars update automatically when outfit changes occur (if enabled)
-4. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
+4. Each portrait is filed against the exact ensemble that occasioned it. Should the character wear that same costume again — five minutes later or five weeks — the picture already taken is brought out of the cabinet rather than a fresh plate exposed, which costs you no time and not a farthing of your image budget. Alter so much as a scarf and that is a new ensemble, deserving of a new sitting
+5. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
 
 **Prerequisites:**
 

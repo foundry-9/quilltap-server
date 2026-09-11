@@ -57,6 +57,11 @@ export const FileEntrySchema = z.object({
   generationPrompt: z.string().nullable().optional(),
   generationModel: z.string().nullable().optional(),
   generationRevisedPrompt: z.string().nullable().optional(),
+  // Avatar configuration cache key — the hash of everything deterministic about
+  // the generation that produced this file (prompt, profile, model, params).
+  // Set only on cached-avatar rows; every other file leaves it null. Derived
+  // exclusively by `lib/wardrobe/avatar-cache.ts`.
+  generationKey: z.string().nullable().optional(),
   description: z.string().nullable().optional(),  // AI description or user-provided description
 
   // Tags

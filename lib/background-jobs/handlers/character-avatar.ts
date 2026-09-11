@@ -11,7 +11,6 @@
 
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
@@ -42,15 +41,59 @@ import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool
 import { resolveAesthetic, getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import { deriveAvatarCacheKeys, lookupCachedAvatar } from '@/lib/wardrobe/avatar-cache';
+
+/**
+ * Point a chat (and the character's per-chat override) at an avatar image.
+ *
+ * Shared by the generation path and the configuration-cache hit path: a reused
+ * avatar must bind exactly the way a freshly drawn one does, or the two paths
+ * drift and a cached avatar shows up in one surface but not the other.
+ */
+async function bindAvatarToChat(
+  repos: ReturnType<typeof getRepositories>,
+  args: {
+    chat: { characterAvatars?: unknown; messageCount?: number | null };
+    character: { id: string; avatarOverrides?: Array<{ chatId: string; imageId: string }> | null };
+    chatId: string;
+    fileId: string;
+  },
+): Promise<void> {
+  const { chat, character, chatId, fileId } = args;
+
+  const existingAvatars = (chat.characterAvatars && typeof chat.characterAvatars === 'object')
+    ? chat.characterAvatars as Record<string, unknown>
+    : {};
+
+  await repos.chats.update(chatId, {
+    characterAvatars: {
+      ...existingAvatars,
+      [character.id]: {
+        imageId: fileId,
+        generatedAt: new Date().toISOString(),
+        afterMessageCount: chat.messageCount ?? 0,
+      },
+    },
+  });
+
+  const existingOverrides = character.avatarOverrides || [];
+  const filteredOverrides = existingOverrides.filter(o => o.chatId !== chatId);
+  filteredOverrides.push({ chatId, imageId: fileId });
+
+  await repos.characters.update(character.id, {
+    avatarOverrides: filteredOverrides,
+  });
+}
 
 /**
  * Handle CHARACTER_AVATAR_GENERATION job.
  *
  * 1. Load character + equipped wardrobe items
  * 2. Build appearance description from physical descriptions + equipped items
- * 3. Run prompt through Concierge (dangerous content classification + provider rerouting)
- * 4. Generate portrait image
- * 5. Store image and update chat.characterAvatars
+ * 3. Look the configuration up in the avatar cache — a hit binds and stops here
+ * 4. Run prompt through Concierge (dangerous content classification + provider rerouting)
+ * 5. Generate portrait image
+ * 6. Store image in the character's vault and update chat.characterAvatars
  */
 export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promise<void> {
   const payload = job.payload as unknown as CharacterAvatarGenerationPayload;
@@ -127,6 +170,54 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       characterId: payload.characterId,
     });
     return;
+  }
+
+  // 5. Avatar configuration cache.
+  //
+  // Built from the ORIGINAL profile, before the Concierge classification below,
+  // so a hit skips that LLM call as well as the image call, the WebP transcode
+  // and the file write. A Concierge reroute therefore stores its image under
+  // the originally-requested key — correct (same inputs, same outcome), though
+  // it means a cached row's generationModel need not match its key's model.
+  //
+  // These params are reused verbatim for generation on a miss; only a reroute
+  // rebuilds them, since the fallback provider's shape mechanism, LoRA support
+  // and stored options are all its own.
+  const { params: avatarParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt,
+    overrides: { n: 1, style: 'natural' },
+    orientation: 'portrait',
+    logContext: { context: 'background-jobs.character-avatar', jobId: job.id },
+  });
+  const cacheKeys = deriveAvatarCacheKeys({
+    provider: imageProfile.provider,
+    imageProfileId: imageProfile.id,
+    params: avatarParams,
+  });
+
+  if (!payload.force) {
+    const cached = await lookupCachedAvatar(repos, cacheKeys, payload.characterId);
+    if (cached) {
+      await bindAvatarToChat(repos, {
+        chat,
+        character,
+        chatId: payload.chatId,
+        fileId: cached.id,
+      });
+
+      // No Lantern notification: nothing was produced. The avatar still reaches
+      // the Salon through the normal realtime path.
+      logger.info('[CharacterAvatar] Reused cached avatar for this configuration', {
+        context: 'background-jobs.character-avatar',
+        jobId: job.id,
+        chatId: payload.chatId,
+        characterId: payload.characterId,
+        fileId: cached.id,
+        leafCounts,
+      });
+      return;
+    }
   }
 
   // 6. Concierge check — classify the prompt for dangerous content (Off-duty chats skip everything)
@@ -217,14 +308,23 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     // profile's LoRAs and residual options — the same params the Salon's
     // `generate_image` gets, so a LoRA configured for a profile does not work
     // in chat and quietly vanish here.
-    const { params: avatarParams } = buildImageGenParams({
-      profile: effectiveImageProfile,
-      prompt,
-      overrides: { n: 1, style: 'natural' },
-      orientation: 'portrait',
-      logContext: { context: 'background-jobs.character-avatar', jobId: job.id },
-    });
-    generationResponse = await provider.generateImage(avatarParams, effectiveApiKey);
+    // Reuse the params the cache key was derived from. A pre-generation
+    // Concierge reroute swaps the profile, and the fallback provider's shape
+    // mechanism, LoRA support and stored options are its own — so that case,
+    // and only that case, rebuilds.
+    const effectiveParams = effectiveImageProfile.id === imageProfile.id
+      ? avatarParams
+      : buildImageGenParams({
+          profile: effectiveImageProfile,
+          prompt,
+          overrides: { n: 1, style: 'natural' },
+          orientation: 'portrait',
+          logContext: {
+            context: 'background-jobs.character-avatar.concierge-route',
+            jobId: job.id,
+          },
+        }).params;
+    generationResponse = await provider.generateImage(effectiveParams, effectiveApiKey);
 
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
@@ -411,79 +511,46 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const category: FileCategory = 'IMAGE';
   const source: FileSource = 'GENERATED';
 
-  const folderProjectId = chat.projectId ?? null;
-
   try {
-    // Route history avatars into the character vault when there's no project
-    // context to route them through. The vault is provisioned at character
-    // creation and re-asserted by startup backfill; if it is somehow missing
-    // we refuse to write rather than leak bytes into the catch-all _general/.
+    // Every avatar goes to the character's vault, project context or not.
     //
-    // The handler runs in the forked job child whose DB connection is readonly
-    // and whose writes are buffered (no read-your-writes), so we cannot
-    // ensureCharacterVault() inline here — the parent's character-create flow
-    // (or the startup backfill) is responsible for provisioning.
-    let storageKey: string;
-    let fileProjectId: string | null;
-    let fileFolderPath: string | null;
-    let usedVault = false;
+    // Reading a mount blob is addressed by blob id with no project scoping and
+    // no permission check (an instance has one user), so a chat in any project
+    // can render a fileId whose bytes live in the vault. That is what lets the
+    // configuration cache be shared across projects without hard-linking
+    // anything: link groups exist to give write-through on mutable documents,
+    // and avatar bytes are never edited in place.
+    //
+    // The vault is provisioned at character creation and re-asserted by startup
+    // backfill; if it is somehow missing we refuse to write rather than leak
+    // bytes into the catch-all _general/. The handler runs in the forked job
+    // child whose DB connection is readonly and whose writes are buffered (no
+    // read-your-writes), so we cannot ensureCharacterVault() inline here — the
+    // parent's character-create flow (or the startup backfill) owns that.
+    const vault = await getCharacterVaultStore(payload.characterId);
+    if (!vault) {
+      throw new Error(
+        `Character ${payload.characterId} has no linked database-backed vault; cannot persist wardrobe avatar.`,
+      );
+    }
     // The storage bridges transcode bitmap uploads to WebP; the FileEntry
     // must record the post-transcode mime/size or vision providers reject
     // the bytes ("media_type X but image is Y").
-    let storedMimeType: string;
-    let storedSize: number;
+    const written = await writeCharacterAvatarToVault({
+      characterId: payload.characterId,
+      kind: 'history',
+      filename: originalFilename,
+      content: buffer,
+      contentType: mimeType,
+    });
+    const storageKey = written.storageKey;
+    const storedMimeType = written.storedMimeType;
+    const storedSize = written.sizeBytes;
 
-    if (!folderProjectId) {
-      const vault = await getCharacterVaultStore(payload.characterId);
-      if (!vault) {
-        throw new Error(
-          `Character ${payload.characterId} has no linked database-backed vault; cannot persist wardrobe avatar.`,
-        );
-      }
-      const written = await writeCharacterAvatarToVault({
-        characterId: payload.characterId,
-        kind: 'history',
-        filename: originalFilename,
-        content: buffer,
-        contentType: mimeType,
-      });
-      storageKey = written.storageKey;
-      storedMimeType = written.storedMimeType;
-      storedSize = written.sizeBytes;
-      fileProjectId = null;
-      fileFolderPath = null;
-      usedVault = true;
-    } else {
-      const uploadResult = await fileStorageManager.uploadFile({
-        filename: originalFilename,
-        content: buffer,
-        contentType: mimeType,
-        projectId: folderProjectId,
-        folderPath: '/character-avatars/',
-      });
-      storageKey = uploadResult.storageKey;
-      storedMimeType = uploadResult.storedMimeType;
-      storedSize = uploadResult.sizeBytes;
-      fileProjectId = folderProjectId;
-      fileFolderPath = '/character-avatars/';
-    }
-
-    // The legacy `folders` table backs the pre-Scriptorium file tree UI. It's
-    // only meaningful for disk-backed (or project-mount-backed) writes; vault
-    // writes own their folder structure inside doc_mount_folders.
-    // find-or-create at the repository chokepoint: this runs in the forked
-    // child, where the call is buffered whole and replayed on the parent's RW
-    // connection, so the return value is the synthetic `undefined` (bug 114).
-    if (!usedVault) {
-      await repos.folders.ensureByPath({
-        userId: job.userId,
-        path: '/character-avatars/',
-        name: 'character-avatars',
-        parentFolderId: null,
-        projectId: fileProjectId,
-      });
-    }
-
+    // No legacy `folders` row: that table backs the pre-Scriptorium file tree
+    // UI and is only meaningful for disk-backed or project-mount-backed writes.
+    // Vault writes own their folder structure inside doc_mount_folders, so the
+    // avatar path no longer mints a folder row per image at all (cf. bug 114).
     await repos.files.create({
       userId: job.userId,
       sha256,
@@ -500,12 +567,17 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
       generationPrompt: prompt,
       generationModel: effectiveImageProfile.modelName,
       generationRevisedPrompt: imageData.revisedPrompt || null,
+      // Bind this configuration's cache key to the new image — last write wins,
+      // which is exactly what makes a forced reroll the new canonical portrait
+      // for this character in this outfit. Keyed on the requested profile, not
+      // the rerouted one.
+      generationKey: cacheKeys.key,
       // No label here — see the matching note in story-background.ts (bug 132).
       description: null,
       tags: [payload.characterId],
       storageKey,
-      projectId: fileProjectId,
-      folderPath: fileFolderPath,
+      projectId: null,
+      folderPath: null,
     }, { id: fileId });
 
     logger.info('[CharacterAvatar] Avatar image saved', {
@@ -521,31 +593,12 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     throw new Error(`Failed to save avatar image: ${getErrorMessage(error)}`);
   }
 
-  // 9. Update chat.characterAvatars with the new avatar
-  const existingAvatars = (chat.characterAvatars && typeof chat.characterAvatars === 'object')
-    ? chat.characterAvatars as Record<string, unknown>
-    : {};
-
-  const updatedAvatars = {
-    ...existingAvatars,
-    [payload.characterId]: {
-      imageId: fileId,
-      generatedAt: new Date().toISOString(),
-      afterMessageCount: chat.messageCount ?? 0,
-    },
-  };
-
-  await repos.chats.update(payload.chatId, {
-    characterAvatars: updatedAvatars,
-  });
-
-  // 10. Also update character.avatarOverrides for this chat
-  const existingOverrides = character.avatarOverrides || [];
-  const filteredOverrides = existingOverrides.filter(o => o.chatId !== payload.chatId);
-  filteredOverrides.push({ chatId: payload.chatId, imageId: fileId });
-
-  await repos.characters.update(payload.characterId, {
-    avatarOverrides: filteredOverrides,
+  // 9. Bind the chat (and the character's per-chat override) to the new avatar
+  await bindAvatarToChat(repos, {
+    chat,
+    character,
+    chatId: payload.chatId,
+    fileId,
   });
 
   logger.info('[CharacterAvatar] Avatar generation completed', {

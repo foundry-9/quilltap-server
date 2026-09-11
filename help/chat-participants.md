@@ -466,7 +466,7 @@ The per-chat dials, formerly scattered across a Tools palette popover and a Chat
 - **Project** — assign this chat to a project (or none)
 - **Image Provider** — which image profile generates pictures for this chat
 - **Announce Generated Images** — whether the Lantern announces fresh images in-chat; see [The Lantern](lantern.md)
-- **Auto-generate Character Avatars** — when on, characters receive a fresh portrait each time their wardrobe shifts
+- **Auto-generate Character Avatars** — when on, characters receive a fresh portrait each time their wardrobe shifts. A costume they have sat for before needs no new sitting: the portrait already on file is brought out again. See [The Wardrobe](wardrobe.md)
 - **Tools…** — opens the per-chat tool allowlist modal
 - **Run Tool…** — opens the manual tool-invocation modal; see [Run Tool](run-tool.md)
 - **Regenerate Background** — only appears when story backgrounds are enabled; queues a fresh background; see [Story Backgrounds](story-backgrounds.md)

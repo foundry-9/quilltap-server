@@ -62,6 +62,10 @@ export async function handleRegenerateAvatar(
       callerContext: '[Chats v1] regenerate-avatar',
       imageProfileIdOverride: imageProfileId ?? null,
       equippedSlotsOverride: equippedSlots ?? null,
+      // A manual click is a reroll: bypass the configuration cache and rebind
+      // the key, so the new portrait becomes the canonical one for this
+      // character in this outfit.
+      force: true,
     });
 
     if (!result.queued) {

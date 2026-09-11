@@ -274,6 +274,14 @@ To enable this feature, look for the **Auto-Generate Avatars** toggle in your ch
 
 The generated avatars update asynchronously: the chat continues without interruption, and the new portrait appears once the image provider has finished its work. Previous messages retain whatever avatar was current at the time, so scrolling backwards through the conversation reveals each costume change in sequence.
 
+### The Portrait Kept On File
+
+The studio, you will be relieved to hear, has learned to file its negatives. Every sitting is catalogued against the exact ensemble that occasioned it --- the same garments, the same likeness, the same image-maker and its settings --- so that when a character shrugs the grey greatcoat back on for the ninth time this evening, the portraitist does not reach for a fresh plate. The picture already taken is simply brought out from the cabinet and hung. It costs you nothing, it arrives in an instant, and --- what pleases the fastidious most --- your character looks the same in that coat on Thursday as they did on Monday, rather than acquiring a new nose each time they dress.
+
+Change so much as a scarf, of course, and that is a different ensemble entirely, deserving of a fresh sitting. Take the coat off and put it on again, and the old portrait returns, none the worse for its rest in the drawer. A character's wardrobe thus accumulates a proper gallery, one likeness per costume, instead of a mounting heap of near-identical plates.
+
+Should the filed portrait fail to please --- the light unkind, the expression wrong, the muse plainly elsewhere that afternoon --- the **regenerate** button on the character's portrait in the Chat Sidebar's **Participants** drawer commissions a new sitting on the spot. This is not a mere second opinion to be glanced at and discarded: the fresh portrait *replaces* the filed one for that ensemble, and it is the new picture that will be brought out every subsequent time the character wears those clothes. Press it as often as your taste and your image budget allow; the last one drawn is the one that stands. Do note that this settles only the matter of that particular costume --- the character's own standing portrait, the one that represents them everywhere outside this arrangement, is a separate commission and remains untouched.
+
 Conversations begun before the Hair slot arrived sit for their portraits exactly as the newer ones do. A dressed character in such a chat had, for a time, been quietly refused at the studio door --- the portraitist balked at an outfit that predated the fifth slot and simply produced nothing --- and along with the portrait went the scene's own account of what the character was wearing. Both are restored, and neither requires anything of you: the older ensembles are read as they always ought to have been, with the coiffure merely unarranged.
 
 ## Migration from Legacy Clothing

@@ -1601,6 +1601,10 @@
         },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "description": { "type": ["string", "null"] },
+        "generationKey": {
+          "type": ["string", "null"],
+          "description": "Avatar configuration cache key — the hash of everything deterministic about the generation that produced this image (prompt, provider, image profile, model, built params). Travels as-is. It folds in the exporting instance's image-profile id, so on a receiving instance the key is simply inert until that same profile id derives it again: nothing on the target will ever compute a matching key by accident, and a round trip back to the origin still hits. Only avatar rows carry one."
+        },
         "dataBase64": {
           "type": "string",
           "contentEncoding": "base64",

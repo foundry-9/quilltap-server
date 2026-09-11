@@ -30,6 +30,11 @@ interface AvatarGenerationParams {
    * been committed to the chat's equipped state.
    */
   equippedSlotsOverride?: EquippedSlots | null;
+  /**
+   * Reroll: bypass the avatar configuration cache and generate unconditionally.
+   * Set by the manual regenerate button; automatic triggers leave it unset.
+   */
+  force?: boolean;
 }
 
 export type AvatarGenerationResult =
@@ -54,6 +59,7 @@ export async function triggerAvatarGeneration(
     callerContext,
     imageProfileIdOverride,
     equippedSlotsOverride,
+    force,
   } = params;
 
   try {
@@ -106,6 +112,7 @@ export async function triggerAvatarGeneration(
       characterId,
       imageProfileId,
       ...(equippedSlotsOverride ? { equippedSlotsOverride } : {}),
+      ...(force ? { force: true } : {}),
     });
 
     return { queued: true };

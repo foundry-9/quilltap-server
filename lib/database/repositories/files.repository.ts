@@ -54,6 +54,23 @@ export class FilesRepository extends TaggableBaseRepository<FileEntry> {
   }
 
   /**
+   * Find files by avatar configuration cache key.
+   *
+   * Backs `lookupCachedAvatar` (`lib/wardrobe/avatar-cache.ts`), which owns the
+   * key format and the hit/miss policy — this is only the indexed read.
+   */
+  async findByGenerationKey(generationKey: string): Promise<FileEntry[]> {
+    return this.safeQuery(
+      async () => {
+        const files = await this.findByFilter({ generationKey } as TypedQueryFilter<FileEntry>);
+        return files;
+      },
+      'Error finding files by generation key',
+      { generationKey }
+    );
+  }
+
+  /**
    * Find files by category
    */
   async findByCategory(category: FileCategory): Promise<FileEntry[]> {

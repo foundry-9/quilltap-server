@@ -186,6 +186,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-route-trail-message-column-v1': 'Pinning the call sheet to every reply, so you may see who was asked…',
   'add-cycle-order-column-v1': 'Drawing up the running order, so your cast knows who follows whom…',
   'add-transcript-version-column-v1': 'Fitting each conversation with a bell-pull, so every open window hears when a new line is set down…',
+  'add-file-generation-key-column-v1': 'Ruling a fresh column in the portrait ledger, one line per costume…',
+  'collapse-duplicate-avatar-rolls-v1': 'Hanging one definitive likeness per outfit and clearing the rest of the sittings from the attic…',
   'clear-generated-image-placeholder-descriptions-v1': 'Peeling the placeholder labels off your pictures, so they may be looked at properly…',
   'add-profile-supports-image-upload-field-v1': 'Adding image-upload support to connection profiles',
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
