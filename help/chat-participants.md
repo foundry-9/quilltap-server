@@ -424,6 +424,10 @@ If impersonating multiple characters:
 2. If the character has no connection profile of its own, you'll be asked to pick one so it can answer under its own steam again
 3. The character resumes speaking for itself; nothing else about the seat is disturbed
 
+### In Their Own Words
+
+An optional amenity, switched off by the factory, addresses the perennial embarrassment of an impersonated character who sounds rather too much like you. Turn on **Impersonated lines in the character's own words** in the Composer card on the Chat tab in Settings, and a line you type while wearing a character's seat is handed first to that character — their own model, their own prompt, their own memory of the evening — and returned for your inspection before anything reaches the room. Send their restatement, have it attempted afresh, retire to the composer and rewrite, or send your own words exactly as typed; nothing posts until you choose. It fires only for seats taken with **Impersonate** — speaking as yourself, or as a seat you have set to *User (you type)*, is left entirely alone. See [In their own words](/settings?tab=chat&section=composer-spellcheck) for the full account.
+
 ## Pause and Resume
 
 ### The Pause Button

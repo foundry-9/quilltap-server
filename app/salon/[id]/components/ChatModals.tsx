@@ -24,6 +24,7 @@ import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
 import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog'
 import ComposeMailDialog from '@/components/chat/ComposeMailDialog'
+import ImpersonationVoiceDialog from '@/components/chat/ImpersonationVoiceDialog'
 import type { ReattributeDialogState, SelectLLMProfileDialogState } from '../hooks/useModalState'
 
 interface ChatModalsProps {
@@ -67,6 +68,8 @@ interface ChatModalsProps {
   closeInsertAnnouncement: () => void
   composeMailOpen: boolean
   closeComposeMail: () => void
+  /** In Their Own Words — the impersonated-seat voice rehearsal. */
+  impersonationVoice: import('../hooks').ImpersonationVoiceState
   allLLMPauseModalOpen: boolean
   setAllLLMPauseModalOpen: (open: boolean) => void
   // Complex modal states
@@ -124,6 +127,7 @@ export function ChatModals({
   standaloneGenerateImageOpen, closeStandaloneGenerateImage,
   insertAnnouncementOpen, closeInsertAnnouncement,
   composeMailOpen, closeComposeMail,
+  impersonationVoice,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
   // Complex
   reattributeDialogState, setReattributeDialogState,
@@ -337,6 +341,33 @@ export function ChatModals({
           onPosted={() => {
             fetchChat()
           }}
+        />
+      )}
+
+      {impersonationVoice.isOpen && impersonationVoice.target && (
+        <ImpersonationVoiceDialog
+          isOpen={impersonationVoice.isOpen}
+          characterName={impersonationVoice.target.characterName}
+          characterTitle={impersonationVoice.target.characterTitle}
+          avatarSrc={impersonationVoice.target.avatarSrc}
+          profileName={impersonationVoice.resolvedVoice?.profileName ?? impersonationVoice.target.profileName}
+          modelName={impersonationVoice.resolvedVoice?.modelName ?? impersonationVoice.target.modelName}
+          systemPrompts={impersonationVoice.target.systemPrompts}
+          selectedSystemPromptId={impersonationVoice.target.selectedSystemPromptId}
+          seed={impersonationVoice.seed}
+          onSeedChange={impersonationVoice.setSeed}
+          proposal={impersonationVoice.proposal}
+          onProposalChange={impersonationVoice.setProposal}
+          generating={impersonationVoice.stage === 'generating'}
+          profileOverride={impersonationVoice.profileOverride}
+          systemPromptOverride={impersonationVoice.systemPromptOverride}
+          onSend={impersonationVoice.send}
+          onSendAsWritten={impersonationVoice.sendAsWritten}
+          onRegenerate={impersonationVoice.regenerate}
+          onChangeProfile={impersonationVoice.changeProfile}
+          onChangeSystemPrompt={impersonationVoice.changeSystemPrompt}
+          onEditOriginal={impersonationVoice.editOriginal}
+          onCancel={impersonationVoice.cancel}
         />
       )}
 

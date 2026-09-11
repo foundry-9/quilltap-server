@@ -243,7 +243,15 @@ const profilesWithoutCustomTemp = new Set<string>()
 /**
  * Maps a cheap LLM task type to an LLM log type for logging
  */
-function mapTaskTypeToLogType(taskType?: string): LLMLogType {
+/**
+ * Map a cheap-LLM task type onto the `llm_logs.type` it is filed under.
+ *
+ * A CLOSED allowlist: an unmapped task type falls through to SUMMARIZATION and
+ * becomes indistinguishable from a chat summary in the Wire Records and the
+ * LLM inspector. Add a row here whenever you add a task type worth telling
+ * apart. Exported for testing.
+ */
+export function mapTaskTypeToLogType(taskType?: string): LLMLogType {
   const mapping: Record<string, LLMLogType> = {
     'memory-extraction-self': 'MEMORY_EXTRACTION',
     'memory-extraction-other': 'MEMORY_EXTRACTION',
@@ -270,6 +278,11 @@ function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'answer-confirmation': 'ANSWER_CONFIRMATION',
     'answer-reaffirmation': 'ANSWER_CONFIRMATION',
     'custom-tool-consult': 'CUSTOM_TOOL_CONSULT',
+    // Both "say it in the character's own voice" rehearsals. Unmapped, these
+    // fell through to the SUMMARIZATION default and were indistinguishable
+    // from a chat summary in the Wire Records and the LLM inspector.
+    'announcement-rewrite': 'VOICE_REWRITE',
+    'impersonation-voice-rewrite': 'VOICE_REWRITE',
   }
   return mapping[taskType || ''] || 'SUMMARIZATION'
 }

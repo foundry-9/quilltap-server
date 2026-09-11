@@ -43,6 +43,7 @@ async function updateChatSettings(
   composerSpellcheck?: boolean,
   composerEmoji?: boolean,
   composerUnicode?: boolean,
+  impersonationVoiceRewrite?: boolean,
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
   thinkingDisplay?: unknown,
@@ -209,6 +210,13 @@ async function updateChatSettings(
     }
     updateData.composerUnicode = composerUnicode
   }
+  if (typeof impersonationVoiceRewrite !== 'undefined') {
+    if (typeof impersonationVoiceRewrite !== 'boolean') {
+      throw new Error('Invalid impersonationVoiceRewrite value (must be boolean)')
+    }
+    updateData.impersonationVoiceRewrite = impersonationVoiceRewrite
+    logger.debug('[Settings v1] impersonationVoiceRewrite updated', { userId, impersonationVoiceRewrite })
+  }
   if (typeof textReplacementsEnabled !== 'undefined') {
     if (typeof textReplacementsEnabled !== 'boolean') {
       throw new Error('Invalid textReplacementsEnabled value (must be boolean)')
@@ -348,6 +356,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
+      impersonationVoiceRewrite,
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,
@@ -382,6 +391,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
+      impersonationVoiceRewrite,
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,

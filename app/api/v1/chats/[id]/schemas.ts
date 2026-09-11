@@ -228,6 +228,20 @@ export const insertAnnouncementPreviewSchema = z.object({
 });
 
 /**
+ * Impersonated-line voice rewrite (the IN-SCENE rehearsal). `participantId` is
+ * the seat the operator is impersonating; the server re-derives the
+ * impersonation from the chat row and never trusts the client's claim. Both
+ * ids are operator overrides from the dialog's pickers — omitted, the seat's
+ * own selections are used.
+ */
+export const impersonationVoicePreviewSchema = z.object({
+  participantId: z.uuid(),
+  seedMarkdown: z.string().min(1),
+  connectionProfileId: z.uuid().optional(),
+  systemPromptId: z.uuid().optional(),
+});
+
+/**
  * Compose Mail composer action: the operator posts a letter as one of their
  * player-characters. `fromCharacterId` must be a `controlledBy:'user'` CHARACTER
  * participant of this chat (re-verified server-side — never trust the client).

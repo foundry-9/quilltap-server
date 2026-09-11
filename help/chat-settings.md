@@ -147,6 +147,35 @@ There is a **button** in the formatting toolbar as well (the small `Ω`), which 
 - Your prose is thick with backslashes — file paths, regular expressions, LaTeX you intend to keep verbatim — and you would rather the menu never stirred
 - As with emoji, the toolbar's `Ω` button is **not** governed by this toggle. The switch restrains the *automatic* backslash; a button pressed on purpose is never a surprise.
 
+#### Impersonated Lines in the Character's Own Words
+
+The last tenant of the **Composer** card, and the only one switched off by the factory. When you have taken a character's seat with the **Impersonate** button, your typed line is handed first to that character — their own model, their own prompt, the recent conversation as they would see it, and a fresh Commonplace Book recall against your draft — and returned for your inspection before a syllable reaches the room. Send their restatement, have it attempted afresh, retire to the composer and rewrite it yourself, or send your own words exactly as typed. Nothing posts until you choose.
+
+It fires only for seats taken with **Impersonate**. Speaking as yourself — or as a seat you have set to *User (you type)* in the participant card's dropdown — is left entirely alone, as are sends carrying only attachments or tool results, and lines beginning with a Carina address (`@Name:`), which are machinery and must survive verbatim.
+
+**Setting Options:**
+
+- **Impersonated lines in the character's own words** — A single toggle, off by default. On: an impersonated line opens a review panel first. Off: impersonated lines post exactly as typed, as they always have.
+
+**How to configure:**
+
+1. Open the **Composer** card on the Chat tab in Settings
+2. Tick or untick the box
+3. The change applies at once to open chats; no reload required
+
+**When useful:**
+
+- You know what your character means to say but would rather not hear your own cadence in their mouth
+- You are playing a character whose diction is a long way from your own — archaic, terse, foreign, drunk
+- You want the scene's narration conventions applied to your line without minding the asterisks yourself
+
+**When to turn it off:**
+
+- You are a careful stylist and the rehearsal is an extra step between you and the room
+- The model reliably mangles a notation you depend on (the per-send **Send as written** door covers the occasional case)
+
+The full account — what the character is told, what they are not, and the honest caveat that the line is model-written and worth reading — is at [In their own words](/settings?tab=chat&section=composer-spellcheck).
+
 ### Auto-Scroll
 
 A question of etiquette: when a character at last lays down the pen at the close of a long reply, should the page hurry you down to the final flourish, or leave you precisely where you were reading? This toggle decides.

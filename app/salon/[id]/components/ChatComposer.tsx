@@ -104,6 +104,12 @@ interface ChatComposerProps {
     title?: string | null
     character?: AvatarImageSource | null
   } | null
+  /**
+   * In Their Own Words is armed for the speaking-as seat: a typed line will be
+   * handed to that character to restate, for review, before it posts.
+   * Informational only — the gate itself lives in `useImpersonationVoice`.
+   */
+  voiceRehearsalArmed?: boolean
 }
 
 export function ChatComposer({
@@ -153,6 +159,7 @@ export function ChatComposer({
   onOpenTerminalClick,
   isTerminalModeActive,
   speakingAs,
+  voiceRehearsalArmed = false,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
@@ -376,6 +383,7 @@ export function ChatComposer({
                 title={speakingAs.title}
                 src={speakingAs.character}
                 canType={hasActiveCharacters && !sending && !streaming && !waitingForResponse}
+                voiceRehearsal={voiceRehearsalArmed}
               />
             </div>
           )}
@@ -497,7 +505,13 @@ export function ChatComposer({
               type="submit"
               disabled={sending || (streaming || waitingForResponse) || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
               className="qt-chat-composer-send"
-              title={!hasActiveCharacters ? "Add a character to start chatting" : (streaming || waitingForResponse) ? "Generating..." : "Send message"}
+              title={!hasActiveCharacters
+                ? "Add a character to start chatting"
+                : (streaming || waitingForResponse)
+                  ? "Generating..."
+                  : voiceRehearsalArmed && speakingAs
+                    ? `Sends your draft to ${speakingAs.name} to say in their own words first`
+                    : "Send message"}
             >
               <Icon name="send" className="w-5 h-5" />
             </button>

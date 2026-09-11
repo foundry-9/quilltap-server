@@ -57,6 +57,7 @@ import {
   useLLMLogs,
   useParticipants,
   useImpersonation,
+  useImpersonationVoice,
   useChatControls,
   useSSEStreaming,
   type SwipeState,
@@ -68,6 +69,7 @@ import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { buildRenderItems } from './announcement-render-items'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -571,6 +573,52 @@ export function SalonView({ chatId }: SalonViewProps) {
       },
     }
   }, [speakingSeat])
+
+  // In Their Own Words: when the instance setting is on and the composer will
+  // attribute this message to a seat the human is *impersonating*, the draft
+  // goes to that character's own model for a restatement the operator reviews
+  // before anything posts. Owner-persona seats are deliberately out of scope.
+  // Read through the TanStack query, NOT `chatSettings` from `useChatData` —
+  // that one is a one-shot fetch on mount, and a workspace tab keeps the Salon
+  // mounted indefinitely, so a toggle flipped in the Settings tab would never
+  // reach an open chat. The query key is invalidated by the settings mutation
+  // and refetched on tab activation, so the gate follows the setting live.
+  const { data: liveChatSettings } = useChatSettingsQuery()
+  const impersonationVoiceEnabled = liveChatSettings?.impersonationVoiceRewrite ?? false
+  const rehearsalTarget = useMemo(() => {
+    const p = speakingSeat
+    if (!p?.character) return null
+    return {
+      participantId: p.id,
+      characterName: p.character.name,
+      characterTitle: p.character.title ?? null,
+      avatarSrc: {
+        defaultImage: p.character.defaultImage ?? null,
+        avatarUrl: p.character.avatarUrl ?? null,
+      },
+      profileName: p.connectionProfile?.name ?? null,
+      modelName: p.connectionProfile?.modelName ?? null,
+      systemPrompts: p.character.systemPrompts ?? [],
+      selectedSystemPromptId: p.selectedSystemPromptId ?? null,
+    }
+  }, [speakingSeat])
+  const focusComposer = useCallback(() => {
+    inputRef.current?.focus()
+  }, [])
+  const impersonationVoice = useImpersonationVoice({
+    chatId: id,
+    sendMessage: sseStreaming.sendMessage,
+    focusComposer,
+  })
+  // Armed for the current seat: drives the composer's informational cue. The
+  // text-dependent half of the gate is checked at submit time.
+  const impersonationVoiceArmed = Boolean(
+    impersonationVoiceEnabled
+    && speakingSeat
+    && speakingSeat.type === 'CHARACTER'
+    && speakingSeat.controlledBy !== 'user'
+    && impersonation.impersonatingParticipantIds.includes(speakingSeat.id),
+  )
 
   // Bug 49: the composer's speaking-as follows the current user-driven turn.
   // When the rotation lands on a seat the human drives — their own character OR
@@ -1530,6 +1578,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         <ChatComposer
           id={id}
           speakingAs={speakingAsSeat}
+          voiceRehearsalArmed={impersonationVoiceArmed}
           input={input}
           setInput={setInput}
           // Bug 67: in raw-source view the textarea is the visible surface and
@@ -1563,21 +1612,50 @@ export function SalonView({ chatId }: SalonViewProps) {
           onToggleDocumentEditingMode={chatControls.handleToggleDocumentEditingMode}
           onOpenDocumentClick={() => setShowDocumentPicker(true)}
           isDocumentModeActive={documentModeHook.documentMode !== 'normal'}
-          onSubmit={(e) => sseStreaming.sendMessage(
-            e,
+          onSubmit={(e) => {
             // Read the live text straight from the editor handle — page `input`
             // intentionally lags while typing (that's the decoupling). Except in
             // raw-source view (bug 67), where the textarea is the edited surface
             // and the editor's bridge is suspended: its handle still holds the
             // pre-toggle document, so send what the writer can see.
-            resolveComposerSubmitText(modals.showPreview, input, inputRef.current?.getMarkdown()),
-            clearComposerInput,
-            attachedFiles,
-            pendingToolResults,
-            setPendingToolResults,
-            clearDraft,
-            chatControls.userStoppedStreamRef,
-          )}
+            const text = resolveComposerSubmitText(
+              modals.showPreview,
+              input,
+              inputRef.current?.getMarkdown(),
+            )
+            const sendArgs = {
+              setInput: clearComposerInput,
+              setPendingToolResults,
+              clearDraft,
+              userStoppedStreamRef: chatControls.userStoppedStreamRef,
+            }
+            // In Their Own Words takes the submit over when it is armed; it has
+            // already called preventDefault and nothing has been cleared.
+            if (
+              impersonationVoice.intercept(e, {
+                text,
+                seat: speakingSeat,
+                seatTarget: rehearsalTarget,
+                enabled: impersonationVoiceEnabled,
+                impersonatingParticipantIds: impersonation.impersonatingParticipantIds,
+                attachedFiles,
+                pendingToolResults,
+                sendArgs,
+              })
+            ) {
+              return
+            }
+            void sseStreaming.sendMessage(
+              e,
+              text,
+              sendArgs.setInput,
+              attachedFiles,
+              pendingToolResults,
+              sendArgs.setPendingToolResults,
+              sendArgs.clearDraft,
+              sendArgs.userStoppedStreamRef,
+            )
+          }}
           onFileSelect={handleFileSelect}
           onAttachFileClick={() => {}}
           onImagePaste={async (file: File) => {
@@ -1739,6 +1817,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           insertAnnouncementOpen={modals.insertAnnouncementOpen}
           closeInsertAnnouncement={modals.closeInsertAnnouncement}
           composeMailOpen={modals.composeMailOpen}
+          impersonationVoice={impersonationVoice}
           closeComposeMail={modals.closeComposeMail}
           allLLMPauseModalOpen={modals.allLLMPauseModalOpen}
           setAllLLMPauseModalOpen={modals.setAllLLMPauseModalOpen}

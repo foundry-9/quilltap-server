@@ -719,7 +719,10 @@ export function useSSEStreaming({
    * Main send message function. Creates the user message, sends request, and streams response.
    */
   const sendMessage = useCallback(async (
-    e: React.FormEvent,
+    // Null when the send is re-dispatched programmatically — the In Their Own
+    // Words dialog already called `preventDefault` on the original submit. The
+    // event is used for nothing else here.
+    e: React.FormEvent | null,
     input: string,
     setInput: (v: string) => void,
     attachedFiles: Array<{ id: string; filename: string; filepath: string; mimeType: string }>,
@@ -728,7 +731,7 @@ export function useSSEStreaming({
     clearDraft: () => void,
     userStoppedStreamRef: React.MutableRefObject<boolean>,
   ) => {
-    e.preventDefault()
+    e?.preventDefault()
     if ((!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || sending) return
 
     // Reset user-stopped flag when user sends a message

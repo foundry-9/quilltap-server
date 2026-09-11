@@ -25,6 +25,7 @@ const TYPE_BADGE_CLASSES: Record<string, string> = {
   CHARACTER_WIZARD: 'qt-bg-success/15 qt-text-success',
   AI_IMPORT: 'qt-bg-success/15 qt-text-success',
   CUSTOM_TOOL_CONSULT: 'qt-bg-info/15 qt-text-info',
+  VOICE_REWRITE: 'qt-bg-info/15 qt-text-info',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -41,6 +42,7 @@ const TYPE_LABELS: Record<string, string> = {
   CHARACTER_WIZARD: 'Wizard',
   AI_IMPORT: 'Import',
   CUSTOM_TOOL_CONSULT: 'Consult',
+  VOICE_REWRITE: 'Voice',
 }
 
 function formatTokens(log: LLMLog): string {

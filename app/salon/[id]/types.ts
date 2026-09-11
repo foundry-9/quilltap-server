@@ -347,6 +347,8 @@ export interface ChatSettings {
   thinkingDisplay?: { defaultVisible: boolean; defaultCollapsed: boolean }
   /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom). DISPLAY ONLY. */
   autoScrollOnResponseComplete?: boolean
+  /** Whether a line typed while impersonating a character is first restated by that character's own model, for review, before it posts. */
+  impersonationVoiceRewrite?: boolean
   createdAt: string
   updatedAt: string
 }

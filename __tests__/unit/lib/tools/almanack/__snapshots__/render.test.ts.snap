@@ -334,6 +334,7 @@ Cast sizes:
 - **Thinking Visible by Default**: Yes
 - **Thinking Collapsed by Default**: Yes
 - **Composer Spellcheck**: Yes
+- **Impersonated Lines in Character Voice**: No
 - **Auto-Scroll on Response Complete**: No
 - **Text Replacements**: Yes (10 of 12 rules enabled)
 - **Avatar Display**: ALWAYS / CIRCULAR

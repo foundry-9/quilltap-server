@@ -275,6 +275,7 @@ export interface FeatureConfigInfo {
   };
   textReplacements: { enabled: boolean; rules: number; enabledRules: number };
   composerSpellcheck: boolean;
+  impersonationVoiceRewrite: boolean;
   autoScrollOnResponseComplete: boolean;
   imageDescriptionProfileConfigured: boolean;
   uncensoredImageDescriptionProfileConfigured: boolean;

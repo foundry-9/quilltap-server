@@ -642,6 +642,8 @@ export const ChatSettingsSchema = z.object({
   composerEmoji: z.boolean().default(true),
   /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
   composerUnicode: z.boolean().default(true),
+  /** Whether a line typed while impersonating a character (the Salon's Impersonate button — the `chat.impersonatingParticipantIds` overlay) is first restated by that character's own model, for review, before it posts. Never fires for a `controlledBy: 'user'` seat (default: false). */
+  impersonationVoiceRewrite: z.boolean().default(false),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
   textReplacementsEnabled: z.boolean().default(true),
   /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */

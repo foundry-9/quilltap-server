@@ -390,6 +390,8 @@ import { addRouteTrailMessageColumnMigration } from './add-route-trail-message-c
 import { addCycleOrderColumnMigration } from './add-cycle-order-column-v1';
 // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
 import { clearGeneratedImagePlaceholderDescriptionsMigration } from './clear-generated-image-placeholder-descriptions';
+// Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
+import { addImpersonationVoiceRewriteFieldMigration } from './add-impersonation-voice-rewrite-field';
 
 /**
  * All available migrations.
@@ -782,6 +784,8 @@ export const migrations: Migration[] = [
   addCycleOrderColumnMigration,
   // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
   clearGeneratedImagePlaceholderDescriptionsMigration,
+  // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
+  addImpersonationVoiceRewriteFieldMigration,
 ];
 
 export {
@@ -1153,5 +1157,7 @@ export {
   addCycleOrderColumnMigration,
   // Generated images: clear the "Story background for: …" / "— wardrobe portrait" labels stored as descriptions (bug 132)
   clearGeneratedImagePlaceholderDescriptionsMigration,
+  // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
+  addImpersonationVoiceRewriteFieldMigration,
 };
 

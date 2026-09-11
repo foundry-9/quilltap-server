@@ -48,6 +48,7 @@ This document tracks planned features and improvements for Quilltap.
 
 - [ ] Character checkpointing (backups of a character at a certain point in time)
 - [ ] "Visual Novel" options
+- [X] In Their Own Words — restate impersonated lines in the character's voice before posting (design: [complete/impersonation-voice-rewrite.md](complete/impersonation-voice-rewrite.md))
 - [X] Four-state character participation system (active/silent/absent/removed) with status change notifications
 - [X] Memory recap at chat start — characters receive first-person narrative summaries from their Commonplace Book when joining a chat
 - [X] Image generation can not only select characters but also different physical descriptions if they have them

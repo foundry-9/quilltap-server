@@ -63,6 +63,7 @@ interface UseChatSettingsReturn {
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
   handleComposerUnicodeChange: (value: boolean) => Promise<void>
+  handleImpersonationVoiceRewriteChange: (value: boolean) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
   handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
@@ -440,6 +441,23 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update the impersonated-line voice-rewrite setting (the Impersonate
+   * overlay only — a `controlledBy: 'user'` seat is never rehearsed)
+   */
+  const handleImpersonationVoiceRewriteChange = useCallback(
+    async (value: boolean) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { impersonationVoiceRewrite: value },
+        'Failed to update impersonated-line voice setting',
+        'Failed to update impersonated-line voice setting'
+      )
+    },
+    [settings, patchChatSettings]
+  )
+
+  /**
    * Update Salon auto-scroll-on-response-complete setting
    */
   const handleAutoScrollOnResponseCompleteChange = useCallback(
@@ -701,6 +719,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleImpersonationVoiceRewriteChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleAgentModeDefaultEnabledChange,

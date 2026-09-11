@@ -41,6 +41,7 @@ export default function LLMLogsCard() {
       'CHARACTER_WIZARD': 'Wizard',
       'IMAGE_DESCRIPTION': 'Image Desc',
       'CUSTOM_TOOL_CONSULT': 'Custom Tool',
+      'VOICE_REWRITE': 'Voice Rewrite',
     }
     return labels[type] || type
   }

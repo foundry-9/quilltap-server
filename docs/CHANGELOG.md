@@ -4,6 +4,65 @@
 
 ### 4.10-dev
 
+#### Fixed: both voice rehearsals were logged as chat summaries
+
+`mapTaskTypeToLogType` is a closed allowlist, and an unmapped task type falls through to
+`SUMMARIZATION` rather than failing. Neither `announcement-rewrite` (the Insert Announcement
+rehearsal, since 4.4) nor the new `impersonation-voice-rewrite` was mapped, so both filed
+themselves as chat summaries — indistinguishable from real summarization in the Almanack's Wire
+Records and in the LLM inspector's filter groups. Added an `LLMLogType` of `VOICE_REWRITE` and
+mapped both to it. `llm_logs.type` is plain `TEXT` with no constraint, so no migration is needed;
+existing rows keep whatever they were written with. The mapping now has a test, since the failure
+mode is silent.
+
+Files: `lib/schemas/llm-log.types.ts`, `lib/memory/cheap-llm-tasks/core-execution.ts`,
+`components/tools/llm-logs-card.tsx`, `components/chat/LLMInspectorEntry.tsx`,
+`components/chat/LLMInspectorPanel.tsx`.
+
+#### Added: impersonated lines can be restated in the character's own voice before posting
+
+New instance setting, Settings → Chat → Composer, default off. With it on, a line typed while
+impersonating a character (the Impersonate button) opens a review dialog instead of posting: the
+seat's own model restates the draft in that character's voice, and the operator can send the
+restatement (edited or not), regenerate it, go back to the composer and rewrite, or send the
+original as written. Nothing reaches the chat until they choose.
+
+The rewrite reuses the Insert Announcement rehearsal's core but frames the character as *in* the
+scene rather than outside it: the seat's own connection profile and system prompt, the chat's
+roleplay template, Taboo phrases, standing instructions, the last 12 played messages shaped as that
+seat would see them (whispers it isn't party to excluded, `[Name]` attribution in a
+multi-character room), and a Commonplace Book recall against the draft. No tool instructions. A
+chat the Concierge has flagged follows its turns onto the uncensored route; a refusal surfaces as
+an ordinary preview failure and never escalates on its own.
+
+The Salon reads the setting through the TanStack query rather than the Salon's mount-only settings
+fetch, so flipping the toggle takes effect on a chat that is already open — a workspace tab keeps a
+Salon mounted indefinitely, so a mount-only read would never have seen it. Eight other Salon
+settings reads still have that staleness; filed as bug 134.
+
+The gate never fires for a `controlledBy: 'user'` seat (owner persona, or a seat flipped to user
+control), for an attachment-only or tool-result-only send, or for a Carina address — `@Name:` is
+machinery and must survive verbatim. Document Mode edits don't pass through the send path and are
+unaffected. "Send as written" and "Edit original" stay available after a failed preview, so a dead
+provider can't trap a draft.
+
+Nothing extra is persisted. The posted message is an ordinary user-authored message attributed to
+the impersonated seat, exactly as before; the rewrite's audit trail is its `llm_logs` row, filed
+under the new `VOICE_REWRITE` type (see the entry above).
+
+Files: `lib/schemas/settings.types.ts`, `migrations/scripts/add-impersonation-voice-rewrite-field.ts`,
+`lib/startup/prettify.ts`, `lib/database/repositories/chat-settings.repository.ts`,
+`app/api/v1/settings/chat/route.ts`, `lib/services/announcer/voice-rewrite-core.ts`,
+`lib/services/announcer/character-voiced.ts`, `lib/services/announcer/in-scene-voiced.ts`,
+`app/api/v1/chats/[id]/actions/impersonation-voice-preview.ts`,
+`app/api/v1/chats/[id]/{schemas.ts,actions/index.ts,handlers/post.ts}`,
+`app/salon/[id]/hooks/useImpersonationVoice.ts`, `app/salon/[id]/hooks/useSSEStreaming.ts`,
+`app/salon/[id]/SalonView.tsx`, `app/salon/[id]/components/{ChatModals,ChatComposer,SpeakingAsAvatar}.tsx`,
+`components/chat/{ImpersonationVoiceDialog,VoiceRewriteReviewPanel,InsertAnnouncementDialog}.tsx`,
+`components/settings/chat-settings/ImpersonationVoiceSettings.tsx`,
+`components/settings/tabs/ChatTabContent.tsx`, `lib/tools/almanack/{types,phase3-ledgers,render}.ts`,
+`help/impersonation-voice.md`, `docs/developer/{API.md,DDL.md}`.
+
 #### Fixed: a moderated chat's story background could escalate to the uncensored image provider
 
 A chat the Concierge had never flagged — no override, `isDangerousChat` false — could receive a

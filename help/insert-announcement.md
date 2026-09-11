@@ -46,6 +46,8 @@ When a profile is selected, the **Preview in character** button takes the place 
 
 From there: post it as it stands, polish it with a small edit, click **Regenerate** to try the recall again, or click **Edit seed** to unlock your original prompt and start over. Nothing is posted to the chat until you click **Post Announcement** — the preview is a private rehearsal between you and the character.
 
+This rehearsal has an in-scene cousin: turn on **Impersonated lines in the character's own words** (Settings → Chat → Composer) and a line you type while *impersonating* a character is restated the same way — except that the character is told they are in the room, shown the recent conversation, and given the scene's roleplay template, because the line is about to be played rather than announced. See [In their own words](/settings?tab=chat&section=composer-spellcheck).
+
 ## What characters see
 
 The bubble's *content* — the Markdown body you typed — is what the audience's LLM receives (every character, when the announcement is public; only those you named, when it is whispered).

@@ -643,6 +643,7 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     },
     textReplacements: { enabled: true, rules: 0, enabledRules: 0 },
     composerSpellcheck: true,
+    impersonationVoiceRewrite: false,
     autoScrollOnResponseComplete: false,
     imageDescriptionProfileConfigured: false,
     uncensoredImageDescriptionProfileConfigured: false,
@@ -738,6 +739,7 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
       enabledRules: num(ruleRow?.enabled),
     },
     composerSpellcheck: chatSettings?.composerSpellcheck ?? true,
+    impersonationVoiceRewrite: chatSettings?.impersonationVoiceRewrite ?? false,
     autoScrollOnResponseComplete: chatSettings?.autoScrollOnResponseComplete ?? false,
     imageDescriptionProfileConfigured: !!chatSettings?.imageDescriptionProfileId,
     uncensoredImageDescriptionProfileConfigured:

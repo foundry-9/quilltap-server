@@ -30,6 +30,10 @@ API reference for Quilltap v4.3 and later.
 > - **Scenario changed mid-chat** — `POST /api/v1/chats/[id]?action=scenario`; the Host announces the change as a revision.
 > - **Archivable scenarios and wardrobe items** — archived rows drop out of every listing unless `includeArchived` is passed.
 
+> **Freshness note (v4.10-dev):** Additions since v4.9:
+>
+> - **Impersonated-line voice rewrite** — `POST /api/v1/chats/[id]?action=impersonation-voice-preview` restates a line typed while impersonating a character in that character's own voice, for operator review before it posts. Gated by the new `impersonationVoiceRewrite` field on chat settings (default off).
+
 ## Table of Contents
 
 - [API Versioning](#api-versioning)
@@ -3241,6 +3245,38 @@ Generate an in-character rewrite of a seed announcement for an off-scene charact
   "proposedMarkdown": "Aurora steps from behind the gilded screen..."
 }
 ```
+
+#### `POST /api/v1/chats/[id]?action=impersonation-voice-preview`
+
+The IN-SCENE cousin of `announcement-preview`: restate a line the operator typed while **impersonating** a character in that character's own voice. Gated on the instance setting `chat_settings.impersonationVoiceRewrite` (default off) on the client; the server's own gate is the chat's impersonation overlay. Persists nothing — the caller (the Salon's *In Their Own Words* dialog) shows the proposal to the operator, who sends it, edits it, regenerates it, or sends their own draft as written. The chosen line then posts through the ordinary `POST /api/v1/messages` send path, attributed to the seat exactly as it would be without the rewrite.
+
+Unlike the off-scene rehearsal, the character is given their full per-turn system prompt (identity stack, roleplay template, Taboo, standing instructions — never tool instructions) plus the last 12 played messages shaped as that seat would see them, so the restatement answers the moment it lands in.
+
+**Request Body**:
+
+```json
+{
+  "participantId": "participant-uuid",
+  "seedMarkdown": "I tell him I'll take the job, but only for double.",
+  "connectionProfileId": "profile-uuid",
+  "systemPromptId": "prompt-uuid"
+}
+```
+
+`participantId` is a **chat participant id, not a character id**, and must be a present CHARACTER seat listed in the chat's `impersonatingParticipantIds` — the server re-derives the impersonation from the chat row and never trusts the client's claim. `connectionProfileId` and `systemPromptId` are optional operator overrides from the dialog's pickers; omitted, the seat's own selections are used (the impersonation overlay leaves them intact), falling back to the character's defaults and then the instance default. A chat the Concierge has flagged follows its turns onto the uncensored route.
+
+**Response**: `200 OK`
+
+```json
+{
+  "success": true,
+  "proposedMarkdown": "*She lets the silence sit before she answers.* \"I'll take it. Double, or find another fool.\"",
+  "profileName": "Sonnet (roleplay)",
+  "modelName": "claude-sonnet-5"
+}
+```
+
+`404` when the participant or character is unknown. `400` when the seat is not a present character seat, is not being impersonated, has no connection profile to rewrite with, or when the provider call fails — the dialog treats a `400` as a recoverable failure and keeps *Send as written* available.
 
 ---
 

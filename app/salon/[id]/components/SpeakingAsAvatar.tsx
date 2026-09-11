@@ -16,6 +16,7 @@
  */
 
 import { getAvatarSrc, type AvatarImageSource } from '@/components/ui/Avatar'
+import { Icon } from '@/components/ui/icon'
 
 interface SpeakingAsAvatarProps {
   /** The character the human is currently speaking as. */
@@ -26,6 +27,12 @@ interface SpeakingAsAvatarProps {
   canType: boolean
   /** Extra wrapper classes (e.g. responsive show/hide from the composer). */
   className?: string
+  /**
+   * True when In Their Own Words is armed for this seat — a typed line goes to
+   * the character for a restatement you review before it posts. Purely a cue:
+   * the badge says what will happen, it does not make it happen.
+   */
+  voiceRehearsal?: boolean
 }
 
 export function SpeakingAsAvatar({
@@ -34,17 +41,24 @@ export function SpeakingAsAvatar({
   src,
   canType,
   className = '',
+  voiceRehearsal = false,
 }: Readonly<SpeakingAsAvatarProps>) {
   const avatarSrc = getAvatarSrc(src ?? null)
   const initial = name.charAt(0).toUpperCase()
 
   return (
     <div
-      className={`qt-speaking-as-avatar self-stretch aspect-[4/5] max-h-40 flex-shrink-0 overflow-hidden qt-bg-muted flex items-center justify-center transition-[filter,opacity] duration-200 ${
+      className={`qt-speaking-as-avatar relative self-stretch aspect-[4/5] max-h-40 flex-shrink-0 overflow-hidden qt-bg-muted flex items-center justify-center transition-[filter,opacity] duration-200 ${
         canType ? 'opacity-100' : 'opacity-60 brightness-50'
       } ${className}`}
       style={{ borderRadius: 'var(--radius-md)' }}
-      title={canType ? `Speaking as ${name}` : `Speaking as ${name} — waiting for the room`}
+      title={
+        voiceRehearsal
+          ? `Speaking as ${name} — your draft goes to ${name} to say in their own words first`
+          : canType
+            ? `Speaking as ${name}`
+            : `Speaking as ${name} — waiting for the room`
+      }
       aria-label={canType ? `Speaking as ${name}` : `Speaking as ${name}, waiting for the room`}
     >
       {avatarSrc ? (
@@ -52,6 +66,15 @@ export function SpeakingAsAvatar({
         <img src={avatarSrc} alt={name} className="w-full h-full object-cover" />
       ) : (
         <span className="font-bold qt-text-secondary text-lg">{initial}</span>
+      )}
+      {voiceRehearsal && (
+        <span
+          className="absolute bottom-0.5 right-0.5 qt-bg-muted qt-text-secondary p-0.5 flex items-center justify-center"
+          style={{ borderRadius: 'var(--radius-sm)' }}
+          aria-hidden="true"
+        >
+          <Icon name="thinking" className="w-3 h-3" />
+        </span>
       )}
     </div>
   )

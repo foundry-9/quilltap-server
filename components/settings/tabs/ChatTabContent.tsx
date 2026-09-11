@@ -7,6 +7,7 @@ import { CompositionModeDefaultSettings } from '@/components/settings/chat-setti
 import { ComposerSpellcheckSettings } from '@/components/settings/chat-settings/ComposerSpellcheckSettings'
 import { ComposerEmojiSettings } from '@/components/settings/chat-settings/ComposerEmojiSettings'
 import { ComposerUnicodeSettings } from '@/components/settings/chat-settings/ComposerUnicodeSettings'
+import { ImpersonationVoiceSettings } from '@/components/settings/chat-settings/ImpersonationVoiceSettings'
 import { AutoScrollSettings } from '@/components/settings/chat-settings/AutoScrollSettings'
 import { TextReplacementSettings } from '@/components/settings/chat-settings/TextReplacementSettings'
 import { TokenDisplaySettingsComponent } from '@/components/settings/chat-settings/TokenDisplaySettings'
@@ -43,6 +44,7 @@ export function ChatTabContent() {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
+    handleImpersonationVoiceRewriteChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
@@ -101,6 +103,11 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onChange={handleComposerUnicodeChange}
+          />
+          <ImpersonationVoiceSettings
+            settings={settings}
+            saving={saving}
+            onChange={handleImpersonationVoiceRewriteChange}
           />
         </CollapsibleCard>
 

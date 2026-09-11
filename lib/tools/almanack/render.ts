@@ -720,6 +720,7 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push(`- **Thinking Visible by Default**: ${yesNo(fc.thinkingDisplay.defaultVisible)}`);
   push(`- **Thinking Collapsed by Default**: ${yesNo(fc.thinkingDisplay.defaultCollapsed)}`);
   push(`- **Composer Spellcheck**: ${yesNo(fc.composerSpellcheck)}`);
+  push(`- **Impersonated Lines in Character Voice**: ${yesNo(fc.impersonationVoiceRewrite)}`);
   push(`- **Auto-Scroll on Response Complete**: ${yesNo(fc.autoScrollOnResponseComplete)}`);
   push(
     `- **Text Replacements**: ${yesNo(fc.textReplacements.enabled)} ` +
