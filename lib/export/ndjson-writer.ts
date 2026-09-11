@@ -17,7 +17,7 @@ import type {
   QuilltapExportCounts,
   QtapRecord,
   ExportedCharacter,
-  ExportedChat,
+  ExportedChatRecord,
   ExportedRoleplayTemplate,
   ExportedProject,
   ExportedGroup,
@@ -309,13 +309,17 @@ async function* streamChats(
     //     ring buffer (its ChatMetadataSchema contract declares it out of scope).
     //   - commonplaceSceneCache: the per-target scene-state emission cache used
     //     to collapse unchanged wardrobe prose; instance-local and regenerable.
-    // Both are dropped here so only durable chat data leaves the instance.
+    //   - transcriptVersion: the counter the message funnel bumps so an open
+    //     Salon tab can ask "has this changed?" cheaply. Derived bookkeeping
+    //     about *this* instance's writes; an import starts it at zero.
+    // All three are dropped here so only durable chat data leaves the instance.
     const {
       commonplaceRecallHistory: _ephemeralRecallHistory,
       commonplaceSceneCache: _ephemeralSceneCache,
+      transcriptVersion: _ephemeralTranscriptVersion,
       ...chatForExport
     } = chat;
-    const chatRecord: Omit<ExportedChat, 'messages'> = {
+    const chatRecord: ExportedChatRecord = {
       ...chatForExport,
       ...(tagNames.length > 0 && { _tagNames: tagNames }),
       ...(participantInfo.length > 0 && { _participantInfo: participantInfo }),

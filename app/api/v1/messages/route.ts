@@ -2,12 +2,16 @@
  * Messages API v1 - Collection Endpoint
  *
  * GET /api/v1/messages?chatId= - List messages for a chat
+ * GET /api/v1/messages?chatId=&action=transcript&knownVersion= - Conditional Salon transcript read
  * POST /api/v1/messages?chatId= - Send a message (returns streaming SSE response)
  *
  * The POST endpoint returns Server-Sent Events for real-time streaming.
  */
 
-import { createContextHandler } from '@/lib/api/middleware';
+import type { NextRequest, NextResponse } from 'next/server';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
+import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
+import { projectChatTranscript } from '@/lib/chat/transcript-projection';
 import {
   handleSendMessage,
   sendMessageSchema,
@@ -21,9 +25,12 @@ import { notFound, badRequest, serverError, successResponse } from '@/lib/api/re
 import { scrubUserAgent } from '@/lib/utils/user-agent';
 
 /**
- * GET /api/v1/messages?chatId= - List messages for a chat
+ * GET /api/v1/messages?chatId= - List raw message events for a chat.
+ *
+ * The lightweight listing: stored `type === 'message'` events, unprojected.
+ * The Salon's own read is `?action=transcript` below.
  */
-export const GET = createContextHandler(async (req, { user, repos }) => {
+async function handleListMessages(req: NextRequest, { repos }: RequestContext): Promise<NextResponse> {
   const { searchParams } = req.nextUrl;
   const chatId = searchParams.get('chatId');
 
@@ -51,7 +58,79 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
     logger.error('[Messages API v1] Error listing messages', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to list messages');
   }
-});
+}
+
+/**
+ * GET /api/v1/messages?chatId=&action=transcript&knownVersion=N
+ *
+ * The Salon's authoritative transcript read, and the one a realtime
+ * `{topic:'chats', id}` hint drives. The whole point is that it can answer
+ * *nothing changed* without serializing a line of the conversation: the tab
+ * hands back the `transcriptVersion` it last saw and gets `{ unchanged: true }`
+ * when the counter still agrees.
+ *
+ * That conditional is not an optimisation but the thing that makes the
+ * subscription affordable. One busy turn fires wardrobe, backdrop, whisper and
+ * memory hints at the same `chats` topic, and a Commonplace whisper alone can
+ * run to 17 KB — so a hint storm must cost round trips, not payloads.
+ *
+ * Omit `knownVersion` (or pass one that no longer matches) to get the full
+ * projection back, identical to the transcript embedded in
+ * `GET /api/v1/chats/[id]` because both come from `projectChatTranscript`.
+ */
+async function handleTranscript(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
+  const { searchParams } = req.nextUrl;
+  const chatId = searchParams.get('chatId');
+
+  if (!chatId) {
+    return badRequest('Query parameter required: chatId');
+  }
+
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    const version = chat.transcriptVersion ?? 0;
+    const knownVersionParam = searchParams.get('knownVersion');
+    const knownVersion = knownVersionParam === null ? null : Number(knownVersionParam);
+
+    if (knownVersion !== null && Number.isInteger(knownVersion) && knownVersion === version) {
+      logger.debug('[Messages API v1] Transcript unchanged', { chatId, version });
+      return successResponse({ unchanged: true, version });
+    }
+
+    const { messages, offSceneCharacters } = await projectChatTranscript(
+      chatId,
+      chat,
+      repos,
+      user.id,
+    );
+
+    logger.debug('[Messages API v1] Transcript read', {
+      chatId,
+      version,
+      knownVersion,
+      count: messages.length,
+    });
+
+    return successResponse({
+      unchanged: false,
+      version,
+      messages,
+      offSceneCharacters,
+      count: messages.length,
+    });
+  } catch (error) {
+    logger.error('[Messages API v1] Error reading transcript', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to read transcript');
+  }
+}
+
+export const GET = createContextHandler(
+  withCollectionActionDispatch({ transcript: handleTranscript }, handleListMessages),
+);
 
 /**
  * POST /api/v1/messages?chatId= - Send a message and get streaming response

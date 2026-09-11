@@ -113,7 +113,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   const chatDataHook = useChatData(id)
   const { chat, messages, loading, error, swipeStates, chatMemoryCount } = chatDataHook
   const { setChat, setMessages, setSwipeStates } = chatDataHook
-  const { fetchChat, fetchChatMemoryCount } = chatDataHook
+  const { fetchChat, refreshTranscript, clearProvisionalMessages, fetchChatMemoryCount } = chatDataHook
 
   // --- Chat settings ---
   // Every settings read in this component goes through the TanStack query, and
@@ -509,6 +509,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     activeTypingParticipantId: impersonation.activeTypingParticipantId,
     impersonatingParticipantIds: impersonation.impersonatingParticipantIds,
     fetchChat,
+    clearProvisionalMessages,
     scrollOnUserMessage: () => scrollOnUserMessage(),
     scrollOnStreamComplete: () => scrollOnStreamComplete(),
     setAttachedFiles,
@@ -866,30 +867,33 @@ export function SalonView({ chatId }: SalonViewProps) {
     fetchChatMemoryCount()
   }, [fetchChat, fetchChatMemoryCount])
 
-  // When a TerminalEmbed reports its PTY has exited, refresh the chat so the
-  // new Ariel close announcement appears inline.
+  // When a TerminalEmbed reports its PTY has exited, re-read the transcript so
+  // the new Ariel close announcement appears inline. The transcript read, not
+  // the whole chat: nothing but a message arrived.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ chatId?: string }>).detail
       if (!detail?.chatId || detail.chatId !== id) return
-      void fetchChat()
+      void refreshTranscript()
     }
     window.addEventListener('quilltap:terminal-exited', handler)
     return () => window.removeEventListener('quilltap:terminal-exited', handler)
-  }, [id, fetchChat])
+  }, [id, refreshTranscript])
 
   // The terminal WebSocket pushes `chat-update` server messages when something
   // (e.g., an Ariel periodic terminal-output summary) gets posted to the chat
-  // out-of-band. Refetch so the new message shows up without a manual reload.
+  // out-of-band. Re-read the transcript so the new message shows up without a
+  // manual reload — and, if the write already published its own `chats` hint,
+  // the conditional read answers "unchanged" and costs nothing.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ chatId?: string }>).detail
       if (!detail?.chatId || detail.chatId !== id) return
-      void fetchChat()
+      void refreshTranscript()
     }
     window.addEventListener('quilltap:chat-update', handler)
     return () => window.removeEventListener('quilltap:chat-update', handler)
-  }, [id, fetchChat])
+  }, [id, refreshTranscript])
 
   useEffect(() => {
     const fetchTemplateData = async () => {

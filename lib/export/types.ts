@@ -156,7 +156,14 @@ export interface ExportedCharacter extends Character {
 }
 
 /**
- * Chat with messages and resolved participant information
+ * Chat with messages and resolved participant information.
+ *
+ * The writer's own record type is
+ * {@link ExportedChatRecord} — `Omit<ExportedChat, 'messages' |
+ * 'transcriptVersion'>` — because a `.qtap` carries neither the messages
+ * (they stream as their own NDJSON records) nor the transcript counter, which
+ * is derived bookkeeping about *this* instance's writes and restarts at zero
+ * wherever the bundle lands.
  */
 export interface ExportedChat extends ChatMetadata {
   messages: MessageEvent[];
@@ -645,13 +652,23 @@ export interface QtapCharacterPluginDataRecord {
 }
 
 /**
+ * A chat as it rides in a `.qtap`: metadata + resolved participant info, but
+ * NOT the messages — those stream as separate `chat_message` records so a chat
+ * with tens of thousands of messages doesn't hit the per-line ceiling — and not
+ * `transcriptVersion`, the counter the message funnel bumps so an open Salon
+ * tab can ask "has this changed?" cheaply. That counter describes one
+ * instance's writes and restarts at zero wherever the bundle lands.
+ */
+export type ExportedChatRecord = Omit<ExportedChat, 'messages' | 'transcriptVersion'>;
+
+/**
  * Chat record carries metadata + resolved participant info but NOT the
  * messages — those stream as separate `chat_message` records so a chat with
  * tens of thousands of messages doesn't hit the per-line ceiling.
  */
 export interface QtapChatRecord {
   kind: 'chat';
-  data: Omit<ExportedChat, 'messages'>;
+  data: ExportedChatRecord;
 }
 
 export interface QtapChatMessageRecord {

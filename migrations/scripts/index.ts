@@ -392,6 +392,7 @@ import { addCycleOrderColumnMigration } from './add-cycle-order-column-v1';
 import { clearGeneratedImagePlaceholderDescriptionsMigration } from './clear-generated-image-placeholder-descriptions';
 // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
 import { addImpersonationVoiceRewriteFieldMigration } from './add-impersonation-voice-rewrite-field';
+import { addTranscriptVersionColumnMigration } from './add-transcript-version-column-v1';
 
 /**
  * All available migrations.
@@ -786,6 +787,8 @@ export const migrations: Migration[] = [
   clearGeneratedImagePlaceholderDescriptionsMigration,
   // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
   addImpersonationVoiceRewriteFieldMigration,
+  // Salon transcript as a subscribed read: transcriptVersion counter column on chats
+  addTranscriptVersionColumnMigration,
 ];
 
 export {
@@ -1159,5 +1162,7 @@ export {
   clearGeneratedImagePlaceholderDescriptionsMigration,
   // Impersonated lines in the character's own voice: impersonationVoiceRewrite toggle column on chat_settings
   addImpersonationVoiceRewriteFieldMigration,
+  // Salon transcript as a subscribed read: transcriptVersion counter column on chats
+  addTranscriptVersionColumnMigration,
 };
 

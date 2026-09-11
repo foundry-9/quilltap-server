@@ -211,6 +211,12 @@ interface UseSSEStreamingParams {
   /** Seats the human is impersonating this session (overlay; `controlledBy` stays `'llm'`) */
   impersonatingParticipantIds: string[]
   fetchChat: () => Promise<void>
+  /**
+   * Retire any optimistic bubble still on screen. Reconciliation drops one the
+   * moment the authoritative read carries its persisted row; this is the turn
+   * boundary's broom for the send that never persisted at all.
+   */
+  clearProvisionalMessages: () => void
   scrollOnUserMessage: () => void
   scrollOnStreamComplete: () => void
   setAttachedFiles: (files: any[]) => void
@@ -248,6 +254,7 @@ export function useSSEStreaming({
   activeTypingParticipantId,
   impersonatingParticipantIds,
   fetchChat,
+  clearProvisionalMessages,
   scrollOnUserMessage,
   scrollOnStreamComplete,
   setAttachedFiles,
@@ -998,10 +1005,14 @@ export function useSSEStreaming({
       setWaitingForResponse(false)
       abortControllerRef.current = null
       setResponseStatus(null)
+      // The turn is over, so every optimistic bubble has had its chance: the
+      // reads above retire the ones the server persisted, and anything still
+      // standing belongs to a send that never landed at all.
+      clearProvisionalMessages()
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
