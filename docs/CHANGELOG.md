@@ -4,6 +4,24 @@
 
 ### 4.10-dev
 
+#### Docs: plan for the Salon transcript as a subscribed read
+
+Added `docs/developer/features/salon-realtime-transcript.md`, a plan to stop the SSE stream being
+the only way a message reaches an open Salon tab. The transcript is a plain `useState` array filled
+once at mount, so nothing can tell it it is stale: an interrupted stream loses the turn it was
+carrying, and staff messages written by the forked child — Aurora wardrobe notes, Lantern backdrops,
+Commonplace whispers — show up only if they happened to be enqueued into an open stream at the right
+moment. The plan has a chat-scoped realtime hint drive a re-read of the transcript and demotes the
+stream to a display-only overlay for the turn in flight, leaving token streaming and the turn
+manager alone. Records that child-written messages already publish `{topic:'chats', id}` through the
+job dispatcher's post-commit hook, so the publish half is largely built and nothing is listening.
+Covers the publish site at the message write funnel, a conditional read so a hint storm costs round
+trips instead of payloads, the reconciliation rule between the streaming bubble and the
+authoritative rows, and the swipe-selection and scroll-anchor state a mid-turn refetch would
+otherwise disturb. Also records two defects found while diagnosing the incident behind it:
+`userStoppedStreamRef` is written in three places and never read, so Stop and pause gate nothing,
+and the Salon's send returns silently when a send is already in flight.
+
 #### Fixed: a chat setting changed while a Salon tab was open never reached it (bug 134)
 
 Flipping a Settings → Chat dial — auto-scroll, thinking display, token display, the LLM inspector
