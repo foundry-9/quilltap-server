@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Wardrobe dialog: "Show shared"
+
+The Wardrobe dialog's item list has a second tickbox beside **Show archived**: **Show shared**, on by
+default. Unticking it hides the rows merged in from a shared tier (group, project, Quilltap General)
+— the ones badged `· shared` — leaving only garments the character owns, which makes dressing a
+character or composing an outfit out of her own clothes a good deal easier.
+
+Unlike **Show archived**, which re-fetches every tier with `?includeArchived=true`, this is a
+client-side filter: ownership is a property of the merge, not something the fetch can ask for. It
+uses the same `canManage` predicate that badges the row, so the badge and the filter can't disagree.
+The tickbox is hidden when browsing a shared container directly, where every row belongs to the
+container on display.
+
 #### Character avatars are cached per configuration
 
 A character wearing the same outfit no longer costs a fresh image every time. The avatar prompt is

@@ -206,6 +206,14 @@ function WardrobeControlDialogInner({
    * server owns the hiding, so this list can never disagree with the API.
    */
   const [showArchived, setShowArchived] = useState(false)
+  /**
+   * "Show shared", the mirror image of the archived toggle: on by default, and
+   * a purely client-side filter. Ownership isn't a fetch parameter — the
+   * character view's list *is* the merge of the character's own garments with
+   * every shared tier above them — so hiding shared items means dropping the
+   * un-manageable rows after the merge, not asking the server for less.
+   */
+  const [showShared, setShowShared] = useState(true)
   const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
     useCharacterWardrobeItems(selectedCharacterId, { chatId, includeArchived: showArchived })
   const {
@@ -477,7 +485,11 @@ function WardrobeControlDialogInner({
     return sorted.filter((i) => {
       // No archived filter here on purpose: the fetch already omitted them
       // unless "Show archived" is ticked, and a second client-side pass would
-      // be a place for the two rules to drift apart.
+      // be a place for the two rules to drift apart. Shared items are the
+      // other way round — the server can't omit them without dismantling the
+      // merge, so the one rule for "is this shared" is `canManageItem`, the
+      // same predicate that badges the row.
+      if (!showShared && !canManageItem(i)) return false
       const isComposite = i.componentItemIds.length > 0
       if (kindFilter === 'items' && isComposite) return false
       if (kindFilter === 'outfits' && !isComposite) return false
@@ -485,7 +497,7 @@ function WardrobeControlDialogInner({
       if (term && !i.title.toLowerCase().includes(term)) return false
       return true
     })
-  }, [listItems, slotFilter, kindFilter, titleFilter])
+  }, [listItems, slotFilter, kindFilter, titleFilter, showShared, canManageItem])
 
   // ---------------------------------------------------------------------------
   // Item action handlers
@@ -1211,15 +1223,31 @@ function WardrobeControlDialogInner({
                   </button>
                 ))}
               </div>
-              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
-                <input
-                  type="checkbox"
-                  checked={showArchived}
-                  onChange={(e) => setShowArchived(e.target.checked)}
-                  className="qt-checkbox"
-                />
-                Show archived
-              </label>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={showArchived}
+                    onChange={(e) => setShowArchived(e.target.checked)}
+                    className="qt-checkbox"
+                  />
+                  Show archived
+                </label>
+                {/* Only the character view merges in other tiers; browsing a
+                    container, every row already belongs to it, so the toggle
+                    would sit there governing nothing. */}
+                {isCharacterScope && (
+                  <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={showShared}
+                      onChange={(e) => setShowShared(e.target.checked)}
+                      className="qt-checkbox"
+                    />
+                    Show shared
+                  </label>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1 max-h-[55vh] pb-12">
