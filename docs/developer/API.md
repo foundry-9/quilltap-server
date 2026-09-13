@@ -2076,6 +2076,28 @@ Remove a photo from the gallery. `[linkId]` is the `doc_mount_file_links.id` ret
 
 ---
 
+### Character Avatar Rolls
+
+The avatar configuration cache, per character: one stored portrait per configuration of outfit, provider, image profile and model. Membership is `files.generationKey IS NOT NULL` plus the character's id in `files.tags` — never a path, since rolls live at `character-avatars/…` (pre-vault), `images/history/…` (since), or `photos/…` (once kept). Backed by `lib/photos/avatar-rolls-service.ts`; design of record: [avatar-configuration-cache.md](features/avatar-configuration-cache.md).
+
+#### `GET /api/v1/characters/[id]/avatar-rolls`
+
+List the character's rolls, newest first. **Query Parameters**: `limit` (1–200, default 60), `offset`. Each entry carries `fileId`, `rollLinkId`, `albumLinkId` (non-null when the bytes are already in the character's `photos/`), `url`, `generationPrompt`, `generationModel`, `isPortrait`, and `usedInChatCount`.
+
+#### `POST /api/v1/characters/[id]/avatar-rolls/[fileId]?action=save-to-album`
+
+Hard-link the roll's bytes into the character's `photos/` folder. Idempotent: a roll already in the album answers with its existing `linkId` and `alreadyInAlbum: true`.
+
+#### `POST /api/v1/characters/[id]/avatar-rolls/[fileId]?action=set-avatar`
+
+Save to the album (if needed) and point `defaultImageId` at the resulting **album link**, not at the `files` row — post-Phase-3 every avatar pointer is a `doc_mount_file_links.id`.
+
+#### `DELETE /api/v1/characters/[id]/avatar-rolls/[fileId]`
+
+Discard a roll. Scrubs every pointer first — `chats.characterAvatars`, the character's `avatarOverrides`, and a legacy `defaultImageId` naming the `files` row — then drops the roll's own mount link with GC and deletes the cache row. **An album copy of the same bytes is never a casualty**: only the link in the mount the roll's `storageKey` names, and never a `photos/` path, is removed. Answers `{ deleted, blobRemoved, chatsScrubbed, keptInAlbum }`.
+
+---
+
 ### Chats
 
 #### `GET /api/v1/chats`

@@ -44,6 +44,27 @@ export interface EmbeddedPhotoGalleryProps {
   onRefresh?: () => void
 }
 
+/**
+ * One plate from the avatar configuration cache — a `files` row the wardrobe
+ * avatar job stored for a particular outfit / provider / model configuration.
+ *
+ * Unlike an album photo, a roll's `id` is a `files.id` rather than a
+ * `doc_mount_file_links.id`: the cache is keyed in the files table, and that
+ * is also the id a chat's `characterAvatars` entry binds. `albumLinkId` is
+ * the link the roll has in the character's `photos/` folder once it has been
+ * kept, which is what makes the keep button idempotent.
+ */
+export interface AvatarRoll extends GalleryImage {
+  /** Link id in the character's album, when this roll has been kept there. */
+  albumLinkId: string | null
+  /** True when the character's portrait is this plate. */
+  isPortrait: boolean
+  /** How many of the character's chats are currently displaying it. */
+  usedInChatCount: number
+  generationPrompt: string | null
+  generationModel: string | null
+}
+
 export interface GalleryImageProps {
   image: GalleryImage
   index: number
@@ -59,4 +80,19 @@ export interface GalleryImageProps {
   onDownloadImage: (e: React.MouseEvent) => void
   onDeleteImage: (e: React.MouseEvent) => void
   entityName: string
+  /**
+   * Optional "keep this in the album" action. Only the avatar-rolls grid
+   * passes it — an album photo is already in the album.
+   */
+  onSaveToAlbum?: (e: React.MouseEvent) => void
+  /** True when the album already holds these bytes; renders as a done state. */
+  isInAlbum?: boolean
+  /** A roll-level action is in flight; every button on the tile waits. */
+  isBusy?: boolean
+  /**
+   * Optional replacement for the delete button's resting tooltip. The rolls
+   * grid uses it to say how many conversations are displaying the plate, so a
+   * destructive click is an informed one.
+   */
+  deleteTitle?: string
 }

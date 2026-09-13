@@ -15,7 +15,7 @@ import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
-import { isPhotosRelativePath } from '@/lib/photos/photos-paths';
+import { isCharacterAlbumRelativePath } from '@/lib/photos/photos-paths';
 import { SINGLE_FILE_OVERLAY_PATHS } from '@/lib/database/repositories/vault-overlay/schema';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
@@ -307,8 +307,10 @@ export async function handleGet(
           repos.groupCharacterMembers.findByCharacterId(id),
         ]);
 
-        // Photos mirrors the Photo Gallery tab's predicate (Phase-3 `photos/`
-        // plus the legacy `images/avatar.webp` + `images/history/` portraits).
+        // Photos counts through `isCharacterAlbumRelativePath`, the same
+        // predicate `listCharacterGallery` filters on, so this figure and the
+        // grid on the Photo Gallery tab cannot disagree. Avatar rolls
+        // (`images/history/`) are not album members and are not counted here.
         // Knowledge = files under the `Knowledge/` folder; Core = files under
         // the `Core/` packet folder (the periodically re-offered core whisper).
         // All three count link rows.
@@ -319,7 +321,7 @@ export async function handleGet(
         for (const link of fileLinks) {
           const rel = link.relativePath.toLowerCase();
           presentPaths.add(rel);
-          if (isPhotosRelativePath(link.relativePath) || rel === 'images/avatar.webp' || rel.startsWith('images/history/')) {
+          if (isCharacterAlbumRelativePath(link.relativePath)) {
             photos++;
           }
           if (rel.startsWith('knowledge/')) knowledge++;

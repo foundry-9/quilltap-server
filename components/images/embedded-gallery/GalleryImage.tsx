@@ -18,6 +18,10 @@ export function GalleryImage({
   onDownloadImage,
   onDeleteImage,
   entityName: _entityName,
+  onSaveToAlbum,
+  isInAlbum = false,
+  isBusy = false,
+  deleteTitle,
 }: GalleryImageProps) {
   const getImageUrl = () => {
     if (image.url) return image.url
@@ -67,8 +71,8 @@ export function GalleryImage({
             onClick={(e) => {
               onSetAvatar(e)
             }}
-            disabled={isUpdating}
-            className={`p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:qt-bg-success hover:qt-text-on-success transition-colors ${isUpdating ? 'opacity-50' : ''}`}
+            disabled={isUpdating || isBusy}
+            className={`p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:qt-bg-success hover:qt-text-on-success transition-colors ${isUpdating || isBusy ? 'opacity-50' : ''}`}
             title="Set as avatar"
           >
             {isUpdating ? (
@@ -79,6 +83,25 @@ export function GalleryImage({
             ) : (
               <Icon name="user" className="w-4 h-4" />
             )}
+          </button>
+        )}
+
+        {/* Keep in the album button — avatar rolls only */}
+        {onSaveToAlbum && (
+          <button
+            onClick={(e) => {
+              onSaveToAlbum(e)
+            }}
+            disabled={isInAlbum || isBusy}
+            className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
+              isInAlbum
+                ? 'qt-bg-success qt-text-on-success'
+                : 'qt-bg-card qt-text-secondary hover:qt-bg-primary hover:qt-text-on-primary'
+            } ${isBusy && !isInAlbum ? 'opacity-50' : ''}`}
+            title={isInAlbum ? 'Already in the photo album' : 'Keep in the photo album'}
+            aria-label={isInAlbum ? 'Already in the photo album' : 'Keep in the photo album'}
+          >
+            <Icon name="bookmark" className="w-4 h-4" />
           </button>
         )}
 
@@ -102,13 +125,13 @@ export function GalleryImage({
             onClick={(e) => {
               onDeleteImage(e)
             }}
-            disabled={isDeletingImage}
+            disabled={isDeletingImage || isBusy}
             className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
               isConfirmingDelete
                 ? 'qt-bg-destructive qt-text-on-destructive'
                 : 'qt-bg-card qt-text-secondary hover:qt-bg-destructive hover:qt-text-on-destructive'
-            } ${isDeletingImage ? 'opacity-50' : ''}`}
-            title={isConfirmingDelete ? 'Click again to confirm delete' : 'Delete image'}
+            } ${isDeletingImage || isBusy ? 'opacity-50' : ''}`}
+            title={isConfirmingDelete ? 'Click again to confirm delete' : deleteTitle ?? 'Delete image'}
           >
             {isDeletingImage ? (
               <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

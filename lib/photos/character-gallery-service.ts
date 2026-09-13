@@ -35,7 +35,12 @@ import {
   basenameOfRelativePath,
 } from './keep-image-markdown';
 import { chunkAndInsertExtractedText } from './chunk-extracted-text';
-import { buildPhotosRelativePath, PHOTOS_FOLDER, isPhotosRelativePath } from './photos-paths';
+import {
+  buildPhotosRelativePath,
+  PHOTOS_FOLDER,
+  isPhotosRelativePath,
+  isCharacterAlbumRelativePath,
+} from './photos-paths';
 import { getPhotoLinkSummaryBySha256, type PhotoLinkSummary } from './photo-link-summary';
 import { buildMountFileUrl } from './resolve-character-avatar';
 
@@ -219,6 +224,9 @@ export async function saveToCharacterGallery(
  * historic `images/avatar.webp` portrait when one exists so the gallery
  * always surfaces the character's current avatar even when it predates
  * the photos/ folder convention. Most-recent first.
+ *
+ * Avatar rolls (`images/history/`) are not part of the album — see
+ * {@link listAvatarRolls} in `lib/photos/avatar-rolls-service.ts`.
  */
 export async function listCharacterGallery(
   input: ListCharacterGalleryInput
@@ -238,15 +246,10 @@ export async function listCharacterGallery(
   const effectiveOffset = Math.max(0, offset ?? 0);
 
   const allLinks = await repos.docMountFileLinks.findByMountPointId(vault.mountPointId);
-  const galleryLinks = allLinks.filter(l => {
-    if (isPhotosRelativePath(l.relativePath)) return true;
-    // The earlier `migrate-character-avatars-to-vaults-v1` migration places
-    // pre-existing portraits under `images/avatar.webp` (+ `images/history/`).
-    // Surface those alongside Phase-3 `photos/` so the gallery isn't empty
-    // for characters who haven't generated/uploaded into `photos/` yet.
-    const lower = l.relativePath.toLowerCase();
-    return lower === 'images/avatar.webp' || lower.startsWith('images/history/');
-  });
+  // `isCharacterAlbumRelativePath` is the single source of album membership —
+  // the character-detail `photos` figure counts through the same predicate, so
+  // the grid and the count cannot disagree.
+  const galleryLinks = allLinks.filter(l => isCharacterAlbumRelativePath(l.relativePath));
 
   const sortedLinks = galleryLinks
     .slice()

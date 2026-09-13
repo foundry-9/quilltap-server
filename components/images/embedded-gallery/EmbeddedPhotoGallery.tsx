@@ -5,6 +5,7 @@ import ImageDetailModal from '../ImageDetailModal'
 import { GalleryControls } from './GalleryControls'
 import { GalleryEmpty } from './GalleryEmpty'
 import { GalleryGrid } from './GalleryGrid'
+import { AvatarRollsSection } from './AvatarRollsSection'
 import { useGalleryData } from './hooks/useGalleryData'
 import type { EmbeddedPhotoGalleryProps, GalleryImage } from './types'
 
@@ -173,6 +174,14 @@ export function EmbeddedPhotoGallery({
           entityName={entityName}
         />
       )}
+
+      <AvatarRollsSection
+        characterId={entityId}
+        entityName={entityName}
+        onAvatarChange={onAvatarChange}
+        onRefresh={onRefresh}
+        thumbnailSize={thumbnailSize}
+      />
 
       {selectedImage && (
         <ImageDetailModal

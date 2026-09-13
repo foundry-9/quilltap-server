@@ -136,6 +136,44 @@ lookup therefore verifies the blob still exists (`mountBlobExists`) before
 returning a hit: a missing blob is a miss, regenerates, and rebinds the key.
 Self-healing, one extra indexed read.
 
+### The drawer: Aurora's Avatar Rolls section
+
+The cache is also a collection somebody owns, so the Aurora Photo Gallery tab
+shows it. `lib/photos/avatar-rolls-service.ts` is the one reader and the one
+mutator; `GET /api/v1/characters/[id]/avatar-rolls` lists, and
+`POST …/avatar-rolls/[fileId]?action=save-to-album|set-avatar` and
+`DELETE …/avatar-rolls/[fileId]` act.
+
+**Membership is `generationKey IS NOT NULL` plus the character tag, never a
+path.** Nothing else writes that column, and the collapse migration backfilled
+it onto every pre-cache portrait — so one predicate covers rolls at
+`character-avatars/…` in a project mount (pre-vault), `images/history/…` in the
+character's own vault (since), and rolls that have been hard-linked into
+`photos/`. A path test would have to know all three and would drift.
+
+`listCharacterGallery` therefore stopped listing `images/history/` in the album.
+It used to, which meant every roll appeared twice on one page and "delete" was
+ambiguous between discarding a plate and removing an album photo. The album is
+what someone kept; the drawer is the working stock. `images/avatar.webp` still
+shows in the album — it is the canonical portrait, not a roll.
+
+**Set-as-avatar keeps first.** A roll is a `files.id`; post-Phase-3 every avatar
+pointer is a `doc_mount_file_links.id`. `resolveCharacterAvatar` still tolerates
+a legacy file id for un-migrated imports, but minting a fresh one here would put
+`defaultImageId` back out of step with `removeFromCharacterGallery`, which
+scrubs pointers by link id. So the plate is hard-linked into `photos/` and
+`defaultImageId` is pointed at *that* link.
+
+**Deleting a roll never takes an album photo.** `deleteMountBlob` is the wrong
+verb (see above) — a kept roll is two links over one set of bytes, and only the
+roll's own link, in the mount its `storageKey` names, is ours. `deleteWithGC` on
+that one link reclaims the blob only when nothing else held it. A roll whose
+only surviving link *is* the album copy loses its `files` row and nothing else.
+Pointers are scrubbed before the bytes go — `chats.characterAvatars`,
+`avatarOverrides`, and a legacy `defaultImageId` — so nothing is left naming a
+file that has stopped existing; the cache's own blob-exists check then treats
+the vanished configuration as a miss and the next sitting is drawn afresh.
+
 ### Concurrency
 
 The handler runs in the forked job child: reads pass through, writes buffer, no

@@ -4,6 +4,36 @@
 
 ### 4.10-dev
 
+#### Avatar Rolls section in a character's Photo Gallery
+
+The Photo Gallery tab on a character's Aurora page has a new collapsible section below the album:
+**Avatar Rolls**. It lists every portrait the avatar configuration cache holds for that character —
+one image per configuration of outfit, image provider, profile and model — with the same actions the
+album offers, plus one of its own:
+
+- **Set as avatar** — saves the roll into the album (if it isn't there yet) and points the
+  character's portrait at the resulting album link.
+- **Keep in the photo album** — hard-links the roll into the character's `photos/` folder. Idempotent;
+  a roll already kept shows a filled bookmark and the button is disabled.
+- **Download**, **view** (with the generation prompt), and **Save to my gallery** from the enlarged
+  view, as in the album.
+- **Delete** (two clicks to confirm) — clears every pointer at the roll first (`chats.characterAvatars`,
+  `avatarOverrides`, and a legacy `defaultImageId`), then drops the roll's own mount link. **A copy
+  you had kept in the album is not deleted.** The cache treats the missing configuration as a miss,
+  so the next time the character wears that outfit a new portrait is generated.
+
+Membership is `files.generationKey IS NOT NULL` plus the character's id in `files.tags`, so it covers
+rolls stored under `character-avatars/` (before avatars moved into the vault), `images/history/`
+(since), and rolls already copied into `photos/`.
+
+New endpoints: `GET /api/v1/characters/[id]/avatar-rolls`,
+`POST /api/v1/characters/[id]/avatar-rolls/[fileId]?action=save-to-album|set-avatar`,
+`DELETE /api/v1/characters/[id]/avatar-rolls/[fileId]`.
+
+**Behavior change:** the character photo album no longer lists images under `images/history/`. Those
+are avatar rolls and now appear only in the new section; previously each one showed in both places on
+the same page. `images/avatar.webp` still appears in the album.
+
 #### Wardrobe dialog: "Show shared"
 
 The Wardrobe dialog's item list has a second tickbox beside **Show archived**: **Show shared**, on by

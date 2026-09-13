@@ -30,6 +30,12 @@ export const queryKeys = {
     prompts: (id: string) => ['characters', id, 'prompts'] as const,
     subprompts: (id: string) => ['characters', id, 'subprompts'] as const,
     photos: (id: string) => ['characters', id, 'photos'] as const,
+    /**
+     * Avatar rolls — the plates the avatar configuration cache holds for this
+     * character. A separate key from `photos` because they are a separate
+     * collection with a separate endpoint, not a filtered view of the album.
+     */
+    avatarRolls: (id: string) => ['characters', id, 'avatar-rolls'] as const,
   },
   chats: {
     all: ['chats'] as const,
