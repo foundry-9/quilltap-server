@@ -96,7 +96,6 @@ export interface SendMessageArgs {
   setInput: (v: string) => void
   setPendingToolResults: (results: PendingToolResult[]) => void
   clearDraft: () => void
-  userStoppedStreamRef: React.MutableRefObject<boolean>
 }
 
 export interface UseImpersonationVoiceOptions {
@@ -110,7 +109,6 @@ export interface UseImpersonationVoiceOptions {
     pendingToolResults: PendingToolResult[],
     setPendingToolResults: (results: PendingToolResult[]) => void,
     clearDraft: () => void,
-    userStoppedStreamRef: React.MutableRefObject<boolean>,
   ) => void | Promise<void>
   /** Put the cursor back in the composer when the operator returns to it. */
   focusComposer: () => void
@@ -285,7 +283,6 @@ export function useImpersonationVoice({
         stash.pendingToolResults,
         sendArgs.setPendingToolResults,
         sendArgs.clearDraft,
-        sendArgs.userStoppedStreamRef,
       )
       close()
     },

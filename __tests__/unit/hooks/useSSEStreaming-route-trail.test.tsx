@@ -110,7 +110,6 @@ function setup(frames: Array<Record<string, unknown>>) {
         [],
         jest.fn() as never,
         jest.fn() as never,
-        { current: false } as React.MutableRefObject<boolean>,
       )
     })
   }

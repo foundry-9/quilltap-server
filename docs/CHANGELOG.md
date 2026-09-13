@@ -4,6 +4,40 @@
 
 ### 4.10-dev
 
+#### Fixed: a send refused while a reply is still streaming now says so (bug 136)
+
+Pressing Enter in the Salon while a reply was still generating did nothing at all — no notice, no
+flash, no log line. The line stayed in the composer and a second press after the turn landed worked,
+but in the moment there was no way to tell "I declined to send that" from "something went wrong",
+which is the same silence a genuinely broken send produces.
+
+One `return` in `sendMessage` covered two quite different cases. The empty-composer half is correct
+and wants no feedback. The `sending` half is a real request refused, and now answers: **One moment —
+the room is still speaking. Your remark waits in the composer.** The **Nudge**, **Continue** and
+**Skip** controls get the same notice when they are refused for the same reason, being clicks on
+explicit controls. A paused chat still declines silently, the sidebar having already said so, and an
+empty composer still says nothing.
+
+Files: `app/salon/[id]/hooks/useSSEStreaming.ts`,
+`__tests__/unit/hooks/useSSEStreaming-send-guard.test.tsx` (new).
+
+#### Removed: a Stop/Pause flag that was written four times and read nowhere (bug 135)
+
+`userStoppedStreamRef` looked like the latch the SSE read loop consults before acting on an event
+that arrives after a Stop. It consulted nothing: the ref had four writers and no readers anywhere in
+the checkout. Stopping a turn works, and always worked, because `stopStreaming` aborts the
+`AbortController` and the fetch dies.
+
+No behaviour changes. The ref, its writes, the parameter it occupied in `sendMessage` and in the In
+Their Own Words dialog's `SendMessageArgs`, and both pass-throughs in `SalonView` are deleted;
+`sendMessage` takes seven arguments instead of eight. No race was demonstrated, so the flag went
+rather than gaining a reader — a write-only ref type-checks and lints clean, so the next person to
+reach for it would have wired a stop-sensitive branch to a guard that is never consulted.
+
+Files: `app/salon/[id]/hooks/useChatControls.ts`, `app/salon/[id]/hooks/useSSEStreaming.ts`,
+`app/salon/[id]/hooks/useImpersonationVoice.ts`, `app/salon/[id]/SalonView.tsx`,
+`__tests__/unit/hooks/useSSEStreaming-route-trail.test.tsx`.
+
 #### Avatar Rolls section in a character's Photo Gallery
 
 The Photo Gallery tab on a character's Aurora page has a new collapsible section below the album:

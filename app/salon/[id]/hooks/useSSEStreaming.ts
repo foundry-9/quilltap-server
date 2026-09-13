@@ -736,14 +736,17 @@ export function useSSEStreaming({
     pendingToolResults: PendingToolResult[],
     setPendingToolResults: (results: PendingToolResult[]) => void,
     clearDraft: () => void,
-    userStoppedStreamRef: React.MutableRefObject<boolean>,
   ) => {
     e?.preventDefault()
-    if ((!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) || sending) return
-
-    // Reset user-stopped flag when user sends a message
-    if (!isPaused) {
-      userStoppedStreamRef.current = false
+    // Two refusals, deliberately told apart (bug 136). An empty composer is
+    // the operator's own doing and wants no answer; a send declined because a
+    // turn is still in flight is a real request refused, and silence there is
+    // indistinguishable from a send that broke. The text stays in the composer
+    // either way.
+    if (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) return
+    if (sending) {
+      showInfoToast('One moment — the room is still speaking. Your remark waits in the composer.')
+      return
     }
 
     const userMessage = input.trim()
@@ -1012,13 +1015,16 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, sending, chat, respondingParticipantId, setMessages, clearProvisionalMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
    */
   const triggerContinueMode = useCallback(async (participantId: string, nudge = false) => {
-    if (streaming || waitingForResponse) return
+    if (streaming || waitingForResponse) {
+      showInfoToast('One moment — the room is still speaking.')
+      return
+    }
     if (isPaused) return
 
     const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)

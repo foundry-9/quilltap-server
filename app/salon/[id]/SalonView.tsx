@@ -739,8 +739,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   )
 
   // --- Unpause callback for turn management ---
-  // The pause setter without its toast: clears the local pause and the
-  // user-stopped flag, then persists.
+  // The pause setter without its toast: clears the local pause, then persists.
   const { setPauseState } = chatControls
   const unpauseChat = useCallback(() => setPauseState(false), [setPauseState])
 
@@ -1634,7 +1633,6 @@ export function SalonView({ chatId }: SalonViewProps) {
               setInput: clearComposerInput,
               setPendingToolResults,
               clearDraft,
-              userStoppedStreamRef: chatControls.userStoppedStreamRef,
             }
             // In Their Own Words takes the submit over when it is armed; it has
             // already called preventDefault and nothing has been cleared.
@@ -1660,7 +1658,6 @@ export function SalonView({ chatId }: SalonViewProps) {
               pendingToolResults,
               sendArgs.setPendingToolResults,
               sendArgs.clearDraft,
-              sendArgs.userStoppedStreamRef,
             )
           }}
           onFileSelect={handleFileSelect}

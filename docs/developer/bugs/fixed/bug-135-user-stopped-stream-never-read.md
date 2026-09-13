@@ -2,15 +2,28 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed |
 | **Found** | 2026-09-11 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-12 |
 | **Severity** | Low-Medium (nothing is lost or corrupted; a guard that looks like it exists does not, so Stop/Pause does not gate stream processing at all — the abort controller is what actually stops a turn, which is why nobody noticed) |
 | **Who it bites** | Anyone reading this code expecting Stop/Pause to have a say in what the stream handler does; and anyone who later relies on the flag, which will silently do nothing |
 | **Provenance** | Found while diagnosing the incident behind [the Salon transcript plan](../features/complete/salon-realtime-transcript.md) (§1.1). Not caused by it and not fixed by it — filed here rather than smuggled into that change |
-| **Fix site** | `app/salon/[id]/hooks/useChatControls.ts:145` (the ref), `:171` and `:224` (the writes), `app/salon/[id]/hooks/useSSEStreaming.ts:739` (the parameter) and `:746` (the third write) |
+| **Fix site** | Deleted outright: `app/salon/[id]/hooks/useChatControls.ts` (the ref, its two writes and its place in the returned object), `app/salon/[id]/hooks/useSSEStreaming.ts` (the parameter and the reset), `app/salon/[id]/hooks/useImpersonationVoice.ts` (the `SendMessageArgs` field and the `sendMessage` signature), `app/salon/[id]/SalonView.tsx` (both pass-throughs) |
 | **v5 status** | Not yet assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+**FIXED in v4 (2026-09-12) by deletion — option (1) below.** No race was
+demonstrated, so the flag went rather than gaining a reader: the ref, its two
+writes in `useChatControls`, the reset in `sendMessage`, the parameter it
+occupied in `sendMessage` and in `useImpersonationVoice`'s `SendMessageArgs`,
+and both pass-throughs in `SalonView` are gone. `sendMessage` takes seven
+arguments instead of eight. The abort controller remains the mechanism, exactly
+as it was — Stop and Pause behave identically, which is the point: nothing about
+the flag was ever load-bearing. `isPaused` left `sendMessage`'s dependency array
+with the reset that used it, and a stale comment in `SalonView` promising that
+`unpauseChat` "clears the local pause and the user-stopped flag" now promises
+only the pause. `grep -rn 'userStoppedStreamRef' --include='*.ts*' .` returns
+nothing.
 
 ## Symptom
 

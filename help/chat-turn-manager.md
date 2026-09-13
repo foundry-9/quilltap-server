@@ -132,6 +132,7 @@ When a cycle begins, the Turn Manager draws the **whole order at once** — ever
 - Nudge takes priority over the queue
 - Only works for LLM-controlled characters
 - The Host announces the summons in the transcript ("The Host turns to _Name_ … and invites them to take the floor"), so the invitation is a permanent part of the conversation rather than a note that vanishes on reload
+- Reach for **Nudge** (or **Continue**, or **Skip**) whilst a reply is still arriving and the Salon declines aloud — *One moment — the room is still speaking* — rather than swallowing the click. Wait for the current turn to land and press again
 
 ### Queue
 

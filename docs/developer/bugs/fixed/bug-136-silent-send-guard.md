@@ -2,15 +2,35 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed |
 | **Found** | 2026-09-11 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-12 |
 | **Severity** | Low-Medium (nothing is lost — the composer keeps the text — but the operator gets no signal at all, and the same silence covers a genuinely dropped send) |
 | **Who it bites** | Anyone who submits while a turn is still in flight: a fast second Enter, the In Their Own Words dialog re-dispatching a submit, a multi-character chain that has not finished |
 | **Provenance** | Found while diagnosing the incident behind [the Salon transcript plan](../features/complete/salon-realtime-transcript.md) (§1.1) — the silence is what made that incident hard to tell apart from an ordinary no-op. Not caused by that change and not fixed by it |
-| **Fix site** | `app/salon/[id]/hooks/useSSEStreaming.ts:742` (the bare `return` in `sendMessage`); the same shape guards `triggerContinueMode` |
+| **Fix site** | `app/salon/[id]/hooks/useSSEStreaming.ts` — the guard in `sendMessage` split in two, and the same split in `triggerContinueMode` |
 | **v5 status** | Not yet assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+**FIXED in v4 (2026-09-12).** The one `return` is now two, and only the half
+that refuses a real request speaks:
+
+```ts
+if (!input.trim() && attachedFiles.length === 0 && pendingToolResults.length === 0) return
+if (sending) {
+  showInfoToast('One moment — the room is still speaking. Your remark waits in the composer.')
+  return
+}
+```
+
+`triggerContinueMode`'s `if (streaming || waitingForResponse)` gained the same
+notice — it refuses a click on an explicit control (Nudge, Continue, Skip), so
+it is the more deserving of the two. Its `if (isPaused) return` is deliberately
+left silent: a paused chat already says so in the sidebar, and the paths that
+reach it lift the pause first. The empty-composer half is untouched and still
+says nothing. Covered by
+`__tests__/unit/hooks/useSSEStreaming-send-guard.test.tsx`, which holds a turn
+open, presses send again, and asserts both the notice and the silence.
 
 ## Symptom
 

@@ -142,7 +142,6 @@ export function useChatControls({
   )
 
   // Refs
-  const userStoppedStreamRef = useRef<boolean>(false)
   const lastAllLLMPauseTurnCountRef = useRef<number>(0)
 
   // Sync agentModeEnabled state when chat loads, using the resolved cascade value
@@ -167,9 +166,6 @@ export function useChatControls({
   useEffect(() => {
     if (chat?.isPaused !== undefined) {
       setIsPaused(chat.isPaused)
-      if (chat.isPaused) {
-        userStoppedStreamRef.current = true
-      }
     }
   }, [chat, setIsPaused])
 
@@ -221,7 +217,6 @@ export function useChatControls({
   // too, so it never disagrees with the local flag between fetches (bug 123).
   const setPauseState = useCallback(async (paused: boolean) => {
     setIsPaused(paused)
-    userStoppedStreamRef.current = paused
     setChat((prev) => (prev ? { ...prev, isPaused: paused } : prev))
     await persistChatField(chatId, { isPaused: paused }, 'pause state')
   }, [chatId, setIsPaused, setChat])
@@ -600,7 +595,6 @@ export function useChatControls({
     answerConfirmationOverride,
     handleSetAnswerConfirmationOverride,
     connectionProfiles,
-    userStoppedStreamRef,
     setPauseState,
     togglePause,
     handleToggleDocumentEditingMode,

@@ -197,6 +197,14 @@ When the AI is generating a response:
 - **Stop Button** — Cancel generation if you change your mind
 - **Progress** — Some themes show generation progress
 
+**Should you press Return whilst the room is still speaking**, the Salon will not talk over its own
+guest. Your remark is declined — politely, and out loud: *One moment — the room is still speaking.
+Your remark waits in the composer.* Nothing is lost. Your words sit exactly where you left them, and
+a second press once the reply has landed sends them on their way. The **Nudge**, **Continue** and
+**Skip** controls are answered in the same terms if you reach for them a beat too early. (An empty
+composer, by contrast, is met with a dignified silence — there is nothing to send, and you knew that
+already.)
+
 ## Message Actions
 
 Each message has actions you can perform:
