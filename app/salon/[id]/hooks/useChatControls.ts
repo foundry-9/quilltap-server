@@ -87,7 +87,6 @@ interface UseChatControlsParams {
   setIsPaused: (paused: boolean) => void
   fetchChat: () => Promise<void>
   setTurnState: React.Dispatch<React.SetStateAction<TurnState>>
-  triggerContinueModeRef: React.MutableRefObject<(participantId: string, nudge?: boolean) => Promise<void>>
   setChat: (fn: (prev: Chat | null) => Chat | null) => void
   startBackgroundPolling: () => void
 }
@@ -108,7 +107,6 @@ export function useChatControls({
   setIsPaused,
   fetchChat,
   setTurnState,
-  triggerContinueModeRef,
   setChat,
   startBackgroundPolling,
 }: UseChatControlsParams) {

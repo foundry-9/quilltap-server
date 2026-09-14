@@ -49,7 +49,6 @@ interface VirtualizedMessageListProps {
   streamingContent: string
   waitingForResponse: boolean
   userParticipantId: string | null
-  isPaused: boolean
   respondingParticipantId: string | null
   /** Chat ID for terminal embed rendering */
   chatId: string
@@ -74,7 +73,6 @@ interface VirtualizedMessageListProps {
   }
   // Handlers
   setEditContent: (content: string) => void
-  onTogglePause: () => void
   onOverrideDangerFlag: (messageId: string) => void
   onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
@@ -140,13 +138,11 @@ export function VirtualizedMessageList({
   streamingContent,
   waitingForResponse,
   userParticipantId,
-  isPaused,
   respondingParticipantId,
   chatId,
   messageActions,
   turnManagement,
   setEditContent,
-  onTogglePause,
   onOverrideDangerFlag,
   onRemoveCharacter,
   onReattribute,
@@ -314,8 +310,6 @@ export function VirtualizedMessageList({
                   streaming={streaming}
                   waitingForResponse={waitingForResponse}
                   userParticipantId={userParticipantId}
-                  isPaused={isPaused}
-                  onTogglePause={onTogglePause}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
                   dangerousContentSettings={chatSettings?.dangerousContentSettings}
                   onOverrideDangerFlag={onOverrideDangerFlag}

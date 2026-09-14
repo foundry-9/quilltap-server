@@ -236,11 +236,12 @@ If characters are queued:
 
 ### Pause/Resume Button
 
-Controls auto-response flow:
+Brings the room to a halt, and a halted room advances only at your invitation:
 
-- **Pause** — Stop automatic turn progression
-- **Resume** — Continue automatic responses
-- Most useful for all-LLM chats
+- **Pause** — Nothing happens by itself. Your remarks are set down in the record and answered by
+  nobody; the rotation waits where you left it
+- **Nudge** a character while paused — they take exactly one turn, and the room falls quiet again
+- **Resume** — Returns the company to its ordinary rotation
 
 ## Managing Participants
 
@@ -432,15 +433,22 @@ An optional amenity, switched off by the factory, addresses the perennial embarr
 
 ### The Pause Button
 
-Located in the sidebar header:
+Located in the sidebar header, and reading **Resume** whenever a pause is in force:
 
-- **Pause** (shown during auto-responses) — Stop automatic progression
-- **Resume** (shown when paused) — Continue auto-responses
+- **Pause** — The room stops dead. No rotation, no chain of replies, and no answer even to a remark
+  of your own: what you type is set down in the record in full and handed to nobody
+- **Nudge** or **Skip** while paused — borrows a single turn against the pause. One character
+  answers, the room falls quiet again, and the floor returns to you. The pause is *not* lifted
+- **Resume** — Returns the company to its ordinary rotation
+
+The first remark you enter into a paused room is answered with a quiet notice to that effect, lest
+the silence be mistaken for a message that never arrived.
 
 ### When to Pause
 
+- Laying down a long passage of scene-setting before anyone is allowed to respond to it
+- Inviting precisely one character to answer, and letting the rest of the table wait
 - Reading and absorbing a complex scene
-- Planning your next action carefully
 - Taking a break during long sessions
 - Preventing runaway all-LLM conversations
 
@@ -448,10 +456,13 @@ Located in the sidebar header:
 
 In all-LLM chats (no user-controlled characters):
 
-- System auto-pauses after several turns
-- Notification appears asking to continue
-- Click Resume or Pause to respond
+- The house calls a halt of its own accord after several turns
+- A dialogue appears asking whether the company should carry on
+- **Continue** lifts the pause and sets them going again; **Stop** leaves the floor yours
 - Prevents infinite conversation loops
+
+The same pause is pressed for you when a turn fails outright, and while the Courier holds a
+conversation waiting for a reply you must paste in by hand. **Resume** is the way out of all of them.
 
 ## The Other Four Drawers
 

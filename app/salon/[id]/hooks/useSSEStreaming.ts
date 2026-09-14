@@ -102,6 +102,9 @@ interface SSEEvent {
   reason?: string
   /** chainComplete: the chat is (or was just) marked paused as part of this stop (bug 123). */
   paused?: boolean
+  /** chainComplete: the stop is the user's own message — a paused room recorded
+   *  it and gave it to nobody (bug 137). */
+  heldUserTurn?: boolean
   isSilentMessage?: boolean
   // The Courier: { pendingExternalTurn: true, messageId, participantId, characterName }
   pendingExternalTurn?: boolean
@@ -385,6 +388,15 @@ export function useSSEStreaming({
     isPausedRef.current = isPaused
   }, [isPaused])
 
+  // Whether the "your remark was recorded, nobody answered it" notice has
+  // already been given for the pause currently in force. Reset whenever the
+  // pause lifts, so the first message into each new pause explains itself and
+  // a long dictation into a paused room does not raise a toast a paragraph.
+  const heldTurnAnnouncedRef = useRef(false)
+  useEffect(() => {
+    if (!isPaused) heldTurnAnnouncedRef.current = false
+  }, [isPaused])
+
   /**
    * Bug 123: a chain that stops because the chat is paused used to do so in
    * silence — the room simply stopped answering, one reply per message, and the
@@ -392,9 +404,21 @@ export function useSSEStreaming({
    * the sync drift the same bug fixed, not even there). Say so. Skipped when the
    * user pressed Pause themselves (they already got the toggle's toast) and in
    * an all-LLM room, where AllLLMPauseModal explains the stop.
+   *
+   * Bug 137 adds the other silence: a message typed into an already-paused room
+   * is recorded and answered by nobody, which is the state the user asked for
+   * and still looks exactly like a send that broke. Announced once per pause —
+   * the user knows they are paused, they just need telling that this is why
+   * nothing happened, and how to get a turn out of it.
    */
-  const announceChainPause = useCallback((event: { reason: string; paused: boolean }) => {
+  const announceChainPause = useCallback((event: { reason: string; paused: boolean; heldUserTurn?: boolean }) => {
     if (!event.paused) return
+    if (event.heldUserTurn) {
+      if (heldTurnAnnouncedRef.current) return
+      heldTurnAnnouncedRef.current = true
+      showInfoToast('Your remark is in the record. The room stays paused — nudge a character for a single turn, or press Resume.')
+      return
+    }
     if (isPausedRef.current) return
     if (isAllLLMChat(participantsAsBase)) return
     if (event.reason === 'error') {
@@ -545,7 +569,7 @@ export function useSSEStreaming({
       onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
       onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
       onTurnComplete?: (event: { participantId: string; messageId: string; chainDepth: number }) => void | Promise<void>
-      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number; paused: boolean }) => void | Promise<void>
+      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number; paused: boolean; heldUserTurn: boolean }) => void | Promise<void>
     }
   ): Promise<string> => {
     const decoder = new TextDecoder()
@@ -700,6 +724,7 @@ export function useSSEStreaming({
             nextSpeakerId: data.nextSpeakerId ?? null,
             chainDepth: data.chainDepth || 0,
             paused: data.paused === true,
+            heldUserTurn: data.heldUserTurn === true,
           })
         }
       }
@@ -1019,13 +1044,18 @@ export function useSSEStreaming({
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
+   *
+   * Deliberately works while the chat is paused: every caller is an explicit
+   * summons by the human (Nudge, Skip, the all-LLM modal's Continue), and a
+   * paused room grants exactly one turn for each. The pause is not lifted to
+   * do it — the server declines to chain past the summoned turn for as long as
+   * `isPaused` stands — so the room falls quiet again straight afterwards.
    */
   const triggerContinueMode = useCallback(async (participantId: string, nudge = false) => {
     if (streaming || waitingForResponse) {
       showInfoToast('One moment — the room is still speaking.')
       return
     }
-    if (isPaused) return
 
     const participant = participantsAsBase.find(p => p.id === participantId && p.isActive)
     if (!participant) {
@@ -1182,7 +1212,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, streaming, waitingForResponse, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

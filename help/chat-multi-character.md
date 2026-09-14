@@ -287,17 +287,42 @@ Chats where all characters are LLM-controlled (no user input needed):
 
 To prevent runaway conversations:
 
-- After several character turns without user input, chat auto-pauses
-- You'll see a notification asking to continue or stop
-- Click **Resume** to continue the conversation
-- Click **Pause** to stop and take manual control
+- After several character turns without a word from you — at three, then six, twelve, twenty-four and
+  so on — the establishment calls a halt of its own accord
+- A dialogue appears asking whether the company should carry on
+- **Continue** lifts the pause and sets the room going again
+- **Stop** leaves it paused, the floor yours
+- Or take over one of the characters and speak in their place
 
-### Manual Pause Control
+## Pausing the Room
 
-- Click **Pause** in the Chat Sidebar header
-- Characters stop responding
-- Click **Resume** when ready to continue
-- Useful for reading or planning your next action
+**Pause** in the participants sidebar brings the room to a halt, and a halted room advances *only*
+at your invitation. Nothing happens by itself: no rotation, no chain of replies, not so much as a
+single answer to a remark of your own.
+
+While the room is paused:
+
+| You do this | The house does this |
+|---|---|
+| **Type a message** | Sets it down in the record in full — attachments, tool results, dice you asked for in passing, any `@Name:` query — and hands it to nobody. The room stays paused |
+| **Nudge** a character | That character takes exactly one turn. The room then falls quiet again, still paused, the floor back with you |
+| **Skip** your own seat | The seat the floor passes to takes exactly one turn, on the same terms |
+| **Queue** a character | Notes their place. They speak when a nudge or a resumption next calls for a speaker |
+| **Resume** | Returns the company to its ordinary rotation |
+
+A nudge does **not** lift the pause — it borrows a single turn against it. This is the whole use of
+a paused room: you may lay down three paragraphs of scene-setting, invite precisely one character to
+respond to them, read what they say at your leisure, and let the rest of the table wait.
+
+The first remark you enter into a paused room is answered with a quiet notice to that effect, lest
+the silence be mistaken for a message that never arrived. Later remarks pass without comment, the
+point having been made.
+
+The Pause button is also the establishment's own safety catch. It is pressed for you when a turn
+fails outright, when an all-LLM room reaches one of the thresholds above, and — briefly — when the
+Courier is holding a conversation while it waits for a reply you must paste in by hand. In every
+case **Resume** is the way out, and the button reads **Resume** whenever a pause is in force,
+whoever called it.
 
 ## Per-Character Settings
 

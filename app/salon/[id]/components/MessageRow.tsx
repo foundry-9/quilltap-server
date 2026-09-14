@@ -56,8 +56,6 @@ interface MessageRowProps {
   streaming: boolean
   waitingForResponse: boolean
   userParticipantId: string | null
-  isPaused?: boolean
-  onTogglePause?: () => void
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
   /** Dangerous content display settings */
@@ -142,8 +140,6 @@ function MessageRowInner({
   streaming,
   waitingForResponse,
   userParticipantId,
-  isPaused = false,
-  onTogglePause,
   tokenDisplaySettings,
   dangerousContentSettings,
   onOverrideDangerFlag,
@@ -521,7 +517,6 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   // Streaming/generation state
   if (prev.streaming !== next.streaming) return false
   if (prev.waitingForResponse !== next.waitingForResponse) return false
-  if (prev.isPaused !== next.isPaused) return false
 
   // Multi-char specific state
   if (prev.isMultiChar !== next.isMultiChar) return false

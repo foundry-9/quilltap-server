@@ -113,8 +113,6 @@ export function useTurnManagement(
   setTurnState: (state: TurnState) => void,
   setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
   triggerContinueMode: (participantId: string, nudge?: boolean) => Promise<void>,
-  isPaused?: boolean,
-  onUnpause?: () => Promise<void>,
   /** Seats the human is impersonating this session (Bug 44 overlay; their `controlledBy` stays `'llm'`). */
   impersonatingParticipantIds: readonly string[] = [],
 ) {
@@ -132,10 +130,9 @@ export function useTurnManagement(
       return
     }
 
-    // If chat is paused, unpause it first
-    if (isPaused && onUnpause) {
-      await onUnpause()
-    }
+    // A nudge never lifts a pause. A paused room grants exactly the turn the
+    // human asked for: the server runs this one and declines to chain past it,
+    // so the floor comes straight back to the user.
 
     // The Host announces the summon as a persisted message once the request
     // reaches the server (see postHostNudgeAnnouncement in the orchestrator),
@@ -152,7 +149,7 @@ export function useTurnManagement(
     // and generate a second (duplicate) response.
     // Nudge is an explicit summon → withhold the "nothing to add" skip option.
     triggerContinueMode(participantId, true)
-  }, [turnState, participantsAsBase, setTurnState, triggerContinueMode, isPaused, onUnpause])
+  }, [turnState, participantsAsBase, setTurnState, triggerContinueMode])
 
   const handleQueue = useCallback(async (participantId: string) => {
     // Optimistic local update for immediate UI feedback
@@ -220,12 +217,8 @@ export function useTurnManagement(
       return
     }
 
-    // Skipping is an explicit "let someone else respond" — like a nudge, it
-    // lifts a pause first, or the next speaker it hands the floor to would be
-    // refused by the pause guard and the skip would appear to do nothing.
-    if (isPaused && onUnpause) {
-      await onUnpause()
-    }
+    // Like a nudge, a skip is one explicit turn and nothing more: a paused room
+    // answers with the seat the skip hands the floor to, then falls quiet again.
 
     const response = await callTurnAction(chatId, 'skipUserTurn', participantId)
     if (!response) {
@@ -239,7 +232,7 @@ export function useTurnManagement(
     if (nextSpeakerId && nextSpeakerControlledBy !== 'user' && !impersonatingParticipantIds.includes(nextSpeakerId)) {
       triggerContinueMode(nextSpeakerId)
     }
-  }, [chatId, participantsAsBase, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode, isPaused, onUnpause, impersonatingParticipantIds])
+  }, [chatId, participantsAsBase, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode, impersonatingParticipantIds])
 
   return {
     handleNudge,

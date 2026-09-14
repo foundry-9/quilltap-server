@@ -749,6 +749,13 @@ export function encodeChainCompleteEvent(
      * the room fall silent with no explanation (bug 123).
      */
     paused?: boolean
+    /**
+     * The stop IS the user's own message: a paused chat recorded what they
+     * typed and gave it to nobody. Distinguishes that from a chain that ran and
+     * then stopped, which is the difference between "your remark is in, the room
+     * is still paused" and no explanation at all.
+     */
+    heldUserTurn?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)

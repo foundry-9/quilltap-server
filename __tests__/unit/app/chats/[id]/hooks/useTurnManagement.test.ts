@@ -164,7 +164,6 @@ describe('useTurnManagement', () => {
   let setTurnState: jest.Mock
   let setTurnSelectionResult: jest.Mock
   let triggerContinueMode: jest.Mock
-  let onUnpause: jest.Mock
 
   // Default test data
   let participantsAsBase: ChatParticipantBase[]
@@ -185,7 +184,6 @@ describe('useTurnManagement', () => {
     setTurnState = jest.fn()
     setTurnSelectionResult = jest.fn()
     triggerContinueMode = jest.fn().mockResolvedValue(undefined)
-    onUnpause = jest.fn().mockResolvedValue(undefined)
 
     // Initialize default test data
     participantsAsBase = [
@@ -372,7 +370,10 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
-    it('should unpause chat before nudge if paused', async () => {
+    // A paused room grants exactly the turn the human asks for. The nudge goes
+    // through untouched and the pause is left standing — the server declines to
+    // chain past the summoned turn, so the floor comes straight back (bug 137).
+    it('nudges without lifting the pause', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
@@ -383,9 +384,7 @@ describe('useTurnManagement', () => {
           participantData,
           setTurnState,
           setTurnSelectionResult,
-          triggerContinueMode,
-          true, // isPaused
-          onUnpause
+          triggerContinueMode
         )
       )
 
@@ -393,31 +392,7 @@ describe('useTurnManagement', () => {
         await result.current.handleNudge('p1')
       })
 
-      expect(onUnpause).toHaveBeenCalled()
-    })
-
-    it('should not call onUnpause when chat is not paused', async () => {
-      const { result } = renderHook(() =>
-        useTurnManagement(
-          TEST_CHAT_ID,
-          participantsAsBase,
-          charactersMap,
-          turnState,
-          'p3',
-          participantData,
-          setTurnState,
-          setTurnSelectionResult,
-          triggerContinueMode,
-          false, // isPaused
-          onUnpause
-        )
-      )
-
-      await act(async () => {
-        await result.current.handleNudge('p1')
-      })
-
-      expect(onUnpause).not.toHaveBeenCalled()
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)
     })
 
   })
@@ -748,7 +723,6 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
           setTurnState, setTurnSelectionResult, triggerContinueMode,
-          false, undefined,
           ['p1'], // impersonating Alice
         )
       )
@@ -784,18 +758,14 @@ describe('useTurnManagement', () => {
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
 
-    it('lifts a pause before skipping so the next speaker is not refused by the pause guard', async () => {
+    it('skips without lifting the pause (bug 137)', async () => {
       mockFetch.mockResolvedValue(skipResponse('p1'))
-      const callOrder: string[] = []
-      onUnpause.mockImplementation(async () => { callOrder.push('unpause') })
-      mockFetch.mockImplementation(async () => { callOrder.push('skip'); return skipResponse('p1') })
+      mockFetch.mockImplementation(async () => skipResponse('p1'))
 
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
           setTurnState, setTurnSelectionResult, triggerContinueMode,
-          true, // isPaused
-          onUnpause,
         )
       )
 
@@ -803,7 +773,6 @@ describe('useTurnManagement', () => {
         await result.current.handleSkipUserTurn('p3')
       })
 
-      expect(callOrder).toEqual(['unpause', 'skip'])
       expect(triggerContinueMode).toHaveBeenCalledWith('p1')
     })
 
@@ -814,7 +783,6 @@ describe('useTurnManagement', () => {
         useTurnManagement(
           TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
           setTurnState, setTurnSelectionResult, triggerContinueMode,
-          false, undefined,
           ['p1'], // the "next speaker" is a seat the human is impersonating
         )
       )
@@ -972,7 +940,7 @@ describe('useTurnManagement', () => {
   })
 
   describe('Integration scenarios', () => {
-    it('should handle full nudge flow: unpause -> update state -> continue', async () => {
+    it('should handle full nudge flow: update state -> continue, pause untouched', async () => {
       const { result } = renderHook(() =>
         useTurnManagement(
           TEST_CHAT_ID,
@@ -983,9 +951,7 @@ describe('useTurnManagement', () => {
           participantData,
           setTurnState,
           setTurnSelectionResult,
-          triggerContinueMode,
-          true, // isPaused
-          onUnpause
+          triggerContinueMode
         )
       )
 
@@ -994,7 +960,6 @@ describe('useTurnManagement', () => {
       })
 
       // Verify full flow (no API call — triggerContinueMode handles it directly)
-      expect(onUnpause).toHaveBeenCalled()
       expect(mockNudgeParticipant).toHaveBeenCalledWith(turnState, 'p1')
       expect(setTurnState).toHaveBeenCalled()
       expect(triggerContinueMode).toHaveBeenCalledWith('p1', true)

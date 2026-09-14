@@ -4,6 +4,46 @@
 
 ### 4.10-dev
 
+#### Changed: a paused chat no longer generates anything on its own (bug 137)
+
+**Pause** in the participants sidebar stopped the turn chain, not the chat. Every message you sent
+still drew exactly one reply, and **Nudge** and **Skip** silently cleared the pause before running,
+so one nudge put the chat back in the normal rotation.
+
+A paused chat now only advances when you ask it to, one turn at a time:
+
+- **Sending a message** saves it in full — attachments, staged tool results, auto-detected dice
+  rolls, inline `@Name:` queries — and generates no reply. The chat stays paused. The first message
+  sent during each pause shows a notice explaining this, so the silence isn't mistaken for a failed
+  send.
+- **Nudge** and **Skip** run exactly one turn and stop. Neither clears the pause.
+- **Resume** returns the chat to the normal rotation.
+
+Two related fixes. The `nudge` flag was dropped by a wrapper between the sidebar button and the
+server; it is what withholds the "nothing to add" skip option, so a nudged character could pass the
+turn — in a paused chat, that means no turn at all (bug 138). And **Continue** in the all-LLM pause
+dialog now works: it cleared no pause and requested no turn, so the button meant to restart a
+runaway chat only closed the dialog (bug 139).
+
+Also removed: the `isPaused` / `onTogglePause` props passed from the Salon through the message list
+to every message row. Neither was rendered, and the memo comparison on `isPaused` re-rendered the
+whole viewport on each pause toggle (bug 140). The sidebar Pause button is unaffected.
+
+Not affected: autonomous rooms, which use `runState` and never read this flag; the Courier, which
+uses the same flag to hold a chat while waiting for a pasted reply; and the all-LLM turn thresholds
+that trigger the dialog.
+
+Files: `lib/services/chat-message/orchestrator.service.ts`,
+`lib/services/chat-message/paused-hold.ts` (new), `lib/services/chat-message/streaming.service.ts`,
+`app/salon/[id]/SalonView.tsx`, `app/salon/[id]/hooks/useSSEStreaming.ts`,
+`app/salon/[id]/hooks/useTurnManagement.ts`, `app/salon/[id]/hooks/useChatControls.ts`,
+`app/salon/[id]/components/MessageRow.tsx`,
+`app/salon/[id]/components/VirtualizedMessageList.tsx`, `help/chat-multi-character.md`, `help/chat-participants.md`, `help/chat-turn-manager.md`,
+`docs/developer/bugs/` (bugs 137–140),
+`__tests__/unit/lib/services/chat-message/paused-hold.test.ts` (new),
+`__tests__/unit/hooks/useSSEStreaming-send-guard.test.tsx`,
+`__tests__/unit/app/chats/[id]/hooks/useTurnManagement.test.ts`.
+
 #### Fixed: a send refused while a reply is still streaming now says so (bug 136)
 
 Pressing Enter in the Salon while a reply was still generating did nothing at all — no notice, no

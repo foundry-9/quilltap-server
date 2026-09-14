@@ -489,7 +489,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     setIsPaused,
     fetchChat,
     setTurnState,
-    triggerContinueModeRef,
     setChat: (fn) => setChat(fn as any),
     startBackgroundPolling,
   })
@@ -738,15 +737,12 @@ export function SalonView({ chatId }: SalonViewProps) {
     chatSettings,
   )
 
-  // --- Unpause callback for turn management ---
-  // The pause setter without its toast: clears the local pause, then persists.
-  const { setPauseState } = chatControls
-  const unpauseChat = useCallback(() => setPauseState(false), [setPauseState])
-
-  // Stable callback wrapper using ref
+  // Stable callback wrapper using ref. `nudge` must be forwarded: it is what
+  // withholds the "nothing to add" skip option, and a summons that lets the
+  // character pass is the difference between one turn and none in a paused room.
   const stableTriggerContinueMode = useCallback(
-    async (participantId: string) => {
-      await triggerContinueModeRef.current(participantId)
+    async (participantId: string, nudge?: boolean) => {
+      await triggerContinueModeRef.current(participantId, nudge)
     },
     []
   )
@@ -762,8 +758,6 @@ export function SalonView({ chatId }: SalonViewProps) {
     setTurnState,
     setTurnSelectionResult,
     stableTriggerContinueMode,
-    isPaused,
-    unpauseChat,
     impersonation.impersonatingParticipantIds,
   )
 
@@ -1370,9 +1364,17 @@ export function SalonView({ chatId }: SalonViewProps) {
   }, [chat?.isPaused, participantsWithImpersonation.isAllLLM, setAllLLMPauseModalOpen])
 
   // --- All-LLM pause handlers ---
-  const handleAllLLMContinue = useCallback(() => {
+  // "Continue" is the one place in a paused room where the human asks for the
+  // conversation back, so it must actually lift the pause before handing the
+  // floor on — closing the modal alone left the room paused and every later
+  // turn stopping dead after one reply. Resume first and await the persist: the
+  // server reads `isPaused` when the continue-mode turn arrives, and would
+  // otherwise grant a single turn and stop again.
+  const handleAllLLMContinue = useCallback(async () => {
     modals.setAllLLMPauseModalOpen(false)
-  }, [modals])
+    await chatControls.setPauseState(false)
+    await turnManagement.handleContinue()
+  }, [modals, chatControls, turnManagement])
 
   const handleAllLLMStop = useCallback(() => {
     modals.setAllLLMPauseModalOpen(false)
@@ -1473,13 +1475,11 @@ export function SalonView({ chatId }: SalonViewProps) {
           streamingContent={sseStreaming.streamingContent}
           waitingForResponse={sseStreaming.waitingForResponse}
           userParticipantId={participantsWithImpersonation.userParticipantId}
-          isPaused={isPaused}
           respondingParticipantId={respondingParticipantId}
           chatId={id}
           messageActions={messageActions}
           turnManagement={turnManagement}
           setEditContent={setEditContent}
-          onTogglePause={chatControls.togglePause}
           onOverrideDangerFlag={chatControls.handleOverrideDangerFlag}
           onRemoveCharacter={chatControls.handleRemoveCharacter}
           onReattribute={handleReattribute}

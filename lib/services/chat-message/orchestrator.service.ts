@@ -110,6 +110,7 @@ import {
 } from './rng-pattern-detector.service'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 import { runCarinaMarkupQuery } from '@/lib/services/carina/markup-runner'
+import { shouldHoldUserTurnForPause } from './paused-hold'
 import {
   finalizeMessageResponse,
 } from './message-finalizer.service'
@@ -289,6 +290,31 @@ async function processMessage(
     throw new Error('Chat not found')
   }
 
+  // ============================================================================
+  // Paused chat — hold the user's turn
+  // ============================================================================
+  // A paused conversation never moves on its own. A typed message is still
+  // recorded in full (attachments, staged tool results, auto-detected rolls,
+  // inline Carina queries) — it simply draws no reply: the floor stays where the
+  // user left it until they nudge a specific character (one turn, still paused)
+  // or press Resume. Continue-mode turns are the explicit summons themselves —
+  // Nudge, Skip, the all-LLM modal's Continue, an autonomous-room turn — so they
+  // are never held; the chain that would follow one is what `executeTurnChain`
+  // stops while `isPaused` stands.
+  const holdForPausedChat = shouldHoldUserTurnForPause({
+    isContinueMode,
+    chatIsPaused: chat.isPaused === true,
+    neverPauseForUser: options.neverPauseForUser,
+  })
+  if (holdForPausedChat) {
+    logger.info('[Orchestrator] Chat paused — recording the user message without a reply', {
+      chatId,
+      userId,
+      hasContent: !!options.content,
+      attachmentCount: options.fileIds?.length ?? 0,
+    })
+  }
+
   // Resolve responding participant
   // For whisper messages, the target participant should respond (not the default first character)
   const respondingId = options.respondingParticipantId
@@ -312,6 +338,10 @@ async function processMessage(
   // speaker), as does any single-user-seat room (the common case is untouched).
   if (
     !isContinueMode &&
+    // A paused chat already holds every user post below — and holds it more
+    // completely (staged tool results, auto-detected rolls, danger flags). The
+    // fairness guard would persist a thinner copy of the same message first.
+    !holdForPausedChat &&
     !options.respondingParticipantId &&
     !(options.targetParticipantIds && options.targetParticipantIds.length > 0) &&
     !options.nudge &&
@@ -448,8 +478,10 @@ async function processMessage(
   // ============================================================================
 
   // Check if full context was requested (requestFullContextOnNextMessage flag)
+  // Held posts build no request, so the flag must survive to be spent by the
+  // turn the user eventually asks for.
   let bypassCompression = false
-  if (chat.requestFullContextOnNextMessage === true) {
+  if (chat.requestFullContextOnNextMessage === true && !holdForPausedChat) {
     bypassCompression = true
     // Reset the flag
     await repos.chats.update(chatId, { requestFullContextOnNextMessage: false })
@@ -605,7 +637,11 @@ async function processMessage(
   const messageCount = existingMessages.filter(m => m.type === 'message').length
   // Skip messageCount === 0 — chat-start handles the initial emit. Cadence
   // re-injects at multiples of N thereafter.
-  const shouldInjectContext = reinjectInterval > 0 && messageCount > 0 && messageCount % reinjectInterval === 0
+  // Both whispers below brief the character about to take the floor. On a held
+  // post nobody does, so the cadence waits for the turn the user asks for.
+  const shouldInjectContext = reinjectInterval > 0 && messageCount > 0
+    && messageCount % reinjectInterval === 0
+    && !holdForPausedChat
 
   if (shouldInjectContext) {
     const projectContext = project ? await loadProsperoProjectContext(project.id) : null
@@ -830,6 +866,24 @@ async function processMessage(
       // character to respond in the same cycle hears it (parallels the
       // RNG-result push above; the DB copy already covers later turns).
       onPublicAnswer: (msg) => existingMessages.push(msg),
+    })
+  }
+
+  // ============================================================================
+  // Paused chat — the user's turn is recorded; nobody answers it
+  // ============================================================================
+  // Everything above belongs to the message the user just wrote. Everything
+  // below belongs to a character's turn, and a paused room grants none. Stop
+  // here, before a single token is spent on tools, context or the model.
+  if (holdForPausedChat) {
+    return finishHeldUserTurn({
+      repos,
+      chatId,
+      isMultiCharacter,
+      userMessageId,
+      userParticipantId,
+      controller,
+      encoder,
     })
   }
 
@@ -1770,6 +1824,50 @@ async function processMessage(
       userParticipantId,
       isPaused: chat.isPaused,
     }
+  }
+}
+
+/**
+ * Close out a user turn that a paused chat held.
+ *
+ * The message and its side effects are already persisted by the time this is
+ * called; all that remains is to leave the floor empty and tell the Salon why
+ * the room said nothing. The `paused` chain-complete is the same event a
+ * mid-chain pause emits, so the client reconciles its pause flag through the
+ * one path it already has (bug 123) — it just arrives at depth 0, before any
+ * character has spoken.
+ */
+async function finishHeldUserTurn(params: {
+  repos: ReturnType<typeof getRepositories>
+  chatId: string
+  isMultiCharacter: boolean
+  userMessageId: string | null
+  userParticipantId: string | null
+  controller: ReadableStreamDefaultController<Uint8Array>
+  encoder: TextEncoder
+}): Promise<ProcessMessageResult> {
+  const { repos, chatId, isMultiCharacter, userMessageId, userParticipantId, controller, encoder } = params
+
+  // Nobody is on deck: the rotation resumes from wherever the user left it, and
+  // a stale pending seat would have the Salon announce a turn that isn't coming.
+  await repos.chats.update(chatId, { lastTurnParticipantId: null })
+
+  safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+    reason: 'paused',
+    nextSpeakerId: null,
+    chainDepth: 0,
+    paused: true,
+    heldUserTurn: true,
+  }))
+
+  return {
+    isMultiCharacter,
+    // No character took the floor, so the turn chain stops before it starts and
+    // neither scene tracking nor the Scriptorium render fires for this message.
+    hasContent: false,
+    messageId: userMessageId,
+    userParticipantId,
+    isPaused: true,
   }
 }
 

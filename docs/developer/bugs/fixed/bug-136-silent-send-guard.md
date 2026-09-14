@@ -25,10 +25,12 @@ if (sending) {
 
 `triggerContinueMode`'s `if (streaming || waitingForResponse)` gained the same
 notice — it refuses a click on an explicit control (Nudge, Continue, Skip), so
-it is the more deserving of the two. Its `if (isPaused) return` is deliberately
-left silent: a paused chat already says so in the sidebar, and the paths that
-reach it lift the pause first. The empty-composer half is untouched and still
-says nothing. Covered by
+it is the more deserving of the two. Its `if (isPaused) return` was left
+deliberately silent, a paused chat already saying so in the sidebar and the
+paths reaching it lifting the pause first — that guard has since been **deleted
+outright** by [bug 137](bug-137-paused-chat-still-answers.md), which holds the
+turn server-side instead and so wants the summons to go through. The
+empty-composer half is untouched and still says nothing. Covered by
 `__tests__/unit/hooks/useSSEStreaming-send-guard.test.tsx`, which holds a turn
 open, presses send again, and asserts both the notice and the silence.
 

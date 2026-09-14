@@ -25,7 +25,7 @@ jest.mock('@/components/layout/queue-status-badges', () => ({
 }))
 
 /** A turn that never lands, so `sending` stays true for the second press. */
-function setup() {
+function setup({ isPaused = false }: { isPaused?: boolean } = {}) {
   let messages: Message[] = []
   const setMessages = jest.fn((next: Message[] | ((prev: Message[]) => Message[])) => {
     messages = typeof next === 'function' ? next(messages) : next
@@ -43,8 +43,10 @@ function setup() {
       setMessages: setMessages as never,
       isMultiChar: false,
       hasActiveCharacters: true,
-      participantsAsBase: [],
-      isPaused: false,
+      participantsAsBase: [
+        { id: 'participant-1', type: 'CHARACTER', isActive: true, controlledBy: 'llm' },
+      ],
+      isPaused,
       respondingParticipantId: null,
       setRespondingParticipantId: jest.fn(),
       activeTypingParticipantId: null,
@@ -104,5 +106,32 @@ describe('useSSEStreaming — the opening guard in sendMessage', () => {
     })
 
     expect(showInfoToast).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Bug 137 — a paused room answers nothing on its own, but it still answers the
+ * human's explicit summons. The pause used to swallow the nudge itself, which
+ * is why nudging had to lift the pause first to work at all.
+ */
+describe('useSSEStreaming — triggerContinueMode while paused', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('asks for the summoned turn instead of refusing it', async () => {
+    const { rendered } = setup({ isPaused: true })
+
+    act(() => {
+      void rendered.result.current.triggerContinueMode('participant-1', true)
+    })
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    const [, init] = jest.mocked(global.fetch).mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      continueMode: true,
+      respondingParticipantId: 'participant-1',
+      nudge: true,
+    })
   })
 })
