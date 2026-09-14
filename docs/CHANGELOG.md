@@ -4,6 +4,35 @@
 
 ### 4.10-dev
 
+#### Fixed: the native-binding ABI heal now actually rebuilds
+
+After a Node.js upgrade, the SQLCipher native addon is compiled against the old ABI and throws
+`NODE_MODULE_VERSION` on load, turning every real-binding test suite red. Both the jest globalSetup
+heal and the CLI's `ensureDatabaseNativeModule()` were supposed to fix that automatically. Neither
+did.
+
+Both shelled out to `npm rebuild <name>`, which fails two different ways:
+
+- **`npm rebuild better-sqlite3`** (the alias the root install uses) is refused with
+  `EALLOWSCRIPTS`. npm no longer runs install scripts for a package that is not listed in the root
+  `package.json` `allowScripts` map, which is keyed `name@version` — the alias is not a key there.
+- **`npm rebuild better-sqlite3-multiple-ciphers`** at the repo root *is* allowed, reports `rebuilt
+  dependencies successfully`, and rebuilds a phantom directory. The stale binary is untouched. A
+  false success is worse than an error: the heal reported it had worked and the suites stayed red.
+
+Rebuilds are now addressed by **directory** rather than by npm package name, and run the package's
+own build chain in place — `prebuild-install`, falling back to `node-gyp rebuild --release`, which
+is exactly what its `install` script does. No name resolution, no npm script policy.
+
+The new helper also **verifies the result instead of trusting the exit code**: it re-reads the
+compiled-for ABI out of the binary afterwards and only reports success once it matches the running
+Node. A tool that exits 0 without changing anything is now reported as the failure it is, naming
+every attempt and what the binding still says.
+
+Files: `packages/quilltap/lib/native-modules.js` (new `findBinFor`, `rebuildNativePackage`;
+`ensureDatabaseNativeModule` rewired), `jest.global-setup.js`,
+`__tests__/unit/packages/quilltap/native-rebuild.test.js` (new).
+
 #### Fixed: a silent provider no longer freezes chat creation (bug 141)
 
 Creating a chat could hang forever at *Setting the opening scene…*, with the Green Room dialog stuck
