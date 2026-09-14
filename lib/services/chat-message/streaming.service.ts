@@ -15,6 +15,7 @@ import { computeRequestPrefixHashes } from '@/lib/llm/cache-prefix-hashes'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
@@ -391,21 +392,32 @@ export async function* streamMessage(
   const cacheKey = buildCharacterCacheKey(characterId)
   const sampling = resolveSamplingParams(modelParams)
 
-  for await (const chunk of provider.streamMessage(
+  // A provider that answers with headers and then goes silent would otherwise
+  // hold this `for await` open forever — the SDK's own timeout stops at the
+  // headers. The watchdog turns that into an ordinary throw, which the fallback
+  // engine reads as `network` and routes to the understudy.
+  for await (const chunk of withStallWatchdog(
+    provider.streamMessage(
+      {
+        messages: llmMessages,
+        model: connectionProfile.modelName,
+        temperature: sampling.temperature,
+        maxTokens: sampling.maxTokens,
+        topP: sampling.topP,
+        tools: tools.length > 0 ? tools : undefined,
+        webSearchEnabled: useNativeWebSearch,
+        profileParameters: modelParams,
+        cacheKey,
+        previousResponseId,
+        stop,
+      },
+      apiKey
+    ),
     {
-      messages: llmMessages,
-      model: connectionProfile.modelName,
-      temperature: sampling.temperature,
-      maxTokens: sampling.maxTokens,
-      topP: sampling.topP,
-      tools: tools.length > 0 ? tools : undefined,
-      webSearchEnabled: useNativeWebSearch,
-      profileParameters: modelParams,
-      cacheKey,
-      previousResponseId,
-      stop,
-    },
-    apiKey
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+      logContext: { context: 'streaming.service', userId, chatId, characterId, messageId },
+    }
   )) {
     chunkCount++
     if (chunk.content) {

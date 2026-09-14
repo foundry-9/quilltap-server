@@ -16,6 +16,7 @@ import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
 import { pickWeightedRandom } from '@/lib/chat/turn-manager/selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
+import { LLMStreamStalledError } from '@/lib/llm/stream-watchdog';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveSamplingParams } from '@/lib/llm/sampling-params';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
@@ -796,6 +797,32 @@ async function autoGenerateFirstMessage(
     return { content: result.content, reasoningContent: result.reasoningContent };
   };
 
+  /**
+   * A stall on the participant's OWN profile ends the ladder. Attempts 1, 2 and
+   * 4 are the same profile three times over, and one that has answered with
+   * headers and then gone silent will not start speaking inside the next
+   * budget — spending two more on the same silence is the whole of the wedge
+   * this guards against. The scripted greeting takes over instead, which is
+   * where an exhausted ladder ends up anyway.
+   *
+   * Deliberately NOT set by the two uncensored-desk attempts: that is a
+   * different profile on a different provider, and its going quiet says nothing
+   * about whether this character's own one will.
+   */
+  let ownProfileStalled = false;
+  const noteOwnProfileOutcome = (error: unknown): void => {
+    if (error instanceof LLMStreamStalledError) ownProfileStalled = true;
+  };
+  const giveUpOnStall = (): GeneratedGreeting => {
+    logger.warn('[Chats v1] Greeting abandoned — the provider accepted the request and then went quiet', {
+      characterId: context.character.id,
+      chatId,
+      provider: connectionProfile.provider,
+      modelName: connectionProfile.modelName,
+    });
+    return NO_GREETING;
+  };
+
   // Attempt 0: a Flagged or Uncensored chat opens at the uncensored desk. The
   // three-attempt ladder below (with memories → without → uncensored on a
   // content filter) stays the path for Monitored and Vouched Safe chats.
@@ -839,12 +866,15 @@ async function autoGenerateFirstMessage(
       contentFilterHit = true;
     }
   } catch (error) {
+    noteOwnProfileOutcome(error);
     logger.warn('[Chats v1] Greeting generation attempt failed', {
       characterId: context.character.id,
       attempt: 'full context',
       error: error instanceof Error ? error.message : String(error),
     });
   }
+
+  if (ownProfileStalled) return giveUpOnStall();
 
   // Attempt 2: Strip memories (they may be triggering content filter)
   if (participantMemories.length > 0) {
@@ -871,6 +901,7 @@ async function autoGenerateFirstMessage(
         contentFilterHit = true;
       }
     } catch (error) {
+      noteOwnProfileOutcome(error);
       logger.warn('[Chats v1] Greeting generation attempt failed', {
         characterId: context.character.id,
         attempt: 'without memories',
@@ -900,6 +931,8 @@ async function autoGenerateFirstMessage(
     }
   }
 
+  if (ownProfileStalled) return giveUpOnStall();
+
   // Attempt 4: Final plain retry with delay for transient failures
   try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -912,11 +945,14 @@ async function autoGenerateFirstMessage(
       return { content: result.content, reasoningContent: result.reasoningContent };
     }
   } catch (error) {
+    noteOwnProfileOutcome(error);
     logger.warn('[Chats v1] Final greeting generation retry failed', {
       characterId: context.character.id,
       error: error instanceof Error ? error.message : String(error),
     });
   }
+
+  if (ownProfileStalled) return giveUpOnStall();
 
   logger.warn('[Chats v1] All greeting generation attempts exhausted, falling back to static greeting', {
     characterId: context.character.id,

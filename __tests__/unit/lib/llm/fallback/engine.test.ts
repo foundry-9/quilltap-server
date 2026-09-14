@@ -29,6 +29,7 @@ import {
   RateLimitError,
   TokenLimitError,
 } from '@/lib/llm/errors'
+import { LLMStreamStalledError } from '@/lib/llm/stream-watchdog'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FallbackContext, FallbackTrigger } from '@/lib/llm/fallback'
 import { RouteAttemptSchema } from '@/lib/schemas/chat.types'
@@ -122,6 +123,13 @@ describe('classifyFallbackTrigger', () => {
     const timeout = new Error('Cheap LLM task exceeded its 45000ms budget')
     timeout.name = 'CheapLLMTimeoutError'
     expect(classifyFallbackTrigger(timeout)).toBe('network')
+  })
+
+  it('recognises a stalled stream as a network failure (bug 141)', () => {
+    expect(classifyFallbackTrigger(new LLMStreamStalledError(240000, 0, 'DEEPSEEK', 'deepseek-v4-flash')))
+      .toBe('network')
+    expect(classifyFallbackTrigger(new LLMStreamStalledError(120000, 37)))
+      .toBe('network')
   })
 
   describe('non-triggers', () => {

@@ -497,7 +497,22 @@ goes to the next candidate rather than being spent on a certainty.
 
 A fallback fires for problems of *availability*: a rejected key, a rate limit, a
 network failure, a model that no longer exists, a provider returning a 500, an
-empty reply, a moderation refusal.
+empty reply, a moderation refusal — and, since 4.10, a provider that simply
+stops talking.
+
+That last deserves a word. A provider may accept your request, acknowledge it
+handsomely, and then say nothing whatever — not a refusal, not an error, merely
+an open line and an unbroken silence. Formerly Quilltap would wait on such a
+line indefinitely, there being nothing in the acknowledgement to suggest
+anything was amiss. It now keeps a discreet watch on the clock: a stream is
+allowed four minutes to produce its first word, and two minutes between words
+thereafter, which is generous even for the most ruminative of thinking models.
+Past that, the line is abandoned and the understudy called for, exactly as
+though the provider had said no outright.
+
+Do not fear for a long answer: the allowance is *between* words, never on the
+total. A model may hold forth for an hour without troubling the watch, and a
+thinking model's deliberations count as words for this purpose.
 
 It pointedly does **not** fire for problems that would recur identically
 elsewhere:

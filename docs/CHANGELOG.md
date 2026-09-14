@@ -4,6 +4,48 @@
 
 ### 4.10-dev
 
+#### Fixed: a silent provider no longer freezes chat creation (bug 141)
+
+Creating a chat could hang forever at *Setting the opening scene…*, with the Green Room dialog stuck
+open. That dialog cannot be dismissed while creation runs, so the only way out was reloading the
+window.
+
+The cause was a provider that accepted the streaming request, sent response headers, and then never
+sent a chunk. Nothing caught it. Provider SDK timeouts stop at the response headers — which is what
+makes them safe to use on a streaming path, and useless once the headers arrive — so a response body
+that never starts was outside every timeout in the app. The chat itself was already fully built by
+that point; only the opening line, and the HTTP response, were missing.
+
+Provider streams are now watched for silence. A stream gets a generous budget for its first chunk
+(four minutes, since a long prompt with extended thinking legitimately takes minutes to start) and a
+tighter one between chunks (two minutes). The opening greeting gets tighter budgets still — 90
+seconds and 60 seconds — because it is short and runs behind the blocking dialog.
+
+What happens when a stream goes silent:
+
+- **In a chat**, the turn fails over to the connection profile's understudy, the same as any other
+  network failure.
+- **During chat creation**, the greeting stops retrying that profile. The remaining attempts go
+  back to the same silent provider, so the chat opens with its scripted greeting instead. A silence
+  at the Concierge's uncensored profile is the exception: that is a different provider, so the
+  character's own profile is still tried.
+- **In the log**, `[LLMStream] Abandoned a stalled provider stream` names the provider, the model,
+  the budget, and how many chunks had arrived.
+
+A stalled request is abandoned, not cancelled — the provider plugin owns its connection. Killing the
+socket needs a change to the plugin interface and is not in this release.
+
+Not affected: slow streams that keep producing. The budget applies to each gap between chunks, not
+to the total, so a long answer is never cut off for being long. Thinking models emit reasoning
+chunks while they think, and those count.
+
+Files: `lib/llm/stream-watchdog.ts` (new), `lib/services/chat-message/streaming.service.ts`,
+`lib/chat/initial-greeting.ts`, `app/api/v1/chats/route.ts`, `lib/llm/fallback/engine.ts`,
+`docs/developer/bugs/fixed/bug-141-stalled-stream-wedges-chat-creation.md` (new),
+`__tests__/unit/lib/llm/stream-watchdog.test.ts` (new),
+`__tests__/unit/app/api/v1/chats/route.greeting-stall.test.ts` (new),
+`__tests__/unit/lib/llm/fallback/engine.test.ts`.
+
 #### Changed: a paused chat no longer generates anything on its own (bug 137)
 
 **Pause** in the participants sidebar stopped the turn chain, not the chat. Every message you sent

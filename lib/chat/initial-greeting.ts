@@ -3,8 +3,20 @@
 
 import { createLLMProvider } from '@/lib/llm'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
+import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { logger } from '@/lib/logger'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
+
+/**
+ * The greeting's own stall budgets, tighter than the Salon's defaults.
+ *
+ * This call is short and low-context — a sentence or two, no history — and it
+ * runs inside the blocking Green Room dialog, where every second is a second
+ * the operator spends looking at a dialog they cannot dismiss. A model that has
+ * not begun a two-sentence opener in ninety seconds is not going to.
+ */
+const GREETING_FIRST_CHUNK_TIMEOUT_MS = 90_000
+const GREETING_IDLE_TIMEOUT_MS = 60_000
 
 export interface ParticipantMemoryForGreeting {
   aboutCharacterName: string
@@ -158,17 +170,26 @@ export async function generateGreetingMessage({
   let finalUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
   let streamError: Error | undefined
   try {
-    for await (const chunk of providerClient.streamMessage(
+    for await (const chunk of withStallWatchdog(
+      providerClient.streamMessage(
+        {
+          messages,
+          model: modelName,
+          temperature,
+          maxTokens,
+          topP,
+          cacheKey: buildCharacterCacheKey(characterId),
+          profileParameters,
+        },
+        apiKey ?? ''
+      ),
       {
-        messages,
-        model: modelName,
-        temperature,
-        maxTokens,
-        topP,
-        cacheKey: buildCharacterCacheKey(characterId),
-        profileParameters,
-      },
-      apiKey ?? ''
+        firstChunkTimeoutMs: GREETING_FIRST_CHUNK_TIMEOUT_MS,
+        idleTimeoutMs: GREETING_IDLE_TIMEOUT_MS,
+        provider,
+        modelName,
+        logContext: { context: 'initial-greeting', userId, chatId, characterId },
+      }
     )) {
       if (chunk.content) {
         accumulated += chunk.content

@@ -85,6 +85,8 @@ One quiet rule governs those wardrobe consultations: **an archived garment is ne
 
 The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
 
+Should your character's provider fall silent while composing the opening line — accepting the commission, and then simply never delivering — the Green Room no longer waits on it indefinitely. It allows ninety seconds, which is ample for a sentence or two, and then proceeds without one: the conversation opens with a plain scripted greeting in place of the composed one, and is yours to speak in as usual. Nothing else is lost; every other preparation was complete long before. Type a line and the chat answers perfectly normally. (See *Connection Profiles* → *The Understudies* for what a silence means elsewhere in the house.)
+
 ### Taking a Character's Chair — "Play As"
 
 By default you attend a chat as yourself, the unseen correspondent. But should you wish to step onto the stage and inhabit one of the cast, the **Play As (Optional)** dropdown on the new-chat form stands ready. It now draws its guest list strictly from the room itself — *every* character you have added to the cast is offered, and none who have not been.

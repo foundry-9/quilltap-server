@@ -118,6 +118,11 @@ export function classifyFallbackTrigger(error: unknown): FallbackTrigger | null 
   // chain: this route did not answer in time, try another.
   if (name === 'CheapLLMTimeoutError') return 'network'
 
+  // Likewise the stream watchdog: the provider took the request, answered with
+  // headers and then went quiet. A silence is not a refusal, and the understudy
+  // is exactly what a chain is for.
+  if (name === 'LLMStreamStalledError') return 'network'
+
   if (NETWORK_ERROR_PATTERNS.some((p) => p.test(message))) return 'network'
   if (PROVIDER_ERROR_PATTERNS.some((p) => p.test(message))) return 'provider-error'
 
