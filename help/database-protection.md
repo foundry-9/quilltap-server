@@ -198,6 +198,16 @@ npx quilltap db --lock-clean
 
 `--lock-status` reports the holder's last heartbeat, which is the useful tell: a live instance updates it continuously, while a stale one's grows steadily older. Should you find yourself reaching for `--lock-override`, pause — it seizes the lock regardless of who holds it, and if that party is in fact alive, you have arranged precisely the collision the lock was built to prevent.
 
+One courtesy of the house deserves mention, lest it be mistaken for obstinacy. A lock is considered held until its heartbeat has gone **five minutes** stale — and that is true whether or not the process that set it still draws breath. Stop an instance and reach immediately for `--lock-clean`, and you will be told, quite correctly, that the heartbeat is still fresh and the lock therefore stays where it is:
+
+```
+Lock heartbeat is still fresh (82s ago). Cannot clean.
+A lock counts as held until its heartbeat is 5 minutes stale, even if its process
+has gone. Wait it out, or use --lock-override to force.
+```
+
+This is deliberate rather than pedantic. On certain systems — containers chief among them — the question *is that process still running?* cannot be answered reliably, and a heartbeat that is merely recent is the only honest evidence available. The house would rather keep a dead instance's lock five minutes too long than clean a living one's out from under it. Wait out the window and `--lock-clean` will oblige without further comment; the next startup would have reclaimed it regardless, so in the ordinary course you need do nothing at all.
+
 ### The Version Floor
 
 A newer Quilltap may alter the shape of your data; an older one, meeting that altered shape, will not recognize it and may make matters considerably worse. Quilltap therefore keeps a note of the highest version that has ever opened your database, and stamps the same figure into the key file so the desktop shell can consult it before the server is even started.

@@ -167,6 +167,31 @@ The `db` command opens the database **read-only** unless you pass `--write`. So 
 
 **Never reach for `--lock-override` to work around this; it defeats the protection.**
 
+### The five-minute heartbeat window
+
+A lock counts as held until its heartbeat is **five minutes** stale, whether or not the process that
+set it is still alive (`HEARTBEAT_FRESH_MS`, `packages/quilltap/bin/quilltap.js`). Freshness is the
+fallback for every environment, not just containers — see
+[bug 126](bugs/fixed/bug-126-hostname-flap-kills-server.md) — because a PID check is not reliable
+everywhere, and cleaning a *live* instance's lock is the worse failure.
+
+So for up to five minutes after stopping the server, `--write`, `maintenance run`, `optimize`,
+`restore-key` and `--lock-clean` all still refuse. That is correct, not a stale lock. Wait it out;
+the next startup reclaims the lock regardless. `--lock-status` shows the heartbeat age, which is
+the tell.
+
+`--lock-clean` says so explicitly, and says nothing about liveness — the arm is reached only once
+the PID check has come back dead ([bug 144](bugs/fixed/bug-144-lock-clean-claims-dead-holder-is-alive.md)):
+
+```
+Lock heartbeat is still fresh (82s ago). Cannot clean.
+A lock counts as held until its heartbeat is 5 minutes stale, even if its process has gone.
+Wait it out, or use --lock-override to force.
+```
+
+`--lock-clean` removes a lock whose heartbeat *has* gone stale, and refuses with
+"Lock is held by a live Quilltap process" only when a live one really holds it.
+
 ## Low-level (still supported)
 
 - List tables: `npx quilltap db --tables`

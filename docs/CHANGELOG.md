@@ -4,6 +4,79 @@
 
 ### 4.10-dev
 
+#### Fixed: collapsing a duplicate avatar roll no longer deletes the photo you kept from it (bug 145)
+
+Copying an avatar roll into a character's photo album does not make a second copy of the image — it
+makes a second reference to the same stored bytes. The migration that collapses duplicate rolls
+deleted those bytes by file, taking *every* reference with them. So collapsing a duplicate removed
+the album photo too, and removed it precisely because you had kept it: keeping is what put the
+second reference there.
+
+Nothing recorded the album photo outside the document index, so the loss left nothing behind to
+notice — no broken link, no missing-image placeholder, no row pointing at nothing.
+
+The migration now deletes only the roll's own reference, and releases the bytes only if that was
+the last one. A roll you had kept loses its entry in the avatar cache and keeps its photo. It uses
+the same rule the Photo Gallery's own delete has always used, reached through the same shared
+code, so the two can no longer disagree.
+
+This has not shipped: 4.10.0 has never been released, so the only instances that ran the old
+version are development ones. No repair is possible where it did run — the bytes are gone — and
+none is needed anywhere else.
+
+On the development instance it was found on, 199 of 1066 surviving avatar rolls (19%) shared their
+bytes with a kept photo. Each was one collapse away from losing it.
+
+Files: `migrations/scripts/collapse-duplicate-avatar-rolls-v1.ts`,
+`__tests__/unit/migrations/collapse-duplicate-avatar-rolls.test.ts`.
+
+#### Fixed: `--lock-clean` no longer says a stopped instance is still running (bug 144)
+
+Stopping an instance and immediately running `quilltap db --lock-clean` printed:
+
+> Lock is still being refreshed (heartbeat 82s ago) — its holder is alive. Cannot clean.
+> Stop the running instance first, or use `--lock-override` to force.
+
+Both sentences were wrong. The holder was not alive, and there was no instance to stop — this
+branch is only reached after the process check has already come back dead. A lock stays claimed
+until its heartbeat is five minutes old whether or not its process is still there, which is
+deliberate: on systems where process checks are unreliable, that window is what stops a running
+instance from having its lock cleaned out from under it.
+
+The refusal was right; only what it said was wrong. It now reads:
+
+> Lock heartbeat is still fresh (82s ago). Cannot clean.
+> A lock counts as held until its heartbeat is 5 minutes stale, even if its process has gone. Wait
+> it out, or use `--lock-override` to force.
+
+Waiting is a remedy the old message did not mention at all. The five-minute figure is taken from
+the setting the check itself uses, so the message cannot fall out of step with the behaviour. The
+separate message for a lock genuinely held by a running instance is unchanged, because there
+"stop the running instance first" is the right instruction.
+
+Nothing else changes: the command still refuses, and still leaves the lock alone.
+
+Files: `packages/quilltap/bin/quilltap.js`, `__tests__/unit/cli/lock-clean-refusal.test.ts` (new).
+
+#### Changed: the avatar-roll migration now reports what it kept, not only what it collapsed (bug 143)
+
+The migration's summary counted the rolls it collapsed and said nothing about the ones it
+deliberately kept — a roll still serving as a character's portrait is kept and shares its
+configuration's cache entry, on purpose. With that number missing from the record, ten such rolls
+on a development instance were later mistaken for damage, and it took a database forensics session
+to establish that all ten were correct.
+
+The summary now ends with "kept N rolls still serving as character portraits". The migration also
+checks its own work before finishing, and reports any duplicate it did not deliberately create.
+
+That check runs *during* the migration rather than afterwards, which matters: a character's
+portrait can be changed at any time, so asking later whether a roll was kept for a good reason
+answers a different question. Two of the ten had had their portraits changed hours before the
+inspection that flagged them, and a third character had been deleted outright.
+
+Files: `migrations/scripts/collapse-duplicate-avatar-rolls-v1.ts`,
+`__tests__/unit/migrations/collapse-duplicate-avatar-rolls.test.ts`.
+
 #### Fixed: deleting a message that is not there no longer counts as a deletion (bug 142)
 
 `deleteMessagesByIds` reported the number of message IDs it was *asked* about, not the number of

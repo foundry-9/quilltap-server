@@ -65,10 +65,13 @@ jest.mock('better-sqlite3', () =>
 
 import { collapseDuplicateAvatarRollsMigration } from '../../../migrations/scripts/collapse-duplicate-avatar-rolls-v1';
 import { deriveLegacyAvatarCacheKey } from '../../../lib/wardrobe/avatar-cache';
+import { logger as migrationLogger } from '../../../migrations/lib/logger';
 
 const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
 
 const MOUNT = 'mount-1';
+/** The character's own vault, where the photo album lives — a different mount. */
+const VAULT_MOUNT = 'vault-1';
 const CHARACTER = 'char-1';
 const PROMPT_A = 'Solo portrait of a single woman: Friday. Wearing a green coat.';
 const PROMPT_B = 'Solo portrait of a single woman: Friday. Wearing a red scarf.';
@@ -127,7 +130,8 @@ function makeMountDb(file: string) {
     CREATE TABLE "doc_mount_file_links" (
       "id" TEXT PRIMARY KEY,
       "fileId" TEXT NOT NULL,
-      "mountPointId" TEXT NOT NULL
+      "mountPointId" TEXT NOT NULL,
+      "relativePath" TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE "doc_mount_chunks" ("id" TEXT PRIMARY KEY, "linkId" TEXT NOT NULL);
   `);
@@ -155,11 +159,26 @@ function seedRoll(id: string, prompt: string, createdAt: string, opts: { model?:
   mountDb.prepare('INSERT INTO "doc_mount_files" (id) VALUES (?)').run(contentId);
   mountDb.prepare('INSERT INTO "doc_mount_blobs" (id, fileId) VALUES (?, ?)').run(blobId, contentId);
   mountDb
-    .prepare('INSERT INTO "doc_mount_file_links" (id, fileId, mountPointId) VALUES (?, ?, ?)')
-    .run(`link-${id}`, contentId, MOUNT);
+    .prepare(
+      'INSERT INTO "doc_mount_file_links" (id, fileId, mountPointId, relativePath) VALUES (?, ?, ?, ?)'
+    )
+    .run(`link-${id}`, contentId, MOUNT, `character-avatars/avatar_Friday_${id}.webp`);
   mountDb
     .prepare('INSERT INTO "doc_mount_chunks" (id, linkId) VALUES (?, ?)')
     .run(`chunk-${id}`, `link-${id}`);
+}
+
+/**
+ * Copy a seeded roll into a character's album: a second link, in the
+ * character's own vault, over the *same* content row. This is what "the
+ * operator kept this plate" looks like in the mount index.
+ */
+function keepInAlbum(id: string, mountPointId = VAULT_MOUNT) {
+  mountDb
+    .prepare(
+      'INSERT INTO "doc_mount_file_links" (id, fileId, mountPointId, relativePath) VALUES (?, ?, ?, ?)'
+    )
+    .run(`album-${id}`, `content-${id}`, mountPointId, `photos/kept-${id}.webp`);
 }
 
 const fileIds = (): string[] =>
@@ -325,6 +344,131 @@ describe('collapse-duplicate-avatar-rolls-v1', () => {
     // The survivor's vault rows are untouched.
     expect(count('doc_mount_blobs', 'id', 'blob-new')).toBe(1);
     expect(count('doc_mount_chunks', 'linkId', 'link-new')).toBe(1);
+  });
+
+  // A roll the operator copied into a character's album is two links over one
+  // set of bytes. Collapsing the roll is not a reason to take the copy they
+  // kept — and nothing in the main DB records an album link, so the loss would
+  // leave no trace to notice or undo.
+  describe('an album copy is never collateral', () => {
+    it('keeps the album photo and its bytes when the roll it came from is collapsed', async () => {
+      seedRoll('old', PROMPT_A, '2026-01-01T00:00:00.000Z');
+      seedRoll('new', PROMPT_A, '2026-06-01T00:00:00.000Z');
+      keepInAlbum('old');
+
+      await collapseDuplicateAvatarRollsMigration.run();
+
+      const count = (table: string, column: string, value: string) =>
+        (mountDb.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`).get(value) as any)
+          .n;
+
+      // The roll's own link and its chunks go.
+      expect(count('doc_mount_file_links', 'id', 'link-old')).toBe(0);
+      expect(count('doc_mount_chunks', 'linkId', 'link-old')).toBe(0);
+
+      // The album's link, and the bytes behind it, stay.
+      expect(count('doc_mount_file_links', 'id', 'album-old')).toBe(1);
+      expect(count('doc_mount_blobs', 'id', 'blob-old')).toBe(1);
+      expect(count('doc_mount_files', 'id', 'content-old')).toBe(1);
+
+      // The duplicate cache row is still gone — this is about the bytes, not
+      // about keeping a redundant configuration.
+      expect(fileIds()).toEqual(['new']);
+    });
+
+    it('still frees the bytes of a roll nobody kept', async () => {
+      seedRoll('kept', PROMPT_A, '2026-01-01T00:00:00.000Z');
+      seedRoll('unkept', PROMPT_A, '2026-02-01T00:00:00.000Z');
+      seedRoll('new', PROMPT_A, '2026-06-01T00:00:00.000Z');
+      keepInAlbum('kept');
+
+      const result = await collapseDuplicateAvatarRollsMigration.run();
+
+      const blobs = (id: string) =>
+        (mountDb.prepare('SELECT COUNT(*) AS n FROM doc_mount_blobs WHERE id = ?').get(id) as any).n;
+
+      expect(blobs('blob-kept')).toBe(1);
+      expect(blobs('blob-unkept')).toBe(0);
+      // Only the roll whose bytes actually went is counted as an image freed.
+      expect(result.message).toContain('1 images freed');
+    });
+
+    it('drops the files row of a roll whose only surviving link is the album copy', async () => {
+      seedRoll('orphaned', PROMPT_A, '2026-01-01T00:00:00.000Z');
+      seedRoll('new', PROMPT_A, '2026-06-01T00:00:00.000Z');
+      keepInAlbum('orphaned');
+      // The roll's own link is already gone; only the kept copy remains.
+      mountDb.prepare('DELETE FROM "doc_mount_file_links" WHERE id = ?').run('link-orphaned');
+
+      await collapseDuplicateAvatarRollsMigration.run();
+
+      expect(fileIds()).toEqual(['new']);
+      expect(
+        (mountDb.prepare('SELECT COUNT(*) AS n FROM doc_mount_file_links WHERE id = ?').get('album-orphaned') as any).n
+      ).toBe(1);
+      expect(
+        (mountDb.prepare('SELECT COUNT(*) AS n FROM doc_mount_blobs WHERE id = ?').get('blob-orphaned') as any).n
+      ).toBe(1);
+    });
+  });
+
+  it('reports the rolls it kept, not only the ones it collapsed', async () => {
+    seedRoll('portrait', PROMPT_A, '2026-01-01T00:00:00.000Z');
+    seedRoll('new', PROMPT_A, '2026-06-01T00:00:00.000Z');
+
+    mainDb
+      .prepare('INSERT INTO "characters" (id, avatarOverrides, defaultImageId) VALUES (?, NULL, ?)')
+      .run(CHARACTER, 'link-portrait');
+
+    const result = await collapseDuplicateAvatarRollsMigration.run();
+
+    // The count outlives the logs in `migrations_state`; without it a later
+    // reader has to rediscover the protected branch from the residue.
+    expect(result.message).toContain('kept 1 roll still serving as a character portrait');
+  });
+
+  // The invariant is only checkable in-pass. `characters.defaultImageId` is
+  // mutable, so reconstructing "was this keep legitimate?" from a later
+  // snapshot reports a false positive for every portrait that has since moved.
+  describe('the duplicate-key census', () => {
+    const censusWarnings = () =>
+      (migrationLogger.warn as jest.Mock).mock.calls.filter(([message]) =>
+        String(message).includes('share a generation key')
+      );
+
+    it('says nothing about a duplicate it chose to keep', async () => {
+      seedRoll('portrait', PROMPT_A, '2026-01-01T00:00:00.000Z');
+      seedRoll('new', PROMPT_A, '2026-06-01T00:00:00.000Z');
+
+      mainDb
+        .prepare('INSERT INTO "characters" (id, avatarOverrides, defaultImageId) VALUES (?, NULL, ?)')
+        .run(CHARACTER, 'link-portrait');
+
+      await collapseDuplicateAvatarRollsMigration.run();
+
+      expect(censusWarnings()).toHaveLength(0);
+    });
+
+    it('names a duplicate key this pass did not double up on purpose', async () => {
+      seedRoll('new', PROMPT_A, '2026-06-01T00:00:00.000Z');
+
+      // Already carrying the survivor's key, but outside the pass's own
+      // predicate — so it is never grouped, never a victim, and survives
+      // sharing a key with nothing to excuse it.
+      mainDb
+        .prepare(
+          `INSERT INTO "files" (id, originalFilename, category, generationPrompt, generationModel, generationKey, storageKey, createdAt)
+           VALUES ('stowaway', 'background_scene.webp', 'IMAGE', ?, ?, ?, NULL, '2026-01-01T00:00:00.000Z')`
+        )
+        .run(PROMPT_A, MODEL, deriveLegacyAvatarCacheKey({ modelName: MODEL, prompt: PROMPT_A }));
+
+      await collapseDuplicateAvatarRollsMigration.run();
+
+      const warnings = censusWarnings();
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0][1].unexplainedCount).toBe(1);
+      expect(warnings[0][1].fileIds).toEqual(['stowaway']);
+    });
   });
 
   it('never deletes a roll a character still names as its portrait', async () => {

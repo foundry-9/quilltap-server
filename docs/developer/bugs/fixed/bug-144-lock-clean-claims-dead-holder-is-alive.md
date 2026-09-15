@@ -2,16 +2,74 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **FIXED in v4 (2026-09-15)** |
 | **Found** | 2026-09-15 (v5 dogfood walk, close-out row I3 — by the plainest gesture there is: stop the server, then clean the lock) |
+| **Fixed** | 2026-09-15 |
 | **Severity** | **Low** — wording only, on a recovery path. The refusal it accompanies is correct; the lock is reclaimed automatically on the next boot regardless |
 | **Who it bites** | an operator who has just stopped an instance and reaches for `--lock-clean` within five minutes. They are told a process is alive and instructed to stop it; there is nothing to stop |
 | **Provenance** | Faithful — v5 reproduces this byte for byte and **stays** reproducing it; see *v5 coordination* |
 | **Defect site** | `packages/quilltap/bin/quilltap.js:630-634` (the `--lock-clean` `heartbeatFresh` arm) |
 | **v5 status** | Faithful and **pinned in both directions** — `crates/quilltap-cli/src/db_cmd.rs`, `lock_clean_refusal_lines()` + `a_fresh_heartbeat_keeps_v4s_false_liveness_claim` |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+## FIXED in v4 (2026-09-15)
+
+Applied as filed. The `heartbeatFresh` arm now says what it tested and offers
+the remedies that exist:
+
+```console
+$ quilltap db --lock-clean
+Lock heartbeat is still fresh (82s ago). Cannot clean.
+A lock counts as held until its heartbeat is 5 minutes stale, even if its
+process has gone. Wait it out, or use --lock-override to force.
+```
+
+Both details the filing asked for are kept. The window is rendered by
+`describeFreshWindow()` **from `HEARTBEAT_FRESH_MS` itself**, so the sentence
+cannot drift from the check that produced it; and the `alive && isNode` arm is
+untouched, because "held by a live Quilltap process … stop the running
+instance" is true exactly there. A comment on the arm records *why* it may not
+assert liveness — it is reached only once the PID check has come back dead —
+so the next reader does not restore the assumption.
+
+Nothing about the refusal changes: still `exit 1`, still leaves the lock in
+place. **Waiting is a remedy the old text did not mention at all** — it named
+only stopping a process that was not running, and `--lock-override`, which the
+house rules forbid.
+
+### Verification
+
+All three arms driven against the real binary:
+
+| Lock | Before | After |
+|---|---|---|
+| fresh heartbeat, dead PID | *"its holder is alive … Stop the running instance"* | *"Lock heartbeat is still fresh (82s ago)"*, `exit 1`, lock kept |
+| heartbeat 10m stale | removes it | unchanged — removes it, `exit 0` |
+| live node PID | *"held by a live Quilltap process … Stop the running instance"* | unchanged |
+
+The filing noted the arm *"has no test of its own that reads the sentence"*.
+It does now: `__tests__/unit/cli/lock-clean-refusal.test.ts` spawns the real
+CLI against a temp data dir and asserts on its output — six cases covering all
+three arms plus the no-lock path. The three wording cases fail against the old
+text and pass against the new one; the three behaviour cases pass against both,
+which is the point.
+
+### v5 coordination — the pin should now trip
+
+As the filing designed it: `a_fresh_heartbeat_keeps_v4s_false_liveness_claim`
+asserts `first.contains("its holder is alive")` deliberately, and v4 no longer
+prints that. **That test is now expected to fail**, which is the signal to
+converge `lock_clean_refusal_lines()` onto the new text and retire the pin at
+the next drift catch-up. The Tier R CLI differential's 5 cases — `lock clean
+suspect but fresh heartbeat refuses`, `lock clean docker fresh refuses`, `lock
+clean retired lima env`, `lock clean foreign fresh local refuses`, and one more
+— will converge with it.
+
+---
+
+## Original filing (2026-09-15)
 
 ## Symptom
 

@@ -487,6 +487,18 @@ function verifyPidIsNode(pid, expectedArgv0) {
 const HEARTBEAT_FRESH_MS = 5 * 60 * 1000;
 
 /**
+ * The freshness window in words, derived from the constant the check actually
+ * uses — so the sentence `--lock-clean` prints cannot drift away from the
+ * behaviour it describes.
+ */
+function describeFreshWindow() {
+  const seconds = Math.round(HEARTBEAT_FRESH_MS / 1000);
+  if (seconds % 60 !== 0) return `${seconds} seconds`;
+  const minutes = seconds / 60;
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+}
+
+/**
  * Decide whether a lock record belongs to a live process.
  *
  * A hostname that differs from ours does NOT mean a different machine: macOS
@@ -628,9 +640,17 @@ function handleLockCommand(dataDir, opts) {
       console.log('Stop the running instance first, or use --lock-override to force.');
       process.exit(1);
     } else if (heartbeatFresh) {
+      // Reached only when `alive` is false — the arm above has already claimed
+      // every confirmed-live case — so this must not assert that anything is
+      // running. Freshness alone is the deliberate fallback (bug 126) for
+      // environments where PID checks are unreliable; the refusal is right,
+      // and what it says is simply what was tested.
       const ageStr = Math.round(heartbeatAgeMs / 1000) + 's';
-      console.log(`Lock is still being refreshed (heartbeat ${ageStr} ago) — its holder is alive. Cannot clean.`);
-      console.log('Stop the running instance first, or use --lock-override to force.');
+      console.log(`Lock heartbeat is still fresh (${ageStr} ago). Cannot clean.`);
+      console.log(
+        `A lock counts as held until its heartbeat is ${describeFreshWindow()} stale, even if its process has gone. ` +
+          'Wait it out, or use --lock-override to force.'
+      );
       process.exit(1);
     } else if (alive && !isNode) {
       console.log(`Lock references PID ${lock.pid} which is alive but does NOT look like a Quilltap process.`);

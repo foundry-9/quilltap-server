@@ -24,10 +24,13 @@
  *     without it the message names a file that no longer exists, to the reader
  *     and to any model that later reads the transcript;
  *   - non-survivors are then deleted — the `files` row, and in the mount-index
- *     DB the chunks, links, and (when that was the last link for the file) the
- *     `doc_mount_files`, `doc_mount_blobs` and `doc_mount_documents` rows.
- *     Explicitly, not via `ON DELETE CASCADE`: tables generated from the Zod
- *     schema carry no foreign keys at all.
+ *     DB the victim's **own** link and its chunks, plus (when that link was the
+ *     last one for the file) the `doc_mount_files`, `doc_mount_blobs` and
+ *     `doc_mount_documents` rows. Explicitly, not via `ON DELETE CASCADE`:
+ *     tables generated from the Zod schema carry no foreign keys at all.
+ *     Only the roll's own link is ours — a plate the operator copied into a
+ *     character's album is two links over one set of bytes, and the album's
+ *     copy is theirs to keep. See {@link dropVictimRollLink}.
  *
  * A group of one keeps its row and gains a key — including rows no chat
  * references any more. An orphaned roll is a perfectly good cache entry for its
@@ -59,6 +62,8 @@ import {
   openMountIndexDbIfPresent,
 } from '../lib/database-utils';
 import { deriveLegacyAvatarCacheKey } from '../../lib/wardrobe/avatar-cache';
+import { isPhotosRelativePath } from '../../lib/photos/photos-paths';
+import { gcOrphanedFileRow } from '../../lib/mount-index/orphan-store-reaper';
 
 const MIGRATION_ID = 'collapse-duplicate-avatar-rolls-v1';
 
@@ -87,13 +92,20 @@ function selectAvatarRows(db: DatabaseType): AvatarRow[] {
     .all() as AvatarRow[];
 }
 
-/** `mount-blob:<mountPointId>:<blobId>` → blobId, or null for any other shape. */
-function blobIdFromStorageKey(storageKey: string | null): string | null {
+/** `mount-blob:<mountPointId>:<blobId>` → its two halves, or null for any other shape. */
+function parseMountBlobKey(
+  storageKey: string | null
+): { mountPointId: string; blobId: string } | null {
   if (!storageKey || !storageKey.startsWith('mount-blob:')) return null;
   const rest = storageKey.slice('mount-blob:'.length);
   const sep = rest.indexOf(':');
   if (sep < 1 || sep === rest.length - 1) return null;
-  return rest.slice(sep + 1);
+  return { mountPointId: rest.slice(0, sep), blobId: rest.slice(sep + 1) };
+}
+
+/** `mount-blob:<mountPointId>:<blobId>` → blobId, or null for any other shape. */
+function blobIdFromStorageKey(storageKey: string | null): string | null {
+  return parseMountBlobKey(storageKey)?.blobId ?? null;
 }
 
 /**
@@ -134,30 +146,59 @@ function protectedBlobIds(db: DatabaseType, mountDb: DatabaseType | null): Set<s
 }
 
 /**
- * Drop a victim's bytes from the mount-index DB, mirroring `deleteMountBlob`:
- * the storageKey was the user-visible handle for "the file", so every link to
- * that file goes with it.
+ * Drop a victim roll's **own link**, and its bytes only when that link was the
+ * last consumer of them.
+ *
+ * Deliberately *not* `deleteMountBlob`'s verb. A roll the operator has already
+ * copied into a character's album is two links over one set of bytes — the
+ * roll's own `character-avatars/…` (or `images/history/…`) link, and the
+ * album's `photos/…` link — and only the first is ours to take. Deleting by
+ * `fileId`, as this once did, took the album photo with the duplicate: the
+ * operator kept a plate they liked, and collapsing an unrelated *roll* of the
+ * same configuration silently removed the copy they kept. Nothing in the main
+ * DB records an album link, so the loss left no trace to notice or undo.
+ *
+ * This is the rule `deleteAvatarRoll` (`lib/photos/avatar-rolls-service.ts`)
+ * follows at runtime — "only the roll's own link is ours" — reached here
+ * through the same GC chokepoint (`gcOrphanedFileRow`) the link repository's
+ * `deleteWithGC` uses, so all three collect content the same way.
+ *
+ * A victim whose only surviving link is the album copy drops no link at all
+ * and keeps its bytes; its `files` row still goes, exactly as
+ * `deleteAvatarRoll` does with a null `rollLink`.
  */
-function deleteVictimBlob(mountDb: DatabaseType, blobId: string): boolean {
+function dropVictimRollLink(
+  mountDb: DatabaseType,
+  blobId: string,
+  rollMountPointId: string | null
+): { linkDropped: boolean; bytesFreed: boolean } {
   const blob = mountDb
     .prepare('SELECT fileId FROM doc_mount_blobs WHERE id = ?')
     .get(blobId) as { fileId: string } | undefined;
-  if (!blob) return false;
+  if (!blob) return { linkDropped: false, bytesFreed: false };
 
   const links = mountDb
-    .prepare('SELECT id FROM doc_mount_file_links WHERE fileId = ?')
-    .all(blob.fileId) as Array<{ id: string }>;
+    .prepare('SELECT id, mountPointId, relativePath FROM doc_mount_file_links WHERE fileId = ?')
+    .all(blob.fileId) as Array<{ id: string; mountPointId: string; relativePath: string }>;
 
-  const deleteChunks = mountDb.prepare('DELETE FROM doc_mount_chunks WHERE linkId = ?');
-  for (const link of links) {
-    deleteChunks.run(link.id);
+  // The roll's own link: never one in a `photos/` folder, and — when the
+  // storage key names a mount — the one living in that mount.
+  const rollLink =
+    links.find(
+      (l) =>
+        !isPhotosRelativePath(l.relativePath) &&
+        (!rollMountPointId || l.mountPointId === rollMountPointId)
+    ) ?? null;
+
+  if (rollLink) {
+    mountDb.prepare('DELETE FROM doc_mount_chunks WHERE linkId = ?').run(rollLink.id);
+    mountDb.prepare('DELETE FROM doc_mount_file_links WHERE id = ?').run(rollLink.id);
   }
 
-  mountDb.prepare('DELETE FROM doc_mount_file_links WHERE fileId = ?').run(blob.fileId);
-  mountDb.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(blob.fileId);
-  mountDb.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(blob.fileId);
-  mountDb.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(blob.fileId);
-  return true;
+  // Bytes go only once nothing links to them any more — a no-op while the
+  // album still holds a copy.
+  const collected = gcOrphanedFileRow(mountDb, blob.fileId);
+  return { linkDropped: rollLink !== null, bytesFreed: (collected?.blobs ?? 0) > 0 };
 }
 
 /**
@@ -200,6 +241,82 @@ function repointJsonColumn(
   }
 
   return changedCount;
+}
+
+/**
+ * Every `generationKey` this pass leaves on more than one row must be one it
+ * doubled up on purpose.
+ *
+ * Run **in-pass**, with the run's own set of deliberate keeps, and not as an
+ * after-the-fact census: the protection is `characters.defaultImageId`, which
+ * the operator can repoint at any time, so reconstructing "was this keep
+ * legitimate?" from a later snapshot answers a different question and reports
+ * false positives for every portrait that has since moved or whose character
+ * has gone. The only moment the invariant is checkable is the one in which the
+ * decisions were made.
+ *
+ * Reports rather than throws. A surprise here means the *next* pass has
+ * something to look at, not that the collapse just done should be abandoned.
+ */
+function unexplainedDuplicateKeys(db: DatabaseType, keptDeliberately: Set<string>): string[] {
+  const rows = db
+    .prepare(
+      `SELECT id, generationKey AS key, createdAt FROM files
+        WHERE generationKey IS NOT NULL AND generationKey != ''
+          AND generationKey IN (
+                SELECT generationKey FROM files
+                 WHERE generationKey IS NOT NULL AND generationKey != ''
+                 GROUP BY generationKey HAVING COUNT(*) > 1)`
+    )
+    .all() as Array<{ id: string; key: string; createdAt: string }>;
+
+  const byKey = new Map<string, Array<{ id: string; createdAt: string }>>();
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    reportProgress(i + 1, rows.length, 'portraits checked');
+    const bucket = byKey.get(row.key);
+    if (bucket) bucket.push(row);
+    else byKey.set(row.key, [row]);
+  }
+
+  const unexplained: string[] = [];
+  let examined = 0;
+  for (const bucket of byKey.values()) {
+    examined += 1;
+    reportProgress(examined, byKey.size, 'configurations checked');
+    // The newest holder is the survivor and needs no excuse; every other row
+    // sharing its key must be one this pass chose to keep.
+    const [, ...rest] = [...bucket].sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt))
+    );
+    for (const row of rest) {
+      if (!keptDeliberately.has(row.id)) unexplained.push(row.id);
+    }
+  }
+  return unexplained;
+}
+
+/**
+ * What the pass *kept*, said out loud. The summary used to count only what it
+ * collapsed, so every deliberate keep was invisible in the one record that
+ * outlives the logs — leaving a later reader to rediscover the protected
+ * branch from the residue and mistake it for damage.
+ */
+function keptClause(protectedKeptCount: number): string {
+  if (protectedKeptCount === 0) return '';
+  return protectedKeptCount === 1
+    ? '; kept 1 roll still serving as a character portrait'
+    : `; kept ${protectedKeptCount} rolls still serving as character portraits`;
+}
+
+function reportCensus(db: DatabaseType, protectedKept: string[]): void {
+  const unexplained = unexplainedDuplicateKeys(db, new Set(protectedKept));
+  if (unexplained.length === 0) return;
+  logger.warn('Avatar rolls share a generation key this pass did not choose to double up', {
+    context: 'migration.collapse-duplicate-avatar-rolls',
+    unexplainedCount: unexplained.length,
+    fileIds: unexplained.slice(0, 20),
+  });
 }
 
 export const collapseDuplicateAvatarRollsMigration: Migration = {
@@ -262,6 +379,12 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
       const remap = new Map<string, string>();
       const survivors: Array<{ id: string; key: string }> = [];
       const victims: AvatarRow[] = [];
+      // Rows deliberately keyed alongside their survivor because they were
+      // still a character's portrait when this pass ran. Recorded here, at the
+      // moment of the decision, because it cannot be reconstructed later:
+      // `characters.defaultImageId` is mutable, so a portrait moved after the
+      // fact makes a perfectly correct keep look like an unexplained duplicate.
+      const protectedKept: string[] = [];
 
       for (const [key, bucket] of groups) {
         const ordered = [...bucket].sort((a, b) =>
@@ -277,6 +400,7 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
             // truthful image of this configuration, and the lookup prefers the
             // newest holder of a key anyway.
             survivors.push({ id: victim.id, key });
+            protectedKept.push(victim.id);
             logger.info('Keeping avatar roll still serving as a character portrait', {
               context: 'migration.collapse-duplicate-avatar-rolls',
               fileId: victim.id,
@@ -304,11 +428,14 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
 
       if (victims.length === 0) {
         const durationMs = Date.now() - startTime;
+        reportCensus(db, protectedKept);
         return {
           id: MIGRATION_ID,
           success: true,
           itemsAffected: rows.length,
-          message: `Keyed ${survivors.length} avatar configurations; nothing to collapse`,
+          message:
+            `Keyed ${survivors.length} avatar configurations; nothing to collapse` +
+            keptClause(protectedKept.length),
           durationMs,
           timestamp: new Date().toISOString(),
         };
@@ -430,14 +557,26 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
       const deleteFileRow = db.prepare('DELETE FROM files WHERE id = ?');
       let blobsDeleted = 0;
 
+      let albumCopiesKept = 0;
+
       for (let i = 0; i < victims.length; i += 1) {
         const victim = victims[i];
-        const blobId = blobIdFromStorageKey(victim.storageKey);
+        const parsed = parseMountBlobKey(victim.storageKey);
+        const blobId = parsed?.blobId ?? null;
 
-        if (mountDb && blobId) {
+        if (mountDb && parsed) {
           try {
-            if (deleteVictimBlob(mountDb, blobId)) {
+            const { linkDropped, bytesFreed } = dropVictimRollLink(
+              mountDb,
+              parsed.blobId,
+              parsed.mountPointId
+            );
+            if (bytesFreed) {
               blobsDeleted += 1;
+            } else if (linkDropped) {
+              // The bytes stayed because the operator had kept this plate in a
+              // character's album. That copy is theirs, not the cache's.
+              albumCopiesKept += 1;
             }
           } catch (error) {
             // A blob that refuses to go is not a reason to abandon the pass;
@@ -464,12 +603,16 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
         configurations: groups.size,
         rowsKeyed: survivors.length,
         victimsDeleted: victims.length,
+        protectedKept: protectedKept.length,
+        albumCopiesKept,
         blobsDeleted,
         chatsChanged,
         charactersChanged,
         messagesChanged,
         durationMs,
       });
+
+      reportCensus(db, protectedKept);
 
       return {
         id: MIGRATION_ID,
@@ -479,7 +622,8 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
         message:
           `Collapsed ${rows.length} avatar rolls to ${groups.size} configurations ` +
           `(${blobsDeleted} images freed; repointed ${chatsChanged} chats, ` +
-          `${charactersChanged} characters, ${messagesChanged} messages)`,
+          `${charactersChanged} characters, ${messagesChanged} messages)` +
+          keptClause(protectedKept.length),
         durationMs,
         timestamp: new Date().toISOString(),
       };
