@@ -2,17 +2,46 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | Fixed |
 | **Found** | 2026-09-14 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-14 |
 | **Severity** | Low today, and rising (nothing is lost or corrupted: `messageCount` and `lastMessageAt` are recomputed from what survives, so they land on the right values either way. What is wrong is the *count* — the return value every caller reports from, and, since `5029075bb`, a `transcriptVersion` bump and a realtime hint for a delete that deleted nothing) |
 | **Who it bites** | Every caller of `deleteMessagesByIds` that shows or logs its result — the Commonplace whisper sweep reports "swept N", and N is the number of ids it *asked* about. With the subscribed transcript read live, it also costs each open Salon tab on that chat a full conditional re-read per phantom delete |
 | **Provenance** | **Pinned.** Found by the v5 port's tier-2 funnel census (`chats_messages_ops_tier2_equivalence`) when `transcriptVersion` became a compared cell: v4 reached 3 on a chat where v5 reached 2, and the extra bump was a delete of an id that was not there. v5 is left correct and the divergence is asserted in both directions as `DELETE_MISS_DIVERGENCE` — the day v4 converges, the pin trips and names itself |
 | **Defect site** | `lib/database/repositories/chats-messages.ops.ts:638-646` (the `removed` accumulator) — the ONLY one of `deleteOne`'s seven callers in `lib/` that does not read `result.deletedCount`, given `lib/database/backends/sqlite/backend.ts:289` and the `DeleteResult` return type declared at `lib/database/interfaces.ts:286` |
 | **v5 status** | **Does not reproduce — deliberately.** v5's `delete_messages_by_ids` counts `rows affected` from its own `DELETE`, which is 0 on a miss. Reproducing v4 here would mean regressing a path that works and miscounting deletions for every caller, so the port keeps the correct behaviour and pins the difference instead |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
 
 ---
+
+**FIXED in v4 (2026-09-14).** `removed += result.deletedCount` — the comment and
+both stale branches deleted, which is what the other six `deleteOne` callers in
+`lib/` already did (`vector-indices.repository.ts:235` is the same accumulator
+loop, written correctly; the fix now matches it verbatim). A delete that removed
+nothing returns 0, logs nothing, leaves `chats.transcriptVersion` where it was,
+and publishes no hint; a mixed batch reports only the rows it took and still
+announces once, because it did change the transcript.
+
+The mock that hid it was corrected first, exactly as this write-up proposed:
+`chats-messages-transcript-version.test.ts` now returns
+`{ deletedCount, acknowledged: true }` from both `deleteOne` and `deleteMany`,
+and with the source left alone that alone reddened
+`says nothing when nothing was removed` — the cheapest reproduction, taken
+before the fix.
+
+Because a double is what let this live for so long, the durable guard is not
+another double: `__tests__/unit/lib/database/repositories/chats-messages-delete-count.integration.test.ts`
+runs `ChatMessagesOps` against a real `SQLiteCollection` over a real in-memory
+database and asserts all four verification cases plus a cross-chat miss, and
+separately pins the backend contract itself — `deleteOne` returns
+`{ deletedCount: 0, acknowledged: true }` on a miss, a truthy object, never a
+number and never a boolean. Four of its six cases fail against the unfixed
+source.
+
+No caller's behaviour changes beyond the count becoming true: all three
+consumers of the return value (`context-summary.ts:463`,
+`context-manager.ts:2212` and `:2502`) only log it.
 
 ## Symptom
 

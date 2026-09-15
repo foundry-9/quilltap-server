@@ -637,12 +637,9 @@ export class ChatMessagesOps {
       if (this.ctx.isSQLiteBackend()) {
         for (const messageId of messageIds) {
           const result = await messagesCollection.deleteOne({ id: messageId, chatId } as QueryFilter);
-          // deleteOne may return either a count or a boolean depending on backend
-          if (typeof result === 'number') {
-            removed += result;
-          } else if (result) {
-            removed += 1;
-          }
+          // `DeleteResult`, always — an id that was not there reports 0, and a
+          // delete that removed nothing must not announce a transcript change.
+          removed += result.deletedCount;
         }
       } else {
         // Legacy data compatibility: rewrite embedded messages array

@@ -54,15 +54,19 @@ function makeOps(startingVersion: number | null = 7): ChatMessagesOps {
     find: jest.fn(async () => rows),
     findOne: jest.fn(async () => rows.find((r) => r.id === MESSAGE_ID) ?? null),
     updateOne: jest.fn(async () => ({})),
+    // `DatabaseCollection.deleteOne` returns a `DeleteResult`, never a number
+    // or a boolean — a mock that returns anything else lets a caller that
+    // mishandles the real shape pass here (bug 142).
     deleteOne: jest.fn(async (filter: { id: string }) => {
       const at = rows.findIndex((r) => r.id === filter.id)
-      if (at < 0) return 0
+      if (at < 0) return { deletedCount: 0, acknowledged: true }
       rows.splice(at, 1)
-      return 1
+      return { deletedCount: 1, acknowledged: true }
     }),
     deleteMany: jest.fn(async () => {
+      const deletedCount = rows.length
       rows = []
-      return 1
+      return { deletedCount, acknowledged: true }
     }),
   }
 
@@ -168,8 +172,29 @@ describe('the funnel bumps and announces together', () => {
 
   it('deleteMessagesByIds — says nothing when nothing was removed', async () => {
     const ops = makeOps()
-    await ops.deleteMessagesByIds(CHAT_ID, ['no-such-message'])
+    // The count is the claim every caller reports from — the Commonplace sweep
+    // logs "swept N" — so a miss must return 0, not the number of ids asked
+    // about, and must leave the counter alone (bug 142).
+    const removed = await ops.deleteMessagesByIds(CHAT_ID, ['no-such-message'])
+    expect(removed).toBe(0)
+    expect(bumps()).toEqual([])
     expect(publishRealtime).not.toHaveBeenCalled()
+  })
+
+  it('deleteMessagesByIds — a batch that removes some of what it asked about still announces', async () => {
+    // The mixed case is the one to keep: one id landed, so the transcript did
+    // change and every open tab has to hear about it — exactly once.
+    const ops = makeOps()
+    await ops.addMessage(CHAT_ID, msg())
+    publishRealtime.mockClear()
+    updates.length = 0
+    chatRowWrites.length = 0
+
+    const removed = await ops.deleteMessagesByIds(CHAT_ID, [MESSAGE_ID, 'no-such-message'])
+    expect(removed).toBe(1)
+    expect(bumps()).toEqual([{ transcriptVersion: 1 }])
+    expect(publishRealtime).toHaveBeenCalledTimes(1)
+    expect(publishRealtime).toHaveBeenCalledWith('chats', CHAT_ID)
   })
 
   it('clearMessages', async () => {

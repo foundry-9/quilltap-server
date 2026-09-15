@@ -4,6 +4,53 @@
 
 ### 4.10-dev
 
+#### Fixed: deleting a message that is not there no longer counts as a deletion (bug 142)
+
+`deleteMessagesByIds` reported the number of message IDs it was *asked* about, not the number of
+rows it actually deleted. Asked to delete one ID that did not exist, it reported deleting one.
+
+Nothing was lost or corrupted — the chat's message count and last-message time are recomputed from
+the messages that survive, so they landed on the right values either way. Two things were wrong:
+
+- Every caller that logs the result was logging a number that could not be false. The Commonplace
+  Book's whisper sweep reported "swept N" whether or not it swept anything.
+- Since the transcript counter was added, a delete that removed nothing still bumped it and told
+  every open Salon tab on that chat that its transcript had changed. Each tab re-read the
+  transcript and was handed the one it already had.
+
+The cause was a check for return values the database layer cannot produce. The code tested whether
+the delete returned a number, then fell back to testing whether it was truthy — but a delete always
+returns a `{ deletedCount, acknowledged }` record, and a miss returns that record with a count of
+zero. An object is truthy, so a miss was counted as a deletion, and the total could only ever equal
+the number of IDs requested. Six of the seven callers of this database method already read
+`deletedCount` directly; this was the only one that did not.
+
+A delete that removes nothing now returns zero, logs nothing, leaves the transcript counter alone,
+and tells no one. A batch that removes some of what it was asked about reports only what it
+removed, and still announces the change — because it did change the transcript.
+
+The reason this survived is worth recording: the test suite's stand-in for the database returned a
+plain `0` or `1`, which took the one branch where the arithmetic was correct. The test named *says
+nothing when nothing was removed* had been passing against a database that does not exist. That
+stand-in was corrected first, which made the test fail on its own before anything else changed. The
+lasting guard is a new suite that runs the real code against a real database instead of a stand-in,
+and separately pins what the database layer actually returns.
+
+Files: `lib/database/repositories/chats-messages.ops.ts`,
+`__tests__/unit/lib/database/repositories/chats-messages-transcript-version.test.ts`,
+`__tests__/unit/lib/database/repositories/chats-messages-delete-count.integration.test.ts` (new).
+
+#### Fixed: a migration test was passing over a helper that did not exist
+
+`add-profile-multi-character-prefill-field.integration.test.ts` replaced the migration's database
+helpers with a stand-in that was missing two of them — `sqliteColumnExists` and
+`addColumnIfMissing`, both of which the migration calls. Six of its seven tests failed with
+`sqliteColumnExists is not a function`, so the migration's column-add and its Anthropic backfill
+were not being exercised at all. Only the test double was wrong; the helpers exist and the
+migration itself is fine.
+
+Files: `__tests__/unit/lib/database/migration/add-profile-multi-character-prefill-field.integration.test.ts`.
+
 #### Fixed: the native-binding ABI heal now actually rebuilds
 
 After a Node.js upgrade, the SQLCipher native addon is compiled against the old ABI and throws

@@ -61,12 +61,29 @@ jest.mock('../../../../../migrations/lib/logger', () => ({
 
 let testDb: DatabaseInstance = null as unknown as DatabaseInstance;
 
+/**
+ * Every helper the migration actually imports must appear here, backed by the
+ * real `testDb` — a factory that omits one does not fail loudly at import, it
+ * fails as `(0, _databaseutils.thing) is not a function` the moment the
+ * migration reaches it.
+ */
+function columnNames(name: string): string[] {
+  return (testDb.prepare(`PRAGMA table_info("${name}")`).all() as Array<{ name: string }>)
+    .map((c) => c.name);
+}
+
 jest.mock('../../../../../migrations/lib/database-utils', () => ({
   isSQLiteBackend: () => true,
   sqliteTableExists: () => true,
   getSQLiteDatabase: () => testDb,
   getSQLiteTableColumns: (name: string) =>
     testDb.prepare(`PRAGMA table_info(${name})`).all() as Array<{ name: string }>,
+  sqliteColumnExists: (table: string, column: string) => columnNames(table).includes(column),
+  addColumnIfMissing: (table: string, column: string, ddl: string) => {
+    if (columnNames(table).includes(column)) return false;
+    testDb.exec(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${ddl}`);
+    return true;
+  },
 }));
 
 function buildSchema(db: DatabaseInstance): void {
