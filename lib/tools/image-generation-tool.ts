@@ -18,7 +18,7 @@ export interface ImageGenerationToolConfig {
   allowedStyles?: string[]; // Restrict available styles (e.g., ["vivid", "natural"])
   allowedAspectRatios?: string[]; // Restrict available aspect ratios (e.g., ["1:1", "16:9"])
   maxImagesPerCall?: number; // Limit images per invocation (1-10)
-  defaultQuality?: 'standard' | 'hd'; // Default quality setting
+  defaultQuality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd'; // Default quality setting
   defaultStyle?: 'vivid' | 'natural'; // Default style
 }
 
@@ -44,19 +44,16 @@ export const imageGenerationToolInputSchema = z.object({
     .describe('PREFERRED way to control image shape. The system maps this onto whatever each provider supports (a concrete size, an aspect ratio, or prompt wording), so it works everywhere. "portrait" = taller than wide, "landscape" = wider than tall, "square" = 1:1. Use this instead of `size`/`aspectRatio` unless you have a specific reason not to.')
     .optional(),
   size: z
-    .enum(['1024x1024', '1792x1024', '1024x1792'])
-    .default('1024x1024')
-    .describe('Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Most providers ignore it. Prefer `orientation`.')
+    .enum(['1024x1024', '1792x1024', '1024x1792', '1536x1024', '1024x1536'])
+    .describe('Advanced, provider-dependent: an exact pixel size honoured only by some providers (e.g. OpenAI). Omit it to use the image profile\'s own setting. Most providers ignore it, and a provider that does not support the exact size falls back to a square. Prefer `orientation`.')
     .optional(),
   style: z
     .enum(['vivid', 'natural'])
-    .default('vivid')
-    .describe('Image style. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images.')
+    .describe('Image style, honoured only by DALL-E 3. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images. Omit it to use the image profile\'s own setting.')
     .optional(),
   quality: z
-    .enum(['standard', 'hd'])
-    .default('standard')
-    .describe('Image quality. "standard" for regular quality (faster, lower cost). "hd" produces finer details and greater consistency (slower, higher cost).')
+    .enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max', 'standard', 'hd'])
+    .describe('Optional, provider-dependent: how much effort the model spends. Omit it to use the image profile\'s own setting, which is almost always right. Newer OpenAI models take "auto", "low", "medium" and "high"; the older DALL-E models take "standard" and "hd". "xhigh" and "max" are premium tiers on GPT Image 2.5 only — markedly slower and more expensive, so use them only when the user has actually asked for the best possible quality. A tier the selected model does not offer is ignored.')
     .optional(),
   aspectRatio: z
     .enum(['1:1', '3:4', '4:3', '9:16', '16:9'])

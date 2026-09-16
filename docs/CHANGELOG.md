@@ -4,6 +4,54 @@
 
 ### 4.10-dev
 
+#### Added: GPT Image 2.5 (Flare and Sunburst), and the rest of the OpenAI image parameters
+
+Two new OpenAI image models: `gpt-image-2.5-flare` (faster and cheaper, at GPT Image 2 quality)
+and `gpt-image-2.5-sunburst` (slower and more expensive, better at detailed editing). Dated
+snapshots such as `gpt-image-2.5-flare-2026-09-08` resolve to their family automatically.
+
+With them, four parameters the plugin never sent:
+
+- **Quality** — `auto`/`low`/`medium`/`high` on every GPT Image model, plus `xhigh` and `max` on
+  the 2.5 pair. Previously only DALL-E's `standard`/`hd` were offered, and quality was not sent to
+  GPT Image models at all.
+- **Background** — `transparent` cuts the subject out, which is what avatars want. Asking for
+  transparency with a JPEG output format switches the format to PNG rather than flattening it.
+- **Output format** and **output compression** — `png`/`jpeg`/`webp`, with compression applied only
+  where it means something. The returned image's MIME type now matches the format requested
+  instead of always claiming PNG.
+- **Moderation** — `auto` or the less restrictive `low`. Not an off switch; OpenAI's usage policies
+  still apply.
+
+GPT Image 2 and both 2.5 models also accept arbitrary resolutions: any `WIDTHxHEIGHT` with both
+edges divisible by 16, an aspect ratio between 1:3 and 3:1, and up to 3840x2160. Anything above
+2560x1440 is experimental.
+
+The OpenAI plugin now implements `getImageProviderOptionsSchema`, so the image-profile editor is
+built per selected model instead of using the old hand-written panel — a model is never offered a
+knob it would reject. Parameters a model does not accept are dropped with a warning rather than
+sent, because the Images API rejects the whole request over one unknown value; an unusable size
+falls back to 1024x1024.
+
+Per-family capabilities live in one table (`plugins/dist/qtap-plugin-openai/image-models.ts`) that
+the wire logic, the host's model list and the editor schema all read from.
+
+The manual image-generation dialog's OpenAI controls were DALL-E-shaped too — its size list held
+no GPT Image size but 1024x1024, and its quality picker offered only Standard/HD, with Standard
+sent on every generation. Both lists now span the families, and quality defaults to sending
+nothing so the profile's own setting stands.
+
+The `openai` SDK is updated to 7.15.0 in the main app and all six plugins that use it.
+
+#### Fixed: image profile size, quality and style were ignored in chat (bug 148)
+
+The `generate_image` tool's schema declared `size`, `quality` and `style` with Zod `.default(...)`.
+Zod applies those defaults when the key is absent, and the tool's parsed output is handed to the
+params builder as *overrides* — which outrank the profile's stored settings by design. So every
+image a character generated carried `standard`/`1024x1024`/`vivid` regardless of what the profile
+said. The defaults are removed; an omitted field now leaves the profile's value in place. `count`
+keeps its default of 1 deliberately.
+
 #### Fixed: the Salon no longer guesses whose turn it is (bug 147)
 
 The turn rotation for a cycle is drawn once and stored on the chat, so that every reader agrees

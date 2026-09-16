@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-09-16
+
+### Changed
+
+- `ImageGenParams.quality` widened from `'standard' | 'hd'` to `'standard' | 'hd' | 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'`. The old union was DALL·E's vocabulary and had outlived it: the GPT Image families use `auto`/`low`/`medium`/`high`, and GPT Image 2.5 adds the premium `xhigh` and `max` tiers. The host stores and forwards this value verbatim — it never interprets it — so the union is the sum of what the plugins accept, and each plugin validates the subset its selected model actually supports. Purely widening, so no existing plugin changes behaviour.
+- `getImageProviderOptionsSchema` documentation corrected: the host-owned storage keys a schema may declare are **three**, not two — `size`, `aspectRatio` and `quality`. The host lifts all three out of the residual bag onto the named `ImageGenParams` fields, so a plugin declaring them reads them from `params.size` / `params.aspectRatio` / `params.quality`, not from `profileParameters`. Documentation only; the behaviour was always this.
+- `PLUGIN_TYPES_VERSION` re-synced to the package version.
+
 ## [2.6.0] - 2026-08-29
 
 ### Added

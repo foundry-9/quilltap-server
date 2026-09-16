@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.10.0-dev.41",
+  "version": "4.10.0-claude-amazing-fermi-3hh73g.42",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -92,7 +92,7 @@
     "next": "^16.3.4",
     "node-fetch": "^3.3.2",
     "node-pty": "^1.1.0",
-    "openai": "^7.10.0",
+    "openai": "^7.15.0",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.8",

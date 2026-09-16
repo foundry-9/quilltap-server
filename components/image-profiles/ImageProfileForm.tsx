@@ -46,7 +46,7 @@ interface ImageProfileFormProps {
 
 // Fallback providers when API is unavailable
 const FALLBACK_PROVIDERS: ImageProviderInfo[] = [
-  { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-2', 'gpt-image-1', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
+  { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-2.5-sunburst', 'gpt-image-2.5-flare', 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1', 'gpt-image-1-mini', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
   { value: 'GROK', label: 'Grok (xAI)', defaultModels: ['grok-2-image'], apiKeyProvider: 'GROK' },
   { value: 'GOOGLE', label: 'Google Gemini', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE', legacyNames: ['GOOGLE_IMAGEN'] },
   { value: 'Z_AI', label: 'Z.AI (CogView / GLM-Image)', defaultModels: ['cogview-4-250304', 'glm-image'], apiKeyProvider: 'Z_AI' },

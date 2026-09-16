@@ -67,8 +67,16 @@ export interface ImageGenParams {
    * call, writing `size` or `aspectRatio` (or appending to `prompt`) as needed.
    */
   orientation?: ImageOrientation;
-  /** Image quality */
-  quality?: 'standard' | 'hd';
+  /**
+   * Image quality tier. The host stores and forwards this verbatim — it never
+   * interprets the value — so the union is the sum of what the plugins accept,
+   * and each plugin validates the subset its selected model actually supports.
+   *
+   * - `standard` / `hd` — the DALL·E spelling.
+   * - `auto` / `low` / `medium` / `high` — the GPT Image spelling.
+   * - `xhigh` / `max` — the two premium tiers added by GPT Image 2.5.
+   */
+  quality?: 'standard' | 'hd' | 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /** Image style */
   style?: 'vivid' | 'natural';
   /** Number of images to generate */

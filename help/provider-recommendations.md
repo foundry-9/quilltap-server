@@ -56,7 +56,7 @@ If you use the Concierge's uncensored routing, you can also set up a Grok profil
 ### Image Generation
 
 - **Google Gemini** (Imagen) --- High quality with good style variety.
-- **OpenAI** (gpt-image / DALL-E) --- Reliable and versatile, good at interpreting character descriptions.
+- **OpenAI** (gpt-image / DALL-E) --- Reliable and versatile, good at interpreting character descriptions. Of the GPT Image 2.5 pair, **Flare** is the quick and thrifty one and **Sunburst** the premium one; both will paint any canvas up to 3840x2160 and cut a subject out on a transparent background.
 - **xAI Grok** (Imagine) --- Strong results with a distinctive look.
 
 All three are solid. We recommend trying each to see which style you prefer.
