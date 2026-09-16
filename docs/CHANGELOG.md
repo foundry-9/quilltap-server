@@ -43,6 +43,12 @@ nothing so the profile's own setting stands.
 
 The `openai` SDK is updated to 7.15.0 in the main app and all six plugins that use it.
 
+`@quilltap/plugin-types` 2.7.0 widens `ImageGenParams.quality` past DALL-E's `standard`/`hd` to
+cover the GPT Image tiers. The host stores and forwards the value without interpreting it, so the
+union is the sum of what the plugins accept and each plugin validates its own model's subset.
+Purely widening — no existing plugin changes behavior. The app now requires `^2.7.0`; the plugins
+still build against `^2.6.0`, since none of their own code depends on the wider type.
+
 #### Fixed: image profile size, quality and style were ignored in chat (bug 148)
 
 The `generate_image` tool's schema declared `size`, `quality` and `style` with Zod `.default(...)`.
