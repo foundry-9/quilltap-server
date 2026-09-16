@@ -4,6 +4,28 @@
 
 ### 4.10-dev
 
+#### Fixed: Skip now passes the turn that is actually outstanding (bug 146)
+
+When you drive two characters in one room — your own plus a guest whose pen you have taken up —
+a message from one of them hands the floor to the other rather than making an LLM answer. That
+part was right. What was wrong is that the banner above the composer named the character you had
+*last written as*, not the one whose turn it was, and its **Skip** button passed that character's
+turn.
+
+So a post as the guest was followed by a prompt that looked like a second turn for the same guest.
+Pressing Skip recorded "the guest declining the floor" — a turn the guest had never held, since
+they had just spoken — left the real turn where it was, and prompted you again. Two passes for one
+turn, and a false line in the transcript that the models then read.
+
+The banner now speaks for whoever holds the floor. When the turn is one of yours, it names that
+character and Skip passes that turn; when the composer is pointed at a different character of
+yours, it says so instead of inviting words in the wrong voice. Between turns — when an LLM is up
+next — it still offers to decline early for the character you are holding, as before.
+
+Files: `lib/chat/turn-manager/utils.ts`, `lib/chat/turn-manager/index.ts`,
+`app/salon/[id]/SalonView.tsx`, `__tests__/unit/lib/chat/turn-manager/floor-seat.test.ts`,
+`help/chat-turn-manager.md`.
+
 #### Fixed: collapsing a duplicate avatar roll no longer deletes the photo you kept from it (bug 145)
 
 Copying an avatar roll into a character's photo album does not make a second copy of the image — it

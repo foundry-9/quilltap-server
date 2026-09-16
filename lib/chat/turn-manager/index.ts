@@ -80,6 +80,7 @@ export {
   findUserParticipant,
   findActiveUserParticipant,
   isUserDrivenSeat,
+  resolveFloorSeatId,
   findUserControlledParticipants,
   getPresentCharacterSeats,
   getActiveCharacterParticipants,

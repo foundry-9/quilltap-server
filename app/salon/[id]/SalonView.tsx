@@ -39,6 +39,7 @@ import {
   qualifiesForTurnSkipping,
   isUserDrivenSeat,
   findActiveUserParticipant,
+  resolveFloorSeatId,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
@@ -1527,14 +1528,38 @@ export function SalonView({ chatId }: SalonViewProps) {
             take words as this seat, Skip is offered for it too: a pass is "let
             someone else respond", and that is as meaningful mid-rotation as it
             is on-turn. The wording says whose turn it is; only the must-speak
-            guard withholds the button. */}
+            guard withholds the button.
+
+            Bug 146: the banner is about the FLOOR, not about the composer. With
+            two seats the human drives, "whose turn is it" and "whose voice will
+            the composer take" disagree routinely — the rotation moves every
+            turn, the speaking-as only follows it as a client-side default. When
+            they disagree, passing the *composer's* seat records a Host
+            turn-pass for a seat that never held the floor and leaves the real
+            turn outstanding, so the human is prompted again. `resolveFloorSeatId`
+            settles it: the rotation's seat wins when it is one the human drives,
+            and the composer's seat is kept only for the off-turn case bug 123
+            added. */}
         {(() => {
           if (sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending) return null
           if (!participantsWithImpersonation.hasActiveCharacters) return null
-          const seat = speakingSeat
+          const floorSeatId = resolveFloorSeatId(
+            turnSelectionResult?.nextSpeakerId,
+            participantsWithImpersonation.participantsAsBase,
+            impersonation.impersonatingParticipantIds,
+            speakingSeat?.id ?? null,
+          )
+          const seat = floorSeatId
+            ? participantsWithImpersonation.participantData.find(pp => pp.id === floorSeatId) ?? null
+            : null
           if (!seat || !isUserDrivenSeat({ id: seat.id, controlledBy: seat.controlledBy ?? 'llm' }, impersonation.impersonatingParticipantIds)) return null
           const name = seat.character?.name ?? 'this character'
           const isSeatsTurn = turnSelectionResult?.nextSpeakerId === seat.id
+          // The composer is pointed somewhere else — say so rather than inviting
+          // words that would land in another character's voice. Normally the Bug
+          // 49 turn-follow has already moved it; this is the reload case and the
+          // deliberate same-turn SpeakerSelector choice.
+          const composerElsewhere = isSeatsTurn && speakingSeat?.id !== seat.id
 
           // Must-speak guard: when every other active character has passed since
           // the last substantive message, the floor falls to this participant and
@@ -1563,9 +1588,11 @@ export function SalonView({ chatId }: SalonViewProps) {
               <span className="qt-text-secondary">
                 {mustSpeak
                   ? `Everyone else has passed — it falls to ${name} to say something.`
-                  : isSeatsTurn
-                    ? `${name}'s turn — type as them, or skip to let someone else respond.`
-                    : `Speaking as ${name} — type, or skip to let someone else take the floor.`}
+                  : composerElsewhere
+                    ? `${name}'s turn — switch the speaker to them to type, or skip to let someone else respond.`
+                    : isSeatsTurn
+                      ? `${name}'s turn — type as them, or skip to let someone else respond.`
+                      : `Speaking as ${name} — type, or skip to let someone else take the floor.`}
               </span>
               {!mustSpeak && (
                 <button

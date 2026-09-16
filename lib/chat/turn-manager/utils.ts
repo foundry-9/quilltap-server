@@ -215,3 +215,48 @@ export function isAllLLMChat(participants: ChatParticipantBase[]): boolean {
   const userControlled = findUserControlledParticipants(participants);
   return userControlled.length === 0;
 }
+
+/**
+ * The seat the "your turn" banner speaks for — and the seat its Skip passes.
+ *
+ * Two different questions can both have an answer at once, and they are not the
+ * same question:
+ *
+ *   - **Whose turn is it?** `turnSelectionResult.nextSpeakerId`.
+ *   - **Whose voice will the composer take?** `activeTypingParticipantId`, via
+ *     {@link findActiveUserParticipant}.
+ *
+ * With two seats the human drives (their own character plus an impersonated one,
+ * or two owned characters) the two disagree routinely: the rotation moves on
+ * every turn, the speaking-as does not (Bug 49's follow is a client-side default
+ * and a reload restores the last *deliberate* choice). Bug 146 is what happens
+ * when the banner answers the second question while the human reads it as the
+ * first: it offers to pass a turn that is not outstanding, records a Host
+ * turn-pass for a seat that never held the floor, and leaves the real turn where
+ * it was — so the human is prompted again and has to pass twice.
+ *
+ * So: **the floor wins when there is one.** When the rotation has landed on a
+ * seat the human drives, that seat is what the banner names and what Skip passes.
+ * Only when the floor belongs to nobody the human drives — an LLM is up next, or
+ * there is no selection yet — does it fall back to the composer's seat, which is
+ * the off-turn "let someone else respond" affordance Bug 123 added.
+ *
+ * Returns null when neither is available (an all-LLM room, or a chat still
+ * loading), which the caller reads as "no banner".
+ */
+export function resolveFloorSeatId(
+  nextSpeakerId: string | null | undefined,
+  participants: ChatParticipantBase[],
+  impersonatingParticipantIds?: readonly string[] | null,
+  speakingSeatId?: string | null,
+): string | null {
+  if (nextSpeakerId) {
+    const onFloor = participants.find(p =>
+      p.id === nextSpeakerId &&
+      isParticipantPresent(p.status) &&
+      isUserDrivenSeat(p, impersonatingParticipantIds)
+    );
+    if (onFloor) return onFloor.id;
+  }
+  return speakingSeatId ?? null;
+}
