@@ -16,13 +16,14 @@ import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generatio
 import { validateProfileLoras } from '@/lib/image-gen/lora-validation';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
+import { imageQualitySchema } from '@/lib/image-gen/quality';
 
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
   chatId: z.uuid().optional(),
   count: z.int().min(1).max(10).optional().prefault(1),
   size: z.string().optional(),
-  quality: z.enum(['standard', 'hd']).optional(),
+  quality: imageQualitySchema.optional(),
   style: z.enum(['vivid', 'natural']).optional(),
   aspectRatio: z.string().optional(),
   negativePrompt: z.string().optional(),

@@ -15,7 +15,7 @@ import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
 import { buildImageGenParams, resolveProfileLoras } from '@/lib/image-gen/params-builder';
-import type { ImageGenParams } from '@quilltap/plugin-types';
+import type { ImageGenParams, ImageOrientation } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
@@ -223,6 +223,28 @@ async function saveGeneratedImage(
 }
 
 /**
+ * The orientation this call should resolve, or undefined to leave the merged
+ * `size` / `aspectRatio` alone.
+ *
+ * Orientation outranks any raw size in the builder, by design — a caller asking
+ * for a shape means the shape, not a string. But defaulting an *absent*
+ * orientation to `'square'` made that precedence unconditional, so a `size` the
+ * model passed was always overwritten by square's 1024x1024 and the tool's
+ * `size` parameter could never do anything. Square stays the default only when
+ * the model named no size of its own.
+ *
+ * Exported for the regression test that pins this precedence (bug 149).
+ */
+export function requestedOrientation(
+  input: ImageGenerationToolInput,
+): ImageOrientation | undefined {
+  if (input.orientation) {
+    return input.orientation;
+  }
+  return input.size ? undefined : 'square';
+}
+
+/**
  * Turn the tool's own input into the override slice the shared builder takes.
  *
  * The builder owns the merge semantics; this only translates vocabulary
@@ -309,15 +331,14 @@ async function generateImagesWithProvider(
 
   // One builder for every image call site: merges the profile's defaults under
   // the tool's input, resolves the orientation onto this provider/model's own
-  // mechanism (orientation outranks any raw size the LLM passed), and attaches
-  // the profile's capped LoRA list plus its residual parameter bag.
-  // `toolInput.prompt` is already the expanded prompt, so whatever the builder
-  // appends lands in the intended final form.
+  // mechanism, and attaches the profile's capped LoRA list plus its residual
+  // parameter bag. `toolInput.prompt` is already the expanded prompt, so
+  // whatever the builder appends lands in the intended final form.
   const { params: mergedParams } = buildImageGenParams({
     profile: imageProfile,
     prompt: toolInput.prompt,
     overrides: toolInputOverrides(toolInput),
-    orientation: toolInput.orientation ?? 'square',
+    orientation: requestedOrientation(toolInput),
     logContext: { context: 'tools.generate_image', chatId, profileId: imageProfile.id },
   });
 
@@ -412,7 +433,7 @@ async function generateImagesWithProvider(
       profile: reroute.profile,
       prompt: toolInput.prompt,
       overrides: toolInputOverrides(toolInput),
-      orientation: toolInput.orientation ?? 'square',
+      orientation: requestedOrientation(toolInput),
       logContext: {
         context: 'tools.generate_image.concierge-reroute',
         chatId,

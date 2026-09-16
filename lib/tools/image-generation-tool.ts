@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
+import { imageQualitySchema, type ImageQuality } from '@/lib/image-gen/quality';
 
 /**
  * Configuration for the image generation tool
@@ -18,7 +19,7 @@ export interface ImageGenerationToolConfig {
   allowedStyles?: string[]; // Restrict available styles (e.g., ["vivid", "natural"])
   allowedAspectRatios?: string[]; // Restrict available aspect ratios (e.g., ["1:1", "16:9"])
   maxImagesPerCall?: number; // Limit images per invocation (1-10)
-  defaultQuality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd'; // Default quality setting
+  defaultQuality?: ImageQuality; // Default quality setting
   defaultStyle?: 'vivid' | 'natural'; // Default style
 }
 
@@ -51,8 +52,7 @@ export const imageGenerationToolInputSchema = z.object({
     .enum(['vivid', 'natural'])
     .describe('Image style, honoured only by DALL-E 3. "vivid" for dramatic, hyper-real, detailed images with vibrant colors. "natural" for more realistic, understated, less exaggerated images. Omit it to use the image profile\'s own setting.')
     .optional(),
-  quality: z
-    .enum(['auto', 'low', 'medium', 'high', 'xhigh', 'max', 'standard', 'hd'])
+  quality: imageQualitySchema
     .describe('Optional, provider-dependent: how much effort the model spends. Omit it to use the image profile\'s own setting, which is almost always right. Newer OpenAI models take "auto", "low", "medium" and "high"; the older DALL-E models take "standard" and "hd". "xhigh" and "max" are premium tiers on GPT Image 2.5 only — markedly slower and more expensive, so use them only when the user has actually asked for the best possible quality. A tier the selected model does not offer is ignored.')
     .optional(),
   aspectRatio: z

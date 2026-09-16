@@ -49,6 +49,26 @@ union is the sum of what the plugins accept and each plugin validates its own mo
 Purely widening — no existing plugin changes behavior. The app now requires `^2.7.0`; the plugins
 still build against `^2.6.0`, since none of their own code depends on the wider type.
 
+#### Fixed: the new quality tiers were rejected by the HTTP generate routes
+
+Caught in review. The GPT Image tiers reached the `generate_image` tool schema, but
+`POST /api/v1/images?action=generate` and `POST /api/v1/image-profiles/[id]?action=generate` each
+spelled the union out for themselves and still read `standard`/`hd` — so a profile could store
+`max` and those routes would reject it before the provider was ever called. All three now share
+one `imageQualitySchema` (`lib/image-gen/quality.ts`), pinned to `ImageGenParams['quality']` by
+compile-time assertions in both directions: adding a tier to one without the other is now a build
+error rather than a silent rejection. Image profile *saving* was never affected — `parameters` is
+stored as an open bag.
+
+#### Fixed: `generate_image`'s `size` parameter has never done anything (bug 149)
+
+The params builder lets orientation outrank a raw `size`, deliberately — a caller asking for a
+shape means the shape. But the handler passed `orientation: toolInput.orientation ?? 'square'`,
+so the builder was told a shape had been requested on every call, and square's 1024x1024 landed on
+top of whatever size the merge produced. No input survived it. The default is now injected only
+when the model named no size of its own; an explicit orientation still wins over an explicit size.
+The same line was also discarding the profile's configured default size.
+
 #### Fixed: image profile size, quality and style were ignored in chat (bug 148)
 
 The `generate_image` tool's schema declared `size`, `quality` and `style` with Zod `.default(...)`.

@@ -446,8 +446,8 @@ Generate images using your configured LLM providers.
   options?: {
     n?: number              // Number of images (1-10, default 1)
     size?: string           // e.g., "1024x1024", "1024x1792", "16:9"
-    quality?: 'standard'    // 'standard' or 'hd' (DALL-E only)
-    style?: 'vivid'         // 'vivid' or 'natural' (DALL-E only)
+    quality?: string        // GPT Image: 'auto'|'low'|'medium'|'high' (+'xhigh'|'max' on 2.5); DALL-E: 'standard'|'hd'
+    style?: 'vivid' | 'natural'  // DALL-E 3 only; GPT Image models ignore it
     aspectRatio?: string    // "16:9", "4:3", "3:2" etc (Gemini only)
   }
 }
@@ -731,7 +731,7 @@ async function generateImage(
   profileId: string,
   options?: {
     size?: string
-    quality?: 'standard' | 'hd'
+    quality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd'
     style?: 'vivid' | 'natural'
   }
 ) {
@@ -886,7 +886,7 @@ export interface ImageGenParams {
   n?: number;                    // Number of images
   size?: string;                 // e.g., "1024x1024"
   aspectRatio?: string;          // e.g., "16:9"
-  quality?: 'standard' | 'hd';
+  quality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd';
   style?: 'vivid' | 'natural';
   seed?: number;
   guidanceScale?: number;
@@ -937,8 +937,8 @@ export const imageGenerationToolDefinition = {
       },
       quality: {
         type: "string",
-        enum: ["standard", "hd"],
-        description: "Image quality."
+        enum: ["auto", "low", "medium", "high", "xhigh", "max", "standard", "hd"],
+        description: "Image quality. Tiers a model does not offer are dropped by the provider."
       },
       count: {
         type: "integer",
