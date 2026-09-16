@@ -40,6 +40,14 @@ interface TurnActionResponse {
   }
   state: {
     queue: string[]
+    /**
+     * The cycle's remaining rotation, as the server resolved it for this action.
+     * The route has always sent it; the client used to declare only `queue` and
+     * dropped it (bug 147), so a local recompute right after a turn action fell
+     * back to a fresh weighted roll instead of following the rotation the server
+     * had just drawn. Optional so an older response shape still parses.
+     */
+    cycleOrder?: string[]
   }
   participant?: {
     id: string
@@ -89,10 +97,13 @@ function applyServerResponse(
   setTurnSelectionResult: (result: TurnSelectionResult | null) => void,
   currentTurnState: TurnState,
 ) {
-  // Update queue from server's authoritative state
+  // Update queue and rotation from the server's authoritative state. Both
+  // matter: the rotation is what `selectNextSpeaker` follows, so dropping it
+  // left the next local recompute guessing (bug 147).
   setTurnState({
     ...currentTurnState,
     queue: response.state.queue,
+    ...(response.state.cycleOrder ? { cycleOrder: response.state.cycleOrder } : {}),
   })
 
   // Update selection result from server

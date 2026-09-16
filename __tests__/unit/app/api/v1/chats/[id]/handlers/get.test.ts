@@ -249,4 +249,45 @@ describe('chats [id] GET handler', () => {
     expect(response.status).toBe(200)
     expect(body.chat.allLLMPauseTurnCount).toBe(0)
   })
+
+  // Bug 147. The Salon recomputes "whose turn is it" locally from these two
+  // columns; omitting them put an empty rotation and an empty spoken-set into
+  // `calculateTurnStateFromHistory`, which is indistinguishable from a fresh
+  // chat, so the client re-rolled the speaker instead of following the
+  // rotation the server had drawn. They must stay on the wire, as the JSON
+  // strings the turn manager's parsers expect.
+  it('projects the cycle rotation and the spoken-this-cycle set (Bug 147)', async () => {
+    ctx.repos.chats.findById.mockResolvedValueOnce({
+      ...chatMetadata,
+      cycleOrderParticipantIds: '["part-2","part-1"]',
+      spokenThisCycleParticipantIds: '["part-3"]',
+    })
+
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.cycleOrderParticipantIds).toBe('["part-2","part-1"]')
+    expect(body.chat.spokenThisCycleParticipantIds).toBe('["part-3"]')
+  })
+
+  it('defaults the cycle columns to an empty JSON array when unset (Bug 147)', async () => {
+    // A legacy row predating the columns must read as "no rotation on file",
+    // never as `undefined` — the client parses these, and the parsers take a
+    // string.
+    const req = {
+      nextUrl: new URL(`http://localhost:3000/api/v1/chats/${chatId}`),
+    } as any
+
+    const response = await handleGet(req, ctx, chatId)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.chat.cycleOrderParticipantIds).toBe('[]')
+    expect(body.chat.spokenThisCycleParticipantIds).toBe('[]')
+  })
 })

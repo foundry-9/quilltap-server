@@ -186,7 +186,7 @@ The participant sidebar shows the **turn order** for all participants. Each part
 7. **Silent (no badge, muted)** — Present but observing silently, still receives turns
 8. **Absent (no badge, dimmed)** — Away from the scene, turns skipped entirely
 
-Participants are automatically sorted in the sidebar by their turn position, so you can see at a glance who's speaking, who follows, and who has already had their say. Since [the running order](#the-running-order) is drawn for the whole cycle before it begins, those positions are a schedule rather than a forecast.
+Participants are automatically sorted in the sidebar by their turn position, so you can see at a glance who's speaking, who follows, and who has already had their say. Since [the running order](#the-running-order) is drawn for the whole cycle before it begins, those positions are a schedule rather than a forecast — the sidebar and the turn banner both read that one stored running order, so what they tell you is what the house will actually do, and not a second opinion arrived at independently.
 
 ### Interrupt/Stop Button
 

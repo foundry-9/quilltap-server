@@ -4,6 +4,37 @@
 
 ### 4.10-dev
 
+#### Fixed: the Salon no longer guesses whose turn it is (bug 147)
+
+The turn rotation for a cycle is drawn once and stored on the chat, so that every reader agrees
+about who follows whom. The Salon recomputes "whose turn is it" in the browser from that stored
+rotation plus the message history — but `GET /api/v1/chats/[id]` was not sending the two columns
+it reads. Both arrived as `undefined`, which reads as an empty rotation and an empty
+spoken-this-cycle set: exactly what a brand-new chat looks like.
+
+So the browser never followed the rotation. It fell back to a fresh weighted-random pick on every
+recompute, contradicting the decision the server had already made and saved. Two things showed it:
+
+- The turn banner named the wrong character, and its **Skip** passed the wrong turn — recording
+  "X declining the floor" for a character who had just spoken, and leaving the real turn
+  outstanding so you were prompted twice. Worst in rooms where you drive two characters, where the
+  server hands the floor from one of yours to the other.
+- The participant sidebar's predicted order was a talkativeness guess rather than the real
+  rotation, and no character was ever marked as having already spoken this cycle.
+
+Both columns are now sent, as the JSON strings the turn code already parses, defaulting to `[]`
+for rows that predate them. The turn API's response also carries the rotation, and the client no
+longer discards it. A test now asserts directly that the browser and the server pick the same
+speaker from the same inputs, rather than assuming it.
+
+This supersedes the previous entry's diagnosis: bug 146's fix was necessary but not sufficient —
+it keyed the banner to the browser's answer, which was itself wrong.
+
+Files: `app/api/v1/chats/[id]/handlers/get.ts`, `app/salon/[id]/hooks/useTurnManagement.ts`,
+`__tests__/unit/app/api/v1/chats/[id]/handlers/get.test.ts`,
+`__tests__/unit/lib/chat/turn-manager/client-server-agreement.test.ts`,
+`help/chat-turn-manager.md`.
+
 #### Fixed: Skip now passes the turn that is actually outstanding (bug 146)
 
 When you drive two characters in one room — your own plus a guest whose pen you have taken up —

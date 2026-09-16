@@ -2,8 +2,8 @@
 
 | | |
 |---|---|
-| **Status** | **FIXED in v4 (2026-09-15)** |
-| **Found** | 2026-09-15 (Friday, chat `08b7635c` — *Sky-Ship at the Copper Quarter*; the operator reported "I took a turn as Helene, and then it immediately prompted me to take another turn as Helene") |
+| **Status** | **FIXED in v4 (2026-09-15)** — but insufficient on its own; the recurrence it failed to stop is [Bug 147](bug-147-chat-get-omits-the-rotation.md). See *Addendum* |
+| **Found** | 2026-09-15 (Friday, chat `08b7635c` — *Sky-Ship at the Copper Quarter*). **Seen again 2026-09-16** in chat `e59f8969` — *Breakfast at the Edge of the Weave* — twice in seven minutes, on an impersonated seat rather than a summoned one; see *Second sighting* |
 | **Fixed** | 2026-09-15 |
 | **Severity** | Medium — no data loss, but the banner states something false about whose turn it is, costs the operator a wasted pass, and writes a Host turn-pass record for a seat that never held the floor. The false record then feeds the stall guard and every reader of the transcript, models included |
 | **Who it bites** | anyone driving **two or more seats** in one room — their own character plus a summoned or impersonated one, or two owned characters. Exactly the configuration `[TurnFairness]` was built for |
@@ -62,6 +62,85 @@ seats plus an LLM). The load-bearing one fails against the old behaviour:
 | a removed seat | Helene | Helene — stale ids fall back |
 
 `npx tsc` clean; the six turn-manager suites (173 tests) pass unchanged.
+
+---
+
+## Addendum (2026-09-16) — this fix was necessary but not sufficient; see Bug 147
+
+The fix above landed, shipped as 4.10.0-dev.40, and **the symptom recurred on
+that build**: impersonate a seat, answer as it, be prompted for it again. The
+filing's account of the banner is correct and the fix is kept — but it named the
+wrong layer as the whole cause.
+
+`resolveFloorSeatId` keys the banner to `turnSelectionResult.nextSpeakerId`, on
+the stated assumption that the client's local recompute agrees with the server.
+It did not. `GET /api/v1/chats/[id]` was not sending the Salon the two columns
+its recompute reads, so `selectNextSpeaker` could never follow the drawn
+rotation and re-rolled a weighted pick every time — usually landing on an LLM
+seat, at which point `resolveFloorSeatId` correctly falls back to the composer's
+seat and the banner names it again. Right rule, garbage input. Full account:
+[Bug 147](bug-147-chat-get-omits-the-rotation.md).
+
+What this filing still owns, and what it got wrong:
+
+- **Owns:** when the client's answer *is* a seat the human drives, the banner
+  and Skip must follow the floor rather than the composer. That was a real
+  defect on its own, it is fixed, and it is what makes the corrected input
+  produce a correct banner.
+- **Wrong:** the claim that the two sightings were fully explained by the
+  banner's seat resolution. The first (Helene) forensics could not reconcile
+  "the client should compute Charlie" with the observed pass of Helene, and the
+  filing let that stand as unresolved detail rather than treating it as the
+  contradiction it was. It was the tell for Bug 147.
+
+---
+
+## Second sighting (2026-09-16) — chat `e59f8969`, *Breakfast at the Edge of the Weave*
+
+Reported independently, the day after the filing and before the fix had reached
+the instance: *"I turn on impersonate for Leilani, answered as her, then it
+immediately prompted me for her again."* Same defect, different route in — the
+first sighting was a **summoned** seat added with `controlledBy: 'user'`, this
+one an existing **LLM** seat taken up by impersonation, whose `controlledBy`
+stays `'llm'`. The two reach the banner by different halves of
+`isUserDrivenSeat`, which is worth knowing: a fix that read the column alone
+would have closed the first and left this one open.
+
+This transcript is the cleaner record of the two — the first chat was rewound
+afterwards, so its cycle columns no longer describe the moment. Here the floor
+decision is logged twice, identically:
+
+```
+11:14:40.762  [TurnFairness] User post pauses for another user-driven seat
+              poster: 2c91e03b (Leilani, impersonated)  →  nextSpeakerId: f08a46e0 (Charlie)
+11:21:01.832  [TurnFairness] User post pauses for another user-driven seat
+              poster: 2c91e03b (Leilani, impersonated)  →  nextSpeakerId: f08a46e0 (Charlie)
+```
+
+The first one cost the operator the full double pass, nine seconds apart:
+
+```
+11:14:40  USER            2c91e03b   (Leilani — the post)
+11:14:49  host turn-pass  "Leilani declining the floor"
+11:14:59  host turn-pass  "Charlie declining the floor"
+11:15:16  ASSISTANT       788b657a   (Baraka)
+```
+
+The second they worked around instead of passing: at 11:23:26 they typed as
+Charlie by hand — which is the seat the floor had been waiting on all along, and
+is the manual version of what the fix now says out loud.
+
+**What it adds to the diagnosis.** Nothing contradicts the filing; two things
+confirm it. The owner seat and the impersonated seat are interchangeable in the
+symptom, so the defect is in *which question the banner asks*, not in either
+seat's provenance. And with an impersonation running, **every** turn of the
+taken-up seat is followed by a turn of the owner seat — that is `[TurnFairness]`
+working, not failing — so the mislabelling fired on every one of them rather
+than being the one-off a summoned latecomer made it look like.
+
+**Verified against the fix** (`resolveFloorSeatId(charlie, …, ['leilani'], leilani)`
+→ `charlie`), and pinned as its own case in the suite so this route stays closed
+alongside the first.
 
 ---
 

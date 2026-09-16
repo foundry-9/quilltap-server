@@ -62,6 +62,17 @@ describe('resolveFloorSeatId', () => {
     expect(resolveFloorSeatId(helene.id, room, [], helene.id)).toBe(helene.id)
   })
 
+  it('sends the floor to the owner seat when the composer holds an impersonated one', () => {
+    // The second sighting (Friday, chat `e59f8969`, 2026-09-16): Leilani is an
+    // LLM seat the operator had taken up, so her `controlledBy` is still 'llm'
+    // and only the overlay makes her theirs. She posts, the floor goes to the
+    // owner seat Charlie, and the composer is still on Leilani — which is what
+    // recorded "Leilani declining the floor" for a turn she had just held.
+    const leilani = seat('leilani', { displayOrder: 3 })
+    const withLeilani = [...room, leilani]
+    expect(resolveFloorSeatId(charlie.id, withLeilani, ['leilani'], leilani.id)).toBe(charlie.id)
+  })
+
   it('honours the impersonation overlay, not the bare controlledBy column', () => {
     // An impersonated seat's durable `controlledBy` stays 'llm' (Bug 44), so a
     // reader that consulted the column alone would hand the floor back to the

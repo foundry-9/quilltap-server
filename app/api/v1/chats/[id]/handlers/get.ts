@@ -359,6 +359,18 @@ export async function handleGet(
       // impersonated character as not impersonated.
       impersonatingParticipantIds: chatMetadata.impersonatingParticipantIds ?? [],
       activeTypingParticipantId: chatMetadata.activeTypingParticipantId ?? null,
+      // The cycle's rotation and who has already spoken in it (bug 147). The
+      // Salon recomputes "whose turn is it" locally from these two columns plus
+      // history — `calculateTurnStateFromHistory` takes them as arguments — and
+      // without them on the wire it reads `undefined` for both, which parses to
+      // an empty rotation and an empty spoken-set. `selectNextSpeaker` then can
+      // never take its cycle-order branch and falls through to a fresh weighted
+      // roll on every recompute, so the client contradicts the server's already
+      // drawn and persisted rotation. They are strings on purpose: the column is
+      // the JSON the turn manager's parsers expect, and re-encoding it here would
+      // put a second shape of the same fact on the wire.
+      spokenThisCycleParticipantIds: chatMetadata.spokenThisCycleParticipantIds ?? '[]',
+      cycleOrderParticipantIds: chatMetadata.cycleOrderParticipantIds ?? '[]',
       isPaused: chatMetadata.isPaused ?? false,
       // All-LLM-pause bookkeeping — surfaced so the client can explain a silent
       // pause (opens AllLLMPauseModal on load / mid-session).
