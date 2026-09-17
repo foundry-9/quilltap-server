@@ -150,7 +150,7 @@ First, obtain an API key from one of the image generation providers Quilltap act
 
    **Model Selection:**
    - **Model** — Select which image model to use
-     - OpenAI: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
+     - OpenAI: gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
      - Google: Imagen models and image-capable Gemini models
      - Grok: grok-imagine-image, grok-imagine-image-pro, grok-2-image
      - OpenRouter: every image-output model they route
@@ -249,10 +249,30 @@ These are the establishments Quilltap can actually commission a picture from —
 
 ### OpenAI (DALL-E / GPT Image)
 
-- **Models:** GPT Image family (gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini) and legacy DALL-E 3 / DALL-E 2
+- **Models:** the GPT Image family — gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini — and the legacy DALL-E 3 / DALL-E 2
 - **Strengths:** Good all-around quality, text in images
-- **Sizes:** 1024x1024, 1024x1536, 1536x1024 (GPT Image); 1024x1792, 1792x1024 (DALL-E 3)
-- **Quality:** Standard, HD
+- **Sizes:** any canvas up to 3840x2160 (GPT Image 2 and 2.5); 1024x1024, 1024x1536, 1536x1024 (earlier GPT Image); 1024x1792, 1792x1024 (DALL-E 3)
+- **Quality:** Low, Medium, High — with Extra High and Max besides, on the 2.5 pair (Standard and HD on the DALL-E models)
+
+#### The Two Lamps of GPT Image 2.5
+
+The newest pair arrive with names rather than numbers, and the distinction is worth a moment:
+
+- **Flare** is the swift one — quicker and appreciably cheaper than GPT Image 2, at fully comparable quality. Commission it for the high-volume work: a room full of minor characters, a dozen quick variations on a scene, anything where you would rather have six attempts than one masterpiece.
+- **Sunburst** is the premium one — slower and dearer, and better at the fiddly, exacting business of detailed editing and polished, production-ready pictures. Reserve it for the portrait that will actually hang on the wall.
+
+Both will paint you any canvas whose edges divide evenly by sixteen, at any proportion between 1:3 and 3:1, up to 3840x2160 — though the establishment admits that anything beyond 2560x1440 is still somewhat experimental, and may be declined on a busy afternoon. The profile form offers a sensible selection of shapes; the models themselves accept a great many more.
+
+#### The GPT Image Output Tray
+
+Every GPT Image model — not merely the 2.5 pair — offers four further dials, which appear in the profile form only when such a model is selected:
+
+- **Background** — *Transparent* returns the subject neatly cut out, with no background at all, which is the very thing for an avatar or a token. *Opaque* insists on a filled background; *Auto* leaves the matter to the model's judgement. A transparent background requires a format that can carry it, so if you have asked for JPEG, Quilltap quietly substitutes PNG rather than hand you a picture with the transparency flattened out of it.
+- **Output Format** — PNG (lossless, carries transparency), WebP (smaller, also carries transparency), or JPEG (smallest, no transparency whatever).
+- **Output Compression** — a number from 0 to 100, consulted only for WebP and JPEG. Higher keeps more detail. PNG ignores it entirely, and Quilltap declines to send it in that case.
+- **Moderation** — OpenAI's own filter, set to *Auto* or the less restrictive *Low*. Be advised that *Low* is not *Off*: OpenAI's usage policies apply regardless of what you select here, and this dial is not a way around them.
+
+Should you set a dial the chosen model has never heard of — an Extra High quality on gpt-image-2, say, or a transparent background on DALL-E 3, or a 1536x864 canvas on gpt-image-1.5 — Quilltap drops it before sending rather than letting the whole commission be refused over one impertinent parameter, and notes what it dropped in the logs. Sizes are the one exception: an impossible canvas falls back to a plain 1024x1024 square, since a picture must have *some* dimensions.
 
 ### Google (Imagen / Gemini)
 

@@ -96,6 +96,11 @@ export function ImageProfileParameters({
 
   switch (provider) {
     case 'OPENAI':
+      // The OpenAI plugin implements getImageProviderOptionsSchema, so this
+      // branch renders only when that fetch fails — which means we cannot know
+      // the selected model. The lists below are therefore the union across
+      // families; the provider drops any tier or size the chosen model rejects
+      // rather than sending it into a 400.
       return (
         <div className="space-y-4 border-t qt-border-default pt-4">
           <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
@@ -106,14 +111,21 @@ export function ImageProfileParameters({
               Quality
             </label>
             <select
-              value={parameters.quality || 'standard'}
+              value={parameters.quality || ''}
               onChange={e => handleChange('quality', e.target.value)}
               className="qt-select"
             >
-              <option value="standard">Standard</option>
-              <option value="hd">HD (Higher detail and consistency)</option>
+              <option value="">(model default)</option>
+              <option value="auto">Auto (the model chooses)</option>
+              <option value="low">Low (GPT Image)</option>
+              <option value="medium">Medium (GPT Image)</option>
+              <option value="high">High (GPT Image)</option>
+              <option value="xhigh">Extra High (GPT Image 2.5)</option>
+              <option value="max">Max (GPT Image 2.5)</option>
+              <option value="standard">Standard (DALL-E)</option>
+              <option value="hd">HD (DALL-E 3)</option>
             </select>
-            <p className="qt-text-xs mt-1">HD quality produces finer details</p>
+            <p className="qt-text-xs mt-1">Higher tiers cost more and take longer</p>
           </div>
 
           {/* Style */}
@@ -122,14 +134,15 @@ export function ImageProfileParameters({
               Style
             </label>
             <select
-              value={parameters.style || 'vivid'}
+              value={parameters.style || ''}
               onChange={e => handleChange('style', e.target.value)}
               className="qt-select"
             >
+              <option value="">(model default)</option>
               <option value="vivid">Vivid (Dramatic, hyper-real)</option>
               <option value="natural">Natural (Realistic, less exaggerated)</option>
             </select>
-            <p className="qt-text-xs mt-1">Controls the aesthetic style of generated images</p>
+            <p className="qt-text-xs mt-1">DALL-E 3 only; the GPT Image models ignore it</p>
           </div>
 
           {/* Size */}
@@ -138,15 +151,25 @@ export function ImageProfileParameters({
               Default Size
             </label>
             <select
-              value={parameters.size || '1024x1024'}
+              value={parameters.size || ''}
               onChange={e => handleChange('size', e.target.value)}
               className="qt-select"
             >
+              <option value="">(model default)</option>
+              <option value="auto">Auto (the model chooses)</option>
               <option value="1024x1024">Square (1024x1024)</option>
+              <option value="1536x1024">Landscape (1536x1024)</option>
+              <option value="1024x1536">Portrait (1024x1536)</option>
               <option value="1792x1024">Landscape (1792x1024)</option>
               <option value="1024x1792">Portrait (1024x1792)</option>
+              <option value="2560x1440">Landscape (2560x1440)</option>
+              <option value="1440x2560">Portrait (1440x2560)</option>
+              <option value="3840x2160">Landscape (3840x2160)</option>
+              <option value="2160x3840">Portrait (2160x3840)</option>
             </select>
-            <p className="qt-text-xs mt-1">Default image dimensions for generation</p>
+            <p className="qt-text-xs mt-1">
+              Default image dimensions. Sizes above 1536x1024 need GPT Image 2 or 2.5.
+            </p>
           </div>
         </div>
       )

@@ -13,7 +13,7 @@ import { useState, useEffect, FormEvent } from 'react';
 interface GenerationOption {
   n?: number;
   size?: string;
-  quality?: 'standard' | 'hd';
+  quality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd' | '';
   style?: 'vivid' | 'natural';
   aspectRatio?: string;
 }
@@ -40,7 +40,37 @@ type PreviewImage = {
   revisedPrompt?: string;
 };
 
-const OPENAI_SIZES = ['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'];
+// Sizes across the OpenAI families. The dialog knows the profile's provider but not
+// its model, so this is the union; the provider drops a size the selected model does
+// not accept (falling back to 1024x1024) rather than sending it into a 400.
+const OPENAI_SIZES = [
+  'auto',
+  '256x256',
+  '512x512',
+  '1024x1024',
+  '1536x1024',
+  '1024x1536',
+  '1792x1024',
+  '1024x1792',
+  '2560x1440',
+  '1440x2560',
+  '3840x2160',
+  '2160x3840',
+];
+
+// Quality tiers across the OpenAI families, likewise a union. '' means "send nothing
+// and let the image profile's own setting stand".
+const OPENAI_QUALITIES: Array<{ value: string; label: string }> = [
+  { value: '', label: '(model default)' },
+  { value: 'auto', label: 'Auto' },
+  { value: 'low', label: 'Low (GPT Image)' },
+  { value: 'medium', label: 'Medium (GPT Image)' },
+  { value: 'high', label: 'High (GPT Image)' },
+  { value: 'xhigh', label: 'Extra High (GPT Image 2.5)' },
+  { value: 'max', label: 'Max (GPT Image 2.5)' },
+  { value: 'standard', label: 'Standard (DALL-E)' },
+  { value: 'hd', label: 'HD (DALL-E 3)' },
+];
 const DEFAULT_SIZES = ['1024x1024', '512x512'];
 
 export function ImageGenerationDialog({
@@ -62,7 +92,7 @@ export function ImageGenerationDialog({
   const [options, setOptions] = useState<GenerationOption>({
     n: 1,
     size: '1024x1024',
-    quality: 'standard',
+    quality: '',
     style: 'vivid',
   });
 
@@ -184,7 +214,7 @@ export function ImageGenerationDialog({
     setOptions({
       n: 1,
       size: '1024x1024',
-      quality: 'standard',
+      quality: '',
       style: 'vivid',
     });
     onClose();
@@ -303,12 +333,15 @@ export function ImageGenerationDialog({
                         Quality
                       </label>
                       <select
-                        value={options.quality || 'standard'}
-                        onChange={(e) => setOptions({ ...options, quality: e.target.value as any })}
+                        value={options.quality ?? ''}
+                        onChange={(e) => setOptions({ ...options, quality: e.target.value as GenerationOption['quality'] })}
                         className="qt-select"
                       >
-                        <option value="standard">Standard</option>
-                        <option value="hd">HD</option>
+                        {OPENAI_QUALITIES.map((q) => (
+                          <option key={q.value} value={q.value}>
+                            {q.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
 

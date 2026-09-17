@@ -71,7 +71,7 @@ Pick one of these image generation services:
 
 | Provider | Best For | Models | Key Parameters |
 |----------|----------|--------|---|
-| **OpenAI** | Photo-realistic, detailed | dall-e-3, dall-e-2, gpt-image-1 | Quality, Style, Size |
+| **OpenAI** | Photo-realistic, detailed | gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini, dall-e-3, dall-e-2 | Quality, Size, Background, Output Format, Compression, Moderation (Style: DALL-E 3 only) |
 | **Google Imagen** | Natural, diverse | imagen-4.0, imagen-3.0 | Aspect Ratio, Negative Prompt |
 | **Grok (xAI)** | Creative, experimental | grok-imagine-image, grok-imagine-image-pro | Aspect Ratio |
 
@@ -79,29 +79,73 @@ Pick one of these image generation services:
 
 ### Provider Configuration Details
 
-#### OpenAI (DALL-E)
+#### OpenAI (GPT Image / DALL-E)
 
 **Supported Models**:
-- `gpt-image-1` - Latest, most capable
-- `dall-e-3` - High quality, follows prompts closely
-- `dall-e-2` - Faster, earlier generation
+- `gpt-image-2.5-sunburst` - Premium tier: highest quality, best at precise editing
+- `gpt-image-2.5-flare` - Speed tier: GPT Image 2 quality at roughly half the latency, and cheaper
+- `gpt-image-2` - Previous flagship
+- `gpt-image-1.5`, `gpt-image-1`, `gpt-image-1-mini` - Earlier GPT Image generations
+- `dall-e-3` - Legacy; high quality, follows prompts closely
+- `dall-e-2` - Legacy; faster, earlier generation
+
+Dated snapshots (`gpt-image-2.5-flare-2026-09-08`, `gpt-image-2-2026-04-21`, …) resolve to their
+family's capabilities by longest-prefix match, so they need no separate entry.
+
+> DALL-E 2 and DALL-E 3 are deprecated and stop being supported on 2026-05-12.
 
 **Parameters**:
 
-| Parameter | Options | Effect |
-|-----------|---------|--------|
-| **Quality** | standard, hd | HD produces finer details and better consistency |
-| **Style** | vivid, natural | Vivid is dramatic and hyper-real; Natural is realistic and less exaggerated |
-| **Size** | 1024x1024, 1792x1024, 1024x1792 | Image dimensions (square, landscape, portrait) |
+| Parameter | Options | Applies to | Effect |
+|-----------|---------|-----------|--------|
+| **Quality** | auto, low, medium, high | GPT Image | Effort spent on the image; higher costs more and takes longer |
+| **Quality** | + xhigh, max | GPT Image 2.5 only | The two premium tiers |
+| **Quality** | standard, hd | DALL-E | HD (DALL-E 3 only) produces finer details |
+| **Style** | vivid, natural | DALL-E 3 only | Vivid is dramatic and hyper-real; Natural is realistic |
+| **Size** | 1024x1024, 1536x1024, 1024x1536, auto | GPT Image | The standard three plus automatic sizing |
+| **Size** | any `WIDTHxHEIGHT` | GPT Image 2 and 2.5 | See *Arbitrary resolutions* below |
+| **Size** | 1024x1024, 1792x1024, 1024x1792 | DALL-E 3 | |
+| **Size** | 256x256, 512x512, 1024x1024 | DALL-E 2 | |
+| **Background** | auto, opaque, transparent | GPT Image | Transparent requires a `png` or `webp` output format |
+| **Output Format** | png, jpeg, webp | GPT Image | Also sets the `mimeType` on the returned image |
+| **Output Compression** | 0-100 | GPT Image, webp/jpeg only | Dropped for png, which does not take it |
+| **Moderation** | auto, low | GPT Image | OpenAI's own content filter; `low` is less restrictive, not off |
 
-**Example Profile**:
+**Arbitrary resolutions** (`gpt-image-2`, `gpt-image-2.5-*`): both edges must be divisible by 16,
+the aspect ratio must fall between 1:3 and 3:1, no edge may exceed 3840px, and the total must stay
+within the 3840x2160 pixel budget. Anything above 2560x1440 is experimental. OpenAI may apply
+tighter per-model limits on top of these, so a size clearing them all is forwarded, not guaranteed.
+
+**Where this lives**: the per-family capability table is
+[`plugins/dist/qtap-plugin-openai/image-models.ts`](../../plugins/dist/qtap-plugin-openai/image-models.ts).
+The wire logic (`image-provider.ts`), the host's model/orientation declarations, and the
+profile-editor schema (`image-options-schema.ts`, served through
+`getImageProviderOptionsSchema`) all read from it — none of them restates a model's limits.
+
+A parameter the selected model does not accept is dropped with a warning rather than forwarded,
+because the Images API rejects the entire request over one unknown enum. An unusable size is the
+exception: it falls back to `1024x1024`, since the request needs some dimensions.
+
+**Storage keys**: `size`, `quality` and `style` are host-owned — the builder lifts them onto the
+named `ImageGenParams` fields, so the provider reads them from `params`. `background`,
+`output_format`, `output_compression` and `moderation` keep their OpenAI wire names and ride the
+profile's residual bag as `profileParameters`.
+
+**Example Profiles**:
 ```
-Name: DALL-E 3 HD
+Name: Sunburst Portrait
 Provider: OpenAI
-Model: dall-e-3
-Quality: hd
-Style: vivid
+Model: gpt-image-2.5-sunburst
+Quality: max
+Size: 1024x1536
+
+Name: Flare Cut-Out (avatars)
+Provider: OpenAI
+Model: gpt-image-2.5-flare
+Quality: medium
 Size: 1024x1024
+Background: transparent
+Output Format: png
 ```
 
 #### Google Imagen
@@ -402,8 +446,8 @@ Generate images using your configured LLM providers.
   options?: {
     n?: number              // Number of images (1-10, default 1)
     size?: string           // e.g., "1024x1024", "1024x1792", "16:9"
-    quality?: 'standard'    // 'standard' or 'hd' (DALL-E only)
-    style?: 'vivid'         // 'vivid' or 'natural' (DALL-E only)
+    quality?: string        // GPT Image: 'auto'|'low'|'medium'|'high' (+'xhigh'|'max' on 2.5); DALL-E: 'standard'|'hd'
+    style?: 'vivid' | 'natural'  // DALL-E 3 only; GPT Image models ignore it
     aspectRatio?: string    // "16:9", "4:3", "3:2" etc (Gemini only)
   }
 }
@@ -687,7 +731,7 @@ async function generateImage(
   profileId: string,
   options?: {
     size?: string
-    quality?: 'standard' | 'hd'
+    quality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd'
     style?: 'vivid' | 'natural'
   }
 ) {
@@ -842,7 +886,7 @@ export interface ImageGenParams {
   n?: number;                    // Number of images
   size?: string;                 // e.g., "1024x1024"
   aspectRatio?: string;          // e.g., "16:9"
-  quality?: 'standard' | 'hd';
+  quality?: 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'standard' | 'hd';
   style?: 'vivid' | 'natural';
   seed?: number;
   guidanceScale?: number;
@@ -893,8 +937,8 @@ export const imageGenerationToolDefinition = {
       },
       quality: {
         type: "string",
-        enum: ["standard", "hd"],
-        description: "Image quality."
+        enum: ["auto", "low", "medium", "high", "xhigh", "max", "standard", "hd"],
+        description: "Image quality. Tiers a model does not offer are dropped by the provider."
       },
       count: {
         type: "integer",

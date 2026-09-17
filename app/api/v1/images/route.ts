@@ -19,6 +19,7 @@ import {
 } from '@/lib/file-storage/lantern-store-bridge';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { z } from 'zod';
+import { imageQualitySchema } from '@/lib/image-gen/quality';
 import { successResponse, badRequest, serverError } from '@/lib/api/responses';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
@@ -65,7 +66,7 @@ const generateImageSchema = z.object({
     .object({
       n: z.int().min(1).max(10).optional(),
       size: z.string().optional(),
-      quality: z.enum(['standard', 'hd']).optional(),
+      quality: imageQualitySchema.optional(),
       style: z.enum(['vivid', 'natural']).optional(),
       aspectRatio: z.string().optional(),
     })
