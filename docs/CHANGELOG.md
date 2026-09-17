@@ -4,6 +4,24 @@
 
 ### 4.10-dev
 
+#### Fixed: a turn carrying freshly generated images failed with "Request Entity Too Large" (bug 151)
+
+After several avatars or backgrounds were generated, the next turn on a profile with **Supports
+image upload** ticked could fail outright with `413 Request Entity Too Large`, stopping the chain.
+The error came from the provider's edge, not from its context window: the same turn was logged at
+49,652 estimated tokens against a million-token window. Image bytes are not tokens, and nothing was
+counting them. Two `gpt-image-2.5` avatars at 1024x1536 were 2.2 MB each of base64 — under the 4 MB
+per-image limit, so neither was resized — and 4.52 MB together.
+
+Images sent to a model are now trimmed to what a model needs to read them: capped at 1024 on the
+long edge and compressed to a 500 KB ceiling per image, with a 2 MB budget across a single turn.
+Measured on a real avatar, that is 2,339 KB of base64 down to 98 KB, with the portrait still fully
+legible.
+
+**Stored images are unchanged.** Files on disk keep their full resolution and quality; the gallery,
+character albums, exports and backups all still hold the originals. The shrinking happens only on
+the copy sent to a model, and is discarded after the request.
+
 #### Fixed: the manual image-generation dialog's Generate button did nothing (bug 150)
 
 The dialog posted to `/api/v1/images/generate`, a path no route serves — it resolved to the item

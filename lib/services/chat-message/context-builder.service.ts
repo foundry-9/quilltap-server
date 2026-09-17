@@ -16,6 +16,7 @@ import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
 import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
+import { LANTERN_IMAGE_BASE64_BUDGET } from '@/lib/files/llm-image-budget'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
   processFileAttachmentFallback,
@@ -1121,6 +1122,16 @@ export async function buildMessageContext(
   // is dropped — same machinery loadAndProcessFiles uses for user uploads.
   // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
   // reject the request because they're being handed images they can't read.
+  //
+  // `ASSISTANT_IMAGE_LOOKBACK` bounds how many messages are scanned; it says
+  // nothing about how many *bytes* they carry, and bug 151 is what that costs.
+  // Two avatars, each under the provider's 4 MB per-image ceiling and so
+  // resized by nobody, summed to 4.52 MB of base64 and NanoGPT answered the
+  // turn with `413 Request Entity Too Large`. The token budget could not see
+  // it either — image bytes are not tokens, so the turn was logged at 49,652
+  // estimated tokens against a million-token window with
+  // `compressionNeeded: false`. `LANTERN_IMAGE_BASE64_BUDGET` is the ceiling
+  // the message count cannot express.
   const ASSISTANT_IMAGE_LOOKBACK = 6
   let mergedAttachmentsToSend: unknown[] = [...attachmentsToSend, ...rehydratedAttachmentsToKeep]
   let lanternImagePrefix = ''
@@ -1138,7 +1149,17 @@ export async function buildMessageContext(
       })
       if (extra.length > 0) {
         const lanternAttachmentsToKeep: typeof extra = []
-        for (const fileAttachment of extra) {
+        // Spent newest-first, then restored to chronological order below.
+        // `rehydrateUserAttachments` spends its text budget oldest-first, and
+        // this deliberately differs: when a budget forces a drop, the picture
+        // worth keeping is the one just generated, not the portrait it
+        // replaced. The describe-fallback prefix is unbudgeted — it is text,
+        // already bounded by the model's own context budget, and a sentence
+        // about an image is never what overruns a request body.
+        let imageBudgetLeft = LANTERN_IMAGE_BASE64_BUDGET
+        let droppedForBudget = 0
+        const lanternPrefixesNewestFirst: string[] = []
+        for (const fileAttachment of [...extra].reverse()) {
           const fileMetadata = {
             id: fileAttachment.id,
             filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
@@ -1155,18 +1176,41 @@ export async function buildMessageContext(
           )
           const prefix = formatFallbackAsMessagePrefix(fallbackResult)
           if (prefix) {
-            lanternImagePrefix += prefix
+            lanternPrefixesNewestFirst.push(prefix)
           }
           // Mirror the loadAndProcessFiles filter: only keep the raw
           // attachment when the provider natively supports it. If the
           // fallback failed, dropping the bytes avoids the provider's
           // "no image input" rejection downstream.
           if (fallbackResult.type === 'unsupported' && !fallbackResult.error) {
+            // `fileAttachment.data` is the base64 this turn will actually put
+            // on the wire — already trimmed by the transport budget in
+            // `loadChatFilesForLLM` — so this measures the true cost, not the
+            // stored file's `size`.
+            const wireBytes = fileAttachment.data?.length ?? 0
+            if (wireBytes > imageBudgetLeft) {
+              droppedForBudget++
+              continue
+            }
+            imageBudgetLeft -= wireBytes
             lanternAttachmentsToKeep.push(fileAttachment)
           }
         }
+        if (droppedForBudget > 0) {
+          logger.warn('Unseen assistant images exceeded the per-turn byte budget; the oldest were not sent', {
+            droppedForBudget,
+            kept: lanternAttachmentsToKeep.length,
+            budget: LANTERN_IMAGE_BASE64_BUDGET,
+            budgetUsed: LANTERN_IMAGE_BASE64_BUDGET - imageBudgetLeft,
+            characterParticipantId: characterParticipant.id,
+          })
+        }
+        // Back to chronological: the budget is spent newest-first, but the
+        // prefix reads as a narration of what has happened since this
+        // character last spoke, and the attachments anchor in that order too.
+        lanternImagePrefix += lanternPrefixesNewestFirst.reverse().join('')
         if (lanternAttachmentsToKeep.length > 0) {
-          mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...lanternAttachmentsToKeep]
+          mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...lanternAttachmentsToKeep.reverse()]
         }
       }
     }
