@@ -171,7 +171,7 @@ export function ImageGenerationDialog({
         requestBody.options.aspectRatio = options.aspectRatio;
       }
 
-      const response = await fetch('/api/v1/images/generate', {
+      const response = await fetch('/api/v1/images?action=generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

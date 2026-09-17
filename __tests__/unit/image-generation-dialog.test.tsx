@@ -5,6 +5,56 @@
  * Tests the image generation dialog component API integration
  */
 
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { ImageGenerationDialog } from '@/components/images/image-generation-dialog';
+
+describe('ImageGenerationDialog - actual component requests', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = jest.fn();
+  });
+
+  // Regression guard for bug 150: the dialog must post to the v1 action-dispatch
+  // route. Earlier tests below only asserted against a fetch() call the test
+  // itself made, never against what the rendered component actually requests,
+  // so a wrong URL in the component (/api/v1/images/generate, which no route
+  // serves) went unnoticed.
+  it('posts generation requests to the v1 action-dispatch route', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          profiles: [{ id: 'profile-1', name: 'OpenAI GPT', provider: 'OPENAI', modelName: 'dall-e-3' }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [{ id: 'img-1', url: 'data:image/png;base64,...', mimeType: 'image/png' }],
+          metadata: { prompt: 'test', provider: 'OpenAI', model: 'dall-e-3', count: 1 },
+        }),
+      });
+
+    render(<ImageGenerationDialog isOpen={true} onClose={jest.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/^Generate$/)).not.toBeDisabled());
+
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want to generate...'), {
+      target: { value: 'A beautiful sunset over mountains' },
+    });
+    fireEvent.click(screen.getByText(/^Generate$/));
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/images?action=generate',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+});
+
 describe('Image Generation Dialog - API Integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();

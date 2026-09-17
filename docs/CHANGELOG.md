@@ -4,6 +4,14 @@
 
 ### 4.10-dev
 
+#### Fixed: the manual image-generation dialog's Generate button did nothing (bug 150)
+
+The dialog posted to `/api/v1/images/generate`, a path no route serves — it resolved to the item
+route with `id = "generate"`, a 404. The generate action actually lives at
+`POST /api/v1/images?action=generate`. The dialog's own test suite never caught it because it
+asserted against a fetch call the test made itself, never against what the component requests; it
+now renders the real component and checks the URL.
+
 #### Added: GPT Image 2.5 (Flare and Sunburst), and the rest of the OpenAI image parameters
 
 Two new OpenAI image models: `gpt-image-2.5-flare` (faster and cheaper, at GPT Image 2 quality)

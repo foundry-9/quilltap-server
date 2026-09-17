@@ -1,14 +1,18 @@
 # Bug 150 — the manual image-generation dialog posts to a route that does not exist
 
+**FIXED in v4 (2026-09-16)** — the fetch call now posts to the action-dispatch
+route the server actually serves, and a new test renders the real component
+to assert on the requested URL, closing the gap that let this ship.
+
 | | |
 |---|---|
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 | **Found** | 2026-09-16, while widening the same dialog's option lists for GPT Image 2.5 ([PR #62](https://github.com/foundry-9/quilltap-server/pull/62)) |
-| **Fixed** | — |
+| **Fixed** | 2026-09-16 |
 | **Severity** | **Medium** — the Generate button in the image-upload dialog cannot work at all. Nothing is lost or corrupted; the feature simply never produces an image |
 | **Who it bites** | anyone pressing **Generate** in the image dialog reached from the character editor (`CharacterEditView`) or the avatar selector (`avatar-selector.tsx`) |
 | **Provenance** | Original to v4. Almost certainly since the v2.8 removal of the legacy non-v1 routes |
-| **Defect site** | `components/images/image-generation-dialog.tsx:174` |
+| **Fix site** | `components/images/image-generation-dialog.tsx:174` |
 | **v5 status** | Not assessed |
 | **Index** | [bugs.md](../../bugs.md) |
 
@@ -38,19 +42,19 @@ So every press of Generate is a 404 against an image that does not exist.
 
 ## Why it survived
 
-**The dialog's test suite mocks a third URL.**
-`__tests__/unit/image-generation-dialog.test.ts` drives `jest-fetch-mock`
+**The dialog's test suite mocked a third URL.**
+`__tests__/unit/image-generation-dialog.test.ts` drove `jest-fetch-mock`
 against `/api/images/generate` — the pre-v1 legacy path, removed in v2.8 — and
-asserts on the mock's own responses. It never asserts what the component
-requests, so the suite is green against a component calling a dead endpoint,
-and would stay green whatever path the component used.
+asserted on the mock's own responses. It never asserted what the component
+requests, so the suite was green against a component calling a dead endpoint,
+and would have stayed green whatever path the component used.
 
-The surrounding feature also hides it: the dialog is one of two ways to attach
+The surrounding feature also hid it: the dialog is one of two ways to attach
 a character image, the other being plain upload, which works. And the
 `generate_image` tool path — how images are actually made in practice — goes
 through `executeImageGenerationTool` directly and never touches this route.
 
-## The fix (proposed, not applied)
+## The fix
 
 One string, to the action-dispatch spelling the route actually serves:
 
@@ -59,22 +63,25 @@ const response = await fetch('/api/v1/images?action=generate', { method: 'POST',
 ```
 
 The request body already matches `generateImageSchema` on that route
-(`prompt`, `profileId`, `chatId`, `tags`, `options`), so nothing else changes.
+(`prompt`, `profileId`, `chatId`, `tags`, `options`), so nothing else changed.
 
-Deliberately **not** applied in PR #62, whose scope is GPT Image 2.5: that PR
-touches this file only to widen its quality and size lists, and swapping the
-endpoint is an unrelated behaviour change that deserves its own review. Note
-that until this is fixed, those widened lists are cosmetic — the dialog cannot
-reach a provider either way.
+Not applied in PR #62, whose scope was GPT Image 2.5: that PR touched this
+file only to widen its quality and size lists, and swapping the endpoint was
+an unrelated behaviour change deserving its own review.
+
+The test suite (renamed `.test.ts` → `.test.tsx`) gained a new test that
+renders the real `ImageGenerationDialog`, fills in a prompt, submits, and
+asserts the second `fetch` call's URL is `/api/v1/images?action=generate` —
+the assertion the original suite lacked. The rest of the pre-existing suite,
+which calls `fetch()` directly against hardcoded strings rather than exercising
+the component, was left as-is; it doesn't guard against this class of bug but
+isn't wrong on its own terms.
 
 ## How to verify
 
-Fix the path, then press **Generate** in the character editor's image dialog
-with a valid image profile selected; an image should be produced and attached.
+Press **Generate** in the character editor's image dialog with a valid image
+profile selected; an image is produced and attached.
 
-The regression guard worth adding with the fix is a test that asserts the
-**requested URL**, since that is the assertion the existing suite lacks:
-
-```ts
-expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/images?action=generate');
+```bash
+npx jest __tests__/unit/image-generation-dialog.test.tsx
 ```
