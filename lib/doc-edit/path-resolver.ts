@@ -827,22 +827,47 @@ export interface AccessibleMountPoint {
 }
 
 /**
+ * What an enumeration may reach. The same shape the resolution side speaks in,
+ * deliberately: enumeration and resolution must agree, or a listing advertises
+ * a store that a subsequent open refuses — which reads to a model as a broken
+ * tool rather than a boundary (bug 153).
+ */
+export interface AccessibleMountPointsQuery {
+  /** Current project ID (from chat context). */
+  projectId?: string;
+  /** The acting character. Keys the character AND group tiers. */
+  characterId?: string;
+  /** Peer participants whose vaults are admitted (cross-character reads). */
+  extraCharacterIds?: string[];
+  /**
+   * The doc-tool opacity covenant — subtract both vault tiers (the acting
+   * character's own and every peer's) while group, project and global stay
+   * reachable. See `PathResolutionContext.hideCharacterVaults`; callers derive
+   * it from `actingCharacterIsOpaqueToVaults` so the two sides cannot disagree.
+   */
+  hideCharacterVaults?: boolean;
+}
+
+/**
  * List all accessible mount points for the current chat context:
  * every store linked to the project, plus the active character's own
  * vault (if any), deduped. Used by doc_list_files, doc_grep, and the
  * blob helpers to enumerate available sources.
+ *
+ * Shares `collectAccessibleMountPointIds` with `resolveDocumentStorePath`, so
+ * whatever this lists is exactly what an open will accept.
  */
 export async function getAccessibleMountPoints(
-  projectId: string | undefined,
-  characterId?: string,
-  extraCharacterIds?: string[],
+  query: AccessibleMountPointsQuery,
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
+    const { projectId, characterId, extraCharacterIds, hideCharacterVaults } = query;
     const ids = await collectAccessibleMountPointIds({
       projectId,
       characterId,
       characterIds: extraCharacterIds && extraCharacterIds.length > 0 ? extraCharacterIds : undefined,
+      hideCharacterVaults,
     });
 
     if (ids.length === 0) {

@@ -157,6 +157,12 @@ everything else is derived from.
   covenant withholds, the same reason `assertCharacterMayRead` mirrors the
   "missing file" shape. A vault keeps the indistinguishable `NOT_FOUND`.
 
+**Sibling defect, spun off rather than folded in:** the *enumeration* path
+(`getAccessibleMountPoints`, feeding `doc_list_files` / `doc_grep` / the blob
+helpers) never honoured the covenant at all, so an opaque character was listed
+vaults she could not then open. Filed and fixed as
+[bug 153](bug-153-opacity-enumeration-leak.md).
+
 Regression test `lib/doc-edit/__tests__/path-resolver-opacity-group-stores.test.ts`
 (13 cases) runs against the **real** tiered-mount-pool, mocking only the
 repositories and the instance-settings singleton, because the defect lived in

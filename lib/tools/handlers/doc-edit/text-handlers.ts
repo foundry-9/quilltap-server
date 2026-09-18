@@ -48,6 +48,7 @@ import {
   type DocEditToolContext,
   applyQtapUriToInput,
   collectPeerCharacterIdsForReads,
+  actingCharacterIsOpaqueToVaults,
   buildReadResolutionContext,
   buildWriteResolutionContext,
   buildDocStoreUriResolver,
@@ -792,7 +793,16 @@ export async function handleGrep(
       ? await resolveMountPointRef(input.mount_point, context.characterId)
       : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
-    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+    // Enumeration honours the same covenant resolution does: an opaque
+    // character must not SEE the vault names she would then be refused
+    // (bug 153). Derived from the one helper the context builders use.
+    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+    const mountPoints = await getAccessibleMountPoints({
+      projectId: context.projectId,
+      characterId: context.characterId,
+      extraCharacterIds: peerCharacterIds,
+      hideCharacterVaults,
+    });
 
     for (const mp of mountPoints) {
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
@@ -988,7 +998,15 @@ export async function handleListFiles(
       ? await resolveMountPointRef(input.mount_point, context.characterId)
       : undefined;
     const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
-    const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+    // See doc_grep: the listing must not advertise what resolution will refuse
+    // (bug 153).
+    const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+    const mountPoints = await getAccessibleMountPoints({
+      projectId: context.projectId,
+      characterId: context.characterId,
+      extraCharacterIds: peerCharacterIds,
+      hideCharacterVaults,
+    });
     for (const mp of mountPoints) {
       if (mountPointFilter && mp.name.toLowerCase() !== mountPointFilter.toLowerCase() && mp.id !== mountPointFilter) {
         continue;

@@ -21,6 +21,7 @@ import {
   logger,
   type DocEditToolContext,
   collectPeerCharacterIdsForReads,
+  actingCharacterIsOpaqueToVaults,
   assertWriteDoesNotTargetPeerVault,
   docStoreUriFor,
   buildDocStoreUriResolver,
@@ -56,7 +57,16 @@ async function resolveBlobMountPointForRead(
   // `mount_point: "self"` resolves here too, mirroring the path resolver.
   const effectiveRef = await resolveMountPointRef(mountPointRef, context.characterId);
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
-  const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId, peerCharacterIds);
+  // The covenant applies to enumeration as well as resolution (bug 153): an
+  // opaque character finds no vault here, her own included, so the self-token
+  // translated above stays unresolvable.
+  const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+  const mountPoints = await getAccessibleMountPoints({
+    projectId: context.projectId,
+    characterId: context.characterId,
+    extraCharacterIds: peerCharacterIds,
+    hideCharacterVaults,
+  });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef
@@ -77,7 +87,13 @@ async function resolveBlobMountPointForWrite(
   // Writes must not land in a peer's vault — raise the dedicated read-only error
   // before we even enumerate accessible mounts.
   await assertWriteDoesNotTargetPeerVault(mountPointRef, peerCharacterIds);
-  const mountPoints = await getAccessibleMountPoints(context.projectId, context.characterId);
+  // See the read helper (bug 153).
+  const hideCharacterVaults = await actingCharacterIsOpaqueToVaults(context);
+  const mountPoints = await getAccessibleMountPoints({
+    projectId: context.projectId,
+    characterId: context.characterId,
+    hideCharacterVaults,
+  });
   const needle = effectiveRef.toLowerCase();
   const found = mountPoints.find(
     mp => mp.name.toLowerCase() === needle || mp.id === effectiveRef

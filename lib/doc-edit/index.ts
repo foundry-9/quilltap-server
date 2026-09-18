@@ -34,6 +34,8 @@ export {
   resolveMountPointRef,
   SELF_VAULT_TOKEN,
   PathResolutionError,
+  type AccessibleMountPoint,
+  type AccessibleMountPointsQuery,
   type DocEditScope,
   type PathResolutionContext,
   type ResolvedPath,

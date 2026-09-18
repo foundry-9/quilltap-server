@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Fixed: document tools listed character vaults they would then refuse to open (bug 153)
+
+A character whose **System Transparency** is off — the default — was shown character vaults by
+`doc_list_files` and `doc_grep`, including her own and, with **Shared Vaults** on, her peers'. File
+paths and all. Opening any of them was then refused.
+
+System Transparency being off hides every character vault from the document tools, and that was
+enforced when a tool opened a path but not when one listed what was available. Two faults in one:
+the listing named the vaults the setting exists to hide, and a tool that offers a path and then
+denies it looks broken to a model, which retries rather than accepting the boundary.
+
+Listing and opening now consult the same rule. An opaque character sees group, project and general
+stores and no vault at all; `mount_point: "self"` returns nothing, as it already did when opening.
+Group stores stay reachable (bug 152), and a character with System Transparency on is unaffected.
+
 #### Fixed: characters could not read or write their own group's document stores (bug 152)
 
 A character whose **System Transparency** is off — the default — could not reach any group
