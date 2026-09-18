@@ -4,6 +4,29 @@
 
 ### 4.10-dev
 
+#### Fixed: characters could not read or write their own group's document stores (bug 152)
+
+A character whose **System Transparency** is off — the default — could not reach any group
+document store with the `doc_*` tools. Not the group's official store, not any store linked to a
+group she belongs to, by name or by ID. Project-linked stores and Quilltap General worked, which is
+why it looked intermittent.
+
+System Transparency being off hides every character vault from the document tools. It did that by
+dropping the character's identity from the request, and group membership is derived from exactly
+that identity — so hiding her vault also hid every store her groups keep. Only character vaults
+were ever meant to be hidden; that is what the help page has always said.
+
+The two are now separated: vaults are hidden by name, and the character's identity stays, so group,
+project and global stores resolve as they always should have. The covenant is unchanged — her own
+vault, her peers' vaults, and the reserved `self` shorthand all stay closed to an opaque character.
+
+Also fixed: a store that exists but is out of reach from the current conversation now says so,
+instead of reporting "not found" as though the name were misspelled. The old wording read to a
+model as a typo, so it would retry the same request with different spellings — the reported case
+spent eight minutes and ten tool calls guessing at a name it had right on the first attempt.
+Character vaults are excluded from the new message, so it cannot disclose a vault the covenant
+hides.
+
 #### Fixed: a turn carrying freshly generated images failed with "Request Entity Too Large" (bug 151)
 
 After several avatars or backgrounds were generated, the next turn on a profile with **Supports

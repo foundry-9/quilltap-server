@@ -352,14 +352,28 @@ export async function resolveTieredMountPool(
  * way the scriptorium search tool does ('character' | 'project' | 'all').
  * `includeParticipants` folds the participant tier into the result (the
  * document path resolver wants it; search does not).
+ *
+ * `includeCharacterTier` (default true) drops the acting character's OWN vault,
+ * the sibling of `includeParticipants`. Set both false to express "every store
+ * this character can reach EXCEPT a character vault" — what the doc-tool
+ * opacity covenant means (see `actingCharacterIsOpaqueToVaults`). It must be
+ * spelled that way rather than by withholding `characterId` from the pool,
+ * because the group tier is derived from `characterId` and from nothing else:
+ * dropping the character to hide her vault would silently take every group
+ * store she belongs to with it (bug 152).
  */
 export function flattenTierPool(
   pool: TieredMountPool,
-  opts: { scope?: 'all' | 'character' | 'group' | 'project'; includeParticipants?: boolean } = {},
+  opts: {
+    scope?: 'all' | 'character' | 'group' | 'project';
+    includeParticipants?: boolean;
+    includeCharacterTier?: boolean;
+  } = {},
 ): string[] {
-  const { scope = 'all', includeParticipants = false } = opts;
+  const { scope = 'all', includeParticipants = false, includeCharacterTier = true } = opts;
   const ids = new Set<string>();
   const addCharacterTier = () => {
+    if (!includeCharacterTier) return;
     if (pool.characterMountPointId) ids.add(pool.characterMountPointId);
     if (includeParticipants) {
       for (const id of pool.participantMountPointIds) ids.add(id);

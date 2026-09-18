@@ -111,6 +111,19 @@ export interface PathResolutionContext {
    * the Salon's document-mode handlers to admit every chat participant's
    * vault, not just the single character the LLM is currently speaking as. */
   characterIds?: string[];
+  /**
+   * The doc-tool opacity covenant: hide every CHARACTER VAULT (the acting
+   * character's own and every peer's) while leaving the group, project and
+   * global tiers reachable. Set by the doc-edit context builders for a
+   * character with `systemTransparency !== true`.
+   *
+   * `characterId` must still be supplied alongside it — group membership is
+   * derived from `characterId` and from nothing else, so hiding vaults by
+   * withholding the character instead of setting this flag also erases every
+   * group store she belongs to (bug 152). The reserved `self` token is refused
+   * while this is set, since her own vault is among what's hidden.
+   */
+  hideCharacterVaults?: boolean;
   /** Mount point name or ID (required for document_store scope) */
   mountPoint?: string;
   /**
@@ -321,15 +334,52 @@ async function collectAccessibleMountPointIds(
   // wardrobe. No ownership gate here — the document path resolver grants the
   // LLM access to its own + participant vaults by chat membership, not user
   // ownership.
+  // The opacity covenant subtracts the two vault tiers and nothing else. The
+  // character still goes INTO the pool so her group stores resolve — that is
+  // the whole point of expressing this as a subtraction (bug 152).
+  const vaultsVisible = !context.hideCharacterVaults;
   const pool = await resolveTieredMountPool(
     {
       characterId: context.characterId,
       characterIds: context.characterIds,
       projectId: context.projectId,
     },
-    { includeParticipants: true },
+    { includeParticipants: vaultsVisible },
   );
-  return flattenTierPool(pool, { includeParticipants: true });
+  return flattenTierPool(pool, {
+    includeParticipants: vaultsVisible,
+    includeCharacterTier: vaultsVisible,
+  });
+}
+
+/**
+ * Find an enabled store matching `ref` (name, case-insensitively, then id)
+ * ANYWHERE, ignoring scope — used only to tell "no such store" apart from
+ * "exists, out of scope" in the refusal.
+ *
+ * **Character vaults are deliberately excluded.** A vault is exactly what the
+ * opacity covenant and the cross-character boundary hide, so admitting one
+ * exists would leak through the refusal what the access rule withholds — the
+ * same reason `assertCharacterMayRead` mirrors the "missing file" shape. A
+ * vault therefore keeps the indistinguishable NOT_FOUND. Fails soft: on any
+ * lookup error the caller falls back to NOT_FOUND.
+ */
+async function findEnabledMountPointByRef(
+  ref: string
+): Promise<{ id: string; name: string } | null> {
+  try {
+    const repos = getRepositories();
+    const needle = ref.toLowerCase();
+    const enabled = await repos.docMountPoints.findEnabled();
+    const match =
+      enabled.find((mp) => mp.name.toLowerCase() === needle) ??
+      enabled.find((mp) => mp.id === ref);
+    if (!match) return null;
+    if (match.storeType === 'character') return null;
+    return { id: match.id, name: match.name };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -375,7 +425,11 @@ async function resolveDocumentStorePath(
   // the DB link, rather than its name (see SELF_VAULT_TOKEN). Only a character
   // acting as itself can use it; without a characterId we fall through to normal
   // resolution so a store literally named "self" stays reachable elsewhere.
-  if (context.characterId && needle === SELF_VAULT_TOKEN) {
+  // `hideCharacterVaults` covers her OWN vault too, so the token is refused
+  // explicitly here. It used to be refused as a side effect of the opacity
+  // gate withholding `characterId` — the same withholding that hid her group
+  // stores (bug 152). Stating it keeps the refusal once the character stays.
+  if (context.characterId && !context.hideCharacterVaults && needle === SELF_VAULT_TOKEN) {
     const ownVaultId = await resolveSelfVaultMountPointId(context.characterId);
     if (ownVaultId && accessibleIds.includes(ownVaultId)) {
       mountPoint = await repos.docMountPoints.findById(ownVaultId);
@@ -415,8 +469,25 @@ async function resolveDocumentStorePath(
   }
 
   if (!mountPoint) {
+    // "No such store" and "exists, but out of scope here" are different
+    // answers, and collapsing them into one NOT_FOUND is what turned bug 152
+    // into eight minutes of guesswork: a model reads NOT_FOUND as a typo and
+    // rationally tries another spelling. Say which wall it is, so an
+    // unreachable store ends the loop instead of feeding it.
+    const existing = await findEnabledMountPointByRef(context.mountPoint);
+    if (existing) {
+      logger.warn(
+        `Mount point exists but is out of scope: ${existing.name} (${existing.id}) (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, vaultsHidden: ${context.hideCharacterVaults === true})`
+      );
+      throw new PathResolutionError(
+        `The document store "${existing.name}" exists but is not reachable from this conversation. ` +
+          `It is not linked to this project, and it is not one of your own group's stores. ` +
+          `Retrying with a different spelling will not help — use doc_list_files with no path to see the stores you can reach.`,
+        'ACCESS_DENIED'
+      );
+    }
     logger.warn(
-      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)})`
+      `Mount point not found or not accessible: ${context.mountPoint} (project: ${context.projectId ?? 'none'}, characters: ${describeCharacters(context)}, vaultsHidden: ${context.hideCharacterVaults === true})`
     );
     throw new PathResolutionError(
       `Mount point not found or not accessible in this context`,
