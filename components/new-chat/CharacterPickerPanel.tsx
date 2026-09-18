@@ -12,6 +12,7 @@ import type {
 } from './types'
 import { USER_CONTROLLED_PROFILE } from './types'
 import { SubpromptPicker } from '@/components/subprompts'
+import { resolveDefaultSystemPrompt } from '@/lib/characters/default-system-prompt'
 
 interface CharacterPickerPanelProps {
   characters: Character[]
@@ -97,9 +98,7 @@ export function CharacterPickerPanel({
       onSelectedCharactersChange((prev) => prev.filter((sc) => sc.character.id !== character.id))
     } else {
       const connectionProfileId = character.defaultConnectionProfileId || profiles[0]?.id || ''
-      const defaultPrompt = character.defaultSystemPromptId
-        ? character.systemPrompts?.find((p) => p.id === character.defaultSystemPromptId)
-        : character.systemPrompts?.find((p) => p.isDefault) || character.systemPrompts?.[0]
+      const defaultPrompt = resolveDefaultSystemPrompt(character)
       onSelectedCharactersChange((prev) => [
         ...prev,
         {

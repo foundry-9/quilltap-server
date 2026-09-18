@@ -22,6 +22,7 @@ import type { TimestampConfig } from '@/lib/schemas/types'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import { toScenarioOption, type ScenarioOption } from '@/components/scenario/types'
 import { toAutonomousSettingsHint } from '../autonomous-settings-hint'
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 
 interface UseNewChatOptions {
   initialCharacterId?: string
@@ -467,9 +468,7 @@ export function useNewChat({
             if (!char) continue
             const connectionProfileId =
               char.defaultConnectionProfileId || loadedProfiles[0]?.id || ''
-            const defaultPromptId = char.defaultSystemPromptId
-              ? char.systemPrompts?.find((p) => p.id === char.defaultSystemPromptId)?.id
-              : char.systemPrompts?.find((p) => p.isDefault)?.id ?? char.systemPrompts?.[0]?.id
+            const defaultPromptId = resolveDefaultSystemPromptId(char)
             seededSelected.push({
               character: char,
               connectionProfileId,
@@ -521,9 +520,7 @@ export function useNewChat({
           const char = seededChar
           const connectionProfileId =
             char.defaultConnectionProfileId || loadedProfiles[0]?.id || ''
-          const defaultPromptId = char.defaultSystemPromptId
-            ? char.systemPrompts?.find((p) => p.id === char.defaultSystemPromptId)?.id
-            : char.systemPrompts?.find((p) => p.isDefault)?.id ?? char.systemPrompts?.[0]?.id
+          const defaultPromptId = resolveDefaultSystemPromptId(char)
           const seededSelected: SelectedCharacter[] = [
             {
               character: char,

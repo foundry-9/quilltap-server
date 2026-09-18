@@ -5,6 +5,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
 
 type StaffId =
   | 'lantern'
@@ -176,14 +177,7 @@ export default function InsertAnnouncementDialog({
   // own resolution: explicit defaultSystemPromptId → isDefault flag → first.
   const defaultSystemPromptId = useMemo<string | null>(() => {
     if (mode !== 'character' || !selectedCharacter) return null
-    const prompts = selectedCharacter.systemPrompts || []
-    if (
-      selectedCharacter.defaultSystemPromptId
-      && prompts.some((p) => p.id === selectedCharacter.defaultSystemPromptId)
-    ) {
-      return selectedCharacter.defaultSystemPromptId
-    }
-    return prompts.find((p) => p.isDefault)?.id ?? prompts[0]?.id ?? null
+    return resolveDefaultSystemPromptId(selectedCharacter)
   }, [mode, selectedCharacter])
 
   const profileId = profileOverride ?? defaultProfileId

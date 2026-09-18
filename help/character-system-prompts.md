@@ -562,6 +562,33 @@ Make values more explicit and connected to behaviors:
 When faced with [situation], you will [specific response]."
 ```
 
+## Keeping Several Prompts, and Choosing Among Them
+
+A character may hold as many system prompts as you please, each with its own
+name — one for the drawing room, one for the front line, one for the long
+autumnal silences. Only one of them is in play at a time. The rest wait their
+turn.
+
+Exactly one prompt at a time wears the **Default** badge, and it is the one a
+new chat reaches for when you don't say otherwise. To move the badge, press the
+**star** beside whichever prompt should have it. The badge moves at once; there
+is no Save button to hunt for, and nothing else on the page needs your
+attention. (The **Set as default prompt** checkbox inside the Edit Prompt dialog
+does the very same thing, should you happen to be in there already.)
+
+Two further conveniences, so that no character is ever left prompt-less:
+
+- The **first** prompt you give a character becomes the default without being
+  asked.
+- Delete the default and the badge passes to whichever prompt remains, rather
+  than vanishing along with it.
+
+The Details tab carries a **default system prompt** picker saying the same thing
+in a different chair; the two stay in agreement whichever one you use. And none
+of this binds you at the table — the New Chat dialog and the Participants drawer
+will both let you choose a different prompt for a particular conversation,
+leaving the default exactly where it stands.
+
 ## Subprompts: The Smaller Instrument
 
 Only one system prompt is in play at a time. For the smaller adjustments — "be terse," "no spoilers," "we are at a funeral" — a character may also carry **subprompts**: short instructions kept as Markdown files in the vault's `Subprompts/` folder, listed beneath the primary prompts on this tab, and switched on or off per chat from the New Chat dialog or the Participants drawer. They are delivered directly after the system prompt and follow the same rule: write to the character, in the second person. See [Character Subprompts](character-subprompts.md).

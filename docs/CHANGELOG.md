@@ -4,6 +4,27 @@
 
 ### 4.10-dev
 
+#### Fixed: the star that sets a character's default system prompt did nothing (bug 154)
+
+On **Aurora → Edit character → System Prompts**, pressing the star beside a prompt reported
+"Default prompt updated" and left the **Default** badge where it was. The request it sent named an
+action the server does not have, fell through to a generic character update that discards the field,
+and came back successful. The checkbox in the **Edit Prompt** dialog was unaffected and is what
+people have been using instead.
+
+The star now sends the same request that dialog does, and the badge moves on the click rather than
+after a refetch.
+
+Underneath, a character's default prompt was recorded in two places — a flag on the prompt and a
+column on the character — and each way of changing it updated only one. So a change that appeared to
+work could still leave new chats opening with the old prompt. Both are now written together
+wherever prompts are added, edited, deleted or promoted, including from the picker on the Details
+tab. The order in which the two are consulted is stated in one place instead of five; two of those
+five used to seed a chat with no system prompt at all when the two disagreed.
+
+The **Edit Prompt** dialog is also wider. The formatting toolbar no longer runs off its right edge,
+where the last several buttons could not be reached.
+
 #### Fixed: document tools listed character vaults they would then refuse to open (bug 153)
 
 A character whose **System Transparency** is off — the default — was shown character vaults by

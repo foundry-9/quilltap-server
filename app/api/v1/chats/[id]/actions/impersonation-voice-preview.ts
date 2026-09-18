@@ -26,6 +26,7 @@ import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-con
 import { impersonationVoicePreviewSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
+import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt';
 
 export async function handleImpersonationVoicePreview(
   req: NextRequest,
@@ -120,16 +121,11 @@ export async function handleImpersonationVoicePreview(
     }
   }
 
-  // System prompt: operator override → the seat's own → the character's
-  // default → their `isDefault` prompt → their first.
-  const characterPrompts = character.systemPrompts ?? [];
+  // System prompt: operator override → the seat's own → the character's default.
   const systemPromptId =
     validated.systemPromptId
     ?? participant.selectedSystemPromptId
-    ?? character.defaultSystemPromptId
-    ?? characterPrompts.find((p) => p.isDefault)?.id
-    ?? characterPrompts[0]?.id
-    ?? null;
+    ?? resolveDefaultSystemPromptId(character);
 
   const subprompts = await resolveSelectedSubprompts(
     character.id,

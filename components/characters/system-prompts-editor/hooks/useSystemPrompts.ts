@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import {
@@ -74,6 +74,8 @@ export function useSystemPrompts(
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  const queryClient = useQueryClient()
 
   const { data: promptsData, isLoading: loading, refetch: mutatePrompts } = useQuery({
     queryKey: queryKeys.characters.prompts(characterId),
@@ -217,18 +219,36 @@ export function useSystemPrompts(
   }
 
   const handleSetDefault = async (promptId: string) => {
+    // Move the badge before the round trip, so the star reads as a switch
+    // rather than a request. The refetch below confirms it; the catch rolls it
+    // back by refetching the server's word.
+    const previous = queryClient.getQueryData<{ prompts: CharacterSystemPrompt[] }>(
+      queryKeys.characters.prompts(characterId)
+    )
+    queryClient.setQueryData<{ prompts: CharacterSystemPrompt[] }>(
+      queryKeys.characters.prompts(characterId),
+      (current) =>
+        current
+          ? { prompts: current.prompts.map((p) => ({ ...p, isDefault: p.id === promptId })) }
+          : current
+    )
+
     try {
       setSaving(true)
       setError(null)
 
-      const res = await fetch(`/api/v1/characters/${characterId}?action=update-prompt&promptId=${promptId}`, {
+      // The prompt's own route is what actually flips the flag. The character
+      // PUT has no `update-prompt` action and its schema drops `isDefault`
+      // outright, so the call that used to live here answered 200 and changed
+      // nothing at all.
+      const res = await fetch(`/api/v1/characters/${characterId}/prompts/${promptId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isDefault: true }),
       })
 
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to set default')
       }
 
@@ -238,6 +258,10 @@ export function useSystemPrompts(
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
+      if (previous) {
+        queryClient.setQueryData(queryKeys.characters.prompts(characterId), previous)
+      }
+      await fetchPrompts()
       setError(message)
     } finally {
       setSaving(false)

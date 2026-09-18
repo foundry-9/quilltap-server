@@ -136,7 +136,15 @@ export async function handlePut(
   const validatedData = updateCharacterSchema.parse(body);
 
   // Normalize scenarios: fill in missing id/createdAt/updatedAt
-  const { scenarios: rawScenarios, physicalDescription: rawPhysical, ...restValidatedData } = validatedData;
+  const {
+    scenarios: rawScenarios,
+    physicalDescription: rawPhysical,
+    // Pulled out of the generic payload: the default prompt is recorded both as
+    // this column and as the `isDefault` flag on the prompt itself, so it goes
+    // through the repository chokepoint below instead of being written raw.
+    defaultSystemPromptId: rawDefaultSystemPromptId,
+    ...restValidatedData
+  } = validatedData;
   const updatePayload: Partial<Character> = { ...restValidatedData };
   if (rawScenarios) {
     const now = new Date().toISOString();
@@ -169,7 +177,21 @@ export async function handlePut(
     }
   }
 
-  const character = await repos.characters.update(id, updatePayload);
+  // A PUT carrying nothing but the default prompt leaves an empty payload, and
+  // an empty patch is not a write anyone asked for — the archive guard reads one
+  // as an unsanctioned edit.
+  let character =
+    Object.keys(updatePayload).length > 0
+      ? await repos.characters.update(id, updatePayload)
+      : await repos.characters.findById(id);
+
+  if (rawDefaultSystemPromptId !== undefined) {
+    const updated = await repos.characters.setDefaultSystemPrompt(id, rawDefaultSystemPromptId);
+    if (!updated) {
+      return badRequest('System prompt not found on this character');
+    }
+    character = updated;
+  }
 
   revalidatePath('/');
 

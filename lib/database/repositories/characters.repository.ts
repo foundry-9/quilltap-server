@@ -710,6 +710,33 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   // ============================================================================
 
   /**
+   * The patch every system-prompt write applies.
+   *
+   * The default prompt is recorded twice — as the `isDefault` flag inside the
+   * prompt and as the character's `defaultSystemPromptId` column — and every
+   * consumer (chat creation, the announcement dialog, the voice preview) reads
+   * the column *first*, falling back to the flag only when the column is null.
+   * A write that moved the flag alone therefore looked right in the editor and
+   * changed nothing about which prompt a new chat actually used. Both faces of
+   * the fact move together here, so no caller has to remember the second one.
+   */
+  private systemPromptsPatch(
+    items: CharacterSystemPrompt[],
+    transientId?: string
+  ): Partial<Character> {
+    const defaultId = items.find((p) => p.isDefault)?.id ?? null;
+    return {
+      systemPrompts: items,
+      // A prompt being added for the first time carries an id minted here, and
+      // the vault re-keys it from its file path on the very next read — so
+      // recording that id would leave the column naming nothing. Null instead,
+      // which sends every reader to the `isDefault` flag, which is correct; the
+      // next write to this character's prompts heals the column.
+      defaultSystemPromptId: defaultId === transientId ? null : defaultId,
+    };
+  }
+
+  /**
    * Add a system prompt to a character
    * @param characterId The character ID
    * @param data The system prompt data (without id, createdAt, updatedAt)
@@ -719,11 +746,15 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: Omit<CharacterSystemPrompt, 'id' | 'createdAt' | 'updatedAt'>
   ): Promise<CharacterSystemPrompt | null> {
+    let transientId: string | undefined;
     return this.addToSubArray<CharacterSystemPrompt>(
       characterId,
       (c) => c.systemPrompts ?? [],
-      (id, now) => ({ ...data, id, createdAt: now, updatedAt: now }),
-      (items) => ({ systemPrompts: items }),
+      (id, now) => {
+        transientId = id;
+        return { ...data, id, createdAt: now, updatedAt: now };
+      },
+      (items) => this.systemPromptsPatch(items, transientId),
       'Error adding system prompt',
       { promptName: data.name },
       (existingItems, newItem) => {
@@ -748,7 +779,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       promptId,
       (c) => c.systemPrompts ?? [],
       (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
-      (items) => ({ systemPrompts: items }),
+      (items) => this.systemPromptsPatch(items),
       'Error updating system prompt',
       { promptId },
       (items, _index, updated) => {
@@ -768,7 +799,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       characterId,
       promptId,
       (c) => c.systemPrompts ?? [],
-      (items) => ({ systemPrompts: items }),
+      (items) => this.systemPromptsPatch(items),
       'Error deleting system prompt',
       (remaining) => {
         if (remaining.length > 0 && !remaining.some((p) => p.isDefault)) {
@@ -779,9 +810,15 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Set a system prompt as default
+   * Set a system prompt as default, or clear the default entirely with `null`.
+   *
+   * The one chokepoint for "which prompt does this character start with": it
+   * moves the `isDefault` flags and the `defaultSystemPromptId` column together
+   * (see {@link systemPromptsPatch}). Anything that changes the default — the
+   * star in the prompts editor, the picker on the character's Profiles tab —
+   * goes through here rather than writing one of the two by hand.
    */
-  async setDefaultSystemPrompt(characterId: string, promptId: string): Promise<Character | null> {
+  async setDefaultSystemPrompt(characterId: string, promptId: string | null): Promise<Character | null> {
     return this.safeQuery(
       async () => {
         const character = await this.findById(characterId);
@@ -791,9 +828,9 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         }
 
         const prompts = character.systemPrompts ?? [];
-        const targetIndex = prompts.findIndex((p) => p.id === promptId);
+        const targetIndex = promptId === null ? -1 : prompts.findIndex((p) => p.id === promptId);
 
-        if (targetIndex === -1) {
+        if (promptId !== null && targetIndex === -1) {
           logger.warn('System prompt not found', { characterId, promptId });
           return null;
         }
@@ -804,7 +841,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
           p.updatedAt = now;
         });
 
-        return this.update(characterId, { systemPrompts: prompts });
+        return this.update(characterId, this.systemPromptsPatch(prompts));
       },
       'Error setting default system prompt',
       { characterId, promptId }
