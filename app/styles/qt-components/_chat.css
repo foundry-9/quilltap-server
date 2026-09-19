@@ -130,6 +130,54 @@
   }
 
   /**
+   * Regeneration — a line being re-rolled in place.
+   *
+   * Two states, one bubble. Before the first token the old line is still there
+   * but visibly out of service (dimmed, desaturated, unselectable) under a
+   * plate that says what is happening. From the first token the plate and the
+   * old line are both gone and the new prose streams in their place, so the
+   * transition the operator sees is "this is being replaced" → "here is what
+   * is replacing it", with no blank gap between.
+   */
+  .qt-chat-message-regenerating {
+    border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 45%, transparent);
+  }
+
+  .qt-chat-regenerating {
+    @apply relative;
+  }
+
+  .qt-chat-regenerating-original {
+    opacity: 0.3;
+    filter: grayscale(0.8);
+    /* The text underneath is a record of what is being replaced, not something
+       to interact with: no selecting it out from under the plate. */
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .qt-chat-regenerating-plate {
+    @apply absolute inset-0 flex items-center justify-center gap-2;
+    color: var(--qt-response-status-streaming-fg);
+  }
+
+  .qt-chat-regenerating-plate-text {
+    @apply text-sm font-medium px-3 py-1.5 rounded-md;
+    background: color-mix(in srgb, var(--qt-chat-assistant-bg) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--qt-response-status-streaming-fg) 35%, transparent);
+    letter-spacing: 0.02em;
+  }
+
+  /**
+   * The action bar of a line that is mid-replacement. Every button on it acts
+   * on content that is about to be different, so none of them is safe to press.
+   */
+  .qt-chat-message-action-bar-disabled {
+    pointer-events: none;
+    opacity: 0.4;
+  }
+
+  /**
    * Thinking / reasoning block — a thinking model's chain-of-thought, spliced
    * into the prose at the point it fired. DISPLAY ONLY. Visually signals
    * "temporary reasoning, not the final answer": right-justified, dimmed,
@@ -3205,6 +3253,15 @@
   }
 
   .qt-chat-response-status[data-stage="streaming"] {
+    color: var(--qt-response-status-streaming-fg);
+    border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 30%, transparent);
+  }
+
+  /* A regeneration narrates itself through the same strip, in the same voice as
+     a first-time turn: `regenerating` once prose is arriving, `saving` while
+     the new line is filed. */
+  .qt-chat-response-status[data-stage="regenerating"],
+  .qt-chat-response-status[data-stage="saving"] {
     color: var(--qt-response-status-streaming-fg);
     border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 30%, transparent);
   }

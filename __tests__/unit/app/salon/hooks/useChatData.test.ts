@@ -492,4 +492,85 @@ describe('useChatData — the transcript', () => {
       '47a3a91d-0000-4000-8000-000000000001',
     ])
   })
+
+  /**
+   * Reconciliation carries the operator's swipe selection across a refetch by
+   * id, which is right everywhere except immediately after a regeneration: the
+   * operator watched that line arrive and must not be shown a different one.
+   * `selectSwipeVariant` is how the regeneration names what it made.
+   */
+  describe('selectSwipeVariant', () => {
+    const GROUP = 'swipe-abc'
+    const OLD_SWIPE = '47a3a91d-0000-4000-8000-00000000000a'
+    const NEW_SWIPE = '47a3a91d-0000-4000-8000-00000000000b'
+
+    function withSwipeGroup() {
+      transcript = {
+        version: 5,
+        messages: [
+          {
+            id: '47a3a91d-0000-4000-8000-000000000001',
+            role: 'USER',
+            content: 'Go on, then.',
+            createdAt: '2026-09-11T12:49:25.818Z',
+          },
+          {
+            id: OLD_SWIPE,
+            role: 'ASSISTANT',
+            content: 'the first attempt',
+            createdAt: '2026-09-11T12:49:30.000Z',
+            swipeGroupId: GROUP,
+            swipeIndex: 0,
+          },
+          {
+            id: NEW_SWIPE,
+            role: 'ASSISTANT',
+            content: 'the re-roll',
+            createdAt: '2026-09-11T12:49:30.000Z',
+            swipeGroupId: GROUP,
+            swipeIndex: 1,
+          },
+        ] as never,
+      }
+      stubTranscript()
+    }
+
+    it('puts the named variant on display and moves the counter to it', async () => {
+      withSwipeGroup()
+      const { result } = renderHook(() => useChatData(CHAT_ID))
+      await act(async () => {
+        await result.current.fetchChat()
+      })
+
+      // Swipe back to the original, as the operator would.
+      act(() => {
+        result.current.selectSwipeVariant(OLD_SWIPE)
+      })
+      expect(result.current.swipeStates[GROUP].current).toBe(0)
+      expect(result.current.messages.map((m) => m.content)).toContain('the first attempt')
+
+      // A regeneration names what it made; the view follows it.
+      act(() => {
+        result.current.selectSwipeVariant(NEW_SWIPE)
+      })
+      expect(result.current.swipeStates[GROUP].current).toBe(1)
+      expect(result.current.messages.map((m) => m.content)).toContain('the re-roll')
+      expect(result.current.messages.map((m) => m.content)).not.toContain('the first attempt')
+    })
+
+    it('leaves everything alone for an id in no group', async () => {
+      withSwipeGroup()
+      const { result } = renderHook(() => useChatData(CHAT_ID))
+      await act(async () => {
+        await result.current.fetchChat()
+      })
+      const before = result.current.messages
+
+      act(() => {
+        result.current.selectSwipeVariant('not-a-message')
+      })
+
+      expect(result.current.messages).toBe(before)
+    })
+  })
 })

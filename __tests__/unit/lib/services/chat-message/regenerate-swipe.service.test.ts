@@ -2,14 +2,26 @@ jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
 }))
 
-const sendMessage = jest.fn(async () => ({
-  content: 'A freshly regenerated line.',
-  usage: { totalTokens: 12, promptTokens: 8, completionTokens: 4 },
-  raw: {},
-}))
+// The regeneration reads its one provider call as a stream, so the fake
+// provider hands back chunks: prose in pieces, then a terminal chunk carrying
+// the usage/raw/reasoning the swipe persists.
+const streamChunks: Array<Record<string, unknown>> = [
+  { content: 'A freshly ', done: false },
+  { content: 'regenerated line.', done: false },
+  {
+    content: '',
+    done: true,
+    usage: { totalTokens: 12, promptTokens: 8, completionTokens: 4 },
+    rawResponse: {},
+  },
+]
+
+const streamMessage = jest.fn(async function* () {
+  for (const chunk of streamChunks) yield chunk
+})
 
 jest.mock('@/lib/llm', () => ({
-  createLLMProvider: jest.fn(async () => ({ sendMessage })),
+  createLLMProvider: jest.fn(async () => ({ streamMessage })),
 }))
 
 jest.mock('@/lib/memory/memory-service', () => ({
@@ -184,6 +196,36 @@ describe('regenerateMessageAsSwipe', () => {
     expect(newSwipe.participantId).toBe('p-abigail')
     // Original already grouped → no re-anchor write.
     expect((repos as any).chats.updateMessage).not.toHaveBeenCalled()
+  })
+
+  it('reports each step to onProgress and streams the new line in pieces', async () => {
+    const repos = buildRepos()
+    const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
+    const allMessages = [makeMessage('msg-user', 'USER', now, 'p-revenant'), target]
+    const events: Array<Record<string, unknown>> = []
+
+    const newSwipe = await regenerateMessageAsSwipe({
+      repos,
+      userId: 'user-1',
+      chat,
+      targetMessage: target,
+      allMessages,
+      onProgress: (e) => { events.push(e as unknown as Record<string, unknown>) },
+    })
+
+    // The prose arrives as deltas, in order, and concatenates to the saved line.
+    const deltas = events.filter(e => e.kind === 'delta').map(e => e.content)
+    expect(deltas).toEqual(['A freshly ', 'regenerated line.'])
+    expect(newSwipe.content).toBe('A freshly regenerated line.')
+
+    // Every status the Salon narrates says "Regenerating", so the strip above
+    // the composer never reads like an ordinary first-time turn.
+    const statuses = events.filter(e => e.kind === 'status')
+    expect(statuses.length).toBeGreaterThan(0)
+    for (const status of statuses) {
+      expect(String(status.message)).toMatch(/regenerating/i)
+    }
+    expect(statuses.map(s => s.stage)).toContain('regenerating')
   })
 
   it('refuses to regenerate staff/system messages', async () => {

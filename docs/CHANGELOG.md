@@ -4,6 +4,33 @@
 
 ### 4.10-dev
 
+#### Changed: Regenerating a message now shows what it is doing
+
+Pressing the refresh icon on a character's message used to do nothing visible until the new line
+appeared, sometimes half a minute later. It now reports itself:
+
+- The message being regenerated dims and shows a "Regenerating..." plate.
+- The plate is replaced by the new line as it streams in. The regeneration is now a streaming
+  provider call, so text arrives token by token instead of all at once at the end. A provider that
+  does not stream simply delivers the whole line when it is done.
+- The status strip above the composer carries the stage ("Regenerating — gathering <name>'s
+  memories and context...", "...sending to <name>...", "Regenerating <name>'s reply..."), the same
+  way it does for a first-time turn.
+- The composer is disabled and the message's action icons are greyed out for the duration, so a new
+  message or a second re-roll can't land on a turn in flight.
+- When the regeneration finishes, the swipe group selects the variant that was just generated. It
+  previously kept whatever variant was selected before, so you could watch a new line arrive and
+  then be shown a different one.
+
+New API: `POST /api/v1/messages/[id]?action=swipe&stream=1` returns `text/event-stream`
+(`status` / `content` delta / `reasoning` / `done` / `error` frames). Without `stream=1` the
+endpoint still returns `201 Created` with the new swipe as JSON.
+
+#### Fixed: `ChatComposer`'s `disabled` prop did nothing
+
+The prop was declared and destructured but never wired to any input. Every control was gated on
+`sending` alone. Both flags now shut the composer.
+
 #### Added: Inform — out-of-character information a character receives before their next turn
 
 The Salon composer has a new **Inform** button (the *i* in the left gutter, beside Pascal). It opens

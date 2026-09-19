@@ -1794,6 +1794,207 @@
 }
 
 /**
+ * Regeneration — a line being re-rolled in place.
+ *
+ * Two states, one bubble. Before the first token the old line is still there
+ * but visibly out of service (dimmed, desaturated, unselectable) under a plate
+ * that says what is happening. From the first token the plate and the old line
+ * are both gone and the new prose streams in their place.
+ */
+.qt-chat-message-regenerating {
+  border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 45%, transparent);
+}
+
+.qt-chat-regenerating {
+  position: relative;
+}
+
+.qt-chat-regenerating-original {
+  opacity: 0.3;
+  filter: grayscale(0.8);
+  pointer-events: none;
+  user-select: none;
+}
+
+.qt-chat-regenerating-plate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--qt-response-status-streaming-fg);
+}
+
+.qt-chat-regenerating-plate-text {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--qt-chat-assistant-bg) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--qt-response-status-streaming-fg) 35%, transparent);
+  letter-spacing: 0.02em;
+}
+
+/**
+ * Message action bar — the per-message toolbar (copy, source, edit, delete,
+ * regenerate, swipe arrows) along the bottom of a bubble.
+ */
+.qt-chat-message-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+}
+
+.qt-chat-message-action-bar-icons {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/** The bar of a line that is mid-replacement: nothing on it is safe to press. */
+.qt-chat-message-action-bar-disabled {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.qt-chat-message-action-icon {
+  padding: 0.375rem;
+  border-radius: 0.25rem;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+}
+
+.qt-chat-message-action-icon:hover {
+  color: var(--color-foreground);
+  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+.qt-chat-message-action-icon-danger:hover {
+  color: var(--qt-status-danger-fg);
+  background: color-mix(in srgb, var(--qt-status-danger-bg) 50%, transparent);
+}
+
+.qt-chat-message-action-icon svg,
+.qt-chat-message-action-icon .qt-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/** User message action icons — light colours on the user bubble's ground. */
+.qt-chat-message-user .qt-chat-message-action-bar {
+  border-top-color: color-mix(in srgb, var(--qt-chat-user-fg) 30%, transparent);
+}
+
+.qt-chat-message-user .qt-chat-message-action-icon {
+  color: color-mix(in srgb, var(--qt-chat-user-fg) 70%, transparent);
+}
+
+.qt-chat-message-user .qt-chat-message-action-icon:hover {
+  color: var(--qt-chat-user-fg);
+  background: color-mix(in srgb, var(--qt-chat-user-fg) 15%, transparent);
+}
+
+.qt-chat-message-user .qt-chat-message-action-icon-danger:hover {
+  color: hsl(0 100% 85%);
+  background: color-mix(in srgb, hsl(0 70% 50%) 25%, transparent);
+}
+
+.qt-chat-message-action-timestamp {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--color-muted-foreground);
+  margin-left: auto;
+}
+
+.qt-chat-message-user .qt-chat-message-action-timestamp {
+  color: color-mix(in srgb, var(--qt-chat-user-fg) 70%, transparent);
+}
+
+/**
+ * Response status strip — the line above the composer that narrates a turn as
+ * it happens ("Gathering memories and context...", "Ada is responding...",
+ * "Regenerating Ada's reply..."). Coloured per stage.
+ */
+.qt-chat-response-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--qt-response-status-bg);
+  color: var(--qt-response-status-fg);
+  border: 1px solid var(--qt-response-status-border);
+  animation: qt-status-fade-in 150ms ease-out;
+}
+
+.qt-chat-response-status-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+}
+
+.qt-chat-response-status-text {
+  font-weight: 500;
+}
+
+.qt-chat-response-status[data-stage="compressing"] {
+  color: var(--qt-response-status-compressing-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-compressing-fg) 30%, transparent);
+}
+
+.qt-chat-response-status[data-stage="gathering"] {
+  color: var(--qt-response-status-gathering-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-gathering-fg) 30%, transparent);
+}
+
+.qt-chat-response-status[data-stage="building"] {
+  color: var(--qt-response-status-building-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-building-fg) 30%, transparent);
+}
+
+.qt-chat-response-status[data-stage="sending"] {
+  color: var(--qt-response-status-sending-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-sending-fg) 30%, transparent);
+}
+
+.qt-chat-response-status[data-stage="streaming"] {
+  color: var(--qt-response-status-streaming-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 30%, transparent);
+}
+
+.qt-chat-response-status[data-stage="regenerating"],
+.qt-chat-response-status[data-stage="saving"] {
+  color: var(--qt-response-status-streaming-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-streaming-fg) 30%, transparent);
+}
+
+.qt-chat-response-status[data-stage="tool_executing"] {
+  color: var(--qt-response-status-tool-fg);
+  border-color: color-mix(in srgb, var(--qt-response-status-tool-fg) 30%, transparent);
+}
+
+@keyframes qt-status-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qt-chat-response-status { animation: none; }
+  .qt-chat-response-status-icon .animate-pulse { animation: none; }
+}
+
+/**
  * Wardrobe action notice — inline summary of outfit changes.
  * Double border with warm amber/gold tones, distinct from whisper (dashed) and silent (dotted).
  */

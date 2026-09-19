@@ -128,6 +128,42 @@ Get an alternative response:
 - The newest version is shown in place; the original is kept one swipe away in the same group
 - Token usage counts for each generation
 
+#### Watching a Regeneration Happen
+
+A re-roll no longer asks you to take it on faith. From the moment you press the
+refresh icon until the new line is filed, the Salon reports itself in three
+places at once:
+
+- **The line being replaced dims**, greys, and wears a small plate reading
+  *Regenerating…* — a plain statement that what you are looking at is on its way
+  out and not to be trusted.
+- **The new line arrives in its place, word by word**, the instant the character
+  begins to speak. The plate withdraws the moment there is prose to read, so
+  there is never a blank gap between the old line and the new one. (A model that
+  declines to stream simply delivers the whole passage at once; the plate holds
+  until it does.)
+- **A notice above the composer** carries the stage of the business —
+  *Regenerating — gathering Riya's memories and context…*, then *…sending to
+  Riya…*, then *Regenerating Riya's reply…* — exactly as it does when a line is
+  spoken for the first time.
+
+While all this is going on the composer is **shut** and the message's own row of
+icons is **greyed out**. Neither is an oversight: a remark typed on top of a
+turn in flight, or a second re-roll pressed on a line already mid-replacement,
+is precisely the sort of accident that produces a transcript nobody can account
+for afterwards. Both open again the instant the new line is in the record.
+
+When the regeneration finishes, the version you just watched arrive is the
+version left on display — the swipe counter advances to it, and the line it
+replaced remains one swipe to the left.
+
+If the character's model shows its thinking (see
+[Chat Settings](chat-settings.md)), that too appears live while the re-roll runs.
+
+Should the whole business fail — a provider that refuses, or one that accepts
+the request and then falls silent — you are told so in a notice, the old line is
+restored untouched, and the composer opens again.
+
 **Use cases:**
 - Response doesn't fit the character
 - Want to see different approaches

@@ -39,6 +39,13 @@ interface ChatComposerProps {
   onRemovePendingToolResult: (id: string) => void
   /** External ref for the editor, enabling parent components to focus it */
   inputRef?: React.MutableRefObject<ComposerEditorHandle | null>
+  /**
+   * Shut the composer without claiming a send is in flight. Raised while a
+   * regeneration holds the floor: the operator should not be able to type a new
+   * message on top of a line that is mid-replacement, but none of the
+   * `sending`-flagged chrome (the stop button, the "Generating..." send title)
+   * belongs to a re-roll.
+   */
   disabled: boolean
   sending: boolean
   hasActiveCharacters: boolean
@@ -171,6 +178,10 @@ export function ChatComposer({
   speakingAs,
   voiceRehearsalArmed = false,
 }: ChatComposerProps) {
+  // Every input surface in here is shut by either flag, so ask the question
+  // once rather than at each control.
+  const composerLocked = disabled || sending
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<ComposerEditorHandle>(null)
@@ -200,6 +211,9 @@ export function ChatComposer({
   // handle (`getMarkdown()`), which is why we no longer round-trip through
   // setInput here (that was the per-keystroke re-render source).
   const handleEditorSubmit = useCallback(() => {
+    // Belt and braces: the editor is already disabled, but a keystroke racing
+    // the lock must not put a message on top of a turn in flight.
+    if (composerLocked) return
     const markdown = editorRef.current?.getMarkdown() ?? ''
     if (markdown.trim() || attachedFiles.length > 0 || pendingToolResults.length > 0) {
       const form = document.querySelector<HTMLFormElement>(`#composer-form-${id}`)
@@ -210,7 +224,7 @@ export function ChatComposer({
         }, 10)
       }
     }
-  }, [id, attachedFiles.length, pendingToolResults.length])
+  }, [id, attachedFiles.length, pendingToolResults.length, composerLocked])
 
   // Capture the Lexical editor instance when the wrapper mounts
   const composerRefCallback = useCallback(
@@ -281,7 +295,9 @@ export function ChatComposer({
             aria-live="polite"
           >
             <div className="qt-chat-response-status-icon">
-              {responseStatus.stage === 'streaming' ? (
+              {/* Prose is actually arriving in these two stages — first turn or
+                  re-roll — so both get the quill rather than the waiting dot. */}
+              {responseStatus.stage === 'streaming' || responseStatus.stage === 'regenerating' ? (
                 <QuillAnimation size="sm" label={null} />
               ) : (
                 <svg className="w-4 h-4 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
@@ -361,7 +377,7 @@ export function ChatComposer({
           <FormattingToolbar
             roleplayTemplateId={roleplayTemplateId}
             editor={lexicalEditor}
-            disabled={sending || !hasActiveCharacters}
+            disabled={composerLocked || !hasActiveCharacters}
             showSource={showSource}
             sourceTextareaRef={sourceTextareaRef}
             setInput={setInput}
@@ -400,7 +416,7 @@ export function ChatComposer({
                 name={speakingAs.name}
                 title={speakingAs.title}
                 src={speakingAs.character}
-                canType={hasActiveCharacters && !sending && !streaming && !waitingForResponse}
+                canType={hasActiveCharacters && !composerLocked && !streaming && !waitingForResponse}
                 voiceRehearsal={voiceRehearsalArmed}
               />
             </div>
@@ -422,7 +438,7 @@ export function ChatComposer({
               onPendingToolResult={onPendingToolResult}
               customToolsAvailable={customToolsAvailable}
               onCustomToolRan={onCustomToolRan}
-              disabled={sending || !hasActiveCharacters}
+              disabled={composerLocked || !hasActiveCharacters}
             />
             </div>
 
@@ -484,7 +500,7 @@ export function ChatComposer({
               className="qt-chat-composer-input qt-source-mode-textarea"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              disabled={sending || !hasActiveCharacters}
+              disabled={composerLocked || !hasActiveCharacters}
               style={{ lineHeight: '1.5' }}
             />
           )}
@@ -499,7 +515,7 @@ export function ChatComposer({
               onSubmit={handleEditorSubmit}
               onImagePaste={onImagePaste}
               documentEditingMode={documentEditingMode}
-              disabled={sending || !hasActiveCharacters}
+              disabled={composerLocked || !hasActiveCharacters}
               placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : ""}
             />
           </div>
@@ -522,7 +538,7 @@ export function ChatComposer({
             /* Send button - disabled while generating when stop is in sidebar */
             <button
               type="submit"
-              disabled={sending || (streaming || waitingForResponse) || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
+              disabled={composerLocked || (streaming || waitingForResponse) || (!hasContent && attachedFiles.length === 0 && pendingToolResults.length === 0) || !hasActiveCharacters}
               className="qt-chat-composer-send"
               title={!hasActiveCharacters
                 ? "Add a character to start chatting"

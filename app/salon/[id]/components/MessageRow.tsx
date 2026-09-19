@@ -17,11 +17,14 @@ import { CourierBubble } from './CourierBubble'
 import { buildInterleavedLayout, resolveReasoningSegments } from '../intersperse-reasoning'
 import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
+import MessageContent from '@/components/chat/MessageContent'
+import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
 import { getImageAttachments } from './message-row/helpers'
 import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
+import type { RegenerationState } from '../hooks/useRegeneration'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
@@ -119,6 +122,12 @@ interface MessageRowProps {
   showThinking?: boolean
   /** Whether thinking blocks start collapsed (global default). */
   thinkingCollapsedByDefault?: boolean
+  /**
+   * Set only on the one message currently being re-rolled. While it is here the
+   * row shows the regeneration instead of its own settled content: the old line
+   * dimmed under a "Regenerating..." plate, then the new one as it streams.
+   */
+  regeneration?: RegenerationState | null
 }
 
 function MessageRowInner({
@@ -176,6 +185,7 @@ function MessageRowInner({
   attachedToolMessages,
   showThinking = false,
   thinkingCollapsedByDefault = true,
+  regeneration = null,
 }: MessageRowProps) {
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
@@ -304,7 +314,8 @@ function MessageRowInner({
             message.role === 'USER'
               ? 'qt-chat-message-user'
               : 'qt-chat-message-assistant'
-          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}`}
+          }${isWhisper ? ' qt-chat-message-whisper' : ''}${isOverheardWhisper ? ' qt-chat-message-whisper-overheard' : ''}${isSilentMessage ? ' qt-chat-message-silent' : ''}${regeneration ? ' qt-chat-message-regenerating' : ''}`}
+          aria-busy={regeneration ? true : undefined}
         >
           {isEditing ? (
             <div className="space-y-2">
@@ -345,6 +356,53 @@ function MessageRowInner({
                   silent — inner thoughts and actions only
                 </div>
               )}
+              {/* A line being re-rolled shows the regeneration in place of its
+                  own settled content: the old text dimmed under a plate that
+                  says so, and — from the first token — the new text instead.
+                  The rest of the bubble (attachments, folded tool blocks) is
+                  left standing; it belongs to the line and the post-stream
+                  refetch reconciles it. */}
+              {regeneration ? (
+                <div className="qt-chat-regenerating">
+                  {regeneration.stage === 'preparing' ? (
+                    <>
+                      <div className="qt-chat-regenerating-original" aria-hidden="true">
+                        <LazyMessageContent
+                          content={message.content}
+                          renderingPatterns={renderingPatterns}
+                          dialogueDetection={dialogueDetection}
+                          forceRender
+                        />
+                      </div>
+                      <div className="qt-chat-regenerating-plate" role="status" aria-live="polite">
+                        <QuillAnimation size="sm" label={null} />
+                        <span className="qt-chat-regenerating-plate-text">Regenerating...</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {showThinking && regeneration.reasoning.trim().length > 0 && (
+                        <ThinkingBlock
+                          content={regeneration.reasoning}
+                          streaming
+                          collapsedByDefault={thinkingCollapsedByDefault}
+                          renderingPatterns={renderingPatterns}
+                          dialogueDetection={dialogueDetection}
+                        />
+                      )}
+                      {/* Not LazyMessageContent: this content changes every
+                          frame, and the lazy wrapper's whole purpose is to
+                          avoid re-rendering settled prose. */}
+                      <MessageContent
+                        content={regeneration.content}
+                        renderingPatterns={renderingPatterns}
+                        dialogueDetection={dialogueDetection}
+                      />
+                      <QuillAnimation size="sm" className="inline-block ml-2 qt-text-secondary" />
+                    </>
+                  )}
+                </div>
+              ) : (
               <DangerContentWrapper displayMode={dangerDisplayMode}>
                 {isSourceView ? (
                   <div className="qt-code-block whitespace-pre-wrap break-words overflow-auto max-h-96">
@@ -394,6 +452,7 @@ function MessageRowInner({
                   <LazyMessageContent content={message.content} renderingPatterns={renderingPatterns} dialogueDetection={dialogueDetection} forceRender={forceRender} renderedHtml={message.renderedHtml} />
                 )}
               </DangerContentWrapper>
+              )}
               {/* Terminal embed for ariel session-opened messages */}
               {message.systemSender === 'ariel' && message.systemKind === 'session-opened' && chatId && (() => {
                 const terminalSessionId = extractTerminalSessionId(message.content)
@@ -455,6 +514,7 @@ function MessageRowInner({
 
               {/* Action bar - shows action icons at bottom of message */}
               <MessageActionBar
+                disabled={!!regeneration}
                 message={message}
                 viewSourceMessageIds={viewSourceMessageIds}
                 swipeState={swipeState}
@@ -608,6 +668,16 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   if (prev.message.confirmationChecked !== next.message.confirmationChecked) return false
   if (prev.message.confirmationRevised !== next.message.confirmationRevised) return false
   if (prev.message.confirmationNotes !== next.message.confirmationNotes) return false
+
+  // Regeneration. This is the one prop that changes every animation frame, and
+  // only ever on the single row being re-rolled — every other row sees null on
+  // both sides and falls straight through.
+  if (!prev.regeneration !== !next.regeneration) return false
+  if (prev.regeneration && next.regeneration) {
+    if (prev.regeneration.stage !== next.regeneration.stage) return false
+    if (prev.regeneration.content !== next.regeneration.content) return false
+    if (prev.regeneration.reasoning !== next.regeneration.reasoning) return false
+  }
 
   // Props are equal, skip re-render
   return true

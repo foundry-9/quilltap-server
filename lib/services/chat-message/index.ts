@@ -60,6 +60,7 @@ export {
 export {
   regenerateMessageAsSwipe,
   type RegenerateSwipeOptions,
+  type RegenerateSwipeProgress,
 } from './regenerate-swipe.service'
 
 // Tool Execution
@@ -78,6 +79,8 @@ export {
   encodeDebugInfo,
   encodeFallbackInfo,
   encodeContentChunk,
+  encodeReasoningChunk,
+  encodeStatusEvent,
   encodeDoneEvent,
   encodeErrorEvent,
   encodeKeepAlive,

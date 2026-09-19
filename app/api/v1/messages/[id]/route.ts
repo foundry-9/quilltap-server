@@ -5,13 +5,23 @@
  * PUT /api/v1/messages/[id] - Edit a message
  * DELETE /api/v1/messages/[id] - Delete a message (with optional memory cascade)
  * POST /api/v1/messages/[id]?action=swipe - Generate alternative response
+ *   (add &stream=1 for a text/event-stream narration of the regeneration)
  * POST /api/v1/messages/[id]?action=reattribute - Re-attribute to different participant
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, getActionParam } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
-import { regenerateMessageAsSwipe } from '@/lib/services/chat-message';
+import {
+  regenerateMessageAsSwipe,
+  encodeContentChunk,
+  encodeReasoningChunk,
+  encodeStatusEvent,
+  encodeErrorEvent,
+  safeClose,
+  safeEnqueue,
+  sseStreamResponse,
+} from '@/lib/services/chat-message';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
 import { z } from 'zod';
@@ -252,8 +262,116 @@ async function handleSwipeAction(
     return handleSwitchSwipe(repos, user.id, messageId, parsed.data.swipeIndex);
   }
 
-  // Otherwise, generate a new swipe
-  return handleGenerateSwipe(repos, user.id, messageId);
+  // Otherwise, generate a new swipe. `stream=1` narrates it as it happens —
+  // the Salon shows the re-roll arriving in place of the line being replaced.
+  const wantsStream = req.nextUrl.searchParams.get('stream') === '1';
+  return wantsStream
+    ? handleGenerateSwipeStreaming(repos, user.id, messageId)
+    : handleGenerateSwipe(repos, user.id, messageId);
+}
+
+/**
+ * Everything a regeneration needs, or the error response that says why it can't
+ * happen. Shared by the JSON and SSE handlers so both refuse the same things
+ * for the same reasons.
+ */
+async function resolveSwipeTarget(
+  repos: any,
+  userId: string,
+  messageId: string
+): Promise<
+  | { ok: true; result: MessageSearchResult }
+  | { ok: false; response: NextResponse }
+> {
+  const result = await findMessageInUserChats(repos, userId, messageId);
+  if (!result) {
+    return { ok: false, response: notFound('Message') };
+  }
+
+  // Only character-authored assistant messages can be regenerated. Staff/system
+  // messages share the ASSISTANT role but have no responder to regenerate from.
+  if (result.message.role !== 'ASSISTANT') {
+    return { ok: false, response: badRequest('Only assistant messages can be swiped') };
+  }
+  if (result.message.systemSender) {
+    return { ok: false, response: badRequest('Staff and system messages cannot be regenerated') };
+  }
+
+  return { ok: true, result };
+}
+
+/**
+ * The regeneration as a live narration.
+ *
+ * Same generation as the JSON handler — the service does the work either way —
+ * but each step is reported as it happens: a `status` line, `content` deltas
+ * (append) and cumulative `reasoning` (replace), then a final `done` carrying
+ * the persisted swipe. That is what lets the Salon dim the line being replaced
+ * and fill it back in as the new one arrives, instead of freezing on a spinner
+ * until the whole thing lands.
+ *
+ * A failure that happens before the stream opens is an ordinary JSON error; one
+ * that happens after it is an `error` event, because the headers are long gone.
+ */
+async function handleGenerateSwipeStreaming(
+  repos: any,
+  userId: string,
+  messageId: string
+): Promise<NextResponse> {
+  const target = await resolveSwipeTarget(repos, userId, messageId);
+  if (!target.ok) return target.response;
+  const { result } = target;
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        const newSwipe = await regenerateMessageAsSwipe({
+          repos,
+          userId,
+          chat: result.chat,
+          targetMessage: result.message,
+          allMessages: result.allMessages.filter(
+            (m): m is MessageEvent => m.type === 'message'
+          ),
+          activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
+          onProgress: (event) => {
+            if (event.kind === 'status') {
+              safeEnqueue(controller, encodeStatusEvent(encoder, event));
+            } else if (event.kind === 'delta') {
+              safeEnqueue(controller, encodeContentChunk(encoder, event.content));
+            } else {
+              safeEnqueue(controller, encodeReasoningChunk(encoder, event.reasoning));
+            }
+          },
+        });
+
+        safeEnqueue(
+          controller,
+          encoder.encode(`data: ${JSON.stringify({ done: true, message: newSwipe })}\n\n`)
+        );
+      } catch (error) {
+        logger.error(
+          '[Messages API v1] Streaming swipe generation failed',
+          { messageId, chatId: result.chat.id },
+          error instanceof Error ? error : undefined
+        );
+        safeEnqueue(
+          controller,
+          encodeErrorEvent(
+            encoder,
+            'Failed to generate alternative response',
+            'regenerate_failed',
+            error instanceof Error ? error.message : String(error)
+          )
+        );
+      } finally {
+        safeClose(controller);
+      }
+    },
+  });
+
+  return sseStreamResponse(stream);
 }
 
 async function handleGenerateSwipe(
@@ -261,19 +379,9 @@ async function handleGenerateSwipe(
   userId: string,
   messageId: string
 ): Promise<NextResponse> {
-  const result = await findMessageInUserChats(repos, userId, messageId);
-  if (!result) {
-    return notFound('Message');
-  }
-
-  // Only character-authored assistant messages can be regenerated. Staff/system
-  // messages share the ASSISTANT role but have no responder to regenerate from.
-  if (result.message.role !== 'ASSISTANT') {
-    return badRequest('Only assistant messages can be swiped');
-  }
-  if (result.message.systemSender) {
-    return badRequest('Staff and system messages cannot be regenerated');
-  }
+  const target = await resolveSwipeTarget(repos, userId, messageId);
+  if (!target.ok) return target.response;
+  const { result } = target;
 
   try {
     // Run the regeneration through the same context engine a normal turn uses,

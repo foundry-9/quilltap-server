@@ -15,6 +15,7 @@ import { isOperatorAuthoredAnnouncement } from '../whisper-visibility'
 import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
+import type { RegenerationState } from '../hooks/useRegeneration'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
 interface VirtualizedMessageListProps {
@@ -59,12 +60,17 @@ interface VirtualizedMessageListProps {
     cancelEdit: () => void
     toggleSourceView: (messageId: string) => void
     deleteMessage: (messageId: string) => Promise<void>
-    generateSwipe: (messageId: string, fetchChat: () => Promise<void>) => void
     switchSwipe: (groupId: string, direction: 'prev' | 'next', swipeStates: Record<string, SwipeState>, setSwipeStates: (value: any) => void) => void
     copyMessageContent: (content: string) => void
     resendMessage: (message: Message) => Promise<void>
     canResendMessage: (messageId: string) => boolean
   }
+  /**
+   * The in-flight regeneration, if any, and the door to starting one. The state
+   * reaches exactly the row whose id it names; every other row is untouched.
+   */
+  regeneration: RegenerationState | null
+  onRegenerate: (messageId: string) => void
   turnManagement: {
     handleNudge: (participantId: string) => void | Promise<void>
     handleQueue: (participantId: string) => void
@@ -140,6 +146,8 @@ export function VirtualizedMessageList({
   userParticipantId,
   respondingParticipantId,
   chatId,
+  regeneration,
+  onRegenerate,
   messageActions,
   turnManagement,
   setEditContent,
@@ -321,7 +329,8 @@ export function VirtualizedMessageList({
                   onEditChange={setEditContent}
                   onToggleSourceView={messageActions.toggleSourceView}
                   onDelete={messageActions.deleteMessage}
-                  onGenerateSwipe={(msgId) => messageActions.generateSwipe(msgId, fetchChat)}
+                  onGenerateSwipe={onRegenerate}
+                  regeneration={regeneration?.messageId === message.id ? regeneration : null}
                   onSwitchSwipe={(groupId, dir) => messageActions.switchSwipe(groupId, dir, swipeStates, setSwipeStates)}
                   onCopyContent={messageActions.copyMessageContent}
                   onResend={messageActions.resendMessage}

@@ -4,7 +4,6 @@ import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { Message, MemoryCascadeAction, ChatSettings } from '../types'
 import { queryKeys } from '@/lib/query/keys'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
@@ -322,22 +321,6 @@ export function useMessageActions(
     showSuccessToast('Message restored to input. Press Enter to resend.')
   }
 
-  const generateSwipe = async (messageId: string, fetchChat: () => Promise<void>) => {
-    try {
-      const res = await fetch(`/api/v1/messages/${messageId}?action=swipe`, {
-        method: 'POST',
-      })
-
-      if (!res.ok) throw new Error('Failed to generate alternative response')
-
-      await res.json()
-      await fetchChat()
-      notifyQueueChange()
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to generate alternative response')
-    }
-  }
-
   const switchSwipe = (
     groupId: string,
     direction: 'prev' | 'next',
@@ -387,7 +370,6 @@ export function useMessageActions(
     deleteMessage,
     canResendMessage,
     resendMessage,
-    generateSwipe,
     switchSwipe,
     copyMessageContent,
     toggleSourceView,

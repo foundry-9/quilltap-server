@@ -50,6 +50,7 @@ import {
   useChatGallery,
   useTurnManagement,
   useMessageActions,
+  useRegeneration,
   useFileAttachments,
   useAutoScroll,
   useModalState,
@@ -113,7 +114,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   // --- Core data hook ---
   const chatDataHook = useChatData(id)
   const { chat, messages, loading, error, swipeStates, chatMemoryCount } = chatDataHook
-  const { setChat, setMessages, setSwipeStates } = chatDataHook
+  const { setChat, setMessages, setSwipeStates, selectSwipeVariant } = chatDataHook
   const { fetchChat, refreshTranscript, clearProvisionalMessages, fetchChatMemoryCount } = chatDataHook
 
   // --- Chat settings ---
@@ -737,6 +738,16 @@ export function SalonView({ chatId }: SalonViewProps) {
     messagesEndRef as React.RefObject<HTMLDivElement>,
     chatSettings,
   )
+
+  // --- Regeneration ---
+  // A re-roll of an already-spoken line. It runs on its own transport, not the
+  // turn stream, so it keeps its own state: the composer is shut for its
+  // duration, the line being replaced narrates itself, and the strip above the
+  // composer carries the stage.
+  const regenerationController = useRegeneration()
+  const handleRegenerate = useCallback((messageId: string) => {
+    void regenerationController.regenerate(messageId, fetchChat, selectSwipeVariant)
+  }, [regenerationController, fetchChat, selectSwipeVariant])
 
   // Stable callback wrapper using ref. `nudge` must be forwarded: it is what
   // withholds the "nothing to add" skip option, and a summons that lets the
@@ -1478,6 +1489,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           userParticipantId={participantsWithImpersonation.userParticipantId}
           respondingParticipantId={respondingParticipantId}
           chatId={id}
+          regeneration={regenerationController.regeneration}
+          onRegenerate={handleRegenerate}
           messageActions={messageActions}
           turnManagement={turnManagement}
           setEditContent={setEditContent}
@@ -1625,12 +1638,14 @@ export function SalonView({ chatId }: SalonViewProps) {
           pendingToolResults={pendingToolResults}
           onRemovePendingToolResult={handleRemovePendingToolResult}
           inputRef={inputRef}
-          disabled={sseStreaming.sending}
+          disabled={sseStreaming.sending || regenerationController.isRegenerating}
           sending={sseStreaming.sending}
           hasActiveCharacters={participantsWithImpersonation.hasActiveCharacters}
           streaming={sseStreaming.streaming}
           waitingForResponse={sseStreaming.waitingForResponse}
-          responseStatus={sseStreaming.responseStatus}
+          // A regeneration owns the strip while it runs; nothing else can be
+          // generating at the same time, so there is no contest for it.
+          responseStatus={regenerationController.regenerationStatus ?? sseStreaming.responseStatus}
           showSource={modals.showPreview}
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}

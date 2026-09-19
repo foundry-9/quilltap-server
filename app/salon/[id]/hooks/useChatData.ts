@@ -113,6 +113,32 @@ export function useChatData(chatId: string) {
   }, [setMessages, setSwipeStates])
 
   /**
+   * Show a particular variant of a swipe group — the one whose id is given.
+   *
+   * Reconciliation deliberately carries the operator's swipe selection across a
+   * refetch *by id*, so an appended variant does not yank the view off the
+   * reply they were reading. That is right for every other refetch and wrong
+   * for the one that follows a regeneration: the operator just watched that
+   * line arrive, and leaving them on the previous variant would answer their
+   * re-roll by showing them something else. So the regeneration says, in as
+   * many words, which variant it made — and this selects it, exactly as a swipe
+   * of the arrows would.
+   *
+   * A no-op for an id that is in no group, or already the one on display.
+   */
+  const selectSwipeVariant = useCallback((messageId: string) => {
+    for (const [groupId, state] of Object.entries(swipeStatesRef.current)) {
+      const index = state.messages.findIndex(m => m.id === messageId)
+      if (index < 0) continue
+      if (index === state.current) return
+      const variant = state.messages[index]
+      setSwipeStates({ ...swipeStatesRef.current, [groupId]: { ...state, current: index } })
+      setMessages(messagesRef.current.map(m => (m.swipeGroupId === groupId ? variant : m)))
+      return
+    }
+  }, [setMessages, setSwipeStates])
+
+  /**
    * Would applying a response carrying `version` walk the transcript backwards?
    *
    * `fetchChat` and the hinted read run independently and can overlap, so
@@ -326,6 +352,7 @@ export function useChatData(chatId: string) {
     error,
     swipeStates,
     setSwipeStates,
+    selectSwipeVariant,
     chatMemoryCount,
     setChatMemoryCount,
     fetchChat,

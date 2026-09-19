@@ -3863,6 +3863,35 @@ Delete a message.
 
 Generate alternative response (swipe).
 
+**Request Body** (optional):
+
+```json
+{ "swipeIndex": 2 }
+```
+
+With `swipeIndex`, switches the group to that existing variant instead of
+generating. Without it, generates a new one.
+
+**Query Parameters**:
+- `stream=1` — narrate the regeneration as `text/event-stream` instead of
+  waiting for it. Only meaningful when generating (no `swipeIndex`).
+
+**Response** (default): `201 Created` — `{ "message": <the new swipe> }`
+
+**Response** (`stream=1`): `200 OK`, `text/event-stream`. Frames, in order:
+
+| Frame | Meaning |
+|---|---|
+| `{"status":{"stage","message",…}}` | A step of the regeneration. Stages: `gathering`, `sending`, `regenerating`, `saving`. |
+| `{"content":"…"}` | A **delta** of the new line — append it. |
+| `{"reasoning":"…"}` | **Cumulative** reasoning so far — replace it. DISPLAY ONLY. |
+| `{"done":true,"message":{…}}` | The persisted swipe. Always last on success. |
+| `{"error","errorType","details"}` | The generation failed *after* the stream opened. |
+
+A failure *before* the stream opens (unknown message, non-assistant message,
+staff message) is an ordinary JSON error response, so callers should check
+`res.ok` before reading the body as a stream.
+
 #### `POST /api/v1/messages/[id]?action=reattribute`
 
 Reattribute a message to a different participant.
