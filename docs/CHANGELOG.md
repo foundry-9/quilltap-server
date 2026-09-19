@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Docs: plan for Inform, out-of-character information delivered before a character's next turn
+
+Added `docs/developer/features/salon-inform.md`, a plan for a Salon composer button that lets the
+operator write a short second-person passage and target one, several, or every LLM-controlled
+character with it. Each target receives the passage verbatim as a system block right after their
+system prompt on their next generation, then it is consumed; a Host transcript message records
+what was posted (public when everyone was targeted, whispered to the targets otherwise) but the
+record itself never reaches a model. Covers a new `chat_informs` table, the `POST ?action=inform` /
+`GET ?action=informs` / `POST ?action=cancel-inform` API, the `buildContext` insertion point between
+the identity reminder and the compressed-history block, consumption tied to a persisted assistant
+message so regenerate/swipe re-applies correctly, autonomous-room delivery, and export/import/backup.
+No code changes yet.
+
 #### Fixed: the star that sets a character's default system prompt did nothing (bug 154)
 
 On **Aurora → Edit character → System Prompts**, pressing the star beside a prompt reported
