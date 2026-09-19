@@ -33,6 +33,7 @@ function renderTools(overrides: Partial<React.ComponentProps<typeof ComposerGutt
       onStandaloneGenerateImageClick={() => {}}
       onInsertAnnouncementClick={() => {}}
       onComposeMailClick={onComposeMailClick}
+      onInformClick={() => {}}
       chatId="chat-1"
       {...overrides}
     />,

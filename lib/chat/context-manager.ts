@@ -118,6 +118,7 @@ import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
+import { buildInformBlock } from '@/lib/chat/context/inform-block'
 import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
@@ -347,6 +348,15 @@ export interface BuiltContext {
   messagesIncluded: number
   /** Whether messages were truncated to fit */
   messagesTruncated: boolean
+  /**
+   * The `chat_informs` rows the inform block carried this turn. Empty when
+   * there was no block, and empty on a swipe (a swipe re-applies but never
+   * consumes). The finalizer marks exactly these consumed once the turn has
+   * produced a *persisted* assistant message — never before, so a provider
+   * failure that saves nothing leaves them pending for the next attempt.
+   * See `lib/chat/context/inform-block.ts`.
+   */
+  informRowIds: string[]
   /** Warnings generated during context building */
   warnings: string[]
   /** Debug info: the actual memories that were included */
@@ -523,6 +533,19 @@ export interface BuildContextOptions {
    * the Aurora Core whisper to skip re-firing on a continuation.
    */
   isContinueMode?: boolean
+
+  // ============================================================================
+  // Inform Re-apply (swipe)
+  // ============================================================================
+
+  /**
+   * Swipe re-apply: the message being re-rolled plus every id in its swipe
+   * group. When set, the inform block carries the rows those generations
+   * consumed and no pending row at all — a swipe must see exactly the informs
+   * the line it re-rolls saw, and a brand-new inform has no business landing
+   * there. Undefined for every ordinary turn.
+   */
+  regenerationOfMessageIds?: string[]
 
   // ============================================================================
   // Status Callback (for streaming status events to client)
@@ -708,6 +731,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     toolInstructions,
     // Continue / nudge / chained autonomous-turn signal (Aurora Core whisper)
     isContinueMode = false,
+    // Swipe re-apply: deliver the informs this message's generation consumed
+    regenerationOfMessageIds,
   } = options
 
   const warnings: string[] = []
@@ -1937,7 +1962,25 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // `reservedOutgoingTokens` is the caller's declaration of what it will add
   // afterwards (tool schemas, agent-mode instructions, tool-change notice);
   // history must not be packed into space those will occupy.
-  const usedTokens = effectiveSystemPromptTokens + memoryRecapTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
+  //
+  // The inform block is the one sanctioned turn-variable system block. It is
+  // read here rather than at assembly so its tokens are spoken for before the
+  // history selection spends what is left: an operator's passage is short, but
+  // a budget that cannot see it is how bytes get onto the wire under a clean
+  // log line. Empty-is-absent, so a turn with no informs costs exactly nothing
+  // and assembles byte-for-byte as it did before the feature existed.
+  const informBlockResult = respondingParticipant
+    ? await buildInformBlock({
+        repos: getRepositories(),
+        chatId: chat.id,
+        participantId: respondingParticipant.id,
+        regenerationOfMessageIds,
+      })
+    : { content: null, rowIds: [] as string[] }
+  const informBlock = informBlockResult.content
+  const informTokens = informBlock ? estimateTokens(informBlock, provider) + 4 : 0
+
+  const usedTokens = effectiveSystemPromptTokens + memoryRecapTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens + informTokens
   const reservedOutgoingTokens = options.reservedOutgoingTokens ?? 0
   const remainingBudget = budget.safeInputLimit - usedTokens - reservedOutgoingTokens
 
@@ -2064,6 +2107,30 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     content: identityReminder,
     metadata: { isInjected: true },
   })
+
+  // The inform block — an out-of-character passage the operator handed this
+  // seat, delivered verbatim and nothing else: no preamble, no Host voice, no
+  // "do not mention this", for transparent and opaque characters alike.
+  //
+  // It sits here, after the static prefix (blocks 1 and 2) and before the
+  // compressed history, because blocks 1 and 2 are the cacheable region: the
+  // Anthropic plugin puts its `cache_control` breakpoint on the FIRST system
+  // block only, OpenAI-style prefix caching is unaffected by anything after an
+  // unchanged prefix, and local providers fold the leading system run into one
+  // message. To the model, that is exactly "after the system prompt".
+  //
+  // Nothing is pushed when there is nothing to deliver — the conditional, not
+  // an empty string, is what keeps a turn without informs byte-identical and
+  // the cache-determinism golden intact. Neither IDENTITY_STACK_BUILDER_VERSION
+  // nor PROMPT_CACHE_STRUCTURE_VERSION is bumped: the block is conditional, not
+  // structural. See `lib/chat/context/inform-block.ts`.
+  if (informBlock) {
+    contextMessages.push({
+      role: 'system',
+      content: informBlock,
+      metadata: { isInjected: true },
+    })
+  }
 
   // System block 3 — compressed-history rolling summary, only when budget
   // compression fired. Lives in its own block so its churn (refreshed every
@@ -2676,6 +2743,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     memoriesIncluded: totalMemoriesIncluded,
     messagesIncluded: selectedMessages.length + (newUserMessage ? 1 : 0), // +1 for new message if provided
     messagesTruncated: truncated,
+    // Consumed by the finalizer once this turn persists an assistant message —
+    // never here. Empty on a swipe: a swipe re-applies, it never consumes.
+    informRowIds: informBlockResult.rowIds,
     warnings,
     // Debug info for the debug panel
     debugMemories,

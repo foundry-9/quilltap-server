@@ -563,6 +563,24 @@ export async function handleRemoveParticipantAction(
     }
   }
 
+  // A seat that has left can never collect what it was handed out of character,
+  // and a pending row would keep its name on the composer's chip forever. Never
+  // allowed to break the removal itself — the seat is already gone.
+  try {
+    const droppedInforms = await repos.chatInforms.deletePendingForParticipant(
+      chatId,
+      validatedData.participantId,
+    );
+    logger.debug('[Chats v1] Pending informs dropped with removed seat', {
+      chatId, participantId: validatedData.participantId, droppedInforms,
+    });
+  } catch (error) {
+    logger.warn('[Chats v1] Could not drop pending informs for removed seat', {
+      chatId, participantId: validatedData.participantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   logger.info('[Chats v1] Participant removed', {
     chatId, participantId: validatedData.participantId, characterName,
     previousStatus,

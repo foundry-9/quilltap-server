@@ -144,6 +144,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-impersonation-voice-rewrite-field-v1': "Fitting the prompter's box beneath the stage, so a borrowed voice may be rehearsed before it carries…",
   'add-smart-typography-settings-field-v1': 'Teaching the quotation marks to curtsey',
   'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
+  'add-chat-informs-table-v1': 'Laying out a tray for the notes you slip the cast',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
   'add-auto-scroll-on-response-complete-field-v1': 'Deciding whether the Salon should chase each reply to its end',
   'add-autonomous-rooms-fields-v1': 'Preparing the autonomous salon quarters',

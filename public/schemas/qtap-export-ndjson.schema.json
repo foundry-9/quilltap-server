@@ -40,6 +40,7 @@
         "character_plugin_data",
         "chat",
         "chat_message",
+        "chat_inform",
         "conversation_annotation",
         "chat_document",
         "memory",
@@ -136,11 +137,11 @@
 
     "ChatChildRecord": {
       "type": "object",
-      "description": "A message, annotation, or Document-Mode pane record belonging to the most recent `chat` record. Messages are split out so a chat with tens of thousands of them still streams; annotations and chat documents follow the messages so a reader can resolve sourceMessageId against IDs it has already seen.",
+      "description": "A message, Inform row, annotation, or Document-Mode pane record belonging to the most recent `chat` record. Messages are split out so a chat with tens of thousands of them still streams; informs, annotations and chat documents follow the messages so a reader can resolve recordMessageId / consumedByMessageId / sourceMessageId against IDs it has already seen.",
       "required": ["kind", "chatId", "data"],
       "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["chat_message", "conversation_annotation", "chat_document"] },
+        "kind": { "enum": ["chat_message", "chat_inform", "conversation_annotation", "chat_document"] },
         "chatId": { "$ref": "https://quilltap.app/schemas/qtap-export.schema.json#/$defs/UUID" },
         "data": { "type": "object" }
       }

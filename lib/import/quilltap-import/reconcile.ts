@@ -16,9 +16,89 @@ import type {
   Project,
 } from '@/lib/schemas/types';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
+
+/**
+ * What one imported `chat_informs` row resolved to: either an insertable
+ * payload with every FK rewritten, or the reason it was dropped.
+ */
+export type ChatInformRemapResult =
+  | {
+      ok: true;
+      data: Omit<ChatInform, 'id' | 'createdAt' | 'updatedAt'>;
+      /**
+       * True when the row's `consumedByMessageId` named a message the
+       * destination does not have and was nulled. The row is still a real
+       * historical inform, so it is kept — it simply loses its swipe anchor.
+       */
+      consumedByMessageIdCleared: boolean;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * Rewrite one Inform row's FKs for the destination instance.
+ *
+ * Three of the four references are identity maps in practice rather than
+ * lookups, and that is exactly why they have to be *checked* here:
+ *
+ * - `chatId` goes through `idMaps.chats` like every other chat sidecar.
+ * - `participantId` is a chat PARTICIPANT id. Participants ride inside the
+ *   chat row, so `chats.create` preserves their ids verbatim — but a chat the
+ *   conflict strategy skipped, or one whose roster was edited in the
+ *   destination, may not have the seat at all.
+ * - `recordMessageId` and `consumedByMessageId` are message ids, which
+ *   `addMessage` also preserves verbatim — but a message import that warned
+ *   and continued leaves a hole.
+ *
+ * A row whose seat or whose Host record is missing is **dropped**: an inform
+ * aimed at nobody would sit pending forever, and a record pointer into empty
+ * space is a transcript lie. A missing `consumedByMessageId` only costs the
+ * row its swipe anchor, so the row is kept with the field nulled.
+ */
+export function remapChatInform(
+  inform: ChatInform,
+  idMaps: IdMappingState,
+  known: { participantIds: ReadonlySet<string>; messageIds: ReadonlySet<string> }
+): ChatInformRemapResult {
+  const chatId = idMaps.chats.get(inform.chatId) ?? inform.chatId;
+
+  if (!known.participantIds.has(inform.participantId)) {
+    return {
+      ok: false,
+      reason: `participant ${inform.participantId} is not a seat in chat ${chatId}`,
+    };
+  }
+
+  const recordMessageId = inform.recordMessageId ?? null;
+  if (recordMessageId && !known.messageIds.has(recordMessageId)) {
+    return {
+      ok: false,
+      reason: `record message ${recordMessageId} is missing from chat ${chatId}`,
+    };
+  }
+
+  const consumedByMessageId = inform.consumedByMessageId ?? null;
+  const consumedByMessageIdCleared = Boolean(
+    consumedByMessageId && !known.messageIds.has(consumedByMessageId)
+  );
+
+  return {
+    ok: true,
+    consumedByMessageIdCleared,
+    data: {
+      chatId,
+      batchId: inform.batchId,
+      participantId: inform.participantId,
+      contentMarkdown: inform.contentMarkdown,
+      recordMessageId,
+      consumedAt: inform.consumedAt ?? null,
+      consumedByMessageId: consumedByMessageIdCleared ? null : consumedByMessageId,
+    },
+  };
+}
 
 /**
  * Tear down the scaffold vault `characters.create()` provisioned, now that the

@@ -287,6 +287,23 @@ export async function finalizeMessageResponse({
     routeTrail
   )
 
+  // Consume this turn's informs. Tied to the *persisted* assistant message,
+  // never to context building: a provider failure that saved nothing must
+  // leave the rows pending for the seat's next attempt, and a turn-skip
+  // ([NOTHING TO ADD]) persists no message at all, so the passage waits until
+  // the character actually speaks. `informRowIds` is empty on a swipe — a
+  // swipe re-applies but never consumes. See `lib/chat/context/inform-block.ts`.
+  if (builtContext.informRowIds.length > 0) {
+    const consumed = await repos.chatInforms.markConsumed(builtContext.informRowIds, assistantMessageId)
+    logger.debug('Consumed informs for turn', {
+      chatId,
+      messageId: assistantMessageId,
+      participantId: characterParticipant.id,
+      requested: builtContext.informRowIds.length,
+      consumed,
+    })
+  }
+
   // Surface the resolved confirmation state to the live client (badge +, on a
   // revision, the replacement bubble text). The persisted columns carry it too,
   // so a page refresh shows the same state.

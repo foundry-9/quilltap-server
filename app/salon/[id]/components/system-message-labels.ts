@@ -46,6 +46,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'autonomous-room-halfway': 'halfway through',
   'autonomous-room-nearing-end': 'nearing the end',
   'mail-delivery': 'mail delivery',
+  inform: 'out of character',
   'custom-tool-result': 'roll outcome',
   'custom-tool-error': "the table couldn't deal",
   'turn-pass': 'nothing to add',

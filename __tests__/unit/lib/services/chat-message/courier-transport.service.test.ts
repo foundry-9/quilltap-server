@@ -330,4 +330,65 @@ describe('courier-transport.service', () => {
     const deltaCallArgs = mockRenderCourierDeltaAsMarkdown.mock.calls[0]?.[0] as { events: Array<{ speaker: string }> } | undefined
     expect(deltaCallArgs?.events[0]?.speaker).toBe('[Staff: The Lantern]')
   })
+
+  // The Courier builds its own transcript straight from the persisted events,
+  // so the record-only strip in `buildMessageContext` never reaches it. Without
+  // an explicit guard this would be the one transport that hands the inform
+  // record to a model — and the operator's note would arrive twice.
+  it('never puts the inform record in the delta', async () => {
+    const checkpoint = { lastResolvedMessageId: 'x', resolvedAt: '2026-05-01T00:00:00.000Z' }
+    const chat = makeChat({ courierCheckpoints: { 'char-1': checkpoint } })
+
+    const { repos } = makeRepos({
+      messages: [
+        {
+          id: 'inform-record',
+          type: 'message',
+          role: 'ASSISTANT',
+          participantId: null,
+          createdAt: '2026-05-02T00:00:00.000Z',
+          content: 'You notice the clock has stopped.',
+          attachments: [],
+          systemSender: 'host',
+          systemKind: 'inform',
+          targetParticipantIds: null,
+        },
+        {
+          id: 'ordinary',
+          type: 'message',
+          role: 'ASSISTANT',
+          participantId: null,
+          createdAt: '2026-05-02T00:01:00.000Z',
+          content: 'The Host welcomes Beatrice.',
+          attachments: [],
+          systemSender: 'host',
+          systemKind: 'add',
+          targetParticipantIds: null,
+        },
+      ],
+    })
+
+    await dispatchCourierTransport({
+      repos,
+      chatId: 'chat-1',
+      chat,
+      character: baseCharacter,
+      characterParticipant: { id: 'p-char' },
+      userParticipantId: 'p-user',
+      isMultiCharacter: false,
+      participantCharacters: new Map(),
+      resolvedIdentity: { name: 'Captain', description: '', characterId: null },
+      formattedMessages: [],
+      streaming: baseStreaming,
+      controller: controller as any,
+      encoder,
+    })
+
+    const deltaCallArgs = mockRenderCourierDeltaAsMarkdown.mock.calls[0]?.[0] as
+      { events: Array<{ text?: string; content?: string }> } | undefined
+    const events = deltaCallArgs?.events ?? []
+    expect(events).toHaveLength(1)
+    expect(JSON.stringify(events)).not.toContain('clock has stopped')
+    expect(JSON.stringify(events)).toContain('welcomes Beatrice')
+  })
 })

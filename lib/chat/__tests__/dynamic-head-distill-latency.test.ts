@@ -90,6 +90,11 @@ beforeEach(() => {
     },
     characters: { findByUserId: jest.fn().mockResolvedValue([characterA]) },
     chats: { getMessages: jest.fn().mockResolvedValue([]), addMessage: jest.fn() },
+    // buildContext always asks this seat what it is owed; nothing pending.
+    chatInforms: {
+      findPendingForParticipant: jest.fn().mockResolvedValue([]),
+      findConsumedByMessages: jest.fn().mockResolvedValue([]),
+    },
   } as never)
 })
 

@@ -46,6 +46,7 @@ export {
 } from './documents';
 export type { AccessibleStoreOption, AccessibleStoreKind, ProjectLibraryTarget } from './documents';
 export { handleInsertAnnouncement } from './announcement';
+export { handleInform, handleGetInforms, handleCancelInform } from './inform';
 export { handleAnnouncementPreview } from './announcement-preview';
 export { handleImpersonationVoicePreview } from './impersonation-voice-preview';
 export { handleSendMail } from './send-mail';

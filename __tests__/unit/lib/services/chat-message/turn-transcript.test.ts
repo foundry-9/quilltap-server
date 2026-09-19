@@ -171,6 +171,30 @@ describe('buildTurnTranscript', () => {
     expect(transcript.characterSlices[0].text).toBe('real reply')
   })
 
+  // Guards the Inform memory decision: the passage is a system block, not a
+  // message, so the per-turn extractor never sees it — and the record that
+  // documents it wears `systemSender`, so it is skipped here too. If Staff
+  // messages ever started reaching this transcript, an out-of-character note
+  // would start becoming a character's memory.
+  it('skips the inform record, so an out-of-character note never becomes a memory', () => {
+    const messages: MessageEvent[] = [
+      userMsg('u-1', 'hello'),
+      assistantMsg('a-inform', 'participant-a', 'You notice the clock has stopped.', {
+        systemSender: 'host',
+        systemKind: 'inform',
+      }),
+      assistantMsg('a-real', 'participant-a', 'real reply'),
+    ]
+
+    const transcript = buildTurnTranscript(messages, participants, characterMap, {
+      turnOpenerMessageId: 'u-1',
+    })
+
+    expect(transcript.characterSlices).toHaveLength(1)
+    expect(transcript.characterSlices[0].text).toBe('real reply')
+    expect(transcript.characterSlices[0].text).not.toContain('clock has stopped')
+  })
+
   it('handles greeting-only history (no turn opener)', () => {
     const messages: MessageEvent[] = [
       assistantMsg('a-greeting', 'participant-a', 'Welcome!'),

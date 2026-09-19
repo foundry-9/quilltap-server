@@ -57,6 +57,7 @@ export { ProjectDocMountLinksRepository } from './project-doc-mount-links.reposi
 export { GroupDocMountLinksRepository } from './group-doc-mount-links.repository';
 export { GroupCharacterMembersRepository } from './group-character-members.repository';
 export { ChatDocumentsRepository } from './chat-documents.repository';
+export { ChatInformsRepository } from './chat-informs.repository';
 export { TerminalSessionsRepository } from './terminal-sessions.repository';
 export { TextReplacementRulesRepository, TextReplacementRuleConflictError } from './text-replacement-rules.repository';
 
@@ -100,6 +101,7 @@ import { ProjectDocMountLinksRepository } from './project-doc-mount-links.reposi
 import { GroupDocMountLinksRepository } from './group-doc-mount-links.repository';
 import { GroupCharacterMembersRepository } from './group-character-members.repository';
 import { ChatDocumentsRepository } from './chat-documents.repository';
+import { ChatInformsRepository } from './chat-informs.repository';
 import { TerminalSessionsRepository } from './terminal-sessions.repository';
 import { TextReplacementRulesRepository } from './text-replacement-rules.repository';
 
@@ -148,6 +150,7 @@ export interface RepositoryContainer {
   groupDocMountLinks: GroupDocMountLinksRepository;
   groupCharacterMembers: GroupCharacterMembersRepository;
   chatDocuments: ChatDocumentsRepository;
+  chatInforms: ChatInformsRepository;
   terminalSessions: TerminalSessionsRepository;
   textReplacementRules: TextReplacementRulesRepository;
 }
@@ -208,6 +211,7 @@ export function createRepositories(): RepositoryContainer {
       groupDocMountLinks: new GroupDocMountLinksRepository(),
       groupCharacterMembers: new GroupCharacterMembersRepository(),
       chatDocuments: new ChatDocumentsRepository(),
+      chatInforms: new ChatInformsRepository(),
       terminalSessions: new TerminalSessionsRepository(),
       textReplacementRules: new TextReplacementRulesRepository(),
     };

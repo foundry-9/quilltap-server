@@ -35,7 +35,21 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.state('chat-1'),
       queryKeys.chats.background('chat-1'),
       queryKeys.chats.gallery('chat-1'),
+      queryKeys.chats.informs('chat-1'),
     ]);
+  });
+
+  it('refreshes the pending informs on the chats topic', () => {
+    // Every event that changes a pending inform already publishes `chats`: the
+    // post inserts the Host record, a consumed row rides the assistant-message
+    // insert, and a cancel publishes the topic by hand. This row is what keeps
+    // the composer chips honest without a poll of their own.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.chats.informs('chat-1'),
+    );
+    expect(queryKeysForTopic('chats', 'other-chat')).not.toContainEqual(
+      queryKeys.chats.informs('chat-1'),
+    );
   });
 
   it('refreshes the chat gallery on the chats topic', () => {

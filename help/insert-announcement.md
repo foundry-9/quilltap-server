@@ -58,6 +58,10 @@ It did have to guess, once. Before this, the name and avatar on the bubble were 
 
 Staff announcements are unaffected: they have always named themselves in their own prose. *"The Host raises a glass and says…"* reads clearly to any character, and still does.
 
+## When you want it known rather than said
+
+Not every intervention wants to be *heard.* If what you actually need is for a character to have noticed something, or to have remembered something, without a word of it being spoken in the room, an announcement is the wrong instrument — even a whispered one, which still arrives as a remark somebody made. Reach instead for **Inform**, the small *i* further down the gutter: it hands a character a short out-of-character passage before their next turn, delivers it verbatim, and spends it once they have spoken. An announcement is *said*; an inform is *known*. See [Informing the cast](/salon).
+
 ## A note on permanence
 
 Announcements, once posted, become part of the chat history. They may be edited or deleted using the same controls as any other message bubble. They are included in exports and imports. They contribute to context summaries and memory extraction, just as any other conversation turn does. Pose them with the care you would pose any other message — the Commonplace Book remembers everything.

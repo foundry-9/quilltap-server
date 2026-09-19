@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
+import PendingInformChips from '@/components/chat/PendingInformChips'
 import { SpeakingAsAvatar } from './SpeakingAsAvatar'
 import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
@@ -79,6 +80,13 @@ interface ChatComposerProps {
   onStandaloneGenerateImageClick: () => void
   onInsertAnnouncementClick: () => void
   onComposeMailClick: () => void
+  /** Open the Inform dialog — a word out of character to one or more seats. */
+  onInformClick: () => void
+  /**
+   * Seat display names keyed by chat participant id, so the pending-inform
+   * chips can name who is still to be told. Omit and the chips stay silent.
+   */
+  informParticipantNames?: Record<string, string>
   onStopStreaming: () => void
   /** Hide the stop button (when sidebar has its own stop button) */
   hideStopButton?: boolean
@@ -150,6 +158,8 @@ export function ChatComposer({
   onStandaloneGenerateImageClick,
   onInsertAnnouncementClick,
   onComposeMailClick,
+  onInformClick,
+  informParticipantNames,
   onStopStreaming,
   hideStopButton = false,
   onPendingToolResult,
@@ -286,6 +296,14 @@ export function ChatComposer({
           </div>
         )}
 
+        {/* Pending Informs — notes waiting on a seat's next turn. Sits with the
+            attachment chips, one row above the form and directly over the
+            gutter, rather than inside the gutter column: a chip beside the
+            tools would narrow the editor every time one appeared. */}
+        {informParticipantNames && (
+          <PendingInformChips chatId={id} participantNames={informParticipantNames} />
+        )}
+
         {/* Attached files and pending tool results preview */}
         {(attachedFiles.length > 0 || pendingToolResults.length > 0) && (
           <div className="qt-chat-attachment-list mb-2">
@@ -399,6 +417,7 @@ export function ChatComposer({
               onStandaloneGenerateImageClick={onStandaloneGenerateImageClick}
               onInsertAnnouncementClick={onInsertAnnouncementClick}
               onComposeMailClick={onComposeMailClick}
+              onInformClick={onInformClick}
               chatId={id}
               onPendingToolResult={onPendingToolResult}
               customToolsAvailable={customToolsAvailable}

@@ -940,6 +940,12 @@ describe('Context Manager', () => {
         memories: {
           findByCharacterAboutCharacters: jest.fn().mockResolvedValue([memory]),
         },
+        // buildContext always asks for this seat's pending informs; an empty
+        // answer is what "no inform block this turn" looks like.
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
       mockedSearchMemories.mockResolvedValue([])
@@ -1007,6 +1013,10 @@ describe('Context Manager', () => {
         name: 'Morgan',
       }
       const repoMock = {
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
         characters: {
           findByUserId: jest.fn().mockResolvedValue([characterA, characterB, characterUser, offSceneCharacter]),
         },
@@ -1076,6 +1086,123 @@ describe('Context Manager', () => {
       expect(repoMock.chats.getMessages).toHaveBeenCalledTimes(1)
       expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
       expect(result.messages.some(m => m.role === 'assistant' && m.content.includes('Off-Scene Character Mentioned'))).toBe(false)
+    })
+
+    // ------------------------------------------------------------------
+    // The inform block — the one sanctioned turn-variable system block.
+    // ------------------------------------------------------------------
+
+    const buildWithInforms = async (pendingRows: unknown[]) => {
+      mockedGetRepositories.mockReturnValue({
+        memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue(pendingRows),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+      } as any)
+      mockedSearchMemories.mockResolvedValue([])
+
+      return buildContext({
+        provider: 'OPENAI',
+        modelName: 'gpt-4o',
+        userId: 'user',
+        character: characterA,
+        userCharacter: { name: 'Alex', description: 'Curious' },
+        chat: {
+          id: 'chat-1',
+          userId: 'user',
+          participants: allParticipants,
+          title: 'Test Chat',
+          contextSummary: null,
+          sillyTavernMetadata: null,
+          tags: [],
+          messageCount: 2,
+          lastMessageAt: timestamp,
+          lastRenameCheckInterchange: 0,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        } as any,
+        existingMessages: [
+          { role: 'USER', content: 'Hello', id: 'm1' },
+          { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+        ],
+        newUserMessage: 'Ready for the next task?',
+        skipMemories: true,
+        respondingParticipant: participantA,
+        allParticipants,
+        participantCharacters,
+        messagesWithParticipants: [
+          { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+          { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+        ],
+      } as any)
+    }
+
+    const informRow = (id: string, contentMarkdown: string) => ({
+      id,
+      chatId: 'chat-1',
+      batchId: `batch-${id}`,
+      participantId: 'participant-a',
+      contentMarkdown,
+      recordMessageId: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      consumedAt: null,
+      consumedByMessageId: null,
+    })
+
+    it('adds nothing at all when the seat is owed no inform', async () => {
+      const result = await buildWithInforms([])
+
+      // Empty-is-absent: with nothing pending the builder must push NOTHING,
+      // not an empty system message. This is what keeps an ordinary turn
+      // byte-identical to one assembled before Inform existed, and is what the
+      // provider prompt caches depend on.
+      expect(result.informRowIds).toEqual([])
+      const systemBlocks = result.messages.filter(m => m.role === 'system')
+      expect(systemBlocks).toHaveLength(2)
+      expect(systemBlocks[1].content).toContain('## Identity Reminder')
+    })
+
+    it('slots exactly one extra system block after the identity reminder, verbatim', async () => {
+      const withoutInform = await buildWithInforms([])
+      const withInform = await buildWithInforms([
+        informRow('row-1', 'You notice the clock has stopped.'),
+      ])
+
+      const systemBlocks = withInform.messages.filter(m => m.role === 'system')
+      expect(systemBlocks).toHaveLength(3)
+      expect(systemBlocks[1].content).toContain('## Identity Reminder')
+
+      // Verbatim: exactly what the operator typed. No preamble, no Host voice,
+      // no "do not mention this".
+      expect(systemBlocks[2].content).toBe('You notice the clock has stopped.')
+
+      // Blocks 1 and 2 — the cacheable static prefix — are untouched.
+      expect(systemBlocks[0].content).toBe(
+        withoutInform.messages.filter(m => m.role === 'system')[0].content,
+      )
+      expect(systemBlocks[1].content).toBe(
+        withoutInform.messages.filter(m => m.role === 'system')[1].content,
+      )
+
+      // And no non-system message changed either.
+      expect(withInform.messages.filter(m => m.role !== 'system')).toEqual(
+        withoutInform.messages.filter(m => m.role !== 'system'),
+      )
+
+      expect(withInform.informRowIds).toEqual(['row-1'])
+    })
+
+    it('stacks several pending passages in posting order, rule-separated', async () => {
+      const result = await buildWithInforms([
+        informRow('row-1', 'First thing.'),
+        informRow('row-2', 'Second thing.'),
+      ])
+
+      const systemBlocks = result.messages.filter(m => m.role === 'system')
+      expect(systemBlocks[2].content).toBe('First thing.\n\n---\n\nSecond thing.')
+      expect(result.informRowIds).toEqual(['row-1', 'row-2'])
     })
   })
 

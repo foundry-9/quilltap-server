@@ -225,20 +225,33 @@ export function stripToolArtifacts(content: string): string | null {
  * Filters:
  * - If `type` field present, skips non-'message' entries (system events, context-summaries)
  * - Skips any role that isn't USER or ASSISTANT (filters TOOL and SYSTEM messages)
+ * - Skips the `inform` record (see below)
  * - Applies `stripToolArtifacts()` to assistant messages; skips if null returned
  * - Case-insensitive role matching (handles both 'USER' and 'user')
+ *
+ * The `inform` record is a Host message documenting an out-of-character passage
+ * the operator handed a seat. The passage itself is delivered as its own system
+ * block; the record is bookkeeping for the operator and **must never reach a
+ * model**. It wears `role: 'ASSISTANT'`, so the role filter alone would let it
+ * through — and every task this function feeds (titles, summaries, story
+ * backgrounds, context compression) hands its output to a model. Compression is
+ * the sharpest case: a folded record comes back as a system block, which is the
+ * record reaching the model by the back door, in every turn thereafter.
  *
  * @param messages - Any message-like array (ChatEvents, MessageEvents, etc.)
  * @returns Clean ChatMessage[] with only user/assistant conversational text
  */
 export function extractVisibleConversation(
-  messages: Array<{ type?: string; role?: string; content?: string }>
+  messages: Array<{ type?: string; role?: string; content?: string; systemKind?: string | null }>
 ): ChatMessage[] {
   const result: ChatMessage[] = []
 
   for (const m of messages) {
     // Skip non-message entries (system events, context-summary events, etc.)
     if (m.type !== undefined && m.type !== 'message') continue
+
+    // Record-only: documents a delivery, is not part of the conversation.
+    if (m.systemKind === 'inform') continue
 
     // Skip entries without content (e.g., context-summary events)
     if (!m.content) continue

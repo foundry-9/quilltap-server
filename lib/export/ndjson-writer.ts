@@ -338,6 +338,25 @@ async function* streamChats(
       });
     }
 
+    // Inform rows come straight after the messages — before the annotations —
+    // because `recordMessageId` and `consumedByMessageId` point at message IDs
+    // the reader has only just seen. Consumed rows ride along on purpose: the
+    // row a past turn consumed is what makes a swipe of that turn honest once
+    // the chat lands in another instance.
+    try {
+      const informs = await getRepositories().chatInforms.findByChatId(id);
+      for (const inform of informs) {
+        yield { kind: 'chat_inform', chatId: id, data: inform };
+        bump(counts, 'chatInforms');
+      }
+      logger.debug('Exported chat informs', { chatId: id, count: informs.length });
+    } catch (error) {
+      logger.warn('Failed to load chat informs for export', {
+        chatId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     // Conversation annotations and chat documents come after the messages so
     // importers can resolve sourceMessageId / chatId against IDs they have
     // already seen in this same stream.

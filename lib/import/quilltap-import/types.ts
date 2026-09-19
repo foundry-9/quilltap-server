@@ -58,9 +58,10 @@ export interface AnyExportData {
   documents?: ExportedDocumentStoreDocument[];
   blobs?: ExportedDocumentStoreBlob[];
   projectLinks?: ExportedProjectDocMountLink[];
-  // Chat sidecars (per-chat annotations + Document Mode pane state)
+  // Chat sidecars (per-chat annotations + Document Mode pane state + Informs)
   conversationAnnotations?: import('@/lib/schemas/types').ConversationAnnotation[];
   chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
+  chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
   // General file library (files + folders; folders share the field above)
   files?: ExportedFileWithBytes[];
   // Configuration / catalogue export types

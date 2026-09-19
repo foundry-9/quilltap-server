@@ -54,6 +54,7 @@ export async function previewRestore(zipPath: string): Promise<RestoreSummary> {
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: 0, // Counted after zip extraction; not shown in preview
       chatDocuments: data.chatDocuments?.length || 0,
+      chatInforms: data.chatInforms?.length || 0,
       instanceSettings: data.instanceSettings?.length || 0,
       embeddingStatus: data.embeddingStatus?.length || 0,
       conversationChunks: data.conversationChunks?.length || 0,

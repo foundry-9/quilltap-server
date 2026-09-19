@@ -42,6 +42,7 @@ import type {
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -341,6 +342,25 @@ export function remapBackupData(
     ...remapper.remapFields(cd, ['id', 'chatId']),
   })) as ChatDocument[];
 
+  // Inform rows reference the chat, one of its participants (`participantId`
+  // is a seat id, never a character id), the Host record message and — once
+  // consumed — the assistant message that carried them. All four were remapped
+  // with the chat above, so the remapper answers with the same new ids.
+  // `batchId` is not a row anywhere; it is remapped anyway so the whole batch
+  // moves together and no id from the source instance survives the restore.
+  // The nullable fields are left alone when null — remapFields only touches
+  // strings.
+  const remappedChatInforms = (data.chatInforms || []).map((inform) => ({
+    ...remapper.remapFields(inform, [
+      'id',
+      'chatId',
+      'batchId',
+      'participantId',
+      'recordMessageId',
+      'consumedByMessageId',
+    ]),
+  })) as ChatInform[];
+
   // Conversation chunks reference chats and individual messages.
   const remappedConversationChunks = (data.conversationChunks || []).map((chunk) => ({
     ...remapper.remapArrayFields(
@@ -448,6 +468,7 @@ export function remapBackupData(
       ...remapper.remapFields(annotation, ['id', 'chatId', 'sourceMessageId']),
     })) as ConversationAnnotation[],
     chatDocuments: remappedChatDocuments,
+    chatInforms: remappedChatInforms,
     instanceSettings: remappedInstanceSettings,
     embeddingStatus: remappedEmbeddingStatus,
     conversationChunks: remappedConversationChunks,

@@ -84,6 +84,56 @@ beforeEach(() => {
 })
 
 describe('regenerateMessageAsSwipe', () => {
+  // Informs re-apply on a swipe and are never consumed by one. A swipe re-rolls
+  // a line that was already spoken, so it must see exactly the passages that
+  // line's generation saw — and it must not spend a brand-new passage that was
+  // meant for the character's next real turn.
+  describe('inform re-apply', () => {
+    it('passes the target and its whole swipe group to the context builder', async () => {
+      const { buildMessageContext } = require('@/lib/services/chat-message/context-builder.service')
+      const repos = buildRepos()
+      const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail', {
+        swipeGroupId: 'swipe-msg-abigail',
+        swipeIndex: 0,
+      })
+      const sibling = makeMessage('msg-abigail-2', 'ASSISTANT', now + 100, 'p-abigail', {
+        swipeGroupId: 'swipe-msg-abigail',
+        swipeIndex: 1,
+      })
+      const allMessages = [makeMessage('msg-user', 'USER', now, 'p-revenant'), target, sibling]
+
+      await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages })
+
+      const passedOptions = buildMessageContext.mock.calls[0][0]
+      expect(passedOptions.regenerationOfMessageIds).toEqual(
+        expect.arrayContaining(['msg-abigail', 'msg-abigail-2']),
+      )
+      expect(passedOptions.regenerationOfMessageIds).toHaveLength(2)
+    })
+
+    it('passes just the target when it has no group yet', async () => {
+      const { buildMessageContext } = require('@/lib/services/chat-message/context-builder.service')
+      const repos = buildRepos()
+      const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
+      const allMessages = [makeMessage('msg-user', 'USER', now, 'p-revenant'), target]
+
+      await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages })
+
+      expect(buildMessageContext.mock.calls[0][0].regenerationOfMessageIds).toEqual(['msg-abigail'])
+    })
+
+    it('never consumes an inform', async () => {
+      const markConsumed = jest.fn()
+      const repos = buildRepos({ chatInforms: { markConsumed } })
+      const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')
+      const allMessages = [makeMessage('msg-user', 'USER', now, 'p-revenant'), target]
+
+      await regenerateMessageAsSwipe({ repos, userId: 'user-1', chat, targetMessage: target, allMessages })
+
+      expect(markConsumed).not.toHaveBeenCalled()
+    })
+  })
+
   it('attributes the new swipe to the original message participant and groups it in place', async () => {
     const repos = buildRepos()
     const target = makeMessage('msg-abigail', 'ASSISTANT', now + 100, 'p-abigail')

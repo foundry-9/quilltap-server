@@ -113,6 +113,13 @@ export interface BuildMessageContextOptions {
    * never persisted.
    */
   turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
+  /**
+   * Swipe re-apply: the message being re-rolled plus every id in its swipe
+   * group. Passed through to `buildContext`, where it makes the inform block
+   * carry the rows those generations consumed and no pending row at all.
+   * Undefined for every ordinary turn.
+   */
+  regenerationOfMessageIds?: string[]
 }
 
 /**
@@ -815,6 +822,36 @@ export function applyMultiCharacterTurnAnchor(
 }
 
 /**
+ * Record-only: a transcript row that exists for the operator and must never
+ * reach a model. Two kinds qualify, for different reasons.
+ *
+ * 1. **Persisted Commonplace Book whispers.** Recall is recomputed per turn and
+ *    inlined into the new user message body, so past whispers piling up across
+ *    turns would only bloat the window with stale recall. EXCEPTION: the
+ *    `relevant-conversations` kind (posted on each summary fold) is NOT
+ *    recomputed per turn and intentionally persists, so it is kept and reaches
+ *    the LLM like any other persistent Staff whisper.
+ *
+ * 2. **The `inform` record.** A Host message documenting an out-of-character
+ *    passage the operator handed a seat. The passage itself is delivered as its
+ *    own system block by `buildInformBlock`; the record is bookkeeping, and
+ *    letting it through would deliver the same words twice, to everyone,
+ *    forever. It wears `role: 'ASSISTANT'`, so a role filter alone lets it past
+ *    — this predicate is what stops it.
+ *
+ * Deliberately blind to system transparency, roster size and whether the turn
+ * is a fresh generation or a swipe: every generation routes through
+ * `buildMessageContext`, and there is exactly one call site, so there is no
+ * dimension along which a record could slip through on one path and not another.
+ */
+export function isRecordOnlyMessage(
+  m: { systemSender?: string | null; systemKind?: string | null },
+): boolean {
+  if (m.systemKind === 'inform') return true
+  return m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations'
+}
+
+/**
  * Build the full message context for the LLM
  */
 export async function buildMessageContext(
@@ -848,22 +885,18 @@ export async function buildMessageContext(
     uncensoredFallbackOptions,
   } = options
 
-  // Drop persisted Commonplace Book whispers from LLM context. They live in
-  // the transcript for UI visibility, but recall is recomputed per turn and
-  // inlined into the new user message body — past whispers piling up across
-  // turns would just bloat the context window with stale recall. This filter
-  // applies regardless of system transparency.
-  //
-  // EXCEPTION: the `relevant-conversations` kind (posted on each summary fold)
-  // is NOT recomputed per turn and intentionally persists across turns, so it
-  // is kept here and reaches the LLM like any other persistent Staff whisper.
-  const isStrippableCmpb = (m: { systemSender?: string | null; systemKind?: string | null }) =>
-    m.systemSender === 'commonplaceBook' && m.systemKind !== 'relevant-conversations'
-  const cmpbStrippedCount = existingMessages.filter(isStrippableCmpb).length
-  const messagesWithoutCmpb = cmpbStrippedCount > 0
-    ? existingMessages.filter(m => !isStrippableCmpb(m))
+  // Drop record-only rows — Commonplace recall whispers and `inform` records —
+  // before anything else touches the history. This is the single call site;
+  // see `isRecordOnlyMessage` above for why each kind qualifies.
+  const recordOnlyStrippedCount = existingMessages.filter(isRecordOnlyMessage).length
+  const messagesWithoutCmpb = recordOnlyStrippedCount > 0
+    ? existingMessages.filter(m => !isRecordOnlyMessage(m))
     : existingMessages
-  if (cmpbStrippedCount > 0) {
+  if (recordOnlyStrippedCount > 0) {
+    logger.debug('[Context] Stripped record-only messages from LLM history', {
+      chatId: chat.id,
+      strippedCount: recordOnlyStrippedCount,
+    })
   }
 
   // Name the speaker on ad-hoc announcements. `customAnnouncer` is a rendering
@@ -1092,6 +1125,8 @@ export async function buildMessageContext(
     reservedOutgoingTokens: options.reservedOutgoingTokens,
     // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
     turnSkip: options.turnSkip,
+    // Swipe re-apply: deliver the informs the re-rolled line's generation saw.
+    regenerationOfMessageIds: options.regenerationOfMessageIds,
   })
 
   // Log context building results for debugging

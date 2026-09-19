@@ -242,6 +242,22 @@ export const impersonationVoicePreviewSchema = z.object({
 });
 
 /**
+ * `POST ?action=inform` — an out-of-character passage handed to one or more
+ * LLM-controlled seats, delivered verbatim as its own system block on each
+ * target's next generation.
+ */
+export const informSchema = z.object({
+  contentMarkdown: z.string().min(1),
+  /** Chat PARTICIPANT ids. null = every eligible seat at post time. */
+  targetParticipantIds: z.array(z.uuid()).min(1).nullable(),
+});
+
+/** `POST ?action=cancel-inform` — drop a batch's still-pending targets. */
+export const cancelInformSchema = z.object({
+  batchId: z.uuid(),
+});
+
+/**
  * Compose Mail composer action: the operator posts a letter as one of their
  * player-characters. `fromCharacterId` must be a `controlledBy:'user'` CHARACTER
  * participant of this chat (re-verified server-side — never trust the client).

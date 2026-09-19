@@ -34,6 +34,7 @@ import type {
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
@@ -202,6 +203,8 @@ export interface BackupManifest {
     userInstalledThemes?: number;
     /** Number of ChatDocument entities (Document Mode pane state) */
     chatDocuments?: number;
+    /** Number of ChatInform rows (out-of-character passages handed to seats) */
+    chatInforms?: number;
     /** Number of instance_settings key/value rows */
     instanceSettings?: number;
     /** Number of EmbeddingStatus entities */
@@ -322,6 +325,12 @@ export interface BackupData {
 
   /** Array of ChatDocument entities (Document Mode pane state per chat) */
   chatDocuments?: ChatDocument[];
+  /**
+   * Array of ChatInform rows per chat — consumed rows included, because a
+   * consumed row is what makes a swipe of the turn that consumed it honest
+   * after a restore.
+   */
+  chatInforms?: ChatInform[];
 
   /**
    * Array of instance_settings key/value pairs. Includes references to
@@ -532,6 +541,8 @@ export interface RestoreSummary {
 
   /** Number of ChatDocument entities restored */
   chatDocuments?: number;
+  /** Number of ChatInform rows restored */
+  chatInforms?: number;
 
   /** Number of instance_settings rows restored */
   instanceSettings?: number;

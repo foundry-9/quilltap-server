@@ -38,7 +38,7 @@ import {
   importPluginConfigs,
   importInstanceSettings,
 } from './import-configuration';
-import { reconcileRelationships } from './reconcile';
+import { reconcileRelationships, remapChatInform } from './reconcile';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
@@ -698,6 +698,97 @@ async function executeImportStrict(
         }
       }
       imported.chatDocuments = chatDocsImported;
+    }
+
+    // 7b-ii. Inform rows (`chat_informs`), consumed ones included — a consumed
+    //    row is what lets a swipe of the turn that consumed it re-apply the
+    //    same passage in this instance.
+    //
+    //    Must follow both the chat *and* its messages: the row points at a
+    //    chat participant, at the Host record message documenting the post,
+    //    and (when consumed) at the assistant message that carried it. Every
+    //    one of those is verified before a row is written — an inform aimed at
+    //    a seat that is not here would sit pending forever, and a record
+    //    pointer into empty space is a transcript lie. `remapChatInform` owns
+    //    that judgement; here we only gather the sets it checks against.
+    if (data.chatInforms && data.chatInforms.length > 0) {
+      const globalRepos = getRepositories();
+      /** Per destination chat: the seats and the message ids it actually has. */
+      const knownByChatId = new Map<
+        string,
+        { participantIds: Set<string>; messageIds: Set<string> }
+      >();
+
+      const knownFor = async (chatId: string) => {
+        const cached = knownByChatId.get(chatId);
+        if (cached) return cached;
+        const participantIds = new Set<string>();
+        const messageIds = new Set<string>();
+        try {
+          const chat = await repos.chats.findById(chatId);
+          for (const participant of chat?.participants ?? []) {
+            if (participant.id) participantIds.add(participant.id);
+          }
+          const events = await repos.chats.getMessages(chatId);
+          for (const event of events) {
+            const id = (event as { id?: string }).id;
+            if (id) messageIds.add(id);
+          }
+        } catch (error) {
+          moduleLogger.warn('Failed to read chat while importing informs', {
+            chatId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        const known = { participantIds, messageIds };
+        knownByChatId.set(chatId, known);
+        return known;
+      };
+
+      let informsImported = 0;
+      let informsDropped = 0;
+      for (const inform of data.chatInforms) {
+        const remappedChatId = idMaps.chats.get(inform.chatId) ?? inform.chatId;
+        const result = remapChatInform(inform, idMaps, await knownFor(remappedChatId));
+
+        if (!result.ok) {
+          informsDropped++;
+          warnings.push(`Dropped an imported inform: ${result.reason}`);
+          moduleLogger.warn('Dropped imported inform with an unresolvable reference', {
+            informId: inform.id,
+            chatId: remappedChatId,
+            reason: result.reason,
+          });
+          continue;
+        }
+
+        if (result.consumedByMessageIdCleared) {
+          moduleLogger.warn('Imported inform lost its consumedByMessageId', {
+            informId: inform.id,
+            chatId: remappedChatId,
+            consumedByMessageId: inform.consumedByMessageId,
+          });
+        }
+
+        try {
+          await globalRepos.chatInforms.create(result.data);
+          informsImported++;
+        } catch (error) {
+          informsDropped++;
+          warnings.push(
+            `Failed to import inform: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+      }
+
+      imported.chatInforms = informsImported;
+      moduleLogger.debug('Imported chat informs', {
+        total: data.chatInforms.length,
+        imported: informsImported,
+        dropped: informsDropped,
+      });
     }
 
     // 7c. Document stores (Scriptorium) — mount point configs plus, for

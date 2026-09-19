@@ -57,6 +57,13 @@ export const queryKeys = {
      * answer, which is what stops them disagreeing (bug 129).
      */
     gallery: (id: string) => ['chats', id, 'gallery'] as const,
+    /**
+     * Pending Inform batches for one conversation, from `?action=informs`.
+     * Drives the composer's "Informing …" chips. It rides the `chats` realtime
+     * topic (see `lib/realtime/topic-map.ts`), so posting, cancelling and
+     * consuming an inform all refresh it without a poll of its own.
+     */
+    informs: (id: string) => ['chats', id, 'informs'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the

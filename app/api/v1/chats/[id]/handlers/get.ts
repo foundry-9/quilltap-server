@@ -9,6 +9,7 @@
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
  * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
+ * GET /api/v1/chats/[id]?action=informs - List the pending Inform batches
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,7 +25,7 @@ import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
 import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { projectChatTranscript } from '@/lib/chat/transcript-projection';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox, handleExportMarkdown } from '../actions';
+import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox, handleExportMarkdown, handleGetInforms } from '../actions';
 import {
   getPhotoLinkSummaryBySha256,
   type PhotoLinkSummary,
@@ -155,6 +156,11 @@ export async function handleGet(
   // Handle photo-albums action - resolve candidate save targets for an image
   if (action === 'photo-albums') {
     return handleGetPhotoAlbums(chatId, ctx);
+  }
+
+  // Handle informs action - pending Inform batches, for the composer's chip.
+  if (action === 'informs') {
+    return handleGetInforms(chatId, ctx);
   }
 
   // Handle group-stores action - document stores of groups the user persona belongs to

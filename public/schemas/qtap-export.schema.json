@@ -45,7 +45,8 @@
               "chats": { "type": "array", "items": { "$ref": "#/$defs/ExportedChat" } },
               "memories": { "type": "array", "items": { "$ref": "#/$defs/Memory" } },
               "conversationAnnotations": { "type": "array", "items": { "$ref": "#/$defs/ConversationAnnotation" } },
-              "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } }
+              "chatDocuments": { "type": "array", "items": { "$ref": "#/$defs/ChatDocument" } },
+              "chatInforms": { "type": "array", "items": { "$ref": "#/$defs/ChatInform" } }
             },
             "additionalProperties": false
           }
@@ -374,6 +375,7 @@
         "documentStoreProjectLinks": { "type": "integer", "minimum": 0 },
         "conversationAnnotations": { "type": "integer", "minimum": 0 },
         "chatDocuments": { "type": "integer", "minimum": 0 },
+        "chatInforms": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
         "promptTemplates": { "type": "integer", "minimum": 0 },
@@ -1019,6 +1021,25 @@
         "mountPoint": { "type": ["string", "null"] },
         "displayTitle": { "type": ["string", "null"] },
         "isActive": { "type": "boolean" },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
+    "ChatInform": {
+      "type": "object",
+      "description": "One Inform row: an out-of-character passage the operator handed to a single LLM-controlled seat, delivered verbatim as its own system block on that seat's next generation. One row per (batch x target) \u2014 the body is duplicated per target on purpose, so consumption is a single-row write. Consumed rows are exported too: the row a past turn consumed is what lets a swipe of that turn re-apply the same inform.",
+      "required": ["id", "chatId", "batchId", "participantId", "contentMarkdown", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "chatId": { "$ref": "#/$defs/UUID" },
+        "batchId": { "$ref": "#/$defs/UUID", "description": "Shared by every row one post produced \u2014 the unit the operator cancels." },
+        "participantId": { "$ref": "#/$defs/UUID", "description": "A chat PARTICIPANT id, never a character id." },
+        "contentMarkdown": { "type": "string", "description": "Exactly what the operator typed. Delivered verbatim; never framed." },
+        "recordMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The Host transcript message documenting the post. Nullable so a record-write failure cannot orphan the batch." },
+        "consumedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
+        "consumedByMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The assistant message whose generation delivered this row." },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }

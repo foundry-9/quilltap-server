@@ -1,6 +1,16 @@
 # Feature: Inform — out-of-character information a character receives before their next turn
 
-**Status:** specified, not started. Target release: 4.10.
+**Status:** implemented in 4.10-dev; **live verification outstanding** (the ten-step
+walkthrough in [Verification](#verification-live-on-the-v4test-instance--never-friday) has not
+been run against a real instance). Move this file to `features/complete/` once it has.
+
+Two things landed differently from the text below, both noted at their sections: the
+`chat_informs` DDL carries an `updatedAt` column (the repository base class writes one on every
+row, and the SQLite adapter builds its INSERT column list from the schema), and the dialog's
+width was derived from the toolbar's CSS rather than measured in a browser — confirm it during
+live verification. A third place needed the record-only strip that the spec did not name:
+`extractVisibleConversation`, which feeds every cheap-LLM task including the async
+pre-compression whose output returns as system block 3.
 
 The Salon composer gains an **Inform** button beside Insert Announcement and the Pascal
 custom-tool button. It opens a floating dialog where the operator picks one, several, or
@@ -61,6 +71,7 @@ CREATE TABLE "chat_informs" (
   "contentMarkdown" TEXT NOT NULL,
   "recordMessageId" TEXT,
   "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
   "consumedAt" TEXT,
   "consumedByMessageId" TEXT,
   FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
@@ -75,6 +86,7 @@ CREATE INDEX "idx_chat_informs_consumedBy" ON "chat_informs" ("consumedByMessage
 - `recordMessageId` links every row of a batch to its Host record message. Nullable so a record-write failure cannot orphan the batch (the announcer convention: errors never propagate).
 - `consumedByMessageId` is the assistant message whose generation delivered the row. It is what makes regenerate re-apply.
 - No `userId` column ([single-user](../../../CLAUDE.md)).
+- `updatedAt` was **not** in the original draft of this block and is required: `AbstractBaseRepository._create` always writes one, and the SQLite adapter derives its INSERT column list from the schema, so a table without the column rejects every insert.
 - Consumed rows are kept. They are tiny, they make swipes honest, and the chat's cascade removes them. No sweep.
 
 **Zod:** `lib/schemas/chat-inform.types.ts` — `ChatInformSchema` in the shape of `ChatDocumentSchema` (`lib/schemas/chat-document.types.ts`), plus `ChatInformInputSchema` omitting `id`/`createdAt`.

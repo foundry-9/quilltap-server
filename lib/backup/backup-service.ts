@@ -227,6 +227,14 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   );
   const chatDocuments = chatDocumentsArrays.flat();
 
+  // Collect Inform rows for every user chat, consumed ones included — a
+  // consumed row is what lets a swipe of the turn that consumed it re-apply
+  // the same passage once the instance is restored.
+  const chatInformsArrays = await Promise.all(
+    chatMetadatas.map((chat) => globalRepos.chatInforms.findByChatId(chat.id))
+  );
+  const chatInforms = chatInformsArrays.flat();
+
   // Collect conversation chunks for every user chat, encoding embeddings as
   // number arrays so they survive JSON. Chunks include the embedding so the
   // restored instance does not have to re-embed an entire chat history.
@@ -366,6 +374,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     characterPluginData,
     conversationAnnotations,
     chatDocuments,
+    chatInforms,
     instanceSettings,
     embeddingStatus,
     conversationChunks,
@@ -468,6 +477,7 @@ function createManifest(
       conversationAnnotations: data.conversationAnnotations?.length || 0,
       userInstalledThemes: countUserInstalledThemes(),
       chatDocuments: data.chatDocuments?.length || 0,
+      chatInforms: data.chatInforms?.length || 0,
       instanceSettings: data.instanceSettings?.length || 0,
       embeddingStatus: data.embeddingStatus?.length || 0,
       conversationChunks: data.conversationChunks?.length || 0,
@@ -664,6 +674,10 @@ export async function createBackup(
     // Format-3 additions (older restorers will simply skip these missing files).
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-documents.json'), data.chatDocuments || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'instance-settings.json'), data.instanceSettings || []);
+
+    // Inform rows (4.10). Optional on the way back in, like every file above,
+    // so an older restorer simply does not see it.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'chat-informs.json'), data.chatInforms || []);
     // Derived embedding collections. A compact backup omits the files
     // outright rather than writing empty arrays — the restore reader treats
     // all of these as optional (`readJsonArrayFileOptional`), so an absent

@@ -1450,6 +1450,9 @@ async function processMessage(
     characterParticipant,
     streaming: streamingState,
     preGeneratedAssistantMessageId,
+    // A preserved partial is a persisted turn, so it spends this turn's
+    // informs exactly as a completed one does.
+    informRowIds: builtContext.informRowIds,
   })
 
   const previousResponseId = findPreviousResponseId(

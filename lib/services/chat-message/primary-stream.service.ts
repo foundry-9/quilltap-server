@@ -60,6 +60,13 @@ export interface MakePreservePartialOnErrorOptions {
   characterParticipant: { id: string }
   streaming: StreamingState
   preGeneratedAssistantMessageId: string
+  /**
+   * This turn's inform rows (`BuiltContext.informRowIds`). A preserved partial
+   * IS a persisted assistant message, and the passage was delivered — the
+   * model read it before the stream fell over — so these are consumed here
+   * too. Empty on a swipe and on turns with no informs.
+   */
+  informRowIds?: string[]
 }
 
 /**
@@ -71,7 +78,7 @@ export interface MakePreservePartialOnErrorOptions {
 export function makePreservePartialOnError(
   opts: MakePreservePartialOnErrorOptions
 ): (error: unknown) => Promise<void> {
-  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId } = opts
+  const { repos, chatId, character, characterParticipant, streaming, preGeneratedAssistantMessageId, informRowIds } = opts
   let partialPreserved = false
 
   return async function preservePartialOnError(error: unknown): Promise<void> {
@@ -108,6 +115,18 @@ export function makePreservePartialOnError(
         // before it belongs on the call sheet. Null when nothing did.
         buildRouteTrail(streaming, { chatId, messageId: preGeneratedAssistantMessageId })
       )
+      // The content reached the model, and it is now a persisted turn — so the
+      // informs it carried are spent. Failing to consume here would deliver the
+      // same passage again on the seat's next turn.
+      if (informRowIds && informRowIds.length > 0) {
+        const consumed = await repos.chatInforms.markConsumed(informRowIds, preservedMessageId)
+        logger.debug('Consumed informs on preserved partial response', {
+          chatId,
+          messageId: preservedMessageId,
+          requested: informRowIds.length,
+          consumed,
+        })
+      }
       logger.info('Preserved partial streamed response after upstream error', {
         chatId,
         messageId: preservedMessageId,

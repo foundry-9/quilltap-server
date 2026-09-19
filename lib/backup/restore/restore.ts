@@ -763,6 +763,27 @@ export async function restore(
       }
     }
 
+    // 22i-ii. Inform rows. Consumed rows come back too: the row a past turn
+    // consumed is what lets a swipe of that turn re-apply the same passage.
+    // Must follow the chats (13/14) and their replayed transcripts, since the
+    // row points at a seat, at the Host record message and, once consumed, at
+    // the assistant message that carried it.
+    let chatInformsRestored = 0;
+    for (const inform of data.chatInforms || []) {
+      try {
+        const { id, createdAt, updatedAt, ...informData } = inform;
+        await globalRepos.chatInforms.create(informData, { id: inform.id });
+        chatInformsRestored++;
+      } catch (error) {
+        warnings.push(`Failed to restore inform: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore chat inform', { informId: inform.id, error });
+      }
+    }
+    moduleLogger.debug('Restored chat informs', {
+      total: (data.chatInforms || []).length,
+      restored: chatInformsRestored,
+    });
+
     // 22j. Vector index metas + entries. Without these every memory would
     // need to be re-embedded after restore.
     let vectorIndexMetasRestored = 0;
@@ -1071,6 +1092,7 @@ export async function restore(
       conversationAnnotations: conversationAnnotationsRestored,
       userInstalledThemes: userInstalledThemesRestored,
       chatDocuments: chatDocumentsRestored,
+      chatInforms: chatInformsRestored,
       instanceSettings: instanceSettingsRestored,
       embeddingStatus: embeddingStatusRestored,
       conversationChunks: conversationChunksRestored,

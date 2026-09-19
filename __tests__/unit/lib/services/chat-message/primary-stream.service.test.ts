@@ -220,6 +220,74 @@ describe('primary-stream.service', () => {
 
       await expect(preserve(new Error('boom'))).resolves.toBeUndefined()
     })
+
+    // A preserved partial IS a persisted assistant turn, and the model read the
+    // inform before the stream fell over. If this path did not consume, the
+    // same out-of-character passage would arrive again on the seat's next turn.
+    it('consumes the turn\'s informs against the preserved message', async () => {
+      mockSaveAssistantMessage.mockResolvedValueOnce('pre')
+      const markConsumed = jest.fn().mockResolvedValue(1)
+      const streaming = makeStreaming({
+        hasStartedStreaming: true,
+        fullResponse: 'partial response here',
+      })
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        informRowIds: ['row-1'],
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(markConsumed).toHaveBeenCalledWith(['row-1'], 'pre')
+    })
+
+    it('touches nothing when the turn carried no inform', async () => {
+      const markConsumed = jest.fn()
+      const streaming = makeStreaming({
+        hasStartedStreaming: true,
+        fullResponse: 'partial response here',
+      })
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        informRowIds: [],
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(markConsumed).not.toHaveBeenCalled()
+    })
+
+    it('leaves the rows pending when the preserve itself fails to persist', async () => {
+      mockSaveAssistantMessage.mockRejectedValueOnce(new Error('db-down'))
+      const markConsumed = jest.fn()
+      const streaming = makeStreaming({
+        hasStartedStreaming: true,
+        fullResponse: 'something',
+      })
+      const preserve = makePreservePartialOnError({
+        repos: { chatInforms: { markConsumed } } as any,
+        chatId: 'c',
+        character: { id: 'ch', name: 'Alice', aliases: [] } as any,
+        characterParticipant: { id: 'cp' },
+        streaming,
+        preGeneratedAssistantMessageId: 'pre',
+        informRowIds: ['row-1'],
+      })
+
+      await preserve(new Error('boom'))
+
+      expect(markConsumed).not.toHaveBeenCalled()
+    })
   })
 
   describe('findPreviousResponseId', () => {

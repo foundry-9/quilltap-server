@@ -47,6 +47,7 @@ import type {
 } from '@/lib/schemas/types';
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
+import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
@@ -246,6 +247,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
 
     // Format-3 additions (optional so older backups still load).
     const chatDocuments = await readJsonArrayFileOptional<ChatDocument>(rootPath, 'data/chat-documents.json', []);
+    // Inform rows (4.10) — optional, so a pre-4.10 archive just has none.
+    const chatInforms = await readJsonArrayFileOptional<ChatInform>(rootPath, 'data/chat-informs.json', []);
     const instanceSettings = await readJsonArrayFileOptional<InstanceSettingRow>(rootPath, 'data/instance-settings.json', []);
     const embeddingStatus = await readJsonArrayFileOptional<EmbeddingStatus>(rootPath, 'data/embedding-status.json', []);
     const conversationChunks = await readJsonArrayFileOptional<SerializedConversationChunk>(rootPath, 'data/conversation-chunks.json', []);
@@ -293,6 +296,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       characterPluginData,
       conversationAnnotations,
       chatDocuments,
+      chatInforms,
       instanceSettings,
       embeddingStatus,
       conversationChunks,

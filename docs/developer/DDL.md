@@ -591,6 +591,48 @@ once** — each open document surfaces as its own tab in the tabbed workspace
 retained as quick-reopen history. (Before 4.8 only one row per chat could be
 active.)
 
+### chat_informs
+
+```sql
+CREATE TABLE "chat_informs" (
+  "id" TEXT PRIMARY KEY,
+  "chatId" TEXT NOT NULL,
+  "batchId" TEXT NOT NULL,
+  "participantId" TEXT NOT NULL,
+  "contentMarkdown" TEXT NOT NULL,
+  "recordMessageId" TEXT,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,
+  "consumedAt" TEXT,
+  "consumedByMessageId" TEXT,
+  FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
+);
+
+CREATE INDEX "idx_chat_informs_pending" ON "chat_informs" ("chatId", "participantId", "consumedAt");
+CREATE INDEX "idx_chat_informs_batch" ON "chat_informs" ("batchId");
+CREATE INDEX "idx_chat_informs_consumedBy" ON "chat_informs" ("consumedByMessageId");
+```
+
+Backs the Salon's **Inform** action: an out-of-character passage the operator
+hands to one or more LLM-controlled seats, delivered verbatim as its own system
+block on that seat's next generation.
+
+One row per (batch x target) — every row a single post produced shares a
+`batchId`, and the body is **duplicated per target on purpose**: consumption is
+then a single-row write, with no read-modify-write of a shared array that a
+buffered job-child write could clobber.
+
+- `participantId` is a **chat participant id**, never a character id — the same
+  rule `chat_messages.targetParticipantIds` follows.
+- `recordMessageId` links every row of a batch to the Host record message that
+  documents the post. Nullable, so a record-write failure cannot orphan the
+  batch.
+- `consumedAt` null means pending. `consumedByMessageId` is the assistant
+  message whose generation delivered the row; it is what makes a
+  regenerate/swipe of that message re-apply the same inform.
+- Consumed rows are **kept**. They are tiny, they are what makes a swipe honest,
+  and the chat's cascade removes them. There is no sweep.
+
 ### terminal_sessions
 
 ```sql

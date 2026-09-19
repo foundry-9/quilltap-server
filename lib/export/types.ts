@@ -108,6 +108,7 @@ export interface QuilltapExportCounts {
   documentStoreProjectLinks?: number;
   conversationAnnotations?: number;
   chatDocuments?: number;
+  chatInforms?: number;
   files?: number;
   folders?: number;
   promptTemplates?: number;
@@ -225,6 +226,13 @@ export interface ChatsExportData {
    * same back-compat reason as conversationAnnotations.
    */
   chatDocuments?: import('@/lib/schemas/chat-document.types').ChatDocument[];
+  /**
+   * Inform rows (`chat_informs`) attached to any exported chat — consumed rows
+   * included, because a consumed row is what makes a swipe of the turn that
+   * consumed it honest after a round-trip. Optional for the same back-compat
+   * reason as conversationAnnotations.
+   */
+  chatInforms?: import('@/lib/schemas/chat-inform.types').ChatInform[];
 }
 
 /**
@@ -697,6 +705,21 @@ export interface QtapChatDocumentRecord {
   data: import('@/lib/schemas/chat-document.types').ChatDocument;
 }
 
+/**
+ * One Inform row streamed alongside its parent chat. Emitted after every
+ * `chat_message` (and before the annotations) so an importer can resolve
+ * `recordMessageId` / `consumedByMessageId` against message IDs it has already
+ * seen in this same stream.
+ *
+ * Consumed rows travel too: the row a past turn consumed is what lets a swipe
+ * of that turn re-apply the same inform in the destination instance.
+ */
+export interface QtapChatInformRecord {
+  kind: 'chat_inform';
+  chatId: string;
+  data: import('@/lib/schemas/chat-inform.types').ChatInform;
+}
+
 export interface QtapDocMountPointRecord {
   kind: 'doc_mount_point';
   data: ExportedDocumentStore;
@@ -830,6 +853,7 @@ export type QtapRecord =
   | QtapCharacterPluginDataRecord
   | QtapChatRecord
   | QtapChatMessageRecord
+  | QtapChatInformRecord
   | QtapConversationAnnotationRecord
   | QtapChatDocumentRecord
   | QtapMemoryRecord

@@ -27,6 +27,7 @@ For one Salon turn, in wire order:
 |---|---|---|---|
 | 1 | `system` | **Identity stack** + roleplay template + math-notation note + Taboo section + standing instructions (project/group) + tool instructions + tool reinforcement | Per character (cacheable prefix) |
 | 2 | `system` | **Identity reminder** — fully static "you are {{char}} and only {{char}}" | Character name only |
+| — | `system` | **Inform block** — an out-of-character passage the operator handed this seat, verbatim and unframed; several join with `---`. Absent entirely when there is nothing pending | Rare, per seat |
 | 3 | `system` | **Compressed-history block** — the rolling summary, only when budget compression fired | Every few turns |
 | — | `system` | Agent-mode instructions, when agent mode is on (inserted after the system group) | Rare |
 | 4 | `user`/`assistant` | **Conversation history**, attributed by `name`; Staff whispers re-roled to `user`; a cache breakpoint on the first surviving Librarian summary | Every turn |
@@ -37,6 +38,8 @@ For one Salon turn, in wire order:
 | 8 | `assistant` | Multi-character anchor `[Name]` prefill — **non-Anthropic providers only** | Multi-character |
 
 Blocks 1–3 are emitted as separate system messages precisely so their cache lifetimes are independent: the persona prefix does not get invalidated when the rolling summary is refolded.
+
+The **inform block** sits between 2 and 3 for the same reason, and it is the one sanctioned turn-variable system block. Blocks 1 and 2 are the static prefix: the Anthropic plugin puts its `cache_control` breakpoint on the *first* system block only, OpenAI-style prefix caching is unaffected by anything after an unchanged prefix, and local providers fold the leading system run into one message — so an extra block after 2 costs nothing and keeps the cached region contiguous. To the model, that position is exactly “after the system prompt”. It is **empty-is-absent**: when there is nothing to deliver, nothing is pushed, and the turn assembles byte-for-byte as it did before the feature existed. Neither `IDENTITY_STACK_BUILDER_VERSION` nor `PROMPT_CACHE_STRUCTURE_VERSION` is bumped by it — the block is conditional, not structural.
 
 **Local providers see them folded into one.** A local runtime applies the *model's own* chat template, and the Qwen family — plus several Llama- and Gemma-derived templates — raises an exception on any system message after index 0, rejecting the whole request. So the Ollama and OpenAI-Compatible request builders fold the leading `system` run into a single message at request-build time, joining the contents with a blank line (`collapseLeadingSystemMessages` in `@quilltap/plugin-utils`; `OpenAICompatibleProvider.acceptsRepeatedSystemMessages`, which defaults to `true`). Nothing about the assembly above changes, and no hosted provider's bytes or cache breakpoints move — see [bug 82](bugs/fixed/bug-82-three-leading-system-messages.md). A new local provider must opt into the same fold; a new hosted one must not.
 
@@ -242,6 +245,8 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 - **`lib/chat/initialize.ts` is half legacy.** Its private `buildSystemPrompt` runs at chat creation and its output is written as a `role: SYSTEM` message at the head of the chat — and `buildConversationMessages` filters history down to `USER`/`ASSISTANT`/`TOOL`, so **that message never reaches the model on any later turn**. The stored message is an artifact. The *string* is not: the same value is handed to `generateGreetingMessage` as the system prompt for the generated opener, which is why the progressions report is appended there (§13) and why an edit to that builder does change what a model sees, exactly once per chat. Do not "fix" a prompt by editing it, and do not delete it casually either — the chat-creation flow and its tests still depend on `buildChatContext` for the processed first message.
 - **Character edits do not invalidate compiled stacks** (§6). Expect one stale turn's worth of confusion when debugging.
 - **Nothing turn-variable belongs in system blocks 1–2** (§1, §5).
+- **The inform block is the one sanctioned turn-variable system block, and it is empty-is-absent** (§2). It goes between blocks 2 and 3, never inside 1 or 2, and when there is nothing pending the builder pushes *nothing* rather than an empty string — that conditional is what keeps a turn without informs byte-identical and the cache-determinism golden intact. It is also the only reader of `chat_informs` on the prompt path (`buildInformBlock`), and it never writes: consumption happens in the finalizer, against a persisted assistant message.
+- **The `inform` record never reaches a model.** It is a Host transcript row documenting a delivery, and it wears `role: 'ASSISTANT'`, so a role filter alone lets it through. Three places strip it: `buildMessageContext` (every character, transparent or opaque, single- or multi-character, swipes included), `extractVisibleConversation` (every cheap-LLM task — titles, summaries, story backgrounds, and the async pre-compression whose output comes back as system block 3), and the Courier transport, which builds its own transcript from raw events. A new transcript-from-raw-events path must strip it too.
 - **Do not reorder Core before/after Commonplace** (§9).
 - **Never derive progression state at a call site** (§9a). Elapsed / remaining / percent come from `lib/progressions/` and nowhere else.
 - **Cache-structure bumps are structural, not cosmetic** (§7).
@@ -259,6 +264,7 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 | `lib/services/chat-message/orchestrator.service.ts` | Tool mode + tool instructions, Prospero cadence, agent-mode and tool-change injections |
 | `lib/chat/context/message-attribution.ts` | `name` attribution, history-access and presence-window filtering, whisper visibility |
 | `lib/chat/context/compression.ts`, `lib/chat/context-summary.ts` | Budget compression and the Librarian rolling summary |
+| `lib/chat/context/inform-block.ts` | `buildInformBlock` — the one reader of `chat_informs` on the prompt path; selects, never consumes |
 | `lib/chat/context/core-whisper-trigger.ts` | Aurora Core cadence; `findLastOwnTurnMs`, shared with progressions |
 | `lib/progressions/schema.ts`, `engine.ts` | Progression shape (Zod source of truth) and the pure, client-safe derivation |
 | `lib/progressions/prompt-section.ts` | `buildProgressionsSection` — the one prompt-side reader of progression state |

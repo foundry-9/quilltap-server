@@ -4,6 +4,47 @@
 
 ### 4.10-dev
 
+#### Added: Inform — out-of-character information a character receives before their next turn
+
+The Salon composer has a new **Inform** button (the *i* in the left gutter, beside Pascal). It opens
+a dialog where you pick one, several, or every LLM-controlled character in the chat and write a
+short second-person passage — "You notice the clock has stopped." Each character you target
+receives that passage verbatim as its own system block immediately after their system prompt on
+their next generation, and then it is consumed for them.
+
+Nothing is added to what you type: no preamble, no Host voice, no instruction not to mention it.
+The passage is never spoken in the scene and it is not a standing instruction — once the character
+has taken a turn, it is gone.
+
+Details:
+
+- **Targets** are LLM-controlled character seats only. Silent and absent seats can be informed and
+  collect the passage whenever they next generate; impersonated seats are still LLM-controlled, so
+  delivery waits for their next LLM turn. Seats you play yourself are not offered.
+- **The transcript keeps a record** — a Host message carrying exactly what you typed, public when
+  every eligible seat was targeted and whispered to the targets otherwise. Its chip reads
+  "out of character". The record never reaches a model: it is stripped from every character's
+  history, from the summarizer and the other cheap-LLM tasks, and from the Courier transport. It is
+  not extracted as memory either.
+- **A pending chip** above the composer names who is still owed an inform, with the first line of
+  the body on hover and a × to cancel. Canceling before anyone has collected it also removes the
+  record; canceling after some have collected it keeps the record and drops only the remaining
+  targets.
+- **Stacking**: several pending passages for the same character are delivered together, in posting
+  order, separated by `---`.
+- **Consumption is tied to a saved assistant message.** A provider failure that saves nothing, or a
+  "nothing to add" turn pass, leaves the passage pending for the next attempt. Regenerating or
+  swiping a message re-applies whatever that generation saw and never consumes, so a new inform
+  posted since does not get spent on a re-roll.
+- **Autonomous rooms** deliver informs on their next chained turn. Carina does not — it builds its
+  own minimal call.
+- Rows survive `.qtap` export/import and backup/restore, consumed ones included, so swipes stay
+  honest after a round trip.
+
+Known limitation: pending informs do not travel through a chat merge or continuation.
+
+New table `chat_informs`, migration `add-chat-informs-table-v1`. Help: `help/inform.md`.
+
 #### Docs: plan for Inform, out-of-character information delivered before a character's next turn
 
 Added `docs/developer/features/salon-inform.md`, a plan for a Salon composer button that lets the

@@ -3302,6 +3302,70 @@ Unlike the off-scene rehearsal, the character is given their full per-turn syste
 
 ---
 
+### Chat Informs
+
+An **Inform** is an out-of-character passage the operator hands to one or more LLM-controlled seats. Each target receives it verbatim as its own system block immediately after their system prompt on their next generation, and it is then consumed for them. The transcript keeps a *record* — a Host message (`systemSender: "host"`, `systemKind: "inform"`) carrying exactly what was typed, public when every eligible seat was targeted and whispered to the targets otherwise. **The record never reaches a model**; it is stripped from every character's context.
+
+#### `POST /api/v1/chats/[id]?action=inform`
+
+**Request Body**:
+
+```json
+{
+  "contentMarkdown": "You notice the clock has stopped.",
+  "targetParticipantIds": ["participant-uuid"]
+}
+```
+
+`targetParticipantIds` carries **chat participant ids, not character ids**. `null` means every eligible seat at post time. An eligible seat is a `CHARACTER` participant with `controlledBy: "llm"` that has not been removed — silent and absent seats are valid targets (they receive the inform whenever they next generate); user-controlled seats are never targets. When an explicit list covers every eligible seat it is treated as `null`, so the public/whisper distinction follows actual coverage rather than how the operator clicked.
+
+**Response**: `201 Created`
+
+```json
+{
+  "success": true,
+  "batchId": "batch-uuid",
+  "targetParticipantIds": null,
+  "message": { "id": "message-uuid", "systemKind": "inform", "...": "..." }
+}
+```
+
+`targetParticipantIds` in the response is the *resolved* audience: `null` for a public record, the target list for a whisper. A record-write failure does not fail the post — `message` is then `null` and the batch is created regardless.
+
+`400` when an id is not a current participant of this chat, when an id names a seat that is not LLM-controlled, or when the chat has no LLM-controlled seat at all. `404` when the chat is unknown.
+
+#### `GET /api/v1/chats/[id]?action=informs`
+
+The batches still owed to somebody, for the composer's pending chip.
+
+**Response**: `200 OK`
+
+```json
+{
+  "batches": [
+    {
+      "batchId": "batch-uuid",
+      "contentMarkdown": "You notice the clock has stopped.",
+      "createdAt": "2026-01-01T21:14:00.000Z",
+      "recordMessageId": "message-uuid",
+      "pendingParticipantIds": ["participant-uuid"]
+    }
+  ]
+}
+```
+
+Rows whose seat is no longer in the chat are omitted, and a batch left with no pending seat is dropped entirely.
+
+#### `POST /api/v1/chats/[id]?action=cancel-inform`
+
+**Request Body**: `{ "batchId": "batch-uuid" }`
+
+Deletes only the batch's *pending* rows. A seat that already read the passage keeps its consumed row, so a later swipe of that turn still re-applies it. When nothing in the batch was consumed the record message is deleted too — it would otherwise document something that never happened; when anything was consumed the record stays and only the remaining targets are dropped. Publishes the `chats` realtime hint explicitly, since deleting pending rows touches no message row.
+
+**Response**: `200 OK` — `{ "success": true, "removed": 2, "recordDeleted": true }`. `404` when the batch is unknown; `400` when it belongs to another conversation.
+
+---
+
 ### Chat Photo Albums
 
 #### `GET /api/v1/chats/[id]?action=photo-albums`

@@ -107,6 +107,26 @@ export async function regenerateMessageAsSwipe({
       m.type === 'message' && new Date(m.createdAt).getTime() < targetTime
   )
 
+  // Informs re-apply on a swipe. A swipe re-rolls a line that has already been
+  // spoken, so it must see exactly the passages THAT generation saw — the
+  // target message and every sibling in its swipe group, since any of them may
+  // have been the generation that consumed a row. Pending informs are
+  // deliberately excluded: it would be surprising for a brand-new passage to
+  // land in a re-roll of an old line and be spent there. Nothing here consumes
+  // — `buildInformBlock` returns no row ids for a regeneration, and the swipe
+  // path never calls `markConsumed`.
+  const existingSwipeGroupId = targetMessage.swipeGroupId || null
+  const regenerationOfMessageIds = [
+    ...new Set([
+      targetMessage.id,
+      ...(existingSwipeGroupId
+        ? allMessages
+            .filter(m => m.type === 'message' && m.swipeGroupId === existingSwipeGroupId)
+            .map(m => m.id)
+        : []),
+    ]),
+  ]
+
   // Build the full provider-ready context (system prompt, multi-char attribution,
   // memory recall) — continue mode, no new user message.
   const { formattedMessages } = await buildMessageContext(
@@ -126,6 +146,7 @@ export async function regenerateMessageAsSwipe({
       activeUserParticipantId: speakingAsId,
       isContinueMode: true,
       contextCompressionSettings: null,
+      regenerationOfMessageIds,
     },
     previousMessages,
     []

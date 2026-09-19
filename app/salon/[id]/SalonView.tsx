@@ -1703,6 +1703,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           onStandaloneGenerateImageClick={modals.openStandaloneGenerateImage}
           onInsertAnnouncementClick={modals.openInsertAnnouncement}
           onComposeMailClick={modals.openComposeMail}
+          onInformClick={modals.openInform}
+          informParticipantNames={participantNames}
           onStopStreaming={sseStreaming.stopStreaming}
           hideStopButton={modals.showParticipantSidebar}
           onPendingToolResult={handleAddPendingToolResult}
@@ -1847,6 +1849,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           closeStandaloneGenerateImage={modals.closeStandaloneGenerateImage}
           insertAnnouncementOpen={modals.insertAnnouncementOpen}
           closeInsertAnnouncement={modals.closeInsertAnnouncement}
+          informOpen={modals.informOpen}
+          closeInform={modals.closeInform}
           composeMailOpen={modals.composeMailOpen}
           impersonationVoice={impersonationVoice}
           closeComposeMail={modals.closeComposeMail}

@@ -187,7 +187,7 @@ describe('message-finalizer.service', () => {
       compression: {
         existingMessages: [],
         content: 'Hello there',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: true,
         cheapLLMSelection: { provider: 'OPENAI', modelName: 'gpt-4.1-mini', isLocal: false } as any,
         contextCompressionSettings: {
@@ -291,7 +291,7 @@ describe('message-finalizer.service', () => {
       compression: {
         existingMessages: [],
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -376,7 +376,7 @@ describe('message-finalizer.service', () => {
       compression: {
         existingMessages: [],
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -464,7 +464,7 @@ describe('message-finalizer.service', () => {
       compression: {
         existingMessages: [],
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -542,7 +542,7 @@ describe('message-finalizer.service', () => {
           { type: 'message', role: 'ASSISTANT', content: 'Hi', participantId: 'participant-2' },
         ] as any,
         content: 'hello',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: {
@@ -633,7 +633,7 @@ describe('message-finalizer.service — the route trail', () => {
       compression: {
         existingMessages: [],
         content: 'Hello there',
-        builtContext: { originalSystemPrompt: 'System prompt' } as any,
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds: [] } as any,
         compressionEnabled: false,
         cheapLLMSelection: null,
         contextCompressionSettings: { enabled: false } as any,
@@ -720,5 +720,102 @@ describe('message-finalizer.service — the route trail', () => {
 
     expect((repos.chats.addMessage.mock.calls[0][1] as any).routeTrail).toBeNull()
     expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({ routeTrail: null }))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Inform consumption
+// ---------------------------------------------------------------------------
+
+describe('message-finalizer.service — inform consumption', () => {
+  const informRepos = () => {
+    const repos = createMockRepos() as ReturnType<typeof createMockRepos> & {
+      chatInforms: { markConsumed: jest.Mock }
+    }
+    repos.chatInforms = { markConsumed: jest.fn().mockResolvedValue(1) }
+    return repos
+  }
+
+  const finalize = (informRowIds: string[], repos: ReturnType<typeof informRepos>) =>
+    finalizeMessageResponse({
+      repos: repos as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: {
+        id: 'chat-1',
+        participants: [
+          { id: 'participant-1', characterId: 'char-1', type: 'CHARACTER', controlledBy: 'llm', status: 'active' },
+        ],
+        isDangerousChat: false,
+      } as any,
+      character: { id: 'char-1', name: 'Alice', aliases: [], pronouns: null } as any,
+      characterParticipant: { id: 'participant-1', status: 'active' } as any,
+      userParticipantId: null,
+      isMultiCharacter: false,
+      isContinueMode: false,
+      generatedImagePaths: [],
+      toolMessages: [],
+      preGeneratedAssistantMessageId: 'assistant-inform',
+      connectionProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+      controller: { enqueue: jest.fn() } as any,
+      encoder: new TextEncoder(),
+      streaming: {
+        fullResponse: 'She glances at the clock.',
+        effectiveProfile: { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4.1' } as any,
+        effectiveApiKey: 'sk-test',
+        usage: null,
+        cacheUsage: null,
+        attachmentResults: null,
+        rawResponse: null,
+        thoughtSignature: undefined,
+        hasStartedStreaming: true,
+        routeFailures: [],
+        routeVia: 'primary',
+      } as any,
+      compression: {
+        existingMessages: [],
+        content: 'Hello there',
+        builtContext: { originalSystemPrompt: 'System prompt', informRowIds } as any,
+        compressionEnabled: false,
+        cheapLLMSelection: null,
+        contextCompressionSettings: { enabled: false } as any,
+        allProfiles: [],
+      },
+      triggers: {
+        dangerSettings: { mode: 'OFF' } as any,
+        chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' }, autoDetectRng: false } as any,
+        participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
+        resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
+        userCharacterId: undefined,
+      },
+    })
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('marks this turn\'s rows consumed by the message that was actually saved', async () => {
+    const repos = informRepos()
+
+    await finalize(['row-1', 'row-2'], repos)
+
+    expect(repos.chatInforms.markConsumed).toHaveBeenCalledWith(['row-1', 'row-2'], 'assistant-inform')
+  })
+
+  it('does not touch the table on a turn that carried no inform', async () => {
+    const repos = informRepos()
+
+    await finalize([], repos)
+
+    expect(repos.chatInforms.markConsumed).not.toHaveBeenCalled()
+  })
+
+  it('leaves the rows pending when the save throws — the passage was never delivered', async () => {
+    const repos = informRepos()
+    repos.chats.addMessage.mockRejectedValueOnce(new Error('disk on fire'))
+
+    await expect(finalize(['row-1'], repos)).rejects.toThrow('disk on fire')
+
+    expect(repos.chatInforms.markConsumed).not.toHaveBeenCalled()
   })
 })

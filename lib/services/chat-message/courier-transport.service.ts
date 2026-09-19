@@ -291,6 +291,15 @@ async function buildCourierDeltaEvents(
     // obvious).
     if (event.id === checkpoint.lastResolvedMessageId) continue
 
+    // The `inform` record is record-only: it documents, for the operator, an
+    // out-of-character passage that was delivered to the seat as its own
+    // system block. The Courier builds its own transcript from the raw events
+    // rather than from the context builder's output, so the strip that keeps
+    // the record out of every model's history (`buildMessageContext`) does not
+    // reach here — without this guard the Courier would be the one transport
+    // that hands the record to a model.
+    if (event.systemKind === 'inform') continue
+
     // Filter targeted whispers the same way `filterWhisperMessages` does for
     // the normal API context. Without this, every other character's
     // Commonplace Book recall / Aurora outfit / Librarian summary whisper

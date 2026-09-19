@@ -34,6 +34,10 @@ const moduleLogger = logger.child({ module: 'backup:restore-service' });
 async function clearFormat3Entities(): Promise<void> {
   const mainTables = [
     'chat_documents',
+    // Inform rows. No userId column (single-user), so the per-row scoped
+    // deletion never reaches them; without this a replace-mode restore would
+    // collide on the preserved primary keys, exactly as chat_documents does.
+    'chat_informs',
     'conversation_chunks',
     // Per-message annotations. On no delete path in v4, so "delete all my data"
     // left them behind (a privacy leak) and a restore into a migrated instance

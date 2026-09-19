@@ -23,6 +23,7 @@ import type { Chat, Message } from '../types'
 import LibraryFilePickerModal from '@/components/chat/LibraryFilePickerModal'
 import StandaloneGenerateImageDialog from '@/components/chat/StandaloneGenerateImageDialog'
 import InsertAnnouncementDialog from '@/components/chat/InsertAnnouncementDialog'
+import InformDialog from '@/components/chat/InformDialog'
 import ComposeMailDialog from '@/components/chat/ComposeMailDialog'
 import ImpersonationVoiceDialog from '@/components/chat/ImpersonationVoiceDialog'
 import type { ReattributeDialogState, SelectLLMProfileDialogState } from '../hooks/useModalState'
@@ -66,6 +67,8 @@ interface ChatModalsProps {
   closeStandaloneGenerateImage: () => void
   insertAnnouncementOpen: boolean
   closeInsertAnnouncement: () => void
+  informOpen: boolean
+  closeInform: () => void
   composeMailOpen: boolean
   closeComposeMail: () => void
   /** In Their Own Words — the impersonated-seat voice rehearsal. */
@@ -126,6 +129,7 @@ export function ChatModals({
   libraryFilePickerOpen, closeLibraryFilePicker,
   standaloneGenerateImageOpen, closeStandaloneGenerateImage,
   insertAnnouncementOpen, closeInsertAnnouncement,
+  informOpen, closeInform,
   composeMailOpen, closeComposeMail,
   impersonationVoice,
   allLLMPauseModalOpen, setAllLLMPauseModalOpen,
@@ -329,6 +333,26 @@ export function ChatModals({
             .filter(p => p.type === 'CHARACTER' && !p.removedAt)
             .map(p => p.character?.id)
             .filter((id): id is string => id !== null && id !== undefined) || []}
+          audienceCandidates={(chat?.participants || [])
+            .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
+            .map(p => ({
+              participantId: p.id,
+              name: p.character!.name,
+              controlledBy: p.controlledBy ?? 'llm',
+              avatarUrl: p.character!.avatarUrl ?? null,
+              status: p.status,
+            }))}
+          onPosted={() => {
+            fetchChat()
+          }}
+        />
+      )}
+
+      {informOpen && (
+        <InformDialog
+          isOpen={informOpen}
+          onClose={closeInform}
+          chatId={chatId}
           audienceCandidates={(chat?.participants || [])
             .filter(p => p.type === 'CHARACTER' && !p.removedAt && p.status !== 'removed' && p.character)
             .map(p => ({

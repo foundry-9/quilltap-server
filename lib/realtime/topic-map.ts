@@ -64,6 +64,11 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // `{topic:'chats', id: chatId}` on completion, so a Lantern
             // backdrop or an Aurora repaint refreshes the gallery for free.
             queryKeys.chats.gallery(id),
+            // Pending Informs. A post inserts the Host record (which publishes
+            // `chats`), a consumed row rides the assistant-message insert, and
+            // a cancel publishes the topic explicitly — so the composer chips
+            // stay honest without a poll.
+            queryKeys.chats.informs(id),
           ]
         : [queryKeys.chats.all]
 
