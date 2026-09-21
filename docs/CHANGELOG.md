@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Docs: plan for `quilltap sync`, and two bugs filed
+
+- `docs/developer/features/cli-document-store-sync.md` is the approved plan for a new CLI verb that
+  mirrors a database-backed document store to a directory in both directions: sha-256 plus
+  modification-time comparison, matching created/modified times on both sides, a
+  `.quilltap-sync.json` manifest for deletions and conflicts, a `<file>.description.md` sidecar for
+  a binary's description, dotfiles ignored on both sides, no WebP transcoding, and nothing done to
+  chunks or vectors. The engine runs in the server behind a new `?action=sync`.
+- Bug 155 (open): writing a binary's bytes over an existing path blanks its description and
+  extracted caption, because `linkBlobContent` treats an omitted field as "set to blank" on update.
+- Bug 156 (open): overwriting a database-store document through `write-file`, `docs write --force`,
+  or a job-child write leaves the old chunks in place, and `rescanDatabaseMountPoint` does not
+  perform the sha-drift check its docstring describes.
+
 #### Changed: Regenerating a message now shows what it is doing
 
 Pressing the refresh icon on a character's message used to do nothing visible until the new line
