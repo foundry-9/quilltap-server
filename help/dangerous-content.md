@@ -161,13 +161,15 @@ A useful way to tell the two failures apart after the fact: read the prompt on t
 
 ## Chat-Level Classification
 
-In addition to per-message scanning, Quilltap can classify entire chats as dangerous based on the compressed context summary. This happens automatically in the background after messages are exchanged and a context summary has been generated.
+In addition to per-message scanning, Quilltap can classify entire chats as dangerous based on the compressed context summary. This happens automatically in the background once there is something to read.
 
 ### How It Works
 
 1. After a new context summary is generated for a chat, a background job is queued
 2. The context summary is sent to the Cheap LLM gatekeeper for classification
 3. The chat is marked as dangerous or safe based on the threshold
+
+**Before a chat has a summary, the Concierge reads its scenario instead.** A summary takes several exchanges to appear, and the Concierge would rather not spend those exchanges blind — so a chat opened on a scenario is assayed on that scenario from its first turn, and re-assayed against the real summary once one exists. The scenario is a fair early witness to where a conversation is headed, and it is the only thing on the table at that point; a chat with neither a summary nor a scenario is classified from its raw messages instead.
 
 ### Sticky Classification
 
@@ -283,8 +285,9 @@ The toggle is persisted in your browser's local storage, so your preference is r
 When dangerous content handling is enabled, Quilltap automatically classifies all existing chats in the background. This runs on startup and periodically every 10 minutes, ensuring legacy chats created before the feature was enabled also get classified.
 
 - Chats with a context summary are classified directly from the summary
-- Longer chats without a summary first have a summary generated, which then triggers classification
-- Shorter chats without a summary are classified from the raw message history
+- Chats with no summary yet but a chosen scenario are classified from that scenario
+- Longer chats with neither first have a summary generated, which then triggers classification
+- Shorter chats with neither are classified from the raw message history
 - Background classification runs at a lower priority than interactive tasks, so it won't slow down your active conversations
 
 ## Important Notes
@@ -292,7 +295,7 @@ When dangerous content handling is enabled, Quilltap automatically classifies al
 - If you have an OpenAI connection profile, classification uses the free moderation endpoint (no token cost)
 - Without an OpenAI profile, classification falls back to your Cheap LLM, adding a small token cost per scanned message
 - Only user messages are scanned per-message, not assistant responses (and permanently dangerous chats skip per-message scanning entirely)
-- Chat-level classification uses the compressed context summary (covers the whole conversation)
+- Chat-level classification uses the compressed context summary (covers the whole conversation), falling back to the chat's scenario before the first summary exists, and to the raw messages when there is no scenario either
 - The system never blocks messages — if anything fails, your message goes through normally
 - If no uncensored provider is available in Auto-Route mode, the message is sent to your regular provider with a warning
 - Classification accuracy depends on the method used: the OpenAI moderation endpoint is purpose-built and highly accurate; the Cheap LLM fallback depends on the model's capabilities

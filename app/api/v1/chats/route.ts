@@ -676,7 +676,10 @@ async function autoGenerateFirstMessage(
   }
 
   // Compute the Recent Conversations block once and reuse across retry attempts.
-  // The new chat has no contextSummary yet, so excluding it is defensive only.
+  // The new chat has no contextSummary yet, so excluding it is defensive only —
+  // true since bug 158; before that the chat was created carrying its own
+  // scenario in that column, and this exclusion was the only thing keeping the
+  // greeting from being handed its own stage direction twice.
   let recentConversationsBlock = '';
   try {
     const maxContext =
@@ -1265,7 +1268,14 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     userId: user.id,
     participants: participantsWithTimestamps,
     title: validatedData.title || `Chat with ${chatContext.character.name}`,
-    contextSummary: resolvedScenario || null,
+    // A scenario is a stage direction for a conversation that has not happened;
+    // `contextSummary` is a record of one that has. Seeding the summary with the
+    // scenario — which this did until bug 158, from before `scenarioText` had a
+    // column of its own — makes every reader of `contextSummary` believe a brand
+    // new chat has already been summarized, and hands the greeting's "Recent
+    // Conversations" block a stage direction to open from. The scenario goes in
+    // `scenarioText` below, and stays there; only the summarizer writes this.
+    contextSummary: null,
     tags: Array.from(buildResult.tags),
     roleplayTemplateId: defaultRoleplayTemplateId,
     timestampConfig: resolvedTimestampConfig,

@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
+import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
@@ -195,7 +196,12 @@ export async function restore(
     for (const chat of data.chats) {
       try {
         const { userId, createdAt, updatedAt, messages, ...chatData } = chat;
-        const createdChat = await repos.chats.create(chatData, { id: chat.id });
+        // A backup taken before bug 158 holds the chat's scenario in
+        // `contextSummary` as well as `scenarioText`. Restoring the instance
+        // exactly would restore the defect with it, and the migration that
+        // cleared those rows will not run again — so it is corrected on the way
+        // in. The scenario itself is untouched.
+        const createdChat = await repos.chats.create(stripScenarioSeededSummary(chatData), { id: chat.id });
 
         // Add messages to the chat
         for (const message of messages) {

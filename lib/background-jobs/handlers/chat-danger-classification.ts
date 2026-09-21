@@ -6,7 +6,8 @@
  *
  * Key behaviors:
  * - Prefers compressed chat contextSummary as input
- * - Falls back to concatenated raw messages (truncated to 4000 chars) when no summary exists
+ * - Falls back to the chat's chosen scenario before its first summary fold
+ * - Falls back to concatenated raw messages (truncated to 4000 chars) when neither exists
  * - Once classified as dangerous, stays dangerous (sticky) — never re-checks
  * - Once classified as safe, stays safe (sticky) unless new messages are added
  * - Bails if mode is OFF or no content available (no summary AND no messages)
@@ -70,13 +71,26 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     return;
   }
 
-  // Determine classification input: prefer context summary, fall back to raw messages
+  // Determine classification input: prefer the context summary, then the chosen
+  // scenario, then raw messages.
+  //
+  // The scenario arm is deliberate and it is not new — it is what this branch
+  // was already doing, unknowingly. Until bug 158, chat creation seeded
+  // `contextSummary` with the scenario, so a pre-fold chat took the first arm
+  // and was classified on its stage direction while the log said `summary`.
+  // The seed is gone; the bootstrap is kept, because a scenario is a real and
+  // early signal about where a chat is going and waiting for the first fold
+  // would leave the Concierge blind for the turns that need it most. It now
+  // reads its source on purpose and says which one it used.
   let classificationInput: string;
-  let inputSource: 'summary' | 'messages';
+  let inputSource: 'summary' | 'scenario' | 'messages';
 
   if (chat.contextSummary) {
     classificationInput = chat.contextSummary;
     inputSource = 'summary';
+  } else if (chat.scenarioText) {
+    classificationInput = chat.scenarioText;
+    inputSource = 'scenario';
   } else {
     // No context summary — fall back to concatenated raw messages.
     // Exclude:

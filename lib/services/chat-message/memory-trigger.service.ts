@@ -143,7 +143,7 @@ export async function triggerContextSummaryCheck(
  * - Bails if dangerous content mode is OFF
  * - Once classified as dangerous, stays dangerous (sticky) — never re-checks
  * - Once classified as safe, stays safe (sticky) unless new messages are added
- * - Skips if no context summary available yet
+ * - Skips if neither a context summary nor a scenario is available yet
  */
 export async function triggerChatDangerClassification(
   repos: ReturnType<typeof getRepositories>,
@@ -192,8 +192,13 @@ export async function triggerChatDangerClassification(
       return
     }
 
-    // No context summary → nothing to classify yet
-    if (!chat.contextSummary) {
+    // Nothing to classify yet. The handler takes a summary, then the chosen
+    // scenario, then raw messages; this gate asks the first two, because a chat
+    // with neither has nothing the classifier can act on early. The scenario
+    // arm keeps the pre-fold behaviour the seed used to give us for free —
+    // before bug 158 a new chat's `contextSummary` *was* its scenario, so this
+    // gate passed from the first turn.
+    if (!chat.contextSummary && !chat.scenarioText) {
       return
     }
 

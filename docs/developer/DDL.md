@@ -453,7 +453,7 @@ CREATE TABLE "chats" (
   "userId" TEXT NOT NULL,
   "participants" TEXT DEFAULT '[]',  -- JSON array of ChatParticipantBase (lib/schemas/chat.types.ts); per-seat prompt choice in selectedSystemPromptId, subprompts in play in selectedSubpromptIds (vault file names sans .md) since 4.10
   "title" TEXT NOT NULL,
-  "contextSummary" TEXT,
+  "contextSummary" TEXT,             -- the folded summary of what was SAID; written only by lib/chat/context-summary.ts. Not the scenario: creation seeded this with scenarioText until 4.10 (bug 158), cleared by clear-scenario-seeded-chat-summaries-v1 and stripped on import/restore
   "sillyTavernMetadata" TEXT,
   "tags" TEXT DEFAULT '[]',
   "roleplayTemplateId" TEXT,

@@ -115,6 +115,7 @@ function makeMemory(overrides: Partial<Memory> = {}): Memory {
 describe('Memory Recap Service', () => {
   // Fresh import for each test to ensure mocks are picked up
   let generateMemoryRecap: typeof import('@/lib/memory/memory-recap').generateMemoryRecap
+  let buildRecentConversationsBlock: typeof import('@/lib/memory/memory-recap').buildRecentConversationsBlock
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -131,6 +132,7 @@ describe('Memory Recap Service', () => {
     jest.isolateModules(() => {
       const mod = require('@/lib/memory/memory-recap')
       generateMemoryRecap = mod.generateMemoryRecap
+      buildRecentConversationsBlock = mod.buildRecentConversationsBlock
     })
   })
 
@@ -701,6 +703,101 @@ describe('Memory Recap Service', () => {
 
       expect(result.memoriesUsed).toBe(6) // 3 + 2 + 1
       expect(mockFormatRelativeAge).toHaveBeenCalledTimes(6)
+    })
+  })
+  /**
+   * Bug 158 — the greeting's "Recent Conversations" block.
+   *
+   * The block used to inline `contextSummary` whole, with no cap and no closing
+   * note, immediately before "open with a concise greeting". A chat created
+   * before the seed was fixed carries its own scenario in that column, so an
+   * unsummarized prior chat put 9 KB of stage direction at the end of the
+   * greeting prompt and the character opened from it. These pin the two guards.
+   */
+  describe('buildRecentConversationsBlock (bug 158)', () => {
+    const scenario =
+      '# Scenario: Amy\'s Pool\n\n' +
+      'Follow the stream north from the Troll Bridge — not across it, not under it, ' +
+      'but along the east bank, on the same side as the mansion and the Cottage, where ' +
+      'the grass is soft and the path is more suggestion than fact. A hundred yards, then ' +
+      'two hundred, and the Cottage is somewhere behind your right shoulder, screened by ' +
+      'its privacy hedge. Amy is in her pool, and Charlie walks up the path and sits down ' +
+      'on the flat rocks next to it.'
+
+    it('caps each entry so one oversized summary cannot dominate the prompt', async () => {
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'chat-pool', title: 'Damp Curtains and Cold Water', contextSummary: scenario },
+      ])
+
+      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+
+      expect(block).toContain('#### Damp Curtains and Cold Water (`chat-pool`)')
+
+      // The entry's body, between its heading and the closing note, is capped.
+      const body = block
+        .split('#### Damp Curtains and Cold Water (`chat-pool`)\n')[1]
+        .split('\n\n_Pass any')[0]
+      expect(body.length).toBeLessThanOrEqual(280)
+      expect(body.length).toBeLessThan(scenario.length)
+
+      // The trailing stage direction is the part that captured the greeting.
+      expect(block).not.toContain('Amy is in her pool')
+      expect(body.endsWith('…')).toBe(true)
+    })
+
+    it('closes with the read_conversation note, framing entries as past transcripts', async () => {
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'chat-1', title: 'The Wrong Wall', contextSummary: 'They argued about a wall.' },
+      ])
+
+      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+
+      expect(block).toContain('`read_conversation`')
+      expect(block.trimEnd().endsWith('_')).toBe(true)
+    })
+
+    it('leaves a short summary intact', async () => {
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'chat-1', title: 'The Wrong Wall', contextSummary: 'They argued about a wall.' },
+      ])
+
+      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+
+      expect(block).toContain('They argued about a wall.')
+      expect(block).not.toContain('…')
+    })
+
+    it('renders a heading alone when a summary is empty, rather than a blank line', async () => {
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([
+        { id: 'chat-1', title: 'Untold', contextSummary: '   ' },
+      ])
+
+      const block = await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+
+      expect(block).toContain('#### Untold (`chat-1`)')
+      expect(block).not.toContain('(`chat-1`)\n ')
+    })
+
+    it('returns nothing when the character has no summarized chats', async () => {
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+
+      expect(await buildRecentConversationsBlock(testCharacterId, testChatId, 5)).toBe('')
+    })
+
+    it('returns nothing, and asks the repository nothing, at limit 0', async () => {
+      expect(await buildRecentConversationsBlock(testCharacterId, testChatId, 0)).toBe('')
+      expect(mockFindRecentSummarizedByCharacter).not.toHaveBeenCalled()
+    })
+
+    it('excludes the chat being greeted', async () => {
+      mockFindRecentSummarizedByCharacter.mockResolvedValue([])
+
+      await buildRecentConversationsBlock(testCharacterId, testChatId, 5)
+
+      expect(mockFindRecentSummarizedByCharacter).toHaveBeenCalledWith(testCharacterId, {
+        limit: 5,
+        excludeChatId: testChatId,
+      })
     })
   })
 })

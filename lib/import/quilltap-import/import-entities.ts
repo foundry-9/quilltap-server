@@ -19,6 +19,7 @@ import type {
   Project,
   Group,
 } from '@/lib/schemas/types';
+import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
 import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -346,7 +347,7 @@ export async function importChats(
           idMaps.chats.set(chat.id, newId);
           const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
           const newChat = await repos.chats.create({
-            ...chatData,
+            ...stripScenarioSeededSummary(chatData),
             title: `${chatData.title} (imported)`,
           });
 
@@ -370,7 +371,12 @@ export async function importChats(
       }
 
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
-      const createData = options.preserveIds ? { ...chatData, id: chat.id } : chatData;
+      // A pre-bug-158 export carries the chat's scenario in `contextSummary` as
+      // well as `scenarioText`; the migration that cleared those rows has long
+      // since run in this instance, so the import is the only thing standing
+      // between a stale bundle and the bug coming back.
+      const cleaned = stripScenarioSeededSummary(chatData);
+      const createData = options.preserveIds ? { ...cleaned, id: chat.id } : cleaned;
       const createOptions = getPreserveIdsCreateOptions(chat.id, options);
       const newChat = await repos.chats.create(createData, createOptions);
       idMaps.chats.set(chat.id, newChat.id);

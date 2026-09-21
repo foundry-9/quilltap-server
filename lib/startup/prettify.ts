@@ -190,6 +190,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-file-generation-key-column-v1': 'Ruling a fresh column in the portrait ledger, one line per costume…',
   'collapse-duplicate-avatar-rolls-v1': 'Hanging one definitive likeness per outfit and clearing the rest of the sittings from the attic…',
   'clear-generated-image-placeholder-descriptions-v1': 'Peeling the placeholder labels off your pictures, so they may be looked at properly…',
+  'clear-scenario-seeded-chat-summaries-v1': 'Separating the scene that was set from the tale that was told, so nobody greets you from the wrong room…',
   'add-profile-supports-image-upload-field-v1': 'Adding image-upload support to connection profiles',
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
   'add-connection-profile-max-tokens-field-v1': 'Adding max-tokens to connection profiles',

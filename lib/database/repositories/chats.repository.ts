@@ -174,6 +174,13 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
    * sorted by lastMessageAt descending. Used by the memory-recap "Recent Conversations"
    * block. Filter, sort, and limit are all pushed to SQL.
    *
+   * The `$exists` filter is only as honest as the column. Until bug 158, chat
+   * creation seeded `contextSummary` with the chosen scenario, so every chat
+   * matched here from the moment it was made and this method handed the greeting
+   * a stage direction to open from. Only the summarizer writes that column now;
+   * the scenario lives in `scenarioText`. Anything that starts seeding it again
+   * re-opens the bug, and the seeding is what to look at, not this filter.
+   *
    * Note: the participants JSON-array filter is the bottleneck at scale (no index can
    * cover it cheaply). If this is moved to a per-message hot path, consider denormalizing
    * participants into a join table.

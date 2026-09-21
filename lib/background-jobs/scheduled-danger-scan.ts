@@ -6,9 +6,9 @@
  * gets classified, including legacy chats created before the feature existed.
  *
  * Decision tree per unclassified chat:
- * - Has contextSummary → enqueue CHAT_DANGER_CLASSIFICATION directly
- * - No summary, messageCount > 50 → enqueue CONTEXT_SUMMARY (chaining handles classification)
- * - No summary, messageCount <= 50 → enqueue CHAT_DANGER_CLASSIFICATION (handler uses raw messages)
+ * - Has contextSummary or scenarioText → enqueue CHAT_DANGER_CLASSIFICATION directly
+ * - Neither, messageCount > 50 → enqueue CONTEXT_SUMMARY (chaining handles classification)
+ * - Neither, messageCount <= 50 → enqueue CHAT_DANGER_CLASSIFICATION (handler uses raw messages)
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
@@ -179,8 +179,12 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
         }
 
         try {
-          if (chat.contextSummary) {
-            // Has summary → classify directly
+          if (chat.contextSummary || chat.scenarioText) {
+            // Has a summary, or a scenario to stand in for one until the first
+            // fold → classify directly. The handler picks between them and
+            // reports which it used. Before bug 158 the scenario arrived here
+            // disguised as a summary, so this branch already took every
+            // scenario-bearing chat; naming it changes nothing but the log.
             await enqueueChatDangerClassification(
               settings.userId,
               { chatId: chat.id, connectionProfileId },
@@ -188,7 +192,7 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
             );
             chatsEnqueued++;
           } else if ((chat.messageCount ?? 0) > 50) {
-            // No summary, long chat → generate summary first (chaining handles classification)
+            // No summary and no scenario, long chat → summarize first (chaining handles classification)
             await enqueueContextSummary(
               settings.userId,
               { chatId: chat.id, connectionProfileId, forceRegenerate: false },
@@ -196,7 +200,7 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
             );
             chatsEnqueued++;
           } else {
-            // No summary, short chat → classify from raw messages
+            // No summary and no scenario, short chat → classify from raw messages
             await enqueueChatDangerClassification(
               settings.userId,
               { chatId: chat.id, connectionProfileId },

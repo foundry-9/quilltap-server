@@ -66,6 +66,23 @@ export function calculateRecentConversationsLimit(maxContext?: number | null): n
   )
 }
 
+/**
+ * The greeting's "Recent Conversations" block — what the character remembers
+ * having talked about lately, rendered once before the opening line.
+ *
+ * Each entry is capped through `truncateGist` and the block closes with
+ * `READ_CONVERSATION_CALL_NOTE`, exactly as `buildConversationRecallLists`
+ * renders the same rows on the per-turn path. Both matter here, and bug 158 is
+ * why: a chat created before that fix carried its own scenario in
+ * `contextSummary`, so an unsummarized prior chat contributed its entire raw
+ * scenario — 9 KB of it, in the reported case — to the greeting prompt, at full
+ * length, with nothing marking it as past, immediately before "open with a
+ * concise greeting". The character greeted from it. The seed is fixed at the
+ * source, and these two lines are the standing guard: an entry that is somehow
+ * the wrong text is now a truncated wrong text that announces itself as a
+ * transcript the model may go read, not a stage direction adjacent to the
+ * instruction to act.
+ */
 export async function buildRecentConversationsBlock(
   characterId: string,
   currentChatId: string | undefined,
@@ -79,9 +96,14 @@ export async function buildRecentConversationsBlock(
   })
   if (eligible.length === 0) return ''
   const entries = eligible
-    .map(c => `#### ${c.title} (\`${c.id}\`)\n${c.contextSummary}`)
+    .map(c => {
+      const gist = (c.contextSummary ?? '').trim()
+      return gist.length > 0
+        ? `#### ${c.title} (\`${c.id}\`)\n${truncateGist(gist)}`
+        : `#### ${c.title} (\`${c.id}\`)`
+    })
     .join('\n\n')
-  return `### Recent Conversations\n\n${entries}`
+  return `### Recent Conversations\n\n${entries}\n\n${READ_CONVERSATION_CALL_NOTE}`
 }
 
 /** Cap an inlined conversation gist so the recap block stays bounded. */

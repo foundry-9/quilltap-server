@@ -306,6 +306,7 @@ import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-f
 import { addTextReplacementRulesTableMigration } from './add-text-replacement-rules-table';
 // Salon Inform: chat_informs table (out-of-character passages handed to LLM seats)
 import { addChatInformsTableMigration } from './add-chat-informs-table';
+import { clearScenarioSeededChatSummariesMigration } from './clear-scenario-seeded-chat-summaries';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -799,6 +800,8 @@ export const migrations: Migration[] = [
   collapseDuplicateAvatarRollsMigration,
   // Salon Inform: chat_informs table (out-of-character passages handed to LLM seats)
   addChatInformsTableMigration,
+  // Conversation summaries: clear the ones that are really the chat's own scenario (bug 158)
+  clearScenarioSeededChatSummariesMigration,
 ];
 
 export {
@@ -1180,5 +1183,7 @@ export {
   collapseDuplicateAvatarRollsMigration,
   // Salon Inform: chat_informs table (out-of-character passages handed to LLM seats)
   addChatInformsTableMigration,
+  // Conversation summaries: clear the ones that are really the chat's own scenario (bug 158)
+  clearScenarioSeededChatSummariesMigration,
 };
 

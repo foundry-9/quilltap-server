@@ -84,6 +84,33 @@ store; edit it in the Scriptorium and the next run carries it out.
 New API: `POST /api/v1/mount-points/[id]?action=sync`. Engine in `lib/mount-index/sync/`.
 Help: `help/cli-sync.md`.
 
+#### Fixed: a character could open a new chat in the wrong scenario (bug 158)
+
+Starting a new chat could produce a greeting set somewhere other than the scenario that was chosen
+— a character greeting you from a swimming hole when the chat was set in an office. The scenario
+shown in the UI was correct; the model was reading a different one.
+
+Creating a chat wrote the chosen scenario into two columns: `scenarioText`, where it belongs, and
+`contextSummary`, where a summary of what was actually said belongs. That second write is left over
+from before `scenarioText` existed. Everything that reads `contextSummary` therefore treated a
+brand-new chat as already summarized, and the greeting prompt's "Recent Conversations" section —
+which inlines that column whole — handed the character the full text of some other chat's scenario,
+positioned immediately before the instruction to greet. On one test instance 186 of 712 chats were
+in this state.
+
+- Chat creation no longer seeds `contextSummary`. Only the summarizer writes it.
+- The greeting's "Recent Conversations" entries are now length-capped and closed with the same
+  `read_conversation` note the per-turn recap uses, so an oversized or wrong entry cannot dominate
+  the prompt.
+- The Concierge's danger classification read the scenario through that seed without knowing it. It
+  now reads `scenarioText` deliberately when a chat has no summary yet — same behavior, and its log
+  reports `scenario` rather than claiming `summary`.
+- A migration clears `contextSummary` on existing chats where it is byte-identical to the chat's own
+  `scenarioText`. Real summaries are untouched: every chat that has been summarized at least once
+  has had that column overwritten, so none match.
+- `.qtap` import and backup restore apply the same rule to incoming chats, so a bundle made before
+  this fix can't bring the problem back into an instance the migration has already cleaned.
+
 #### Fixed: a file description saved at one path appeared at another (bug 157)
 
 Setting a description on an image in a document store could write it to a different file with
