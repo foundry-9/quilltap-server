@@ -191,7 +191,7 @@ async function handleLinkFile(
 async function ensureImageDescription(
   repos: RepositoryContainer,
   userId: string,
-  blob: { id: string; storedMimeType: string; description: string; originalFileName: string; sizeBytes: number },
+  blob: { id: string; linkId: string; storedMimeType: string; description: string; originalFileName: string; sizeBytes: number },
 ): Promise<string> {
   if (!blob.storedMimeType.toLowerCase().startsWith('image/')) {
     return '';
@@ -235,7 +235,7 @@ async function ensureImageDescription(
 
   const description = result.imageDescription.trim();
   try {
-    await repos.docMountBlobs.updateDescription(blob.id, description);
+    await repos.docMountBlobs.updateDescription(blob.id, description, blob.linkId);
     logger.info('[Chats v1 Files] Cached generated image description on blob', {
       blobId: blob.id,
       descriptionLength: description.length,

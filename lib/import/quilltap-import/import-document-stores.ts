@@ -343,7 +343,7 @@ export async function importDocumentStores(
           extractedTextSha256: blob.extractedTextSha256 ?? null,
           extractionStatus: blob.extractionStatus ?? 'none',
           extractionError: blob.extractionError ?? null,
-        });
+        }, created.linkId);
       }
       counts.blobs++;
     } catch (error) {

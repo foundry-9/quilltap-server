@@ -17,6 +17,14 @@
  *   claiming `chunkCount > 0, converted`, which is precisely the predicate
  *   `rescanDatabaseMountPoint` uses to decide a link needs nothing done.
  *
+ * Bug 157 — a caption written at one path landed at another.
+ *   `updateDescription` / `updateExtractedText` had a two-argument form that
+ *   resolved the target link with `WHERE fileId = ? LIMIT 1`. Both are per-link
+ *   (per-location) state, and content-addressing puts several links on one file
+ *   row — a character vault holds every avatar at both `photos/` and
+ *   `images/history/`, byte-identical — so the write landed on an arbitrary one
+ *   of the sharing locations. `linkId` is now required.
+ *
  * Also covers the caller-supplied `lastModified` / `createdAt` the sync needs
  * so the two sides converge instead of re-stamping `now` on every pass.
  *
@@ -26,6 +34,8 @@
  *   - lib/database/repositories/doc-mount-file-links.repository.ts
  *     (linkBlobContent + linkDocumentContent update branches,
  *      fanOutGroupFileId, setLinkTimestamps)
+ *   - lib/database/repositories/doc-mount-blobs.repository.ts
+ *     (updateDescription / updateExtractedText target exactly one link)
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
@@ -66,6 +76,7 @@ const V2 = '# Harbour\nThe second revision mentions a customs house instead.';
 
 let db: any;
 let links: DocMountFileLinksRepository;
+let blobs: DocMountBlobsRepository;
 
 async function writeBlob(
   mountPointId: string,
@@ -149,10 +160,11 @@ beforeEach(async () => {
   (globalThis as Record<string, unknown>).__quilltapMountIndexDegraded = false;
 
   links = new DocMountFileLinksRepository();
+  blobs = new DocMountBlobsRepository();
   await new DocMountFilesRepository().findBySha256('seed');
   await new DocMountFoldersRepository().findByMountPointId('seed');
   await new DocMountDocumentsRepository().findByFileId('seed');
-  await new DocMountBlobsRepository().findByFileId('seed');
+  await blobs.findByFileId('seed');
   await new DocMountChunksRepository().findByLinkId('seed');
 });
 
@@ -323,5 +335,74 @@ describe('per-location timestamps may be supplied by the writer', () => {
   it('setLinkTimestamps reports false for an unknown link', async () => {
     await writeDoc('mp-1', 'somebody-else.md', V1);
     expect(await links.setLinkTimestamps('no-such-link', { lastModified: MTIME })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bug 157
+// ---------------------------------------------------------------------------
+
+describe('bug 157: a caption belongs to a location, not to the bytes', () => {
+  const PHOTOS = 'photos/avatar_Riya_1789257668916.webp';
+  const HISTORY = 'images/history/avatar_Riya_1789257668916.webp';
+  const CAPTION = 'Riya at the harbour rail, hair loose in the wind.';
+
+  /** What a character vault looks like: the same avatar at two paths. */
+  async function twoPathsOneBlob() {
+    const photos = await writeBlob('vault-1', PHOTOS, PNG_A);
+    const history = await writeBlob('vault-1', HISTORY, PNG_A);
+    // Content-addressed, so both links hang off one file row — which is the
+    // whole condition for this bug.
+    expect(linkRow(history.id).fileId).toBe(linkRow(photos.id).fileId);
+    return { photos, history };
+  }
+
+  it('resolves each path to its own link id', async () => {
+    const { photos, history } = await twoPathsOneBlob();
+    expect((await blobs.findByMountPointAndPath('vault-1', PHOTOS))?.linkId).toBe(photos.id);
+    expect((await blobs.findByMountPointAndPath('vault-1', HISTORY))?.linkId).toBe(history.id);
+  });
+
+  it('describes the path it was asked about and leaves the twin blank', async () => {
+    const { photos, history } = await twoPathsOneBlob();
+    const meta = await blobs.findByMountPointAndPath('vault-1', PHOTOS);
+
+    const updated = await blobs.updateDescription(meta!.id, CAPTION, meta!.linkId);
+
+    expect(updated?.relativePath).toBe(PHOTOS);
+    expect(updated?.description).toBe(CAPTION);
+    expect(linkRow(photos.id).description).toBe(CAPTION);
+    expect(linkRow(photos.id).descriptionUpdatedAt).toBeTruthy();
+    expect(linkRow(history.id).description).toBe('');
+    expect(linkRow(history.id).descriptionUpdatedAt).toBeNull();
+  });
+
+  it('lets the two locations carry different captions', async () => {
+    const { photos, history } = await twoPathsOneBlob();
+    const a = await blobs.findByMountPointAndPath('vault-1', PHOTOS);
+    const b = await blobs.findByMountPointAndPath('vault-1', HISTORY);
+
+    await blobs.updateDescription(a!.id, CAPTION, a!.linkId);
+    await blobs.updateDescription(b!.id, 'The same portrait, filed by date.', b!.linkId);
+
+    expect(linkRow(photos.id).description).toBe(CAPTION);
+    expect(linkRow(history.id).description).toBe('The same portrait, filed by date.');
+  });
+
+  it('keeps extracted text per location as well', async () => {
+    const { photos, history } = await twoPathsOneBlob();
+    const meta = await blobs.findByMountPointAndPath('vault-1', HISTORY);
+
+    await blobs.updateExtractedText(meta!.id, {
+      extractedText: CAPTION,
+      extractedTextSha256: shaOf(CAPTION),
+      extractionStatus: 'converted',
+      extractionError: null,
+    }, meta!.linkId);
+
+    expect(linkRow(history.id).extractedText).toBe(CAPTION);
+    expect(linkRow(history.id).extractionStatus).toBe('converted');
+    expect(linkRow(photos.id).extractedText).toBeNull();
+    expect(linkRow(photos.id).extractionStatus).toBe('none');
   });
 });

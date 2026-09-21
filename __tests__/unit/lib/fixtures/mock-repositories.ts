@@ -189,7 +189,7 @@ export interface MockDocMountLookupRepository {
   deleteByMountPointId: jest.Mock<(mountPointId: string) => Promise<number>>;
   linkDocumentContent: jest.Mock<(input: any) => Promise<any>>;
   bindLinkGroup: jest.Mock<(anchorId: string, memberId: string) => Promise<void>>;
-  updateExtractedText: jest.Mock<(id: string, data: any) => Promise<void>>;
+  updateExtractedText: jest.Mock<(id: string, data: any, linkId: string) => Promise<void>>;
 }
 
 export interface MockGlobalRepositories {
@@ -469,7 +469,7 @@ function createMockDocMountLookupRepository(): MockDocMountLookupRepository {
         groupSiblings: [],
       })),
     bindLinkGroup: jest.fn<(anchorId: string, memberId: string) => Promise<void>>().mockResolvedValue(undefined),
-    updateExtractedText: jest.fn<(id: string, data: any) => Promise<void>>().mockResolvedValue(undefined),
+    updateExtractedText: jest.fn<(id: string, data: any, linkId: string) => Promise<void>>().mockResolvedValue(undefined),
   };
 }
 

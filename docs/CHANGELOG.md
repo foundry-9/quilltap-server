@@ -42,6 +42,20 @@ store; edit it in the Scriptorium and the next run carries it out.
 New API: `POST /api/v1/mount-points/[id]?action=sync`. Engine in `lib/mount-index/sync/`.
 Help: `help/cli-sync.md`.
 
+#### Fixed: a file description saved at one path appeared at another (bug 157)
+
+Setting a description on an image in a document store could write it to a different file with
+identical bytes. A character vault keeps every avatar at both `photos/` and `images/history/`, and
+because the store is content-addressed those two paths share one content row. The repository method
+that saves a description takes a content id, and when the caller did not say which path it meant,
+it picked one with `LIMIT 1`. The request returned 200 and the description showed up on the other
+copy.
+
+The path is now required, not inferred. Three callers were affected: the Scriptorium's description
+field, the `.qtap` importer's extracted-text restore, and the cached caption the chat attach
+generates — that last one also read from the correct row and wrote to the wrong one, so attaching
+the same vault image ran the vision model again every time.
+
 #### Fixed: writing a binary's bytes no longer blanks its description (bug 155)
 
 Re-uploading an image over an existing path in the Scriptorium file manager, running

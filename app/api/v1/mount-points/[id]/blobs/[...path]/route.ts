@@ -151,7 +151,16 @@ export const PATCH = createContextParamsHandler<Params>(
       if (!meta) return notFound('Blob');
       const body = await req.json();
       const description = typeof body?.description === 'string' ? body.description : '';
-      const updated = await repos.docMountBlobs.updateDescription(meta.id, description);
+      // The caption belongs to this *location*, not to the bytes. A vault
+      // holds each avatar at both `photos/` and `images/history/`, identical
+      // and so sharing one content row, and the two-argument form used to
+      // pick an arbitrary link off that row (bug 157). `meta.linkId` is the
+      // link the path resolved to.
+      const updated = await repos.docMountBlobs.updateDescription(
+        meta.id,
+        description,
+        meta.linkId
+      );
       logger.info('[Mount Points v1] Updated blob description', {
         mountPointId: id,
         relativePath,
