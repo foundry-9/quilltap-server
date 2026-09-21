@@ -29,7 +29,7 @@ type PluginsPostAction = typeof PLUGINS_POST_ACTIONS[number];
 
 const searchPluginsSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
-  type: z.enum(['provider', 'theme', 'tool', 'all']).optional().prefault('all'),
+  type: z.enum(['provider', 'theme', 'tool', 'all']).prefault('all'),
 });
 
 const installPluginSchema = z.object({

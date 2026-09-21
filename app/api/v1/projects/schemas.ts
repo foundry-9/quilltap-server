@@ -13,8 +13,8 @@ export const createProjectSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(2000).nullable().optional(),
   instructions: z.string().max(10000).nullable().optional(),
-  allowAnyCharacter: z.boolean().optional().prefault(false),
-  characterRoster: z.array(z.uuid()).optional().prefault([]),
+  allowAnyCharacter: z.boolean().prefault(false),
+  characterRoster: z.array(z.uuid()).prefault([]),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
 });

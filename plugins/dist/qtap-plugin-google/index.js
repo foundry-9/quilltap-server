@@ -40817,7 +40817,127 @@ var safeJSON2 = (text) => {
 };
 
 // ../../../node_modules/openai/internal/utils/sleep.mjs
-var sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var sleep2 = (ms, ...signals) => new Promise((resolve, reject) => {
+  const activeSignals = [...new Set(signals.filter((signal) => signal != null))];
+  let timeout;
+  let settled = false;
+  const cleanup = () => {
+    for (const signal of activeSignals) {
+      try {
+        signal.removeEventListener("abort", abort);
+      } catch {
+      }
+    }
+  };
+  const settle = (callback) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    if (timeout !== void 0) {
+      clearTimeout(timeout);
+      timeout = void 0;
+    }
+    cleanup();
+    callback();
+  };
+  const abort = () => {
+    settle(() => reject());
+  };
+  if (activeSignals.some((signal) => signal.aborted)) {
+    abort();
+    return;
+  }
+  timeout = setTimeout(() => {
+    settle(resolve);
+  }, ms);
+  for (const signal of activeSignals) {
+    if (settled) {
+      break;
+    }
+    try {
+      signal.addEventListener("abort", abort, { once: true });
+    } catch (error) {
+      settle(() => reject(error));
+    }
+  }
+  if (activeSignals.some((signal) => signal.aborted)) {
+    abort();
+  }
+});
+
+// ../../../node_modules/openai/internal/utils/abort.mjs
+var weakGlobals = globalThis;
+var finalizer = (
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Weak references and finalizers are optional host capabilities, so probe them before constructing either.
+  typeof weakGlobals.FinalizationRegistry === "function" ? new weakGlobals.FinalizationRegistry((cleanup) => {
+    try {
+      cleanup();
+    } catch {
+    }
+  }) : void 0
+);
+var callbackOwners = /* @__PURE__ */ new WeakMap();
+var subscriptions = /* @__PURE__ */ new WeakMap();
+function subscribeWeakly(signal, reference, registry) {
+  let subscription = subscriptions.get(signal);
+  if (!subscription) {
+    const callbacks = /* @__PURE__ */ new Set();
+    const abort = () => {
+      subscriptions.delete(signal);
+      for (const callback of callbacks) {
+        registry.unregister(callback);
+        callback.deref()?.();
+      }
+      callbacks.clear();
+    };
+    subscription = { callbacks, abort };
+    signal.addEventListener("abort", abort, { once: true });
+    subscriptions.set(signal, subscription);
+  }
+  const owner = subscription;
+  owner.callbacks.add(reference);
+  return () => {
+    owner.callbacks.delete(reference);
+    registry.unregister(reference);
+    if (owner.callbacks.size === 0) {
+      if (subscriptions.get(signal) === owner) {
+        subscriptions.delete(signal);
+      }
+      signal.removeEventListener("abort", owner.abort);
+    }
+  };
+}
+function releaseOnAbort(signal, callbacks, abort) {
+  signal.addEventListener("abort", () => callbacks.deref()?.delete(abort), { once: true });
+}
+function retainRequestAbortCallback(owner, abort, requestSignal) {
+  if (typeof weakGlobals.WeakRef === "function" && finalizer && !requestSignal.aborted) {
+    let callbacks = callbackOwners.get(owner);
+    if (!callbacks) {
+      callbacks = /* @__PURE__ */ new Set();
+      callbackOwners.set(owner, callbacks);
+    }
+    callbacks.add(abort);
+    releaseOnAbort(requestSignal, new weakGlobals.WeakRef(callbacks), abort);
+  }
+}
+function addRequestAbortListener(signal, abort, requestSignal) {
+  if (signal.aborted) {
+    abort();
+    return () => {
+    };
+  }
+  if (typeof weakGlobals.WeakRef !== "function" || !finalizer) {
+    signal.addEventListener("abort", abort, { once: true });
+    return () => signal.removeEventListener("abort", abort);
+  }
+  const reference = new weakGlobals.WeakRef(abort);
+  const cleanup = subscribeWeakly(signal, reference, finalizer);
+  finalizer.register(abort, cleanup, reference);
+  retainRequestAbortCallback(requestSignal, abort, requestSignal);
+  return cleanup;
+}
 
 // ../../../node_modules/openai/internal/shims.mjs
 function getDefaultFetch2() {
@@ -41129,6 +41249,7 @@ var sensitiveQueryNames = /* @__PURE__ */ new Set([
   "token",
   "password",
   "clientsecret",
+  "signingsecret",
   "xamzsecuritytoken",
   "xamzsignature",
   "xamzcredential"
@@ -41469,10 +41590,13 @@ var Stream4 = class _Stream {
    * which can be turned back into a Stream with `Stream.fromReadableStream()`.
    * Canceling a response-backed readable aborts its request. Canceling a tee
    * branch discards its buffered events and leaves sibling consumers running.
+   * Read or serialization failures also release the iterator without replacing the original error.
    */
   toReadableStream() {
     const { controller } = this;
     let iter;
+    let cancellation;
+    const cancel = () => cancellation ?? (cancellation = __classPrivateFieldGet(this, _Stream_instances, "m", _Stream_cancelIterator).call(this, iter, controller));
     return makeReadableStream2({
       start: async () => {
         iter = this[Symbol.asyncIterator]();
@@ -41487,9 +41611,10 @@ var Stream4 = class _Stream {
           ctrl.enqueue(bytes);
         } catch (err) {
           ctrl.error(err);
+          void cancel().catch(() => void 0);
         }
       },
-      cancel: () => __classPrivateFieldGet(this, _Stream_instances, "m", _Stream_cancelIterator).call(this, iter, controller)
+      cancel
     });
   }
 };
@@ -41660,6 +41785,13 @@ async function* _iterSSEMessages2(response, controller) {
         yield sse;
       }
     }
+    if (signal.aborted) {
+      return;
+    }
+    const pending = sseDecoder.flush();
+    if (pending) {
+      yield pending;
+    }
   } catch (error) {
     failed = true;
     if (!signal.aborted || !isAbortError2(error) && error !== signal.reason) {
@@ -41755,6 +41887,14 @@ var SSEDecoder2 = class {
     }
     return null;
   }
+  /**
+   * Emits a pending event at EOF when the stream omitted the trailing blank
+   * line. Returns `null` when no event is in progress so a record that already
+   * ended with a blank line is not delivered twice.
+   */
+  flush() {
+    return this.decode("");
+  }
 };
 function partition2(str, delimiter) {
   const index = str.indexOf(delimiter);
@@ -41767,6 +41907,7 @@ function partition2(str, delimiter) {
 // ../../../node_modules/openai/internal/parse.mjs
 async function defaultParseResponse2(client, props) {
   const { response, requestLogID, retryOfRequestLogID, startTime } = props;
+  let jsonBodyLength;
   const body = await (async () => {
     if (props.options.stream) {
       loggerFor2(client).debug("response", response.status, response.url, response.headers, response.body);
@@ -41794,6 +41935,7 @@ async function defaultParseResponse2(client, props) {
         return void 0;
       }
       const json = JSON.parse(bodyText);
+      jsonBodyLength = bodyText.length;
       return addRequestID(json, response);
     }
     const text = await response.text();
@@ -41801,13 +41943,15 @@ async function defaultParseResponse2(client, props) {
   })().catch((error) => {
     throw asAbortError(error, props.controller.signal);
   });
-  loggerFor2(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails2({
-    retryOfRequestLogID,
-    url: response.url,
-    status: response.status,
-    body,
-    durationMs: Date.now() - startTime
-  }));
+  if (client.logLevel === "debug") {
+    loggerFor2(client).debug(`[${requestLogID}] response parsed`, formatRequestDetails2({
+      retryOfRequestLogID,
+      url: response.url,
+      status: response.status,
+      body: jsonBodyLength === void 0 ? body : { type: "json", length: jsonBodyLength },
+      durationMs: Date.now() - startTime
+    }));
+  }
   return body;
 }
 function asAbortError(error, signal) {
@@ -41829,7 +41973,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION2 = "7.15.0";
+var VERSION2 = "7.20.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -42785,7 +42929,9 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
     this.config = {
       identityProviderId,
       serviceAccountId,
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...clientId === void 0 ? {} : { clientId },
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...refreshBufferSeconds === void 0 ? {} : { refreshBufferSeconds },
       provider: {
         tokenType: provider.tokenType,
@@ -43218,7 +43364,9 @@ var X509WorkloadIdentityAuth = class {
       type: "x509",
       identityProviderId: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_identityProviderId, "f"),
       serviceAccountId: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_serviceAccountId, "f"),
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") === void 0 ? {} : { refreshBufferMs: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") },
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") === void 0 ? {} : { refreshBufferSeconds: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") }
     };
   }
@@ -43384,6 +43532,7 @@ var X509WorkloadIdentityAuth = class {
     return scope.effectiveSignal ?? scope.request?.signal;
   }
   /** Establishes an independent scope even when concurrent requests share caller options. */
+  // oxlint-disable-next-line anti-slop/no-object-parameters -- Logical request owners are opaque identity tokens; their properties are never read.
   runRequest(operation, requestOwner) {
     return __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").run(async () => {
       const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
@@ -43403,6 +43552,7 @@ var X509WorkloadIdentityAuth = class {
     });
   }
   /** Reports whether a public request-building call already belongs to an active logical operation. */
+  // oxlint-disable-next-line anti-slop/no-object-parameters -- Request scope membership compares the opaque caller token by identity only.
   inRequest(requestOwner) {
     const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
     return scope?.owner === this && scope.requestOwner === requestOwner && scope.phase !== "authorizing";
@@ -43418,9 +43568,13 @@ var X509WorkloadIdentityAuth = class {
       wallStartedAt,
       monotonicStartedAt,
       owner: this,
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...deadlineArmed ? { deadlineArmed } : {},
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...request ? { request } : {},
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...effectiveSignal ? { effectiveSignal } : {},
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...requestOwner ? { requestOwner } : {}
     };
     return (operation) => __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").resume(scope, async () => {
@@ -44278,7 +44432,8 @@ var createPathTagFunction2 = (pathEncoder = encodeURIPath2) => function path3(st
       }
       const value = params[index];
       let encoded = (postPath ? encodeURIComponent : pathEncoder)("" + value);
-      if (index !== params.length && (value == null || typeof value === "object" && // handle values from other realms
+      if (index !== params.length && (value == null || // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Path parameters may arrive from JavaScript callers and require runtime validation before URL encoding.
+      typeof value === "object" && // handle values from other realms
       value.toString === Object.getPrototypeOf(Object.getPrototypeOf(value.hasOwnProperty ?? EMPTY2) ?? EMPTY2)?.toString)) {
         encoded = value + "";
         invalidSegments.push({
@@ -44320,22 +44475,55 @@ ${underline}`);
 var path2 = /* @__PURE__ */ createPathTagFunction2(encodeURIPath2);
 
 // ../../../node_modules/openai/resources/chat/completions/messages.mjs
+var normalizeRequestOptionsForQueryKeys = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Messages = class extends APIResource2 {
-  /**
-   * Get the messages in a stored chat completion. Only Chat Completions that have
-   * been created with the `store` parameter set to `true` will be returned.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const chatCompletionStoreMessage of client.chat.completions.messages.list(
-   *   'completion_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(completionID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
   }
 };
@@ -44485,6 +44673,7 @@ var _EventStream_errored;
 var _EventStream_aborted;
 var _EventStream_catchingPromiseCreated;
 var _EventStream_terminalFailure;
+var _EventStream_abortFromSignal;
 var _EventStream_removeAbortListeners;
 var _EventStream_onceForEmitted;
 var _EventStream_removeEmittedListener;
@@ -45459,18 +45648,28 @@ var EventStream = class {
   abort() {
     this.controller.abort();
   }
+  /** Creates a user-abort error retaining this runner's cancellation reason. */
+  _userAbortError() {
+    const error = new APIUserAbortError2();
+    Object.defineProperty(error, "cause", {
+      value: this.controller.signal.reason,
+      writable: true,
+      configurable: true
+    });
+    return error;
+  }
   _listenForAbort(signal) {
     if (!signal || this.ended) {
       return;
     }
     if (signal.aborted) {
-      this.controller.abort();
+      __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_abortFromSignal).call(this, signal);
       return;
     }
     if (__classPrivateFieldGet(this, _EventStream_abortListeners, "f").some((registration) => registration.signal === signal)) {
       return;
     }
-    const listener = () => this.controller.abort();
+    const listener = () => __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_abortFromSignal).call(this, signal);
     signal.addEventListener("abort", listener, { once: true });
     __classPrivateFieldGet(this, _EventStream_abortListeners, "f").push({ signal, listener });
   }
@@ -45857,7 +46056,13 @@ var EventStream = class {
   _emitFinal() {
   }
 };
-_EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_endPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_listeners = /* @__PURE__ */ new WeakMap(), _EventStream_abortListeners = /* @__PURE__ */ new WeakMap(), _EventStream_emittedListenerRegistrations = /* @__PURE__ */ new WeakMap(), _EventStream_pendingListenerCleanup = /* @__PURE__ */ new WeakMap(), _EventStream_pendingBufferedEventChecks = /* @__PURE__ */ new WeakMap(), _EventStream_listenerDispatchDepth = /* @__PURE__ */ new WeakMap(), _EventStream_ended = /* @__PURE__ */ new WeakMap(), _EventStream_errored = /* @__PURE__ */ new WeakMap(), _EventStream_aborted = /* @__PURE__ */ new WeakMap(), _EventStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _EventStream_terminalFailure = /* @__PURE__ */ new WeakMap(), _EventStream_instances = /* @__PURE__ */ new WeakSet(), _EventStream_removeAbortListeners = function _EventStream_removeAbortListeners2() {
+_EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_endPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_listeners = /* @__PURE__ */ new WeakMap(), _EventStream_abortListeners = /* @__PURE__ */ new WeakMap(), _EventStream_emittedListenerRegistrations = /* @__PURE__ */ new WeakMap(), _EventStream_pendingListenerCleanup = /* @__PURE__ */ new WeakMap(), _EventStream_pendingBufferedEventChecks = /* @__PURE__ */ new WeakMap(), _EventStream_listenerDispatchDepth = /* @__PURE__ */ new WeakMap(), _EventStream_ended = /* @__PURE__ */ new WeakMap(), _EventStream_errored = /* @__PURE__ */ new WeakMap(), _EventStream_aborted = /* @__PURE__ */ new WeakMap(), _EventStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _EventStream_terminalFailure = /* @__PURE__ */ new WeakMap(), _EventStream_instances = /* @__PURE__ */ new WeakSet(), _EventStream_abortFromSignal = function _EventStream_abortFromSignal2(signal) {
+  try {
+    this.controller.abort(signal.reason);
+  } catch {
+    this.controller.abort();
+  }
+}, _EventStream_removeAbortListeners = function _EventStream_removeAbortListeners2() {
   for (const { signal, listener } of __classPrivateFieldGet(this, _EventStream_abortListeners, "f").splice(0)) {
     signal.removeEventListener("abort", listener);
   }
@@ -45892,7 +46097,7 @@ _EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_reso
 }, _EventStream_handleError = function _EventStream_handleError2(error) {
   __classPrivateFieldSet(this, _EventStream_errored, true, "f");
   if (error instanceof Error && error.name === "AbortError") {
-    error = new APIUserAbortError2();
+    error = this._userAbortError();
   }
   if (error instanceof APIUserAbortError2) {
     __classPrivateFieldSet(this, _EventStream_aborted, true, "f");
@@ -46136,7 +46341,10 @@ var AbstractChatCompletionRunner = class extends EventStream {
     const role = "tool";
     const { tool_choice = "auto", stream, toolContext: inputToolContext, ...restParams } = params;
     const toolContext = inputToolContext;
-    const singleFunctionToCall = typeof tool_choice !== "string" && tool_choice.type === "function" && tool_choice?.function?.name;
+    const singleFunctionToCall = (
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Chat history and tool-choice inputs can contain runtime variants that select different runner behavior.
+      typeof tool_choice !== "string" && tool_choice.type === "function" && tool_choice?.function?.name
+    );
     const { maxChatCompletions = DEFAULT_MAX_CHAT_COMPLETIONS, afterCompletion } = options || {};
     const runAfterCompletion = async (completion) => {
       if (afterCompletion == null) {
@@ -46175,11 +46383,15 @@ var AbstractChatCompletionRunner = class extends EventStream {
       type: "function",
       function: {
         name: t2.function.name || t2.function.function.name,
+        // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Tool parameter schemas use the published open JSON Schema dictionary contract, including arbitrary extensions.
         parameters: t2.function.parameters,
         description: t2.function.description,
         strict: t2.function.strict
       }
-    } : t2) : void 0;
+    } : (
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Preserve the existing non-function tool pass-through; runnable and wire schema interfaces have incompatible index signatures.
+      t2
+    )) : void 0;
     for (const message of params.messages) {
       this._addMessage(message, false, false);
     }
@@ -46208,20 +46420,34 @@ var AbstractChatCompletionRunner = class extends EventStream {
           parsed = await fn.parse(args);
         } catch (error) {
           if (this.controller.signal.aborted) {
-            throw new APIUserAbortError2();
+            throw this._userAbortError();
           }
           const content2 = error instanceof Error ? error.message : String(error);
           return { message: { role, tool_call_id, content: content2 }, functionCalled: false };
         }
         if (this.controller.signal.aborted) {
-          throw new APIUserAbortError2();
+          throw this._userAbortError();
         }
-        rawContent = await fn.function(parsed, runner, toolContext);
+        try {
+          rawContent = await fn.function(parsed, runner, toolContext);
+        } catch (error) {
+          if (this.controller.signal.aborted && Object.is(error, this.controller.signal.reason)) {
+            throw this._userAbortError();
+          }
+          throw error;
+        }
       } else {
         if (this.controller.signal.aborted && !bufferedToolCall) {
-          throw new APIUserAbortError2();
+          throw this._userAbortError();
         }
-        rawContent = await fn.function(args, runner, toolContext);
+        try {
+          rawContent = await fn.function(args, runner, toolContext);
+        } catch (error) {
+          if (this.controller.signal.aborted && Object.is(error, this.controller.signal.reason)) {
+            throw this._userAbortError();
+          }
+          throw error;
+        }
       }
       const content = __classPrivateFieldGet(_a3, _a3, "m", _AbstractChatCompletionRunner_stringifyFunctionCallResult).call(_a3, rawContent);
       return { message: { role, tool_call_id, content }, functionCalled: true };
@@ -46249,7 +46475,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
             this._addMessage(result.message);
           }
           if (this.controller.signal.aborted) {
-            throw new APIUserAbortError2();
+            throw this._userAbortError();
           }
           if (singleFunctionToCall && result.functionCalled) {
             await runAfterCompletion(chatCompletion);
@@ -46271,7 +46497,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
           }
         }
         if (this.controller.signal.aborted) {
-          throw new APIUserAbortError2();
+          throw this._userAbortError();
         }
       }
       await runAfterCompletion(chatCompletion);
@@ -46310,7 +46536,8 @@ _a3 = AbstractChatCompletionRunner, _AbstractChatCompletionRunner_completionArri
 }, _AbstractChatCompletionRunner_getFinalFunctionToolCallResult = function _AbstractChatCompletionRunner_getFinalFunctionToolCallResult2() {
   for (let i2 = this.messages.length - 1; i2 >= 0; i2--) {
     const message = this.messages[i2];
-    if (isToolMessage(message) && message.content != null && typeof message.content === "string" && this.messages.some((x2) => x2.role === "assistant" && x2.tool_calls?.some((y) => y.type === "function" && y.id === message.tool_call_id))) {
+    if (isToolMessage(message) && message.content != null && // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Chat history and tool-choice inputs can contain runtime variants that select different runner behavior.
+    typeof message.content === "string" && this.messages.some((x2) => x2.role === "assistant" && x2.tool_calls?.some((y) => y.type === "function" && y.id === message.tool_call_id))) {
       return message.content;
     }
   }
@@ -46331,13 +46558,7 @@ _a3 = AbstractChatCompletionRunner, _AbstractChatCompletionRunner_completionArri
   return total;
 }, _AbstractChatCompletionRunner_throwIfAborted = function _AbstractChatCompletionRunner_throwIfAborted2() {
   if (this.controller.signal.aborted) {
-    const error = new APIUserAbortError2();
-    Object.defineProperty(error, "cause", {
-      value: this.controller.signal.reason,
-      writable: true,
-      configurable: true
-    });
-    throw error;
+    throw this._userAbortError();
   }
 }, _AbstractChatCompletionRunner_validateParams = function _AbstractChatCompletionRunner_validateParams2(params) {
   if (params.n != null && params.n > 1) {
@@ -46605,6 +46826,7 @@ var partialParse = (input) => parseJSON(input, Allow.ALL ^ Allow.NUM);
 // ../../../node_modules/openai/lib/ChatCompletionStream.mjs
 var _ChatCompletionStream_instances;
 var _ChatCompletionStream_params;
+var _ChatCompletionStream_rejectsUnfinishedTurns;
 var _ChatCompletionStream_audioDoneChoiceIndexes;
 var _ChatCompletionStream_choiceEventStates;
 var _ChatCompletionStream_currentChatCompletionSnapshot;
@@ -46633,6 +46855,7 @@ function makeChatCompletionReadableStreamMessageChunk(chunk, message, toolCallId
   const payload = {
     type: "message",
     message,
+    // Spread creates an own data property without invoking inherited setters or changing the object prototype.
     ...toolCallIds ? { tool_call_ids: toolCallIds } : {}
   };
   return {
@@ -46885,6 +47108,7 @@ function cloneParserConfigObject(value, stableFields = []) {
       continue;
     }
     descriptors[field] = {
+      // oxlint-disable-next-line anti-slop/no-reflect-get -- Generic config cloning must resolve inherited/accessor keys outside the declared config shape.
       value: descriptor && "value" in descriptor ? descriptor.value : Reflect.get(value, field, value),
       enumerable: descriptor?.enumerable ?? false,
       configurable: descriptor?.configurable ?? true,
@@ -47306,6 +47530,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     super();
     _ChatCompletionStream_instances.add(this);
     _ChatCompletionStream_params.set(this, void 0);
+    _ChatCompletionStream_rejectsUnfinishedTurns.set(this, false);
     _ChatCompletionStream_audioDoneChoiceIndexes.set(this, void 0);
     _ChatCompletionStream_choiceEventStates.set(this, void 0);
     _ChatCompletionStream_currentChatCompletionSnapshot.set(this, void 0);
@@ -47355,6 +47580,11 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     runner._run(() => runner._runChatCompletion(client, { ...params, stream: true }, { ...options, __metadata: { ...options?.__metadata, helperMethod: "stream" } }));
     return runner;
   }
+  /** Rejects unfinished turns before tool callbacks while preserving ordinary stream and replay behavior. */
+  _runTools(client, params, runner, options) {
+    __classPrivateFieldSet(this, _ChatCompletionStream_rejectsUnfinishedTurns, true, "f");
+    return super._runTools(client, params, runner, options);
+  }
   async _createChatCompletion(client, params, options) {
     this._listenForAbort(options?.signal);
     const requestParams = { ...params, stream: true };
@@ -47376,7 +47606,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_addChunk).call(this, chunk);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
   }
@@ -47416,7 +47646,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       }
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     if (__classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f")) {
       return this._addChatCompletion(__classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_endRequest).call(this));
@@ -47428,7 +47658,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     throw new OpenAIError(`request ended without sending any chunks`);
   }
   /** Iterates over raw API chunks; stopping iteration early aborts the underlying request. */
-  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_audioDoneChoiceIndexes = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_hasAutoParseableTool = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_partialJSONParseBudget = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
+  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_rejectsUnfinishedTurns = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_audioDoneChoiceIndexes = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_hasAutoParseableTool = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_partialJSONParseBudget = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
     if (this.ended) {
       return;
     }
@@ -47785,7 +48015,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       }
       if (finish_reason) {
         choice.finish_reason = finish_reason;
-        if (__classPrivateFieldGet(this, _ChatCompletionStream_params, "f") && hasAutoParseableInput(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f"))) {
+        if (__classPrivateFieldGet(this, _ChatCompletionStream_params, "f") && (__classPrivateFieldGet(this, _ChatCompletionStream_rejectsUnfinishedTurns, "f") || hasAutoParseableInput(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")))) {
           if (finish_reason === "length") {
             throw new LengthFinishReasonError();
           }
@@ -48122,6 +48352,7 @@ function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes, valida
     created,
     model,
     object: "chat.completion",
+    // Spread creates an own data property without invoking inherited setters or changing the object prototype.
     ...system_fingerprint ? { system_fingerprint } : {}
   };
   return maybeParseChatCompletion(completion, params);
@@ -48192,6 +48423,47 @@ var ChatCompletionStreamingRunner = class _ChatCompletionStreamingRunner extends
 };
 
 // ../../../node_modules/openai/resources/chat/completions/completions.mjs
+var normalizeRequestOptionsForQueryKeys2 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery2(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys2.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys2.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Completions = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -48241,19 +48513,13 @@ var Completions = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List stored Chat Completions. Only Chat Completions that have been stored with
-   * the `store` parameter set to `true` will be returned.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const chatCompletion of client.chat.completions.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery2(query, ["after", "limit", "metadata", "model", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/chat/completions", CursorPage, {
       query,
       ...options,
@@ -48308,6 +48574,47 @@ var Chat2 = class extends APIResource2 {
 Chat2.Completions = Completions;
 
 // ../../../node_modules/openai/resources/admin/organization/admin-api-keys.mjs
+var normalizeRequestOptionsForQueryKeys3 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery3(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys3.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys3.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var AdminAPIKeys = class extends APIResource2 {
   /**
    * Create an organization admin API key
@@ -48344,18 +48651,13 @@ var AdminAPIKeys = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * List organization API keys
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const adminAPIKey of client.admin.organization.adminAPIKeys.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery3(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/admin_api_keys", CursorPage, {
       query,
       ...options,
@@ -48382,19 +48684,66 @@ var AdminAPIKeys = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/audit-logs.mjs
+var normalizeRequestOptionsForQueryKeys4 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery4(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys4.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys4.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var AuditLogs = class extends APIResource2 {
-  /**
-   * List user actions and configuration changes within this organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const auditLogListResponse of client.admin.organization.auditLogs.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery4(query, [
+      "actor_emails",
+      "actor_ids",
+      "after",
+      "before",
+      "effective_at",
+      "event_types",
+      "limit",
+      "project_ids",
+      "resource_ids",
+      "tenant_only"
+    ], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/audit_logs", ConversationCursorPage, {
       query,
       ...options,
@@ -48404,6 +48753,47 @@ var AuditLogs = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/certificates.mjs
+var normalizeRequestOptionsForQueryKeys5 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery5(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys5.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys5.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Certificates = class extends APIResource2 {
   /**
    * Upload a certificate to the organization. This does **not** automatically
@@ -48426,20 +48816,13 @@ var Certificates = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Get a certificate that has been uploaded to the organization.
-   *
-   * You can get a certificate regardless of whether it is active or not.
-   *
-   * @example
-   * ```ts
-   * const certificate =
-   *   await client.admin.organization.certificates.retrieve(
-   *     'certificate_id',
-   *   );
-   * ```
-   */
   retrieve(certificateID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery5(query, ["include"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.get(path2`/organization/certificates/${certificateID}`, {
       query,
       ...options,
@@ -48464,18 +48847,13 @@ var Certificates = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * List uploaded certificates for this organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const certificateListResponse of client.admin.organization.certificates.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery5(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/certificates", ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -48577,7 +48955,176 @@ var DataRetention = class extends APIResource2 {
   }
 };
 
+// ../../../node_modules/openai/resources/admin/organization/external-storage.mjs
+var normalizeRequestOptionsForQueryKeys6 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery6(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys6.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys6.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var ExternalStorage = class extends APIResource2 {
+  /**
+   * Register one customer-managed external storage configuration.
+   *
+   * @example
+   * ```ts
+   * const externalStorageConfiguration =
+   *   await client.admin.organization.externalStorage.create({
+   *     project_id: 'proj_123',
+   *     provider: {
+   *       bucket: 'bucket',
+   *       role_arn: 'role_arn',
+   *       type: 'aws',
+   *     },
+   *   });
+   * ```
+   */
+  create(body, options) {
+    return this._client.post("/organization/external_storage", {
+      body,
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Get one customer-managed external storage configuration.
+   *
+   * @example
+   * ```ts
+   * const externalStorageConfiguration =
+   *   await client.admin.organization.externalStorage.retrieve(
+   *     'extstorage_123',
+   *   );
+   * ```
+   */
+  retrieve(externalStorageID, options) {
+    return this._client.get(path2`/organization/external_storage/${externalStorageID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery6(query, ["after", "limit", "order", "project_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/organization/external_storage", CursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+  }
+  /**
+   * Soft-delete one customer-managed external storage configuration.
+   *
+   * @example
+   * ```ts
+   * const externalStorageDeleted =
+   *   await client.admin.organization.externalStorage.delete(
+   *     'extstorage_123',
+   *   );
+   * ```
+   */
+  delete(externalStorageID, options) {
+    return this._client.delete(path2`/organization/external_storage/${externalStorageID}`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+  /**
+   * Validate one customer-managed external storage configuration.
+   *
+   * @example
+   * ```ts
+   * const externalStorageConfiguration =
+   *   await client.admin.organization.externalStorage.validate(
+   *     'extstorage_123',
+   *   );
+   * ```
+   */
+  validate(externalStorageID, options) {
+    return this._client.post(path2`/organization/external_storage/${externalStorageID}/validate`, {
+      ...options,
+      __security: { adminAPIKeyAuth: true }
+    });
+  }
+};
+
 // ../../../node_modules/openai/resources/admin/organization/invites.mjs
+var normalizeRequestOptionsForQueryKeys7 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery7(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys7.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys7.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Invites = class extends APIResource2 {
   /**
    * Create an invite for a user to the organization. The invite must be accepted by
@@ -48616,18 +49163,13 @@ var Invites = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Returns a list of invites in the organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const invite of client.admin.organization.invites.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery7(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/invites", ConversationCursorPage, {
       query,
       ...options,
@@ -48654,6 +49196,47 @@ var Invites = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/roles.mjs
+var normalizeRequestOptionsForQueryKeys8 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery8(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys8.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys8.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Roles = class extends APIResource2 {
   /**
    * Creates a custom role for the organization.
@@ -48706,18 +49289,13 @@ var Roles = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists the roles configured for the organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const role of client.admin.organization.roles.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery8(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/roles", NextCursorPage, {
       query,
       ...options,
@@ -48743,6 +49321,47 @@ var Roles = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/spend-alerts.mjs
+var normalizeRequestOptionsForQueryKeys9 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery9(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys9.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys9.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var SpendAlerts = class extends APIResource2 {
   /**
    * Creates an organization spend alert.
@@ -48812,18 +49431,13 @@ var SpendAlerts = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists organization spend alerts.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const organizationSpendAlert of client.admin.organization.spendAlerts.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery9(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/spend_alerts", ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -49102,6 +49716,47 @@ var Usage = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/roles.mjs
+var normalizeRequestOptionsForQueryKeys10 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery10(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys10.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys10.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Roles2 = class extends APIResource2 {
   /**
    * Assigns an organization role to a group within the organization.
@@ -49141,20 +49796,13 @@ var Roles2 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists the organization roles assigned to a group within the organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const roleListResponse of client.admin.organization.groups.roles.list(
-   *   'group_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(groupID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery10(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/groups/${groupID}/roles`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -49179,6 +49827,47 @@ var Roles2 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/users.mjs
+var normalizeRequestOptionsForQueryKeys11 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery11(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys11.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys11.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Users = class extends APIResource2 {
   /**
    * Adds a user to a group.
@@ -49218,20 +49907,13 @@ var Users = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists the users assigned to a group.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const organizationGroupUser of client.admin.organization.groups.users.list(
-   *   'group_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(groupID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery11(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/groups/${groupID}/users`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -49256,6 +49938,47 @@ var Users = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/groups.mjs
+var normalizeRequestOptionsForQueryKeys12 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery12(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys12.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys12.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Groups = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -49314,18 +50037,13 @@ var Groups = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists all groups in the organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const group of client.admin.organization.groups.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery12(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/groups", NextCursorPage, {
       query,
       ...options,
@@ -49353,6 +50071,47 @@ Groups.Users = Users;
 Groups.Roles = Roles2;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/api-keys.mjs
+var normalizeRequestOptionsForQueryKeys13 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery13(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys13.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys13.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var APIKeys = class extends APIResource2 {
   /**
    * Retrieves an API key in the project.
@@ -49373,20 +50132,13 @@ var APIKeys = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Returns a list of API keys in the project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectAPIKey of client.admin.organization.projects.apiKeys.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery13(query, ["after", "limit", "owner_project_access"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/api_keys`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -49414,21 +50166,55 @@ var APIKeys = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/certificates.mjs
+var normalizeRequestOptionsForQueryKeys14 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery14(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys14.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys14.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Certificates2 = class extends APIResource2 {
-  /**
-   * List certificates for this project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const certificateListResponse of client.admin.organization.projects.certificates.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery14(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/certificates`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -49607,21 +50393,55 @@ var ModelPermissions = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/rate-limits.mjs
+var normalizeRequestOptionsForQueryKeys15 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery15(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys15.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys15.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var RateLimits = class extends APIResource2 {
-  /**
-   * Returns the rate limits per model for a project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectRateLimit of client.admin.organization.projects.rateLimits.listRateLimits(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   listRateLimits(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery15(query, ["after", "before", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/rate_limits`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -49647,6 +50467,47 @@ var RateLimits = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/roles.mjs
+var normalizeRequestOptionsForQueryKeys16 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery16(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys16.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys16.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Roles3 = class extends APIResource2 {
   /**
    * Creates a custom role for a project.
@@ -49706,20 +50567,13 @@ var Roles3 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists the roles configured for a project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const role of client.admin.organization.projects.roles.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery16(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/projects/${projectID}/roles`, NextCursorPage, {
       query,
       ...options,
@@ -49748,6 +50602,47 @@ var Roles3 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+var normalizeRequestOptionsForQueryKeys17 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery17(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys17.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys17.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var SpendAlerts2 = class extends APIResource2 {
   /**
    * Creates a project spend alert.
@@ -49824,20 +50719,13 @@ var SpendAlerts2 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists project spend alerts.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectSpendAlert of client.admin.organization.projects.spendAlerts.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery17(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -50003,6 +50891,47 @@ var Roles4 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/groups.mjs
+var normalizeRequestOptionsForQueryKeys18 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery18(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys18.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys18.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Groups2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50047,20 +50976,13 @@ var Groups2 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists the groups that have access to a project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectGroup of client.admin.organization.projects.groups.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery18(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/groups`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -50106,6 +51028,47 @@ var APIKeys2 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/service-accounts.mjs
+var normalizeRequestOptionsForQueryKeys19 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery19(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys19.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys19.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var ServiceAccounts = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50166,20 +51129,13 @@ var ServiceAccounts = class extends APIResource2 {
     const { project_id, ...body } = params;
     return this._client.post(path2`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { body, ...options, __security: { adminAPIKeyAuth: true } });
   }
-  /**
-   * Returns a list of service accounts in the project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectServiceAccount of client.admin.organization.projects.serviceAccounts.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery19(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -50285,6 +51241,47 @@ var Roles5 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/users/users.mjs
+var normalizeRequestOptionsForQueryKeys20 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery20(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys20.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys20.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Users2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50349,20 +51346,13 @@ var Users2 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Returns a list of users in the project.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const projectUser of client.admin.organization.projects.users.list(
-   *   'project_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(projectID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery20(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/projects/${projectID}/users`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -50391,6 +51381,47 @@ var Users2 = class extends APIResource2 {
 Users2.Roles = Roles5;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/projects.mjs
+var normalizeRequestOptionsForQueryKeys21 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery21(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys21.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys21.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Projects = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50461,18 +51492,13 @@ var Projects = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Returns a list of projects.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const project of client.admin.organization.projects.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery21(query, ["after", "include_archived", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/projects", ConversationCursorPage, {
       query,
       ...options,
@@ -50512,6 +51538,47 @@ Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
+var normalizeRequestOptionsForQueryKeys22 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery22(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys22.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys22.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Roles6 = class extends APIResource2 {
   /**
    * Assigns an organization role to a user within the organization.
@@ -50551,20 +51618,13 @@ var Roles6 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists the organization roles assigned to a user within the organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const roleListResponse of client.admin.organization.users.roles.list(
-   *   'user_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(userID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery22(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/organization/users/${userID}/roles`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -50589,6 +51649,47 @@ var Roles6 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/admin/organization/users/users.mjs
+var normalizeRequestOptionsForQueryKeys23 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery23(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys23.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys23.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Users3 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -50625,18 +51726,13 @@ var Users3 = class extends APIResource2 {
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * Lists all of the users in the organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const organizationUser of client.admin.organization.users.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery23(query, ["after", "emails", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/organization/users", ConversationCursorPage, {
       query,
       ...options,
@@ -50666,6 +51762,7 @@ Users3.Roles = Roles6;
 var Organization = class extends APIResource2 {
   constructor() {
     super(...arguments);
+    this.externalStorage = new ExternalStorage(this._client);
     this.auditLogs = new AuditLogs(this._client);
     this.adminAPIKeys = new AdminAPIKeys(this._client);
     this.usage = new Usage(this._client);
@@ -50680,6 +51777,7 @@ var Organization = class extends APIResource2 {
     this.projects = new Projects(this._client);
   }
 };
+Organization.ExternalStorage = ExternalStorage;
 Organization.AuditLogs = AuditLogs;
 Organization.AdminAPIKeys = AdminAPIKeys;
 Organization.Usage = Usage;
@@ -50766,6 +51864,47 @@ Audio.Translations = Translations;
 Audio.Speech = Speech;
 
 // ../../../node_modules/openai/resources/batches.mjs
+var normalizeRequestOptionsForQueryKeys24 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery24(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys24.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys24.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Batches2 = class extends APIResource2 {
   /**
    * Creates and executes a batch from an uploaded file of requests
@@ -50779,10 +51918,13 @@ var Batches2 = class extends APIResource2 {
   retrieve(batchID, options) {
     return this._client.get(path2`/batches/${batchID}`, { ...options, __security: { bearerAuth: true } });
   }
-  /**
-   * List your organization's batches.
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery24(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/batches", CursorPage, {
       query,
       ...options,
@@ -50803,6 +51945,47 @@ var Batches2 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/assistants.mjs
+var normalizeRequestOptionsForQueryKeys25 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery25(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys25.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys25.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Assistants = class extends APIResource2 {
   /**
    * Create an assistant with a model and instructions.
@@ -50842,12 +52025,13 @@ var Assistants = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Returns a list of assistants.
-   *
-   * @deprecated
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery25(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/assistants", CursorPage, {
       query,
       ...options,
@@ -50988,6 +52172,47 @@ var Files2 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/environments/templates.mjs
+var normalizeRequestOptionsForQueryKeys26 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery26(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys26.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys26.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Templates = class extends APIResource2 {
   /**
    * Creates reusable environment configuration without returning confidential setup
@@ -51049,19 +52274,13 @@ var Templates = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists reusable environment templates without returning confidential values. See
-   * [reusing a hosted setup](https://developers.openai.com/api/docs/guides/agents-api/tools#reuse-a-hosted-plugin-setup).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const environmentTemplate of client.beta.agents.environments.templates.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery26(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/agents/environments/templates", CursorPage, {
       query,
       ...options,
@@ -51217,7 +52436,7 @@ function normalizedOutput(value) {
   throw new OpenAIError("Tool output must be text, content, a JSON object, or null");
 }
 function toolResult(call, value) {
-  const output = value !== null && typeof value === "object" && !Array.isArray(value) ? JSON.stringify(value) : value;
+  const output = isObj(value) ? JSON.stringify(value) : value;
   const serialized = JSON.stringify(output);
   if (serialized === void 0) {
     throw new OpenAIError("Tool output must be JSON serializable");
@@ -51305,6 +52524,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
     __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_checkAbort).call(this);
     await __classPrivateFieldGet(this, _AgentSessionStream_sessions, "f").events.create(__classPrivateFieldGet(this, _AgentSessionStream_sessionID, "f"), {
       events: [__classPrivateFieldGet(this, _AgentSessionStream_input, "f")],
+      // Spread creates an own data property without invoking inherited setters or changing the object prototype.
       ...__classPrivateFieldGet(this, _AgentSessionStream_inputKey, "f") === void 0 ? {} : { "Idempotency-Key": __classPrivateFieldGet(this, _AgentSessionStream_inputKey, "f") }
     }, {
       ...options,
@@ -51346,7 +52566,7 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
 }, _AgentSessionStream_result = async function _AgentSessionStream_result2(call, handler) {
   try {
     const args = typeof call.arguments === "string" ? JSON.parse(call.arguments) : call.arguments;
-    if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    if (!isObj(args)) {
       throw new OpenAIError("Function arguments must be a JSON object");
     }
     return toolResult(call, await __classPrivateFieldGet(this, _AgentSessionStream_instances, "m", _AgentSessionStream_wait).call(this, () => handler(args)));
@@ -51414,6 +52634,47 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/artifacts.mjs
+var normalizeRequestOptionsForQueryKeys27 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery27(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys27.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys27.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Artifacts = class extends APIResource2 {
   /**
    * Retrieves immutable metadata for one durable session artifact. See
@@ -51436,21 +52697,13 @@ var Artifacts = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists immutable artifacts published by completed hosted session turns. See
-   * [session artifacts](https://developers.openai.com/api/docs/guides/agents-api/environments/files#openai-hosted-artifacts).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const sessionArtifact of client.beta.agents.sessions.artifacts.list(
-   *   'session_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(sessionID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery27(query, ["after", "environment_id", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/agents/sessions/${sessionID}/artifacts`, CursorPage, {
       query,
       ...options,
@@ -51515,7 +52768,10 @@ var Artifacts = class extends APIResource2 {
 var Events = class extends APIResource2 {
   /**
    * Submits message, cancellation, or tool-result events to a managed agent session.
-   * See
+   * Cancellation can recover a still-open turn whose backend execution has ended by
+   * marking it cancelled and abandoning unpublished outputs. Saved results,
+   * published files, and existing terminal outcomes are preserved. HTTP 202 confirms
+   * acceptance, not durable completion. See
    * [session events](https://developers.openai.com/api/docs/guides/agents-api/sessions/events).
    *
    * @example
@@ -51577,23 +52833,55 @@ var Events = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/items.mjs
+var normalizeRequestOptionsForQueryKeys28 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery28(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys28.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys28.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Items = class extends APIResource2 {
-  /**
-   * Lists items produced by the session's root agent, including its interactions
-   * with subagents. Each subagent has its own item history. See
-   * [inspecting agent output](https://developers.openai.com/api/docs/guides/agents-api/observability).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const agentSessionItem of client.beta.agents.sessions.items.list(
-   *   'session_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(sessionID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery28(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/agents/sessions/${sessionID}/items`, CursorPage, {
       query,
       ...options,
@@ -51604,6 +52892,47 @@ var Items = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/turns.mjs
+var normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery29(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys29.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys29.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Turns = class extends APIResource2 {
   /**
    * Retrieves a turn's current status, timestamps, usage, and error. Returns 404 if
@@ -51627,22 +52956,13 @@ var Turns = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists turns by creation time and turn ID. The after cursor is exclusive in the
-   * selected order. See
-   * [session turns](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage#inspect-session-turns).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const turn of client.beta.agents.sessions.turns.list(
-   *   'session_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(sessionID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery29(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/agents/sessions/${sessionID}/turns`, CursorPage, {
       query,
       ...options,
@@ -51766,6 +53086,47 @@ var Turns2 = class extends APIResource2 {
 Turns2.Items = Items3;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/subagents.mjs
+var normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery30(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys30.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys30.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Subagents = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -51793,21 +53154,13 @@ var Subagents = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists subagents in a session, including nested and closed subagents. See
-   * [subagent workflows](https://developers.openai.com/api/docs/guides/agents-api/multi-agent).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const subagent of client.beta.agents.sessions.subagents.list(
-   *   'session_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(sessionID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery30(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/agents/sessions/${sessionID}/subagents`, CursorPage, {
       query,
       ...options,
@@ -51820,6 +53173,47 @@ Subagents.Items = Items2;
 Subagents.Turns = Turns2;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/sessions.mjs
+var normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery31(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys31.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys31.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Sessions2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -51860,7 +53254,8 @@ var Sessions2 = class extends APIResource2 {
     });
   }
   /**
-   * Updates session metadata. Omitted fields are unchanged. See
+   * Updates session metadata, model, reasoning effort, or service tier. Model
+   * settings apply to subsequent turns. Omitted fields are unchanged. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -51877,20 +53272,13 @@ var Sessions2 = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists managed agent sessions using ID-based pagination and the requested sort
-   * order. See
-   * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const agentSession of client.beta.agents.sessions.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery31(query, ["after", "agent_id", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/agents/sessions", CursorPage, {
       query,
       ...options,
@@ -51900,7 +53288,9 @@ var Sessions2 = class extends APIResource2 {
   }
   /**
    * Removes a managed agent session from the public API and returns a deletion
-   * confirmation. Physical cleanup may continue asynchronously. See
+   * confirmation. If backend execution has ended, deletion can cancel a still-open
+   * public turn and abandon unpublished outputs. Running execution must be cancelled
+   * first. Physical cleanup may continue asynchronously. See
    * [managing sessions](https://developers.openai.com/api/docs/guides/agents-api/sessions/manage).
    *
    * @example
@@ -51924,6 +53314,47 @@ Sessions2.Events = Events;
 Sessions2.Turns = Turns;
 
 // ../../../node_modules/openai/resources/beta/agents/vaults/credentials.mjs
+var normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery32(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys32.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys32.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Credentials = class extends APIResource2 {
   /**
    * Creates a vault credential. Secret values are write-only and are never returned.
@@ -52001,22 +53432,13 @@ var Credentials = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists a vault's credentials using ID-based pagination without returning secret
-   * values. See
-   * [vaults](https://developers.openai.com/api/docs/guides/agents-api/tools/vaults).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const credential of client.beta.agents.vaults.credentials.list(
-   *   'vault_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(vaultID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery32(query, ["after", "limit", "order", "status"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/vaults/${vaultID}/credentials`, CursorPage, {
       query,
       ...options,
@@ -52048,6 +53470,47 @@ var Credentials = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/vaults/vaults.mjs
+var normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery33(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys33.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys33.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Vaults = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -52088,19 +53551,13 @@ var Vaults = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists vaults using ID-based pagination. See
-   * [vaults](https://developers.openai.com/api/docs/guides/agents-api/tools/vaults).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const vault of client.beta.agents.vaults.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery33(query, ["after", "limit", "order", "status"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/vaults", CursorPage, {
       query,
       ...options,
@@ -52130,6 +53587,47 @@ var Vaults = class extends APIResource2 {
 Vaults.Credentials = Credentials;
 
 // ../../../node_modules/openai/resources/beta/agents/agents.mjs
+var normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery34(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys34.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys34.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Agents = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -52189,19 +53687,13 @@ var Agents = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Lists reusable agents in the current project. See
-   * [agent configuration](https://developers.openai.com/api/docs/guides/agents-api/configuration).
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const agent of client.beta.agents.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery34(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/agents", CursorPage, {
       query,
       ...options,
@@ -52275,6 +53767,47 @@ var Sessions3 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
+var normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery35(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys35.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys35.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Threads = class extends APIResource2 {
   /**
    * Retrieve a ChatKit thread by its identifier.
@@ -52292,18 +53825,13 @@ var Threads = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List ChatKit threads with optional pagination and user filters.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const chatkitThread of client.beta.chatkit.threads.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "before", "limit", "order", "user"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, {
       query,
       ...options,
@@ -52328,20 +53856,13 @@ var Threads = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List items that belong to a ChatKit thread.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const thread of client.beta.chatkit.threads.listItems(
-   *   'cthr_123',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   listItems(threadID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/chatkit/threads/${threadID}/items`, ConversationCursorPage, {
       query,
       ...options,
@@ -52529,6 +54050,47 @@ Responses.InputItems = InputItems;
 Responses.InputTokens = InputTokens;
 
 // ../../../node_modules/openai/resources/beta/threads/messages.mjs
+var normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery36(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys36.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys36.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Messages2 = class extends APIResource2 {
   /**
    * Create a message.
@@ -52570,12 +54132,13 @@ var Messages2 = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Returns a list of messages for a given thread.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
   list(threadID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(query, ["after", "before", "limit", "order", "run_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/threads/${threadID}/messages`, CursorPage, {
       query,
       ...options,
@@ -53001,7 +54564,8 @@ function stabilizeAssistantStreamEvent(event) {
   let stableData = data;
   if (eventType === "thread.message.created" || eventType === "thread.message.in_progress" || eventType === "thread.message.delta" || eventType === "thread.message.completed" || eventType === "thread.message.incomplete" || eventType === "thread.run.step.created" || eventType === "thread.run.step.in_progress" || eventType === "thread.run.step.delta" || eventType === "thread.run.step.completed" || eventType === "thread.run.step.failed" || eventType === "thread.run.step.cancelled" || eventType === "thread.run.step.expired") {
     const messageID = Object.getOwnPropertyDescriptor(data, "id");
-    if (messageID && "value" in messageID && Reflect.get(data, "id", data) !== messageID.value) {
+    if (messageID && "value" in messageID && // SAFETY: The own id descriptor was found above; keep its live read unknown while comparing it with the captured descriptor value.
+    data.id !== messageID.value) {
       const canonicalID = messageID.value;
       stableData = new Proxy(data, {
         get(target, property) {
@@ -53059,7 +54623,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
       __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_addEvent).call(this, event);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return this._addRun(__classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_endRequest).call(this));
   }
@@ -53089,7 +54653,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
       __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_addEvent).call(this, event);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return this._addRun(__classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_endRequest).call(this));
   }
@@ -53161,7 +54725,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
       __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_addEvent).call(this, event);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return this._addRun(__classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_endRequest).call(this));
   }
@@ -53174,7 +54738,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
       __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_addEvent).call(this, event);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return this._addRun(__classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_endRequest).call(this));
   }
@@ -53769,6 +55333,47 @@ function pollAssistantRun(resource, runID, params, options) {
 }
 
 // ../../../node_modules/openai/resources/beta/threads/runs/runs.mjs
+var normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery37(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Runs = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -53813,12 +55418,13 @@ var Runs = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Returns a list of runs belonging to a thread.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
   list(threadID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/threads/${threadID}/runs`, CursorPage, {
       query,
       ...options,
@@ -54035,6 +55641,47 @@ var Content = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/containers/files/files.mjs
+var normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery38(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Files3 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -54059,10 +55706,13 @@ var Files3 = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List Container files
-   */
   list(containerID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/containers/${containerID}/files`, CursorPage, {
       query,
       ...options,
@@ -54084,6 +55734,47 @@ var Files3 = class extends APIResource2 {
 Files3.Content = Content;
 
 // ../../../node_modules/openai/resources/containers/containers.mjs
+var normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery39(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys39.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys39.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Containers = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -54104,10 +55795,13 @@ var Containers = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List Containers
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query, ["after", "limit", "name", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/containers", CursorPage, {
       query,
       ...options,
@@ -54146,6 +55840,47 @@ var ContentProvenanceChecks = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/conversations/items.mjs
+var normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery40(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys40.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys40.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Items4 = class extends APIResource2 {
   /**
    * Create items in a conversation with the given ID.
@@ -54170,10 +55905,13 @@ var Items4 = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List all items for a conversation with the given ID.
-   */
   list(conversationID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query, ["after", "include", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options, __security: { bearerAuth: true } });
   }
   /**
@@ -54300,6 +56038,47 @@ var OutputItems = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/evals/runs/runs.mjs
+var normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery41(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Runs2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -54327,10 +56106,13 @@ var Runs2 = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Get a list of runs for an evaluation.
-   */
   list(evalID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query, ["after", "limit", "order", "status"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/evals/${evalID}/runs`, CursorPage, {
       query,
       ...options,
@@ -54361,6 +56143,47 @@ var Runs2 = class extends APIResource2 {
 Runs2.OutputItems = OutputItems;
 
 // ../../../node_modules/openai/resources/evals/evals.mjs
+var normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery42(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Evals = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -54389,10 +56212,13 @@ var Evals = class extends APIResource2 {
   update(evalID, body, options) {
     return this._client.post(path2`/evals/${evalID}`, { body, ...options, __security: { bearerAuth: true } });
   }
-  /**
-   * List evaluations for a project.
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(query, ["after", "limit", "order", "order_by"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/evals", CursorPage, {
       query,
       ...options,
@@ -54426,6 +56252,47 @@ async function waitForFileProcessing(resource, id, pollInterval, maxWait) {
 }
 
 // ../../../node_modules/openai/resources/files.mjs
+var normalizeRequestOptionsForQueryKeys43 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery43(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys43.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys43.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Files4 = class extends APIResource2 {
   /**
    * Upload a file that can be used across various endpoints. Individual files can be
@@ -54465,10 +56332,13 @@ var Files4 = class extends APIResource2 {
   retrieve(fileID, options) {
     return this._client.get(path2`/files/${fileID}`, { ...options, __security: { bearerAuth: true } });
   }
-  /**
-   * Returns a list of files.
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query, ["after", "limit", "order", "purpose"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/files", CursorPage, {
       query,
       ...options,
@@ -54566,6 +56436,47 @@ var Alpha = class extends APIResource2 {
 Alpha.Graders = Graders;
 
 // ../../../node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs
+var normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery44(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Permissions = class extends APIResource2 {
   /**
    * **NOTE:** Calling this endpoint requires an
@@ -54588,40 +56499,26 @@ var Permissions = class extends APIResource2 {
   create(fineTunedModelCheckpoint, body, options) {
     return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options, __security: { adminAPIKeyAuth: true } });
   }
-  /**
-   * **NOTE:** This endpoint requires an
-   * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
-   *
-   * Organization owners can use this endpoint to view all permissions for a
-   * fine-tuned model checkpoint.
-   *
-   * @deprecated Retrieve is deprecated. Please swap to the paginated list method instead.
-   */
   retrieve(fineTunedModelCheckpoint, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query, ["after", "limit", "order", "project_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.get(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
       query,
       ...options,
       __security: { adminAPIKeyAuth: true }
     });
   }
-  /**
-   * **NOTE:** This endpoint requires an
-   * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
-   *
-   * Organization owners can use this endpoint to view all permissions for a
-   * fine-tuned model checkpoint.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const permissionListResponse of client.fineTuning.checkpoints.permissions.list(
-   *   'ft-AF1WoRqd3aJAHsqc9NY7iL8F',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(fineTunedModelCheckpoint, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query, ["after", "limit", "order", "project_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
   }
   /**
@@ -54659,26 +56556,101 @@ var Checkpoints = class extends APIResource2 {
 Checkpoints.Permissions = Permissions;
 
 // ../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
+var normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery45(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Checkpoints2 = class extends APIResource2 {
-  /**
-   * List checkpoints for a fine-tuning job.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const fineTuningJobCheckpoint of client.fineTuning.jobs.checkpoints.list(
-   *   'ft-AF1WoRqd3aJAHsqc9NY7iL8F',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(fineTuningJobID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
   }
 };
 
 // ../../../node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
+var normalizeRequestOptionsForQueryKeys46 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery46(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys46.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys46.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Jobs = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -54722,18 +56694,13 @@ var Jobs = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List your organization's fine-tuning jobs
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const fineTuningJob of client.fineTuning.jobs.list()) {
-   *   // ...
-   * }
-   * ```
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit", "metadata"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/fine_tuning/jobs", CursorPage, {
       query,
       ...options,
@@ -54756,20 +56723,13 @@ var Jobs = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Get status updates for a fine-tuning job.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const fineTuningJobEvent of client.fineTuning.jobs.listEvents(
-   *   'ft-AF1WoRqd3aJAHsqc9NY7iL8F',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   listEvents(fineTuningJobID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
   }
   /**
@@ -55676,7 +57636,8 @@ var expectedOutputItemTypes = {
   "response.image_generation_call.partial_image": "image_generation_call",
   "response.mcp_list_tools.in_progress": "mcp_list_tools",
   "response.mcp_list_tools.completed": "mcp_list_tools",
-  "response.mcp_list_tools.failed": "mcp_list_tools"
+  "response.mcp_list_tools.failed": "mcp_list_tools",
+  "response.compaction.compacting": "compaction"
 };
 function getExpectedOutputItemType(event) {
   if (event.type === "response.content_part.added" || event.type === "response.content_part.done") {
@@ -55811,6 +57772,7 @@ var supportedResponseEventTypes = createSupportedResponseEventTypes([
   "response.audio.done",
   "response.audio.transcript.delta",
   "response.audio.transcript.done",
+  "response.compaction.compacting",
   "response.image_generation_call.partial_image",
   "response.mcp_list_tools.in_progress",
   "response.mcp_list_tools.completed",
@@ -55837,7 +57799,10 @@ function sanitizeResponseEvent(event) {
     return assertNever3(event);
   }
   const type = descriptor?.value;
-  if (typeof type !== "string" || !supportedResponseEventTypes.has(type)) {
+  if (
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Validate untrusted streamed item identifiers and discriminators before mutating the response snapshot.
+    typeof type !== "string" || !supportedResponseEventTypes.has(type)
+  ) {
     return assertNever3(event);
   }
   const stableValues = /* @__PURE__ */ new Map([["type", type]]);
@@ -55846,12 +57811,12 @@ function sanitizeResponseEvent(event) {
     try {
       for (const field of responseEventRoutingFields) {
         const routingDescriptor = Object.getOwnPropertyDescriptor(event, field);
-        stableValues.set(field, routingDescriptor ? Reflect.get(event, field, event) : void 0);
+        stableValues.set(field, routingDescriptor ? event[field] : void 0);
       }
       if (type === "response.output_item.done") {
-        stableValues.set("item", structuredClone(Reflect.get(event, "item", event)));
+        stableValues.set("item", structuredClone(event.item));
       } else if (type === "response.content_part.added" || type === "response.content_part.done") {
-        stableValues.set("part", structuredClone(Reflect.get(event, "part", event)));
+        stableValues.set("part", structuredClone(event.part));
       }
     } catch {
       return assertNever3(event);
@@ -56364,6 +58329,7 @@ function isIgnoredResponseEvent(event) {
     case "response.audio.done":
     case "response.audio.transcript.delta":
     case "response.audio.transcript.done":
+    case "response.compaction.compacting":
     case "response.image_generation_call.partial_image":
     case "response.mcp_list_tools.in_progress":
     case "response.mcp_list_tools.completed":
@@ -56482,7 +58448,7 @@ var ResponseStream = class _ResponseStream extends EventStream {
       __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_addEvent).call(this, event, starting_after);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_endRequest).call(this);
   }
@@ -56495,7 +58461,7 @@ var ResponseStream = class _ResponseStream extends EventStream {
       __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_addEvent).call(this, event, null);
     }
     if (stream.controller.signal?.aborted) {
-      throw new APIUserAbortError2();
+      throw this._userAbortError();
     }
     return __classPrivateFieldGet(this, _ResponseStream_instances, "m", _ResponseStream_endRequest).call(this);
   }
@@ -56516,7 +58482,10 @@ var ResponseStream = class _ResponseStream extends EventStream {
       }
     };
     if (event.type === "error") {
-      const error = "error" in event && typeof event.error === "object" && event.error !== null ? event.error : event;
+      const error = (
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- An error event can contain malformed server data; validate its container before extracting error details.
+        "error" in event && typeof event.error === "object" && event.error !== null ? event.error : event
+      );
       throw new APIError2(void 0, error, event.message, void 0);
     }
     let dispatchEvent = event;
@@ -56611,21 +58580,55 @@ function finalizeResponse(snapshot, params) {
 }
 
 // ../../../node_modules/openai/resources/responses/input-items.mjs
+var normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery47(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var InputItems2 = class extends APIResource2 {
-  /**
-   * Returns a list of input items for a given response.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const responseItem of client.responses.inputItems.list(
-   *   'response_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
   list(responseID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query, ["after", "include", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/responses/${responseID}/input_items`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
   }
 };
@@ -56653,6 +58656,47 @@ var InputTokens2 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/responses/responses.mjs
+var normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery48(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys48.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys48.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Responses2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -56673,6 +58717,12 @@ var Responses2 = class extends APIResource2 {
     });
   }
   retrieve(responseID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query, ["include", "include_obfuscation", "starting_after", "stream"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.get(path2`/responses/${responseID}`, {
       query,
       ...options,
@@ -56761,14 +58811,26 @@ var Alerts = class extends APIResource2 {
   }
 };
 
+// ../../../node_modules/openai/resources/safety/cases.mjs
+var Cases = class extends APIResource2 {
+  /**
+   * Get a safety case by ID.
+   */
+  retrieve(id, options) {
+    return this._client.get(path2`/safety/cases/${id}`, { ...options, __security: { bearerAuth: true } });
+  }
+};
+
 // ../../../node_modules/openai/resources/safety/safety.mjs
 var Safety = class extends APIResource2 {
   constructor() {
     super(...arguments);
     this.alerts = new Alerts(this._client);
+    this.cases = new Cases(this._client);
   }
 };
 Safety.Alerts = Alerts;
+Safety.Cases = Cases;
 
 // ../../../node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource2 {
@@ -56802,6 +58864,47 @@ var Content3 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/skills/versions/versions.mjs
+var normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery49(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys49.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys49.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Versions = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -56825,10 +58928,13 @@ var Versions = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List skill versions for a skill.
-   */
   list(skillID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/skills/${skillID}/versions`, CursorPage, {
       query,
       ...options,
@@ -56849,6 +58955,47 @@ var Versions = class extends APIResource2 {
 Versions.Content = Content3;
 
 // ../../../node_modules/openai/resources/skills/skills.mjs
+var normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery50(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys50.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys50.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Skills = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -56879,10 +59026,13 @@ var Skills = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * List all skills for the current project.
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/skills", CursorPage, {
       query,
       ...options,
@@ -57120,6 +59270,47 @@ var FileBatches = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/vector-stores/files.mjs
+var normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery51(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Files5 = class extends APIResource2 {
   /**
    * Create a vector store file by attaching a
@@ -57157,10 +59348,13 @@ var Files5 = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Returns a list of vector store files.
-   */
   list(vectorStoreID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query, ["after", "before", "filter", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList(path2`/vector_stores/${vectorStoreID}/files`, CursorPage, {
       query,
       ...options,
@@ -57229,6 +59423,47 @@ var Files5 = class extends APIResource2 {
 };
 
 // ../../../node_modules/openai/resources/vector-stores/vector-stores.mjs
+var normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery52(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var VectorStores = class extends APIResource2 {
   constructor() {
     super(...arguments);
@@ -57267,10 +59502,13 @@ var VectorStores = class extends APIResource2 {
       __security: { bearerAuth: true }
     });
   }
-  /**
-   * Returns a list of vector stores.
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/vector_stores", CursorPage, {
       query,
       ...options,
@@ -57306,6 +59544,47 @@ VectorStores.Files = Files5;
 VectorStores.FileBatches = FileBatches;
 
 // ../../../node_modules/openai/resources/videos.mjs
+var normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery53(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys53.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys53.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Videos = class extends APIResource2 {
   /**
    * Create a new video generation job from a prompt and optional reference assets.
@@ -57323,12 +59602,13 @@ var Videos = class extends APIResource2 {
   retrieve(videoID, options) {
     return this._client.get(path2`/videos/${videoID}`, { ...options, __security: { bearerAuth: true } });
   }
-  /**
-   * List recently generated videos for the current project.
-   *
-   * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
-   */
   list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.getAPIList("/videos", ConversationCursorPage, {
       query,
       ...options,
@@ -57351,14 +59631,13 @@ var Videos = class extends APIResource2 {
   createCharacter(body, options) {
     return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
   }
-  /**
-   * Download the generated video bytes or a derived preview asset.
-   *
-   * Streams the rendered video content for the specified video job.
-   *
-   * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
-   */
   downloadContent(videoID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["variant"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
     return this._client.get(path2`/videos/${videoID}/content`, {
       query,
       ...options,
@@ -57502,14 +59781,182 @@ async function verifyWebhookSignature(payload, signatureHeader, timestamp, webho
   throw new InvalidWebhookSignatureError("The given webhook signature does not match the expected signature");
 }
 
+// ../../../node_modules/openai/resources/webhooks/event-types.mjs
+var EventTypes = class extends APIResource2 {
+  /**
+   * Returns webhook event types visible to the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const webhookEventTypeList =
+   *   await client.webhooks.eventTypes.list();
+   * ```
+   */
+  list(options) {
+    return this._client.get("/webhook_event_types", { ...options, __security: { bearerAuth: true } });
+  }
+};
+
 // ../../../node_modules/openai/resources/webhooks/webhooks.mjs
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
+var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery54(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Webhooks2 = class extends APIResource2 {
   constructor() {
     super(...arguments);
     _Webhooks_instances.add(this);
+    this.eventTypes = new EventTypes(this._client);
+  }
+  /**
+   * Creates a webhook endpoint for the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const webhookEndpointWithSecret =
+   *   await client.webhooks.create({
+   *     event_types: ['batch.completed'],
+   *     name: 'x',
+   *     url: 'https://',
+   *   });
+   * ```
+   */
+  create(body, options) {
+    return this._client.post("/webhook_endpoints", { body, ...options, __security: { bearerAuth: true } });
+  }
+  /**
+   * Retrieves a webhook endpoint for the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const webhookEndpoint = await client.webhooks.retrieve(
+   *   'whe_123',
+   * );
+   * ```
+   */
+  retrieve(webhookEndpointID, options) {
+    return this._client.get(path2`/webhook_endpoints/${webhookEndpointID}`, {
+      ...options,
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Updates a webhook endpoint for the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const webhookEndpoint = await client.webhooks.update('whe_123');
+   * ```
+   */
+  update(webhookEndpointID, body = {}, options) {
+    return this._client.post(path2`/webhook_endpoints/${webhookEndpointID}`, {
+      body,
+      ...options,
+      __security: { bearerAuth: true }
+    });
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/webhook_endpoints", CursorPage, {
+      query,
+      ...options,
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Deletes a webhook endpoint for the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const deletedWebhookEndpoint = await client.webhooks.delete(
+   *   'whe_123',
+   * );
+   * ```
+   */
+  delete(webhookEndpointID, options) {
+    return this._client.delete(path2`/webhook_endpoints/${webhookEndpointID}`, {
+      ...options,
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Rotates the signing secret for a webhook endpoint in the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const webhookEndpointWithSecret =
+   *   await client.webhooks.rotateSecret('whe_123');
+   * ```
+   */
+  rotateSecret(webhookEndpointID, body = {}, options) {
+    return this._client.post(path2`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, {
+      body,
+      ...options,
+      __security: { bearerAuth: true }
+    });
+  }
+  /**
+   * Sends a sample event to a webhook endpoint for the authenticated project.
+   *
+   * @example
+   * ```ts
+   * const webhookEndpointTestResult =
+   *   await client.webhooks.test('whe_123', {
+   *     event_type: 'batch.completed',
+   *   });
+   * ```
+   */
+  test(webhookEndpointID, body, options) {
+    return this._client.post(path2`/webhook_endpoints/${webhookEndpointID}/test`, {
+      body,
+      ...options,
+      __security: { bearerAuth: true }
+    });
   }
   /**
    * Validates that the given payload was sent by OpenAI and parses the payload.
@@ -57557,6 +60004,16 @@ _Webhooks_instances = /* @__PURE__ */ new WeakSet(), _Webhooks_validateSecret = 
   }
   return value;
 };
+Webhooks2.EventTypes = EventTypes;
+
+// ../../../node_modules/openai/internal/realtime-credentials.mjs
+async function resolveRealtimeAPIKey(client) {
+  let apiKey;
+  const isProvider = await client._callApiKey((resolved) => {
+    apiKey = resolved;
+  });
+  return { apiKey: apiKey === void 0 ? client.apiKey : apiKey, isProvider };
+}
 
 // ../../../node_modules/openai/internal/provider.mjs
 var providerDefinitionsKey = /* @__PURE__ */ Symbol.for("openai.node.providerDefinitions.v1");
@@ -57795,6 +60252,18 @@ var OpenAI = class {
   defaultQuery() {
     return this._options.defaultQuery;
   }
+  /** @internal Client request headers for each new WebSocket handshake. */
+  _buildWebSocketHeaders(authHeaders) {
+    return Object.fromEntries(buildHeaders2([
+      {
+        "User-Agent": this.getUserAgent(),
+        "OpenAI-Organization": this.organization,
+        "OpenAI-Project": this.project
+      },
+      authHeaders,
+      this._options.defaultHeaders
+    ]).values);
+  }
   validateHeaders({ values, nulls }, schemes = {
     bearerAuth: true,
     adminAPIKeyAuth: true
@@ -57844,10 +60313,11 @@ var OpenAI = class {
       }) : await authentication.getToken();
       return buildHeaders2([{ Authorization: `Bearer ${token}` }]);
     }
-    if (this.apiKey == null) {
+    const { apiKey } = await resolveRealtimeAPIKey(this);
+    if (apiKey == null) {
       return void 0;
     }
-    return buildHeaders2([{ Authorization: `Bearer ${this.apiKey}` }]);
+    return buildHeaders2([{ Authorization: `Bearer ${apiKey}` }]);
   }
   async adminAPIKeyAuth(opts) {
     if (this.adminAPIKey == null) {
@@ -57868,12 +60338,15 @@ var OpenAI = class {
     const normalizedError = error && typeof error === "object" && error.error == null ? { error } : error;
     return APIError2.generate(status, normalizedError, message, headers);
   }
+  _hasApiKeyProvider() {
+    return typeof this._options.apiKey === "function";
+  }
   /**
    * Resolves a function-based API key and retains the resolved value on this client.
    * Returns whether a provider was invoked. Internal callers can capture this
    * invocation's key before another request updates the shared `apiKey` property.
    * Overrides should forward `capture` or invoke it with their own resolved key
-   * to preserve connection-local credentials in concurrent Realtime factories.
+   * to preserve invocation-local credentials in concurrent requests and Realtime factories.
    * @internal
    */
   async _callApiKey(capture) {
@@ -57920,14 +60393,11 @@ var OpenAI = class {
   }
   /**
    * Used as a callback for mutating the given `FinalRequestOptions` object.
+   * Function-based credentials are resolved later, when building authentication
+   * headers, including for direct `buildRequest()` calls. Overriding this hook
+   * does not bypass that resolution.
    */
   async prepareOptions(options) {
-    if (this._provider)
-      return;
-    const security = options.__security ?? { bearerAuth: true };
-    if (security.bearerAuth) {
-      await this._callApiKey();
-    }
   }
   /**
    * Used as a callback for mutating the given `RequestInit` object.
@@ -58040,7 +60510,7 @@ var OpenAI = class {
         if (abortListener)
           callerSignal?.removeEventListener("abort", abortListener);
         abortListener = void 0;
-        const next = await this.retryRequest(props.options, retriesRemaining, props.retryOfRequestLogID ?? props.requestLogID);
+        const next = await this.retryRequest(props.options, retriesRemaining, props.retryOfRequestLogID ?? props.requestLogID, void 0, props.requestSignal);
         Object.assign(props, next);
       } finally {
         if (timer !== void 0)
@@ -58156,13 +60626,16 @@ var OpenAI = class {
     const requestLogID = "log_" + (Math.random() * (1 << 24) | 0).toString(16).padStart(6, "0");
     const retryLogStr = retryOfRequestLogID === void 0 ? "" : `, retryOf: ${retryOfRequestLogID}`;
     const startTime = x509Authentication?.requestStartedAt(options) ?? Date.now();
-    loggerFor2(this).debug(`[${requestLogID}] sending request`, formatRequestDetails2({
-      retryOfRequestLogID,
-      method: options.method,
-      url,
-      options: x509Authentication ? { body: req.body, ...x509Authentication.requestSnapshot() } : options,
-      headers: req.headers
-    }));
+    if (this.logLevel === "debug") {
+      const body = typeof req.body === "string" ? { type: "string", length: req.body.length } : req.body;
+      loggerFor2(this).debug(`[${requestLogID}] sending request`, formatRequestDetails2({
+        retryOfRequestLogID,
+        method: options.method,
+        url,
+        options: x509Authentication ? { body, ...x509Authentication.requestSnapshot() } : { ...options, body },
+        headers: req.headers
+      }));
+    }
     const callerSignal = x509Authentication ? x509Authentication.requestSnapshot().signal : options.signal;
     if (callerSignal?.aborted || req.signal?.aborted) {
       throw this._makeUserAbortError(callerSignal?.aborted ? callerSignal : req.signal);
@@ -58188,7 +60661,7 @@ var OpenAI = class {
           durationMs: headersTime - startTime,
           message: x509Authentication ? "X.509 workload identity API connection failed." : response.message
         }));
-        return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID);
+        return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID, void 0, req.signal);
       }
       const terminalMessage = hasStreamingBody ? "error; streaming body cannot be retried" : "error; no more retries left";
       loggerFor2(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - ${terminalMessage}`);
@@ -58259,7 +60732,7 @@ var OpenAI = class {
           headers: response.headers,
           durationMs: headersTime - startTime
         }));
-        return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID, response.headers);
+        return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID, response.headers, req.signal);
       }
       const retryMessage = shouldRetry ? hasStreamingBody ? `error; streaming body cannot be retried` : `error; no more retries left` : `error; not retryable`;
       loggerFor2(this).info(`${responseInfo} - ${retryMessage}`);
@@ -58295,7 +60768,15 @@ var OpenAI = class {
       helperMethod: options.__metadata?.["helperMethod"],
       ...continueRequest ? { continueRequest } : {}
     });
-    return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
+    return {
+      response,
+      options,
+      controller,
+      requestSignal: req.signal,
+      requestLogID,
+      retryOfRequestLogID,
+      startTime
+    };
   }
   getAPIList(path3, Page2, opts) {
     return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path3, ...opts2 })) : { method: "get", path: path3, ...opts });
@@ -58335,8 +60816,7 @@ var OpenAI = class {
     const { signal, method, ...options } = init || {};
     const abort = this._makeAbort(controller);
     const composed = !!signal && composedCallerSignals.get(controller) === signal;
-    if (signal && !composed)
-      signal.addEventListener("abort", abort, { once: true });
+    const cleanup = signal && !composed ? addRequestAbortListener(signal, abort, controller.signal) : void 0;
     const timeout = setTimeout(abort, ms);
     const isReadableBody = globalThis.ReadableStream && options.body instanceof globalThis.ReadableStream || typeof options.body === "object" && options.body !== null && Symbol.asyncIterator in options.body;
     const fetchOptions = {
@@ -58349,10 +60829,13 @@ var OpenAI = class {
       fetchOptions.method = method.toUpperCase();
     }
     try {
-      return await (__classPrivateFieldGet(this, _OpenAI_x509Fetch, "f") ?? this.fetch).call(void 0, url, fetchOptions);
+      const response = await (__classPrivateFieldGet(this, _OpenAI_x509Fetch, "f") ?? this.fetch).call(void 0, url, fetchOptions);
+      if (cleanup) {
+        retainRequestAbortCallback(response.body ?? response, abort, controller.signal);
+      }
+      return response;
     } catch (err) {
-      if (signal && !composed)
-        signal.removeEventListener("abort", abort);
+      cleanup?.();
       throw err;
     } finally {
       clearTimeout(timeout);
@@ -58374,7 +60857,7 @@ var OpenAI = class {
       return true;
     return false;
   }
-  async retryRequest(options, retriesRemaining, requestLogID, responseHeaders) {
+  async retryRequest(options, retriesRemaining, requestLogID, responseHeaders, requestSignal = options.signal) {
     let timeoutMillis;
     const retryAfterMillisHeader = responseHeaders?.get("retry-after-ms");
     if (retryAfterMillisHeader) {
@@ -58406,7 +60889,16 @@ var OpenAI = class {
     if (x509Authentication) {
       await x509Authentication.waitForRetry(timeoutMillis, x509Authentication.effectiveSignal());
     } else {
-      await sleep2(timeoutMillis);
+      const retrySignals = requestSignal === options.signal ? [requestSignal] : [requestSignal, options.signal];
+      try {
+        await sleep2(timeoutMillis, ...retrySignals);
+      } catch (error) {
+        const abortedSignal = retrySignals.find((signal) => signal?.aborted);
+        if (abortedSignal) {
+          throw this._makeUserAbortError(abortedSignal);
+        }
+        throw error;
+      }
     }
     return this.makeRequest(options, retriesRemaining - 1, requestLogID);
   }
@@ -58418,6 +60910,12 @@ var OpenAI = class {
     const jitter = 1 - Math.random() * 0.25;
     return sleepSeconds * jitter * 1e3;
   }
+  /**
+   * Builds a request, resolving callback credentials when constructing authentication
+   * headers, after any subclass request-option rewrites. Calling this method directly
+   * also resolves credentials. Complete replacement builders own authentication and
+   * can call `this.authHeaders()` to resolve headers with request-local credentials.
+   */
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
     if (__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") && !__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f").inRequest(this)) {
       const authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
@@ -58455,6 +60953,7 @@ var OpenAI = class {
         options.signal = snapshot.signal;
       }
     }
+    const authenticationHeaders = this._provider || x509Authentication ? void 0 : await this.authHeaders(inputOptions, inputOptions.__security ?? { bearerAuth: true });
     const { bodyHeaders, body, isStreamingBody } = this.buildBody({ options });
     if (isStreamingBody) {
       inputOptions.__metadata = {
@@ -58467,6 +60966,7 @@ var OpenAI = class {
       options: inputOptions,
       method,
       bodyHeaders,
+      authenticationHeaders,
       retryCount,
       x509Headers,
       x509Timeout: explicitTimeout ? options.timeout : void 0,
@@ -58483,7 +60983,7 @@ var OpenAI = class {
     };
     return { req, url, timeout: options.timeout };
   }
-  async buildHeaders({ options, method, bodyHeaders, retryCount, x509Headers, x509Timeout, x509Tenant }) {
+  async buildHeaders({ options, method, bodyHeaders, authenticationHeaders, retryCount, x509Headers, x509Timeout, x509Tenant }) {
     let idempotencyHeaders = {};
     if (this.idempotencyHeader && method !== "get") {
       if (!options.idempotencyKey)
@@ -58504,7 +61004,8 @@ var OpenAI = class {
         "OpenAI-Organization": x509Tenant ? x509Tenant.organization : this.organization,
         "OpenAI-Project": x509Tenant ? x509Tenant.project : this.project
       },
-      this._provider || __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f")?.isPlanningRequest() ? void 0 : await this.authHeaders(options, options.__security ?? { bearerAuth: true }),
+      // X.509 owns streaming uploads before authentication so it can retire them on failure.
+      __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") && !__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f").isPlanningRequest() ? await this.authHeaders(options, options.__security ?? { bearerAuth: true }) : authenticationHeaders,
       x509Headers?.defaultHeaders ?? this._options.defaultHeaders,
       bodyHeaders,
       x509Headers?.requestHeaders ?? options.headers
@@ -58607,6 +61108,11 @@ OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
+OpenAI.ConversationCursorPage = ConversationCursorPage;
+OpenAI.CursorPage = CursorPage;
+OpenAI.NextCursorPage = NextCursorPage;
+OpenAI.Page = Page;
+OpenAI.TokenPage = TokenPage;
 var composedCallerSignals = /* @__PURE__ */ new WeakMap();
 function createRequestController(callerSignal, originalSignal) {
   const controller = new AbortController();

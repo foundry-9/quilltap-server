@@ -4,6 +4,27 @@
 
 ### 4.10-dev
 
+#### Changed: dependency update across the app, packages and plugins
+
+`npm update -S` was run on the root project, every package under `packages/`, and all 15 distributed
+plugins. No behavior changes are intended; the one code change below was forced by a type-inference
+change in Zod.
+
+- Root, notable versions: Next 16.3.4 to 16.3.5, React and React DOM 19.2.8 to 19.3.0, Zod 4.5.4 to
+  4.6.5, `openai` 7.15 to 7.20, `@openrouter/sdk` 1.2.106 to 1.3.11, TanStack Query 5.102.8 to
+  5.103.2, Playwright 1.62.1 to 1.63.0, Jest 30.5.1 to 30.5.2, plus `katex`, `mammoth`, `yaml`,
+  `autoprefixer`, `tsx` and the `@types/*` packages.
+- Packages published: `create-quilltap-theme` 2.0.20, `@quilltap/plugin-types` 2.7.1,
+  `@quilltap/plugin-utils` 2.6.2, `theme-storybook` 1.0.72. `packages/quilltap` had nothing to
+  update and was not bumped.
+- All 15 plugins took a patch bump in both `package.json` and `manifest.json`, mostly for
+  `@quilltap/plugin-types` ^2.6.0 to ^2.7.0, and were rebuilt with `npm run build:plugins`.
+- Zod 4.6 changed what `.optional().prefault(x)` infers: it now yields `T | undefined` where 4.5
+  yielded `T`, which broke the typecheck in three routes. The `.optional()` was redundant —
+  `.prefault()` already accepts a missing key and substitutes the default — so it was dropped from
+  all five places it appeared, in the project, character-prompt, plugin-search and image-generate
+  schemas. Runtime parsing is unchanged.
+
 #### Docs: one comprehensive CLI reference, in the package README
 
 The CLI reference was split across `packages/quilltap/README.md` (what npm users get) and

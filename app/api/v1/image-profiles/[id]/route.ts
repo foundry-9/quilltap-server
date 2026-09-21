@@ -21,7 +21,7 @@ import { imageQualitySchema } from '@/lib/image-gen/quality';
 const generateImageSchema = z.object({
   prompt: z.string().min(1).max(4000),
   chatId: z.uuid().optional(),
-  count: z.int().min(1).max(10).optional().prefault(1),
+  count: z.int().min(1).max(10).prefault(1),
   size: z.string().optional(),
   quality: imageQualitySchema.optional(),
   style: z.enum(['vivid', 'natural']).optional(),
