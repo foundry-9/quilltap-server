@@ -1,0 +1,41 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`DDL is single-sourced matches its snapshot 1`] = `
+[
+  "CREATE TABLE IF NOT EXISTS "chat_messages_fts_map" (
+  "ftsId"     INTEGER PRIMARY KEY,
+  "messageId" TEXT NOT NULL UNIQUE
+)",
+  "CREATE VIRTUAL TABLE IF NOT EXISTS "chat_messages_fts" USING fts5(
+  content,
+  content='',
+  contentless_delete=1,
+  tokenize='unicode61 remove_diacritics 2'
+)",
+  "CREATE TRIGGER IF NOT EXISTS "chat_messages_fts_ai" AFTER INSERT ON "chat_messages"
+  WHEN new."type" = 'message' AND new."role" IN ('USER','ASSISTANT') AND new."content" IS NOT NULL
+BEGIN
+  INSERT INTO "chat_messages_fts_map"("messageId") VALUES (new."id");
+  INSERT INTO "chat_messages_fts"(rowid, content)
+    VALUES ((SELECT "ftsId" FROM "chat_messages_fts_map" WHERE "messageId" = new."id"),
+            qt_text(new."content"));
+END",
+  "CREATE TRIGGER IF NOT EXISTS "chat_messages_fts_ad" AFTER DELETE ON "chat_messages"
+  WHEN EXISTS (SELECT 1 FROM "chat_messages_fts_map" WHERE "messageId" = old."id")
+BEGIN
+  DELETE FROM "chat_messages_fts"
+    WHERE rowid = (SELECT "ftsId" FROM "chat_messages_fts_map" WHERE "messageId" = old."id");
+  DELETE FROM "chat_messages_fts_map" WHERE "messageId" = old."id";
+END",
+  "CREATE TRIGGER IF NOT EXISTS "chat_messages_fts_au" AFTER UPDATE OF "content" ON "chat_messages"
+  WHEN qt_text(new."content") IS NOT qt_text(old."content")
+   AND EXISTS (SELECT 1 FROM "chat_messages_fts_map" WHERE "messageId" = old."id")
+BEGIN
+  DELETE FROM "chat_messages_fts"
+    WHERE rowid = (SELECT "ftsId" FROM "chat_messages_fts_map" WHERE "messageId" = old."id");
+  INSERT INTO "chat_messages_fts"(rowid, content)
+    VALUES ((SELECT "ftsId" FROM "chat_messages_fts_map" WHERE "messageId" = old."id"),
+            qt_text(new."content"));
+END",
+]
+`;

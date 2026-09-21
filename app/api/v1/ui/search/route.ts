@@ -28,6 +28,7 @@ import {
 import type { SearchResult, SearchType, MatchPriority } from '@/components/search/types';
 import { ALL_SEARCH_TYPES } from '@/components/search/types';
 import { searchDocumentText } from '@/lib/mount-index/document-text-search';
+import { tokenizeLikeUnicode61 } from '@/lib/database/repositories/fts-query';
 
 /**
  * Accepted `types` values — the same ordered list the dialog renders chips
@@ -54,13 +55,69 @@ function getMatchPriority(value: string, query: string): MatchPriority {
   return 2;
 }
 
-// Helper to create a snippet from matched content
+/**
+ * Case-fold and strip diacritics, keeping a map back to the ORIGINAL indices.
+ *
+ * Folding the whole string with `normalize('NFD')` would be simpler and wrong:
+ * NFD changes the string's length (é → e + U+0301), so an index into the
+ * folded text no longer points at the same character in the original. Folding
+ * per character and recording where each folded unit came from keeps the two
+ * coordinate systems tied together.
+ */
+function foldWithIndexMap(value: string): { folded: string; map: number[] } {
+  let folded = '';
+  const map: number[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const unit = value[i].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    for (let k = 0; k < unit.length; k++) {
+      folded += unit[k];
+      map.push(i);
+    }
+  }
+  return { folded, map };
+}
+
+/**
+ * Create a snippet centred on where the query matched.
+ *
+ * Message results come from an FTS5 index now, and under token semantics a hit
+ * need NOT contain the literal query: `café` matches *cafe*, `walk` matches
+ * *walking*, and the phrase the user typed may never appear verbatim. A plain
+ * `indexOf` therefore misses, and every such result used to fall back to "the
+ * first 100 characters" — a snippet that showed the reader nothing about why
+ * the row matched.
+ *
+ * So: try the literal phrase first (the common case, and the cheapest), then
+ * the same phrase case-folded and diacritic-stripped, then each query token in
+ * turn as a folded prefix. The original "first N characters" fallback stays for
+ * the genuine miss.
+ */
 function createSnippet(content: string, query: string, maxLength = 100): string {
   if (!content) return '';
 
   const lowerContent = content.toLowerCase();
   const lowerQuery = query.toLowerCase();
-  const matchIndex = lowerContent.indexOf(lowerQuery);
+
+  let matchIndex = lowerContent.indexOf(lowerQuery);
+  let matchLength = query.length;
+
+  if (matchIndex === -1) {
+    const { folded, map } = foldWithIndexMap(content);
+    // The phrase, then each token — first one that lands wins.
+    const needles = [lowerQuery, ...tokenizeLikeUnicode61(query)]
+      .map(n => foldWithIndexMap(n).folded)
+      .filter(Boolean);
+
+    for (const needle of needles) {
+      const at = folded.indexOf(needle);
+      if (at === -1) continue;
+      matchIndex = map[at];
+      // Fold and original can disagree on length; measure in ORIGINAL indices.
+      const lastFolded = Math.min(at + needle.length - 1, map.length - 1);
+      matchLength = map[lastFolded] - matchIndex + 1;
+      break;
+    }
+  }
 
   if (matchIndex === -1) {
     return content.substring(0, maxLength) + (content.length > maxLength ? '...' : '');
@@ -68,7 +125,7 @@ function createSnippet(content: string, query: string, maxLength = 100): string 
 
   // Center the snippet around the match
   const start = Math.max(0, matchIndex - 30);
-  const end = Math.min(content.length, matchIndex + query.length + 70);
+  const end = Math.min(content.length, matchIndex + matchLength + 70);
   let snippet = content.substring(start, end);
 
   if (start > 0) snippet = '...' + snippet;

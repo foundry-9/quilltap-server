@@ -894,7 +894,13 @@ export class SQLiteBackend implements DatabaseBackend {
 
     // SQLite transactions in better-sqlite3 are handled via the transaction() method
     // For the interface compliance, we provide a wrapper
-    return new SQLiteTransaction(db, this.collectionJsonColumns, this.collectionBooleanColumns, this.collectionBlobColumns);
+    return new SQLiteTransaction(
+      db,
+      this.collectionJsonColumns,
+      this.collectionBooleanColumns,
+      this.collectionBlobColumns,
+      this.collectionCompressedColumns,
+    );
   }
 
   /**
@@ -943,12 +949,20 @@ class SQLiteTransaction implements DatabaseTransaction {
   private jsonColumns: Map<string, string[]>;
   private booleanColumns: Map<string, string[]>;
   private blobColumns: Map<string, string[]>;
+  private compressedColumns: Map<string, string[]>;
 
-  constructor(db: DatabaseType, jsonColumns: Map<string, string[]>, booleanColumns: Map<string, string[]>, blobColumns: Map<string, string[]> = new Map()) {
+  constructor(
+    db: DatabaseType,
+    jsonColumns: Map<string, string[]>,
+    booleanColumns: Map<string, string[]>,
+    blobColumns: Map<string, string[]> = new Map(),
+    compressedColumns: Map<string, string[]> = new Map(),
+  ) {
     this.db = db;
     this.jsonColumns = jsonColumns;
     this.booleanColumns = booleanColumns;
     this.blobColumns = blobColumns;
+    this.compressedColumns = compressedColumns;
     // Start the transaction
     this.db.exec('BEGIN IMMEDIATE');
   }
@@ -969,11 +983,20 @@ class SQLiteTransaction implements DatabaseTransaction {
     this.rolledBack = true;
   }
 
+  /**
+   * Collections handed out inside a transaction carry the SAME codec
+   * registrations as `SQLiteBackend.getCollection`. Omitting the compressed
+   * set here would let a write made inside `withTransaction` bypass the codec
+   * and store plaintext into a column every reader expects to be able to
+   * decode — a silent, per-write-path hole in what is meant to be a
+   * chokepoint.
+   */
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {
     const jsonCols = this.jsonColumns.get(name) || [];
     const boolCols = this.booleanColumns.get(name) || [];
     const blobCols = this.blobColumns.get(name) || [];
-    return new SQLiteCollection<T>(this.db, name, jsonCols, [], boolCols, blobCols);
+    const compressedCols = this.compressedColumns.get(name) || [];
+    return new SQLiteCollection<T>(this.db, name, jsonCols, [], boolCols, blobCols, compressedCols);
   }
 }
 

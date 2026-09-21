@@ -4,6 +4,35 @@
 
 ### 4.10-dev
 
+#### Changed: message search is an index probe, and conversation text takes about a third less disk
+
+Two changes that only work together. Global message search used to be a `LIKE '%...%'` scan of every
+message in the instance — 355 MB read per query, about 55 ms — and that scan was the one thing
+keeping the largest text in the database from being stored compressed. Replacing it with an FTS5
+index makes the usual search a fraction of a millisecond and unblocks the compression. (A word that
+appears in most of your messages still costs tens of milliseconds, because every match has to be
+collected and sorted by date before the 100-result cap applies. The old path was worse there: it
+applied that cap in JavaScript after loading every matching message.)
+
+- **Search is indexed.** `create-chat-message-fts-v1` builds a contentless FTS5 index over the same
+  rows search always covered: your messages and your characters', not system events or Staff
+  announcements. The index is maintained by database triggers, so no write path can bypass it, and a
+  startup check rebuilds it if a future schema change ever drops those triggers.
+- **Queries with punctuation now work.** The old path escaped the query as a regular expression, then
+  translated it to `LIKE` without an escape clause, so a period became a wildcard: searching
+  `Mr. Smith` silently returned nothing. It now returns what you asked for.
+- **Search matches whole words and word beginnings** rather than any run of letters. `walk` still
+  finds *walking* and *walked*; it no longer finds *sidewalk*. Accents fold (`café` and `cafe` find
+  each other) and case folding now covers non-ASCII letters. A query that is only punctuation or
+  single letters, such as `C++`, falls back to the old exact scan. Results are still capped at 100
+  and still ordered newest first, not by relevance.
+- **Conversation text is compressed.** `compress-chat-message-text-v1` stores `content`,
+  `opaqueContent`, `description` and `context` brotli-compressed. Compression is lossless and
+  reversible; the text you read, export and back up is byte for byte what it always was. On the
+  reference instance `chat_messages` was 515 MB and is projected at about 332 MB after the index and
+  the compression together. Rewriting rows frees pages inside the file — run
+  `npx quilltap db optimize` afterward to shrink the file itself.
+
 #### Docs: plan for full-text message search and compressed message text, checked against the code
 
 - `docs/developer/features/chat-message-fts5-and-compression.md` now matches the repository it

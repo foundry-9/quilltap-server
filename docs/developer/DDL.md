@@ -180,6 +180,7 @@ bytes. Columns currently registered:
 |---|---|---|
 | llm-logs | `llm_logs` | `request`, `response` (also JSON columns — object → JSON → brotli) |
 | main | `conversation_chunks` | `content` |
+| main | `chat_messages` | `content`, `opaqueContent`, `description`, `context` |
 
 ```
 Byte layout:
@@ -192,7 +193,14 @@ Byte layout:
 **The column type stays `TEXT`.** SQLite is dynamically typed, so a BLOB lives
 in a TEXT column without any DDL change — registering a column needs no
 migration, and the backfill migrations (`compress-llm-log-payloads-v1`,
-`compress-conversation-chunk-content-v1`) only reclaim bytes.
+`compress-conversation-chunk-content-v1`, `compress-chat-message-text-v1`)
+only reclaim bytes.
+
+`chat_messages.content` was the last of these to be compressed because it is
+the one large text column that is SEARCHED in SQL. It only became safe once
+`create-chat-message-fts-v1` replaced the `LIKE` scan with an FTS5 index whose
+triggers tokenize through `qt_text()` — see
+[chat_messages search index](#chat_messages-search-index-fts5) below.
 
 Values below 512 bytes stay plain TEXT (compression is a net loss there), and
 any value **without** the magic prefix is read as plaintext, so a column
@@ -205,6 +213,7 @@ holds a mix of both indefinitely.
 ```sql
 SELECT json_extract(qt_text("response"), '$.error') FROM llm_logs;
 SELECT LENGTH(qt_text("content")) FROM conversation_chunks;  -- characters, not blob bytes
+SELECT qt_text("content") FROM chat_messages WHERE id = ?;   -- prose, not brotli
 ```
 
 A statement that forgets it fails loudly (`malformed JSON`, or a length in
@@ -829,6 +838,64 @@ CREATE INDEX "idx_chat_messages_chatId" ON "chat_messages" ("chatId");
 CREATE INDEX "idx_chat_messages_createdAt" ON "chat_messages" ("createdAt" DESC);
 CREATE INDEX "idx_chat_messages_swipeGroupId" ON "chat_messages" ("swipeGroupId");
 ```
+
+`content`, `opaqueContent`, `description` and `context` are
+[compressed text BLOB columns](#compressed-text-blob-format-large-text-columns).
+Raw SQL that reads inside any of them must wrap it in `qt_text()`.
+
+### chat_messages search index (FTS5)
+
+Global message search (`GET /api/v1/ui/search?types=messages`) is an FTS5 index
+probe, not a table scan. Created by `create-chat-message-fts-v1`; the DDL is
+single-sourced in
+[`lib/database/backends/sqlite/chat-message-fts.ts`](../../lib/database/backends/sqlite/chat-message-fts.ts)
+and **nothing else may spell it**.
+
+```sql
+-- Stable integer identity for the index. `chat_messages` is "id" TEXT PRIMARY
+-- KEY, so its rowid is IMPLICIT — VACUUM may renumber it and a table rebuild
+-- certainly does, either of which would silently corrupt an index keyed on it.
+-- An explicit INTEGER PRIMARY KEY is never renumbered.
+CREATE TABLE "chat_messages_fts_map" (
+  "ftsId"     INTEGER PRIMARY KEY,
+  "messageId" TEXT NOT NULL UNIQUE
+);
+
+-- Contentless: the index stores the inverted index only and never reads the
+-- base table, so it is correct no matter how `content` is encoded. An
+-- external-content table would tokenize the brotli bytes.
+CREATE VIRTUAL TABLE "chat_messages_fts" USING fts5(
+  content,
+  content='',
+  contentless_delete=1,
+  tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER "chat_messages_fts_ai" AFTER INSERT ON "chat_messages" ...;
+CREATE TRIGGER "chat_messages_fts_ad" AFTER DELETE ON "chat_messages" ...;
+CREATE TRIGGER "chat_messages_fts_au" AFTER UPDATE OF "content" ON "chat_messages" ...;
+```
+
+Facts that constrain anything touching this:
+
+- **Only eligible rows are indexed** — `type='message'`,
+  `role IN ('USER','ASSISTANT')`, non-null `content`. That is the filter global
+  search has always applied. Eligibility is decided at INSERT time only.
+- **The triggers call `qt_text()`.** A connection that opens without the
+  function fails any write to `chat_messages` with "no such function" — a loud
+  failure instead of silent index drift.
+- **The update trigger compares DECODED TEXT**, so `compress-chat-message-text-v1`
+  re-encodes 140k rows without retokenizing one index entry. No migration needs
+  to drop these triggers.
+- **A table rebuild of `chat_messages` drops the triggers silently.**
+  `reconcileChatMessageFts()` (`lib/startup/reconcile-chat-message-fts.ts`)
+  replays the `IF NOT EXISTS` DDL every boot and rebuilds when the map count
+  disagrees with the eligible-row count.
+- **`'rebuild'` is refused on a contentless table**, so a rebuild is a
+  `DELETE FROM` on both tables followed by a batched re-insert
+  (`rebuildChatMessageFtsIndex`).
+- Contentless also means `snippet()` / `highlight()` are unavailable; the
+  search route builds snippets in JavaScript.
 
 ### chat_settings
 

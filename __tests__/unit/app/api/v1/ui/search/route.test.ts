@@ -254,3 +254,59 @@ describe('ranking and pagination', () => {
     expect(second.hasMore).toBe(false);
   });
 });
+
+// ============================================================================
+// Message snippets under FTS semantics
+// ============================================================================
+
+describe('message snippets', () => {
+  function messageCtx(content: string) {
+    return makeCtx({
+      chats: {
+        findByUserId: jest.fn(async () => [
+          { id: 'chat-1', title: 'A Chat', participants: [], createdAt: '2026-01-01T00:00:00.000Z' },
+        ]),
+        searchMessagesGlobal: jest.fn(async () => [
+          {
+            messageId: 'msg-1',
+            chatId: 'chat-1',
+            role: 'USER',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            content,
+          },
+        ]),
+      },
+    });
+  }
+
+  const snippetOf = async (content: string, q: string) => {
+    const { ctx } = messageCtx(content);
+    const data = await body(await GET(req({ q, types: 'messages' }), ctx));
+    return data.results[0].snippet;
+  };
+
+  it('centres on the literal phrase when it is present', async () => {
+    const lead = 'x'.repeat(200);
+    const snippet = await snippetOf(`${lead} the estate was quiet ${lead}`, 'the estate');
+    expect(snippet).toContain('the estate was quiet');
+    expect(snippet.startsWith('...')).toBe(true);
+  });
+
+  it('centres on a prefix hit, which FTS can return without the literal query', async () => {
+    // "walk" matches "walking" in the index; a literal indexOf would miss.
+    const lead = 'y'.repeat(200);
+    const snippet = await snippetOf(`${lead} she was walking home ${lead}`, 'walk');
+    expect(snippet).toContain('walking home');
+  });
+
+  it('centres on a diacritic-folded hit', async () => {
+    const lead = 'z'.repeat(200);
+    const snippet = await snippetOf(`${lead} a café in Istanbul ${lead}`, 'cafe');
+    expect(snippet).toContain('café in Istanbul');
+  });
+
+  it('still falls back to the head of the message on a genuine miss', async () => {
+    const snippet = await snippetOf('nothing of the sort appears here at all', 'zebra');
+    expect(snippet.startsWith('nothing of the sort')).toBe(true);
+  });
+});

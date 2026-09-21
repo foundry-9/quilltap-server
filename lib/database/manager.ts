@@ -125,6 +125,18 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
         backend.registerCompressedColumns('conversation_chunks', ['content']);
         backend.registerBlobColumns('help_docs', ['embedding']);
         backend.registerBlobColumns('help_doc_chunks', ['embedding']);
+        // The transcript itself — the largest text in the schema. `content`
+        // is the one column here that is SQL-searched, and only became safe
+        // to compress once `create-chat-message-fts-v1` replaced the LIKE
+        // scan with an FTS5 index that tokenizes through qt_text(). Raw SQL
+        // that reads inside any of the four must wrap it in qt_text();
+        // see lib/database/backends/sqlite/chat-message-fts.ts.
+        backend.registerCompressedColumns('chat_messages', [
+          'content',
+          'opaqueContent',
+          'description',
+          'context',
+        ]);
       }
 
       setDatabaseBackend(backend);

@@ -878,6 +878,28 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.65: Reconcile the chat-message full-text search index
+      // ================================================================
+      // The index is trigger-maintained, but a table rebuild of
+      // `chat_messages` would drop those triggers silently and leave search
+      // quietly stale. Replay the IF NOT EXISTS DDL and compare eligible rows
+      // against indexed rows; rebuild only on a mismatch. Two indexed counts
+      // on a healthy instance. Awaited rather than fire-and-forget: it is a
+      // no-op in the common case, and a stale index is what the search bar
+      // reads the moment the UI is up.
+      try {
+        const { reconcileChatMessageFts } = await import(
+          './lib/startup/reconcile-chat-message-fts'
+        );
+        await reconcileChatMessageFts();
+      } catch (ftsReconcileError) {
+        logger.warn('Chat message FTS reconciliation failed', {
+          context: 'instrumentation.register',
+          error: ftsReconcileError instanceof Error ? ftsReconcileError.message : String(ftsReconcileError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.7: Reconcile embedding dimensions against the default profile
       // ================================================================
       // There is one embedding standard per instance — the default profile's

@@ -22,7 +22,7 @@ The search bar searches across six categories:
 
 1. **Chats** — Find conversations by title
 2. **Characters** — Locate characters by name or description
-3. **Messages** — Find what was actually said, inside any conversation
+3. **Messages** — Find what was actually said, inside any conversation. Searched through a proper index, so the answer arrives before your finger leaves the key
 4. **Documents** — Find documents in any of your document stores, by name, by folder, or by what is written inside them
 5. **Tags** — Search for content tagged with specific keywords
 6. **Memories** — Find stored memories and notes from conversations
@@ -88,7 +88,7 @@ On mobile, the search experience automatically adapts for better usability.
 
 The search indexes:
 
-- **Chat titles and content** — Find conversations by name or message content
+- **Chat titles and content** — Find conversations by name or message content; every line ever spoken sits in a catalogue built for the purpose
 - **Character names and bios** — Locate characters by their profiles
 - **Document names, paths, and text** — Every enabled document store is searched, character vaults included
 - **Tags and keywords** — Search by labels you've applied to content
@@ -103,16 +103,52 @@ The Documents category searches the *text* of your documents — the words thems
 - **Archived characters' vaults are never searched.** An archived character is a closed chapter; its papers stay in the box.
 - **Documents hidden from characters are still found by you.** A document marked `character_read: false` in its frontmatter is invisible to your characters, not to their employer.
 
+### How the Message Search Reads Your Words
+
+The Messages category consults a catalogue of every word in every
+conversation — an arrangement of admirable speed, and one with its own
+manners, which it is only civil to explain:
+
+- **It matches whole words and the beginnings of words**, not any stray run of
+  letters. Searching `walk` finds *walking* and *walked*; it does **not** find
+  *sidewalk*. This is the one genuine trade for the speed, and in practice
+  nobody misses it.
+- **Accents are treated as decoration.** `café` finds *cafe*, and `cafe` finds
+  *café*. Capital letters remain irrelevant, as they always were — and now in
+  every alphabet, not merely the English one.
+- **Punctuation is not catalogued**, but it no longer trips the thing up
+  either. `Mr. Smith`, `Ms. Havisham (née Anybody)` and their punctuated
+  brethren now find what they are looking for; previously they returned, with
+  great confidence, nothing whatsoever.
+- **A search made entirely of punctuation or single letters** — `C++`, say —
+  steps off the catalogue and searches the transcripts letter by letter. It is
+  slower. It is also exactly right, which on balance seems the better bargain.
+- **Word order still counts.** Type two words and the search looks for them
+  together, in that order, as you typed them.
+- **Results arrive newest first**, capped at one hundred, as before — not
+  ordered by how well they match.
+
+Only what was actually *said* is catalogued: your messages and your
+characters'. House announcements, system events and the Staff's own asides
+remain unsearchable, precisely as they always have been.
+
 ## Search Limitations
 
 - Search requires at least **2 characters** to start
-- Search matches **exact strings**, not meanings — it finds "manifesto", not "declaration of principles". (Your characters have semantic search; the search bar is a plain, honest, literal-minded instrument.)
+- Search matches **words**, not meanings — it finds "manifesto", not "declaration of principles". (Your characters have semantic search; the search bar is a plain, honest, literal-minded instrument.)
 - Results are limited to your **personal content** (you only see your own chats, characters, etc.)
 - Some very large documents may take a moment to search
 - Search is **case-insensitive** — "alice" finds "Alice"
+- Message search finds **whole words and word beginnings**, not arbitrary fragments — see *How the Message Search Reads Your Words*, above
 
 ## Quick Access
 
 The keyboard shortcut **Cmd+K** (Mac) or **Ctrl+K** (Windows/Linux) is the fastest way to search from anywhere in Quilltap. Use it frequently to speed up your workflow!
 
 Need help with search results? Click the result to navigate to its full page where you can see all details.
+
+## In-Chat Navigation
+
+Characters with help tools enabled can navigate directly to this page:
+
+`help_navigate(url: "/")`

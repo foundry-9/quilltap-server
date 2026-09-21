@@ -1,17 +1,56 @@
 ---
 title: Chat-Message Full-Text Search (FTS5) + Text Column Compression — Implementation Spec
 audience: Claude Code (quilltap-server)
-status: ready to implement
+status: implemented (4.10-dev)
 target: main DB (quilltap.db); measured against instance "Friday"
 verified against: 4.10.0-dev.59 (2026-09-21) — every file, line and behaviour claim in §2 was re-checked
 supersedes: none — successor to features/complete/db-size-reduction-spec.md
+implemented: 2026-09-21 — PR-1 (FTS5 index) and PR-2 (compression) both landed; PR-3 (relevance ordering) remains a follow-up
 ---
 
 # Chat-Message FTS5 + Text Column Compression
 
+> ## Implementation notes (2026-09-21)
+>
+> Both PRs landed as specified. Three departures from the plan, recorded here
+> so the spec below can be read as written:
+>
+> 1. **The query defers the text decode past the `LIMIT`.** §3-C's query puts
+>    `qt_text(m."content")` in the outer SELECT list. SQLite places output
+>    columns in the sorter record, so that decompresses *every* match before
+>    `ORDER BY createdAt DESC LIMIT 100` applies. Measured on 142,000 synthetic
+>    rows with a Zipf vocabulary: a term appearing in nearly every message took
+>    **1.2 s** that way and **86 ms** with the matching ids selected in a
+>    subquery and the text joined back afterwards — identical results. The
+>    shipped `buildFtsSearchSql` / `buildLikeSearchSql` both go through
+>    `deferTextDecode`, and a test in `chats-search-global.test.ts` asserts the
+>    subquery carries no `qt_text`.
+> 2. **"A 0.2 ms index probe" is the normal case, not the worst case.** A rare
+>    or absent term is 0.1–0.2 ms (against 0.5–1.3 s for the equivalent scan,
+>    which compression makes ~2.5× slower still). A term that matches most of
+>    the corpus is ~50–90 ms, because every match must be collected and sorted
+>    by `createdAt` before the cap applies. That is still better than what it
+>    replaced: the old path applied its 100-row cap in JavaScript *after*
+>    hydrating every matching row.
+> 3. **§2.1 item 2 — the `chatId IN (…)` list was kept** for parity rather than
+>    replaced with a join on `chats.userId`. It binds exactly what the `$in`
+>    filter always did, so the caller's contract is unchanged.
+>
+> One extra fix rode along: `collapse-duplicate-avatar-rolls-v1`, §2.6's one
+> raw-SQL reader of `content` / `opaqueContent`, now reads through `qt_text()`
+> and writes through `textToBlob()`. The spec argued it is safe by migration
+> ordering, which is true; this makes it safe to replay as well.
+>
+> §5's help-doc question was decided rather than skipped: `help/search.md` gets
+> an "In-Chat Navigation" section with `help_navigate(url: "/")`, matching its
+> own "Open this page" link.
+>
+> Not done, by design: **PR-3, relevance ordering.** Search is still capped at
+> 100 and ordered `createdAt DESC`.
+
 ## 0. Purpose & scope
 
-[db-size-reduction-spec.md](complete/db-size-reduction-spec.md) took `quilltap.db`
+[db-size-reduction-spec.md](db-size-reduction-spec.md) took `quilltap.db`
 from ~837 MB down by collapsing regenerable caches, cold-tiering chunk
 embeddings, and quantizing vectors. It stopped at a hard line, stated in its
 §9: *"Never modify `chat_messages.content`."*
@@ -66,7 +105,7 @@ scratch databases, VACUUMed, and sized on disk. The sample is representative:
 
 `renderedHtml`, `rawResponse`, `reasoningContent`, `reasoningSegments` and
 `debugMemoryLogs` are already collapsed to zero on stale chats by
-[collapse-stale-chat-caches.ts](../../../lib/background-jobs/maintenance/collapse-stale-chat-caches.ts).
+[collapse-stale-chat-caches.ts](../../../../lib/background-jobs/maintenance/collapse-stale-chat-caches.ts).
 There is nothing left to reclaim there.
 
 ### 1.2 Configuration benchmark
@@ -138,13 +177,13 @@ the root `package.json`), re-run 2026-09-21:
 
 ### 2.1 The current search is a full scan — and a slightly broken one
 
-[chats-search.ops.ts:94](../../../lib/database/repositories/chats-search.ops.ts)
+[chats-search.ops.ts:94](../../../../lib/database/repositories/chats-search.ops.ts)
 `searchMessagesGlobal` regex-escapes the query, builds a JS `RegExp`, passes it
 as `content: { $regex }`, and
-[query-translator.ts:235](../../../lib/database/backends/sqlite/query-translator.ts)
+[query-translator.ts:235](../../../../lib/database/backends/sqlite/query-translator.ts)
 converts it to `"content" LIKE '%…%'`. Case-insensitivity comes from SQLite's
 default `LIKE`, which folds **ASCII only**. Its one caller is
-[app/api/v1/ui/search/route.ts:199](../../../app/api/v1/ui/search/route.ts).
+[app/api/v1/ui/search/route.ts:199](../../../../app/api/v1/ui/search/route.ts).
 
 The filter is `chatId IN (…) AND type='message' AND role IN ('USER','ASSISTANT')`,
 sorted `createdAt DESC`. There is **no index that can serve it** — every global
@@ -179,14 +218,14 @@ by compression; they are also outside this spec's scope.
 
 ### 2.2 The codec layer already exists
 
-[backend.ts:745](../../../lib/database/backends/sqlite/backend.ts) `registerBlobColumns`
-and [backend.ts:759](../../../lib/database/backends/sqlite/backend.ts)
+[backend.ts:745](../../../../lib/database/backends/sqlite/backend.ts) `registerBlobColumns`
+and [backend.ts:759](../../../../lib/database/backends/sqlite/backend.ts)
 `registerCompressedColumns` register per-table columns whose values are
 transformed on the way in
-([json-columns.ts:285](../../../lib/database/backends/sqlite/json-columns.ts)
+([json-columns.ts:285](../../../../lib/database/backends/sqlite/json-columns.ts)
 `documentToRow`; `buildUpdateQuery` in `query-translator.ts` for `$set`) and
 back on the way out (`SQLiteCollection.hydrateRow`,
-[backend.ts:374](../../../lib/database/backends/sqlite/backend.ts), which
+[backend.ts:374](../../../../lib/database/backends/sqlite/backend.ts), which
 decodes compressed columns *first* so the bytes cannot be misread as an
 embedding).
 
@@ -199,7 +238,7 @@ constructor argument) so the codec has no bypass at all.
 
 ### 2.3 The self-describing-blob precedent
 
-[lib/embedding/float32-conversion.ts](../../../lib/embedding/float32-conversion.ts)
+[lib/embedding/float32-conversion.ts](../../../../lib/embedding/float32-conversion.ts)
 is the model `text-compression.ts` already copies:
 
 - one module that is the *single source of truth* for an on-disk format
@@ -223,7 +262,7 @@ never meaning.* Nothing may store a lossy, truncated, or normalized form of it.
 ### 2.5 `chat_messages` has no stable integer identity
 
 `chat_messages` is declared `"id" TEXT PRIMARY KEY`
-([sqlite-initial-schema.ts:238](../../../migrations/scripts/sqlite-initial-schema.ts)),
+([sqlite-initial-schema.ts:238](../../../../migrations/scripts/sqlite-initial-schema.ts)),
 so its `rowid` is **implicit**. FTS5 keys every index entry on an integer
 rowid, and a contentless table can hand back nothing else. Keying the index on
 the implicit rowid has two failure modes, one documented and one observed in
@@ -233,7 +272,7 @@ this repo:
   without an explicit `INTEGER PRIMARY KEY`. This build did not (§1.4), and
   `npx quilltap db optimize` runs `VACUUM`; the contract is "may", not "won't".
 - Any table rebuild — the `CREATE new … INSERT … SELECT … DROP … RENAME`
-  pattern that [add-doc-mount-file-links.ts](../../../migrations/scripts/add-doc-mount-file-links.ts)
+  pattern that [add-doc-mount-file-links.ts](../../../../migrations/scripts/add-doc-mount-file-links.ts)
   uses four times on other tables — reassigns every rowid **and silently drops
   the triggers** with the old table. No such rebuild of `chat_messages` exists
   today; the point is that one would corrupt the index without a single error.
@@ -247,19 +286,19 @@ id, and §3-B's startup guard catches dropped triggers.
 Verified, so §5 can state these as facts rather than to-dos:
 
 - **Backup** reads messages via `repos.chats.getMessages`
-  ([backup-service.ts:194](../../../lib/backup/backup-service.ts)); **restore**
+  ([backup-service.ts:194](../../../../lib/backup/backup-service.ts)); **restore**
   writes them via `repos.chats.addMessage`
-  ([restore/restore.ts:209](../../../lib/backup/restore/restore.ts)); the
+  ([restore/restore.ts:209](../../../../lib/backup/restore/restore.ts)); the
   **`.qtap` exporter** reads via `getMessages`
-  ([ndjson-writer.ts:328](../../../lib/export/ndjson-writer.ts)). All three see
+  ([ndjson-writer.ts:328](../../../../lib/export/ndjson-writer.ts)). All three see
   decoded strings and fire the triggers on write.
 - **Physical backups** are `VACUUM INTO`
-  ([physical-backup.ts:263](../../../lib/database/backends/sqlite/physical-backup.ts)),
+  ([physical-backup.ts:263](../../../../lib/database/backends/sqlite/physical-backup.ts)),
   which copies the FTS shadow tables, the mapping table and the triggers
   verbatim.
 - **The job child's buffered writes** are replayed in the parent as repository
   method calls (`applyWritesUnsafe`,
-  [job-dispatcher.ts:360](../../../lib/background-jobs/host/job-dispatcher.ts)),
+  [job-dispatcher.ts:360](../../../../lib/background-jobs/host/job-dispatcher.ts)),
   so they hit the codec and the triggers like any other write.
 - **`qt_text` is registered on every connection already:** parent
   (`client.ts`), forked child (`child-client.ts`), mount-index and llm-logs
@@ -278,7 +317,7 @@ Verified, so §5 can state these as facts rather than to-dos:
   print it; `db log` already decodes `request`/`response` through `decodeText`
   at ~604. PR-2 must extend `decodeText` to the four message columns.
 - `SQLITE_CAPABILITIES.textSearch` in
-  [interfaces.ts:223](../../../lib/database/interfaces.ts) has advertised
+  [interfaces.ts:223](../../../../lib/database/interfaces.ts) has advertised
   "Via FTS5 extension" since the backend was written; this spec is the first
   thing to make it true.
 
@@ -327,7 +366,7 @@ rows stay TEXT and stay greppable by any tool that looks at the file.
 **Registration — what PR-2 actually adds:**
 
 1. One line beside the existing registrations in
-   [manager.ts:125](../../../lib/database/manager.ts):
+   [manager.ts:125](../../../../lib/database/manager.ts):
    `backend.registerCompressedColumns('chat_messages', ['content', 'opaqueContent', 'description', 'context'])`.
    All four are plain `z.string()` fields in `lib/schemas/chat.types.ts` (no
    JSON detour). **Only after Part B has shipped** — compressing `content`
@@ -435,7 +474,7 @@ not happen with the connections that exist today.
 
 **Startup guard.** Because a table rebuild drops triggers silently (§2.5), add
 `reconcileChatMessageFts()` beside
-[reconcile-conversation-rendering.ts](../../../lib/startup/reconcile-conversation-rendering.ts):
+[reconcile-conversation-rendering.ts](../../../../lib/startup/reconcile-conversation-rendering.ts):
 run `ensureChatMessageFtsSchema` (all statements are `IF NOT EXISTS`, so it is
 a no-op on a healthy instance), then compare
 `COUNT(*) FROM chat_messages WHERE type='message' AND role IN (…) AND content IS NOT NULL`
@@ -518,10 +557,10 @@ and it is much faster.
 
 Two migrations, one per PR, so PR-1 is revertible without touching stored
 bytes. Both follow the shape of
-[compress-conversation-chunk-content.ts](../../../migrations/scripts/compress-conversation-chunk-content.ts)
+[compress-conversation-chunk-content.ts](../../../../migrations/scripts/compress-conversation-chunk-content.ts)
 (the closest template — same codec, same `shouldRun` sampling, same batching)
 and satisfy the two rules in CLAUDE.md § *Writing migrations*: a `PRETTY_LABELS`
-entry in [lib/startup/prettify.ts](../../../lib/startup/prettify.ts) and
+entry in [lib/startup/prettify.ts](../../../../lib/startup/prettify.ts) and
 `reportProgress(...)` in every loop (the commit skill blocks a migration
 without either). Both are listed in `migrations/scripts/index.ts` after
 `compressConversationChunkContentMigration`.

@@ -64,6 +64,7 @@ import {
 import { deriveLegacyAvatarCacheKey } from '../../lib/wardrobe/avatar-cache';
 import { isPhotosRelativePath } from '../../lib/photos/photos-paths';
 import { gcOrphanedFileRow } from '../../lib/mount-index/orphan-store-reaper';
+import { textToBlob } from '../../lib/database/text-compression';
 
 const MIGRATION_ID = 'collapse-duplicate-avatar-rolls-v1';
 
@@ -495,7 +496,13 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
       // quoted inline, which must name the file actually attached.
       const messageRows = db
         .prepare(
-          `SELECT id, attachments, content, opaqueContent
+          // content / opaqueContent are compressed-text columns: read through
+          // qt_text() and write back through textToBlob(). This migration is
+          // ordered BEFORE compress-chat-message-text-v1, so on any real
+          // instance it has already run against plaintext — the codec here is
+          // what makes it safe to replay on a database that has since been
+          // compressed. See lib/database/text-compression.ts.
+          `SELECT id, attachments, qt_text(content) AS content, qt_text(opaqueContent) AS opaqueContent
              FROM chat_messages
             WHERE attachments IS NOT NULL AND attachments != '[]'`
         )
@@ -546,7 +553,12 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
               opaqueContent = opaqueContent.split(victimId).join(survivorId);
             }
           }
-          updateMessage.run(JSON.stringify(swapped), content, opaqueContent, row.id);
+          updateMessage.run(
+            JSON.stringify(swapped),
+            content === null ? null : textToBlob(content),
+            opaqueContent === null ? null : textToBlob(opaqueContent),
+            row.id,
+          );
           messagesChanged += 1;
         }
 

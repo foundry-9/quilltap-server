@@ -195,6 +195,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'compress-llm-log-payloads-v1': 'Folding the correspondence with the machines into smaller envelopes…',
   'add-profile-supports-image-upload-field-v1': 'Adding image-upload support to connection profiles',
   'compress-conversation-chunk-content-v1': 'Pressing the rendered transcripts into thinner folios…',
+  'create-chat-message-fts-v1': 'Cataloguing every line ever spoken, so the search bar can find it in a blink…',
+  'compress-chat-message-text-v1': 'Pressing the transcripts into smaller trunks…',
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
   'add-connection-profile-max-tokens-field-v1': 'Adding max-tokens to connection profiles',
   'add-connection-profile-sort-index-v1': 'Adding sort order to connection profiles',

@@ -310,6 +310,8 @@ import { clearScenarioSeededChatSummariesMigration } from './clear-scenario-seed
 import { recompressOversizedMountBlobsMigration } from './recompress-oversized-mount-blobs';
 import { compressLlmLogPayloadsMigration } from './compress-llm-log-payloads';
 import { compressConversationChunkContentMigration } from './compress-conversation-chunk-content';
+import { createChatMessageFtsMigration } from './create-chat-message-fts';
+import { compressChatMessageTextMigration } from './compress-chat-message-text';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -811,6 +813,11 @@ export const migrations: Migration[] = [
   compressLlmLogPayloadsMigration,
   // Scriptorium transcripts: store the rendered chunk text brotli-compressed
   compressConversationChunkContentMigration,
+  // Message search: the FTS5 index that replaces the LIKE scan (and unblocks
+  // compressing chat_messages.content — must come before it)
+  createChatMessageFtsMigration,
+  // Transcripts: store the four large chat_messages text columns compressed
+  compressChatMessageTextMigration,
 ];
 
 export {
@@ -1200,5 +1207,10 @@ export {
   compressLlmLogPayloadsMigration,
   // Scriptorium transcripts: store the rendered chunk text brotli-compressed
   compressConversationChunkContentMigration,
+  // Message search: the FTS5 index that replaces the LIKE scan (and unblocks
+  // compressing chat_messages.content — must come before it)
+  createChatMessageFtsMigration,
+  // Transcripts: store the four large chat_messages text columns compressed
+  compressChatMessageTextMigration,
 };
 

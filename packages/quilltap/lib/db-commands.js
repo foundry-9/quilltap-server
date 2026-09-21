@@ -478,6 +478,11 @@ function cmdMessages(args, ctx) {
     params.push(last);
     const rows = db.prepare(sql).all(...params).reverse(); // oldest first
 
+    // `content` may be a brotli BLOB (see lib/text-codec.js). Decode before
+    // anything prints or JSON-serializes it — a raw BLOB prints as binary and
+    // JSON.stringify turns it into a byte array.
+    for (const r of rows) r.content = decodeText(r.content);
+
     if (json) return printJson({ chat, total: totalRow.n, returned: rows.length, messages: rows });
 
     console.log(`Chat: ${chat.title} (${chat.id}) — showing ${rows.length} of ${totalRow.n} matching messages`);
@@ -558,6 +563,13 @@ function cmdMessage(args, ctx) {
   try {
     const row = db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(id);
     if (!row) throw new Error(`No chat_message with id ${id}`);
+
+    // The four large text columns may be brotli BLOBs (see lib/text-codec.js).
+    // Decode before anything prints or JSON-serializes them.
+    for (const col of ['content', 'opaqueContent', 'description', 'context']) {
+      if (col in row) row[col] = decodeText(row[col]);
+    }
+
     if (json) return printJson(row);
 
     printRecord(`Message ${row.id}`, {

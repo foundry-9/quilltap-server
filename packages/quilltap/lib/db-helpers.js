@@ -202,8 +202,11 @@ function openEncryptedDb(dbPath, pepper, { readonly = true, friendlyName = 'data
       'The database may be encrypted with a different key, or the .dbkey file may be missing.');
   }
 
-  // Compressed text columns (llm_logs.request/response and friends) are
-  // BLOBs; qt_text() lets raw SQL and the repl read inside them.
+  // Compressed text columns (llm_logs.request/response, chat_messages.content
+  // and friends) are BLOBs; qt_text() lets raw SQL and the repl read inside
+  // them. It is also REQUIRED for any --write that touches chat_messages: the
+  // message search triggers call it, so a connection without it fails the
+  // write loudly rather than letting the index drift.
   try {
     registerTextCodecFunction(db);
   } catch {

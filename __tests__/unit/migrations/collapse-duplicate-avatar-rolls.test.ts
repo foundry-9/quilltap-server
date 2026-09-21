@@ -65,6 +65,7 @@ jest.mock('better-sqlite3', () =>
 
 import { collapseDuplicateAvatarRollsMigration } from '../../../migrations/scripts/collapse-duplicate-avatar-rolls-v1';
 import { deriveLegacyAvatarCacheKey } from '../../../lib/wardrobe/avatar-cache';
+import { registerTextCodecFunction } from '../../../lib/database/backends/sqlite/text-codec-function';
 import { logger as migrationLogger } from '../../../migrations/lib/logger';
 
 const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'));
@@ -83,6 +84,10 @@ let mountDb: any;
 
 function makeMainDb() {
   const db = new Database(':memory:');
+  // chat_messages.content / opaqueContent are compressed-text columns, and the
+  // migration reads them through qt_text(). Every real connection registers the
+  // function (migrations/lib/database-utils.ts); this one must too.
+  registerTextCodecFunction(db);
   db.exec(`
     CREATE TABLE "files" (
       "id" TEXT PRIMARY KEY,
