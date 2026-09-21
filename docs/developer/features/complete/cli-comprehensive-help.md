@@ -1,6 +1,6 @@
 # Consolidating the CLI reference into packages/quilltap/README.md
 
-**Status:** Proposal / Not Implemented — analysis and recommendation only, no docs changed yet
+**Status:** Implemented (2026-09-21) — option (a) taken; `packages/quilltap/README.md` is now the full reference and `docs/developer/CLI.md` is a pointer plus the developer-only remainder. The write-up below is preserved as the design of record; its line numbers refer to `CLI.md` as it stood before the merge.
 **Scope:** Documentation only. No code, no behavior change.
 **Trigger:** User asked for "a comprehensive help file... detailing how to use the Quilltap CLI," to live in the package's `README.md` if one already exists somewhere.
 
@@ -8,8 +8,8 @@
 
 A comprehensive CLI reference already exists, but its content is split across two files that grew independently:
 
-- **[`packages/quilltap/README.md`](../../../packages/quilltap/README.md)** (450 lines) — the npm package README. This is what a `npm install -g quilltap` user, or anyone viewing the package on npmjs.com or browsing `packages/quilltap/` on GitHub, actually sees. Reasonably thorough already: install, data dirs, named instances, `db`, `docs`, `sync`, `memories`, `logs`, `migrations`, `maintenance`, `file-verify`, `themes`, shell completion.
-- **[`docs/developer/CLI.md`](../CLI.md)** (278 lines) — extracted out of `CLAUDE.md` in a past release cycle (see `docs/CHANGELOG_V4.md`, "CLAUDE.md slimmed; CLI reference extracted to docs/developer/CLI.md") specifically to be *the* full reference. `CLAUDE.md`'s standing rules still point here (`**Full command reference: [CLI.md](docs/developer/CLI.md).**`), and [`release-checklist-12-cli.md`](../../../.claude/commands/release-checklist-12-cli.md) names it "the full reference" with the package README listed as a secondary thing to also keep updated.
+- **[`packages/quilltap/README.md`](../../../../packages/quilltap/README.md)** (450 lines) — the npm package README. This is what a `npm install -g quilltap` user, or anyone viewing the package on npmjs.com or browsing `packages/quilltap/` on GitHub, actually sees. Reasonably thorough already: install, data dirs, named instances, `db`, `docs`, `sync`, `memories`, `logs`, `migrations`, `maintenance`, `file-verify`, `themes`, shell completion.
+- **[`docs/developer/CLI.md`](../../CLI.md)** (278 lines) — extracted out of `CLAUDE.md` in a past release cycle (see `docs/CHANGELOG_V4.md`, "CLAUDE.md slimmed; CLI reference extracted to docs/developer/CLI.md") specifically to be *the* full reference. `CLAUDE.md`'s standing rules still point here (`**Full command reference: [CLI.md](docs/developer/CLI.md).**`), and [`release-checklist-12-cli.md`](../../../../.claude/commands/release-checklist-12-cli.md) names it "the full reference" with the package README listed as a secondary thing to also keep updated.
 
 So today there isn't one comprehensive file — there are two, overlapping but not identical, and the project's own tooling (the release checklist) currently treats the *developer* doc as canonical rather than the *package* doc, which is backwards from what an npm-installed user can actually reach.
 

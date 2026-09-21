@@ -200,8 +200,8 @@ and `--no-store-mounts` opts out. To inspect or hand-assemble the plan:
 npx quilltap docs docker-mounts --format args
 ```
 
-See [CLI.md](CLI.md) for the planner's rules (collapsed duplicates, nested-path
-drops, skipped non-existent paths, and the Windows refusal).
+See [CLI.md](CLI.md#the-bind-planner) for the planner's rules (collapsed duplicates,
+nested-path drops, skipped non-existent paths, and the Windows refusal).
 
 ### Running with the Desktop App (Electron)
 

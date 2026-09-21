@@ -4,12 +4,26 @@
 
 ### 4.10-dev
 
-#### Docs: plan for consolidating the CLI reference into the package README
+#### Docs: one comprehensive CLI reference, in the package README
 
-Added `docs/developer/features/cli-comprehensive-help.md`, an analysis of the CLI documentation
-split between `docs/developer/CLI.md` (developer-only) and `packages/quilltap/README.md` (what
-actually ships to npm users), with a section-by-section gap list and a recommendation to make the
-package README the single comprehensive reference. No docs merged yet; this is the plan.
+The CLI reference was split across `packages/quilltap/README.md` (what npm users get) and
+`docs/developer/CLI.md` (what the release checklist called canonical). The package README is now
+the single full reference, and `CLI.md` is a pointer plus the developer-only remainder.
+
+- Merged into the README: the `db characters archives|archive|rehydrate|export` commands, `qtap://`
+  URI addressing for the `docs` verbs (including `--uri` output and the `self`/`project`/`general`
+  CLI limitation), the camelCase-columns note, `memories validate`, a new Locking section covering
+  the five-minute heartbeat window and `--lock-status` / `--lock-clean` / `--lock-override`, the
+  `link`-vs-`copy` link-group semantics, the Docker bind planner's user-visible rules, the two sync
+  refusal cases that were missing (a second concurrent run; character-vault keystones report a
+  `conflict` rather than being deleted), and the caveat that `instances restore-key` does not
+  re-encrypt character archive bundles.
+- `docs/developer/CLI.md` now holds only what does not belong in a published package README: the
+  `scripts/start-quilltap-docker.ts` startup script and its bind planner, why the sync engine is
+  server-side plus its module map, and the shell-completion template internals.
+- Repointed `CLAUDE.md`, the release checklist's CLI item, the documentation catalogue, and
+  `DEVELOPMENT.md`. The in-app `help/cli-*.md` pages are a separate layer and are unchanged.
+- Design of record: `docs/developer/features/complete/cli-comprehensive-help.md`.
 
 #### New: `quilltap sync` mirrors a document store to a directory
 

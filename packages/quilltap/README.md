@@ -100,15 +100,19 @@ quilltap instances default Friday                        # Make it the fall-thro
 quilltap instances rename Friday Weekday                 # Rename, preserving the stored passphrase
 quilltap instances remove Friday                         # Unregister
 quilltap instances restore-key Friday                    # Rebuild a lost or passphrase-locked .dbkey
+quilltap instances default --clear                       # Revert to the OS platform default
+quilltap instances list --json                           # The registry as JSON, for scripts
 ```
 
-If an instance's `quilltap.dbkey` goes missing — or its passphrase does — `instances restore-key` rebuilds it. The file only *wraps* the pepper; the pepper itself is the database key, so an operator who kept the one printed at first-run setup can get back in. The pepper is read from `ENCRYPTION_MASTER_PEPPER` or prompted for hidden, never passed as a flag, and it is proved against the encrypted databases on disk before anything is written. Run it with the server down — the command refuses while the instance lock is held. Flags: `--passphrase <pass>` / `--no-passphrase` (the new wrapping), `-d, --data-dir <path>`, `--force`, `-y, --yes`.
+If an instance's `quilltap.dbkey` goes missing — or its passphrase does — `instances restore-key` rebuilds it. The file only *wraps* the pepper; the pepper itself is the database key, so an operator who kept the one printed at first-run setup can get back in. The pepper is read from `ENCRYPTION_MASTER_PEPPER` or prompted for hidden, never passed as a flag, and it is proved against the encrypted databases on disk before anything is written. Run it with the server down — the command refuses while the instance lock is held. Flags: `--passphrase <pass>` / `--no-passphrase` (the new wrapping), `-d, --data-dir <path>`, `--force` (proceed when there is no encrypted database to prove against — a fresh or still-plaintext instance), `-y, --yes`. An existing key file is backed up to `quilltap.dbkey.bak-<timestamp>` first, and a registered instance's stored passphrase is updated to match.
 
-Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The registry lives at `<app-support>/Quilltap/instances.json` (mode 0600; e.g. `~/Library/Application Support/Quilltap/instances.json` on macOS). **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` > the OS platform default. Pass the **instance root** (e.g. `~/iCloud/Quilltap/Friday`), not its `data/` subdirectory.
+**It does not re-encrypt character archive bundles.** Those are keyed on the *passphrase*, not the pepper; only the server's Change Passphrase card rewrites them. Bundles made under a passphrase you have just replaced still want the old one.
+
+Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The registry lives at `<app-support>/Quilltap/instances.json` (mode 0600; e.g. `~/Library/Application Support/Quilltap/instances.json` on macOS). **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` > the OS platform default. Pass the **instance root** (e.g. `~/iCloud/Quilltap/Friday`), not its `data/` subdirectory — the CLI appends `data/quilltap.db` itself. `instances list --json` emits the registry (`name`, `path`, `hasPassphrase`, `isDefault`) for scripting.
 
 ## Database Tool
 
-The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
+The encrypted SQLite databases (main, LLM logs, mount index) can be queried directly via `quilltap db`. They are SQLCipher-encrypted, so the stock `sqlite3` binary **cannot** open them — this is the way in. There are two modes: high-level subcommands that auto-pick the right database and resolve characters/chats/projects by name, and a low-level path for arbitrary SQL.
 
 ### Subcommands
 
@@ -135,6 +139,27 @@ quilltap db memories --character Friday [--about Amy] [--source AUTO]
 quilltap db characters status               # Per-character vault readiness (--id, --diverged, --blocked)
 ```
 
+SQLite columns are **camelCase**, mirroring the Zod/TypeScript types — `createdAt`, `updatedAt`, `chatType`, `messageCount`, `projectId`, *not* `created_at`. When in doubt, run `quilltap db schema <table>`.
+
+### Character Archive
+
+Archiving prunes a character down to a tombstone and packs everything else into an encrypted `ARCHIVE` bundle in the file library; rehydrating puts it all back at its original ids.
+
+```bash
+quilltap db characters archives                     # Archived characters + the bundles on the shelf
+quilltap db characters archive Ariadne --write      # Archive her (server must be running)
+quilltap db characters rehydrate Ariadne --write    # Wake her again
+quilltap db characters export Ariadne --out /tmp    # Plaintext .qtap, archived or live
+```
+
+`archives` is read-only, and flags **loose** bundles — survivors of a "keep archived bundles" wipe, which are importable but not rehydratable.
+
+`archive` and `rehydrate` run **through the running server's API** (`--port`, default 3000), because the export pipeline and the unlocked passphrase live only in the server process; the server, not the CLI, holds the instance lock for the duration. `--write` is still required as the explicit opt-in. A rehydrate restores the pruned material at its original ids (skip-if-present), clears the tombstone, and queues re-embedding; the bundle stays in the file library afterwards as a spare copy. On failure — wrong-era passphrase, missing bundle, import refusal — the character stays archived and re-running is safe.
+
+`export` writes a **plaintext** `.qtap` and takes no `--write`. For an **archived** character it decrypts the bundle straight off the disk, offline (it tries the internal no-passphrase key, then `QUILLTAP_DB_PASSPHRASE`, then prompts) — the only way to reach packed-away mail, photographs, and summaries without rehydrating. For a **live** character it runs the server's export pipeline, so the server must be up.
+
+**Pre-emptive, not recovery:** exporting an archive needs an instance that can still decrypt it. It is no help to someone holding only a restored backup and a forgotten passphrase — which is also why changing an instance's passphrase rewrites every archive bundle. A bundle reported left behind by a partial rewrite still wants the old one.
+
 ### Maintenance and Snapshots
 
 ```bash
@@ -149,7 +174,7 @@ quilltap db integrity                       # cipher_integrity_check + integrity
 quilltap db integrity llm-logs              # one DB; exit 0 ok, 1 issues, 2 open failure
 ```
 
-`backup` and `integrity` are safe to run while the server is up; `optimize` refuses while a live lock is held. Backups default to `<dataDir>/backups/<timestamp>/` and inherit the source's encryption key transparently.
+`backup` and `integrity` are safe to run while the server is up; `optimize` refuses while a live lock is held (see [Locking](#locking)). Backups default to `<dataDir>/backups/<timestamp>/` and inherit the source's encryption key transparently.
 
 Most subcommands accept `--json` (for piping) and `--limit N`. Names are case-insensitive; aliases are searched alongside character names. Ambiguous matches print all candidates and exit non-zero.
 
@@ -166,9 +191,36 @@ quilltap db --llm-logs --tables                     # Target the LLM logs DB
 quilltap db --mount-points --tables                 # Target the mount index DB
 ```
 
-The database is opened **read-only by default**. Add `--write` to make changes: it opens the database read-write, **claims the instance lock** (`<dataDir>/quilltap.lock`) for the duration, and releases it on exit. It **refuses — with no override — if a running server or another instance holds the lock**, so stop the server first. `--repl` is read-only unless combined with `--write`. Attempting a write without `--write` fails with a hint to re-run with the flag.
+The database is opened **read-only by default**. Add `--write` to make changes: it opens the database read-write, **claims the instance lock** (`<dataDir>/quilltap.lock`) for the duration, and releases it on exit. It **refuses — with no override — if a running server or another instance holds the lock**, so stop the server first. `--repl` is read-only unless combined with `--write`. Attempting a write without `--write` fails with a hint to re-run with the flag. What "held" means, and how to tell a live lock from a stale one, is [below](#locking).
 
 In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
+
+## Locking
+
+Everything that writes to an instance claims `<dataDir>/quilltap.lock` — the same lockfile the server itself uses — for the duration, and releases it on exit. That is `db --write` (including `db --repl --write`), `db optimize`, `maintenance run`, and `instances restore-key`. All four **refuse while the lock is held**: stop the server first. Read-only work — plain `db`, the `docs` read verbs, `memories`, `logs`, `migrations`, `maintenance status`, `db backup`, `db integrity` — never touches the lock and is safe alongside a running instance.
+
+### The five-minute heartbeat window
+
+A lock counts as held until its heartbeat is **five minutes** stale, whether or not the process that set it is still alive. Freshness is the fallback for every environment, not just containers: a PID check is not reliable everywhere, and cleaning a *live* instance's lock is much the worse failure.
+
+So for up to five minutes after stopping the server, `--write`, `optimize`, `maintenance run`, `restore-key`, and `--lock-clean` all still refuse. That is correct behaviour, not a stale lock. Wait it out; the next startup reclaims the lock regardless.
+
+```bash
+quilltap db --lock-status      # Who holds it, and how old the heartbeat is
+quilltap db --lock-clean       # Remove a lock whose heartbeat has gone stale
+```
+
+`--lock-status` shows the heartbeat age, which is the tell. `--lock-clean` says so explicitly rather than muttering about liveness, because that arm is only reached once the PID check has come back dead:
+
+```
+Lock heartbeat is still fresh (82s ago). Cannot clean.
+A lock counts as held until its heartbeat is 5 minutes stale, even if its process has gone.
+Wait it out, or use --lock-override to force.
+```
+
+When a live process really does hold the lock, it refuses with "Lock is held by a live Quilltap process" instead.
+
+**`--lock-override` exists and is almost never the right answer** — it defeats the protection the lock provides. Reach for `--lock-status` first.
 
 ## Document Stores (Scriptorium)
 
@@ -178,6 +230,7 @@ In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
 # Read
 quilltap docs list                              # All mounts
 quilltap docs show <mount>                      # One mount, with counts
+quilltap docs files <mount> [--folder <path>]   # Flat file list for a mount
 quilltap docs ls <mount> [path] [--links]       # POSIX-flavoured listing (alias: dir)
 quilltap docs tree <mount> [path]               # ASCII tree of a folder hierarchy (--depth, --max-nodes)
 quilltap docs read [--rendered] <mount> <path>  # File contents → stdout
@@ -203,7 +256,24 @@ quilltap docs rmdir <mount> <path>                            # Delete an empty 
 quilltap docs mvdir <mount> <fromPath> <toPath>               # Rename/move a folder (server-required)
 ```
 
-Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex`, `embed`, `link`, `rmdir`, and `mvdir` refuse to run without a reachable server.
+Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous names print candidates and exit non-zero. `--json` is supported by every verb; `reindex`, `embed`, `link`, `rmdir`, and `mvdir` refuse to run without a reachable server. `grep --semantic` goes through `POST /api/v1/mount-points?action=semantic-search`, because the embedding provider lives in the server; it defaults to `--top 20`, `--threshold 0.5`, `--port 3000`.
+
+### Addressing documents with `qtap://` URIs
+
+Anywhere a verb takes a positional `<mount> <relativePath>` pair — `read`, `write`, `delete`, `mkdir`, `ls`/`dir`, `tree`, `files`, `move`, `copy`, `link`, `rmdir`, `mvdir` — you may pass a single `qtap://…` URI in its place:
+
+```bash
+quilltap docs read qtap://notes/today.md
+quilltap docs move qtap://drafts/foo.md qtap://notes/2026/foo.md
+quilltap docs grep --mount qtap://notes/ "TODO"
+quilltap docs find --uri Manifesto
+```
+
+The URI authority is matched name-first, UUID as fallback — the same rule as a bare `<mount>` (`qtap://<store name>/…` or `qtap://<uuid>/…`). Two-target verbs (`move` / `copy` / `link` / `mvdir`) take either two `qtap://` URIs or the four legacy positionals; `find` and `grep` take one via `--mount`.
+
+**CLI limitation:** the CLI addresses document stores only. `qtap://self/…` needs a character context, and there is none at a shell prompt, so it is rejected with guidance; `qtap://project/…` and `qtap://general/…` are likewise not CLI-addressable — pass a store name or UUID instead.
+
+**Emitting URIs:** `--json` output for `find`, `grep`, `ls`, `files`, and `tree` carries a `uri` field on every row or node. `--uri` switches the text output of `find`, `grep`, and `files` to show the canonical `qtap://` URI as the locator (name form, UUID when the store name is ambiguous).
 
 ### `--base64` flag
 
@@ -213,11 +283,17 @@ Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous na
 
 ### `link`, `rmdir`, `mvdir`
 
+**`link` vs `copy`:** `docs link` makes two addresses into one document — it shares the content row *and* enrols both link rows in a `linkGroupId`, so a later write through either path repoints both and re-chunks the sibling. `docs copy` produces an independent document that merely shares a deduplicated content row until the first write. The `links` column in `ls` counts group members, not rows that happen to share identical bytes.
+
 `link` calls `POST /api/v1/mount-points/{srcMountId}?action=link-file` with `{sourcePath, destMountPointId, destPath}`. Creates a true hard link with no byte copy; the server reports back a `strategy` field. Errors: `DEST_EXISTS` (exit 2), `UNSUPPORTED` (cross-storage or cross-device), `SOURCE_NOT_FOUND`.
 
 `rmdir` calls `POST /api/v1/mount-points/{mountId}?action=delete-folder` with `{path}`. Fails with a clear message if the folder is not empty (`NOT_EMPTY` / `CONFLICT`).
 
 `mvdir` calls `POST /api/v1/mount-points/{mountId}?action=move-folder` with `{fromPath, toPath}`. Fails with exit 2 if the destination already exists (`DEST_EXISTS`).
+
+### Docker binds
+
+`quilltap docs docker-mounts` reports the bind mounts an instance's filesystem and Obsidian stores need in order to be reachable inside a container. Binds are **path-identical** (`-v /host/vault:/host/vault`), so the `basePath` recorded in the database resolves the same inside and out. Stores sharing a path collapse to a single bind, paths nested inside another bind are dropped, and a path that does not exist is **skipped** rather than handed to Docker to fabricate as an empty directory. It warns about macOS paths outside Docker Desktop's default shares and about a Linux uid mismatch, and refuses on Windows, where path-identical binds are not possible. `--format args` puts only the flags on stdout and all advice on stderr, which is what makes it pipeable into a `docker run`.
 
 ## Sync a Store to a Directory
 
@@ -236,15 +312,19 @@ quilltap sync Lore ~/Documents/lore --prefer disk
 --no-delete           Never propagate a deletion
 --no-manifest         Ignore .quilltap-sync.json (first-run rules every time)
 --json                Machine-readable plan and results
+-p, --port <n>        Server port (default 3000)
+-i, -d, --passphrase  The usual instance plumbing (used only to resolve <store>)
 ```
 
-Compares by SHA-256 first and modification time second, so equal bytes with unequal clocks are re-stamped rather than re-copied. The side that changed wins; when both changed since the last run it is a `conflict` and nothing happens. Deletions propagate only when `.quilltap-sync.json` — a manifest the verb keeps in the directory — proves the entry was there at the last run; on a first run an entry present on one side is created on the other, never deleted.
+Compares by SHA-256 first and modification time second, so equal bytes with unequal clocks are re-stamped rather than re-copied. The side that changed wins; when both changed since the last run it is a `conflict` and nothing happens. After a content action both sides carry the winner's `lastModified` and the **older** of the two `createdAt`s. Deletions propagate only when `.quilltap-sync.json` — a manifest the verb keeps in the directory — proves the entry was there at the last run; on a first run an entry present on one side is created on the other, never deleted.
 
 Files and folders whose names begin with a dot are **invisible in both directions**, the manifest being the one exception. A binary's description travels as `<file>.description.md` beside it. Bytes are preserved verbatim: a `.png` pushed from disk stays a `.png`, unlike a Scriptorium upload. Chunks and embedding vectors are never touched by the sync — the store's own post-write hooks re-index.
 
 Exit codes: `0` clean, `1` error or failed action, `2` unresolved conflict; `--dry-run` uses the same codes. Report lines go to stdout, warnings and the summary to stderr.
 
-Server-required (as `docs write` already is for database stores), and the path is resolved **on the server** — under Docker it must sit inside a bind mount (`quilltap docs docker-mounts`). Refused for a filesystem or Obsidian store, an archived character's vault, a store mid-conversion or mid-scan, and a manifest belonging to another store.
+Server-required (as `docs write` already is for database stores), and the path is resolved **on the server** — under Docker it must sit inside a bind mount (`quilltap docs docker-mounts`). Refused for a filesystem or Obsidian store (one pointed at its own `basePath`), an archived character's vault, a store mid-conversion or mid-scan, a second concurrent run, and a manifest belonging to another store.
+
+A character vault's **keystone files** — `properties.json`, the five required `.md` files, and `Wardrobe/instructions.md` — are never deleted from the store by a sync. The planner reports a `conflict` instead.
 
 ## Memories
 
@@ -258,10 +338,11 @@ quilltap memories grep -i --max 3 --context 1 "concrete examples"      # Pattern
 quilltap memories show <id|prefix> [--depth N] [--no-related]          # Full record + related-memory neighbourhood
 quilltap memories tree <id|prefix> [--depth N] [--max-nodes N]         # ASCII walk of the bidirectional related-memory graph
 quilltap memories status [--character <name|id>]                       # Per-holder rollup + dangling-edge check
+quilltap memories validate [--character <name|id>] [--list]            # Dangling-edge health check; exit 1 if any remain
 quilltap memories grep --semantic --character Ariadne "the argument"   # Embedding search (server required, one holder)
 ```
 
-Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
+Shared filter flags apply to `ls`, `find`, `grep`, and `status` where they make sense: `--character`, `--about` (with `self` / `none` shortcuts), `--source`, `--chat` (with `none` for manual entries), `--project`, `--since`, `--until`, `--min-importance`, `--min-reinforced`, `--has-embedding` / `--no-embedding`. Sort flags (`--sort reinforced|importance|created|accessed|reinforcement-count|links`, plus `-r` to reverse) apply to `ls`, `find`, and `grep`. Names accept fuzzy substrings; ambiguous names print candidates and exit 2. `--json` is supported by every verb. `validate` is `status`'s terse twin — read-only, exit 1 if any dangling related-memory edge remains, `--list` to print the offending source IDs and their dangling targets. `grep --semantic` defaults to `--top 20`, `--threshold 0.5`, `--port 3000`, and scopes to **one holder at a time**: `--character all` is rejected. The legacy `quilltap db memories --character <name>` verb remains undisturbed.
 
 ## Memory Extraction Dry-Run
 

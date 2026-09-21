@@ -180,7 +180,7 @@ An **instance** is a self-contained base directory you point Quilltap at, holdin
 
 > When I say I'm "in the `~/iCloud/Quilltap/Friday` instance," the troubleshooting paths are `~/iCloud/Quilltap/Friday/{data,files,logs}/`. Logs there include `combined.log` / `error.log` (auto-rolled every 2–3 MB) plus `quilltap-{stdout,stderr}.log`, `startup.log`, and sometimes `stdout.log`.
 
-**Databases are SQLCipher-encrypted — the `sqlite3` binary can't open them. Use `npx quilltap`.** Prefer high-level subcommands over raw SQL; they auto-pick the database, resolve names to UUIDs, and are read-only unless you pass `--write`. **Full command reference: [CLI.md](docs/developer/CLI.md).** Database schema: [DDL.md](docs/developer/DDL.md).
+**Databases are SQLCipher-encrypted — the `sqlite3` binary can't open them. Use `npx quilltap`.** Prefer high-level subcommands over raw SQL; they auto-pick the database, resolve names to UUIDs, and are read-only unless you pass `--write`. **Full command reference: [packages/quilltap/README.md](packages/quilltap/README.md)** (developer-only notes — repo scripts, module maps, completion-template internals — in [CLI.md](docs/developer/CLI.md)). Database schema: [DDL.md](docs/developer/DDL.md).
 
 ## Themes
 
