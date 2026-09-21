@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Docs: plan for consolidating the CLI reference into the package README
+
+Added `docs/developer/features/cli-comprehensive-help.md`, an analysis of the CLI documentation
+split between `docs/developer/CLI.md` (developer-only) and `packages/quilltap/README.md` (what
+actually ships to npm users), with a section-by-section gap list and a recommendation to make the
+package README the single comprehensive reference. No docs merged yet; this is the plan.
+
 #### New: `quilltap sync` mirrors a document store to a directory
 
 `npx quilltap sync <store> <path>` keeps a database-backed document store and a directory on disk
