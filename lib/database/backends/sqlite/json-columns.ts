@@ -271,6 +271,7 @@ export function jsonArrayLength(column: string): string {
 // re-exported here so existing SQLite-backend imports keep working.
 
 import { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
+import { textToBlob } from '@/lib/database/text-compression';
 export { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText };
 
 // ============================================================================
@@ -284,11 +285,27 @@ export { embeddingToBlob, blobToEmbedding, parseLegacyEmbeddingText };
 export function documentToRow(
   document: Record<string, unknown>,
   jsonColumns: string[] = [],
-  blobColumns: Set<string> = new Set()
+  blobColumns: Set<string> = new Set(),
+  compressedColumns: Set<string> = new Set()
 ): Record<string, string | number | Buffer | null> {
   const row: Record<string, string | number | Buffer | null> = {};
 
   for (const [key, value] of Object.entries(document)) {
+    // Compressed text columns are checked FIRST: the value may also be a JSON
+    // column (llm_logs.request is both), in which case it is serialized to
+    // JSON and then handed to the codec. Encoding last, after the JSON branch
+    // had already written a string, would mean every new branch has to
+    // remember the codec exists.
+    if (compressedColumns.has(key)) {
+      if (value === null || value === undefined) {
+        row[key] = null;
+      } else {
+        const text = typeof value === 'string' ? value : toJson(value);
+        row[key] = typeof text === 'string' ? (textToBlob(text) as string | Buffer) : text;
+      }
+      continue;
+    }
+
     // BLOB columns: convert Float32Array or number[] to Float32 Buffer
     if (blobColumns.has(key) && value instanceof Float32Array) {
       row[key] = value.length === 0 ? null : embeddingToBlob(value);

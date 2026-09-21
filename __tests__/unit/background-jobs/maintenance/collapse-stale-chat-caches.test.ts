@@ -82,6 +82,7 @@ describe('collapseStaleChatCaches', () => {
     const [messagesSql] = mockRawQuery.mock.calls[1];
     expect(chatsSql).toContain('compressionCache = NULL');
     expect(chatsSql).toContain('renderedMarkdown = NULL');
+    expect(chatsSql).toContain('compiledIdentityStacks = NULL');
     expect(messagesSql).toContain('rawResponse = NULL');
     expect(messagesSql).toContain('reasoningContent = NULL');
     expect(messagesSql).toContain('reasoningSegments = NULL');

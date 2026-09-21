@@ -9,6 +9,7 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
+import { registerTextCodecFunction } from './text-codec-function';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { closeMountIndexSQLiteClient } from './mount-index-client';
@@ -88,6 +89,7 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
 
     // SQLCipher key MUST be the first pragma before any other operations.
     applySqlcipherKey(db);
+    registerTextCodecFunction(db);
 
     // Configure pragmas
     configurePragmas(db, config);

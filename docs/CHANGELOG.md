@@ -4,6 +4,34 @@
 
 ### 4.10-dev
 
+#### Changed: databases take about a quarter less disk
+
+Three storage changes, measured end-to-end on a 2.0 GB reference instance, which came out at
+1.48 GB afterward (492 MB, 24.9%). Every change is reversible, no conversation text or image is
+lost, and searching, reading and exporting behave exactly as before. Rewriting rows frees pages
+inside the files; run `npx quilltap db optimize` afterward to shrink the files themselves.
+
+- **Images in document stores are normalized on write.** Transcoding used to be optional at each
+  call site and eight write paths skipped it, so untranscoded PNGs and oversized lossless WebP
+  accumulated. It now happens in one place that no write path can bypass. The
+  `recompress-oversized-mount-blobs-v1` migration re-encodes what landed earlier: 149 images and
+  191.8 MB on the reference instance, with dimensions unchanged. A `.qtap` import and an archive
+  rehydrate still restore bytes exactly as archived.
+- **LLM log payloads are compressed.** `llm_logs.request` is the same prompt scaffolding
+  re-serialized on every call and was the single largest thing in the instance — 318 MB for seven
+  days of logs. Compressing it reclaimed 208 MB, and the logs viewer and `quilltap db log` read it
+  back unchanged.
+- **Rendered conversation transcripts are compressed.** `conversation_chunks.content` duplicates
+  the transcript for the Scriptorium; compressing it reclaimed 88.5 MB. It is regenerable either
+  way — a render job rebuilds it from the chat's messages.
+
+#### Fixed: stale chats kept one cache the maintenance sweep never cleared
+
+The daily sweep clears a quiet chat's regenerable caches, but `compiledIdentityStacks` was never on
+its list, so it accumulated on chats that had gone quiet — 13.5 MB across 841 stale chats on the
+reference instance. It is a version-stamped read-through cache that rebuilds on the chat's next
+turn, exactly like the other entries the sweep already cleared.
+
 #### Changed: dependency update across the app, packages and plugins
 
 `npm update -S` was run on the root project, every package under `packages/`, and all 15 distributed

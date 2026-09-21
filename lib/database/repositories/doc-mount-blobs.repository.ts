@@ -92,6 +92,12 @@ export interface CreateBlobInput {
   fileId?: string;
   linkId?: string;
   blobId?: string;
+  /**
+   * Forwarded to linkBlobContent. Defaults to `true` (normalize images to
+   * WebP). Set `false` ONLY for byte-fidelity restores — `.qtap` import and
+   * archive rehydrate — where the bytes must return exactly as archived.
+   */
+  normalizeImages?: boolean;
 }
 
 function nowIso(): string {
@@ -314,6 +320,7 @@ export class DocMountBlobsRepository {
       fileId: input.fileId,
       linkId: input.linkId,
       blobId: input.blobId,
+      normalizeImages: input.normalizeImages,
     });
 
     const found = await this.findByMountPointAndPath(link.mountPointId, link.relativePath);

@@ -21,6 +21,7 @@ import { sleepSync } from '@/lib/utils/sleep';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
+import { registerTextCodecFunction } from './text-codec-function';
 import { stopMountIndexPeriodicCheckpoints, runMountIndexShutdownCheckpoint } from './mount-index-protection';
 
 const moduleLogger = logger.child({ module: 'database:mount-index-client' });
@@ -52,6 +53,7 @@ function attemptOpenMountIndex(config: SQLiteConfig): DatabaseType {
   try {
     // SQLCipher key MUST be the first pragma before any other operations.
     applySqlcipherKey(db);
+    registerTextCodecFunction(db);
 
     // Verify probe — forces SQLCipher to decrypt page 1 and parse the
     // SQLite header. Failure here surfaces cleanly as `file is not a

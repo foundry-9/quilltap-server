@@ -16,6 +16,7 @@ const {
   resolveProject,
 } = require('./db-helpers');
 const { getLockStatus } = require('./lock-helpers');
+const { decodeText } = require('./text-codec');
 
 // Tables grouped by domain for `db schema` (with-no-arg) overview, and for
 // DB-routing when a verb names a specific table. Keep this list short — it's
@@ -596,6 +597,13 @@ function cmdLog(args, ctx) {
   try {
     const row = db.prepare('SELECT * FROM llm_logs WHERE id = ?').get(id);
     if (!row) throw new Error(`No llm_log with id ${id}`);
+
+    // request/response may be brotli BLOBs (see lib/text-codec.js). Decode
+    // before anything reads, prints or JSON-serializes them — a raw BLOB
+    // would print as binary and JSON.stringify as a byte array.
+    row.request = decodeText(row.request);
+    row.response = decodeText(row.response);
+
     if (json) return printJson(row);
 
     let finishReason = null;

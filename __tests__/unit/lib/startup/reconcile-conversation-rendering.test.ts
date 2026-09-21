@@ -172,8 +172,10 @@ describe('reconcileConversationRendering', () => {
 
     const sql = (prepare.mock.calls[0] as [string])[0];
     // The arm-(C) window: over CHUNK_CHAR_BUDGET, within EMBEDDING_MAX_CHARS.
-    expect(sql).toContain('LENGTH(cc2."content") > ?');
-    expect(sql).toContain('LENGTH(cc2."content") <= ?');
+    // qt_text() is load-bearing — `content` is a compressed-text column, so a
+    // bare LENGTH() would measure brotli bytes instead of rendered characters.
+    expect(sql).toContain('LENGTH(qt_text(cc2."content")) > ?');
+    expect(sql).toContain('LENGTH(qt_text(cc2."content")) <= ?');
     expect(sql).toContain('cc2."embedding" IS NULL');
   });
 

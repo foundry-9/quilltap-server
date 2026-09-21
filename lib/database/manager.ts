@@ -118,6 +118,11 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
         backend.registerBlobColumns('memories', ['embedding']);
         backend.registerBlobColumns('vector_entries', ['embedding']);
         backend.registerBlobColumns('conversation_chunks', ['embedding']);
+        // The rendered interchange text is a second copy of the transcript
+        // and is never SQL-searched — only fetched by id/chatId or ranked by
+        // embedding similarity. Raw SQL that measures or reads it must go
+        // through qt_text(); see reconcile-conversation-rendering.ts.
+        backend.registerCompressedColumns('conversation_chunks', ['content']);
         backend.registerBlobColumns('help_docs', ['embedding']);
         backend.registerBlobColumns('help_doc_chunks', ['embedding']);
       }

@@ -19,6 +19,7 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
+import { registerTextCodecFunction } from './text-codec-function';
 import { stopLLMLogsPeriodicCheckpoints, runLLMLogsShutdownCheckpoint } from './llm-logs-protection';
 
 const moduleLogger = logger.child({ module: 'database:llm-logs-client' });
@@ -62,6 +63,7 @@ export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | nul
     if (applySqlcipherKey(db)) {
       moduleLogger.debug('SQLCipher key set on LLM logs database');
     }
+    registerTextCodecFunction(db);
 
     // Configure pragmas (no foreign keys for the logs DB).
     // Journal mode defaults to a single-file mode (truncate) for safety on

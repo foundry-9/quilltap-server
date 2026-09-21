@@ -7,6 +7,7 @@
 
 import { QueryFilter, QueryOptions, SortSpec, UpdateSpec, UpdateOperators } from '../../interfaces';
 import { jsonExtract, jsonArrayContains, jsonArrayContainsAny, jsonArrayContainsLike, jsonArrayObjectMatch, jsonArrayObjectMatchAny, toJson, embeddingToBlob } from './json-columns';
+import { textToBlob } from '@/lib/database/text-compression';
 import { logger } from '@/lib/logger';
 
 // ============================================================================
@@ -461,10 +462,33 @@ function hasUpdateOperators(update: UpdateSpec<unknown>): update is UpdateOperat
 export function translateUpdate(
   update: UpdateSpec<unknown>,
   jsonColumns: Set<string> = new Set(),
-  blobColumns: Set<string> = new Set()
+  blobColumns: Set<string> = new Set(),
+  compressedColumns: Set<string> = new Set()
 ): TranslatedUpdate {
   const setClauses: string[] = [];
   const params: unknown[] = [];
+
+  /**
+   * Encode a value bound for a compressed column: object/array fields are
+   * serialized as JSON first, then the string is handed to the codec, which
+   * returns a BLOB or (for short values) the string unchanged.
+   */
+  const encodeCompressed = (value: unknown): unknown => {
+    if (value === null || value === undefined) return null;
+    const text = typeof value === 'string' ? value : toJson(value);
+    return typeof text === 'string' ? textToBlob(text) : text;
+  };
+
+  /** JSON-mutating operators cannot work through the codec. */
+  const rejectJsonOperator = (field: string, operator: string) => {
+    if (compressedColumns.has(field)) {
+      throw new Error(
+        `Cannot apply ${operator} to compressed column "${field}": the stored value is a ` +
+          `compressed BLOB and SQLite's json_* functions cannot read it. Read, modify and ` +
+          `write the whole value instead.`
+      );
+    }
+  };
 
   if (hasUpdateOperators(update)) {
     // Handle MongoDB-style update operators
@@ -476,6 +500,9 @@ export function translateUpdate(
         if (value === undefined) {
           setClauses.push(`"${field}" = ?`);
           params.push(null);
+        } else if (compressedColumns.has(field)) {
+          setClauses.push(`"${field}" = ?`);
+          params.push(encodeCompressed(value));
         } else if (blobColumns.has(field) && value instanceof Float32Array) {
           setClauses.push(`"${field}" = ?`);
           params.push(value.length === 0 ? null : embeddingToBlob(value));
@@ -514,6 +541,7 @@ export function translateUpdate(
     // $push - append to array (JSON column)
     if (update.$push) {
       for (const [field, value] of Object.entries(update.$push)) {
+        rejectJsonOperator(field, '$push');
         setClauses.push(`"${field}" = CASE
           WHEN "${field}" IS NULL THEN json_array(?)
           ELSE json_insert("${field}", '$[#]', json(?))
@@ -526,6 +554,7 @@ export function translateUpdate(
     // $pull - remove from array (JSON column)
     if (update.$pull) {
       for (const [field, value] of Object.entries(update.$pull)) {
+        rejectJsonOperator(field, '$pull');
         setClauses.push(`"${field}" = (SELECT json_group_array(value) FROM json_each("${field}") WHERE value != ?)`);
         params.push(typeof value === 'string' ? value : toJson(value));
       }
@@ -534,6 +563,7 @@ export function translateUpdate(
     // $addToSet - add unique value to array
     if (update.$addToSet) {
       for (const [field, value] of Object.entries(update.$addToSet)) {
+        rejectJsonOperator(field, '$addToSet');
         setClauses.push(`"${field}" = CASE
           WHEN "${field}" IS NULL THEN json_array(?)
           WHEN NOT EXISTS (SELECT 1 FROM json_each("${field}") WHERE value = ?) THEN json_insert("${field}", '$[#]', json(?))
@@ -555,6 +585,9 @@ export function translateUpdate(
       if (value === undefined) {
         setClauses.push(`"${field}" = ?`);
         params.push(null);
+      } else if (compressedColumns.has(field)) {
+        setClauses.push(`"${field}" = ?`);
+        params.push(encodeCompressed(value));
       } else if (blobColumns.has(field) && value instanceof Float32Array) {
         setClauses.push(`"${field}" = ?`);
         params.push(value.length === 0 ? null : embeddingToBlob(value));
@@ -637,10 +670,11 @@ export function buildUpdateQuery(
   update: UpdateSpec<unknown>,
   jsonColumns?: Set<string>,
   arrayColumns?: Set<string>,
-  blobColumns?: Set<string>
+  blobColumns?: Set<string>,
+  compressedColumns?: Set<string>
 ): TranslatedQuery {
   const whereClause = translateFilter(filter, jsonColumns, arrayColumns);
-  const updateClause = translateUpdate(update, jsonColumns, blobColumns);
+  const updateClause = translateUpdate(update, jsonColumns, blobColumns, compressedColumns);
 
   if (updateClause.setClauses.length === 0) {
     throw new Error('Update must specify at least one field to update');

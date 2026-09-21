@@ -39,6 +39,7 @@ import { getInstanceLockPath } from '@/lib/paths';
 import { generateDDL, classifySchemaColumns } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
+import { blobToText } from '@/lib/database/text-compression';
 import { parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
 import { logger } from '@/lib/logger';
 
@@ -56,15 +57,18 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   private arrayColumns: Set<string>;
   private booleanColumns: Set<string>;
   private blobColumns: Set<string>;
+  /** Large text/JSON columns stored brotli-compressed (lib/database/text-compression.ts). */
+  private compressedColumns: Set<string>;
   private preparedStatements: Map<string, Statement> = new Map();
 
-  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], arrayColumns: string[] = [], booleanColumns: string[] = [], blobColumns: string[] = []) {
+  constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], arrayColumns: string[] = [], booleanColumns: string[] = [], blobColumns: string[] = [], compressedColumns: string[] = []) {
     this.db = db;
     this.name = name;
     this.jsonColumns = new Set(jsonColumns);
     this.arrayColumns = new Set(arrayColumns);
     this.booleanColumns = new Set(booleanColumns);
     this.blobColumns = new Set(blobColumns);
+    this.compressedColumns = new Set(compressedColumns);
   }
 
   /**
@@ -123,7 +127,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   async insertOne(document: T): Promise<InsertResult> {
     try {
       const doc = document as Record<string, unknown>;
-      const row = documentToRow(doc, Array.from(this.jsonColumns), this.blobColumns);
+      const row = documentToRow(doc, Array.from(this.jsonColumns), this.blobColumns, this.compressedColumns);
 
       const columns = Object.keys(row);
       const placeholders = columns.map(() => '?').join(', ');
@@ -156,7 +160,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
     try {
       const insertedIds: string[] = [];
       const firstDoc = documents[0] as Record<string, unknown>;
-      const columns = Object.keys(documentToRow(firstDoc, Array.from(this.jsonColumns), this.blobColumns));
+      const columns = Object.keys(documentToRow(firstDoc, Array.from(this.jsonColumns), this.blobColumns, this.compressedColumns));
       const placeholders = columns.map(() => '?').join(', ');
 
       const sql = `INSERT INTO "${this.name}" (${columns.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`;
@@ -165,7 +169,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const insertAll = this.db.transaction((docs: T[]) => {
         for (const document of docs) {
           const doc = document as Record<string, unknown>;
-          const row = documentToRow(doc, Array.from(this.jsonColumns), this.blobColumns);
+          const row = documentToRow(doc, Array.from(this.jsonColumns), this.blobColumns, this.compressedColumns);
           stmt.run(...Object.values(row));
           insertedIds.push(doc.id as string);
         }
@@ -193,7 +197,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
         return { matchedCount: 0, modifiedCount: 0, acknowledged: true };
       }
 
-      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns, this.compressedColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -215,7 +219,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
    */
   async updateMany(filter: TypedQueryFilter<T>, update: UpdateSpec<T>): Promise<UpdateResult> {
     try {
-      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
+      const query = buildUpdateQuery(this.name, filter as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns, this.compressedColumns);
       const result = this.db.prepare(query.sql).run(...query.params);
 
       return {
@@ -260,7 +264,7 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       const docId = doc.id;
 
       // Perform the update using the document's ID for precision
-      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns);
+      const updateQuery = buildUpdateQuery(this.name, { id: docId } as QueryFilter, update as UpdateSpec<unknown>, this.jsonColumns, this.arrayColumns, this.blobColumns, this.compressedColumns);
       const result = this.db.prepare(updateQuery.sql).run(...updateQuery.params);
 
       if (result.changes === 0) {
@@ -374,6 +378,29 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
       // Skip MongoDB _id field if somehow present
       if (key === '_id') continue;
 
+      // Compressed text columns are decoded FIRST, before the JSON and BLOB
+      // branches can misread the bytes. Without this a compressed value would
+      // fall into the JSON-column branch below and, being a Buffer, be
+      // decoded as a Float32 embedding.
+      if (this.compressedColumns.has(key)) {
+        const text = blobToText(value);
+        if (text === null) {
+          result[key] = undefined;
+        } else if (this.jsonColumns.has(key)) {
+          const parsed = fromJsonSafe(text);
+          if (parsed === null && text !== '' && text !== 'null') {
+            logger.warn('Corrupted JSON in compressed column', {
+              table: this.name,
+              column: key,
+            });
+          }
+          result[key] = parsed === null ? undefined : parsed;
+        } else {
+          result[key] = text;
+        }
+        continue;
+      }
+
       // BLOB columns: convert Buffer back to number[]
       if (this.blobColumns.has(key)) {
         if (Buffer.isBuffer(value)) {
@@ -483,6 +510,7 @@ export class SQLiteBackend implements DatabaseBackend {
   private collectionArrayColumns: Map<string, string[]> = new Map();
   private collectionBooleanColumns: Map<string, string[]> = new Map();
   private collectionBlobColumns: Map<string, string[]> = new Map();
+  private collectionCompressedColumns: Map<string, string[]> = new Map();
 
   constructor(config?: SQLiteConfig) {
     this.config = config || loadSQLiteConfig();
@@ -720,6 +748,20 @@ export class SQLiteBackend implements DatabaseBackend {
     this.collectionBlobColumns.set(tableName, merged);
   }
 
+  /**
+   * Register large text (or JSON) columns to be stored brotli-compressed.
+   * Call this before using getCollection for the table.
+   *
+   * Reads tolerate plaintext, so registering a column does not require a
+   * migration — existing rows keep working and only new writes compress.
+   * See `lib/database/text-compression.ts`.
+   */
+  registerCompressedColumns(tableName: string, columns: string[]): void {
+    const existing = this.collectionCompressedColumns.get(tableName) || [];
+    const merged = [...new Set([...existing, ...columns])];
+    this.collectionCompressedColumns.set(tableName, merged);
+  }
+
   getCollection<T = unknown>(name: string): DatabaseCollection<T> {
     const db = this.requireDb();
 
@@ -727,8 +769,9 @@ export class SQLiteBackend implements DatabaseBackend {
     const arrayColumns = this.collectionArrayColumns.get(name) || [];
     const booleanColumns = this.collectionBooleanColumns.get(name) || [];
     const blobColumns = this.collectionBlobColumns.get(name) || [];
+    const compressedColumns = this.collectionCompressedColumns.get(name) || [];
 
-    return new SQLiteCollection<T>(db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns);
+    return new SQLiteCollection<T>(db, name, jsonColumns, arrayColumns, booleanColumns, blobColumns, compressedColumns);
   }
 
   /**
@@ -777,6 +820,7 @@ export class SQLiteBackend implements DatabaseBackend {
       this.collectionArrayColumns.delete(name);
       this.collectionBooleanColumns.delete(name);
       this.collectionBlobColumns.delete(name);
+      this.collectionCompressedColumns.delete(name);
 
       logger.info('Dropped collection', { table: name });
     } catch (error) {

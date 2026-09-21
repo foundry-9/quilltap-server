@@ -57,6 +57,10 @@ jest.mock('better-sqlite3', () => {
       pragma: jest.fn(),
       prepare: jest.fn(),
       close: jest.fn(),
+      // openEncryptedSqlite registers the qt_text() UDF on every connection
+      // (lib/database/backends/sqlite/text-codec-function.ts) so migrations
+      // can read compressed text columns.
+      function: jest.fn(),
     };
   });
 });

@@ -319,6 +319,11 @@ export async function importDocumentStores(
         sha256: blob.sha256,
         description: blob.description,
         data,
+        // Byte fidelity: an imported bundle must come back exactly as it was
+        // archived, so the write-side image normalization is skipped here.
+        // A character archived and rehydrated has to round-trip identically,
+        // and the bundle's recorded sha256 has to keep matching the bytes.
+        normalizeImages: false,
         ...(options.preserveIds
           ? {
               fileId: blob.fileId ?? undefined,

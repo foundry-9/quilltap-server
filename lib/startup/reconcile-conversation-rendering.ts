@@ -106,7 +106,10 @@ const SELECT_INCOMPLETE_CHATS = `
     SELECT 1 FROM "conversation_chunks" cc
     WHERE cc."chatId" = c."id"
       AND cc."embedding" IS NULL
-      AND LENGTH(cc."content") BETWEEN 1 AND ?
+      -- qt_text() decodes the compressed-text column so LENGTH counts
+      -- CHARACTERS of the rendered chunk, not bytes of its brotli blob.
+      -- See lib/database/backends/sqlite/text-codec-function.ts.
+      AND LENGTH(qt_text(cc."content")) BETWEEN 1 AND ?
       AND NOT EXISTS (
         SELECT 1 FROM "embedding_status" es
         WHERE es."entityType" = 'CONVERSATION_CHUNK'
@@ -123,8 +126,8 @@ const SELECT_INCOMPLETE_CHATS = `
     SELECT 1 FROM "conversation_chunks" cc2
     WHERE cc2."chatId" = c."id"
       AND cc2."embedding" IS NULL
-      AND LENGTH(cc2."content") > ?
-      AND LENGTH(cc2."content") <= ?
+      AND LENGTH(qt_text(cc2."content")) > ?
+      AND LENGTH(qt_text(cc2."content")) <= ?
   )
 `;
 

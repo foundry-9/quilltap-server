@@ -9,6 +9,11 @@
  *    regenerable with a synchronous-recompute fallback.
  *  - `chats.renderedMarkdown`      — Scriptorium render; rebuilt by any
  *    CONVERSATION_RENDER job.
+ *  - `chats.compiledIdentityStacks` — precompiled per-participant identity
+ *    stacks; a read-through cache stamped with `IDENTITY_STACK_BUILDER_VERSION`
+ *    whose miss path (`buildSystemPrompt`) rebuilds from the character's own
+ *    fields. A stale entry is already discarded wholesale on a version bump,
+ *    so clearing it costs one recompile on the chat's next turn.
  *  - `chat_messages.rawResponse`   — byte-exact provider payload; only read
  *    by generation-time services (failover/finalizer/regenerate), never by
  *    the historical read/render path.
@@ -58,7 +63,7 @@ export interface StaleChatCacheCollapseSummary {
   staleChats: number;
   /** Stale chats where at least one column/row was actually cleared. */
   chatsCollapsed: number;
-  /** `chats` rows whose compressionCache/renderedMarkdown were cleared. */
+  /** `chats` rows whose regenerable cache columns were cleared. */
   chatRowsCleared: number;
   /** `chat_messages` rows that had at least one discardable column cleared. */
   messageRowsCleared: number;
@@ -85,9 +90,12 @@ async function collapseOneChat(
   //    alongside so the service can't serve a stale entry it believes is
   //    still persisted.
   const chatResult = await rawQuery<RunResultLike>(
-    `UPDATE chats SET compressionCache = NULL, renderedMarkdown = NULL
+    `UPDATE chats
+        SET compressionCache = NULL, renderedMarkdown = NULL,
+            compiledIdentityStacks = NULL
       WHERE id = ?
-        AND (compressionCache IS NOT NULL OR renderedMarkdown IS NOT NULL)`,
+        AND (compressionCache IS NOT NULL OR renderedMarkdown IS NOT NULL
+          OR compiledIdentityStacks IS NOT NULL)`,
     [chat.id],
   );
   const chatRows = Number(chatResult?.changes ?? 0);

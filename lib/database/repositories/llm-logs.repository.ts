@@ -25,13 +25,29 @@ import { generateDDL, classifySchemaColumns } from '../schema-translator';
  * denominator, and the failure count. Column aliases are the row-type field
  * names ({@link LLMLogTypeStatsRow} / {@link LLMLogProfileStatsRow}).
  */
+/**
+ * Columns stored brotli-compressed (`lib/database/text-compression.ts`).
+ *
+ * `request` is the whole prompt payload re-serialized on every call, so the
+ * same system blocks and character sheets repeat across every row — the most
+ * compressible data in the instance (measured 6.7% of original across a
+ * corpus, ~34% per row in isolation). `response` rides along for consistency.
+ *
+ * Both are also JSON columns, so the codec sits OUTSIDE the JSON
+ * serialization: object → JSON text → brotli → BLOB, and back.
+ *
+ * Any RAW SQL in this file that reads inside these columns must wrap them in
+ * the `qt_text()` UDF — see {@link USAGE_AGGREGATE_COLUMNS}.
+ */
+const LLM_LOG_COMPRESSED_COLUMNS = ['request', 'response'];
+
 const USAGE_AGGREGATE_COLUMNS = `
          COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
          COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
          COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
          SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
          AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
-         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures`;
+         SUM(CASE WHEN json_extract(qt_text("response"), '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures`;
 
 /** The attribution keys a per-profile roll-up can group by. */
 type ProfileGroupBy = 'connectionProfileId' | 'imageProfileId' | 'providerModel';
@@ -93,7 +109,15 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     // Detect JSON, array, and boolean columns from schema
     const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
-    return new SQLiteCollection<LLMLog>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
+    return new SQLiteCollection<LLMLog>(
+      db,
+      this.collectionName,
+      jsonColumns,
+      arrayColumns,
+      booleanColumns,
+      [],
+      LLM_LOG_COMPRESSED_COLUMNS,
+    );
   }
 
   /**

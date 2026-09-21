@@ -21,6 +21,7 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
+import { registerTextCodecFunction } from './text-codec-function';
 
 let readonlyDatabase: DatabaseType | null = null;
 
@@ -44,6 +45,7 @@ export function getReadonlyChildSQLiteClient(config: SQLiteConfig): DatabaseType
 
   // The pepper is guaranteed present by the guard above.
   applySqlcipherKey(db);
+  registerTextCodecFunction(db);
 
   if (config.foreignKeys) {
     db.pragma('foreign_keys = ON');

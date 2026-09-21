@@ -33,6 +33,7 @@ import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase } from '../backends/sqlite/mount-index-client';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
 import { generateDDL, classifySchemaColumns } from '../schema-translator';
+import { normalizeLinkBlobImage } from '@/lib/mount-index/normalize-blob-image';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
@@ -270,8 +271,22 @@ interface LinkBlobInput {
    * computed value for dedup and both inserts, warning on any mismatch.
    */
   sha256: string;
-  /** Already-transcoded bytes destined for doc_mount_blobs. */
+  /** Bytes destined for doc_mount_blobs. */
   data: Buffer;
+  /**
+   * Normalize image bytes to WebP before storing (default `true`).
+   *
+   * This is the chokepoint: transcoding at the call sites was optional and
+   * eight of them skipped it, which is how untranscoded PNGs and oversized
+   * lossless WebP reached the store. Normalizing here means no write path can
+   * bypass it. `storedMimeType`, `relativePath` and `fileName` are rewritten
+   * to match whatever is actually stored.
+   *
+   * Set `false` ONLY for byte-fidelity restores — importing a `.qtap` bundle
+   * or rehydrating an archive, where the bytes must come back exactly as they
+   * went in. Never set it false to "save time" on an upload.
+   */
+  normalizeImages?: boolean;
   /**
    * Omitted means "no opinion", NOT "blank it" (bug 155). On a fresh insert an
    * omitted `description` / `extractedText` / `extractionStatus` takes the
@@ -904,7 +919,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * caller hard-linking the same bytes into another mount gets a fresh
    * link row pointing at the same fileId.
    */
-  async linkBlobContent(input: LinkBlobInput): Promise<{
+  async linkBlobContent(rawInput: LinkBlobInput): Promise<{
     link: DocMountFileLinkWithContent;
     file: DocMountFile;
     blobId: string;
@@ -913,6 +928,10 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }> {
     const db = getRawMountIndexDatabase();
     if (!db) throw new Error('Mount index database not initialized');
+
+    // Normalize image bytes BEFORE the hash is computed, so the stored sha256
+    // describes the bytes that actually land in the row.
+    const input = await normalizeLinkBlobImage(rawInput);
 
     // Ensure all relevant tables are initialized via repository getCollection
     // calls. Cheap when the tables already exist.

@@ -18,7 +18,7 @@ A chat is considered idle when nobody has *actually spoken* in it for the config
 
 Once a chat crosses the threshold, the nightly sweep clears:
 
-- **Regenerable caches** — compression caches and pre-rendered text, rebuilt automatically the next time they're wanted.
+- **Regenerable caches** — compression caches, pre-rendered text, and the precompiled introductions Quilltap assembles for each character in the room, all rebuilt automatically the next time they're wanted.
 - **Model scratch-work** — raw provider payloads, thinking/reasoning traces, and memory-extraction debug logs from old messages. These are diagnostic ephemera; the messages themselves are untouched.
 - **Superseded generated images** — old story backgrounds and outfit avatars the chat no longer references (the current ones always stay; so does anything you saved to a gallery or promoted to a character).
 - **Conversation embeddings** — the semantic-search fingerprints of the chat's interchanges. The rendered text of each interchange is kept, so keyword search still works.
@@ -48,6 +48,28 @@ npx quilltap db optimize
 ```
 
 which performs a VACUUM and re-tunes the query planner while it's at it.
+
+## The cellars are packed more tightly now
+
+Quite apart from the nightly tidying, Quilltap has taken to storing three sorts of bulky item more
+economically. None of this is a setting, none of it discards anything, and none of it changes what
+you can read, search, or export — it is simply better packing, and it happens whether you attend to
+it or not.
+
+- **Pictures in your document stores** are now re-encoded to a sensible size the moment they are
+  filed. Previously a few routes admitted images at their full unreduced bulk — a portrait arriving
+  as a six-megabyte plate when a tenth of that would hang just as well. The dimensions are
+  untouched; only the needless weight goes. Anything you import from a `.qtap` bundle, or wake from
+  an archive, is restored exactly as it was packed away.
+- **The correspondence with the models** — the verbatim record of every prompt sent and reply
+  received, which the LLM log viewer shows you — is folded into a fraction of its former space. It
+  reads back identically.
+- **The rendered transcripts** the Scriptorium keeps for searching are compressed likewise. They
+  were always a second copy of your conversation, rebuilt on demand; now they are a smaller one.
+
+On an establishment of some two gigabytes, the three together returned roughly a quarter of the
+cellar. Do run the compaction above afterwards, or the space is merely freed *within* the files
+rather than returned to your disk.
 
 ## In-Chat Navigation
 
