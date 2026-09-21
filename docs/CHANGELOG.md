@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Docs: plan for full-text message search and compressed message text, checked against the code
+
+- `docs/developer/features/chat-message-fts5-and-compression.md` now matches the repository it
+  describes. The FTS5 index is keyed through a small id-mapping table instead of the implicit rowid
+  of a TEXT-keyed table (VACUUM may renumber it and a table rebuild silently drops triggers), a
+  startup guard rebuilds a stale index, and the index and compression ship as two migrations so the
+  search change can be reverted alone. The plan also records what was already true: `qt_text()` is
+  registered on every connection, backup, restore, export and the job child all go through the
+  repository, today's search silently returns nothing for a query containing a period, the CLI's
+  message commands print the columns raw, transaction-scoped collections skip the codec, and the
+  size figures predate the 4.10 storage work.
+
 #### Changed: databases take about a quarter less disk
 
 Three storage changes, measured end-to-end on a 2.0 GB reference instance, which came out at
