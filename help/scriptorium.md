@@ -112,6 +112,34 @@ Each filed summary wears a small dossier at its head — frontmatter, in the ver
 
 Like every other page in a character's vault, these summaries are embedded into searchable chunks — which is precisely the point. A character may thus recall the gist of a long-finished conversation without re-reading every line of it, and the Commonplace Book has one more well-indexed shelf to consult when it goes looking for what a character ought to remember.
 
+## Mirroring a Store to a Directory
+
+A database-backed store may be kept in step with an ordinary directory on disk
+by way of `quilltap sync` — edit a chapter in your own text editor, and the
+next run carries it into the store; edit it here, and the next run carries it
+back out. The full account lives in
+[Keeping a Store and a Directory in Step](cli-sync.md), but two conventions
+are worth knowing wherever document stores are discussed, because you will
+meet both the moment you look inside such a directory.
+
+**Anything beginning with a dot is invisible to the sync, in both
+directions.** A file or folder whose name starts with `.` — or that sits
+anywhere beneath one — is never read, never copied, and never deleted, on
+either side. Your `.git` directory and your editor's scratch files stay out of
+your store; a dot-named file in your store stays off your disk. The single
+exception is `.quilltap-sync.json`, a small record the verb keeps in the
+directory of what the last run left on both sides. It is what allows the sync
+to tell "this file is new here" from "this file was deleted there", it never
+enters the store, and `--no-manifest` makes the verb disregard it.
+
+**A binary's description travels beside it.** An image or PDF that carries a
+description keeps it, on disk, in a small Markdown file named after the whole
+file with `.description.md` appended — so `harbour.png` is accompanied by
+`harbour.png.description.md`. Edit that file and the caption changes in the
+store; delete it and the caption is cleared. Text documents' descriptions are
+not mirrored this way, on the reasonable grounds that a Markdown file's
+contents are already its own description.
+
 ## Why It Matters
 
 The Scriptorium transforms ephemeral chat messages into structured, searchable documents. Characters can review what has been said with perfect fidelity, annotate the record with their own perspectives, and the entire corpus becomes discoverable through semantic search. It is, in short, the difference between a conversation that evaporates like morning fog and one that is preserved in the archives for future reference — indexed, annotated, and ready for consultation at a moment's notice.
@@ -128,3 +156,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Using Tools in Chat](tools-usage.md)
 - [Scene State Tracker](scene-state-tracker.md)
 - [Embedding Profiles](embedding-profiles.md)
+- [Keeping a Store and a Directory in Step](cli-sync.md)

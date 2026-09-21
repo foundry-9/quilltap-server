@@ -344,6 +344,19 @@ The `--data-dir` and `--passphrase` flags work identically to the standard `db` 
 
 - `quilltap memories --help` — the same shape, applied to a character's memories instead of documents ([CLI: The Command Line and the Commonplace Book](cli-memories.md)).
 
+## Keeping a Store and a Directory in Step
+
+The `docs` family reads, writes, and exports one thing at a time. Its sibling
+verb `quilltap sync` does the whole store at once, and in both directions —
+mirroring a database-backed store to a directory on disk and back, comparing
+by SHA-256, copying whichever side changed, and reporting a conflict rather
+than choosing when both did. See
+[Keeping a Store and a Directory in Step](cli-sync.md).
+
+Note that `docs export` is *not* the same thing: it is a one-way dump with no
+timestamps, no empty folders, and no descriptions. `sync` is the verb that
+converges.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

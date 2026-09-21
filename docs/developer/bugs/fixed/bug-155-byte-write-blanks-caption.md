@@ -1,16 +1,30 @@
 # Bug 155 — writing a binary's bytes over an existing path blanks its caption
 
+**FIXED in v4 (2026-09-21)** — `linkBlobContent`'s UPDATE branch now builds its
+SET clause per field: `description`/`descriptionUpdatedAt`,
+`extractedText`/`extractedTextSha256` and `extractionStatus` are written only
+when their input field is present, so an omitted field means "keep what is
+there" rather than "set it to blank". An explicit `description: ''` still
+clears, because that is a deliberate set; the INSERT branch keeps its blank
+defaults, because a brand-new link genuinely has no caption. Every
+byte-preserving writer — `file-ops.writeDestBytes` behind `write-file`,
+`docs write --force`, cross-storage `copy`/`move`, and the new document-store
+sync — inherits the right behaviour without a line of its own. Regression
+tests in
+`__tests__/unit/lib/database/repositories/doc-mount-write-metadata.integration.test.ts`
+cover the overwrite, the explicit clear, and the fresh-insert default.
+
 | | |
 |---|---|
-| **Status** | **OPEN** |
-| **Found** | 2026-09-21, while planning the [document-store sync verb](../features/cli-document-store-sync.md); not reported live |
-| **Fixed** | — |
+| **Status** | **FIXED** |
+| **Found** | 2026-09-21, while planning the [document-store sync verb](../../features/complete/cli-document-store-sync.md); not reported live |
+| **Fixed** | 2026-09-21, in the same change as [bug 156](bug-156-overwrite-leaves-stale-chunks.md), ahead of `quilltap sync` |
 | **Severity** | **Medium** — silent data loss of operator- or LLM-authored text. The bytes are fine; the `description` (and, with it, the `extractedText` caption the auto-describer wrote) is gone, and nothing tells anyone |
 | **Who it bites** | anyone who re-uploads an image over an existing path in the Scriptorium file manager (SVAR upload → `?action=write-file`), runs `quilltap docs write --force` on an image, `docs copy --force` onto one, or moves/copies a described image from a filesystem store into a database store |
 | **Provenance** | Original to v4: the `description` column arrived with the link table and `linkBlobContent` has always upserted it unconditionally |
 | **Fix site** | `lib/mount-index/file-ops.ts` (`writeDestBytes`, `:731-748`), and/or `lib/database/repositories/doc-mount-file-links.repository.ts` (`linkBlobContent`, `:921-945`) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
 

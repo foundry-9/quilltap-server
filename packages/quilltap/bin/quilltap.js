@@ -92,6 +92,7 @@ Subcommands:
   db                            Query encrypted databases
   themes                        Manage theme bundles
   docs                          Inspect, read, and export document mounts
+  sync <store> <path>           Mirror a database-backed store to a directory
   memories                      Search, browse, and graph memories
   instances                     Register / inspect named Quilltap instances
   logs                          Tail or print an instance log file
@@ -1174,7 +1175,7 @@ async function dbCommand(args) {
 // to the subcommand. Each subcommand parses these flags position-independently,
 // so they behave the same before or after the verb.
 const SUBCOMMANDS = new Set([
-  'db', 'themes', 'docs', 'memories', 'instances', 'memory-diff', 'recall-replay', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
+  'db', 'themes', 'docs', 'sync', 'memories', 'instances', 'memory-diff', 'recall-replay', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
 ]);
 // Global flags that consume the following token as their value.
 const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
@@ -1213,6 +1214,12 @@ if (subName === 'db') {
 } else if (subName === 'docs') {
   const { docsCommand } = require('../lib/docs-commands');
   docsCommand(subArgs);
+} else if (subName === 'sync') {
+  const { syncCommand } = require('../lib/sync-command');
+  syncCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
 } else if (subName === 'memories') {
   const { memoriesCommand } = require('../lib/memories-commands');
   memoriesCommand(subArgs).catch(err => {

@@ -1,16 +1,36 @@
 # Bug 156 — overwriting a database-store document leaves its old chunks, and the rescan that claims to catch this does not
 
+**FIXED in v4 (2026-09-21)** — the overwrite now announces itself. When
+`linkDocumentContent`'s UPDATE branch repoints a link at a different `fileId`
+it deletes that link's rows from `doc_mount_chunks` and sets `chunkCount = 0`
+(and `fanOutGroupFileId` does the same for exactly the hard-link siblings whose
+content moved), then invalidates the affected mounts' chunk caches. The
+existing rescan predicate — `chunkCount === 0 || conversionStatus !==
+'converted'` — therefore catches every un-re-chunked overwrite, including the
+in-child `doc_write_file` writes that defer chunking to it by design, with no
+new column and no new query. Writers that re-chunk immediately set the real
+count back moments later. Deleting the rows as well as zeroing the count was
+step 2 of the recommended fix and is kept: a search between the write and the
+re-chunk now returns nothing rather than the previous revision.
+`rescanDatabaseMountPoint`'s docstring describes the predicate that exists
+instead of a sha-drift check that was never written, and says why the predicate
+is now sufficient. The post-write re-chunk block is factored out of
+`writeDatabaseDocument` into `lib/mount-index/post-write-reindex.ts`
+(`reindexAfterDatabaseWrite`) and `file-ops.writeDestBytes` — which had none —
+now calls it. Regression tests in
+`__tests__/unit/lib/database/repositories/doc-mount-write-metadata.integration.test.ts`.
+
 | | |
 |---|---|
-| **Status** | **OPEN** |
-| **Found** | 2026-09-21, while planning the [document-store sync verb](../features/cli-document-store-sync.md); not reported live |
-| **Fixed** | — |
+| **Status** | **FIXED** |
+| **Found** | 2026-09-21, while planning the [document-store sync verb](../../features/complete/cli-document-store-sync.md); not reported live |
+| **Fixed** | 2026-09-21, in the same change as [bug 155](bug-155-byte-write-blanks-caption.md), ahead of `quilltap sync` |
 | **Severity** | **Medium** — no data loss; the document is correct on read. But semantic search, `doc_grep`'s chunk fallback, and every character's RAG context keep serving the *previous* revision of an edited document indefinitely, and nothing heals it short of `docs reindex --force` |
 | **Who it bites** | anyone who overwrites an existing text document in a database store through a path that does not re-chunk: the Scriptorium file manager's upload onto an existing path (SVAR → `?action=write-file`), `quilltap docs write --force`, cross-storage `copy --force`/`move` onto an existing path, and every `doc_write_file` issued from inside the forked job child (autonomous turns), which by design defers chunking "to the next database rescan" |
 | **Provenance** | Original to v4. The rescan predicate predates the content/link split; the docstring describes a sha-drift check that was never written |
 | **Fix site** | `lib/mount-index/database-store.ts` (`rescanDatabaseMountPoint`, `:646-695`); `lib/database/repositories/doc-mount-file-links.repository.ts` (`linkDocumentContent` update branch, `:1093-1106`); `lib/mount-index/file-ops.ts` (`writeDestBytes`, `:716-728`) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
 
@@ -115,7 +135,7 @@ to compare against even if written.
    the docstring fix alone.
 4. Give `writeDestBytes` the same parent-process re-chunk block that
    `writeDatabaseDocument` runs, factored into one shared helper (the
-   [sync plan](../features/cli-document-store-sync.md) wants the same
+   [sync plan](../../features/complete/cli-document-store-sync.md) wants the same
    helper).
 
 ## How to verify

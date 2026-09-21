@@ -19,7 +19,7 @@ function __quilltap_no_subcommand
   end
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
+      case db docs sync themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
         return 1
     end
   end
@@ -31,7 +31,7 @@ function __quilltap_using_subcommand
   set -l cmd (commandline -opc)
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
+      case db docs sync themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
         test "$cmd[$i]" = "$target"
         return $status
     end
@@ -55,6 +55,7 @@ end
 
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'db' -d 'Query encrypted databases'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'docs' -d 'Inspect and read document mounts'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'sync' -d 'Mirror a database-backed store to a directory'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'themes' -d 'Manage theme bundles'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'instances' -d 'Register or inspect instances'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search and browse memories'
@@ -187,6 +188,22 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'semantic' -d 'Sem
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'uri' -d 'Show canonical qtap:// URIs'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'base64' -d 'Base64 transfer for binary files'
 complete -c quilltap -n '__quilltap_using_subverb docs docker-mounts' -l 'format' -d 'Output shape' -x -a 'args json'
+
+# ---------- sync ----------
+# `quilltap sync <store> <path>`: the first positional is a store, the second a
+# local directory — so the verb is not -f (file completion stays available).
+complete -c quilltap -n '__quilltap_using_subcommand sync' -f -a '(__quilltap_mount_names)' -d 'Document store'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'dry-run' -d 'Plan and print; change nothing'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'direction' -d 'Which side may change' -x -a 'both to-disk to-store'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'prefer' -d 'How to resolve a conflict' -x -a 'newer store disk'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'no-delete' -d 'Never propagate a deletion'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'no-manifest' -d 'Ignore .quilltap-sync.json'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'json' -d 'Machine-readable plan and results'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'port' -s 'p' -d 'Server port' -x
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'instance' -s 'i' -d 'Registered instance' -x -a '(__quilltap_instance_names)'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'data-dir' -s 'd' -d 'Data directory' -x -a '(__fish_complete_directories)'
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'passphrase' -d 'Database passphrase' -x
+complete -c quilltap -n '__quilltap_using_subcommand sync' -l 'help' -s 'h' -d 'Show help'
 
 # ---------- themes verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'list' -d 'List themes'

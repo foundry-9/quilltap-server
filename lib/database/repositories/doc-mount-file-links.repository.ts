@@ -80,11 +80,32 @@ export interface GroupSibling {
  *
  * @returns the siblings that were repointed (excluding `excludeLinkId`)
  */
+/**
+ * Delete every chunk row belonging to `linkIds`.
+ *
+ * Tolerates a mount index whose `doc_mount_chunks` table has not been created
+ * yet: this repository's tables are minted lazily on first use, so a store
+ * written to before anything has ever chunked has no such table, and a
+ * missing table means there are no stale chunks to retire anyway. Anything
+ * else is a real failure and rolls the enclosing write back.
+ */
+function dropChunksForLinks(db: SyncDb, linkIds: string[]): void {
+  if (linkIds.length === 0) return;
+  const placeholders = linkIds.map(() => '?').join(', ');
+  try {
+    db.prepare(`DELETE FROM doc_mount_chunks WHERE linkId IN (${placeholders})`).run(...linkIds);
+  } catch (err) {
+    if (!/no such table/i.test(err instanceof Error ? err.message : String(err))) throw err;
+  }
+}
+
 function fanOutGroupFileId(
   db: SyncDb,
   groupId: string | null,
   excludeLinkId: string,
   newFileId: string,
+  /** Per-location mtime to stamp on the siblings (the writer's, not the clock's). */
+  lastModified: string,
   now: string,
   /** Text-shaped columns to carry along; omit for blobs. */
   textState: { plainTextLength: number; allowEmbed: number; allowCharacterRead: number; allowCharacterWrite: number } | null
@@ -92,12 +113,24 @@ function fanOutGroupFileId(
   if (!groupId) return [];
 
   const siblings = db.prepare(
-    `SELECT id, mountPointId, relativePath FROM doc_mount_file_links
+    `SELECT id, mountPointId, relativePath, fileId FROM doc_mount_file_links
      WHERE linkGroupId = ? AND id <> ?`
-  ).all(groupId, excludeLinkId) as GroupSibling[];
+  ).all(groupId, excludeLinkId) as (GroupSibling & { fileId: string })[];
   if (siblings.length === 0) return [];
 
   if (textState) {
+    // Bug 156, the sibling half: each member keeps its own chunks, so a
+    // repointed sibling's chunks are as stale as the writer's own. Drop them
+    // and zero the count for exactly the members whose content moved, so
+    // `reindexLinkGroupSiblings` (parent) or the next rescan (child) rebuilds
+    // them rather than leaving the previous revision answering searches.
+    const moved = siblings.filter(sib => sib.fileId !== newFileId).map(sib => sib.id);
+    if (moved.length > 0) {
+      dropChunksForLinks(db, moved);
+      db.prepare(
+        `UPDATE doc_mount_file_links SET chunkCount = 0 WHERE id IN (${moved.map(() => '?').join(', ')})`
+      ).run(...moved);
+    }
     db.prepare(
       `UPDATE doc_mount_file_links SET
          fileId = ?, plainTextLength = ?,
@@ -108,16 +141,16 @@ function fanOutGroupFileId(
     ).run(
       newFileId, textState.plainTextLength,
       textState.allowEmbed, textState.allowCharacterRead, textState.allowCharacterWrite,
-      now, now, groupId, excludeLinkId
+      lastModified, now, groupId, excludeLinkId
     );
   } else {
     db.prepare(
       `UPDATE doc_mount_file_links SET fileId = ?, lastModified = ?, updatedAt = ?
        WHERE linkGroupId = ? AND id <> ?`
-    ).run(newFileId, now, now, groupId, excludeLinkId);
+    ).run(newFileId, lastModified, now, groupId, excludeLinkId);
   }
 
-  return siblings;
+  return siblings.map(({ id, mountPointId, relativePath }) => ({ id, mountPointId, relativePath }));
 }
 
 /**
@@ -239,12 +272,26 @@ interface LinkBlobInput {
   sha256: string;
   /** Already-transcoded bytes destined for doc_mount_blobs. */
   data: Buffer;
+  /**
+   * Omitted means "no opinion", NOT "blank it" (bug 155). On a fresh insert an
+   * omitted `description` / `extractedText` / `extractionStatus` takes the
+   * empty default; on an upsert over an existing link the stored value is
+   * kept. An explicit `''` still clears the description — that is a `set`.
+   */
   description?: string;
   conversionStatus?: DocMountFileLink['conversionStatus'];
   /** Set when the caller has already extracted text (e.g. PDF). */
   extractedText?: string | null;
   extractedTextSha256?: string | null;
   extractionStatus?: DocMountFileLink['extractionStatus'];
+  /**
+   * Per-location timestamps. Callers that are restoring or mirroring a file
+   * whose times are known — the document-store sync — supply them so the two
+   * sides converge; every other caller omits them and gets `now`.
+   * `createdAt` is honoured on INSERT only.
+   */
+  lastModified?: string;
+  createdAt?: string;
   /**
    * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
    * Honored only when the row in question is actually being *created*; an
@@ -270,6 +317,12 @@ interface LinkDocumentInput {
   allowEmbed?: boolean;
   allowCharacterRead?: boolean;
   allowCharacterWrite?: boolean;
+  /**
+   * Per-location timestamps. See {@link LinkBlobInput.lastModified}.
+   * `createdAt` is honoured on INSERT only.
+   */
+  lastModified?: string;
+  createdAt?: string;
   /**
    * Explicit row ids for `preserveIds` imports (archive/rehydrate, spec F4).
    * Honored only when the row in question is actually being *created*; an
@@ -669,6 +722,56 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }
 
   // ============================================================================
+  // Timestamps
+  // ============================================================================
+
+  /**
+   * Set a link's per-location timestamps without touching its content.
+   *
+   * The mirror half of `lastModified` / `createdAt` on the two `link*Content`
+   * writers: a document-store sync that finds both sides byte-identical but
+   * differently dated copies the winner's clock across rather than the bytes.
+   * `updatedAt` is the row's own audit column and always moves to now — it is
+   * not the file's mtime.
+   *
+   * Returns false when no such link exists (or nothing was asked for).
+   */
+  async setLinkTimestamps(
+    linkId: string,
+    times: { lastModified?: string; createdAt?: string }
+  ): Promise<boolean> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return false;
+
+        const sets: string[] = [];
+        const values: unknown[] = [];
+        if (times.lastModified !== undefined) {
+          sets.push('lastModified = ?');
+          values.push(times.lastModified);
+        }
+        if (times.createdAt !== undefined) {
+          sets.push('createdAt = ?');
+          values.push(times.createdAt);
+        }
+        if (sets.length === 0) return false;
+
+        sets.push('updatedAt = ?');
+        values.push(new Date().toISOString(), linkId);
+
+        const result = db.prepare(
+          `UPDATE doc_mount_file_links SET ${sets.join(', ')} WHERE id = ?`
+        ).run(...values as never[]);
+        return result.changes > 0;
+      },
+      'Error setting file link timestamps',
+      { linkId },
+      false
+    );
+  }
+
+  // ============================================================================
   // Deletion with garbage-collection of the underlying file
   // ============================================================================
 
@@ -923,29 +1026,46 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       const extractionStatus = input.extractionStatus ?? 'none';
       const extractedText = input.extractedText ?? null;
       const extractedTextSha256 = input.extractedTextSha256 ?? null;
+      const linkModified = input.lastModified ?? now;
 
       let linkId: string;
       let groupSiblings: GroupSibling[] = [];
       if (existingLink) {
         linkId = existingLink.id;
-        db.prepare(
-          `UPDATE doc_mount_file_links SET
-             fileId = ?, folderId = ?,
-             originalFileName = ?, originalMimeType = ?,
-             description = ?, descriptionUpdatedAt = ?,
-             extractedText = ?, extractedTextSha256 = ?, extractionStatus = ?,
-             lastModified = ?, updatedAt = ?
-           WHERE id = ?`
-        ).run(
+        // Bug 155: an overwrite is a write of BYTES. A caller that says
+        // nothing about the caption has no opinion about it, and blanking it
+        // here is silent data loss — `docs write --force` over a described
+        // image, a re-upload onto the same path, a mirror push from disk. So
+        // the metadata columns join the SET clause only when their input field
+        // is actually present; an explicit `''` still clears.
+        const sets: string[] = [
+          'fileId = ?', 'folderId = ?',
+          'originalFileName = ?', 'originalMimeType = ?',
+        ];
+        const values: unknown[] = [
           fileRow.id, folderId,
           input.originalFileName, input.originalMimeType,
-          description, descriptionUpdatedAt,
-          extractedText, extractedTextSha256, extractionStatus,
-          now, now, linkId
-        );
+        ];
+        if (input.description !== undefined) {
+          sets.push('description = ?', 'descriptionUpdatedAt = ?');
+          values.push(description, descriptionUpdatedAt);
+        }
+        if (input.extractedText !== undefined) {
+          sets.push('extractedText = ?', 'extractedTextSha256 = ?');
+          values.push(extractedText, extractedTextSha256);
+        }
+        if (input.extractionStatus !== undefined) {
+          sets.push('extractionStatus = ?');
+          values.push(extractionStatus);
+        }
+        sets.push('lastModified = ?', 'updatedAt = ?');
+        values.push(linkModified, now, linkId);
+        db.prepare(
+          `UPDATE doc_mount_file_links SET ${sets.join(', ')} WHERE id = ?`
+        ).run(...values as never[]);
         // Bytes are shared, so the whole group moves; each member keeps its own
         // description and extracted caption (null textState).
-        groupSiblings = fanOutGroupFileId(db, existingLink.linkGroupId, linkId, fileRow.id, now, null);
+        groupSiblings = fanOutGroupFileId(db, existingLink.linkGroupId, linkId, fileRow.id, linkModified, now, null);
         if (existingLink.fileId !== fileRow.id) {
           gcOrphanedFileRow(db, existingLink.fileId);
         }
@@ -973,7 +1093,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           description, descriptionUpdatedAt,
           conversionStatus,
           extractedText, extractedTextSha256, extractionStatus,
-          now, now, now
+          linkModified, input.createdAt ?? now, now
         );
       }
 
@@ -1086,31 +1206,51 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       const allowCharacterRead = (input.allowCharacterRead ?? parsedPolicy.characterRead) ? 1 : 0;
       const allowCharacterWrite = (input.allowCharacterWrite ?? parsedPolicy.characterWrite) ? 1 : 0;
 
+      const linkModified = input.lastModified ?? now;
+
       let linkId: string;
       let groupSiblings: GroupSibling[] = [];
+      let contentChanged = false;
       if (existingLink) {
         linkId = existingLink.id;
+        // Bug 156: repointing the link at different content invalidates every
+        // chunk built from the old revision. Chunks are keyed by linkId and
+        // cascade only on link *deletion*, so without this the stale rows
+        // survive an overwrite and keep answering semantic search — and the
+        // link would claim `chunkCount > 0, converted`, which is exactly the
+        // predicate `rescanDatabaseMountPoint` uses to decide it has nothing
+        // to do. Dropping the rows and zeroing the count makes the overwrite
+        // announce itself: writers that re-chunk immediately
+        // (`writeDatabaseDocument` on the parent) set the real count back
+        // moments later; writers that do not — the byte-preserving file-ops
+        // path, and every in-child `doc_write_file` — are caught by the next
+        // rescan instead of never.
+        contentChanged = existingLink.fileId !== fileRow.id;
+        if (contentChanged) {
+          dropChunksForLinks(db, [linkId]);
+        }
         db.prepare(
           `UPDATE doc_mount_file_links SET
              fileId = ?, folderId = ?,
              plainTextLength = ?,
              conversionStatus = 'converted', conversionError = NULL,
              allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?,
+             ${contentChanged ? 'chunkCount = 0,' : ''}
              lastModified = ?, updatedAt = ?
            WHERE id = ?`
         ).run(
           fileRow.id, folderId,
           input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
-          now, now, linkId
+          linkModified, now, linkId
         );
         // Deliberate hard links move together, then the abandoned content row
         // (if this write orphaned it) is collected.
-        groupSiblings = fanOutGroupFileId(db, existingLink.linkGroupId, linkId, fileRow.id, now, {
+        groupSiblings = fanOutGroupFileId(db, existingLink.linkGroupId, linkId, fileRow.id, linkModified, now, {
           plainTextLength: input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
         });
-        if (existingLink.fileId !== fileRow.id) {
+        if (contentChanged) {
           gcOrphanedFileRow(db, existingLink.fileId);
         }
       } else {
@@ -1131,14 +1271,24 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           linkId, fileRow.id, input.mountPointId, canonicalRel, input.fileName, folderId,
           input.plainTextLength,
           allowEmbed, allowCharacterRead, allowCharacterWrite,
-          now, now, now
+          linkModified, input.createdAt ?? now, now
         );
       }
 
-      return { fileRow: fileRow!, documentId, linkId, groupSiblings };
+      return { fileRow: fileRow!, documentId, linkId, groupSiblings, chunksDropped: contentChanged };
     });
 
-    const { fileRow: finalFile, documentId, linkId, groupSiblings } = tx();
+    const { fileRow: finalFile, documentId, linkId, groupSiblings, chunksDropped } = tx();
+
+    if (chunksDropped) {
+      // The rows this write deleted are cached per mount (and a fanned-out
+      // sibling may live in another one), so drop every affected mount's
+      // cached chunk set or search keeps serving the old revision from memory.
+      invalidateMountPoint(input.mountPointId);
+      for (const mountId of new Set(groupSiblings.map(sib => sib.mountPointId))) {
+        invalidateMountPoint(mountId);
+      }
+    }
 
     if (groupSiblings.length > 0) {
       logger.debug('linkDocumentContent: fanned write out to hard-link group', {

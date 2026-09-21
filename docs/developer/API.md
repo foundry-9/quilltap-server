@@ -4,7 +4,7 @@ API reference for Quilltap v4.3 and later.
 
 > **Freshness note (v4.3-dev):** The Scriptorium / Document Mode work, the Salon Staff (Librarian, Host, Concierge, Aurora, Lantern, Prospero) announcement system, and the Ariel terminal subsystem landed during 4.3-dev. The chat-actions list, the LLM-tools list, the terminals endpoints, and the message schema below reflect those changes; older subsections may still describe earlier shapes verbatim. When in doubt, the source of truth is `app/api/v1/`, `lib/schemas/`, and `lib/tools/`. Notable additions since v4.2:
 >
-> - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert actions, and per-project linking
+> - **Mount Points** (`/api/v1/mount-points`) — Scriptorium document-store CRUD, files/folders/blobs operations, scan/convert/deconvert/sync actions, and per-project linking
 > - **Terminals** (`/api/v1/terminals`) — Ariel PTY session spawn, list, signal, write, and ring-buffer access
 > - **Chat actions overhaul** — handlers under `app/api/v1/chats/[id]/actions/` were consolidated; current action set: `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `danger-classification`, `documents`, `mailbox`, `memories`, `merge`, `outfit`, `participants`, `photo-albums`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`
 > - **New built-in LLM tools** — `doc_*` family (read/write/grep/list/move/copy/str_replace/focus/open/close/insert_text/update_heading/read_heading/read_frontmatter/update_frontmatter/create_folder/delete_folder/delete_file, plus blob variants), `self_inventory`, `state`, `whisper`, `read_conversation`, `submit_final_response`, `upsert_annotation`, `delete_annotation`, and the `wardrobe_*` family (`wardrobe_list`/`wardrobe_read`/`wardrobe_wear`/`wardrobe_take_off`/`wardrobe_create`/`wardrobe_update`/`wardrobe_archive`). The unified search tool is now named `search` (was `search_memories`).
@@ -4866,6 +4866,62 @@ Convert a `database` mount back to `filesystem`-backed storage at a chosen `targ
 ```
 
 **Response**: `200 OK` — `{ success: true, mountPoint: {...}, deconvertResult: { filesWritten, blobsWritten, bytesWritten, errors } }`.
+
+#### `POST /api/v1/mount-points/[id]?action=sync`
+
+Mirror a `database`-backed store and a **server-local** directory in both
+directions. Compares by SHA-256 first and `lastModified` second; copies
+whichever side changed; reports a `conflict` (and changes nothing) when the
+manifest shows both sides changed since the last run. Creates the directory
+when absent; never creates a store. Engine: `lib/mount-index/sync/`.
+
+Refused for a non-`database` `mountType`, for an archived character's vault,
+while `conversionStatus !== 'idle'` or `scanStatus === 'scanning'` (409), and
+while another sync of the same store is running (409). A
+`.quilltap-sync.json` belonging to a different store is a 409.
+
+This schema is the **single source of truth** for `quilltap sync`'s flags —
+the CLI does not re-validate.
+
+**Request Body**:
+
+```json
+{
+  "targetPath": "/Users/me/Documents/lore",
+  "dryRun": false,
+  "direction": "both",
+  "prefer": "newer",
+  "propagateDeletes": true,
+  "useManifest": true
+}
+```
+
+- `direction` — `both` (default) | `to-disk` | `to-store`; filtered-out work is reported as `skip`.
+- `prefer` — `newer` (default) | `store` | `disk`; `store`/`disk` resolve every difference in that direction without consulting a clock.
+- `propagateDeletes` — false suppresses every `delete` / `rmdir`.
+- `useManifest` — false ignores (and does not write) `.quilltap-sync.json`; first-run rules then apply every time, so nothing is ever deleted.
+
+**Response**: `200 OK` — a `SyncReport`:
+
+```json
+{
+  "storeId": "…", "storeName": "Lore", "targetPath": "/Users/me/Documents/lore",
+  "dryRun": false,
+  "actions": [
+    { "kind": "modify", "side": "store", "relativePath": "chapters/03.md",
+      "entryKind": "file", "reason": "disk newer by 2h 14m", "outcome": "applied" }
+  ],
+  "summary": { "created": 3, "modified": 1, "deleted": 1, "touched": 1,
+               "described": 0, "conflicts": 1, "skipped": 0, "failed": 0 },
+  "warnings": [], "elapsedMs": 812
+}
+```
+
+`kind` is one of `create` | `modify` | `delete` | `touch` | `describe` |
+`mkdir` | `rmdir` | `conflict` | `skip`; `side` is the side that **changes**
+(`null` for `conflict` / `skip`). Chunks and embedding vectors are never read
+or written by the sync — the store's own post-write hooks re-index, because
+the sync writes through the same chokepoints as every other writer.
 
 #### `GET /api/v1/mount-points/[id]/files`
 

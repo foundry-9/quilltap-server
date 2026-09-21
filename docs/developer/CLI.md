@@ -74,6 +74,69 @@ The URI authority is matched name-first, UUID as fallback — the same rule as a
 
 **Emitting URIs:** `--json` output for `find`, `grep`, `ls`, `files`, and `tree` carries a `uri` field per row/node. `--uri` switches the text output of `find`, `grep`, and `files` to show the canonical `qtap://` URI as the locator (name form, UUID when the store name is ambiguous).
 
+## Sync CLI (`npx quilltap sync`)
+
+`npx quilltap sync <store|qtap://store/> <path> [flags]` mirrors a
+**database-backed** store and a directory on disk in both directions.
+
+```
+--dry-run           plan and print; change nothing on either side
+--direction both|to-disk|to-store    (default both)
+--prefer newer|store|disk            (default newer)
+--no-delete         never propagate a deletion
+--no-manifest       ignore .quilltap-sync.json (first-run rules every time)
+--json              machine-readable plan + results on stdout
+-p, --port N        server port (default 3000)
+-i, -d, --passphrase   the usual instance plumbing (used only to resolve <store>)
+```
+
+**Thin client.** The engine is server-side (`POST /api/v1/mount-points/[id]?action=sync`,
+`lib/mount-index/sync/`); the CLI resolves the store name against the local
+mount index (read-only — the one thing it opens the database for) and prints
+the report. The route's Zod schema is the single source of truth for the flags
+above; the CLI does not re-validate. The engine lives in the server because the
+sync writes through `linkDocumentContent` / `linkBlobContent`,
+`ensureFolderPath`, the hard-link fan-out and the post-write re-chunk — all
+TypeScript in `lib/`, unreachable from this plain-JS package, and a lock-gated
+direct-SQLite writer could not re-chunk at all. `docs write` on a database
+store already requires the server for the same reason.
+
+**Comparison currency:** SHA-256 first, `lastModified` second. Equal sha +
+unequal mtime is a `touch`, never a copy. After a content action both sides
+carry the winner's `lastModified` and the **older** of the two `createdAt`s.
+
+**Deletions need proof.** An entry absent on one side is a deletion only when
+`.quilltap-sync.json` (the manifest, in the target directory) shows it was
+present at the last run and unchanged on the surviving side. With no manifest
+— a first run, or `--no-manifest` — it is **created** on the missing side,
+never deleted.
+
+**Dotfiles are invisible in both directions.** A path with a dot-segment is
+never read, written or deleted, on either side; the manifest is the one
+exception and never enters the store. **Sidecars:** a binary's `description`
+lives on disk as `<file>.description.md` (binaries only — `blob`/`pdf`/`docx`;
+a text document's description is reported as `skip`). **No transcoding:** a
+`.png` pushed from disk is stored as a `.png` with the same sha, unlike a
+Scriptorium upload.
+
+**Refusals:** a non-database store (pointed at its own `basePath`), an
+archived character's vault, a store mid-conversion or mid-scan, a second
+concurrent run, and a manifest belonging to another store. A character vault's
+keystones (`properties.json`, the five required `.md` files,
+`Wardrobe/instructions.md`) are never deleted from the store — the planner
+reports a `conflict` instead.
+
+**Exit codes:** `0` clean, `1` error or failed action, `2` unresolved conflict.
+`--dry-run` uses the same codes. Report lines go to stdout, warnings and the
+summary to stderr.
+
+**Docker:** `<path>` is resolved on the server, so it must sit inside a bind
+mount; `docs docker-mounts` plans those, and the route says so on `ENOENT`.
+
+Modules: `lib/mount-index/sync/{index,walk-store,walk-disk,manifest,planner,apply-store,apply-disk,sidecar,types}.ts`;
+CLI `packages/quilltap/lib/{sync-command,sync-report}.js`. The planner is pure
+and table-tested; `sync-report.js` is pure and unit-tested.
+
 ## Docker startup (`scripts/start-quilltap-docker.ts`)
 
 `npm run start:docker` builds and runs the container. Beyond the data-directory bind it also passes through every filesystem/Obsidian document store, so their `basePath` values resolve inside the container.

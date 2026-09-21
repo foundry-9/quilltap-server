@@ -26,6 +26,7 @@ import {
   emitDocumentWritten,
 } from './db-store-events';
 import { detectNativeText } from './path-utils';
+import { reindexAfterDatabaseWrite } from './post-write-reindex';
 
 const logger = createServiceLogger('MountIndex:DatabaseStore');
 
@@ -155,45 +156,12 @@ export async function writeDatabaseDocument(
   });
 
   // Chunk the just-written content so it is immediately searchable. The write
-  // above only records the document + link row (chunkCount 0); without this the
-  // embedding scheduler triggered by emitDocumentWritten below would find no
-  // chunks, and the document would stay unsearchable until a manual rescan.
-  // reindexSingleFile reads the content back from doc_mount_documents and
-  // (re)builds the link's chunks, so an overwrite re-chunks too.
-  //
-  // Parent-only: inside the forked job child this write is buffered (read-your-
-  // writes does not hold), so the content reindexSingleFile would read isn't
-  // committed yet. In-child writers (doc_write_file in autonomous turns) leave
-  // chunking to the next database rescan, as before. Bridge writers
-  // (conversation summaries, avatars) already run this on the parent via
-  // host-RPC, so their documents chunk here.
-  if (process.env.QUILLTAP_JOB_CHILD !== '1') {
-    try {
-      const { reindexSingleFile } = await import('@/lib/doc-edit/reindex-file');
-      await reindexSingleFile(mountPointId, rel, '');
-    } catch (chunkErr) {
-      logger.warn('Failed to chunk database document after write', {
-        mountPointId,
-        relativePath: rel,
-        error: chunkErr instanceof Error ? chunkErr.message : String(chunkErr),
-      });
-    }
-
-    // linkDocumentContent has already repointed every member of this file's
-    // hard-link group at the new content row, but chunks are per-link: without
-    // this pass a sibling path would keep serving the previous revision's
-    // chunks to search and to character context.
-    try {
-      const { reindexLinkGroupSiblings } = await import('@/lib/mount-index/link-groups');
-      await reindexLinkGroupSiblings(mountPointId, rel);
-    } catch (groupErr) {
-      logger.warn('Failed to re-index hard-link group after database write', {
-        mountPointId,
-        relativePath: rel,
-        error: groupErr instanceof Error ? groupErr.message : String(groupErr),
-      });
-    }
-  }
+  // above only records the document + link row (chunkCount 0 on a repoint);
+  // without this the embedding scheduler triggered by emitDocumentWritten below
+  // would find no chunks, and the document would stay unsearchable until a
+  // manual rescan. Shared with file-ops' byte-preserving writer and the
+  // document-store sync, and a no-op inside the job child.
+  await reindexAfterDatabaseWrite(mountPointId, rel);
 
   emitDocumentWritten({ mountPointId, relativePath: rel });
 
@@ -644,11 +612,20 @@ export async function databaseFolderExists(
 
 /**
  * Rehydrate (rechunk) all documents in a database-backed mount point.
- * Used by the scan endpoint for DB-backed stores — the filesystem scanner
- * has nothing to walk, so the equivalent operation is to re-chunk every
- * document whose content sha has drifted from its file-record sha (or for
- * which chunks simply don't exist yet, as happens after a fresh import),
- * then emit write events so the embedding scheduler picks up the new
+ * Used by the scan endpoint for DB-backed stores — the filesystem scanner has
+ * nothing to walk, so the equivalent operation is to re-chunk every document
+ * the index says is unchunked: `chunkCount === 0` (a fresh import, or a write
+ * that repointed the link and dropped its stale chunks) or a conversion that
+ * never finished.
+ *
+ * It does NOT compare shas, and nothing on the link records which revision its
+ * chunks were built from, so this pass cannot detect drift on its own. It does
+ * not need to: `linkDocumentContent` deletes the chunks and zeroes the count
+ * whenever it repoints a link at different content (bug 156), which is what
+ * puts every un-re-chunked overwrite — including the in-child `doc_write_file`
+ * writes that defer chunking here by design — into the predicate below.
+ *
+ * Afterwards it emits write events so the embedding scheduler picks up the new
  * null-embedding chunks.
  */
 export async function rescanDatabaseMountPoint(mountPoint: DocMountPoint): Promise<number> {

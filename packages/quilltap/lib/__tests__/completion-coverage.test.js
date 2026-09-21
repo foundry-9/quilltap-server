@@ -108,6 +108,7 @@ describe('every subcommand has its own completion arm', () => {
 const HELP_SOURCES = {
   db: ['bin/quilltap.js', 'printDbHelp'],
   docs: ['lib/docs-commands.js', 'printDocsHelp'],
+  sync: ['lib/sync-command.js', 'printSyncHelp'],
   memories: ['lib/memories-commands.js', 'printMemoriesHelp'],
   themes: ['lib/theme-commands.js', 'printHelp'],
   instances: ['lib/instances-commands.js', 'printHelp'],

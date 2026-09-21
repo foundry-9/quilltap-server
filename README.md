@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.10.0--dev.51-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.10.0--dev.53-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -185,6 +185,8 @@ Organize your work into projects with custom system prompts, file uploads, folde
 - **Database-backed stores** — files and binaries live entirely inside the encrypted SQLCipher mount index. Upload PDFs, Word documents, images, audio, archives — anything. Text is extracted from PDFs and DOCX automatically and made searchable alongside Markdown and plain-text files.
 
 A **Convert** button on filesystem and Obsidian stores moves their contents into the database. A **Deconvert** button writes them back out. Embeddings are preserved across either direction, so a 14,000-document store converts in seconds rather than re-embedding for an afternoon.
+
+`npx quilltap sync <store> <path>` keeps a database-backed store and a directory on disk in step, both ways — edit a chapter in your own text editor and the next run carries it into the store; edit it in the Scriptorium and the next run carries it back out. Files are compared by SHA-256 first and modification time second, so equal bytes with unequal clocks are re-stamped rather than re-copied; whichever side changed wins; and when both changed since the last run it reports a conflict and leaves them alone rather than choosing for you. Deletions propagate only once there's a record proving them. Bytes are preserved exactly, dotfiles are invisible in both directions, and a binary's description travels beside it as a small Markdown sidecar.
 
 Document stores carry a **store type** — `documents` for general notes and references, `character` for character vaults — visible as a badge in the Scriptorium index. Folder operations are first-class: create folders inside the picker, drag entries between them, move whole subtrees with cascade updates. Markdown rendering supports wikilinks, code highlighting, LaTeX math (KaTeX), and PDF preview. Semantic search finds content by meaning across your entire project: not just the file that mentions "the red door," but the one that describes "a crimson entrance" three chapters ago.
 

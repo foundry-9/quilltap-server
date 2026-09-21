@@ -61,7 +61,7 @@ _quilltap_complete() {
   local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
-  local top_cmds="db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
+  local top_cmds="db docs sync themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
 
   # Flags that swallow the word after them. A flat list will not do: -o is the
   # valueless global --open but themes' valued --output, and `memories`
@@ -71,6 +71,7 @@ _quilltap_complete() {
   local vf_global=" -d --data-dir -i --instance -p --port --passphrase "
   local vf_db=" --limit --grep --character --project --about --source --chat --message --field --tail --last --from --type --out --id --count "
   local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes --format "
+  local vf_sync=" --direction --prefer "
   local vf_themes=" -o --output -k --key -n --name "
   local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
@@ -93,6 +94,7 @@ _quilltap_complete() {
     case "$subcommand" in
       db)            valued="$vf_global$vf_db" ;;
       docs)          valued="$vf_global$vf_docs" ;;
+      sync)          valued="$vf_global$vf_sync" ;;
       themes)        valued="$vf_global$vf_themes" ;;
       memories)      valued="$vf_memories" ;;
       logs)          valued="$vf_global$vf_logs" ;;
@@ -197,6 +199,14 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "args json" -- "$cur"))
       return
       ;;
+    --direction)
+      COMPREPLY=($(compgen -W "both to-disk to-store" -- "$cur"))
+      return
+      ;;
+    --prefer)
+      COMPREPLY=($(compgen -W "newer store disk" -- "$cur"))
+      return
+      ;;
   esac
 
   # Subcommand-specific completion
@@ -239,6 +249,18 @@ _quilltap_complete() {
         COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
       else
         _quilltap_docs_positional "$subverb" "$positional_count" "$cur"
+      fi
+      ;;
+    sync)
+      local sync_flags="--dry-run --direction --prefer --no-delete --no-manifest \
+        --json --instance --data-dir --passphrase --port --help"
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "$sync_flags" -- "$cur"))
+      elif [[ "$positional_count" == "1" ]]; then
+        _quilltap_lines_compreply "$cur" \
+          <<< "$(command quilltap docs list --names-only "${ctx_flags[@]}" 2>/dev/null)"
+      else
+        COMPREPLY=($(compgen -d -- "$cur"))
       fi
       ;;
     themes)

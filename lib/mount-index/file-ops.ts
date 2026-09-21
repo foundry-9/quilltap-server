@@ -28,6 +28,7 @@ import {
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
 import { FileOpError } from './file-op-error';
 import { normaliseRelativePath, detectNativeText, mimeForExtension } from './path-utils';
+import { reindexAfterDatabaseWrite } from './post-write-reindex';
 
 // Re-exported so existing `import { FileOpError } from '@/lib/mount-index/file-ops'`
 // call sites keep working after the class moved to its own leaf module.
@@ -724,6 +725,11 @@ async function writeDestBytes(
       plainTextLength: text.length,
       fileSizeBytes: Buffer.byteLength(text, 'utf-8'),
     });
+    // Bug 156: this writer is byte-preserving and has no chunking step of its
+    // own, so without the shared re-chunk an overwrite left the previous
+    // revision's chunks answering every semantic search. emitDocumentWritten
+    // alone only schedules EMBEDDING of chunks that already exist.
+    await reindexAfterDatabaseWrite(destMount.id, destRel);
     emitDocumentWritten({ mountPointId: destMount.id, relativePath: destRel });
     return contentSha;
   }

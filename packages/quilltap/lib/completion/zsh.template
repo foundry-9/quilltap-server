@@ -37,6 +37,7 @@ _quilltap() {
   subcommands=(
     'db:Query encrypted databases'
     'docs:Inspect, read, and export document mounts'
+    'sync:Mirror a database-backed store to a directory'
     'themes:Manage theme bundles'
     'instances:Register or inspect named Quilltap instances'
     'memories:Search, browse, and graph memories'
@@ -79,6 +80,9 @@ _quilltap_subcommand() {
       ;;
     docs)
       _quilltap_docs
+      ;;
+    sync)
+      _quilltap_sync
       ;;
     themes)
       _quilltap_themes
@@ -310,6 +314,38 @@ _quilltap_docs() {
       ;;
     pos2|pos3|pos4)
       _quilltap_docs_positional ${state#pos}
+      ;;
+  esac
+}
+
+# `quilltap sync <store> <path>` — a store, then a local directory.
+_quilltap_sync() {
+  local -a sync_opts
+  sync_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '(-p --port)'{-p,--port}'[Server port]:port:'
+    '--json[Machine-readable plan and results]'
+    '--dry-run[Plan and print; change nothing]'
+    '--direction[Which side may change]:direction:(both to-disk to-store)'
+    '--prefer[How to resolve a conflict]:prefer:(newer store disk)'
+    '--no-delete[Never propagate a deletion]'
+    '--no-manifest[Ignore .quilltap-sync.json]'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  _arguments -C $sync_opts \
+    '1: :->store' \
+    '2: :->target' \
+    '*: :'
+
+  case "$state" in
+    store)
+      _quilltap_mount_names
+      ;;
+    target)
+      _directories
       ;;
   esac
 }

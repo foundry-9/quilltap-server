@@ -170,6 +170,34 @@ Crucially, **these flags govern your characters, never you.** The human at the d
 
 Only Markdown documents carry frontmatter, so only they may bear these instructions; other formats (PDFs, plain text, and the like) remain fully accessible as before. And because the flags are read afresh each time a document is re-indexed, the way to change a document's discretion is simply to edit its frontmatter — at the desk, or directly on disk in your editor of choice — and let the Scriptorium take note on its next pass.
 
+## Mirroring a Store to a Directory
+
+A database-backed store may be kept in step with an ordinary directory on disk
+by way of `quilltap sync` — edit a chapter in your own text editor, and the
+next run carries it into the store; edit it here, and the next run carries it
+back out. The full account lives in
+[Keeping a Store and a Directory in Step](cli-sync.md), but two conventions
+are worth knowing wherever document stores are discussed, because you will
+meet both the moment you look inside such a directory.
+
+**Anything beginning with a dot is invisible to the sync, in both
+directions.** A file or folder whose name starts with `.` — or that sits
+anywhere beneath one — is never read, never copied, and never deleted, on
+either side. Your `.git` directory and your editor's scratch files stay out of
+your store; a dot-named file in your store stays off your disk. The single
+exception is `.quilltap-sync.json`, a small record the verb keeps in the
+directory of what the last run left on both sides. It is what allows the sync
+to tell "this file is new here" from "this file was deleted there", it never
+enters the store, and `--no-manifest` makes the verb disregard it.
+
+**A binary's description travels beside it.** An image or PDF that carries a
+description keeps it, on disk, in a small Markdown file named after the whole
+file with `.description.md` appended — so `harbour.png` is accompanied by
+`harbour.png.description.md`. Edit that file and the caption changes in the
+store; delete it and the caption is cleared. Text documents' descriptions are
+not mirrored this way, on the reasonable grounds that a Markdown file's
+contents are already its own description.
+
 ## In-Chat Navigation
 
 To navigate to The Scriptorium:

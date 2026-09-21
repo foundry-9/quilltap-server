@@ -1,12 +1,16 @@
 # Feature: `quilltap sync` — mirror a database-backed document store to a directory
 
-**Status:** plan, approved 2026-09-21, not started. Written against 4.10-dev.
-The operator settled every open question the same day; the answers are
-recorded in [Decisions taken](#decisions-taken-2026-09-21) at the end and are
-folded into the text. Two defects found while planning are filed as
-[bug 155](../bugs/bug-155-byte-write-blanks-caption.md) and
-[bug 156](../bugs/bug-156-overwrite-leaves-stale-chunks.md); phase 1 fixes
-them, because the sync's store-side applier depends on both.
+**Status:** **implemented** in 4.10-dev, 2026-09-21. Design of record.
+All five phases shipped in one change, live walkthrough included. The operator
+settled every open question on the day
+the plan was approved; the answers are recorded in
+[Decisions taken](#decisions-taken-2026-09-21) at the end and are folded into
+the text. Two defects found while planning were filed as
+[bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) and
+[bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) and fixed
+in phase 1, because the sync's store-side applier depends on both. Where the
+shipped code departs from the plan, see
+[Implementation notes (as landed)](#implementation-notes-as-landed) at the end.
 
 A new top-level CLI verb, `quilltap sync <store> <path>`, keeps a
 **database-backed** document store (`doc_mount_points.mountType = 'database'`)
@@ -309,13 +313,13 @@ SQL of its own.
   `writeDatabaseDocument` runs (`reindexSingleFile`, `reindexLinkGroupSiblings`),
   then `emitDocumentWritten`. Factoring that block out of
   `writeDatabaseDocument` into a shared helper is part of the
-  [bug 156](../bugs/bug-156-overwrite-leaves-stale-chunks.md) fix, which
+  [bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) fix, which
   lands first; the sync calls the helper rather than copying the block.
 - `create store` / `modify store` for binaries → `linkBlobContent` with the
   bytes verbatim, `storedMimeType = originalMimeType = mimeForExtension`,
   and **no** `description` / `extractedText` / `extractionStatus` in the
   input — which is safe only once
-  [bug 155](../bugs/bug-155-byte-write-blanks-caption.md) has taught the
+  [bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) has taught the
   update branch that an omitted field means "keep what is there". Until that
   fix lands the sync must not be merged. No `transcodeToWebP`. The reader
   side is indifferent: the blob route serves `storedMimeType` as-is, and the
@@ -492,8 +496,8 @@ artefacts the store never contains.
 
 ## Phases
 
-1. Fix [bug 155](../bugs/bug-155-byte-write-blanks-caption.md) and
-   [bug 156](../bugs/bug-156-overwrite-leaves-stale-chunks.md) — the
+1. Fix [bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) and
+   [bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) — the
    omitted-means-keep update branch, `chunkCount = 0` on repoint, the shared
    post-write re-chunk helper, the docstring. Then the repository additions
    (`lastModified`/`createdAt` inputs, `setLinkTimestamps`). Tests. This
@@ -529,8 +533,131 @@ already reflected in the sections above; this list is the record.
    documented in the help and in the document-store help pages, not only
    here.
 8. **The two pre-existing defects are filed** as
-   [bug 155](../bugs/bug-155-byte-write-blanks-caption.md) (a byte write
+   [bug 155](../../bugs/fixed/bug-155-byte-write-blanks-caption.md) (a byte write
    over a described binary blanks the caption) and
-   [bug 156](../bugs/bug-156-overwrite-leaves-stale-chunks.md) (an
+   [bug 156](../../bugs/fixed/bug-156-overwrite-leaves-stale-chunks.md) (an
    overwrite leaves stale chunks and the rescan docstring promises a check
    the code does not make). Both are fixed in phase 1, ahead of the sync.
+
+## Implementation notes (as landed)
+
+Where the shipped code departs from the plan above, and why. The plan is left
+as written; this section is the correction.
+
+1. **The planner takes a `canSetDiskBirthtime` flag, and a disk `createdAt`
+   that disagrees does not drive a `touch` where it cannot be set.** The plan
+   said the manifest carries `createdAt` where the filesystem cannot, which is
+   right, but the decision table as written still planned a `touch disk`
+   whenever the two `createdAt`s differed. On Linux and Windows that touch
+   cannot change the filesystem's answer, so the next walk reads the same
+   disagreement and the sync plans the same futile action **every run for
+   ever**. The engine convergence test caught it on the first pass. The
+   planner now takes the platform's capability as an input (the engine passes
+   `birthtimeIsSettable()`), skips the `createdAt` half of a disk touch where
+   it is out of reach, and omits `createdAt` from the action so the applier
+   does not attempt the two-step for nothing. The store side is unaffected —
+   `setLinkTimestamps` is exact.
+
+2. **A one-sided `create` carries the description with it.** The plan's
+   description rules were written for the both-sides case, which is the only
+   one `planDescription` sees. On a first run every entry is one-sided, so a
+   store full of captioned images would have been materialised on disk with no
+   sidecars at all — and a directory of captioned images adopted into the
+   store would have lost every caption. `create disk` of a binary with a
+   non-empty description now emits a `describe disk` beside it, and `create
+   store` of a disk file carrying a sidecar emits a `describe store`. The
+   latter has no `linkId` to name (the link does not exist until the create
+   lands), so the store applier resolves a `describe` by path when the id is
+   absent.
+
+3. **Reserved sidecar names are held outside the entry map.** The plan has the
+   store walk report a `conflict (reserved name)`. Putting such a row into the
+   map would have made the planner compare a file that must not be compared,
+   so `walkStore` returns them in a separate `reservedPaths` list and the
+   engine turns each into a `conflict` before planning.
+
+4. **Store-side actions are ordered before disk-side ones.** The hard-link
+   fan-out reads the sibling's new bytes back out of the store, so the write
+   that produced them has to have landed. Nothing else depends on the order
+   across sides; within a side the plan's rules (parents before children,
+   deletions last and children-first) are unchanged.
+
+5. **`dropChunksForLinks` tolerates a missing `doc_mount_chunks` table.** The
+   mount index's tables are minted lazily on first use, so a store written to
+   before anything has ever chunked has no such table — and a missing table
+   means there are no stale chunks to retire anyway. Any other SQLite error
+   still rolls the enclosing write back.
+
+6. **The manifest is built by re-reading both sides, not from the plan.** A
+   failed action must not be recorded as though it had succeeded, because that
+   is exactly the base state that would make the *next* run propagate a
+   deletion nobody asked for. `buildManifest` walks both sides again after
+   apply and records only entries the two sides actually agree on.
+
+7. **A failing action does not abort the run.** The plan did not say either
+   way. The rest of the plan is independent of any one action, and a sync that
+   stopped at the first unwritable file would leave a directory in a state no
+   manifest describes. Failures are recorded on the action, counted in the
+   summary, surfaced as warnings, and earn exit code 1.
+
+8. **`--dry-run` does not create the target directory.** The plan says the
+   directory is created when absent and that `--dry-run` changes nothing on
+   either side; the first live run showed those two sentences fighting, and
+   the directory won. An operator planning a sync against a path they mistyped
+   should be left with the mistyped path absent, not with an empty folder they
+   now have to notice and remove — so the creation is skipped under
+   `--dry-run`, the plan gains a warning saying a real run would create it, and
+   `walkDisk` treats an `ENOENT` on the *root* as an empty side rather than an
+   unreadable directory.
+
+9. **`packages/quilltap/package.json` is not bumped by hand** — that file is
+   synced by `update_version.sh` at release, per the standing rule for the CLI
+   package.
+
+## Live walkthrough — run 2026-09-21 on V4test
+
+Against `Riya Character Vault (3)` (a character vault: 14 files, two captioned
+WebP avatars sharing a content row, several empty keystones, nested folders),
+server on :3005. Every numbered step of [Live verification](#live-verification-v4test-never-friday)
+passed, plus the keystone and dotfile cases. The vault was restored to its
+pre-walkthrough state afterwards — file for file, size for size, mtime for
+mtime — using the verb itself with `--prefer disk`, with one 91-byte subprompt
+recovered from that morning's automatic mount-index backup.
+
+What the walkthrough proved that the test suite could not:
+
+- **Timestamps round-trip through a real filesystem.** `stat` reported each
+  file's mtime equal to its link's `lastModified` and, on APFS, its birthtime
+  equal to `createdAt` — the two-step `utimes` works as described.
+- **Bytes are preserved through a real image.** A 1,776,815-byte PNG pushed
+  from disk landed as `lore/maps/harbour.png`, `image/png`, sha
+  `9c90e0be…` — the disk file's own sha, to the byte. No transcode, no rename.
+- **Bug 155's fix holds on the write path the sync actually uses.** A caption
+  set in the store survived a byte edit pushed from disk: new sha, new size,
+  same description.
+- **Bug 156's fix holds too, and the shared hook runs.** After a `modify store`
+  of a text document, `doc_mount_chunks` held the *new* sentence and not the
+  old one — the re-chunk fired on a write that, before this change, would have
+  left the previous revision answering every search.
+- **A conflict really does change nothing.** Both sides edited, run: one
+  `conflict`, exit 2, and both files still carrying their own text.
+  `--prefer disk` then resolved it in one action.
+- **Dotfiles really are invisible.** `.hidden.md` and `.config/settings.json`
+  were left on disk untouched and produced zero rows in the store.
+- **The keystone refusal fires.** Deleting `identity.md` from disk produced a
+  `conflict`, the store kept it, and an ordinary subprompt deleted in the same
+  run was propagated normally. The following run re-created the keystone on
+  disk, because a refused entry never enters the manifest and so reads as
+  one-sided next time — which is the right recovery.
+- **Every run converged.** After each step, two further runs reported
+  `Already in step`.
+
+One defect was found while verifying, in code the sync does not own:
+`PATCH /api/v1/mount-points/[id]/blobs/[...path]` calls the **two-arg**
+`updateDescription`, which resolves the link with `WHERE fileId = ? LIMIT 1`.
+Captioning `photos/avatar_….webp` set the description on
+`images/history/avatar_….webp` instead, the two paths sharing a content row
+because the bytes are identical — the normal case for a character vault's
+avatar. The sync then correctly mirrored the caption to where it actually was.
+Filed separately; the route already holds the right `linkId` and need only
+pass it.

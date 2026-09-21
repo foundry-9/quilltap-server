@@ -219,6 +219,33 @@ Mount arguments accept the mount name (case-insensitive) or a UUID; ambiguous na
 
 `mvdir` calls `POST /api/v1/mount-points/{mountId}?action=move-folder` with `{fromPath, toPath}`. Fails with exit 2 if the destination already exists (`DEST_EXISTS`).
 
+## Sync a Store to a Directory
+
+`quilltap sync <store|qtap://store/> <path>` mirrors a **database-backed** document store and a directory on disk in both directions. Edit a file in your own editor and the next run carries it into the store; edit it in the Scriptorium and the next run carries it out.
+
+```bash
+quilltap sync Lore ~/Documents/lore --dry-run   # plan only
+quilltap sync Lore ~/Documents/lore             # apply
+quilltap sync Lore ~/Documents/lore --prefer disk
+```
+
+```text
+--dry-run             Plan and print; change nothing on either side
+--direction <which>   both (default), to-disk, or to-store
+--prefer <which>      newer (default), store, or disk — resolves conflicts
+--no-delete           Never propagate a deletion
+--no-manifest         Ignore .quilltap-sync.json (first-run rules every time)
+--json                Machine-readable plan and results
+```
+
+Compares by SHA-256 first and modification time second, so equal bytes with unequal clocks are re-stamped rather than re-copied. The side that changed wins; when both changed since the last run it is a `conflict` and nothing happens. Deletions propagate only when `.quilltap-sync.json` — a manifest the verb keeps in the directory — proves the entry was there at the last run; on a first run an entry present on one side is created on the other, never deleted.
+
+Files and folders whose names begin with a dot are **invisible in both directions**, the manifest being the one exception. A binary's description travels as `<file>.description.md` beside it. Bytes are preserved verbatim: a `.png` pushed from disk stays a `.png`, unlike a Scriptorium upload. Chunks and embedding vectors are never touched by the sync — the store's own post-write hooks re-index.
+
+Exit codes: `0` clean, `1` error or failed action, `2` unresolved conflict; `--dry-run` uses the same codes. Report lines go to stdout, warnings and the summary to stderr.
+
+Server-required (as `docs write` already is for database stores), and the path is resolved **on the server** — under Docker it must sit inside a bind mount (`quilltap docs docker-mounts`). Refused for a filesystem or Obsidian store, an archived character's vault, a store mid-conversion or mid-scan, and a manifest belonging to another store.
+
 ## Memories
 
 `quilltap memories` exposes the same Commonplace Book that each character carries — searchable, sortable, graphable, but never writable. All verbs open the main encrypted DB read-only.

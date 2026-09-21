@@ -4,6 +4,71 @@
 
 ### 4.10-dev
 
+#### New: `quilltap sync` mirrors a document store to a directory
+
+`npx quilltap sync <store> <path>` keeps a database-backed document store and a directory on disk
+in step, in both directions. Edit a file in your own editor and the next run carries it into the
+store; edit it in the Scriptorium and the next run carries it out.
+
+- Compares by SHA-256 first, modification time second. Equal bytes with unequal clocks are
+  re-stamped, not re-copied. After a content action both sides carry the winner's modified time and
+  the older of the two creation dates.
+- The side that changed wins. When both changed since the last run it is reported as a `conflict`
+  and nothing happens; `--prefer store` or `--prefer disk` resolves it.
+- Deletions propagate only when `.quilltap-sync.json` (a manifest the verb keeps in the directory)
+  shows the entry was there at the last run. On a first run, or with `--no-manifest`, an entry
+  present on one side is created on the other, never deleted. `--no-delete` suppresses propagation.
+- Files and folders whose names begin with a dot are invisible to the sync in both directions —
+  never copied, never deleted, on either side. `.quilltap-sync.json` is the one exception and never
+  enters the store.
+- A binary's description travels as `<file>.description.md` beside it. Editing the sidecar changes
+  the caption; deleting it clears the caption. Text documents' descriptions are not synced and are
+  reported once as a `skip`.
+- Byte-preserving: a `.png` pushed from disk is stored as a `.png` with the same sha, not converted
+  to WebP the way a Scriptorium upload would be.
+- Empty folders are real on both sides. Hard-linked paths converge in a single run.
+- Never reads or writes a chunk or an embedding vector. The store's existing post-write hooks
+  re-index, because the sync writes through the same chokepoints as every other writer.
+- Other flags: `--dry-run`, `--direction both|to-disk|to-store`, `--json`, `--port`. `--dry-run`
+  changes nothing on either side, including not creating the directory; it says a real run would.
+- Exit codes: 0 clean, 1 error or failed action, 2 unresolved conflict. `--dry-run` uses the same
+  codes, so a script can gate on a clean plan.
+- Refused for a filesystem or Obsidian store (it already is a directory), an archived character's
+  vault, a store mid-conversion or mid-scan, a second concurrent run, and a manifest belonging to
+  another store. A character vault's keystone files are never deleted from the store.
+- The server must be running, as it already must for `quilltap docs write` on a database store. The
+  path is resolved on the server: under Docker it must sit inside a bind mount.
+
+New API: `POST /api/v1/mount-points/[id]?action=sync`. Engine in `lib/mount-index/sync/`.
+Help: `help/cli-sync.md`.
+
+#### Fixed: writing a binary's bytes no longer blanks its description (bug 155)
+
+Re-uploading an image over an existing path in the Scriptorium file manager, running
+`quilltap docs write --force` on one, or copying a described image between stores erased its
+description, its auto-generated caption, and its extraction status. `linkBlobContent` treated an
+omitted metadata field as "set this to blank" on the update branch as well as the insert, and every
+byte-preserving writer omits them.
+
+An omitted field now means "keep what is there". An explicit empty description still clears it, and
+a fresh insert still defaults to blank.
+
+#### Fixed: overwriting a document no longer leaves the old chunks answering searches (bug 156)
+
+A text document overwritten through the file manager's upload, `docs write --force`, a cross-store
+copy, or a `doc_write_file` from an autonomous turn kept the previous revision's chunks. Semantic
+search, `doc_grep`'s chunk fallback, and character document recall went on returning passages from
+text that was no longer there, and nothing healed it short of `docs reindex --force`.
+
+- Repointing a link at different content now deletes that link's chunks and sets `chunkCount` to 0,
+  so the write announces itself. Hard-link siblings whose content moved are treated the same way.
+- `rescanDatabaseMountPoint`'s predicate (`chunkCount === 0 || not converted`) therefore catches
+  every un-re-chunked overwrite, including the in-child writes that defer chunking to it by design.
+  Its docstring, which described a sha-drift check the code never performed, now describes what it
+  does.
+- The byte-preserving writer in `file-ops` now runs the same post-write re-chunk that
+  `writeDatabaseDocument` does, factored into one shared helper.
+
 #### Docs: plan for `quilltap sync`, and two bugs filed
 
 - `docs/developer/features/cli-document-store-sync.md` is the approved plan for a new CLI verb that
