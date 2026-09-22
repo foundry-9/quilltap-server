@@ -193,6 +193,8 @@ quilltap db --mount-points --tables                 # Target the mount index DB
 
 The database is opened **read-only by default**. Add `--write` to make changes: it opens the database read-write, **claims the instance lock** (`<dataDir>/quilltap.lock`) for the duration, and releases it on exit. It **refuses — with no override — if a running server or another instance holds the lock**, so stop the server first. `--repl` is read-only unless combined with `--write`. Attempting a write without `--write` fails with a hint to re-run with the flag. What "held" means, and how to tell a live lock from a stale one, is [below](#locking).
 
+Compressed text columns (`chat_messages.content`, `llm_logs.request` / `response` and friends) are stored as BLOBs. Wrap them in `qt_text()` to read the text: `SELECT qt_text(content) …`.
+
 In the REPL, `.cols <table>` and `.find <text>` mirror the subcommand helpers.
 
 ## Locking

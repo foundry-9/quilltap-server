@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Fixed: `quilltap db` raw SQL and `--repl` can read compressed columns again (bug 162)
+
+- The low-level `db` path — raw SQL, `--repl`, `--tables`, `--count` — opened its own database
+  connection instead of going through `openEncryptedDb`, so it never registered `qt_text()`.
+  `SELECT qt_text(content) FROM chat_messages` answered `no such function: qt_text`, and every
+  `--write` against `chat_messages` failed the same way, because the search-index triggers call
+  that function on the new row. The subcommands (`messages`, `log`, `logs`) were never affected.
+- That path now opens through `openEncryptedDb` like everything else the CLI opens. One opener, so
+  the next function registered there reaches the REPL too.
+- `packages/quilltap/README.md` notes under **Low-level options** that compressed text columns are
+  BLOBs and need `qt_text()` to read as text.
+
 #### Fixed: the running summary no longer invents a name for a character (bug 161)
 
 The context summary is built by folding batches of turns into a running five-section record. The
