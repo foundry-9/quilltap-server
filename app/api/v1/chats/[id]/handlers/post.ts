@@ -11,6 +11,7 @@ import {
   handleAddTag,
   handleRemoveTag,
   handleRegenerateTitle,
+  handleRebuildSummary,
   handleImpersonate,
   handleSetActiveSpeaker,
   handleAddParticipantAction,
@@ -59,6 +60,7 @@ import type { RequestContext } from '@/lib/api/middleware';
 
 const CHAT_POST_ACTIONS = [
   'regenerate-title',
+  'rebuild-summary',
   'add-tag',
   'remove-tag',
   'impersonate',
@@ -131,6 +133,7 @@ export async function handlePost(
 
   const actionHandlers: Record<ChatPostAction, () => Promise<NextResponse>> = {
     'regenerate-title': () => handleRegenerateTitle(chatId, chat, ctx),
+    'rebuild-summary': () => handleRebuildSummary(chatId, chat, ctx),
     'add-tag': () => handleAddTag(req, chatId, ctx),
     'remove-tag': () => handleRemoveTag(req, chatId, ctx),
     impersonate: () => handleImpersonate(req, chatId, chat, ctx),

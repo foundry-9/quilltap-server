@@ -2270,6 +2270,23 @@ Get detailed cost breakdown for a chat.
 
 Regenerate chat title using AI.
 
+#### `POST /api/v1/chats/[id]?action=rebuild-summary`
+
+Discard the chat's running context summary and let the ordinary fold cadence rebuild it from turn 1. The operator's remedy for a summary that has gone wrong — most notably a speaker name the fold model invented and then carried forward (bug 161).
+
+**Request Body**: none.
+
+**Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" }`
+
+**Notes**:
+
+- Clears `contextSummary`, `summaryAnchorMessageIds` and `lastSummaryTurn` in a single update, then enqueues one `CONTEXT_SUMMARY` job with `forceRegenerate: false`.
+- `lastFullRebuildTurn` is deliberately **not** cleared. Zeroing it would put the next gate evaluation over `T_HARD_TURN_THRESHOLD` on any chat past turn 50 and route the rebuild into the single-shot `forceRegenerate` path, which puts every turn up to the tail floor into one request and will not fit a cheap model's window on a long chat.
+- The cheap-LLM profile is resolved the same way `regenerate-title` resolves it: the first `CHARACTER` participant's `connectionProfileId` when it names an available profile, otherwise the first available profile. `400` when the user has none.
+- Returns `409` on an autonomous room whose `runState` is `running` — its own turn loop owns the summary cadence; pause the room first.
+- Publishes `publishRealtime('chats', chatId)` so the Salon's summary panel re-reads.
+- The summary is empty from the moment this returns until the fold cadence has caught back up, in `FOLD_TURN_BATCH` steps. The transcript is untouched.
+
 #### `POST /api/v1/chats/[id]?action=add-tag`
 
 Add a tag to a chat.

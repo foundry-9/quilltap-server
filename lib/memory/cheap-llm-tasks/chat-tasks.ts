@@ -598,7 +598,7 @@ The summary tracks five sections:
 - Open questions: unanswered things in the air. Drop any the new turns answered. Carry forward the rest. Add new ones.
 - Timeline: dated one-liners of specific things that HAPPENED — visits, outings, arrivals, purchases, incidents. Format each line as "- YYYY-MM-DD (narrative: 'in-story time', only if the story runs on its own timeline): what happened, naming place and participants". Dates come from the timestamps on the new turns. APPEND-ONLY: carry forward every prior Timeline line unchanged and add new lines at the bottom. Cap at ~30 lines — when over, merge the OLDEST lines into coarser one-liners (never drop the dates). Standing facts, moods, and decisions do not belong here — only events.
 
-Rewrite the five sections in plain prose (the Timeline as its dated list). Be concise. Don't transcribe — synthesize. Use character names, not roles. Output only the five sections under their labels; no preamble, no closing remarks.`
+Rewrite the five sections in plain prose (the Timeline as its dated list). Be concise. Don't transcribe — synthesize. Refer to each speaker by the name on their turns. If a turn is labelled only by a role, keep that label; never invent a name for anyone. Output only the five sections under their labels; no preamble, no closing remarks.`
 
 export interface FoldSummaryInput {
   /** The previous running summary, or null when this is the first fold. */
@@ -607,8 +607,15 @@ export interface FoldSummaryInput {
    * New conversation turns to fold into the running summary. When a turn
    * carries `createdAt`, its date is rendered inline so the Timeline section
    * can date events from the transcript instead of guessing.
+   *
+   * `speaker` is the transcript label — a character name, or the `User` /
+   * `Character` fallback for a seat that could not be resolved (see
+   * `lib/chat/speaker-names.ts`). It is what the rendered transcript shows;
+   * `role` stays on the shape for callers that want it, but a bare LLM role
+   * never reaches the model, because a model told to summarize in names and
+   * given only roles will invent one (bug 161).
    */
-  newTurns: Array<ChatMessage & { createdAt?: string | null }>
+  newTurns: Array<ChatMessage & { speaker: string; createdAt?: string | null }>
 }
 
 /**
@@ -626,7 +633,7 @@ export async function foldChatSummary(
   const newTurnsText = input.newTurns
     .map(m => {
       const stamp = m.createdAt ? `[${m.createdAt.slice(0, 10)}] ` : ''
-      return `${stamp}${m.role.toUpperCase()}: ${m.content}`
+      return `${stamp}${m.speaker}: ${m.content}`
     })
     .join('\n\n')
 

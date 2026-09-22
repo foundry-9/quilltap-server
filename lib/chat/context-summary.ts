@@ -20,6 +20,7 @@ import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/
 import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
 import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
+import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 
 /**
  * Rolling-window summarization cadence.
@@ -288,11 +289,21 @@ export function partitionMessagesIntoTurns(
   return turns
 }
 
-function turnsToChatMessages(turns: FoldedTurn[]): Array<ChatMessage & { createdAt?: string | null }> {
-  const result: Array<ChatMessage & { createdAt?: string | null }> = []
+/**
+ * Render folded turns for the fold prompt. Every line carries a speaker label
+ * resolved from the chat's seats — a bare `USER:` / `ASSISTANT:` transcript is
+ * what let a model invent a name for the character nobody happened to address
+ * (bug 161).
+ */
+function turnsToChatMessages(
+  turns: FoldedTurn[],
+  names: SpeakerNames,
+): Array<ChatMessage & { speaker: string; createdAt?: string | null }> {
+  const result: Array<ChatMessage & { speaker: string; createdAt?: string | null }> = []
   for (const t of turns) {
     for (const m of t.messages) {
       result.push({
+        speaker: speakerLabel(m, names),
         role: m.role.toLowerCase() as 'user' | 'assistant',
         content: m.content,
         // Message dates feed the fold summary's Timeline section.
@@ -383,7 +394,17 @@ export async function generateContextSummary(
     }
 
     const turnsToFold = allTurns.slice(foldFromTurn - 1, foldThroughTurn)
-    const newTurnsContent = turnsToChatMessages(turnsToFold)
+    const speakerNames = await resolveSpeakerNames(chat)
+    const unresolvedParticipantIds = chat.participants
+      .filter(p => !speakerNames.has(p.id))
+      .map(p => p.id)
+    logger.debug('[Context Summary] Resolved speaker names for fold', {
+      chatId,
+      seatCount: chat.participants.length,
+      resolvedCount: speakerNames.size,
+      unresolvedParticipantIds,
+    })
+    const newTurnsContent = turnsToChatMessages(turnsToFold, speakerNames)
 
     if (newTurnsContent.length === 0) {
       return { success: false, error: 'No content in turns to fold', wasGenerated: false }

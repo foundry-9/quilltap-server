@@ -2,15 +2,26 @@
 
 | | |
 |---|---|
-| **Status** | **Open** — spec at [features/context-summary-speaker-names.md](../features/context-summary-speaker-names.md) |
+| **Status** | **FIXED in v4 (2026-09-21)** — design of record at [features/complete/context-summary-speaker-names.md](../../features/complete/context-summary-speaker-names.md) |
 | **Found** | 2026-09-21, live on the `Friday` instance, chat `358cabfe-00f4-459f-8fb4-22b080825824` ("Tuesday-Night Pie and a Dress in the Car") |
-| **Fixed** | — |
+| **Fixed** | 2026-09-21, v4.10-dev |
 | **Severity** | **Medium** — no data is lost and the transcript is untouched, but the summary is what a character reads about the conversation once the early turns have been compressed away, and it is wrong about who was in the room. The error compounds: every later fold carries the invented name forward under a "carry forward" instruction, and the model reads the character's real name, when it finally appears, as an alias |
 | **Who it bites** | every chat whose characters do not speak each other's names in the first ten turns. Two-seat chats between a character and the user's persona are the common case: the persona is addressed by name in dialogue and the character is not |
 | **Provenance** | Original to v4, from the rolling-window fold (the `FOLD_SUMMARY_PROMPT` rewrite). The transcript renderer was written against `ChatMessage`, which has a role and no seat, at the same time the prompt was written to demand names |
-| **Fix site** | `lib/chat/context-summary.ts:291` (`turnsToChatMessages` drops `participantId`), `lib/memory/cheap-llm-tasks/chat-tasks.ts:626` (renders `ROLE:` and asks for names); the working resolver to share is `lib/memory/fold-episode-pass.ts:89` |
+| **Fix site** | `lib/chat/speaker-names.ts` (new, shared), `lib/chat/context-summary.ts` (`turnsToChatMessages` takes the resolved names), `lib/memory/cheap-llm-tasks/chat-tasks.ts` (renders by speaker; prompt reworded), `lib/memory/fold-episode-pass.ts` (private resolver deleted), `app/api/v1/chats/[id]/actions/rebuild-summary.ts` (new action) |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+**FIXED in v4 (2026-09-21).** The fold's transcript now carries a speaker name on every line,
+resolved from the chat's seats through the one shared `resolveSpeakerNames` / `speakerLabel` in
+`lib/chat/speaker-names.ts` — the episode pass's private resolver, extracted and deleted from its
+old home so there is one implementation instead of two. A seat that cannot be resolved gets `User`
+or `Character`, and `FOLD_SUMMARY_PROMPT` now says to keep such a label rather than invent a name
+for anyone. `POST /api/v1/chats/[id]?action=rebuild-summary`, surfaced as **Rebuild Summary…** in
+the Salon's Organize drawer, discards a summary that is already wrong and lets the ordinary fold
+cadence refill it from turn 1; it refuses a running autonomous room and deliberately leaves
+`lastFullRebuildTurn` alone so the rebuild stays on the bounded fold path. No migration — a wrong
+name is not mechanically detectable. The write-up below is the original diagnosis.
 
 ## Symptom
 
@@ -53,7 +64,7 @@ to the episode pass; the context fold never got one.
 
 ## The fix
 
-Specified in [context-summary-speaker-names.md](../features/context-summary-speaker-names.md):
+Specified in [context-summary-speaker-names.md](../../features/complete/context-summary-speaker-names.md):
 one shared `resolveSpeakerNames` used by both passes, the fold transcript rendered by name, the
 prompt told to keep a role label rather than invent, and a `rebuild-summary` chat action so an
 operator can discard a poisoned summary without raw SQL. No migration: a wrong name is not

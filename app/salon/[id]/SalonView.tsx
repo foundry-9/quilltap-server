@@ -56,6 +56,7 @@ import {
   useModalState,
   useDraftPersistence,
   useMemoryActions,
+  useSummaryActions,
   useLLMLogs,
   useParticipants,
   useImpersonation,
@@ -465,6 +466,9 @@ export function SalonView({ chatId }: SalonViewProps) {
     setChatMemoryCount: chatDataHook.setChatMemoryCount,
     chat,
   })
+
+  // --- Summary actions hook ---
+  const summaryActions = useSummaryActions({ chatId: id })
 
   // --- LLM logs hook ---
   const llmLogs = useLLMLogs({
@@ -2007,6 +2011,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           onStateClick={modals.openStateEditor}
           onContinueChatClick={modals.openContinueChat}
           onMergeConversationClick={modals.openMergeConversation}
+          onRebuildSummaryClick={summaryActions.handleRebuildSummary}
           galleryCount={chatGalleryTotal}
           onGalleryClick={modals.openGallery}
           isAutonomousRoom={chat?.chatType === 'autonomous'}

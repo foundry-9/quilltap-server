@@ -25,6 +25,7 @@ import {
 } from './cheap-llm-tasks'
 import { createMemoryWithGate } from './memory-service'
 import { resolveEpisodicAnchors } from './episodic-anchors'
+import { resolveSpeakerNames, speakerLabel } from '@/lib/chat/speaker-names'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/types'
@@ -86,22 +87,12 @@ export async function runFoldEpisodePass(
       timelineMode: input.timelineMode,
     }
 
-    // Resolve speaker names per participant (raw read — survives a broken vault).
-    const speakerNames = new Map<string, string>()
-    for (const p of chat.participants) {
-      if (!p.characterId || speakerNames.has(p.id)) continue
-      try {
-        const character = await repos.characters.findByIdRaw(p.characterId)
-        if (character) speakerNames.set(p.id, character.name)
-      } catch {
-        // Name stays role-labelled below.
-      }
-    }
+    // Resolve speaker names per participant. Shared with the context-summary
+    // fold — see lib/chat/speaker-names.ts for why there is only one of these.
+    const speakerNames = await resolveSpeakerNames(chat)
 
     const rendered: FoldEpisodeMessage[] = windowMessages.map(m => ({
-      speaker:
-        (m.participantId ? speakerNames.get(m.participantId) : undefined) ??
-        (m.role === 'USER' ? 'User' : 'Character'),
+      speaker: speakerLabel(m, speakerNames),
       content: m.content ?? '',
       createdAt: m.createdAt ?? null,
     }))

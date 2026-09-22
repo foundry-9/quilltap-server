@@ -4,6 +4,31 @@
 
 ### 4.10-dev
 
+#### Fixed: the running summary no longer invents a name for a character (bug 161)
+
+The context summary is built by folding batches of turns into a running five-section record. The
+transcript handed to that fold was labelled `USER:` and `ASSISTANT:`, while the prompt above it said
+to use character names. On a chat where nobody happens to say a character's name out loud — a
+two-seat chat between a character and your persona is the usual case, since the character addresses
+you by name and nobody addresses the character — the model was asked to name a speaker it had no
+name for, and supplied one. Every later fold then carried the invention forward, and read the
+character's real name as an alias when it finally appeared.
+
+- Transcript lines handed to the fold now carry a speaker name, resolved from the chat's seats.
+  Removed and silent seats resolve too, so a message from a character who has since left the chat
+  still gets their name.
+- The resolver is shared with the fold-time episode pass, which had a private copy of it and was
+  already getting this right. There is now one implementation instead of two.
+- A seat that cannot be resolved — a broken character vault, an unattributed message — gets `User`
+  or `Character`, and the prompt now says to keep such a label rather than invent a name for it.
+- **New: Rebuild Summary…** in the Chat Sidebar's Organize drawer, for a summary that is already
+  wrong. It discards the summary and lets the normal fold cadence rebuild it from the first turn,
+  a few turns at a time. The chat has no summary until that catches up; the transcript is never
+  touched. An autonomous room that is running refuses the request — pause it first.
+
+Existing summaries are not rewritten. A wrong name cannot be told apart mechanically from a correct
+one, so rebuilding is applied where you see the symptom rather than everywhere.
+
 #### Docs: plan to fix the summarizer inventing names, and two bugs filed
 
 - `docs/developer/features/context-summary-speaker-names.md` is the plan for bug 161. The

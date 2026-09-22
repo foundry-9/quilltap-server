@@ -375,6 +375,30 @@ Press **Merge In**, and Quilltap attends to the formalities:
 
 Unlike a change of venue, no old messages are replayed into the running conversation — the recap stands in for the history, and the proceedings carry on uninterrupted.
 
+### Rebuilding the Running Summary
+
+As a conversation lengthens, the Librarian quietly folds its earlier passages into a running
+summary — five tidy sections standing in for turns long since compressed away. It is an excellent
+arrangement until the day you read the thing and find it confidently wrong: a character called by
+a name nobody in the room has ever used, an event misremembered, a resolution attributed to the
+wrong party. Once such an error is written down it is carried forward at every subsequent folding,
+politely and indefinitely, rather in the manner of a butler who has misheard a guest's name at the
+door and will go on announcing it that way until the end of time.
+
+The remedy is **Rebuild Summary…**, in the **Organize** drawer of the **Chat Sidebar**. Press it,
+confirm, and the Librarian's record of the conversation is struck out entirely — summary, its
+anchors, and the mark showing how far he had read.
+
+Be warned that the chat is genuinely without a summary for a short while afterwards. The Librarian
+does not sit down and re-read the whole conversation in a single sitting; he resumes his ordinary
+rhythm from the first turn, taking it in modest batches as the talk goes on, until he has caught up
+to within a few turns of the present moment. Expect the summary panel to sit empty and then refill
+over the next several exchanges. The transcript itself is never touched — not a word of what was
+actually said is at risk.
+
+An autonomous room that is mid-run declines the request, its clockwork having its own views on when
+the Librarian should be interrupted. Pause the room first, then rebuild at leisure.
+
 ## Advanced Features
 
 ### Memory Integration

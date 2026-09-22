@@ -1,7 +1,12 @@
 # Feature: the context summary names its speakers
 
-**Status:** proposed. Fixes [bug 161](../bugs/bug-161-summary-invents-a-name.md). Move this file
-to `features/complete/` and the bug to `bugs/fixed/` when it lands.
+**Status:** **complete** — landed in v4.10-dev on 2026-09-21. Design of record for
+[bug 161](../../bugs/fixed/bug-161-summary-invents-a-name.md).
+
+Built as specified, with one deviation: the Salon's **Rebuild Summary…** entry is wired through a
+new `hooks/useSummaryActions.ts` rather than `useModalState`. There is no modal — the confirm is a
+`showConfirmation` await, the same shape `useMemoryActions` uses for re-extract and delete — and
+`useModalState` holds only open/close booleans.
 
 ## The incident
 
@@ -34,7 +39,7 @@ Two functions, one omission:
 - `foldChatSummary` in [`lib/memory/cheap-llm-tasks/chat-tasks.ts:626`](../../../lib/memory/cheap-llm-tasks/chat-tasks.ts)
   renders `${role.toUpperCase()}: ${content}`, and its system prompt demands names.
 
-`fold-episode-pass.ts:89–107` already solves the identical problem for the episode pass: it builds a
+`fold-episode-pass.ts:89–107` already solved the identical problem for the episode pass: it builds a
 `participantId → character.name` map through `repos.characters.findByIdRaw` (a raw read that
 survives a broken vault) and renders `speaker:` per message, falling back to `User` / `Character`.
 That code is private to the episode pass.

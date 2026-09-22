@@ -6,6 +6,7 @@
 
 export { handleAddTag, handleRemoveTag } from './tags';
 export { handleRegenerateTitle } from './title';
+export { handleRebuildSummary } from './rebuild-summary';
 export {
   handleImpersonate,
   handleStopImpersonate,

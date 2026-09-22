@@ -220,6 +220,8 @@ export interface ChatSidebarProps {
   onStateClick?: () => void
   onContinueChatClick?: () => void
   onMergeConversationClick?: () => void
+  /** Discards the running context summary and lets the fold cadence rebuild it. */
+  onRebuildSummaryClick?: () => void
   /** How many images the chat's gallery holds — `total` from `useChatGallery`. */
   galleryCount?: number
   onGalleryClick?: () => void
@@ -569,6 +571,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             onStateClick={props.onStateClick}
             onContinueChatClick={props.onContinueChatClick}
             onMergeConversationClick={props.onMergeConversationClick}
+            onRebuildSummaryClick={props.onRebuildSummaryClick}
             galleryCount={props.galleryCount}
             onGalleryClick={props.onGalleryClick}
             isAutonomousRoom={props.isAutonomousRoom}
@@ -1548,6 +1551,7 @@ interface OrganizeSectionProps {
   onStateClick?: () => void
   onContinueChatClick?: () => void
   onMergeConversationClick?: () => void
+  onRebuildSummaryClick?: () => void
   galleryCount?: number
   onGalleryClick?: () => void
   isAutonomousRoom?: boolean
@@ -1560,6 +1564,7 @@ function OrganizeSection({
   onStateClick,
   onContinueChatClick,
   onMergeConversationClick,
+  onRebuildSummaryClick,
   galleryCount = 0,
   onGalleryClick,
   isAutonomousRoom = false,
@@ -1638,6 +1643,18 @@ function OrganizeSection({
         >
           <Icon name="user-plus" className="w-4 h-4" />
           <span>Merge In…</span>
+        </button>
+      )}
+
+      {onRebuildSummaryClick && (
+        <button
+          type="button"
+          onClick={onRebuildSummaryClick}
+          className="qt-tool-palette-button"
+          title="Discard the running summary and rebuild it from the start of the conversation"
+        >
+          <Icon name="refresh" className="w-4 h-4" />
+          <span>Rebuild Summary…</span>
         </button>
       )}
 
