@@ -11,6 +11,7 @@ const {
   printDefaultInstanceHint,
   promptPassphrase,
   loadDbKey,
+  openEncryptedDb,
 } = require('../lib/db-helpers');
 const { resolveInstance } = require('../lib/instances');
 const { resolveModuleDir, ensureNativeModules, ensureDatabaseNativeModule } = require('../lib/native-modules');
@@ -982,9 +983,10 @@ async function dbCommand(args) {
   }
 
   let dbFilename;
-  if (useLlmLogs) dbFilename = 'quilltap-llm-logs.db';
-  else if (useMountPoints) dbFilename = 'quilltap-mount-index.db';
-  else dbFilename = 'quilltap.db';
+  let dbFriendlyName;
+  if (useLlmLogs) { dbFilename = 'quilltap-llm-logs.db'; dbFriendlyName = 'LLM logs database'; }
+  else if (useMountPoints) { dbFilename = 'quilltap-mount-index.db'; dbFriendlyName = 'mount index database'; }
+  else { dbFilename = 'quilltap.db'; dbFriendlyName = 'main database'; }
   const dbPath = path.join(dataDir, dbFilename);
 
   if (!fs.existsSync(dbPath)) {
@@ -1014,27 +1016,16 @@ async function dbCommand(args) {
     }
   }
 
-  // Open database — prefer SQLCipher-capable build
-  let Database;
+  // Open through the one shared opener. It picks the SQLCipher-capable build,
+  // keys the connection, verifies it, and — the reason the low-level path may
+  // not roll its own — registers qt_text(). Without it raw SQL cannot read
+  // inside a compressed text column, and a --write to chat_messages fails
+  // outright because the search-index triggers call it (bug 162).
+  let db;
   try {
-    Database = require('better-sqlite3-multiple-ciphers');
-  } catch {
-    Database = require('better-sqlite3');
-  }
-  const db = new Database(dbPath, { readonly: !writable });
-
-  if (pepper) {
-    const keyHex = Buffer.from(pepper, 'base64').toString('hex');
-    db.pragma(`key = "x'${keyHex}'"`);
-  }
-
-  try {
-    // Verify database is readable
-    db.prepare('SELECT 1').get();
+    db = openEncryptedDb(dbPath, pepper, { readonly: !writable, friendlyName: dbFriendlyName });
   } catch (err) {
-    console.error(`Cannot open database: ${err.message}`);
-    console.error('The database may be encrypted with a different key, or the .dbkey file may be missing.');
-    db.close();
+    console.error(err.message);
     process.exit(1);
   }
 
