@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Docs: plan to fix the summarizer inventing names, and two bugs filed
+
+- `docs/developer/features/context-summary-speaker-names.md` is the plan for bug 161. The
+  context-summary fold currently renders its transcript as `USER:` / `ASSISTANT:` while its prompt
+  says to use character names, so a character who is never named in the first ten turns gets a
+  name invented for them, and every later fold carries it forward. The plan shares the episode
+  pass's seat-to-name resolver with the fold, labels transcript lines by name, tells the prompt to
+  keep a role label rather than invent, and adds a `rebuild-summary` chat action and Salon menu
+  entry for summaries already poisoned. No migration: a wrong name is not mechanically detectable.
+- Bug 161 (open): the running summary of a `Friday` chat calls one of its two characters
+  "Vivienne", a name that appears in no message and belongs to no character.
+- Bug 162 (open): the CLI's raw-SQL, `--repl` and `--write` path opens its own connection without
+  `qt_text()`, so it cannot read a compressed column and every `--write` on `chat_messages` fails,
+  because the search-index triggers call that function. The subcommands are unaffected.
+
 #### Changed: message search is an index probe, and conversation text takes about a third less disk
 
 Two changes that only work together. Global message search used to be a `LIKE '%...%'` scan of every
