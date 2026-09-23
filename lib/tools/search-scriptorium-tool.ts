@@ -221,3 +221,65 @@ export const searchScriptoriumBrahmaToolDefinition = {
     parameters: zodToOpenAISchema(searchScriptoriumBrahmaToolInputSchema),
   },
 }
+
+// ============================================================================
+// Scenario Builder variant — documents and knowledge only
+// ============================================================================
+
+/**
+ * Zod schema for the search tool as exposed to **The Host's Scenario Builder**
+ * — a character-less, pre-chat tool loop that reads the stores a chat with the
+ * chosen cast could see. Only `documents` and `knowledge` are offered: there
+ * are no memories to recall and no conversations to consult. The pool is fixed
+ * by the caller (cast vaults, their groups' stores, the project's stores,
+ * Quilltap General), so `scope` narrows within it.
+ */
+export const searchScriptoriumScenarioToolInputSchema = z.object({
+  query: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe(
+      'What to look up in the document stores: a place, its history, a custom, an event, a season. Be specific.'
+    ),
+  sources: z
+    .array(z.enum(['documents', 'knowledge']))
+    .describe(
+      'Which layers to search. Defaults to both. "documents" searches every file in every reachable store; "knowledge" searches only files under a `Knowledge/` folder inside those stores, tagged by tier.'
+    )
+    .optional(),
+  scope: z
+    .enum(['all', 'project', 'character', 'group'])
+    .default('all')
+    .describe(
+      '"all" (the default) searches every reachable store. "character" narrows to the cast\'s character vaults, "group" to their groups\' stores, "project" to the project\'s stores.'
+    )
+    .optional(),
+  limit: llmNumber(
+    z
+      .number()
+      .int()
+      .min(1)
+      .max(20)
+      .describe('Maximum number of results to return. Default is 10.')
+  )
+    .default(10)
+    .optional(),
+})
+
+export type SearchScriptoriumScenarioToolInput = z.infer<typeof searchScriptoriumScenarioToolInputSchema>
+
+/**
+ * Scenario Builder search tool definition. Same tool name (`search`) and
+ * handler as the standard search; the handler enforces the documents-only
+ * restriction defensively when it is given a pre-built mount pool.
+ */
+export const searchScriptoriumScenarioToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'search',
+    description:
+      'Search the document stores reachable for this scene — the cast\'s character vaults, their groups\' stores, the project\'s stores, and the instance-wide Quilltap General store. Use the `knowledge` source to confine the search to `Knowledge/` folders. Use it to find the place, its history, its customs, and what the given time means there.',
+    parameters: zodToOpenAISchema(searchScriptoriumScenarioToolInputSchema),
+  },
+}

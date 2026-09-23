@@ -264,6 +264,17 @@ export function ChatSidebar(props: ChatSidebarProps) {
   )
   const singleLlmCharacterId = llmCharacterIds.length === 1 ? llmCharacterIds[0] : null
 
+  // Everyone present, whoever holds the reins, for the Scenario Builder: the
+  // user's persona has a vault and groups too. Archived characters are
+  // tombstones and lend the Host nothing.
+  const castCharacters = useMemo(
+    () =>
+      participants
+        .filter((p) => p.status !== 'removed' && p.character?.id && !p.character.archivedAt)
+        .map((p) => ({ id: p.character!.id, name: p.character!.name })),
+    [participants]
+  )
+
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
 
@@ -521,6 +532,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
             scenarioText={props.scenarioText}
             llmCharacterIds={llmCharacterIds}
             singleLlmCharacterId={singleLlmCharacterId}
+            castCharacters={castCharacters}
             onProjectClick={props.onProjectClick}
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
@@ -893,6 +905,8 @@ interface ChatSectionProps {
   llmCharacterIds: string[]
   /** The lone LLM character's ID, or null when several share the room. */
   singleLlmCharacterId: string | null
+  /** Every present character (any controller), for the Scenario Builder. */
+  castCharacters: Array<{ id: string; name: string }>
   onProjectClick?: () => void
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
@@ -918,6 +932,7 @@ function ChatSection({
   scenarioText,
   llmCharacterIds,
   singleLlmCharacterId,
+  castCharacters,
   onProjectClick,
   imageProfileId,
   alertCharactersOfLanternImages,
@@ -1201,6 +1216,8 @@ function ChatSection({
         scenarioText={scenarioText}
         llmCharacterIds={llmCharacterIds}
         singleLlmCharacterId={singleLlmCharacterId}
+        castCharacters={castCharacters}
+        projectName={projectName}
         enabled={hasEverOpened}
         onChatUpdated={onChatUpdated}
       />

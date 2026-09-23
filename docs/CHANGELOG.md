@@ -4,6 +4,51 @@
 
 ### 4.10-dev
 
+#### Fixed: creating a character scenario returned an id that was never stored (bug 165)
+
+- `CharactersRepository.addScenario` returned the id it minted, but a vault-backed character
+  re-keys scenarios from their file path on read, so `POST /api/v1/characters/[id]/scenarios`
+  returned an id nothing else would ever see. It now re-reads and returns the projected entry.
+
+#### Fixed: the workspace New Chat dialog never offered group scenarios (bug 166)
+
+- `NewChatModal` did not pass `groupScenarios` to `NewChatForm`; the `/salon/new` page did.
+
+#### Added: Scenario Builder — the Host researches and drafts a starting scene
+
+- New **Ask the Host to set the scene** button beside the scenario text on the New Chat form
+  (page and workspace dialog) and in the Salon sidebar's Scenario control. The dialog takes
+  mode (real / in-world), location, time and optional details, plus a connection profile
+  (the default is preselected; profiles with tool use off are listed but disabled).
+- `POST /api/v1/scenario-builder?action=build` runs an ephemeral tool loop in the parent
+  process and streams tool events, reasoning and a terminal `done` carrying the scene over SSE.
+  Closing the request aborts the loop. `GET ?action=capabilities` reports whether web search and
+  curl are configured. Nothing is persisted except LLM log rows, now typed `SCENARIO_BUILDER`.
+- Tool slate: `search` (documents and knowledge only — new builder variant), the five read-only
+  `doc_*` tools, and `submit_final_response`; real mode adds `search_web` (when the profile
+  allows it and a provider is configured) and `curl`. In-world mode never gets the web.
+- Tools are scoped to what the chat could see: the cast's vaults, the union of their groups'
+  stores, the project's stores and Quilltap General, via a new `mountPool` on the tool, search
+  and doc-edit contexts (`resolveScenarioBuilderMountPool`). `mountPool` and `operatorSurface`
+  are mutually exclusive. `doc_grep` / `doc_list_files` accept a `mountPool` in place of a
+  project.
+- The prompt requires a cast-agnostic scene (no names, no placeholders, present tense) of about
+  1,000 tokens or fewer. The review pane is an editable draft with Revise, **Use this scene**
+  (fills the custom text; in-chat, **Change scenario** still persists it and the Host announces
+  the revision) and **Save as scenario…** to General, the project, a cast member's group, or a
+  cast character's own scenarios; the picker then selects the saved preset when its re-read
+  tier lists it (`useNewChat().refetchScenarioTiers` returns the fresh tiers for that check).
+- Refactors: the Brahma one-shot loop moved to `runOneShotToolLoop`
+  (`lib/services/agent-loop/one-shot-loop.ts`), shared by `runBrahmaQuery` and the builder.
+  `buildTools` takes `docToolsMode: 'off' | 'read' | 'full'` in place of the document-editing
+  boolean and an extras argument (`pluginToolAllowlist`, `documentsOnlySearch`, `webSearch`);
+  `streamMessage` takes an optional `logType`. The Brahma Console's SSE parsing moved to
+  `components/agent-stream/parse-agent-stream.ts`, shared with the builder's hook.
+- `GET /api/v1/groups` accepts `?characterIds=` to list only those characters' groups.
+- `useConnectionProfiles` now maps `isDefault`, `allowToolUse` and `allowWebSearch`.
+- Help: new `help/scenario-builder.md`; pointers from chats, general scenarios and project
+  scenarios.
+
 #### Docs: plan for the Scenario Builder
 
 - Added `docs/developer/features/scenario-builder.md`, the handoff spec for a Host-run scenario

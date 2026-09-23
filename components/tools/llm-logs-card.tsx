@@ -42,6 +42,7 @@ export default function LLMLogsCard() {
       'IMAGE_DESCRIPTION': 'Image Desc',
       'CUSTOM_TOOL_CONSULT': 'Custom Tool',
       'VOICE_REWRITE': 'Voice Rewrite',
+      'SCENARIO_BUILDER': 'Scenario Builder',
     }
     return labels[type] || type
   }

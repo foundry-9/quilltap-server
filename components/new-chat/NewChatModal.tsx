@@ -107,11 +107,13 @@ export function NewChatModal({
     project,
     projectScenarios,
     generalScenarios,
+    groupScenarios,
     roleplayTemplates,
     defaultRoleplayTemplateId,
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
+    refetchScenarioTiers,
     selectedCharacters,
     setSelectedCharacters,
     state,
@@ -244,6 +246,7 @@ export function NewChatModal({
               project={project}
               projectScenarios={projectScenarios}
               generalScenarios={generalScenarios}
+              groupScenarios={groupScenarios}
               roleplayTemplates={roleplayTemplates}
               defaultRoleplayTemplateId={defaultRoleplayTemplateId}
               availableProjects={isContinuation ? undefined : availableProjects}
@@ -254,6 +257,7 @@ export function NewChatModal({
               continuationFromChatId={continuationFromChatId ?? null}
               previousOutfitSummary={previousOutfitSummary}
               autonomousSettingsHint={autonomousHint}
+            onScenarioTiersChanged={refetchScenarioTiers}
             />
           </div>
         )}

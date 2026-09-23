@@ -52,7 +52,11 @@ import { requestFullContextToolDefinition } from '../request-full-context-tool'
 import { rngToolDefinition } from '../rng-tool'
 import { runCustomToolDefinition } from '../run-custom-tool'
 import { runSqlToolDefinition } from '../run-sql-tool'
-import { searchScriptoriumToolDefinition, searchScriptoriumBrahmaToolDefinition } from '../search-scriptorium-tool'
+import {
+  searchScriptoriumToolDefinition,
+  searchScriptoriumBrahmaToolDefinition,
+  searchScriptoriumScenarioToolDefinition,
+} from '../search-scriptorium-tool'
 import { selfInventoryToolDefinition } from '../self-inventory-tool'
 import { stateToolDefinition } from '../state-tool'
 import { submitFinalResponseToolDefinition } from '../submit-final-response-tool'
@@ -113,6 +117,7 @@ const ALL_TOOLS = {
   runSql: runSqlToolDefinition,
   searchScriptorium: searchScriptoriumToolDefinition,
   searchScriptoriumBrahma: searchScriptoriumBrahmaToolDefinition,
+  searchScriptoriumScenario: searchScriptoriumScenarioToolDefinition,
   selfInventory: selfInventoryToolDefinition,
   state: stateToolDefinition,
   submitFinalResponse: submitFinalResponseToolDefinition,

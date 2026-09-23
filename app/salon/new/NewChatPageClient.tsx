@@ -28,6 +28,7 @@ export function NewChatPageClient() {
     groupScenarios,
     showArchivedScenarios,
     setShowArchivedScenarios,
+    refetchScenarioTiers,
     roleplayTemplates,
     defaultRoleplayTemplateId,
     availableProjects,
@@ -138,6 +139,7 @@ export function NewChatPageClient() {
             creating={creating}
             showSingleCharacterControls={false}
             autonomousSettingsHint={autonomousHint}
+            onScenarioTiersChanged={refetchScenarioTiers}
           />
         </div>
 

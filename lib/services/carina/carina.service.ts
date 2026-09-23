@@ -637,7 +637,7 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
       answerer.defaultHelpToolsEnabled === true, // helpToolsEnabled
       false, // canDressThemselves — Carina does not dress the answerer
       false, // canCreateOutfits
-      documentEditingEnabled,
+      documentEditingEnabled ? 'full' : 'off',
     );
     const tools = built.tools.filter((t) => {
       const name =

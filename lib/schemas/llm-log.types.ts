@@ -36,6 +36,7 @@ export const LLMLogTypeEnum = z.enum([
   'ANSWER_CONFIRMATION',
   'CUSTOM_TOOL_CONSULT',
   'VOICE_REWRITE',
+  'SCENARIO_BUILDER',
 ]);
 export type LLMLogType = z.infer<typeof LLMLogTypeEnum>;
 

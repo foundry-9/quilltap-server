@@ -141,6 +141,7 @@ import {
   TerminalToolError,
   type TerminalToolError as TerminalToolErrorType,
 } from '@/lib/tools/handlers/terminal-handler';
+import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
 export interface ToolCallRequest {
   name: string;
@@ -242,6 +243,14 @@ export interface ToolExecutionContext {
    * unchanged.
    */
   operatorSurface?: boolean;
+  /**
+   * A pre-built accessible set — "what this chat could see" before the chat
+   * exists — for a character-less tool loop (the Scenario Builder; built by
+   * `resolveScenarioBuilderMountPool`). Copied onto the `search` and `doc_*`
+   * contexts, where it replaces pool resolution. Mutually exclusive with
+   * `operatorSurface`: the executor refuses a context that sets both.
+   */
+  mountPool?: TieredMountPool;
 }
 
 /**
@@ -297,6 +306,22 @@ export async function executeToolCallWithContext(
   context: ToolExecutionContext
 ): Promise<ToolResult> {
   const { chatId, userId, imageProfileId, characterId, embeddingProfileId } = context;
+
+  // A pre-built pool narrows; the operator surface widens. A context carrying
+  // both is a caller bug — refuse rather than guess which one was meant.
+  if (context.mountPool && context.operatorSurface) {
+    logger.error('Tool context sets both mountPool and operatorSurface; refusing', {
+      context: 'tool-executor',
+      toolName: toolCall.name,
+      chatId,
+    });
+    return {
+      toolName: toolCall.name,
+      success: false,
+      result: null,
+      error: 'Tool context is misconfigured (mountPool and operatorSurface are mutually exclusive).',
+    };
+  }
 
   try {
     // Check if this is a built-in tool - these are handled later in this function
@@ -993,7 +1018,7 @@ export async function executeToolCallWithContext(
       // Character surfaces require a character (memories/conversations are
       // per-character). The operator surface (Brahma Console) is character-less:
       // it searches operator-wide and never touches memories.
-      if (!characterId && !context.operatorSurface) {
+      if (!characterId && !context.operatorSurface && !context.mountPool) {
         return {
           toolName: 'search',
           success: false,
@@ -1008,6 +1033,7 @@ export async function executeToolCallWithContext(
         embeddingProfileId,
         projectId: context.projectId,
         operatorSurface: context.operatorSurface,
+        mountPool: context.mountPool,
       };
 
       const result = await executeSearchScriptoriumTool(toolCall.arguments, searchContext);
@@ -1119,6 +1145,7 @@ export async function executeToolCallWithContext(
         characterId,
         // Operator surface (Brahma Console): resolve against every enabled store.
         operatorOverride: context.operatorSurface,
+        mountPool: context.mountPool,
       };
 
       const result = await executeDocEditTool(toolCall.name, toolCall.arguments, docEditContext);

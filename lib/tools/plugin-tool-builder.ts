@@ -45,6 +45,7 @@ import {
 import {
   searchScriptoriumToolDefinition,
   searchScriptoriumBrahmaToolDefinition,
+  searchScriptoriumScenarioToolDefinition,
 } from '@/lib/tools/search-scriptorium-tool';
 import { runSqlToolDefinition } from '@/lib/tools/run-sql-tool';
 import {
@@ -178,6 +179,9 @@ function applyImageConstraintsToTool(
   return result;
 }
 
+/** Which `doc_*` tools a surface is offered. See `BuildToolsOptions.docToolsMode`. */
+export type DocToolsMode = 'off' | 'read' | 'full';
+
 /**
  * Options for building tools for a provider
  */
@@ -254,8 +258,23 @@ export interface BuildToolsOptions {
   /** Whether to enable submit_final_response tool (for agent mode) */
   agentMode?: boolean;
 
-  /** Whether to enable document editing tools (Scriptorium Phase 3.3) */
-  documentEditing?: boolean;
+  /**
+   * Which `doc_*` tools to build (Scriptorium Phase 3.3). `'full'` is the whole
+   * family — reads, writes, document-UI and photo tools. `'read'` is the five
+   * read-only tools alone (`doc_read_file`, `doc_grep`, `doc_list_files`,
+   * `doc_read_frontmatter`, `doc_read_heading`) for a surface with no chat row
+   * to open documents in and nothing it may write (the Scenario Builder).
+   * `'off'` (the default) builds none.
+   */
+  docToolsMode?: DocToolsMode;
+
+  /**
+   * When present, only plugin tools whose name is listed are built. Applied at
+   * construction, never as a post-filter. The Scenario Builder passes
+   * `['curl']` (real mode) or `[]` (in-world). Absent means every configured
+   * plugin tool.
+   */
+  pluginToolAllowlist?: string[];
 
   /** Whether to include tools from the tool registry (plugin tools) */
   includePluginTools?: boolean;
@@ -283,6 +302,13 @@ export interface BuildToolsOptions {
    * tool, which can search memories).
    */
   excludeMemorySearch?: boolean;
+
+  /**
+   * When true, the `search` tool is built from its **Scenario Builder**
+   * variant, whose `sources` enum is `documents | knowledge` only. Takes
+   * precedence over `excludeMemorySearch`.
+   */
+  documentsOnlySearch?: boolean;
 
   /**
    * When true, include the `run_sql` tool — read-only SQL access to the three
@@ -345,7 +371,9 @@ export async function buildToolsForProvider(
       wardrobeCreate: options.wardrobeCreate,
       wardrobeUpdate: options.wardrobeUpdate,
       wardrobeArchive: options.wardrobeArchive,
-      documentEditing: options.documentEditing,
+      docToolsMode: options.docToolsMode ?? 'off',
+      pluginToolAllowlist: options.pluginToolAllowlist,
+      documentsOnlySearch: options.documentsOnlySearch,
       includePluginTools: options.includePluginTools,
       askCarina: options.askCarina,
       sqlAccess: options.sqlAccess,
@@ -444,10 +472,13 @@ export async function buildToolsForProvider(
 
   // Unified search — available on every surface. The Brahma variant drops the
   // `memories` source so the console can never search memories.
+  // The Scenario Builder variant narrows further to documents/knowledge.
   universalTools.push(
-    (options.excludeMemorySearch
-      ? searchScriptoriumBrahmaToolDefinition
-      : searchScriptoriumToolDefinition) as UniversalTool
+    (options.documentsOnlySearch
+      ? searchScriptoriumScenarioToolDefinition
+      : options.excludeMemorySearch
+        ? searchScriptoriumBrahmaToolDefinition
+        : searchScriptoriumToolDefinition) as UniversalTool
   );
 
   // Read-only SQL access — Brahma Console only. Execution is additionally gated
@@ -501,8 +532,17 @@ export async function buildToolsForProvider(
     universalTools.push(submitFinalResponseToolDefinition as UniversalTool);
   }
 
-  // Add document editing tools if enabled (Scriptorium Phase 3.3)
-  if (options.documentEditing) {
+  // Document tools (Scriptorium Phase 3.3). 'read' builds the read-only five
+  // and nothing else — no writes, no document-UI tools (they need a real chat
+  // row), no photo tools.
+  const docToolsMode: DocToolsMode = options.docToolsMode ?? 'off';
+  if (docToolsMode === 'read') {
+    universalTools.push(docReadFileTool as UniversalTool);
+    universalTools.push(docGrepTool as UniversalTool);
+    universalTools.push(docListFilesTool as UniversalTool);
+    universalTools.push(docReadFrontmatterTool as UniversalTool);
+    universalTools.push(docReadHeadingTool as UniversalTool);
+  } else if (docToolsMode === 'full') {
     universalTools.push(docReadFileTool as UniversalTool);
     universalTools.push(docWriteFileTool as UniversalTool);
     universalTools.push(docStrReplaceTool as UniversalTool);
@@ -534,9 +574,13 @@ export async function buildToolsForProvider(
     // Get configured tool definitions from the tool registry (async for multi-tool plugins)
     const toolConfigs = options.toolConfigs || new Map();
     const pluginToolDefs = await toolRegistry.getConfiguredToolDefinitions(toolConfigs);
+    const allowlist = options.pluginToolAllowlist ? new Set(options.pluginToolAllowlist) : null;
+    const admitted = allowlist
+      ? pluginToolDefs.filter((def) => allowlist.has((def as UniversalTool).function?.name))
+      : pluginToolDefs;
 
-    if (pluginToolDefs.length > 0) {
-      universalTools.push(...pluginToolDefs);
+    if (admitted.length > 0) {
+      universalTools.push(...admitted);
     }
   }
 

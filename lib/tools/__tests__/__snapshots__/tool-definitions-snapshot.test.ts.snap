@@ -1521,6 +1521,53 @@ exports[`tool definitions: derived OpenAI parameters searchScriptoriumBrahma: pa
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters searchScriptoriumScenario: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 10,
+      "description": "Maximum number of results to return. Default is 10.",
+      "maximum": 20,
+      "minimum": 1,
+      "type": "integer",
+    },
+    "query": {
+      "description": "What to look up in the document stores: a place, its history, a custom, an event, a season. Be specific.",
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "scope": {
+      "default": "all",
+      "description": ""all" (the default) searches every reachable store. "character" narrows to the cast's character vaults, "group" to their groups' stores, "project" to the project's stores.",
+      "enum": [
+        "all",
+        "project",
+        "character",
+        "group",
+      ],
+      "type": "string",
+    },
+    "sources": {
+      "description": "Which layers to search. Defaults to both. "documents" searches every file in every reachable store; "knowledge" searches only files under a \`Knowledge/\` folder inside those stores, tagged by tier.",
+      "items": {
+        "enum": [
+          "documents",
+          "knowledge",
+        ],
+        "type": "string",
+      },
+      "type": "array",
+    },
+  },
+  "required": [
+    "query",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters selfInventory: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

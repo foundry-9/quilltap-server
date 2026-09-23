@@ -273,6 +273,7 @@ export {
 export {
   buildToolsForProvider,
   type BuildToolsOptions,
+  type DocToolsMode,
 } from './plugin-tool-builder';
 
 // Wardrobe Tools (Modular Wardrobe System)

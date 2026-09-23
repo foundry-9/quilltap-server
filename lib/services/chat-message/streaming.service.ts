@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider, type LLMMessage } from '@/lib/llm'
-import { buildToolsForProvider, checkModelSupportsTools } from '@/lib/tools'
+import { buildToolsForProvider, checkModelSupportsTools, type DocToolsMode } from '@/lib/tools'
 import { getRepositories } from '@/lib/repositories/factory'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -18,6 +18,7 @@ import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
 import { withStallWatchdog } from '@/lib/llm/stream-watchdog'
 import { resolveCustomToolRoster, type RosterContext, type DiscoveredCustomTool } from '@/lib/pascal/custom-tools'
 import type { ConnectionProfile, ImageProfile, MessageEvent } from '@/lib/schemas/types'
+import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { BuiltContext } from '@/lib/chat/context-manager'
 import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { StreamingResult, StreamingState, ReasoningSegment } from './types'
@@ -56,6 +57,8 @@ export interface StreamOptions {
    * `stop_sequences`, Google: `stopSequences`). Pseudo-tool strategies that
    * want a hard termination on their closing marker set this. */
   stop?: string[]
+  /** LLM log row type for this call. Defaults to `CHAT_MESSAGE`. */
+  logType?: LLMLogType
 }
 
 /**
@@ -133,6 +136,19 @@ function isToolDisabled(
 }
 
 /**
+ * Surface-specific narrowing for `buildTools`. Every field only ever removes
+ * tools relative to the positional flags and the profile.
+ */
+export interface BuildToolsExtras {
+  /** Only these plugin tools are built (e.g. `['curl']`); absent = all configured. */
+  pluginToolAllowlist?: string[]
+  /** Build the documents/knowledge-only `search` variant (Scenario Builder). */
+  documentsOnlySearch?: boolean
+  /** `false` withholds `search_web` even when the profile allows it. */
+  webSearch?: boolean
+}
+
+/**
  * Build tools for the provider
  */
 export async function buildTools(
@@ -158,8 +174,12 @@ export async function buildTools(
   canDressThemselves?: boolean,
   /** Whether this character can create new outfits (enables wardrobe_create, wardrobe_update, and wardrobe_archive) */
   canCreateOutfits?: boolean,
-  /** Whether document editing tools are enabled (project has linked document stores or files) */
-  documentEditingEnabled?: boolean,
+  /**
+   * Which `doc_*` tools to build: `'full'` (the whole family — chat surfaces
+   * with linked stores, the Brahma Console), `'read'` (the read-only five — the
+   * Scenario Builder), or `'off'`.
+   */
+  docToolsMode?: DocToolsMode,
   /** Whether the ask_carina tool is enabled for this character */
   askCarinaEnabled?: boolean,
   /**
@@ -191,7 +211,9 @@ export async function buildTools(
    * turns: a `.tool.json` edited mid-chat must be live on the next call (see
    * the freshness note atop `lib/pascal/custom-tools.ts`).
    */
-  customToolContext?: RosterContext | null
+  customToolContext?: RosterContext | null,
+  /** Surface-specific narrowing, applied at construction (never a post-filter). */
+  extras?: BuildToolsExtras
 ): Promise<{
   tools: unknown[]
   modelSupportsNativeTools: boolean
@@ -263,7 +285,8 @@ export async function buildTools(
   let tools = await buildToolsForProvider(connectionProfile.provider, {
     imageGeneration: !!imageProfileId,
     imageProviderType: imageProfile?.provider,
-    webSearch: connectionProfile.allowWebSearch,
+    // A surface may narrow web search further (never widen it past the profile).
+    webSearch: !!connectionProfile.allowWebSearch && extras?.webSearch !== false,
     projectInfo: !!projectId,
     requestFullContext: !!requestFullContext,
     agentMode: !!agentModeEnabled,
@@ -278,7 +301,9 @@ export async function buildTools(
     wardrobeUpdate: canCreateOutfits !== false,
     wardrobeArchive: canCreateOutfits !== false,
     whisper: !!isMultiCharacter,
-    documentEditing: !!documentEditingEnabled,
+    docToolsMode: docToolsMode ?? 'off',
+    pluginToolAllowlist: extras?.pluginToolAllowlist,
+    documentsOnlySearch: !!extras?.documentsOnlySearch,
     askCarina: askCarinaEnabled,
     includeWorkspaceTools: includeWorkspaceTools !== false,
     excludeMemorySearch: !!excludeMemorySearch,
@@ -360,7 +385,7 @@ export async function* streamMessage(
   thoughtSignature?: string
   reasoningContent?: string
 }> {
-  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop } = options
+  const { messages, connectionProfile, apiKey, modelParams, tools, useNativeWebSearch, userId, messageId, chatId, characterId, previousResponseId, stop, logType = 'CHAT_MESSAGE' } = options
 
   const provider = await createLLMProvider(
     connectionProfile.provider,
@@ -456,7 +481,7 @@ export async function* streamMessage(
 
         logLLMCall({
           userId,
-          type: 'CHAT_MESSAGE',
+          type: logType,
           messageId,
           chatId,
           characterId,

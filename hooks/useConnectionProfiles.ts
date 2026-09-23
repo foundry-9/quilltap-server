@@ -4,11 +4,17 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 
-interface ConnectionProfileInfo {
+export interface ConnectionProfileInfo {
   id: string
   name: string
   provider: string
   modelName: string
+  /** The user's default chat profile. */
+  isDefault: boolean
+  /** False when the profile has tool use switched off. */
+  allowToolUse: boolean
+  /** Whether the profile may offer the `search_web` tool. */
+  allowWebSearch: boolean
 }
 
 interface ConnectionProfilesResponse {
@@ -21,6 +27,9 @@ function mapProfiles(data: ConnectionProfilesResponse): ConnectionProfileInfo[] 
     name: (p.name as string) || '',
     provider: (p.provider as string) || '',
     modelName: (p.modelName as string) || '',
+    isDefault: p.isDefault === true,
+    allowToolUse: p.allowToolUse !== false,
+    allowWebSearch: p.allowWebSearch === true,
   }))
 }
 

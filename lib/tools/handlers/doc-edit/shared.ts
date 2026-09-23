@@ -31,6 +31,7 @@ export {
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import type { LibrarianActorOrigin } from '@/lib/services/librarian-notifications/writer';
+import type { TieredMountPool } from '@/lib/mount-index/tiered-mount-pool';
 
 export const logger = createServiceLogger('DocEdit:Handler');
 
@@ -120,6 +121,12 @@ export interface DocEditToolContext {
    * resolver's `operatorOverride`.
    */
   operatorOverride?: boolean;
+  /**
+   * A pre-built accessible set (the Scenario Builder's "what this chat could
+   * see", built by `resolveScenarioBuilderMountPool`). Passed straight through
+   * to the path resolver's `mountPool`; never combined with `operatorOverride`.
+   */
+  mountPool?: TieredMountPool;
 }
 
 /**
@@ -385,6 +392,7 @@ export async function buildReadResolutionContext(
       hideCharacterVaults: true,
       mountPoint: input.mount_point,
       operatorOverride: context.operatorOverride,
+      mountPool: context.mountPool,
     };
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
@@ -394,6 +402,7 @@ export async function buildReadResolutionContext(
     characterIds: peerCharacterIds.length > 0 ? peerCharacterIds : undefined,
     mountPoint: input.mount_point,
     operatorOverride: context.operatorOverride,
+    mountPool: context.mountPool,
   };
 }
 
@@ -418,6 +427,7 @@ export async function buildWriteResolutionContext(
       hideCharacterVaults: true,
       mountPoint: input.mount_point,
       operatorOverride: context.operatorOverride,
+      mountPool: context.mountPool,
     };
   }
   const peerCharacterIds = await collectPeerCharacterIdsForReads(context);
@@ -427,6 +437,7 @@ export async function buildWriteResolutionContext(
     characterId: context.characterId,
     mountPoint: input.mount_point,
     operatorOverride: context.operatorOverride,
+    mountPool: context.mountPool,
   };
 }
 

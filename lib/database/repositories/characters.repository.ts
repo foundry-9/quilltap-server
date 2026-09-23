@@ -885,7 +885,14 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     characterId: string,
     data: { title: string; content: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
-    return this.addToSubArray<CharacterScenario>(
+    // A vault-backed character re-keys each scenario from its file path when
+    // the vault is read back, so the id minted below is transient. Callers
+    // (the create route, and through it the Scenario Builder's picker
+    // selection) need the id a later read will return — bug 165. Note the
+    // projected ids already present, add, then re-read and return the new one.
+    const before = await this.findById(characterId);
+    const priorIds = new Set((before?.scenarios ?? []).map((s) => s.id));
+    const added = await this.addToSubArray<CharacterScenario>(
       characterId,
       (c) => c.scenarios ?? [],
       (id, now) => ({
@@ -901,6 +908,19 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       'Error adding scenario',
       { title: data.title }
     );
+    if (!added) return null;
+    const after = await this.findById(characterId);
+    const fresh = (after?.scenarios ?? []).filter((s) => !priorIds.has(s.id));
+    const projected =
+      fresh.find((s) => s.title === data.title) ?? (fresh.length === 1 ? fresh[0] : undefined);
+    if (projected && projected.id !== added.id) {
+      logger.debug('addScenario: returning the vault-projected scenario id', {
+        characterId,
+        transientId: added.id,
+        projectedId: projected.id,
+      });
+    }
+    return projected ?? added;
   }
 
   /**

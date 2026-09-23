@@ -1018,7 +1018,7 @@ async function processMessage(
       helpToolsEnabled, // helpToolsEnabled - enables help_search and help_settings tools
       canDressThemselves, // enables wardrobe_list, wardrobe_read, wardrobe_wear, wardrobe_take_off
       canCreateOutfits, // enables wardrobe_create, wardrobe_update, wardrobe_archive
-      documentEditingEnabled, // documentEditingEnabled - enables doc_* editing tools
+      documentEditingEnabled ? 'full' : 'off', // docToolsMode - the full doc_* family when stores are linked
       askCarinaEnabled, // askCarinaEnabled - enables ask_carina tool when an answerer exists
       undefined, // includeWorkspaceTools - Salon turns keep the always-on set
       undefined, // excludeMemorySearch - Brahma Console only

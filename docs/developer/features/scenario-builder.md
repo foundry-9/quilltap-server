@@ -1,6 +1,13 @@
 # Feature: Scenario Builder — The Host researches and drafts a starting scene
 
-**Status:** Proposed (not started). Handoff spec for Claude Code.
+**Status:** Implemented in 4.10-dev (2026-09-23). Live V4test walkthrough (§10) passed 2026-09-23 — results and fixtures in §10a.
+
+**Deviations from this spec, as built:**
+- §5.2: the path resolver flattens the pool with `{ includeParticipants: true }` only. `flattenTierPool`'s `includeCharacterTier: false` also drops the participant tier (it gates both), so the flags written below would hide every cast vault. The pool's character tier is always null, so nothing is lost.
+- §5.1: the request schema lives in `lib/scenario-builder/request-schema.ts` (a Next.js route file may export only handlers).
+- §5.3: `buildTools` gained `docToolsMode` in place of its document-editing boolean and a trailing `extras` argument (`pluginToolAllowlist`, `documentsOnlySearch`, `webSearch`) rather than more positional flags.
+- §6.4: `GET /api/v1/groups?characterIds=` was added for the Save dialog's group list (`groups/scenarios` omits groups with no scenarios).
+- §6.1: the dialog is loaded with `next/dynamic` on both surfaces.
 **Owner subsystems:** The Host (persona and voice), The Salon (both surfaces), The Scriptorium (the stores it reads).
 **Implementation note:** This spec is written to be executed by Claude Code. Follow the CLAUDE.md standing rules throughout: changelog entry, help docs with `url` + In-Chat Navigation, debug logging on every touched backend path, Zod-first tool definitions, `qt-*` classes not raw Tailwind, `npx tsc` not `npm run build`. The decisions in §2 were settled with the operator before this spec was written. **Do not reopen them.**
 
@@ -281,6 +288,50 @@ No new entity. Saves invalidate `queryKeys.scenarios.all`; if `REALTIME_TOPICS` 
 8. In an open chat: sidebar → Change scenario → the Host button → build → Use → Save. The Host posts the revision announcement; `chat.scenarioText` updated.
 9. Close the tab mid-run; `logs/combined.log` shows the abort within one turn, and no further provider calls.
 10. `npx quilltap logs` shows the run's rows typed `SCENARIO_BUILDER`; no chat rows were created for a New Chat run.
+
+## 10a. Verification record (V4test, 2026-09-23)
+
+All ten §10 steps were run on V4test with the default profile (OpenAI `gpt-5`). Two defects
+surfaced and were fixed in the same change: [bug 165](../bugs/fixed/bug-165-scenario-create-transient-id.md)
+(a character scenario's create response carried a transient id, so the picker could not select
+it) and [bug 166](../bugs/fixed/bug-166-modal-no-group-scenarios.md) (the workspace New Chat
+dialog never offered group scenarios). Fixing 166 also led to the save handler checking the
+re-read tiers before selecting anything.
+
+### Fixtures created on V4test
+
+These stay on V4test so the walkthrough can be repeated. They are the "in-world" lore the
+builder is expected to find; each has details specific enough to check for in a draft.
+
+| Store | File | Checkable details |
+|---|---|---|
+| Group Files: Aeronauts Club (Lorian is a member) | `Knowledge/Skyhook Aerodrome.md` | mooring mast *Old Tallow*, saffron gasbags, the Kettlewrights' tea tent, the *Harrow breath*, blue pennants |
+| Group Files: Aeronauts Club | `Knowledge/Festival of Lifting Lanterns.md` | blue-chalk sigils, St. Aldric's nine bells, no flame after the ninth bell, fox-fire jars, burnt-sugar tea, paper birds |
+| Lorian Character Vault (3) | `lore/Lorian at the Aerodrome.md` | describes Lorian (sextant, green notebook) — the cast-agnostic trap: none of it may appear |
+| Project *Scenario Builder Test* (created for this) — its official store | `Knowledge/Festival-Week Weather.md` | *kettle-rattlers*, glazed turf, white pennant, hobnailed boots |
+
+Scenarios saved during the run (safe to delete): General *Skyhook Festival Eve*; Aeronauts Club
+*Skyhook Festival Eve* and *Aerodrome at Dawn*; Riya *Aerodrome at Dawn*; Lorian *Kettlewrights
+Tent, Festival Night* and *Kettlewrights Tent at Lantern-Rise*; project *the Skyhook Aerodrome at
+Vey's Crossing — an afternoon in festival week, just after a squall*. Chat *Chat with Lorian and
+Riya* was created by step 3; chat *Roses, Rain, and the Unopened Letter* had its scene changed
+by step 8.
+
+### Results
+
+| § | Step | Result |
+|---|---|---|
+| 1 | In-world, cast Lorian (+ Tester as persona), Skyhook Aerodrome, "the night before the festival" | **Pass.** Pool: 2 vaults, 1 group, General. Activity: `search` → `doc_read_file` ×2 on the group's Knowledge. Draft used Old Tallow, Harrow breath, nine bells, flame ban, fox-fire, blue sigils, burnt-sugar tea, paper birds; no names, no sextant, no placeholders |
+| 2 | Revise "make it raining and move it two hours later" | **Pass.** Rain, "two hours after the ninth bell"; form's picker untouched |
+| 3 | Use → Start Chat | **Pass.** `scenarioText` equals the draft; the Host's "sets the scene" message carries it |
+| 4 | Real mode, web allowed (profile toggled on for the test, then restored), Gare du Nord / March 1926 | **Pass.** `webAvailable: true`, `search_web` then `search`; period detail (Rue de Dunkerque, enamel *Sortie / Consignes / Buffet* signs); no names |
+| 5 | Real mode, profile without web | **Pass.** Warning shown (`role=status`), run completed; prompt carries the "web is unavailable" clause |
+| 6 | Save → General; save same name again | **Pass.** Picker switches to the new preset, custom text cleared; duplicate → "A scenario named … already exists", save dialog stays open |
+| 7 | Save to a character with two LLM characters cast | **Pass.** Saved to Riya; picker unchanged (character tier not offered). Group save from the same draft selects the group preset (after the bug 166 fix) |
+| 8 | In-chat build → save to the lone LLM character → Use → Change scenario | **Pass** (after the bug 165 fix). Request carried *Where the conversation stands* (no current scene — the chat had none; a later in-chat run carried both); picker selects the character preset; Change scenario → "The Host revises the scene for the proceedings:" |
+| 9 | Client leaves mid-run | **Pass.** Disconnect logged 13:33:51; loop reported *aborted mid-stream* at 13:34:09, when the in-flight turn's first chunk arrived; no log row for that turn and no further calls. Providers take no abort signal, so a reasoning pause can hold the loop that long |
+| 10 | LLM logs / chat rows | **Pass.** Every run logged as `SCENARIO_BUILDER`; the only chat created was step 3's |
+| — | Project tier + project save (not in §10) | **Pass.** Pool `projects: 1`; draft used *kettle-rattler*, glazed turf, white pennant; save to *Project: Scenario Builder Test* selects the project preset |
 
 ## 11. Deferred
 

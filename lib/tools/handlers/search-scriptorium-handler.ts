@@ -48,6 +48,14 @@ export interface SearchScriptoriumToolContext {
    * and conversations are searched operator-wide (all the user's chats).
    */
   operatorSurface?: boolean
+  /**
+   * A pre-built pool — "what this chat could see" before the chat exists (the
+   * Scenario Builder; `resolveScenarioBuilderMountPool`). When set, the pool is
+   * used as-is instead of resolved, the cast vaults (participant tier) are
+   * searched, and only `documents` / `knowledge` run: memories and
+   * conversations are forced off. Never combined with `operatorSurface`.
+   */
+  mountPool?: TieredMountPool
 }
 
 /**
@@ -104,9 +112,13 @@ export async function executeSearchScriptoriumTool(
     // Operator surface (Brahma Console): no character, no memories. Memory
     // search is forced off here defensively even if a caller somehow requests
     // it — the console never reads anyone's commonplace book.
-    const operatorWide = !!context.operatorSurface
-    const searchMemories = sources.includes('memories') && !operatorWide && !!context.characterId
-    const searchConversations = sources.includes('conversations')
+    const operatorWide = !!context.operatorSurface && !context.mountPool
+    // A pre-built pool is a documents-only surface (Scenario Builder): its
+    // schema never offers memories or conversations, and the handler enforces
+    // the same exclusion defensively.
+    const prebuiltPool = context.mountPool ?? null
+    const searchMemories = sources.includes('memories') && !operatorWide && !prebuiltPool && !!context.characterId
+    const searchConversations = sources.includes('conversations') && !prebuiltPool
     const searchDocuments = sources.includes('documents')
     const searchKnowledge = sources.includes('knowledge')
 
@@ -135,7 +147,17 @@ export async function executeSearchScriptoriumTool(
     let operatorStoreIds: string[] = []
 
     if (searchDocuments || searchKnowledge) {
-      if (operatorWide) {
+      if (prebuiltPool) {
+        pool = prebuiltPool
+        // The caller vetted the cast before building the pool.
+        ownsCharacter = true
+        logger.debug('Search using pre-built mount pool', {
+          participants: pool.participantMountPointIds.length,
+          groups: pool.groupMountPointIds.length,
+          projects: pool.projectMountPointIds.length,
+          hasGlobal: !!pool.globalMountPointId,
+        })
+      } else if (operatorWide) {
         const enabled = await repos.docMountPoints.findEnabled()
         operatorStoreIds = enabled.map((mp) => mp.id)
       } else {
@@ -158,7 +180,9 @@ export async function executeSearchScriptoriumTool(
     // (`all` is the union; `project` is project-linked stores; `character` is
     // the character's own vault only).
     const buildDocumentsPool = (): string[] =>
-      operatorWide ? operatorStoreIds : flattenTierPool(pool, { scope })
+      operatorWide
+        ? operatorStoreIds
+        : flattenTierPool(pool, { scope, includeParticipants: !!prebuiltPool })
 
     // Tiers for the `knowledge` source — same pools, each constrained to
     // `Knowledge/` paths, with tier-specific literal-phrase boosts so a hit in
@@ -186,6 +210,10 @@ export async function executeSearchScriptoriumTool(
       const wantGlobal = scope === 'all'
       if (wantCharacter && pool.characterMountPointId) {
         tiers.push({ tier: 'character', mountPointIds: [pool.characterMountPointId], boost: LITERAL_BOOST_CHARACTER })
+      }
+      // Pre-built pool: the cast vaults stand where the character tier would.
+      if (wantCharacter && prebuiltPool && pool.participantMountPointIds.length > 0) {
+        tiers.push({ tier: 'character', mountPointIds: pool.participantMountPointIds, boost: LITERAL_BOOST_CHARACTER })
       }
       if (wantGroup && pool.groupMountPointIds.length > 0) {
         tiers.push({ tier: 'group', mountPointIds: pool.groupMountPointIds, boost: LITERAL_BOOST_GROUP })

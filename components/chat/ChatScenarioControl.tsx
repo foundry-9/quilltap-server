@@ -19,7 +19,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -33,6 +33,19 @@ import {
   type ProjectScenarioOption,
   type ScenarioSelection,
 } from '@/components/scenario/types'
+import dynamic from 'next/dynamic'
+import type {
+  SavedScenarioTarget,
+  ScenarioBuilderCastMember,
+} from '@/components/scenario-builder/ScenarioBuilderDialog'
+import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
+
+// Loaded on demand: the builder (and the Markdown renderer behind its thinking
+// block) stays out of this surface's bundle until the Host is asked.
+const ScenarioBuilderDialog = dynamic(
+  () => import('@/components/scenario-builder/ScenarioBuilderDialog').then((m) => m.ScenarioBuilderDialog),
+  { ssr: false },
+)
 
 interface GroupScenarioGroup {
   groupId: string
@@ -57,6 +70,14 @@ export interface ChatScenarioControlProps {
   enabled: boolean
   /** Fired after the scenario is saved (typically `fetchChat`). */
   onChatUpdated?: () => void
+  /**
+   * Every present character in the room — LLM- and user-controlled alike — for
+   * the Scenario Builder: their vaults and groups scope what the Host may read,
+   * and they are offered as save targets.
+   */
+  castCharacters?: ScenarioBuilderCastMember[]
+  /** The chat's project name, for the Scenario Builder's save targets. */
+  projectName?: string | null
 }
 
 export function ChatScenarioControl({
@@ -67,7 +88,10 @@ export function ChatScenarioControl({
   singleLlmCharacterId,
   enabled,
   onChatUpdated,
+  castCharacters = [],
+  projectName,
 }: ChatScenarioControlProps) {
+  const queryClient = useQueryClient()
   /**
    * What the user has picked in this sitting. Null means "nothing touched
    * yet", in which case the control shows the scene the chat already has —
@@ -78,6 +102,7 @@ export function ChatScenarioControl({
   )
   const [saving, setSaving] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
+  const [builderOpen, setBuilderOpen] = useState(false)
 
   const characterIdsKey = useMemo(
     () => [...llmCharacterIds].sort().join(','),
@@ -212,6 +237,43 @@ export function ChatScenarioControl({
     }
   }, [selection, projectScenarios, generalScenarios, groupScenarios, characterScenarios])
 
+  // "Use this scene": the Host's draft becomes the custom text. The existing
+  // Change-scenario button persists it, so the Host's revision announcement
+  // fires exactly as for a hand-typed scene.
+  const handleUseBuiltScene = (scene: string) => {
+    setDraft({ selection: { kind: 'custom' }, customText: scene })
+  }
+
+  // After a save, select the new preset when this picker offers it. The dialog
+  // has already awaited the invalidation, so the cache holds fresh lists.
+  const handleBuiltSceneSaved = (target: SavedScenarioTarget) => {
+    const hasPath = (data: { scenarios?: Array<{ path: string }> } | undefined, path: string) =>
+      (data?.scenarios ?? []).some((s) => s.path === path)
+    let next: ScenarioSelection | null = null
+    if (target.kind === 'general') {
+      const data = queryClient.getQueryData<{ scenarios: GeneralScenarioOption[] }>(
+        queryKeys.scenarios.general(showArchived),
+      )
+      if (hasPath(data, target.path)) next = { kind: 'general', path: target.path }
+    } else if (target.kind === 'project' && target.projectId === projectId) {
+      const data = queryClient.getQueryData<{ scenarios: ProjectScenarioOption[] }>(
+        queryKeys.scenarios.project(target.projectId, showArchived),
+      )
+      if (hasPath(data, target.path)) next = { kind: 'project', path: target.path }
+    } else if (target.kind === 'group') {
+      const data = queryClient.getQueryData<{ groupScenarios: GroupScenarioGroup[] }>(
+        queryKeys.scenarios.group(characterIdsKey, showArchived),
+      )
+      const offered = (data?.groupScenarios ?? []).some(
+        (g) => g.groupId === target.groupId && g.scenarios.some((s) => s.path === target.path),
+      )
+      if (offered) next = { kind: 'group', groupId: target.groupId, path: target.path }
+    } else if (target.kind === 'character' && target.characterId === singleLlmCharacterId) {
+      next = { kind: 'character', scenarioId: target.scenarioId }
+    }
+    if (next) setDraft({ selection: next, customText: '' })
+  }
+
   const handleSave = async () => {
     try {
       setSaving(true)
@@ -276,6 +338,31 @@ export function ChatScenarioControl({
         />
         Show archived
       </label>
+      <button
+        type="button"
+        onClick={() => setBuilderOpen(true)}
+        disabled={saving}
+        className="qt-button-secondary qt-button-sm inline-flex items-center gap-1.5 mb-2"
+      >
+        <img
+          src={STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'}
+          alt=""
+          className="h-4 w-4 rounded-full"
+        />
+        Ask the Host to set the scene
+      </button>
+      {builderOpen && (
+        <ScenarioBuilderDialog
+          isOpen={builderOpen}
+          onClose={() => setBuilderOpen(false)}
+          cast={castCharacters}
+          projectId={projectId ?? null}
+          projectName={projectName ?? null}
+          chatId={chatId}
+          onUse={handleUseBuiltScene}
+          onSaved={handleBuiltSceneSaved}
+        />
+      )}
       {selection.kind === 'custom' ? (
         <textarea
           value={customText}

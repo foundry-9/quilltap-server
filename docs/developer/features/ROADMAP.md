@@ -61,7 +61,7 @@ This document tracks planned features and improvements for Quilltap.
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
 - [X] Better selectable saved scenarios and prompts per chat
-- [ ] Scenario Builder — The Host researches (web for a real place, the chat's visible stores for an in-world one) and drafts a cast-agnostic starting scene, editable and revisable, usable at once or saved to General, a project, a group, or a character's scenarios (design: [scenario-builder.md](scenario-builder.md))
+- [X] Scenario Builder — The Host researches (web for a real place, the chat's visible stores for an in-world one) and drafts a cast-agnostic starting scene, editable and revisable, usable at once or saved to General, a project, a group, or a character's scenarios (design: [scenario-builder.md](scenario-builder.md))
 
 ### LLM Integration (The Foundry)
 

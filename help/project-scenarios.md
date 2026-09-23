@@ -76,6 +76,8 @@ The **project default** takes precedence when seeding the form's initial selecti
 
 The free-text desk beneath the drop-down stays open even once a scenario is chosen: anything written there is **layered beneath** the selected scenario rather than supplanting it, so a project scenario can be embellished with tonight's particulars without disturbing the original. (See [General Scenarios](general-scenarios.md) for the fuller account.)
 
+Or leave the writing to the Host: **Ask the Host to set the scene**, beside the **Starting Scenario** label, researches the place and time you name — reading this project's stores among others — and brings back a scene you may **Save as scenario…** directly into this project's collection. See [The Scenario Builder](scenario-builder.md).
+
 ## Keeping the Folder Healthy
 
 Should you, in some moment of housekeeping zeal, delete the `Scenarios/` folder or even the entire `Project Files:` document store, fear not — both are reconstructed at the next server start (and at the next visit to the project page, whichever comes first). The structure reappears empty, ready for fresh scenarios; previously-deleted files do not return.
@@ -97,3 +99,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Project Chats](project-chats.md) — Conversations in projects
 - [Project Settings](project-settings.md) — Other project configuration
 - [The Scriptorium](scriptorium.md) — Browsing and editing document stores directly
+- [The Scenario Builder](scenario-builder.md) — Having the Host research and draft a scene

@@ -89,6 +89,13 @@ export const queryKeys = {
   groups: {
     all: ['groups'] as const,
     state: (id: string) => ['groups', id, 'state'] as const,
+    /** Groups any of these characters belongs to; keyed by comma-joined, sorted ids. */
+    byCharacters: (characterIdsKey: string) => ['groups', 'by-characters', characterIdsKey] as const,
+  },
+  /** The Host's Scenario Builder — only its capability probe is cached; runs are streams. */
+  scenarioBuilder: {
+    all: ['scenario-builder'] as const,
+    capabilities: ['scenario-builder', 'capabilities'] as const,
   },
   settings: {
     chat: ['settings', 'chat'] as const,

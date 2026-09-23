@@ -23,6 +23,7 @@ import {
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import {
+  type TieredMountPool,
   resolveTieredMountPool,
   flattenTierPool,
 } from '@/lib/mount-index/tiered-mount-pool';
@@ -136,6 +137,14 @@ export interface PathResolutionContext {
    * build their own context and never set it, so their sandbox is unchanged.
    */
   operatorOverride?: boolean;
+  /**
+   * A pre-built pool that IS the accessible set — used by a tool loop that must
+   * see "what this chat could see" before the chat exists (the Scenario
+   * Builder; see `resolveScenarioBuilderMountPool`). When set, resolution never
+   * consults `characterId` / `projectId` for the pool, and the participant tier
+   * is admitted. Mutually exclusive with `operatorOverride`.
+   */
+  mountPool?: TieredMountPool;
 }
 
 export interface ResolvedPath {
@@ -327,6 +336,16 @@ async function collectAccessibleMountPointIds(
     return Array.from(ids);
   }
 
+  // A pre-built pool (Scenario Builder) is the accessible set, verbatim. The
+  // cast vaults ride in the participant tier; there is no character tier.
+  if (context.mountPool) {
+    const ids = flattenTierPool(context.mountPool, { includeParticipants: true });
+    logger.debug('Path resolver: pre-built mount pool — accessible set supplied by caller', {
+      count: ids.length,
+    });
+    return ids;
+  }
+
   // Standard access set: the responding character's vault, every chat
   // participant's vault, every project-linked store, and Quilltap General.
   // Resolved through the shared tiered-mount-pool helper so the dedup and
@@ -400,7 +419,7 @@ async function resolveDocumentStorePath(
   const hasCharacterContext = Boolean(context.characterId) || (context.characterIds?.length ?? 0) > 0;
   // The operator "look everywhere" override carries its own accessible set
   // (every enabled store) and so needs neither a project nor a character.
-  if (!context.operatorOverride && !context.projectId && !hasCharacterContext) {
+  if (!context.operatorOverride && !context.mountPool && !context.projectId && !hasCharacterContext) {
     logger.warn('document_store scope requires projectId or characterId in context');
     throw new PathResolutionError(
       'Project ID or character ID is required for document_store scope',
@@ -846,6 +865,8 @@ export interface AccessibleMountPointsQuery {
    * it from `actingCharacterIsOpaqueToVaults` so the two sides cannot disagree.
    */
   hideCharacterVaults?: boolean;
+  /** A pre-built pool that is the accessible set (see `PathResolutionContext.mountPool`). */
+  mountPool?: TieredMountPool;
 }
 
 /**
@@ -862,12 +883,13 @@ export async function getAccessibleMountPoints(
 ): Promise<AccessibleMountPoint[]> {
   try {
     const repos = getRepositories();
-    const { projectId, characterId, extraCharacterIds, hideCharacterVaults } = query;
+    const { projectId, characterId, extraCharacterIds, hideCharacterVaults, mountPool } = query;
     const ids = await collectAccessibleMountPointIds({
       projectId,
       characterId,
       characterIds: extraCharacterIds && extraCharacterIds.length > 0 ? extraCharacterIds : undefined,
       hideCharacterVaults,
+      mountPool,
     });
 
     if (ids.length === 0) {

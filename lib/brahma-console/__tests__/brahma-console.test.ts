@@ -65,7 +65,7 @@ describe('buildToolsForProvider — Brahma surface flags', () => {
   it('strips workspace tools, keeps search (no-memories) + doc_* + submit_final_response', async () => {
     const tools = await buildToolsForProvider('OPENAI', {
       agentMode: true,
-      documentEditing: true,
+      docToolsMode: 'full',
       includeWorkspaceTools: false,
       excludeMemorySearch: true,
       rng: false,
@@ -113,7 +113,7 @@ describe('buildToolsForProvider — run_sql (Brahma SQL access)', () => {
   it('includes run_sql when sqlAccess is true (the Brahma Console surface)', async () => {
     const tools = await buildToolsForProvider('OPENAI', {
       agentMode: true,
-      documentEditing: true,
+      docToolsMode: 'full',
       includeWorkspaceTools: false,
       excludeMemorySearch: true,
       sqlAccess: true,

@@ -12,7 +12,7 @@
  * with a plain textarea that surfaces its aria-label.
  */
 
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import React from 'react'
 import { NewChatForm } from '../NewChatForm'
 import { CONCIERGE_STATE_PRESENTATION } from '@/lib/services/dangerous-content/concierge-state-presentation'
@@ -41,17 +41,52 @@ jest.mock('@/components/markdown-editor/MarkdownLexicalEditor', () => ({
     value,
     onChange,
     ariaLabel,
+    remountKey,
   }: {
     value: string
     onChange: (v: string) => void
     ariaLabel?: string
+    remountKey?: number
   }) => (
     <textarea
+      key={remountKey}
       aria-label={ariaLabel}
+      data-remount-key={remountKey}
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
   ),
+}))
+
+// The Scenario Builder dialog is loaded lazily via next/dynamic. Mock the
+// target module with a trivial stub carrying a button that fires `onUse`, and
+// mock next/dynamic to resolve to it synchronously (the real dynamic() awaits
+// the import; the mocked module is already in the registry, so there is
+// nothing async worth waiting for in a test).
+jest.mock('@/components/scenario-builder/ScenarioBuilderDialog', () => ({
+  __esModule: true,
+  ScenarioBuilderDialog: (props: {
+    onUse: (scene: string) => void
+    onSaved?: (target: unknown) => void
+  }) => (
+    <>
+      <button type="button" onClick={() => props.onUse('A scene from the Host.')}>
+        Use built scene
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onSaved?.((globalThis as { __savedTarget?: unknown }).__savedTarget)}
+      >
+        Saved built scene
+      </button>
+    </>
+  ),
+}))
+
+jest.mock('next/dynamic', () => ({
+  __esModule: true,
+  default: () =>
+    require('@/components/scenario-builder/ScenarioBuilderDialog').ScenarioBuilderDialog,
 }))
 
 jest.mock('@/components/image-profiles/ImageProfilePicker', () => ({
@@ -430,5 +465,144 @@ describe('NewChatForm Concierge picker', () => {
     expect(setState).toHaveBeenCalledTimes(1)
     const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
     expect(updater(makeState()).conciergeState).toBe('uncensored')
+  })
+})
+
+// --- Ask the Host to set the scene (Scenario Builder entry point) ----------
+
+function connectionProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'profile-1',
+    name: 'Sonnet',
+    provider: 'anthropic',
+    modelName: 'claude-sonnet-5',
+    isDefault: true,
+    ...overrides,
+  }
+}
+
+function hostButton() {
+  return screen.getByRole('button', { name: /Ask the Host to set the scene/i })
+}
+
+describe('NewChatForm — Ask the Host to set the scene', () => {
+  it('is disabled while creating', () => {
+    renderForm({}, { creating: true, profiles: [connectionProfile()] })
+    expect(hostButton()).toBeDisabled()
+  })
+
+  it('is disabled when there are no connection profiles', () => {
+    renderForm({}, { profiles: [] })
+    expect(hostButton()).toBeDisabled()
+  })
+
+  it('is enabled with at least one profile and not creating', () => {
+    renderForm({}, { profiles: [connectionProfile()] })
+    expect(hostButton()).not.toBeDisabled()
+  })
+
+  it("fills state.scenario from the builder's scene and clears every preset pointer, and remounts the editor", () => {
+    const { setState } = renderForm(
+      {
+        scenario: 'old notes',
+        scenarioId: 'preset-1',
+        projectScenarioPath: 'project/x.md',
+        generalScenarioPath: 'general/y.md',
+        groupScenarioPath: 'group/z.md',
+        groupScenarioGroupId: 'group-1',
+      },
+      { profiles: [connectionProfile()] }
+    )
+
+    const editorBefore = screen.getByLabelText('Starting scenario')
+    const keyBefore = editorBefore.getAttribute('data-remount-key')
+
+    // Open the (mocked, dynamically-loaded) builder dialog.
+    fireEvent.click(hostButton())
+    // The stub's "Use" button fires onUse('A scene from the Host.').
+    fireEvent.click(screen.getByRole('button', { name: 'Use built scene' }))
+
+    expect(setState).toHaveBeenCalledTimes(1)
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    const next = updater(
+      makeState({
+        scenario: 'old notes',
+        scenarioId: 'preset-1',
+        projectScenarioPath: 'project/x.md',
+        generalScenarioPath: 'general/y.md',
+        groupScenarioPath: 'group/z.md',
+        groupScenarioGroupId: 'group-1',
+      })
+    )
+    expect(next.scenario).toBe('A scene from the Host.')
+    expect(next.scenarioId).toBeNull()
+    expect(next.projectScenarioPath).toBeNull()
+    expect(next.generalScenarioPath).toBeNull()
+    expect(next.groupScenarioPath).toBeNull()
+    expect(next.groupScenarioGroupId).toBeNull()
+
+    // scenarioEditorKey is real internal state (setState above is a spy that
+    // never applies), so the remount happens regardless of the mocked setState.
+    const editorAfter = screen.getByLabelText('Starting scenario')
+    expect(editorAfter.getAttribute('data-remount-key')).not.toBe(keyBefore)
+  })
+})
+
+describe('NewChatForm — selecting a scene the Host just filed', () => {
+  const GROUP_OPTION = {
+    path: 'Scenarios/aerodrome.md',
+    filename: 'aerodrome.md',
+    name: 'Aerodrome',
+    isDefault: false,
+    body: 'Dawn on the downs.',
+    groupId: 'group-1',
+    groupName: 'Aeronauts Club',
+  }
+
+  async function saveWith(target: unknown, fresh: unknown) {
+    ;(globalThis as { __savedTarget?: unknown }).__savedTarget = target
+    const onScenarioTiersChanged = jest.fn().mockResolvedValue(fresh)
+    const view = renderForm({ scenario: 'old notes' }, { profiles: [connectionProfile()], onScenarioTiersChanged })
+    fireEvent.click(hostButton())
+    fireEvent.click(screen.getByRole('button', { name: 'Saved built scene' }))
+    await waitFor(() => expect(onScenarioTiersChanged).toHaveBeenCalled())
+    // Let the handler's continuation after the awaited refetch run.
+    await new Promise((r) => setTimeout(r, 0))
+    return view
+  }
+
+  const applyAll = (setState: jest.Mock) =>
+    setState.mock.calls.reduce(
+      (acc: NewChatFormState, [u]: [(p: NewChatFormState) => NewChatFormState]) => u(acc),
+      makeState({ scenario: 'old notes' }),
+    )
+
+  it('selects a group preset the re-read tiers now offer, and clears the custom text', async () => {
+    const { setState } = await saveWith(
+      { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
+      { general: [], project: null, group: [GROUP_OPTION] },
+    )
+    const next = applyAll(setState)
+    expect(next.groupScenarioPath).toBe(GROUP_OPTION.path)
+    expect(next.groupScenarioGroupId).toBe('group-1')
+    expect(next.scenario).toBe('')
+  })
+
+  it('leaves the form alone when the saved tier is not offered here', async () => {
+    const { setState } = await saveWith(
+      { kind: 'group', groupId: 'group-1', path: GROUP_OPTION.path },
+      { general: [], project: null, group: null },
+    )
+    expect(setState).not.toHaveBeenCalled()
+  })
+
+  it('selects a general preset when the re-read general tier carries it', async () => {
+    const { setState } = await saveWith(
+      { kind: 'general', path: GENERAL_SCENARIO.path },
+      { general: [GENERAL_SCENARIO], project: null, group: null },
+    )
+    const next = applyAll(setState)
+    expect(next.generalScenarioPath).toBe(GENERAL_SCENARIO.path)
+    expect(next.scenario).toBe('')
   })
 })

@@ -109,8 +109,38 @@ interface UseNewChatReturn {
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
   state: NewChatFormState
   setState: React.Dispatch<React.SetStateAction<NewChatFormState>>
+  /**
+   * Re-read the general, project and group scenario tiers (e.g. after the
+   * Scenario Builder files a new one). These lists ride plain `fetch`, not
+   * TanStack, so invalidating `queryKeys.scenarios.all` does not reach them.
+   */
+  refetchScenarioTiers: () => Promise<RefetchedScenarioTiers>
   // Actions
   handleCreateChat: () => Promise<{ chatId: string } | null>
+}
+
+/**
+ * The tiers as re-read by `refetchScenarioTiers`, so a caller can check what
+ * the picker now offers without waiting for a re-render. `null` = not re-read
+ * (tier not applicable, or the fetch failed).
+ */
+export interface RefetchedScenarioTiers {
+  general: ScenarioOption[] | null
+  project: ScenarioOption[] | null
+  group: GroupScenarioOption[] | null
+}
+
+/** Flatten `/api/v1/groups/scenarios`' grouped payload into picker options. */
+function flattenGroupScenarios(data: {
+  groupScenarios?: Array<{ groupId: string; groupName: string; scenarios?: ScenarioOption[] }>
+}): GroupScenarioOption[] {
+  const flat: GroupScenarioOption[] = []
+  for (const group of data.groupScenarios || []) {
+    for (const s of group.scenarios || []) {
+      flat.push({ ...toScenarioOption(s), groupId: group.groupId, groupName: group.groupName })
+    }
+  }
+  return flat
 }
 
 const INITIAL_STATE: NewChatFormState = {
@@ -356,19 +386,7 @@ export function useNewChat({
 
         let loadedGroupScenarios: GroupScenarioOption[] = []
         if (groupScenariosRes && groupScenariosRes.ok) {
-          const data = await groupScenariosRes.json()
-          const groupScenariosByGroup = data.groupScenarios || []
-          // Flatten the grouped scenarios into a single array with groupId/groupName metadata
-          for (const group of groupScenariosByGroup) {
-            const scenarios = group.scenarios || []
-            for (const s of scenarios) {
-              loadedGroupScenarios.push({
-                ...toScenarioOption(s),
-                groupId: group.groupId,
-                groupName: group.groupName,
-              })
-            }
-          }
+          loadedGroupScenarios = flattenGroupScenarios(await groupScenariosRes.json())
         } else if (groupScenariosRes && !groupScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load group scenarios', {
             status: groupScenariosRes.status,
@@ -904,6 +922,40 @@ export function useNewChat({
     }
   }
 
+  const refetchScenarioTiers = useCallback(async () => {
+    const readScenarios = async (url: string): Promise<ScenarioOption[] | null> => {
+      const res = await fetch(withArchivedParam(url, showArchivedScenarios))
+      if (!res.ok) {
+        console.warn('[useNewChat] Failed to refetch scenarios', { url, status: res.status })
+        return null
+      }
+      const data = await res.json()
+      return (data.scenarios || []).map((s: ScenarioOption) => toScenarioOption(s))
+    }
+    try {
+      const [general, projectTier, groupRes] = await Promise.all([
+        readScenarios('/api/v1/scenarios'),
+        selectedProjectId ? readScenarios(`/api/v1/projects/${selectedProjectId}/scenarios`) : Promise.resolve(null),
+        selectedLlmCharacterIds.length > 0
+          ? fetch(withArchivedParam(
+              `/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`,
+              showArchivedScenarios,
+            ))
+          : Promise.resolve(null),
+      ])
+      const group = groupRes && groupRes.ok ? flattenGroupScenarios(await groupRes.json()) : null
+      if (general) setGeneralScenarios(general)
+      if (projectTier) setProjectScenarios(projectTier)
+      if (group) setGroupScenarios(group)
+      return { general, project: projectTier, group }
+    } catch (error) {
+      console.warn('[useNewChat] Scenario tier refetch failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return { general: null, project: null, group: null }
+    }
+  }, [showArchivedScenarios, selectedProjectId, selectedLlmCharacterIds])
+
   return {
     loading,
     creating,
@@ -922,6 +974,7 @@ export function useNewChat({
     setSelectedProjectId,
     showArchivedScenarios,
     setShowArchivedScenarios,
+    refetchScenarioTiers,
     selectedCharacters,
     setSelectedCharacters,
     state,

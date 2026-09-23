@@ -66,6 +66,7 @@ API reference for Quilltap v4.3 and later.
   - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
+  - [Scenario Builder](#scenario-builder)
   - [Chat Announcements](#chat-announcements)
   - [Chat Photo Albums](#chat-photo-albums)
   - [Photo Gallery](#photo-gallery)
@@ -3228,6 +3229,36 @@ Send a message; returns an SSE stream. Body: `{ content }`.
 #### `GET /api/v1/brahma-console/[id]/messages`
 
 Load the chat's messages.
+
+---
+
+### Scenario Builder
+
+The Host researches a place and time and drafts a cast-agnostic starting scene. A run is ephemeral: no chat, no messages, no participant — the only durable trace is the LLM log rows typed `SCENARIO_BUILDER`. It runs in the parent process inside the route (never a background job). See `lib/services/scenario-builder/` and [features/scenario-builder.md](features/scenario-builder.md).
+
+#### `POST /api/v1/scenario-builder?action=build`
+
+Run the builder; returns an SSE stream. Body (`scenarioBuildRequestSchema`, `lib/scenario-builder/request-schema.ts`):
+
+| Field | Type | Notes |
+|---|---|---|
+| `mode` | `'real' \| 'in-world'` | Real: `search_web` + `curl` (when available) + the stores. In-world: the stores only. |
+| `location` | string (1–500) | |
+| `time` | string (1–200) | |
+| `details` | string (≤4000) | Optional; default `''`. |
+| `connectionProfileId` | UUID | Must be the user's; `allowToolUse: false` → 400. |
+| `projectId` | UUID? | Adds the project's stores to the pool. |
+| `characterIds` | UUID[] (≤32) | The cast. Ids the user cannot read are dropped. Scopes the stores (cast vaults, their groups' stores); never handed to the model. |
+| `chatId` | UUID? | In-chat: must be the user's `salon`/`autonomous` chat. Adds `scenarioText` and `contextSummary` to the model's message. |
+| `priorDraft` / `revision` | string? | Revise. Both or neither (400 otherwise). |
+
+Errors before the stream opens: `400` validation / no-tools profile / missing API key / wrong chat type; `404` foreign profile or chat.
+
+SSE events: `toolsDetected` (+ `toolNames`, `toolArguments`), `status` (`tool_executing`), `toolResult`, `reasoning` (cumulative — replace, don't append), `error` (Host-voiced, with `errorType` / `details`), and a terminal `{ done: true, scenario, provider, modelName, usage, toolsExecuted, webAvailable }`. No `content` chunks: the scene arrives whole. Closing the request aborts the loop.
+
+#### `GET /api/v1/scenario-builder?action=capabilities`
+
+`{ webSearchConfigured, curlConfigured }` — whether a search provider is configured, and whether the curl plugin has at least one allowed URL pattern. The dialog combines this with the chosen profile's `allowWebSearch` to warn that real mode will run without the web.
 
 ---
 
@@ -6460,7 +6491,7 @@ Character groups bundle several characters and their shared document stores. Gro
 
 #### `GET /api/v1/groups`
 
-List all groups.
+List all groups. With `?characterIds=<id,id,...>`, only the groups any of those characters belongs to (ids the user cannot read are ignored) — the Scenario Builder's save targets.
 
 #### `POST /api/v1/groups`
 

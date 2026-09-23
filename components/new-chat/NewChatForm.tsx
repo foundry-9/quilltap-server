@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import Link from 'next/link'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
@@ -29,10 +29,22 @@ import type {
   SelectedCharacter,
   UserControlledCharacter,
 } from './types'
-import type { ProjectListEntry } from './hooks/useNewChat'
+import type { ProjectListEntry, RefetchedScenarioTiers } from './hooks/useNewChat'
 import { ScenarioSelect, hasAnyScenarioOptions } from '@/components/scenario/ScenarioSelect'
 import type { ScenarioSelection } from '@/components/scenario/types'
 import { SubpromptPicker } from '@/components/subprompts'
+import dynamic from 'next/dynamic'
+import type {
+  SavedScenarioTarget,
+} from '@/components/scenario-builder/ScenarioBuilderDialog'
+import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
+
+// Loaded on demand: the builder (and the Markdown renderer behind its thinking
+// block) stays out of this surface's bundle until the Host is asked.
+const ScenarioBuilderDialog = dynamic(
+  () => import('@/components/scenario-builder/ScenarioBuilderDialog').then((m) => m.ScenarioBuilderDialog),
+  { ssr: false },
+)
 
 interface NewChatFormProps {
   profiles: ConnectionProfile[]
@@ -106,6 +118,12 @@ interface NewChatFormProps {
     destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
     defaultFreshnessHours?: number
   }
+  /**
+   * Re-read the scenario tiers after the Scenario Builder files a new one
+   * (`useNewChat().refetchScenarioTiers`). Without it a saved scene still
+   * works as custom text; it just can't be selected as a preset.
+   */
+  onScenarioTiersChanged?: () => Promise<RefetchedScenarioTiers>
 }
 
 export function NewChatForm({
@@ -133,6 +151,7 @@ export function NewChatForm({
   continuationFromChatId,
   previousOutfitSummary,
   autonomousSettingsHint,
+  onScenarioTiersChanged,
 }: NewChatFormProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
 
@@ -242,6 +261,81 @@ export function NewChatForm({
       groupScenarioPath: selection.kind === 'group' ? selection.path : null,
       groupScenarioGroupId: selection.kind === 'group' ? selection.groupId : null,
     }))
+  }
+
+  // --- The Host's Scenario Builder -----------------------------------------
+  const [builderOpen, setBuilderOpen] = useState(false)
+  // MarkdownLexicalEditor reads `value` only at mount; a programmatic fill must
+  // bump its remountKey or the editor keeps showing the old text.
+  const [scenarioEditorKey, setScenarioEditorKey] = useState(0)
+
+  const builderCast = useMemo(
+    () => selectedCharacters.map((sc) => ({ id: sc.character.id, name: sc.character.name })),
+    [selectedCharacters],
+  )
+  const builderProjectId = selectedProjectId ?? project?.id ?? null
+  const builderProjectName =
+    (builderProjectId && availableProjects?.find((p) => p.id === builderProjectId)?.name) ||
+    (project && project.id === builderProjectId ? project.name : null)
+
+  const handleUseBuiltScene = (scene: string) => {
+    setState((prev) => ({
+      ...prev,
+      scenario: scene,
+      scenarioId: null,
+      projectScenarioPath: null,
+      generalScenarioPath: null,
+      groupScenarioPath: null,
+      groupScenarioGroupId: null,
+    }))
+    setScenarioEditorKey((k) => k + 1)
+  }
+
+  // After a save: select the new preset when this form's picker now offers it
+  // (checked against the freshly re-read tiers — a tier this surface doesn't
+  // show, or a group no LLM cast member belongs to, is not offered; a
+  // character's own list only when exactly one LLM character is cast), and
+  // clear the custom text it replaces. Otherwise the text stays as custom.
+  const handleBuiltSceneSaved = async (target: SavedScenarioTarget) => {
+    const fresh = await onScenarioTiersChanged?.()
+    let selection: ScenarioSelection | null = null
+    if (target.kind === 'general') {
+      if (fresh?.general?.some((s) => s.path === target.path)) {
+        selection = { kind: 'general', path: target.path }
+      }
+    } else if (target.kind === 'project' && target.projectId === builderProjectId) {
+      if (fresh?.project?.some((s) => s.path === target.path)) {
+        selection = { kind: 'project', path: target.path }
+      }
+    } else if (target.kind === 'group') {
+      if (fresh?.group?.some((s) => s.groupId === target.groupId && s.path === target.path)) {
+        selection = { kind: 'group', groupId: target.groupId, path: target.path }
+      }
+    } else if (target.kind === 'character' && singleLlm?.character.id === target.characterId) {
+      // The character's scenario list rides on the character record, which this
+      // form does not refetch; add the new entry locally so it can be selected.
+      setSelectedCharacters((prev) =>
+        prev.map((sc) =>
+          sc.character.id === target.characterId
+            ? {
+                ...sc,
+                character: {
+                  ...sc.character,
+                  scenarios: [
+                    ...(sc.character.scenarios ?? []),
+                    { id: target.scenarioId, title: target.title, content: target.content },
+                  ],
+                },
+              }
+            : sc,
+        ),
+      )
+      selection = { kind: 'character', scenarioId: target.scenarioId }
+    }
+    if (!selection) return
+    handleScenarioSelectionChange(selection)
+    setState((prev) => ({ ...prev, scenario: '' }))
+    setScenarioEditorKey((k) => k + 1)
   }
 
   const switchToCharacterDefault = () => {
@@ -623,9 +717,24 @@ export function NewChatForm({
         </div>
 
         <div>
-          <label htmlFor="new-chat-scenario" className="mb-2 block text-sm qt-text-primary">
-            Starting Scenario (Optional)
-          </label>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="new-chat-scenario" className="block text-sm qt-text-primary">
+              Starting Scenario (Optional)
+            </label>
+            <button
+              type="button"
+              onClick={() => setBuilderOpen(true)}
+              disabled={creating || profiles.length === 0}
+              className="qt-button-secondary qt-button-sm inline-flex items-center gap-1.5"
+            >
+              <img
+                src={STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'}
+                alt=""
+                className="h-4 w-4 rounded-full"
+              />
+              Ask the Host to set the scene
+            </button>
+          </div>
           {showScenarioDropdown && (
             <ScenarioSelect
               id="new-chat-scenario-select"
@@ -679,10 +788,22 @@ export function NewChatForm({
             value={state.scenario}
             onChange={(value) => setState((prev) => ({ ...prev, scenario: value }))}
             disabled={creating}
+            remountKey={scenarioEditorKey}
             namespace="NewChatForm.scenario"
             ariaLabel={selectedPreset ? 'Additional scenario notes' : 'Starting scenario'}
             minHeight="6rem"
           />
+          {builderOpen && (
+            <ScenarioBuilderDialog
+              isOpen={builderOpen}
+              onClose={() => setBuilderOpen(false)}
+              cast={builderCast}
+              projectId={builderProjectId}
+              projectName={builderProjectName}
+              onUse={handleUseBuiltScene}
+              onSaved={handleBuiltSceneSaved}
+            />
+          )}
         </div>
 
         {outfitCharacters.length > 0 && (
