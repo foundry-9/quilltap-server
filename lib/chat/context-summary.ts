@@ -21,6 +21,7 @@ import { writeConversationSummaryToVaults, computeConversationStats } from '@/li
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
 import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
+import { applyAutoTitle } from '@/lib/chat/auto-title'
 
 /**
  * Rolling-window summarization cadence.
@@ -579,16 +580,29 @@ export async function generateContextSummary(
       }
     }
 
+    // A hand-renamed chat keeps its title, so don't pay for one (bug 164).
+    // applyAutoTitle re-checks after the call in case the user renames mid-flight.
+    if (chat.isManuallyRenamed) {
+      logger.debug('[Context Summary] Chat renamed by hand; skipping fold title', { chatId })
+      return result
+    }
+
     try {
       const titleResult = isHelpLikeChatType(chat.chatType)
         ? await generateHelpChatTitleFromSummary(newSummary, cheapLLM, userId, chatId)
         : await generateTitleFromSummary(newSummary, cheapLLM, userId, chatId)
       if (titleResult.success && titleResult.result) {
-        await repos.chats.update(chatId, {
+        // A changed title is the Lantern's scene-change cue, same as the
+        // checkpoint title check (bug 163).
+        const chatSettings = await repos.chatSettings.findByUserId(userId)
+        const outcome = await applyAutoTitle({
+          userId,
+          chatId,
           title: titleResult.result,
-          updatedAt: new Date().toISOString(),
+          chatSettings,
+          source: 'summary-fold',
         })
-        logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`)
+        logger.info(`[Context Summary] Generated title for chat ${chatId}: ${titleResult.result}`, { outcome })
 
         if (titleResult.usage && (titleResult.usage.promptTokens > 0 || titleResult.usage.completionTokens > 0)) {
           try {

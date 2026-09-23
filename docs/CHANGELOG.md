@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Fixed: story backgrounds follow every automatic retitle, and a hand-set title stays put (bugs 163, 164)
+
+- A story background was queued only when the checkpoint title check renamed a chat. The
+  context-summary fold also writes a new title after every pass, and so does ticking **Use automatic naming** in the rename dialog (the `regenerate-title` action),
+  but neither queued a background. Past turn 10, when most renames come from the fold, the
+  backdrop stayed on the first scene.
+- The fold also ignored `isManuallyRenamed` and overwrote a title the user had set by hand at
+  every fold. Named autonomous rooms were exposed the same way.
+- All three titlers now go through `applyAutoTitle` (`lib/chat/auto-title.ts`). It re-reads the
+  chat, keeps a hand-set title (only that checkbox overrules one), writes a title only
+  when it changed, and queues the story background when it does. `queueStoryBackgroundIfEnabled`
+  moved there from the `TITLE_UPDATE` handler.
+- The fold skips its title call entirely on a hand-renamed chat.
+
 #### Fixed: `quilltap db` raw SQL and `--repl` can read compressed columns again (bug 162)
 
 - The low-level `db` path — raw SQL, `--repl`, `--tables`, `--count` — opened its own database

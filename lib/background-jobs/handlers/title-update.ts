@@ -12,8 +12,8 @@
  * autonomous-room-turn handler used to drop the write on the floor.
  */
 
-import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
-import { isHelpLikeChatType, isParticipantPresent, type ChatMetadata } from '@/lib/schemas/chat.types';
+import { BackgroundJob } from '@/lib/schemas/types';
+import { isHelpLikeChatType } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   considerTitleUpdate,
@@ -23,13 +23,12 @@ import {
 } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
-import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createTitleGenerationEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { TitleUpdatePayload } from '../queue-service';
-import { enqueueStoryBackgroundGeneration } from '../queue-service';
+import { applyAutoTitle } from '@/lib/chat/auto-title';
 
 /**
  * Handle a title update job
@@ -219,100 +218,14 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     `[Title Update] Chat ${payload.chatId} - needsNewTitle: true, reason: ${result.result.reason}`,
   );
 
-  // Update the chat title
-  await repos.chats.update(payload.chatId, {
+  // The chokepoint re-reads the chat (a hand rename during the LLM call
+  // still wins) and queues the story background when the title changed.
+  await applyAutoTitle({
+    userId: job.userId,
+    chatId: payload.chatId,
     title: result.result.suggestedTitle,
-    lastRenameCheckInterchange: payload.currentInterchange,
-    updatedAt: new Date().toISOString(),
+    chatSettings,
+    extraPatch: { lastRenameCheckInterchange: payload.currentInterchange },
+    source: 'title-check',
   });
-
-  logger.info(`[Title Update] Updated title for chat ${payload.chatId} to: "${result.result.suggestedTitle}"`);
-
-  // Story-background generation runs for normal chats only — help chats and
-  // autonomous rooms are skipped (the latter inside queueStoryBackgroundIfEnabled).
-  if (!isHelpChat) {
-    // Re-fetch so the helper sees the freshly written title (the chat we
-    // loaded above still has the old one in memory).
-    const updatedChat = await repos.chats.findById(payload.chatId);
-    if (updatedChat) {
-      await queueStoryBackgroundIfEnabled(
-        job.userId,
-        updatedChat,
-        chatSettings,
-        result.result.suggestedTitle,
-      );
-    }
-  }
-}
-
-/**
- * Queue a story background generation job if the feature is enabled
- */
-export async function queueStoryBackgroundIfEnabled(
-  userId: string,
-  chat: ChatMetadata,
-  chatSettings: ChatSettings,
-  newTitle: string
-): Promise<void> {
-
-  // Check if story backgrounds are enabled
-  const storyBackgroundsSettings = chatSettings.storyBackgroundsSettings;
-  if (!storyBackgroundsSettings?.enabled) {
-    return;
-  }
-
-  // Autonomous rooms (4.6 Private Character Rooms): the Lantern's auto-trigger
-  // is disabled. Backgrounds are token-budget-conscious; the user is not in
-  // the room to see them, and a character can still deliberately invoke
-  // image-generation tools when desired.
-  if (chat.chatType === 'autonomous') {
-    return;
-  }
-
-  // Determine the image profile to use
-  const repos = getRepositories();
-  const imageProfileId = await resolveImageProfileForChat(userId, chat, chatSettings, repos);
-  if (!imageProfileId) {
-    return;
-  }
-
-  // Get character IDs from participants who are actually in the scene. Absent
-  // and (soft-)removed participants must never be painted into the background —
-  // the crafter is told to place every enumerated character as a figure in the
-  // frame, so a stale enumeration puts someone in the room who walked out of it.
-  // 'silent' counts as present: they are standing there, just not speaking.
-  const characterIds = chat.participants
-    .filter(p => isParticipantPresent(p.status) && p.characterId)
-    .map(p => p.characterId!);
-
-  if (characterIds.length === 0) {
-    return;
-  }
-
-  // Queue the story background generation job
-  try {
-    const { jobId, isNew } = await enqueueStoryBackgroundGeneration(userId, {
-      chatId: chat.id,
-      imageProfileId,
-      characterIds,
-      sceneContext: newTitle,
-      projectId: chat.projectId ?? null,
-    });
-
-    if (isNew) {
-      logger.info('[Title Update] Queued story background generation', {
-        context: 'background-jobs.title-update',
-        chatId: chat.id,
-        jobId,
-        imageProfileId,
-        characterCount: characterIds.length,
-      });
-    }
-  } catch (error) {
-    logger.warn('[Title Update] Failed to queue story background generation', {
-      context: 'background-jobs.title-update',
-      chatId: chat.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
 }

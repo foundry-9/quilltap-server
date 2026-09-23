@@ -6,7 +6,7 @@
  * payload gets painted back into a room they walked out of. Both enqueue sites
  * must filter on `isParticipantPresent`.
  */
-import { queueStoryBackgroundIfEnabled } from '@/lib/background-jobs/handlers/title-update'
+import { queueStoryBackgroundIfEnabled } from '@/lib/chat/auto-title'
 import { handleRegenerateBackground } from '@/app/api/v1/chats/[id]/actions/story-background'
 import { enqueueStoryBackgroundGeneration } from '@/lib/background-jobs/queue-service'
 import type { ChatMetadata, ChatSettings } from '@/lib/schemas/types'

@@ -8,11 +8,11 @@ Story Backgrounds is a feature that automatically generates atmospheric backgrou
 
 ## How It Works
 
-When enabled, Quilltap generates a landscape scene image featuring your characters whenever a chat title is updated. The image appears as a subtle background behind your chat messages, adding atmosphere without interfering with readability.
+When enabled, Quilltap generates a landscape scene image featuring your characters whenever the Estate retitles a chat — the moment a new title is written being, by long custom, the Lantern's cue that the scene has shifted. The image appears as a subtle background behind your chat messages, adding atmosphere without interfering with readability.
 
 ### Generation Process
 
-1. **Trigger**: Background generation happens automatically after chat title updates (both automatic and manual)
+1. **Trigger**: A fresh background is commissioned whenever a chat's title actually changes at the hands of the automatic titler — whether at one of its periodic look-ins, when the Librarian folds older turns into the running summary and proposes a truer name for the evening, or when you tick **Use automatic naming** in the chat's rename dialog. A title typed in by hand does not summon the Lantern (use **Regenerate Background** for that), and a title that comes back unchanged commissions nothing, so the same scene is never painted twice.
 2. **Scene Understanding**: The system determines the current scene in one of two ways:
    - **Scene State Tracker** (preferred): After every chat turn, a lightweight background task automatically tracks the current scene — where characters are, what they're doing, and what they look like. When this data is fresh (within 5 messages), the Lantern uses it directly, saving an extra LLM call.
    - **On-demand derivation** (fallback): If no recent scene state exists, the system reads your recent messages and asks a cheap LLM to describe the scene, much as a particularly attentive stage manager might.
@@ -77,6 +77,7 @@ When a project is open beside a conversation in a split workspace, the conversat
 
 - Background images are generated as background jobs, so they won't slow down your chat
 - Images are cached and don't re-generate unless the title changes
+- A chat you have renamed by hand keeps its name: neither the periodic titler nor the Librarian's summary will overwrite it. Tick **Use automatic naming** in the rename dialog to hand the naming back to the Estate
 - The feature can be disabled at any time without affecting existing backgrounds
 
 ## Troubleshooting

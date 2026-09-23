@@ -1,11 +1,17 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-09-23
 **Codebase**: Quilltap v4.10.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–162** are **fixed in v4**; none are open. **161** and **162** were both
+**Status**: Bugs **1–164** are **fixed in v4**; none are open. **163** and **164** were found
+together on 2026-09-23 while explaining why a live `Friday` chat retitled three times had one story
+background. Both trace to the context-summary fold, which writes a fresh title after every pass.
+**163**: that write never cued the Lantern, because only the checkpoint title check queued a
+background. **164**: it ignored `isManuallyRenamed`, so a hand-set title was overwritten at every
+fold. Fixed the same day with one chokepoint, `applyAutoTitle` (`lib/chat/auto-title.ts`), which
+every automatic titler now calls. **161** and **162** were both
 found on 2026-09-21 while tracing one live `Friday` chat whose running summary called a character
 "Vivienne" — a name that appears in no message and belongs to no character. **161** was the cause:
 the context-summary fold rendered the transcript as `USER:` / `ASSISTANT:` under a prompt that says
@@ -1135,6 +1141,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 160 | [the stale-chat sweep never cleared the identity-stack cache](bugs/fixed/bug-160-stale-chat-identity-stack-cache.md) | 2026-09-21 | 2026-09-21 | Low | `chats.compiledIdentityStacks` was omitted from the nightly cache collapse, accumulating 13.45 MB across 841 stale chats | `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts` | Owed |
 | 161 | [the running summary invents a name for a character it was never told about](bugs/fixed/bug-161-summary-invents-a-name.md) | 2026-09-21 | 2026-09-21 | **Medium** (the summary a character reads once early turns are compressed away is wrong about who was in the room, and every fold carries the invented name forward; on `Friday` chat `358cabfe…` Friday is "Vivienne" twenty-nine times after three folds) | `turnsToChatMessages` (`context-summary.ts:291`) dropped `participantId`, so `foldChatSummary` (`chat-tasks.ts:626`) rendered `USER:` / `ASSISTANT:` under a prompt that says *use character names, not roles*; a seat whose name is never spoken in the first ten turns got one invented, and the carry-forward framing compounded it. The episode pass resolved seats to names (`fold-episode-pass.ts:89`) and was correct | `lib/chat/speaker-names.ts` (new, shared — the episode pass's private loop, extracted and deleted), `context-summary.ts` (resolves names, logs unresolved seats at `debug`), `chat-tasks.ts` (`FoldSummaryInput` carries `speaker`; prompt keeps a role label rather than inventing), `app/api/v1/chats/[id]/actions/rebuild-summary.ts` + Salon **Rebuild Summary…**. No migration — a wrong name is not mechanically detectable — [design of record](features/complete/context-summary-speaker-names.md) | Not assessed |
 | 162 | [the CLI's raw-SQL connection has no `qt_text()`](bugs/fixed/bug-162-cli-raw-sql-no-qt-text.md) | 2026-09-21 | 2026-09-22 | Low (reads) / **Medium** (writes) | `bin/quilltap.js:1024` opened its own connection for raw SQL, `--repl`, `--tables` and `--count`, bypassing `openEncryptedDb` where `registerTextCodecFunction` lives — so `SELECT qt_text(content)` answered *no such function*, and every `--write` on `chat_messages` failed the same way because the FTS5 triggers call it. Loud, so nothing drifted; but the one ad-hoc repair path could not touch the transcript | **Fixed.** The low-level path opens through `openEncryptedDb` like every other connection the CLI makes — its private driver-require, key pragma and readability probe are gone, `readonly` follows `!writable` and `friendlyName` follows the `--llm-logs` / `--mount-points` target. The larger fix rather than a second `registerTextCodecFunction` call, because two openers is how this happened: the next function registered in `db-helpers.js` now reaches raw SQL and the REPL for free. `packages/quilltap/README.md` gains the `qt_text()` note under **Low-level options**. Regression tests in `__tests__/unit/packages/quilltap/db-raw-sql-qt-text.integration.test.js` drive the bin itself | Not assessed |
+| 163 | [a title from the summary fold never cues a story background](bugs/fixed/bug-163-fold-rename-no-background.md) | 2026-09-23 | 2026-09-23 | Low | `queueStoryBackgroundIfEnabled` was called only from `handleTitleUpdate` after a rename. `generateContextSummary` (`context-summary.ts:~583`) and `handleRegenerateTitle` wrote `chats.title` directly, so past turn 10, when most renames come from the fold, the backdrop stayed on the first scene. Friday chat `60397907…`: three titles, one background | `lib/chat/auto-title.ts` (new): `applyAutoTitle` re-reads the chat, writes only a changed title, and queues the background; `queueStoryBackgroundIfEnabled` moved there. All three titlers call it | Not assessed |
+| 164 | [the summary fold overwrites a title the user set by hand](bugs/fixed/bug-164-fold-overwrites-manual-title.md) | 2026-09-23 | 2026-09-23 | **Medium** | `isManuallyRenamed` was honoured only by `handleTitleUpdate`. The fold called `generateTitleFromSummary` and wrote the result regardless, so a renamed chat (or a named autonomous room) lost its title at every fold | `applyAutoTitle` refuses a hand-renamed chat unless `clearManualRename` (the explicit Regenerate); the fold skips its title call up front | Not assessed |
 
 ### Families and reading order
 
