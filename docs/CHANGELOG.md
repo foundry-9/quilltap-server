@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### Docs: plan for the Scenario Builder
+
+- Added `docs/developer/features/scenario-builder.md`, the handoff spec for a Host-run scenario
+  builder beside the custom scenario text on the New Chat form and the in-chat Change scenario
+  control: four inputs (real or in-world, location, time, details), a connection-profile
+  dropdown, an ephemeral tool loop generalised from the Brahma Console's one-shot service, web
+  research for a real place and store-only research for an in-world one, a cast-agnostic draft
+  of at most about 1,000 tokens with edit and revise, and saving to General, project, group or a
+  character's scenarios. Roadmap and documentation index updated.
+
 #### Fixed: story backgrounds follow every automatic retitle, and a hand-set title stays put (bugs 163, 164)
 
 - A story background was queued only when the checkpoint title check renamed a chat. The
