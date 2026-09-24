@@ -158,11 +158,11 @@ The list shapes stop carrying the raw pair and carry the derived state instead:
   at the same spot that currently copies `isDangerousChat` / `conciergeOverride`,
   line 602) and `dangerCategories: string[]` (from the chat row, `[]` default).
   Drop `isDangerousChat` and `conciergeOverride` from the summary once no
-  consumer reads them — the list route's `hasDangerous` at
-  [chats/route.ts:898](../../../../app/api/v1/chats/route.ts) is the one server-side
-  reader, and it moves to `conciergeStateUsesUncensoredRoute` (see Quick-hide below).
-  *(Later: the `has-dangerous` action was removed in 4.10 once the quick-hide
-  button became always visible.)*
+  consumer reads them. *(At the time of this design the list route's
+  `has-dangerous` action was the one server-side reader of the raw label and
+  moved to the uncensored row — see Quick-hide below. That action was removed
+  in 4.10, once the quick-hide button became always visible, so no such reader
+  remains.)*
 - **`RecentChat`** ([types.ts](../../../../components/homepage/types.ts)):
   `isDangerousChat` → `conciergeState: ConciergeState`, plus `dangerCategories?: string[]`.
   `getHomeData` ([home-data.service.ts:67](../../../../lib/services/home-data.service.ts))

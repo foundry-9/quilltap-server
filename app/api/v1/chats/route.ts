@@ -1531,7 +1531,8 @@ async function handleImport(req: NextRequest, context: RequestContext) {
 export const GET = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
-  if (action) {
+  // `!== null`, not truthiness: a bare `?action` or `?action=` is still an action.
+  if (action !== null) {
     return badRequest(`Unknown action: ${action}. GET /api/v1/chats takes no actions`);
   }
 
