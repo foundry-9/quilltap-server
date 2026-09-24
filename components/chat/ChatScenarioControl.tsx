@@ -39,6 +39,7 @@ import type {
   ScenarioBuilderCastMember,
 } from '@/components/scenario-builder/ScenarioBuilderDialog'
 import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 // Loaded on demand: the builder (and the Markdown renderer behind its thinking
 // block) stays out of this surface's bundle until the Host is asked.
@@ -91,6 +92,7 @@ export function ChatScenarioControl({
   castCharacters = [],
   projectName,
 }: ChatScenarioControlProps) {
+  const imagesHidden = useImagesHidden()
   const queryClient = useQueryClient()
   /**
    * What the user has picked in this sitting. Null means "nothing touched
@@ -344,11 +346,13 @@ export function ChatScenarioControl({
         disabled={saving}
         className="qt-button-secondary qt-button-sm inline-flex items-center gap-1.5 mb-2"
       >
-        <img
-          src={STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'}
-          alt=""
-          className="h-4 w-4 rounded-full"
-        />
+        {!imagesHidden && (
+          <img
+            src={STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'}
+            alt=""
+            className="h-4 w-4 rounded-full"
+          />
+        )}
         Ask the Host to set the scene
       </button>
       {builderOpen && (

@@ -19,10 +19,17 @@ interface QuickHideContextValue {
    * so the choice survives reloads.
    */
   includeAutonomousRooms: boolean
+  /**
+   * When true, the Salon withholds every image it would paint — the story
+   * background, avatars in the transcript and the participant sidebar, and
+   * attached or embedded images. Off by default; persisted in localStorage.
+   */
+  hideSalonImages: boolean
   loading: boolean
   toggleTag: (tagId: string) => void
   toggleHideDangerousChats: () => void
   toggleIncludeAutonomousRooms: () => void
+  toggleHideSalonImages: () => void
   clearAllHidden: () => void
   refresh: () => Promise<void>
   shouldHideByIds: (tagIds?: Array<string | null | undefined>) => boolean
@@ -38,6 +45,7 @@ interface QuickHideContextValue {
 const STORAGE_KEY = 'quilltap.quickHide.activeTags'
 const DANGER_STORAGE_KEY = 'quilltap.quickHide.hideDangerous'
 const AUTONOMOUS_STORAGE_KEY = 'quilltap.quickHide.includeAutonomousRooms'
+const SALON_IMAGES_STORAGE_KEY = 'quilltap.quickHide.hideSalonImages'
 
 const QuickHideContext = createContext<QuickHideContextValue | null>(null)
 
@@ -59,6 +67,7 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   const [hiddenTagIds, setHiddenTagIds] = useState<Set<string>>(new Set())
   const [hideDangerousChats, setHideDangerousChats] = useState(false)
   const [includeAutonomousRooms, setIncludeAutonomousRooms] = useState(false)
+  const [hideSalonImages, setHideSalonImages] = useState(false)
   const [loading, setLoading] = useState(true)
   const [storageReady, setStorageReady] = useState(false)
 
@@ -115,6 +124,9 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       if (autoRaw === 'true') {
         setIncludeAutonomousRooms(true)
       }
+      if (window.localStorage.getItem(SALON_IMAGES_STORAGE_KEY) === 'true') {
+        setHideSalonImages(true)
+      }
     } catch (error) {
       console.warn('Unable to load quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -130,10 +142,11 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(hiddenTagIds)))
       window.localStorage.setItem(DANGER_STORAGE_KEY, hideDangerousChats ? 'true' : 'false')
       window.localStorage.setItem(AUTONOMOUS_STORAGE_KEY, includeAutonomousRooms ? 'true' : 'false')
+      window.localStorage.setItem(SALON_IMAGES_STORAGE_KEY, hideSalonImages ? 'true' : 'false')
     } catch (error) {
       console.warn('Unable to persist quick-hide preferences', { error: error instanceof Error ? error.message : String(error) })
     }
-  }, [hiddenTagIds, hideDangerousChats, includeAutonomousRooms, storageReady])
+  }, [hiddenTagIds, hideDangerousChats, includeAutonomousRooms, hideSalonImages, storageReady])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -153,6 +166,9 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       }
       if (event.key === AUTONOMOUS_STORAGE_KEY && event.newValue) {
         setIncludeAutonomousRooms(event.newValue === 'true')
+      }
+      if (event.key === SALON_IMAGES_STORAGE_KEY && event.newValue) {
+        setHideSalonImages(event.newValue === 'true')
       }
     }
     window.addEventListener('storage', handler)
@@ -180,9 +196,14 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
     setIncludeAutonomousRooms(prev => !prev)
   }, [])
 
+  const toggleHideSalonImages = useCallback(() => {
+    setHideSalonImages(prev => !prev)
+  }, [])
+
   const clearAllHidden = useCallback(() => {
     setHiddenTagIds(new Set())
     setHideDangerousChats(false)
+    setHideSalonImages(false)
     // Note: includeAutonomousRooms is an "include" toggle (adds items),
     // not a "hide" toggle, so it is not reset by Clear All Hidden.
   }, [])
@@ -221,16 +242,18 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
       hiddenTagIds,
       hideDangerousChats,
       includeAutonomousRooms,
+      hideSalonImages,
       loading,
       toggleTag,
       toggleHideDangerousChats,
       toggleIncludeAutonomousRooms,
+      toggleHideSalonImages,
       clearAllHidden,
       refresh: loadTags,
       shouldHideByIds,
       shouldHideChat,
     }),
-    [quickHideTags, hiddenTagIds, hideDangerousChats, includeAutonomousRooms, loading, toggleTag, toggleHideDangerousChats, toggleIncludeAutonomousRooms, clearAllHidden, loadTags, shouldHideByIds, shouldHideChat]
+    [quickHideTags, hiddenTagIds, hideDangerousChats, includeAutonomousRooms, hideSalonImages, loading, toggleTag, toggleHideDangerousChats, toggleIncludeAutonomousRooms, toggleHideSalonImages, clearAllHidden, loadTags, shouldHideByIds, shouldHideChat]
   )
 
   return <QuickHideContext.Provider value={value}>{children}</QuickHideContext.Provider>

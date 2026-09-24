@@ -6,6 +6,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { getAvatarSrc } from '@/components/ui/Avatar'
+import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import { Icon } from '@/components/ui/icon'
 
 interface ToolMessageProps {
@@ -212,6 +213,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
+  const imagesHidden = useImagesHidden()
 
   const toolData: ToolResult = useMemo(() => {
     try {
@@ -371,7 +373,7 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
   const responsePreview = getPreviewText(formatResultContent(toolData))
 
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
-  const headerAvatarSrc = headerAvatar ? getAvatarSrc(headerAvatar) : null
+  const headerAvatarSrc = headerAvatar && !imagesHidden ? getAvatarSrc(headerAvatar) : null
   const isUserInitiated = toolData.initiatedBy === 'user'
   const actorName = isUserInitiated
     ? (toolData.operatorName || 'You')
@@ -564,12 +566,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                                 type="button"
                               >
                                 <div className="relative w-20 h-20 qt-bg-muted">
-                                  <img
-                                    src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                                    alt={attachment.filename}
-                                    className="w-full h-full object-cover"
-                                    onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                                  />
+                                  {imagesHidden ? (
+                                    <HiddenImageTile label={attachment.filename} />
+                                  ) : (
+                                    <img
+                                      src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
+                                      alt={attachment.filename}
+                                      className="w-full h-full object-cover"
+                                      onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
+                                    />
+                                  )}
                                 </div>
                                 <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
                                   <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />
@@ -648,12 +654,16 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
                         type="button"
                       >
                         <div className="relative w-20 h-20 qt-bg-muted">
-                          <img
-                            src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
-                            alt={attachment.filename}
-                            className="w-full h-full object-cover"
-                            onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
-                          />
+                          {imagesHidden ? (
+                            <HiddenImageTile label={attachment.filename} />
+                          ) : (
+                            <img
+                              src={attachment.filepath.startsWith('/') ? attachment.filepath : `/${attachment.filepath}`}
+                              alt={attachment.filename}
+                              className="w-full h-full object-cover"
+                              onError={() => setMissingImages((prev) => new Set(prev).add(attachment.id))}
+                            />
+                          )}
                         </div>
                         <div className="absolute inset-0 qt-bg-overlay-none group-hover/thumb:qt-bg-overlay-light transition-colors flex items-center justify-center">
                           <Icon name="zoom-in" className="w-6 h-6 qt-text-overlay opacity-0 group-hover/thumb:opacity-100 transition-opacity drop-shadow-lg" />

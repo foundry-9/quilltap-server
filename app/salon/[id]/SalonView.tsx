@@ -17,6 +17,7 @@ import { useChatContext } from '@/components/providers/chat-context'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
+import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import { getConciergeState, shouldShowDangerStyling } from '@/lib/services/dangerous-content/chat-override'
 import {
@@ -152,10 +153,15 @@ export function SalonView({ chatId }: SalonViewProps) {
     () => { void fetchChat() }
   )
 
+  // Quick-hide "Salon Images" withholds the backdrop along with every other
+  // image in the room; the URL is still tracked so it returns on un-hide.
+  const { shouldHideByIds, hiddenTagIds, hideSalonImages } = useQuickHide()
+  const visibleStoryBackgroundUrl = hideSalonImages ? null : storyBackgroundUrl
+
   // In the workspace, surrender the story background to the single arbitrated
   // workspace backdrop — a conversation's background always wins (no-op outside
   // the workspace).
-  useReportWorkspaceBackdrop(storyBackgroundUrl || null, true)
+  useReportWorkspaceBackdrop(visibleStoryBackgroundUrl || null, true)
 
   // --- UI state that stays in page ---
   // `input` is the EXTERNAL composer value (draft restore / resend / post-send
@@ -863,7 +869,6 @@ export function SalonView({ chatId }: SalonViewProps) {
 
   // --- Quick-hide logic ---
   const chatContext = useChatContext()
-  const { shouldHideByIds, hiddenTagIds } = useQuickHide()
   const quickHideActive = hiddenTagIds.size > 0
   const isCurrentChat = chatContext.chatId === id
   const chatTags = chatContext.tags.map(tag => tag.id)
@@ -1068,6 +1073,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   useEffect(() => {
     if (chat?.title) {
       const getCharacterAvatarUrl = (character: CharacterData): string | null => {
+        if (hideSalonImages) return null
         if (character.defaultImage?.url) return character.defaultImage.url
         if (character.defaultImage?.filepath) return character.defaultImage.filepath.startsWith('/') ? character.defaultImage.filepath : `/${character.defaultImage.filepath}`
         if (character.avatarUrl) return character.avatarUrl.startsWith('/') ? character.avatarUrl : `/${character.avatarUrl}`
@@ -1115,11 +1121,11 @@ export function SalonView({ chatId }: SalonViewProps) {
               </span>
             )
           })}
-          {storyBackgroundUrl && (
+          {visibleStoryBackgroundUrl && (
             <button
               type="button"
               onClick={() => setModalImage({
-                src: storyBackgroundUrl,
+                src: visibleStoryBackgroundUrl,
                 filename: storyBackgroundFilename || 'story_background.png',
                 fileId: storyBackgroundFileId || undefined,
               })}
@@ -1127,7 +1133,7 @@ export function SalonView({ chatId }: SalonViewProps) {
               title="View story background"
             >
               <img
-                src={storyBackgroundUrl}
+                src={visibleStoryBackgroundUrl}
                 alt="Story background"
                 className="w-8 h-5 object-cover"
               />
@@ -1173,7 +1179,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
     return () => setLeftContent(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
-  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, chat?.conciergeOverride, llmCharacterKey, setLeftContent, storyBackgroundUrl, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
+  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, chat?.conciergeOverride, llmCharacterKey, setLeftContent, visibleStoryBackgroundUrl, hideSalonImages, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
@@ -1448,10 +1454,11 @@ export function SalonView({ chatId }: SalonViewProps) {
   const isTerminalModeActive = terminalModeHook.terminalMode !== 'normal'
 
   return (
+    <ImagesHiddenProvider hidden={hideSalonImages}>
     <TerminalModeContext.Provider value={terminalCtxValue}>
     <div
       className="qt-chat-layout"
-      style={storyBackgroundUrl ? { '--story-background-url': `url('${storyBackgroundUrl}')` } as React.CSSProperties : undefined}
+      style={visibleStoryBackgroundUrl ? { '--story-background-url': `url('${visibleStoryBackgroundUrl}')` } as React.CSSProperties : undefined}
     >
       <div className="qt-chat-main">
         <SalonModePanes
@@ -2053,5 +2060,6 @@ export function SalonView({ chatId }: SalonViewProps) {
 
     </div>
     </TerminalModeContext.Provider>
+    </ImagesHiddenProvider>
   )
 }
