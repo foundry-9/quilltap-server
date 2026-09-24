@@ -65,6 +65,12 @@ export interface DedicatedDbOptions {
    * not initialized (`requireMountIndexDb` / `requireLLMLogsDb`).
    */
   acquireDb: () => DatabaseType;
+  /**
+   * Columns stored as raw BLOBs (Float32 embedding vectors). Without this the
+   * collection would JSON-serialize a `Float32Array` into an index-keyed
+   * object that no later read can decode.
+   */
+  blobColumns?: string[];
   /** Columns stored brotli-compressed (see `lib/database/text-compression.ts`). */
   compressedColumns?: string[];
 }
@@ -81,6 +87,7 @@ type ColumnKinds = ReturnType<typeof classifySchemaColumns>;
 export abstract class AbstractDedicatedDbRepository<T extends BaseEntity> extends AbstractBaseRepository<T> {
   override readonly dbTarget: DedicatedDbTarget;
   private readonly acquireDb: () => DatabaseType;
+  private readonly blobColumns: string[];
   private readonly compressedColumns: string[];
   private tableEnsured = false;
   private columnKinds: ColumnKinds | null = null;
@@ -89,6 +96,7 @@ export abstract class AbstractDedicatedDbRepository<T extends BaseEntity> extend
     super(collectionName, schema);
     this.dbTarget = options.dbTarget;
     this.acquireDb = options.acquireDb;
+    this.blobColumns = options.blobColumns ?? [];
     this.compressedColumns = options.compressedColumns ?? [];
   }
 
@@ -173,7 +181,7 @@ export abstract class AbstractDedicatedDbRepository<T extends BaseEntity> extend
       jsonColumns,
       arrayColumns,
       booleanColumns,
-      [],
+      this.blobColumns,
       this.compressedColumns,
     );
   }

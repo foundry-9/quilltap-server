@@ -20,6 +20,9 @@
   `ensureRawDb()` covers the writers that must throw instead.
 - New `requireLLMLogsDb()` (`lib/database/backends/sqlite/llm-logs-guard.ts`), the LLM-logs
   twin of `requireMountIndexDb()`.
+- The base takes a `blobColumns` option, and `DocMountChunksRepository` passes `['embedding']`
+  as before, so a chunk's `Float32Array` embedding is still written as a Float32 BLOB. A new
+  test round-trips an embedding through the real repository on in-memory SQLite.
 - Every repository now declares `dbTarget` (`'main' | 'mountIndex' | 'llmLogs'`), and a new unit
   test checks the background-job write partitioner's `MOUNT_INDEX_REPO_KEYS` /
   `LLM_LOGS_REPO_KEYS` against those declarations, so the `groupDocMountLinks` /

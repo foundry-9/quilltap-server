@@ -44,7 +44,14 @@ export interface DocMountChunkTextMatch {
 
 export class DocMountChunksRepository extends AbstractDedicatedDbRepository<DocMountChunk> {
   constructor() {
-    super('doc_mount_chunks', DocMountChunkSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
+    super('doc_mount_chunks', DocMountChunkSchema, {
+      dbTarget: 'mountIndex',
+      acquireDb: requireMountIndexDb,
+      // Float32 BLOBs in the embedding column need explicit blob-column
+      // handling so they're deserialized to Float32Array instead of being
+      // run through JSON.parse.
+      blobColumns: ['embedding'],
+    });
   }
 
   /**
