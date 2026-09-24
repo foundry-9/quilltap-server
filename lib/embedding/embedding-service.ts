@@ -430,6 +430,32 @@ export function normalizeVector(v: Float32Array): Float32Array {
 }
 
 /**
+ * The unit-length mean of a set of embeddings — one vector standing for the
+ * whole of which they are the parts.
+ *
+ * Help documents are embedded this way: a long page cannot be sent to the
+ * provider in one piece (every embedding model has an input ceiling, some as
+ * low as 512 tokens), but its section chunks always can, and the normalised
+ * centroid of their vectors ranks the page by its overall subject much as a
+ * single whole-text vector would. Returns null for an empty set; throws if the
+ * vectors disagree on dimension, which would make the average meaningless.
+ */
+export function averageEmbeddings(vectors: ReadonlyArray<Float32Array>): Float32Array | null {
+  if (vectors.length === 0) return null
+  const dims = vectors[0].length
+  const sum = new Float32Array(dims)
+  for (const v of vectors) {
+    if (v.length !== dims) {
+      throw new Error(`Cannot average embeddings of differing dimension (${dims} vs ${v.length})`)
+    }
+    for (let i = 0; i < dims; i++) {
+      sum[i] += v[i]
+    }
+  }
+  return normalizeVector(sum)
+}
+
+/**
  * Convert an arbitrary embedding (number[] or Float32Array) to a fresh
  * unit-length Float32Array. Does not mutate the input.
  */

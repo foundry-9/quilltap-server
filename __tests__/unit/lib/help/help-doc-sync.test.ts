@@ -1,10 +1,10 @@
 /**
  * Help Doc Sync Unit Tests
  *
- * Covers the disk -> database sync for help documentation: what makes
- * ensureHelpDocsSynced() decide a sync is warranted, how changed/unchanged
- * docs are detected, pruning of rows whose Markdown file has been deleted,
- * and the embedding top-up for newly synced docs.
+ * Covers the disk -> database sync for help documentation: how changed and
+ * unchanged docs are detected, pruning of rows whose Markdown file has been
+ * deleted, and the startup reconcile that slices section-less docs and queues
+ * embedding for every incomplete one.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals'
@@ -36,7 +36,7 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueEmbeddingGenerate: jest.fn().mockResolvedValue({ jobId: 'job-1', isNew: true }),
 }))
 
-import { syncHelpDocs, ensureHelpDocsSynced } from '@/lib/help/help-doc-sync'
+import { syncHelpDocs, reconcileHelpDocs } from '@/lib/help/help-doc-sync'
 import { getRepositories } from '@/lib/repositories/factory'
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service'
 import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
@@ -90,18 +90,21 @@ describe('help-doc-sync', () => {
     mockHelpDocs = {
       findAll: jest.fn().mockResolvedValue([]),
       findByPath: jest.fn().mockResolvedValue(null),
-      upsertByPath: jest.fn().mockImplementation(async (path: string) => ({
-        id: `id-for-${path}`,
-        path,
+      // Both shaped like the job child's buffered writes: `create` hands back
+      // an id of its own rather than the one it was asked to use, and `update`
+      // returns nothing. The sync must key chunks to ids it already knows.
+      create: jest.fn().mockImplementation(async (data: Record<string, unknown>) => ({
+        ...data,
+        id: 'id-returned-by-a-buffered-write',
       })),
+      update: jest.fn().mockResolvedValue(undefined),
       clearAllEmbeddingsForDoc: jest.fn().mockResolvedValue(undefined),
-      findAllNeedingEmbedding: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue(true),
     }
     mockHelpDocChunks = {
       replaceForDoc: jest.fn().mockResolvedValue(0),
       deleteByDocId: jest.fn().mockResolvedValue(0),
-      count: jest.fn().mockResolvedValue(0),
+      countByDoc: jest.fn().mockResolvedValue(new Map()),
     }
     mockEmbeddingStatus = {
       deleteByEntity: jest.fn().mockResolvedValue(1),
@@ -128,9 +131,13 @@ describe('help-doc-sync', () => {
 
       expect(result.created).toBe(1)
       expect(result.totalOnDisk).toBe(1)
-      expect(mockHelpDocs.upsertByPath).toHaveBeenCalledWith(
-        'help/answer-confirmation.md',
-        expect.objectContaining({ title: 'Answer Confirmation', url: '/salon' })
+      expect(mockHelpDocs.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: 'help/answer-confirmation.md',
+          title: 'Answer Confirmation',
+          url: '/salon',
+        }),
+        { id: expect.any(String) }
       )
     })
 
@@ -145,7 +152,8 @@ describe('help-doc-sync', () => {
 
       expect(result.unchanged).toBe(1)
       expect(result.updated).toBe(0)
-      expect(mockHelpDocs.upsertByPath).not.toHaveBeenCalled()
+      expect(mockHelpDocs.create).not.toHaveBeenCalled()
+      expect(mockHelpDocs.update).not.toHaveBeenCalled()
     })
 
     it('clears the embedding of a doc whose content changed', async () => {
@@ -155,7 +163,35 @@ describe('help-doc-sync', () => {
       const result = await syncHelpDocs()
 
       expect(result.updated).toBe(1)
-      expect(mockHelpDocs.clearAllEmbeddingsForDoc).toHaveBeenCalledWith('id-for-help/aurora.md')
+      expect(mockHelpDocs.update).toHaveBeenCalledWith(
+        'existing-id',
+        expect.objectContaining({ content: '# Aurora\n\nRewritten.' })
+      )
+      expect(mockHelpDocs.clearAllEmbeddingsForDoc).toHaveBeenCalledWith('existing-id')
+      // A failure recorded against the old text must not bar the new text
+      expect(mockEmbeddingStatus.deleteByEntity).toHaveBeenCalledWith('HELP_DOC', 'existing-id')
+    })
+
+    it('keys a changed doc\'s chunks to the existing row id (bug 167)', async () => {
+      // In the job child `update` is a buffered write that returns nothing, and
+      // the old upsert-by-path returned a random synthetic id there — so every
+      // chunk insert failed its foreign key when the parent replayed the batch.
+      givenHelpDirContains({ 'aurora.md': '# Aurora\n\nRewritten.' })
+      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: 'stale-hash' })])
+
+      await syncHelpDocs()
+
+      expect(mockHelpDocChunks.replaceForDoc).toHaveBeenCalledWith('existing-id', expect.any(Array))
+    })
+
+    it('keys a new doc\'s chunks to the id it asked create to use (bug 167)', async () => {
+      givenHelpDirContains({ 'aurora.md': '# Aurora\n\nBody.' })
+
+      await syncHelpDocs()
+
+      const [, options] = mockHelpDocs.create.mock.calls[0]
+      expect(options.id).not.toBe('id-returned-by-a-buffered-write')
+      expect(mockHelpDocChunks.replaceForDoc).toHaveBeenCalledWith(options.id, expect.any(Array))
     })
 
     it('prunes rows whose file has been deleted from disk', async () => {
@@ -178,8 +214,9 @@ describe('help-doc-sync', () => {
 
       const result = await syncHelpDocs()
 
+      const [, options] = mockHelpDocs.create.mock.calls[0]
       expect(mockHelpDocChunks.replaceForDoc).toHaveBeenCalledWith(
-        'id-for-help/aurora.md',
+        options.id,
         expect.arrayContaining([
           expect.objectContaining({ chunkIndex: 0, content: expect.stringContaining('Body one.') }),
         ])
@@ -272,132 +309,134 @@ describe('help-doc-sync', () => {
     })
   })
 
-  describe('ensureHelpDocsSynced', () => {
-    it('syncs a doc added after the initial sync, with a populated table', async () => {
-      givenHelpDirContains({
-        'aurora.md': '# Aurora',
-        'brahma-console.md': '# Brahma Console',
-      })
-      mockHelpDocs.findAll.mockResolvedValue([helpDocRow()])
+  describe('reconcileHelpDocs', () => {
+    /** Content hash as the sync computes it, so a row reads as unchanged. */
+    async function hashOf(content: string): Promise<string> {
+      const { createHash } = await import('node:crypto')
+      return createHash('sha256').update(content).digest('hex')
+    }
 
-      await ensureHelpDocsSynced()
+    const embedded = new Float32Array([0.6, 0.8])
 
-      expect(mockHelpDocs.upsertByPath).toHaveBeenCalledWith(
-        'help/brahma-console.md',
-        expect.objectContaining({ title: 'Brahma Console' })
-      )
+    it('re-syncs a page whose text changed even when no file was added or removed', async () => {
+      // The old lazy check compared only file names, so this edit was never
+      // picked up outside a full reindex.
+      givenHelpDirContains({ 'aurora.md': '# Aurora\n\nRewritten.' })
+      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: 'stale-hash' })])
+
+      const result = await reconcileHelpDocs()
+
+      expect(result.sync.updated).toBe(1)
+      expect(mockHelpDocs.update).toHaveBeenCalledWith('existing-id', expect.anything())
     })
 
-    it('backfills sections for an instance whose docs are already synced', async () => {
-      // The upgrade case: every content hash matches, so syncHelpDocs would
-      // skip every file and the chunk table would stay empty forever.
+    it('queues nothing when every page is unchanged and fully embedded', async () => {
       const content = '# Aurora\n\nBody.'
       givenHelpDirContains({ 'aurora.md': content })
-      const { createHash } = await import('node:crypto')
-      const hash = createHash('sha256').update(content).digest('hex')
       mockHelpDocs.findAll.mockResolvedValue([
-        helpDocRow({ contentHash: hash, content: '# Aurora\n\nBody.' }),
+        helpDocRow({ contentHash: await hashOf(content), content, embedding: embedded }),
       ])
+      mockHelpDocChunks.countByDoc.mockResolvedValue(new Map([['existing-id', { total: 2, embedded: 2 }]]))
 
-      await ensureHelpDocsSynced()
+      const result = await reconcileHelpDocs()
 
+      expect(result.incomplete).toBe(0)
+      expect(mockHelpDocs.update).not.toHaveBeenCalled()
+      expect(mockHelpDocChunks.replaceForDoc).not.toHaveBeenCalled()
+      expect(mockedEnqueue).not.toHaveBeenCalled()
+    })
+
+    it('slices and queues an unchanged page that has no sections (bug 167 aftermath)', async () => {
+      // Other pages already have sections, which is what defeated the old
+      // "any rows at all?" backfill check.
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ contentHash: await hashOf(content), content, embedding: embedded }),
+      ])
+      mockHelpDocChunks.countByDoc.mockResolvedValue(new Map([['some-other-doc', { total: 3, embedded: 3 }]]))
+
+      const result = await reconcileHelpDocs()
+
+      expect(result.sectionsBackfilled).toBe(1)
       expect(mockHelpDocChunks.replaceForDoc).toHaveBeenCalledWith(
         'existing-id',
         expect.arrayContaining([expect.objectContaining({ chunkIndex: 0 })])
       )
-      // The doc's own embedding is present, so only the chunk backfill can
-      // enqueue the job that fills the section vectors.
-      expect(mockedEnqueue).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({ entityType: 'HELP_DOC', entityId: 'existing-id' })
-      )
-    })
-
-    it('does not backfill when sections already exist', async () => {
-      const content = '# Aurora\n\nBody.'
-      givenHelpDirContains({ 'aurora.md': content })
-      const { createHash } = await import('node:crypto')
-      const hash = createHash('sha256').update(content).digest('hex')
-      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: hash })])
-      mockHelpDocChunks.count.mockResolvedValue(42)
-
-      await ensureHelpDocsSynced()
-
-      expect(mockHelpDocChunks.replaceForDoc).not.toHaveBeenCalled()
-    })
-
-    it('still loads help when the section backfill throws', async () => {
-      const content = '# Aurora\n\nBody.'
-      givenHelpDirContains({ 'aurora.md': content })
-      const { createHash } = await import('node:crypto')
-      const hash = createHash('sha256').update(content).digest('hex')
-      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: hash })])
-      mockHelpDocChunks.count.mockRejectedValue(new Error('no such table'))
-
-      await expect(ensureHelpDocsSynced()).resolves.toBeUndefined()
-    })
-
-    it('syncs when a row has no file on disk, so the prune is reachable', async () => {
-      givenHelpDirContains({ 'aurora.md': '# Aurora' })
-      const { createHash } = await import('node:crypto')
-      const hash = createHash('sha256').update('# Aurora').digest('hex')
-      // Every file on disk already has a row, so only the deleted direction
-      // can trigger this sync.
-      mockHelpDocs.findAll.mockResolvedValue([
-        helpDocRow({ contentHash: hash }),
-        helpDocRow({ id: 'gone-id', path: 'help/retired.md' }),
-      ])
-
-      await ensureHelpDocsSynced()
-
-      expect(mockHelpDocs.delete).toHaveBeenCalledWith('gone-id')
-    })
-
-    it('does not sync when disk and database agree', async () => {
-      givenHelpDirContains({ 'aurora.md': '# Aurora' })
-      mockHelpDocs.findAll.mockResolvedValue([helpDocRow()])
-      // Sections already present too, so there is genuinely nothing to do —
-      // an empty chunk table is its own reason to act (see the backfill tests).
-      mockHelpDocChunks.count.mockResolvedValue(12)
-
-      await ensureHelpDocsSynced()
-
-      expect(mockHelpDocs.upsertByPath).not.toHaveBeenCalled()
-      expect(mockHelpDocs.delete).not.toHaveBeenCalled()
-      expect(mockedEnqueue).not.toHaveBeenCalled()
-    })
-
-    it('syncs when the table is empty', async () => {
-      givenHelpDirContains({ 'aurora.md': '# Aurora' })
-
-      await ensureHelpDocsSynced()
-
-      expect(mockHelpDocs.upsertByPath).toHaveBeenCalledWith(
-        'help/aurora.md',
-        expect.objectContaining({ title: 'Aurora' })
-      )
-    })
-
-    it('enqueues embedding jobs for docs that have no embedding', async () => {
-      givenHelpDirContains({ 'aurora.md': '# Aurora' })
-      mockHelpDocs.findAllNeedingEmbedding.mockResolvedValue([{ id: 'doc-needs-embedding' }])
-
-      await ensureHelpDocsSynced()
-
       expect(mockedEnqueue).toHaveBeenCalledWith('user-1', {
         entityType: 'HELP_DOC',
-        entityId: 'doc-needs-embedding',
+        entityId: 'existing-id',
         profileId: 'profile-1',
       })
     })
 
+    it('queues a page whose own vector is missing', async () => {
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ contentHash: await hashOf(content), content, embedding: null }),
+      ])
+      mockHelpDocChunks.countByDoc.mockResolvedValue(new Map([['existing-id', { total: 2, embedded: 2 }]]))
+
+      await reconcileHelpDocs()
+
+      expect(mockedEnqueue).toHaveBeenCalledWith('user-1', expect.objectContaining({ entityId: 'existing-id' }))
+    })
+
+    it('queues a page with any section still unembedded', async () => {
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ contentHash: await hashOf(content), content, embedding: embedded }),
+      ])
+      mockHelpDocChunks.countByDoc.mockResolvedValue(new Map([['existing-id', { total: 4, embedded: 3 }]]))
+
+      await reconcileHelpDocs()
+
+      expect(mockHelpDocChunks.replaceForDoc).not.toHaveBeenCalled()
+      expect(mockedEnqueue).toHaveBeenCalledWith('user-1', expect.objectContaining({ entityId: 'existing-id' }))
+    })
+
     it('still completes when no embedding profile is configured', async () => {
       givenHelpDirContains({ 'aurora.md': '# Aurora' })
-      mockHelpDocs.findAllNeedingEmbedding.mockResolvedValue([{ id: 'doc-needs-embedding' }])
+      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ embedding: null })])
       mockedGetRepositories().embeddingProfiles.findAll.mockResolvedValue([])
 
-      await expect(ensureHelpDocsSynced()).resolves.toBeUndefined()
+      await expect(reconcileHelpDocs()).resolves.toEqual(expect.objectContaining({ incomplete: 1 }))
       expect(mockedEnqueue).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('ensureHelpDocsSynced', () => {
+    /** A fresh copy of the module, so its once-per-process memo starts empty. */
+    function freshModule(): typeof import('@/lib/help/help-doc-sync') {
+      let mod!: typeof import('@/lib/help/help-doc-sync')
+      jest.isolateModules(() => {
+        mod = require('@/lib/help/help-doc-sync')
+      })
+      return mod
+    }
+
+    it('reconciles once per process however many callers ask', async () => {
+      givenHelpDirContains({ 'aurora.md': '# Aurora' })
+      const { ensureHelpDocsSynced } = freshModule()
+
+      await Promise.all([ensureHelpDocsSynced(), ensureHelpDocsSynced()])
+      await ensureHelpDocsSynced()
+
+      expect(mockHelpDocs.create).toHaveBeenCalledTimes(1)
+    })
+
+    it('never throws, and retries on the next call after a failure', async () => {
+      givenHelpDirContains({ 'aurora.md': '# Aurora' })
+      mockHelpDocs.findAll.mockRejectedValueOnce(new Error('database is locked'))
+      const { ensureHelpDocsSynced } = freshModule()
+
+      await expect(ensureHelpDocsSynced()).resolves.toBeUndefined()
+      expect(mockHelpDocs.create).not.toHaveBeenCalled()
+
+      await ensureHelpDocsSynced()
+      expect(mockHelpDocs.create).toHaveBeenCalledTimes(1)
     })
   })
 })

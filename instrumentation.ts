@@ -900,6 +900,26 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 3.66: Reconcile the help index against the help files on disk
+      // ================================================================
+      // Every help file is re-read and compared by content hash: new and
+      // edited pages are rewritten and re-sliced, deleted ones pruned, and a
+      // HELP_DOC embedding job is queued for any page missing its own vector
+      // or a section's. Only help docs are touched — never memories or store
+      // chunks. Awaited: it is file reads plus two small queries when nothing
+      // changed, and it must finish its writes before Phase 3.7 can enqueue a
+      // reindex whose job-child sync would otherwise race it.
+      try {
+        const { ensureHelpDocsSynced } = await import('./lib/help/help-doc-sync');
+        await ensureHelpDocsSynced();
+      } catch (helpReconcileError) {
+        logger.warn('Help doc reconciliation failed', {
+          context: 'instrumentation.register',
+          error: helpReconcileError instanceof Error ? helpReconcileError.message : String(helpReconcileError),
+        });
+      }
+
+      // ================================================================
       // PHASE 3.7: Reconcile embedding dimensions against the default profile
       // ================================================================
       // There is one embedding standard per instance — the default profile's

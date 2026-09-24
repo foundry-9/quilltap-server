@@ -1207,13 +1207,13 @@ CREATE INDEX "idx_help_docs_url" ON "help_docs" ("url");
 | url | TEXT | URL route this doc is associated with (e.g., `/aurora`, `/settings?tab=chat`) |
 | content | TEXT | Full document content with frontmatter stripped |
 | contentHash | TEXT | SHA-256 hash of raw file content, used for change detection during sync |
-| embedding | BLOB (nullable) | Quantized embedding vector (see "Embedding BLOB format"), generated at runtime using user's embedding profile. Whole-document granularity — the coarse signal; see `help_doc_chunks` for section granularity |
+| embedding | BLOB (nullable) | Quantized embedding vector (see "Embedding BLOB format"), generated at runtime using user's embedding profile. Whole-document granularity — the coarse signal; see `help_doc_chunks` for section granularity. Never an embedding of the whole text: it is the normalised mean of the document's section vectors (`averageEmbeddings`), so a page longer than the provider's input ceiling still gets one (bug 168) |
 | createdAt | TEXT (ISO 8601) | Creation timestamp |
 | updatedAt | TEXT (ISO 8601) | Last update timestamp |
 
 ### help_doc_chunks
 
-Section-level slices of each help document, one row per chunk, so semantic search can match a *section* rather than only a whole page. A whole-document vector for a long, topically broad page (`help/chat-settings.md` covers a dozen subsystems) is a smear that matches any specific question only weakly. Rows are rebuilt from disk by the help-doc sync whenever a document's content hash changes, and their embeddings are filled by the same `HELP_DOC` background job that embeds the parent document — so a chunk can never carry a dimension its parent doesn't. Introduced in v4.9.0 (migration: `create-help-doc-chunks-table-v1`).
+Section-level slices of each help document, one row per chunk, so semantic search can match a *section* rather than only a whole page. A whole-document vector for a long, topically broad page (a settings page can cover a dozen subsystems) is a smear that matches any specific question only weakly. Sections are also the only help text ever sent to an embedding provider — the parent's vector is their average — and `__tests__/unit/lib/help/help-doc-size.test.ts` holds each one's embedding text to `HELP_SECTION_EMBEDDING_MAX_TOKENS`. Rows are rebuilt from disk by the help-doc sync whenever a document's content hash changes, and their embeddings are filled by the same `HELP_DOC` background job that embeds the parent document — so a chunk can never carry a dimension its parent doesn't. Introduced in v4.9.0 (migration: `create-help-doc-chunks-table-v1`).
 
 ```sql
 CREATE TABLE "help_doc_chunks" (

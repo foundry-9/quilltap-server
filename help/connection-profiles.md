@@ -550,7 +550,7 @@ The same arrangement covers the cheap-LLM tasks that run out of sight: titling,
 memory extraction, summarising, scene tracking and the rest. When those run
 through a connection profile, that profile's chain applies. When they don't —
 a local model, or a route Quilltap assembled on the spot — see the *Allow a
-Similar-Tier Stand-In* option in [Chat Settings](chat-settings.md).
+Similar-Tier Stand-In* option in [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#cheap-llm-configuration).
 
 Background work fails quietly, as it always has. Only chats speak up.
 
