@@ -72,6 +72,33 @@ function matchTier(name: string, query: string): MatchTier | null {
 }
 
 /**
+ * The Brahma Console, offered as a name only at the start of a line — the one
+ * place `@Brahma:` / `@Brahma?` means anything. It is not a character, so the
+ * character list never carries it. The operator (the composer's only user) may
+ * always reach it; the gating in `carina.service.ts` concerns characters.
+ */
+export const BRAHMA_MENTION: MentionCandidate = {
+  id: 'brahma-console',
+  name: 'Brahma',
+  title: 'the Brahma Console',
+};
+
+/**
+ * The candidates for a trigger: the characters, plus Brahma when the `@` opens
+ * a line — unless a character already answers to that name, in which case the
+ * name is on offer already and the Carina service decides who hears it.
+ */
+export function mentionCandidatesFor<T extends MentionCandidate>(
+  characters: readonly T[],
+  atLineStart: boolean,
+): Array<T | MentionCandidate> {
+  if (!atLineStart) return [...characters];
+  const brahmaName = BRAHMA_MENTION.name.toLocaleLowerCase();
+  if (characters.some((c) => c.name?.trim().toLocaleLowerCase() === brahmaName)) return [...characters];
+  return [...characters, BRAHMA_MENTION];
+}
+
+/**
  * Filter and order candidates for a query.
  *
  * Characters in `priorityIds` (the current chat's cast) come first, then by

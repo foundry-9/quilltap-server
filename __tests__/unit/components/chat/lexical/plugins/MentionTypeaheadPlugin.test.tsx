@@ -56,12 +56,23 @@ beforeAll(() => {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver
-  global.fetch = jest.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ characters: CHARACTERS }),
-    text: async () => JSON.stringify({ characters: CHARACTERS }),
-  })) as unknown as typeof fetch
+  global.fetch = jest.fn(() => respond()) as unknown as typeof fetch
+})
+
+function jsonResponse(body: unknown, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? 'OK' : 'Error',
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response
+}
+
+/** What the character list request answers with; tests swap it out. */
+let respond: () => Promise<Response>
+beforeEach(() => {
+  respond = async () => jsonResponse({ characters: CHARACTERS })
 })
 
 afterAll(() => {
@@ -167,6 +178,59 @@ describe('MentionTypeaheadPlugin', () => {
     })
   })
 
+  describe('while the list is loading or unreachable', () => {
+    it('says it is consulting the register, not that nobody matches', async () => {
+      respond = () => new Promise<Response>(() => {})
+      const editor = mount()
+      await openMenu(editor, 'hello @ari')
+      expect(screen.getByText(/Consulting the register/)).toBeInTheDocument()
+      expect(screen.queryByText(/No such personage/)).toBeNull()
+    })
+
+    it('holds Enter rather than sending the half-typed name', async () => {
+      respond = () => new Promise<Response>(() => {})
+      const editor = mount()
+      await openMenu(editor, 'hello @ari')
+      press(editor, KEY_ENTER_COMMAND)
+      expect(readText(editor)).toBe('hello @ari')
+    })
+
+    it('says so when the register cannot be reached, and lets Enter through', async () => {
+      respond = async () => jsonResponse({ error: 'nope' }, 500)
+      const editor = mount()
+      await openMenu(editor, 'hello @ari')
+      expect(screen.getByText(/could not be reached/)).toBeInTheDocument()
+      // Not held: Enter reaches the editor (here, a new paragraph; in the
+      // composer, KeyboardPlugin sends).
+      press(editor, KEY_ENTER_COMMAND)
+      expect(readText(editor)).not.toBe('hello @ari')
+    })
+  })
+
+  describe('Brahma', () => {
+    it('is offered at the start of a line', async () => {
+      const editor = mount()
+      await openMenu(editor, '@bra')
+      expect(optionLabels()).toEqual([expect.stringContaining('Brahma')])
+    })
+
+    it('is not offered mid-line', async () => {
+      const editor = mount()
+      await openMenu(editor, 'ask @bra')
+      expect(optionLabels()).toEqual([])
+    })
+
+    it('completes into a Brahma query', async () => {
+      const editor = mount()
+      await openMenu(editor, 'first', '@bra')
+      press(editor, KEY_ENTER_COMMAND)
+      type(editor, '?')
+      type(editor, ' ')
+      type(editor, 'how many chats?')
+      expect(readText(editor)).toBe('first\n@Brahma? how many chats?')
+    })
+  })
+
   describe('completing mid-line', () => {
     it('Enter takes the first name and drops the @', async () => {
       const editor = mount()
@@ -267,6 +331,42 @@ describe('MentionTypeaheadPlugin', () => {
       type(editor, ':')
       type(editor, ' ')
       expect(readText(editor)).toBe('first line\n@Aristarchus: ')
+    })
+
+    it('judges a restored @ again after an undo', async () => {
+      const editor = mount()
+      await openMenu(editor, '@ari')
+      press(editor, KEY_ENTER_COMMAND)
+      await settle()
+      type(editor, ',')
+      await settle()
+      expect(readText(editor)).toBe('Aristarchus,')
+
+      act(() => {
+        editor.dispatchCommand(UNDO_COMMAND, undefined)
+      })
+      flush(editor)
+      expect(readText(editor)).toBe('@Aristarchus')
+
+      type(editor, '.')
+      expect(readText(editor)).toBe('Aristarchus.')
+    })
+
+    it('keeps a restored @ that goes on to become a query', async () => {
+      const editor = mount()
+      await openMenu(editor, '@ari')
+      press(editor, KEY_ENTER_COMMAND)
+      await settle()
+      type(editor, ',')
+      await settle()
+      act(() => {
+        editor.dispatchCommand(UNDO_COMMAND, undefined)
+      })
+      flush(editor)
+
+      type(editor, ':')
+      type(editor, ' ')
+      expect(readText(editor)).toBe('@Aristarchus: ')
     })
 
     it('one undo takes back the keystroke and the dropped @ together', async () => {

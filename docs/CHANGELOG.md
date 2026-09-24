@@ -16,6 +16,12 @@
   an update merged into the same undo step. Names the Carina parser cannot address (hyphen,
   apostrophe, non-ASCII, single character) drop the `@` immediately; the parser's name grammar
   is now exported as `isCarinaInvocableName` (`lib/chat/carina-parser.ts`) and shared.
+- At the start of a line the menu also offers Brahma (`BRAHMA_MENTION`), unless a character
+  named Brahma already exists.
+- While the character list is loading the menu shows a loading label (an error label if the
+  fetch fails) instead of "no match", and holds Enter/Tab so a half-typed `@name` is not sent.
+- An undo or redo that restores a line-start `@Name` to its undecided form re-arms the
+  keep-or-strip check.
 - New `MentionTypeaheadPlugin` and pure logic in `lib/mentions/mention-typeahead.ts`.
   `$textBeforeCursor` / `$isGluedToPreviousRun` moved from `CharTypeaheadPlugin` into
   `components/chat/lexical/typeahead/trigger-context.ts` so both typeaheads share them.

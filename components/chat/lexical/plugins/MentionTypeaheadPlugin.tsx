@@ -38,8 +38,11 @@ import {
   $isRootNode,
   $isTextNode,
   COMMAND_PRIORITY_CRITICAL,
+  HISTORIC_TAG,
   HISTORY_MERGE_TAG,
   KEY_DOWN_COMMAND,
+  KEY_ENTER_COMMAND,
+  KEY_TAB_COMMAND,
   type LexicalEditor,
   type LexicalNode,
   type ParagraphNode,
@@ -52,6 +55,7 @@ import {
   canKeepLineStartAt,
   classifyLineStartMention,
   findMentionTrigger,
+  mentionCandidatesFor,
   rankMentionCandidates,
   type MentionCandidate,
 } from '@/lib/mentions/mention-typeahead'
@@ -68,6 +72,8 @@ const MENU_LIMIT = 10
 
 const LISTBOX_ID = 'qt-mention-typeahead-listbox'
 const EMPTY_LABEL = 'No such personage in the register'
+const LOADING_LABEL = 'Consulting the register\u2026'
+const ERROR_LABEL = 'The register could not be reached'
 
 interface CharactersResponse {
   characters?: MentionCandidate[]
@@ -132,17 +138,38 @@ function $dropLeadingCharacter(node: TextNode): void {
   }
 }
 
-interface SpaceCommitBindingProps {
+interface MenuKeyBindingsProps {
   editor: LexicalEditor
   onSpace: () => boolean
+  /**
+   * The list is still loading and has nothing to offer: Enter and Tab are held
+   * rather than falling through, so `@ari` + Enter typed before the register
+   * arrives does not send `@ari` as the message. Escape closes the menu and
+   * restores both keys.
+   */
+  holdCommitKeys: boolean
 }
 
 /**
- * Registers the Space commit for as long as the menu is on screen. Living inside
- * the menu's render output ties the handler's lifetime to the menu's, and hands
- * it the menu's own highlighted index rather than a guess at it.
+ * Registers the menu's extra keys for as long as the menu is on screen. Living
+ * inside the menu's render output ties the handlers' lifetime to the menu's,
+ * and hands them the menu's own highlighted index rather than a guess at it.
  */
-function SpaceCommitBinding({ editor, onSpace }: SpaceCommitBindingProps): null {
+function MenuKeyBindings({ editor, onSpace, holdCommitKeys }: MenuKeyBindingsProps): null {
+  useEffect(() => {
+    if (!holdCommitKeys) return
+    const hold = (event: KeyboardEvent | null) => {
+      event?.preventDefault()
+      return true
+    }
+    const releaseEnter = editor.registerCommand(KEY_ENTER_COMMAND, hold, COMMAND_PRIORITY_CRITICAL)
+    const releaseTab = editor.registerCommand(KEY_TAB_COMMAND, hold, COMMAND_PRIORITY_CRITICAL)
+    return () => {
+      releaseEnter()
+      releaseTab()
+    }
+  }, [editor, holdCommitKeys])
+
   useEffect(
     () =>
       editor.registerCommand(
@@ -173,10 +200,12 @@ export function MentionTypeaheadPlugin({
   const [editor] = useLexicalComposerContext()
   const [query, setQuery] = useState<string | null>(null)
   const [rootElement, setRootElement] = useState<HTMLElement | null>(null)
+  /** Whether the open trigger's `@` starts a line — Brahma is offered only there. */
+  const [atLineStart, setAtLineStart] = useState(false)
 
   // Same key and URL as the spellcheck dictionary feed, so the list is shared.
   // The endpoint already leaves archived characters out.
-  const { data } = useQuery({
+  const { data, isPending, isError } = useQuery({
     queryKey: queryKeys.characters.list(),
     queryFn: ({ signal }) => apiFetch<CharactersResponse>('/api/v1/characters', { signal }),
     enabled: query !== null,
@@ -192,12 +221,18 @@ export function MentionTypeaheadPlugin({
   const committingWithSpaceRef = useRef(false)
   /** The line-start `@Name` awaiting a keep-or-strip verdict, if any. */
   const pendingRef = useRef<PendingLineStart | null>(null)
+  /**
+   * The last line-start `@Name` to receive a verdict. An undo can put that line
+   * back exactly as it stood while undecided; this is what re-arms the watch.
+   */
+  const lastJudgedRef = useRef<PendingLineStart | null>(null)
 
   useEffect(() => editor.registerRootListener((next) => setRootElement(next)), [editor])
 
   const options = useMemo(() => {
-    if (query === null || !data?.characters) return []
-    return rankMentionCandidates(data.characters, query, prioritySet, MENU_LIMIT).map(
+    if (query === null) return []
+    const candidates = mentionCandidatesFor(data?.characters ?? [], atLineStart)
+    return rankMentionCandidates(candidates, query, prioritySet, MENU_LIMIT).map(
       (character) =>
         new TypeaheadOption<MentionCandidate>(
           {
@@ -209,7 +244,7 @@ export function MentionTypeaheadPlugin({
           character,
         ),
     )
-  }, [data, query, prioritySet])
+  }, [data, query, prioritySet, atLineStart])
 
   const triggerFn = useCallback(
     (text: string, activeEditor: LexicalEditor): MenuTextMatch | null => {
@@ -227,6 +262,7 @@ export function MentionTypeaheadPlugin({
       const pending = pendingRef.current
       if (pending && match.start === 0 && match.query === pending.name) return null
 
+      setAtLineStart(match.start === 0 && $lineStartOf(current.node) !== null)
       return toMenuTextMatch(text, match)
     },
     [],
@@ -256,6 +292,7 @@ export function MentionTypeaheadPlugin({
             lineIndex: lineStart.lineIndex,
             name,
           }
+          lastJudgedRef.current = null
         } else {
           $insertTypeaheadText(nodeToReplace, name, { trailingSpace: withSpace })
         }
@@ -269,22 +306,37 @@ export function MentionTypeaheadPlugin({
    * Judge the pending line-start `@` after every change. `strip` removes it in
    * an update merged into the keystroke's own history entry, so one undo takes
    * back the keystroke and the removal together.
+   *
+   * An undo or redo that puts a judged line back into its undecided form
+   * (`@Name`, `@Name:`) re-arms the watch, so the restored `@` is judged again
+   * by the next keystroke rather than left standing unconditionally.
    */
   useEffect(
     () =>
       editor.registerUpdateListener(({ editorState, tags }) => {
+        if (tags.has(HISTORY_MERGE_TAG) || editor.isComposing()) return
+
+        const readVerdict = (watched: PendingLineStart) =>
+          editorState.read(() => {
+            const paragraph = $getNodeByKey(watched.paragraphKey)
+            if (!$isParagraphNode(paragraph)) return 'abandon' as const
+            const line = paragraph.getTextContent().split('\n')[watched.lineIndex] ?? ''
+            return classifyLineStartMention(line, watched.name)
+          })
+
+        const lastJudged = lastJudgedRef.current
+        if (!pendingRef.current && lastJudged && tags.has(HISTORIC_TAG)) {
+          if (readVerdict(lastJudged) === 'pending') pendingRef.current = lastJudged
+          return
+        }
+
         const pending = pendingRef.current
-        if (!pending || tags.has(HISTORY_MERGE_TAG) || editor.isComposing()) return
+        if (!pending) return
 
-        const verdict = editorState.read(() => {
-          const paragraph = $getNodeByKey(pending.paragraphKey)
-          if (!$isParagraphNode(paragraph)) return 'abandon'
-          const line = paragraph.getTextContent().split('\n')[pending.lineIndex] ?? ''
-          return classifyLineStartMention(line, pending.name)
-        })
-
+        const verdict = readVerdict(pending)
         if (verdict === 'pending') return
         pendingRef.current = null
+        lastJudgedRef.current = pending
         if (verdict !== 'strip') return
 
         editor.update(
@@ -302,9 +354,11 @@ export function MentionTypeaheadPlugin({
     [editor],
   )
 
+  // Only a list with nothing in it yet is "loading" — a cached list shows at once.
+  const loading = isPending && !data
   const shellRenderFn = useTypeaheadShell<MentionCandidate>({
     listboxId: LISTBOX_ID,
-    emptyLabel: EMPTY_LABEL,
+    emptyLabel: loading ? LOADING_LABEL : isError && !data ? ERROR_LABEL : EMPTY_LABEL,
     activeDescendantTarget: rootElement,
   })
 
@@ -325,12 +379,16 @@ export function MentionTypeaheadPlugin({
 
       return (
         <>
-          <SpaceCommitBinding editor={editor} onSpace={onSpace} />
+          <MenuKeyBindings
+            editor={editor}
+            onSpace={onSpace}
+            holdCommitKeys={loading && itemProps.options.length === 0}
+          />
           {shellRenderFn(anchorElementRef, itemProps, matchingString)}
         </>
       )
     },
-    [editor, shellRenderFn],
+    [editor, shellRenderFn, loading],
   )
 
   return (

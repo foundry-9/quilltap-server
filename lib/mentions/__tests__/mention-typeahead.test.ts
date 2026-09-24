@@ -5,7 +5,9 @@
  */
 
 import {
+  BRAHMA_MENTION,
   classifyLineStartMention,
+  mentionCandidatesFor,
   findMentionTrigger,
   rankMentionCandidates,
 } from '../mention-typeahead';
@@ -96,5 +98,23 @@ describe('classifyLineStartMention', () => {
   it('handles names with interior spaces', () => {
     expect(classifyLineStartMention('@Lady Arabella: hello', 'Lady Arabella')).toBe('keep');
     expect(classifyLineStartMention('@Lady Arabella said', 'Lady Arabella')).toBe('strip');
+  });
+});
+
+describe('mentionCandidatesFor', () => {
+  const cast = [{ id: '1', name: 'Aristarchus' }];
+
+  it('adds Brahma only at the start of a line', () => {
+    expect(mentionCandidatesFor(cast, false)).toEqual(cast);
+    expect(mentionCandidatesFor(cast, true)).toEqual([...cast, BRAHMA_MENTION]);
+  });
+
+  it('does not add a second Brahma when a character already answers to it', () => {
+    const withBrahma = [...cast, { id: '2', name: ' brahma ' }];
+    expect(mentionCandidatesFor(withBrahma, true)).toEqual(withBrahma);
+  });
+
+  it('offers a name the Carina parser can address', () => {
+    expect(classifyLineStartMention('@Brahma? hi', BRAHMA_MENTION.name)).toBe('keep');
   });
 });
