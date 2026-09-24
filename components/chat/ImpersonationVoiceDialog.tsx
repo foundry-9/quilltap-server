@@ -20,6 +20,7 @@ import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { getAvatarSrc, type AvatarImageSource } from '@/components/ui/Avatar'
 import { showErrorToast } from '@/lib/toast'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 interface ProfileCard {
   id: string
@@ -82,6 +83,7 @@ export default function ImpersonationVoiceDialog({
   onEditOriginal,
   onCancel,
 }: ImpersonationVoiceDialogProps) {
+  const imagesHidden = useImagesHidden()
   // The draft is editable here, but the hook owns the text — a second copy
   // would need an effect to stay in step with it.
   const [profiles, setProfiles] = useState<ProfileCard[]>([])
@@ -114,7 +116,7 @@ export default function ImpersonationVoiceDialog({
       })
   }, [isOpen])
 
-  const avatar = getAvatarSrc(avatarSrc ?? null)
+  const avatar = imagesHidden ? null : getAvatarSrc(avatarSrc ?? null)
   const initial = characterName.charAt(0).toUpperCase()
   const showPromptPicker = systemPrompts.length > 1
   const canSend = !generating && proposal.trim().length > 0

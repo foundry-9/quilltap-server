@@ -164,14 +164,14 @@ See [Dangerous Content Handling](dangerous-content.md) for more information abou
 There are moments — a crowded railway carriage, a colleague with a wandering eye, a relative of delicate constitution peering over one's shoulder — when a conversation may proceed quite respectably in words while its illustrations had better stay in the portfolio. The **Salon Images** toggle draws a discreet curtain over every picture in the Salon:
 
 - The **story background** behind the conversation (and its little thumbnail in the header) is withdrawn, leaving the plain wallpaper of your theme
-- **Avatars** beside each message, on the speaking-as portrait by the composer, in the participant sidebar, and beside the character names in the header give way to each party's initial
+- **Avatars** beside each message, on the speaking-as portrait by the composer, in the participant sidebar, beside the character names in the header, and in the Salon's own dialogues (announcements, informs, the impersonation voice) give way to each party's initial or a plain disc
 - **Attached images** and images produced by tools become a modest grey tile bearing a closed eye; click the tile and the image opens in the viewer as usual, should you decide the coast is clear
 - **Images embedded in a message's text** are replaced by a small "Image hidden" label
 
 Particulars:
 
 - Images are shown by default; flip the toggle to hide them, and flip it again to bring them back
-- The curtain is drawn in the Salon only — character pages, the gallery and the rest of the establishment go on displaying their pictures
+- The curtain is drawn in the Salon only — character pages, the wardrobe, the gallery, the image viewer and the rest of the establishment go on displaying their pictures, since one opens those precisely to look
 - Nothing is deleted, regenerated or re-fetched; the Lantern goes on painting backgrounds in the ordinary way, and they reappear the moment you lift the curtain
 - Your preference is saved across sessions, like the other quick-hide choices
 

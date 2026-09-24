@@ -12,9 +12,17 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { QuickHideProvider, useQuickHide } from '@/components/providers/quick-hide-provider'
 import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
 import Avatar from '@/components/ui/Avatar'
+import LazyMessageContent from '@/components/chat/LazyMessageContent'
 
 jest.mock('@/components/providers/session-provider', () => ({
   useSession: () => ({ status: 'authenticated' }),
+}))
+
+// The real MessageContent pulls in ESM-only react-markdown; the stand-in
+// just marks which path LazyMessageContent took.
+jest.mock('@/components/chat/MessageContent', () => ({
+  __esModule: true,
+  default: () => <div data-testid="full-render" />,
 }))
 
 jest.mock('@/hooks/useAvatarDisplay', () => ({
@@ -98,4 +106,32 @@ describe('ImagesHiddenProvider consumers', () => {
     expect(screen.getByText('V')).toBeInTheDocument()
   })
 
+
+  it('LazyMessageContent keeps the pre-rendered fast path when images are shown', () => {
+    const { container } = render(
+      <LazyMessageContent content="x" renderedHtml={'<p><img src="/img/a.webp" alt="a"></p>'} />
+    )
+    expect(container.querySelector('img')).not.toBeNull()
+    expect(screen.queryByTestId('full-render')).toBeNull()
+  })
+
+  it('LazyMessageContent routes pre-rendered HTML with an image to the full render when hidden', () => {
+    const { container } = render(
+      <ImagesHiddenProvider hidden>
+        <LazyMessageContent content="x" renderedHtml={'<p><img src="/img/a.webp" alt="a"></p>'} />
+      </ImagesHiddenProvider>
+    )
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.getByTestId('full-render')).toBeInTheDocument()
+  })
+
+  it('LazyMessageContent keeps the fast path for image-free HTML even when hidden', () => {
+    render(
+      <ImagesHiddenProvider hidden>
+        <LazyMessageContent content="x" renderedHtml={'<p>plain words</p>'} />
+      </ImagesHiddenProvider>
+    )
+    expect(screen.getByText('plain words')).toBeInTheDocument()
+    expect(screen.queryByTestId('full-render')).toBeNull()
+  })
 })

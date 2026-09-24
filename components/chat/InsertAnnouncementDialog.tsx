@@ -6,6 +6,7 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { VoiceRewriteReviewPanel } from '@/components/chat/VoiceRewriteReviewPanel'
 import { resolveDefaultSystemPromptId } from '@/lib/characters/default-system-prompt'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 type StaffId =
   | 'lantern'
@@ -91,6 +92,7 @@ export default function InsertAnnouncementDialog({
   audienceCandidates = [],
   onPosted,
 }: InsertAnnouncementDialogProps) {
+  const imagesHidden = useImagesHidden()
   const [mode, setMode] = useState<Mode>('staff')
   const [staffId, setStaffId] = useState<StaffId>('host')
   const [characterId, setCharacterId] = useState<string>('')
@@ -472,7 +474,7 @@ export default function InsertAnnouncementDialog({
                         }`}
                         disabled={isPosting || stage !== 'compose'}
                       >
-                        {c.avatarUrl ? (
+                        {c.avatarUrl && !imagesHidden ? (
                           <img
                             src={c.avatarUrl}
                             alt=""
@@ -595,7 +597,7 @@ export default function InsertAnnouncementDialog({
                         disabled={isPosting || stage === 'generating'}
                         className="qt-checkbox flex-shrink-0"
                       />
-                      {p.avatarUrl ? (
+                      {p.avatarUrl && !imagesHidden ? (
                         <img
                           src={p.avatarUrl}
                           alt=""

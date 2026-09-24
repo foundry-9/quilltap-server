@@ -14,6 +14,11 @@
 - The Salon passes the flag down through a new `ImagesHiddenProvider`
   (`components/quick-hide/images-hidden-context.tsx`); `Avatar`, `MessageContent`,
   `ToolMessage`, `SpeakingAsAvatar` and `MessageRow` read it. Other pages are unaffected.
+- Also covered: server pre-rendered message HTML that contains an `<img>` (`LazyMessageContent`
+  takes the full `MessageContent` render while hidden), the Host icon on the scenario
+  control, and avatars in the Insert Announcement, Inform and Impersonation Voice dialogs.
+  Galleries, the file picker, the image viewer and the app-level wardrobe dialog still show
+  images.
 - The sidebar footer's quick-hide button is now always shown; the `useHasDangerousChats`
   hook that gated it is removed.
 
