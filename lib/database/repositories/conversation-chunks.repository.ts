@@ -24,8 +24,6 @@ import { rawQuery, registerBlobColumns } from '../manager';
  * chat-scoping and embedding storage.
  */
 export class ConversationChunksRepository extends AbstractBaseRepository<ConversationChunk> {
-  private blobColumnsRegistered = false;
-
   constructor() {
     super('conversation_chunks', ConversationChunkSchema);
   }
@@ -35,12 +33,17 @@ export class ConversationChunksRepository extends AbstractBaseRepository<Convers
    * The embedding column stores Float32 BLOBs.
    * Without this registration, BLOB embeddings are not deserialized to number[] and fail
    * Zod validation, causing chunks to be silently filtered out.
+   *
+   * Registration is keyed to the backend, so it is re-asserted on every call
+   * rather than remembered on this instance: a repository outlives the backend
+   * it first ran against (reconnect, or a dev-server reload), and a stale
+   * "already registered" flag would leave the fresh backend without blob
+   * handling — the write path would then persist an index-keyed object in place
+   * of the BLOB and corrupt the embedding. Merging an already-registered column
+   * is a no-op, so re-asserting is cheap. (Same rationale as `HelpDocsRepository`.)
    */
   protected async getCollection(): Promise<DatabaseCollection<ConversationChunk>> {
-    if (!this.blobColumnsRegistered) {
-      await registerBlobColumns('conversation_chunks', ['embedding']);
-      this.blobColumnsRegistered = true;
-    }
+    await registerBlobColumns('conversation_chunks', ['embedding']);
     return super.getCollection();
   }
 

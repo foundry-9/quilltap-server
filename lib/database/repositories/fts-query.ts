@@ -46,6 +46,8 @@
  * @module lib/database/repositories/fts-query
  */
 
+import { escapeLikeLiteral } from './like-escape';
+
 /** Tokens shorter than this cannot usefully drive a prefix query. */
 const MIN_USEFUL_TOKEN_LENGTH = 2;
 
@@ -79,18 +81,6 @@ export interface FtsFallbackPlan {
 export type FtsQueryPlan = FtsMatchPlan | FtsFallbackPlan;
 
 /**
- * Escape a user string for a `LIKE ? ESCAPE '\'` comparison.
- *
- * The backslash must go first, or it would escape the escapes we add after it.
- * Built directly rather than through the repository's `$regex` filter: that
- * path escapes regex metacharacters, then translates `.` to `_`, and emits no
- * `ESCAPE` clause — which is the bug this fallback exists to avoid repeating.
- */
-export function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
-/**
  * Decide how to run a user's query.
  *
  * Returns an FTS plan for anything with at least one token of two or more
@@ -99,7 +89,7 @@ export function escapeLikePattern(value: string): string {
  */
 export function buildFtsMatchExpression(query: string): FtsQueryPlan {
   const tokens = tokenizeLikeUnicode61(query);
-  const likePattern = `%${escapeLikePattern(query)}%`;
+  const likePattern = `%${escapeLikeLiteral(query)}%`;
 
   if (tokens.length === 0) {
     return { kind: 'fallback', likePattern, tokens, reason: 'no-tokens' };

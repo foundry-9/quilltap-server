@@ -210,38 +210,6 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   }
 
   /**
-   * Find direct child folders of a parent folder
-   * @param userId The user ID
-   * @param parentFolderId The parent folder ID (null for root level)
-   * @param projectId The project ID (null for general files)
-   * @returns Promise<Folder[]> Array of child folders
-   */
-  async findByParent(
-    userId: string,
-    parentFolderId: string | null,
-    projectId: string | null
-  ): Promise<Folder[]> {
-    return this.safeQuery(
-      async () => {
-        const query: TypedQueryFilter<Folder> = {
-          userId,
-          parentFolderId,
-          ...this.createNullableFilter('projectId', projectId),
-        };
-
-        const options: QueryOptions = { sort: { name: 1 } };
-
-        const results = await this.findByFilter(query, options);
-
-        return results;
-      },
-      'Error finding folders by parent',
-      { userId, parentFolderId, projectId },
-      []
-    );
-  }
-
-  /**
    * Find all folders for a user within a project or general files
    * @param userId The user ID
    * @param projectId The project ID (null for general files)
@@ -300,35 +268,6 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
   // ============================================================================
   // BULK OPERATIONS
   // ============================================================================
-
-  /**
-   * Create multiple folders at once (for migration)
-   * @param folders Array of folder data
-   * @returns Promise<Folder[]> Array of created folders
-   */
-  async createMany(
-    folders: Array<Omit<FolderInput, 'id' | 'createdAt' | 'updatedAt'>>
-  ): Promise<Folder[]> {
-    if (folders.length === 0) {
-      return [];
-    }
-
-    return this.safeQuery(
-      async () => {
-        const createdFolders: Folder[] = [];
-
-        for (const data of folders) {
-          const folder = await this.create(data);
-          createdFolders.push(folder);
-        }
-
-        logger.info('Folders created in bulk', { count: createdFolders.length });
-        return createdFolders;
-      },
-      'Error creating folders in bulk',
-      { count: folders.length }
-    );
-  }
 
   /**
    * Update paths for all folders under a renamed parent

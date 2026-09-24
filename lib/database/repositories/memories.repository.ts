@@ -23,8 +23,6 @@ const MAX_SEARCH_QUERY_LENGTH = 1000;
  * Implements CRUD operations for memories with character-scoping and advanced search capabilities.
  */
 export class MemoriesRepository extends AbstractBaseRepository<Memory> {
-  private blobColumnsRegistered = false;
-
   constructor() {
     super('memories', MemorySchema);
   }
@@ -34,12 +32,17 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * The embedding column stores Float32 BLOBs after the normalize-vector-storage migration.
    * Without this registration, BLOB embeddings are not deserialized to number[] and fail
    * Zod validation, causing memories to be silently filtered out.
+   *
+   * Registration is keyed to the backend, so it is re-asserted on every call
+   * rather than remembered on this instance: a repository outlives the backend
+   * it first ran against (reconnect, or a dev-server reload), and a stale
+   * "already registered" flag would leave the fresh backend without blob
+   * handling — the write path would then persist an index-keyed object in place
+   * of the BLOB and corrupt the embedding. Merging an already-registered column
+   * is a no-op, so re-asserting is cheap. (Same rationale as `HelpDocsRepository`.)
    */
   protected async getCollection(): Promise<DatabaseCollection<Memory>> {
-    if (!this.blobColumnsRegistered) {
-      await registerBlobColumns('memories', ['embedding']);
-      this.blobColumnsRegistered = true;
-    }
+    await registerBlobColumns('memories', ['embedding']);
     return super.getCollection();
   }
 
@@ -211,31 +214,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       'Error finding paginated memories for character',
       { characterId, limit: options.limit, offset: options.offset },
       { memories: [], totalCount: 0 }
-    );
-  }
-
-  /**
-   * Find memories containing any of the specified keywords
-   * @param characterId The character ID
-   * @param keywords Array of keywords to search for
-   * @returns Promise<Memory[]> Array of memories containing any keyword
-   */
-  async findByKeywords(characterId: string, keywords: string[]): Promise<Memory[]> {
-    return this.safeQuery(
-      async () => {
-        if (keywords.length === 0) {
-          return [];
-        }
-
-        const memories = await this.findByFilter({
-          characterId,
-          keywords: { $in: keywords },
-        });
-        return memories;
-      },
-      'Error finding memories by keywords',
-      { characterId, keywordCount: keywords.length },
-      []
     );
   }
 
@@ -888,28 +866,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Delete all memories associated with multiple source messages (for swipe groups)
-   * @param sourceMessageIds Array of source message IDs
-   * @returns Promise<number> Number of memories deleted
-   */
-  async deleteBySourceMessageIds(sourceMessageIds: string[]): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        if (sourceMessageIds.length === 0) {
-          return 0;
-        }
-
-        const deletedCount = await this.deleteMany({
-          sourceMessageId: { $in: sourceMessageIds },
-        });
-        return deletedCount;
-      },
-      'Error deleting memories by source message IDs',
-      { count: sourceMessageIds.length }
-    );
-  }
-
-  /**
    * Count memories associated with a specific source message
    * @param sourceMessageId The source message ID
    * @returns Promise<number> Number of memories for the message
@@ -1058,25 +1014,6 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   // ============================================================================
   // SEARCH AND REPLACE OPERATIONS
   // ============================================================================
-
-  /**
-   * Find all memories about a specific character
-   * @param aboutCharacterId The character ID this memory is about
-   * @returns Promise<Memory[]> Array of memories about the character
-   */
-  async findByAboutCharacterId(aboutCharacterId: string): Promise<Memory[]> {
-    return this.safeQuery(
-      async () => {
-        const memories = await this.findByFilter({
-          aboutCharacterId,
-        });
-        return memories;
-      },
-      'Error finding memories by aboutCharacterId',
-      { aboutCharacterId },
-      []
-    );
-  }
 
   /**
    * Count memories containing specific text

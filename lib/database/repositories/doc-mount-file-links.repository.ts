@@ -597,26 +597,6 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }
 
   /**
-   * Count links pointing at a file. Used by GC to decide whether to
-   * tombstone the file row after a link delete.
-   */
-  async countByFileId(fileId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return 0;
-        const row = db.prepare(
-          'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
-        ).get(fileId) as { count: number } | undefined;
-        return row?.count ?? 0;
-      },
-      'Error counting file links by file ID',
-      { fileId },
-      0
-    );
-  }
-
-  /**
    * Substring-search link rows by file name or relative path across a set of
    * mount points. Powers the global search bar's Documents chip
    * ({@link ../../mount-index/document-text-search}); the companion

@@ -29,8 +29,10 @@ jest.mock('@/lib/api/middleware', () => ({
   exists: (entity: unknown) => entity != null,
 }))
 
+// These requests carry no `?action=`, so dispatch always takes the fallback
+// (the plain PUT update).
 jest.mock('@/lib/api/middleware/actions', () => ({
-  getActionParam: () => null,
+  dispatchAction: (_req: unknown, _handlers: unknown, fallback: () => Promise<unknown>) => fallback(),
 }))
 
 jest.mock('@/lib/api/responses', () => ({

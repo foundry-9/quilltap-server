@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextHandler } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { created, serverError, badRequest, conflict, successResponse } from '@/lib/api/responses';
@@ -149,13 +149,18 @@ async function handleSemanticSearch(req: NextRequest, userId: string) {
   }
 }
 
-export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
-  const action = getActionParam(req);
+export const POST = createContextHandler(async (req: NextRequest, ctx) =>
+  dispatchAction(
+    req,
+    { 'semantic-search': () => handleSemanticSearch(req, ctx.user.id) },
+    () => handleCreateMountPoint(req, ctx)
+  )
+);
 
-  if (action === 'semantic-search') {
-    return handleSemanticSearch(req, user.id);
-  }
-
+async function handleCreateMountPoint(
+  req: NextRequest,
+  { user, repos }: RequestContext
+): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = createMountPointSchema.parse(body);
 
@@ -240,4 +245,4 @@ export const POST = createContextHandler(async (req: NextRequest, { user, repos 
   }
 
   return created({ mountPoint });
-});
+}

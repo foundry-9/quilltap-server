@@ -48,7 +48,7 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
         // duplicate sha rows that pre-date the content/link split (every
         // (mountPoint, relativePath) used to be its own file row, and the
         // migration deliberately keeps them rather than collapsing). Writers
-        // call findOrCreateByContent to reuse on match.
+        // check findBySha256 before creating so a matching row is reused.
         db.exec(`CREATE INDEX IF NOT EXISTS idx_doc_mount_files_sha256 ON doc_mount_files (sha256)`);
 
         this.mountIndexCollectionInitialized = true;
@@ -98,23 +98,6 @@ export class DocMountFilesRepository extends AbstractBaseRepository<DocMountFile
       { sha256 },
       null
     );
-  }
-
-  /**
-   * Get-or-create a content row keyed by sha256. If a row with this sha
-   * already exists, returns the existing row (and crucially its existing
-   * UUID is preserved — hard-linkers depend on this stability). If not,
-   * inserts a fresh content row with the supplied attributes.
-   */
-  async findOrCreateByContent(
-    data: Omit<DocMountFile, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<DocMountFile> {
-    const existing = await this.findBySha256(data.sha256);
-    if (existing) {
-      return existing;
-    }
-    return this._create(data, options);
   }
 
   // ============================================================================

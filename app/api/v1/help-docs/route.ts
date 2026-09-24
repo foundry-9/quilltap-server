@@ -7,7 +7,7 @@
 
 import { NextRequest } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { successResponse, serverError } from '@/lib/api/responses';
 import { getHelpSearch } from '@/lib/help-search';
@@ -146,16 +146,13 @@ async function handleChatCount(_request: NextRequest, context: RequestContext) {
 /**
  * GET /api/v1/help-docs or /api/v1/help-docs?action=chat-count
  */
-export const GET = createContextHandler(async (request: NextRequest, context: RequestContext) => {
-  const action = getActionParam(request);
-
-  if (action === 'chat-count') {
-    return handleChatCount(request, context);
-  }
-
-  if (action === 'search') {
-    return handleSearch(request, context);
-  }
-
-  return handleList(request, context);
-});
+export const GET = createContextHandler(async (request: NextRequest, context: RequestContext) =>
+  dispatchAction(
+    request,
+    {
+      'chat-count': () => handleChatCount(request, context),
+      search: () => handleSearch(request, context),
+    },
+    () => handleList(request, context)
+  )
+);

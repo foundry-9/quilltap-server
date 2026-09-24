@@ -8,8 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, enrichProfile } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { createContextParamsHandler, enrichProfile, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { notFound, badRequest, serverError, messageResponse, successResponse, validationError } from '@/lib/api/responses';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
@@ -224,13 +224,14 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
  * Generate images using this profile with placeholder expansion support
  */
 export const POST = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
-    const action = getActionParam(req);
+  async (req, ctx, { id }) => dispatchAction(req, { generate: () => handleGenerate(req, ctx, id) })
+);
 
-    if (action !== 'generate') {
-      return badRequest(`Unknown action: ${action}. Available actions: generate`);
-    }
-
+async function handleGenerate(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  id: string
+): Promise<NextResponse> {
     // Verify profile exists and belongs to user
     const profile = await repos.imageProfiles.findById(id);
 
@@ -284,5 +285,4 @@ export const POST = createContextParamsHandler<{ id: string }>(
         count: result.images?.length || 0,
       },
     }, 201);
-  }
-);
+}
