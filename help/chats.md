@@ -188,6 +188,10 @@ See [Chat Sidebar](chat-participants.md) for the full tour.
 
 **A word on mathematics.** The Salon typesets LaTeX mathematics — `$$e^{i\pi}+1=0$$` between double dollar signs, or the backslashed `\(...\)` and `\[...\]` forms — into proper printed-monograph equations. Single dollar signs remain honest currency and are never mistaken for algebra. The full particulars are catalogued in [Mathematical Notation](math-notation.md).
 
+**Summoning a name with `@`.** Begin a word with `@` and a little register of your characters drops open beside the caret — the players in the present chat listed first, the remainder of your acquaintance after. Each letter you add pares the list down (`@ar` offers *Arabella* and *Aristarchus*, and — since any word of a name will answer — *Lady Arabella* besides). **Enter**, **Tab** or a click takes the name at the top (or whichever you have arrowed to); a **space** does likewise once you have typed at least one letter, and keeps its space, so you may carry on without breaking stride. A bare `@` followed by a space is taken for honest punctuation and left alone, as is any `@` lodged inside an address such as `name@example.com`.
+
+What lands is the character's plain name, and the `@` quietly excuses itself — `see @ari` becomes `see Aristarchus`. The single exception is the **start of a line**, where `@Name:` and `@Name?` summon a [Carina](carina.md) answerer. There the `@` lingers a moment to learn your intentions: follow the name with a colon or question mark and then a space, and it stays put for the query; type anything else, and it withdraws. One Cmd/Ctrl+Z restores it, should it have withdrawn in error.
+
 ### Viewing History
 
 Scroll up to see earlier messages in the conversation. Long chats may have:

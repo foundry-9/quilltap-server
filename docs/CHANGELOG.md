@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Added: `@` character typeahead in the Salon composer
+
+- Typing `@` at the start of a word opens a menu of characters (chat cast first, then all
+  non-archived characters from `/api/v1/characters`), filtered by name or word prefix.
+- Enter, Tab or click completes the highlighted name; Space completes it when at least one
+  query character was typed and keeps the space. A bare `@` plus Space is left alone.
+- The completed text is the plain name with the `@` removed, except at the start of a line
+  (top-level paragraph, or after a soft line break): there the `@` is kept only if the name is
+  followed by `:` or `?` and whitespace (a Carina / Brahma query); anything else removes it in
+  an update merged into the same undo step.
+- New `MentionTypeaheadPlugin` and pure logic in `lib/mentions/mention-typeahead.ts`.
+  `$textBeforeCursor` / `$isGluedToPreviousRun` moved from `CharTypeaheadPlugin` into
+  `components/chat/lexical/typeahead/trigger-context.ts` so both typeaheads share them.
+
 #### Fixed: creating a character scenario returned an id that was never stored (bug 165)
 
 - `CharactersRepository.addScenario` returned the id it minted, but a vault-backed character

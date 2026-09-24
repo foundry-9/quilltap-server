@@ -235,6 +235,15 @@ export function SalonView({ chatId }: SalonViewProps) {
     return names
   }, [chat?.participants])
 
+  // The `@` typeahead lists this chat's cast ahead of everyone else.
+  const castCharacterIds = useMemo(
+    () =>
+      (chat?.participants ?? [])
+        .filter(p => p.status !== 'removed' && p.character?.id)
+        .map(p => p.character!.id),
+    [chat?.participants]
+  )
+
   const handleWhisper = useCallback((participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)
     const name = participant?.character?.name || 'Unknown'
@@ -1629,6 +1638,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           id={id}
           speakingAs={speakingAsSeat}
           voiceRehearsalArmed={impersonationVoiceArmed}
+          mentionPriorityCharacterIds={castCharacterIds}
           input={input}
           setInput={setInput}
           // Bug 67: in raw-source view the textarea is the visible surface and

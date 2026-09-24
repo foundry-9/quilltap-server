@@ -12,6 +12,8 @@ Carina is Quilltap's reference desk. She does not speak as herself — she has n
 
 To consult a Carina answerer from any message in the Salon, place an `@Name` invocation at the beginning of a line. The character name must be followed immediately by either a colon (`:`) for a public answer or a question mark (`?`) for a whispered one.
 
+You need not spell the name out in full: type `@` and the first letters, and the composer's name list will finish it for you with **Enter** or **Tab**. At the start of a line the `@` stays in place so long as you follow the name with `:` or `?` and a space, which is precisely what a query wants.
+
 ### Public queries (`@Name:`)
 
 ```

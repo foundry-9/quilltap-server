@@ -47,6 +47,7 @@ import { FormattingCommandPlugin } from './plugins/FormattingCommandPlugin'
 import { SmartTypographyPlugin } from './plugins/SmartTypographyPlugin'
 import { TextReplacementPlugin } from './plugins/TextReplacementPlugin'
 import { CharTypeaheadPlugin } from './plugins/CharTypeaheadPlugin'
+import { MentionTypeaheadPlugin } from './plugins/MentionTypeaheadPlugin'
 import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
 import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
 
@@ -76,6 +77,8 @@ interface LexicalComposerWrapperProps {
    * `input`; the composer re-syncs it on toggle-out via the editor handle.
    */
   suspendSync?: boolean
+  /** Character ids the `@` typeahead lists first — the current chat's cast. */
+  mentionPriorityCharacterIds?: readonly string[]
 }
 
 /**
@@ -96,6 +99,7 @@ const ComposerPlugins = forwardRef<
     disabled,
     placeholder,
     suspendSync,
+    mentionPriorityCharacterIds,
   },
   ref,
 ) {
@@ -158,6 +162,7 @@ const ComposerPlugins = forwardRef<
           actually commits. One mount per dataset profile. */}
       <CharTypeaheadPlugin profile={EMOJI_PROFILE} />
       <CharTypeaheadPlugin profile={UNICODE_PROFILE} />
+      <MentionTypeaheadPlugin priorityCharacterIds={mentionPriorityCharacterIds} />
       {/* Above TextReplacementPlugin: `.` is a trigger for both, and smart
           typography must resolve `...` before text replacement claims the word
           boundary. Registration order is load-bearing — see the interaction
