@@ -13,9 +13,6 @@ export const promoteFileSchema = z.object({
   folderPath: z.string().optional(),
 });
 
-export const FILE_ITEM_POST_ACTIONS = ['move', 'promote'] as const;
-export type FileItemPostAction = typeof FILE_ITEM_POST_ACTIONS[number];
-
 export { buildContentDisposition } from '@/lib/api/content-disposition';
 
 export function buildManagedFileResponse(file: any) {

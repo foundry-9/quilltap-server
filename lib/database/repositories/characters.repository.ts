@@ -147,30 +147,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
-   * Find LLM-controlled characters by user ID
-   * @param userId The user ID
-   * @returns Promise<Character[]> Array of LLM-controlled characters
-   */
-  async findLLMControlled(userId: string): Promise<Character[]> {
-    return this.safeQuery(
-      async () => {
-        // Include characters with no controlledBy field (defaults to llm)
-        const results = await this.findByFilter({
-          userId,
-          $or: [
-            { controlledBy: 'llm' },
-            { controlledBy: { $exists: false } },
-          ],
-        } as TypedQueryFilter<Character>);
-        return applyDocumentStoreOverlay(results);
-      },
-      'Error finding LLM-controlled characters',
-      { userId },
-      []
-    );
-  }
-
-  /**
    * Find multiple characters by their IDs in a single query
    * @param ids Array of character IDs
    * @returns Promise<Character[]> Array of found characters (may be shorter than input if some IDs don't exist)
@@ -660,47 +636,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     );
   }
 
-  private async getFromSubArray<S extends { id: string }>(
-    characterId: string,
-    itemId: string,
-    getItems: (c: Character) => S[],
-    errorMsg: string
-  ): Promise<S | null> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return null;
-        }
-        return getItems(character).find((i) => i.id === itemId) ?? null;
-      },
-      errorMsg,
-      { characterId, itemId },
-      null
-    );
-  }
-
-  private async getAllFromSubArray<S>(
-    characterId: string,
-    getItems: (c: Character) => S[],
-    errorMsg: string
-  ): Promise<S[]> {
-    return this.safeQuery(
-      async () => {
-        const character = await this.findById(characterId);
-        if (!character) {
-          logger.warn(`Character not found: ${errorMsg}`, { characterId });
-          return [];
-        }
-        return getItems(character);
-      },
-      errorMsg,
-      { characterId },
-      []
-    );
-  }
-
   // ============================================================================
   // PHYSICAL DESCRIPTION OPERATIONS
   // ============================================================================
@@ -848,29 +783,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     );
   }
 
-  /**
-   * Get a single system prompt by ID
-   */
-  async getSystemPrompt(characterId: string, promptId: string): Promise<CharacterSystemPrompt | null> {
-    return this.getFromSubArray<CharacterSystemPrompt>(
-      characterId,
-      promptId,
-      (c) => c.systemPrompts ?? [],
-      'Error getting system prompt'
-    );
-  }
-
-  /**
-   * Get all system prompts for a character
-   */
-  async getSystemPrompts(characterId: string): Promise<CharacterSystemPrompt[]> {
-    return this.getAllFromSubArray<CharacterSystemPrompt>(
-      characterId,
-      (c) => c.systemPrompts ?? [],
-      'Error getting system prompts'
-    );
-  }
-
   // ============================================================================
   // SCENARIO OPERATIONS
   // ============================================================================
@@ -971,19 +883,6 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
       (c) => c.scenarios ?? [],
       (items) => ({ scenarios: items }),
       'Error removing scenario'
-    );
-  }
-
-  /**
-   * Get all scenarios for a character
-   * @param characterId The character ID
-   * @returns Promise<CharacterScenario[]> Array of all scenarios for the character
-   */
-  async getScenarios(characterId: string): Promise<CharacterScenario[]> {
-    return this.getAllFromSubArray<CharacterScenario>(
-      characterId,
-      (c) => c.scenarios ?? [],
-      'Error getting scenarios'
     );
   }
 }

@@ -3,7 +3,8 @@
  * of lib/background-jobs/handlers/embedding-generate.ts
  *
  * Covers:
- *  - Successful embedding generation and storage for HELP_DOC
+ *  - HELP_DOC: document vector averaged from section vectors (never the
+ *    whole text, which can exceed a provider's input ceiling — bug 168)
  *  - Not-found handling for HELP_DOC
  *  - Error propagation for HELP_DOC
  *  - Successful embedding generation and storage for MOUNT_CHUNK
@@ -27,6 +28,8 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/embedding/embedding-service', () => ({
   generateEmbeddingForUser: jest.fn(),
+  // The real averaging, so the stored document vector is checked for what it is
+  averageEmbeddings: jest.requireActual('@/lib/embedding/embedding-service').averageEmbeddings,
   EMBEDDING_MAX_CHARS: 128 * 1024,
 }))
 
@@ -84,12 +87,17 @@ const embeddingResult = {
   provider: 'TEST',
 }
 
-function makeRepos(helpDocs = {}, docMountChunks = {}, embeddingStatus = {}) {
+function makeRepos(helpDocs = {}, docMountChunks = {}, embeddingStatus = {}, helpDocChunks = {}) {
   return {
     helpDocs: {
       findById: jest.fn(),
       updateEmbedding: jest.fn().mockResolvedValue(undefined),
       ...helpDocs,
+    },
+    helpDocChunks: {
+      findByDocId: jest.fn().mockResolvedValue([]),
+      updateEmbedding: jest.fn().mockResolvedValue(undefined),
+      ...helpDocChunks,
     },
     docMountChunks: {
       findById: jest.fn(),
@@ -117,26 +125,111 @@ describe('handleEmbeddingGenerate — HELP_DOC entity type', () => {
     mockGenerateEmbeddingForUser.mockResolvedValue(embeddingResult)
   })
 
-  it('generates and stores embedding for a found HELP_DOC', async () => {
+  function chunkRow(id: string, chunkIndex: number, embedding: Float32Array | null = null) {
+    return { id, docId: 'doc-1', chunkIndex, heading: `Section ${chunkIndex}`, content: `Body ${chunkIndex}.`, embedding }
+  }
+
+  it('stores the normalised mean of the section vectors as the document vector', async () => {
     const doc = { id: 'doc-1', title: 'Welcome', content: 'Hello world.' }
-    const repos = makeRepos({ findById: jest.fn().mockResolvedValue(doc) })
+    const repos = makeRepos(
+      { findById: jest.fn().mockResolvedValue(doc) },
+      {},
+      {},
+      { findByDocId: jest.fn().mockResolvedValue([chunkRow('c0', 0), chunkRow('c1', 1)]) }
+    )
     mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+    mockGenerateEmbeddingForUser
+      .mockResolvedValueOnce({ ...embeddingResult, embedding: new Float32Array([1, 0]) })
+      .mockResolvedValueOnce({ ...embeddingResult, embedding: new Float32Array([0, 1]) })
 
     await handleEmbeddingGenerate(makeJob('HELP_DOC', 'doc-1'))
 
+    // Each section is embedded under its title path; the whole text never is.
+    expect(mockGenerateEmbeddingForUser).toHaveBeenCalledTimes(2)
     expect(mockGenerateEmbeddingForUser).toHaveBeenCalledWith(
-      `${doc.title}\n\n${doc.content}`,
+      'Welcome › Section 0\n\nBody 0.',
       'user-1',
       'profile-1',
       { priority: 'background' }
     )
-    expect(repos.helpDocs.updateEmbedding).toHaveBeenCalledWith('doc-1', fakeEmbedding)
+    expect(repos.helpDocChunks.updateEmbedding).toHaveBeenCalledWith('c0', new Float32Array([1, 0]))
+    expect(repos.helpDocChunks.updateEmbedding).toHaveBeenCalledWith('c1', new Float32Array([0, 1]))
+
+    const [docId, vector] = (repos.helpDocs.updateEmbedding as jest.Mock).mock.calls[0]
+    expect(docId).toBe('doc-1')
+    expect(vector[0]).toBeCloseTo(Math.SQRT1_2)
+    expect(vector[1]).toBeCloseTo(Math.SQRT1_2)
     expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalledWith(
       'HELP_DOC',
       'doc-1',
       'profile-1',
       'user-1'
     )
+  })
+
+  it('embeds a document far larger than any provider input ceiling (bug 168)', async () => {
+    const huge = Array.from({ length: 80 }, (_, i) =>
+      `## Section ${i}\n\n${'Words about this setting and what it does. '.repeat(40)}`
+    ).join('\n\n')
+    const doc = { id: 'doc-1', title: 'Chat Settings', content: huge }
+    const repos = makeRepos({ findById: jest.fn().mockResolvedValue(doc) })
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+    mockGenerateEmbeddingForUser.mockResolvedValue({ ...embeddingResult, embedding: new Float32Array([0.6, 0.8]) })
+
+    await handleEmbeddingGenerate(makeJob('HELP_DOC', 'doc-1'))
+
+    // No stored rows yet, so the doc is sliced in memory — and no single call
+    // carries more than a section's worth of text.
+    const longest = Math.max(...mockGenerateEmbeddingForUser.mock.calls.map(([text]) => (text as string).length))
+    expect(longest).toBeLessThan(huge.length / 10)
+    expect(repos.helpDocChunks.updateEmbedding).not.toHaveBeenCalled()
+    expect(repos.helpDocs.updateEmbedding).toHaveBeenCalledWith('doc-1', expect.any(Float32Array))
+    expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalled()
+  })
+
+  it('reuses stored section vectors and re-embeds those of another width', async () => {
+    const doc = { id: 'doc-1', title: 'Welcome', content: 'Hello.' }
+    const repos = makeRepos(
+      { findById: jest.fn().mockResolvedValue(doc) },
+      {},
+      {},
+      {
+        findByDocId: jest.fn().mockResolvedValue([
+          chunkRow('c0', 0, new Float32Array([1, 0])),        // current width, reused
+          chunkRow('c1', 1),                                   // missing, embedded
+          chunkRow('c2', 2, new Float32Array([1, 0, 0])),     // stale profile, re-embedded
+        ]),
+      }
+    )
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+    mockGenerateEmbeddingForUser.mockResolvedValue({ ...embeddingResult, embedding: new Float32Array([0, 1]) })
+
+    await handleEmbeddingGenerate(makeJob('HELP_DOC', 'doc-1'))
+
+    expect(mockGenerateEmbeddingForUser).toHaveBeenCalledTimes(2)
+    expect(repos.helpDocChunks.updateEmbedding).not.toHaveBeenCalledWith('c0', expect.anything())
+    expect(repos.helpDocChunks.updateEmbedding).toHaveBeenCalledWith('c2', new Float32Array([0, 1]))
+    const [, vector] = (repos.helpDocs.updateEmbedding as jest.Mock).mock.calls[0]
+    expect(vector).toHaveLength(2)
+  })
+
+  it('still embeds the document when one section fails', async () => {
+    const doc = { id: 'doc-1', title: 'Welcome', content: 'Hello.' }
+    const repos = makeRepos(
+      { findById: jest.fn().mockResolvedValue(doc) },
+      {},
+      {},
+      { findByDocId: jest.fn().mockResolvedValue([chunkRow('c0', 0), chunkRow('c1', 1)]) }
+    )
+    mockGetRepositories.mockReturnValue(repos as ReturnType<typeof getRepositories>)
+    mockGenerateEmbeddingForUser
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({ ...embeddingResult, embedding: new Float32Array([0, 1]) })
+
+    await handleEmbeddingGenerate(makeJob('HELP_DOC', 'doc-1'))
+
+    expect(repos.helpDocs.updateEmbedding).toHaveBeenCalledWith('doc-1', new Float32Array([0, 1]))
+    expect(repos.embeddingStatus.markAsEmbedded).toHaveBeenCalled()
   })
 
   it('marks status as failed and returns when HELP_DOC is not found', async () => {

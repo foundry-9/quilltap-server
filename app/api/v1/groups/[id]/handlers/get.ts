@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import {
   handleGetDefault,
   handleGetMembers,
@@ -14,8 +14,6 @@ import {
 } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
-const GROUP_GET_ACTIONS = ['members', 'get-state'] as const;
-type GroupGetAction = typeof GROUP_GET_ACTIONS[number];
 
 /**
  * GET handler for individual group
@@ -25,16 +23,12 @@ export async function handleGet(
   ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
-  const action = getActionParam(req);
-
-  if (!action || !isValidAction(action, GROUP_GET_ACTIONS)) {
-    return handleGetDefault(groupId, ctx);
-  }
-
-  const actionHandlers: Record<GroupGetAction, () => Promise<NextResponse>> = {
-    members: () => handleGetMembers(groupId, ctx),
-    'get-state': () => handleGetState(groupId, ctx),
-  };
-
-  return actionHandlers[action]();
+  return dispatchAction(
+    req,
+    {
+      members: () => handleGetMembers(groupId, ctx),
+      'get-state': () => handleGetState(groupId, ctx),
+    },
+    () => handleGetDefault(groupId, ctx)
+  );
 }

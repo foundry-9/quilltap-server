@@ -112,7 +112,7 @@ export class HelpSearch {
     const literalPhrase = getLiteralPhrase(query)
 
     // Section-level scores first. A whole-document vector for a long, broad
-    // page (chat-settings.md spans a dozen subsystems) is a smear that matches
+    // page (a settings page can span a dozen subsystems) is a smear that matches
     // any specific question only weakly, so the best section's score stands in
     // for the document wherever sections exist.
     const bestSectionByDoc = await this.scoreSections(queryEmbedding)

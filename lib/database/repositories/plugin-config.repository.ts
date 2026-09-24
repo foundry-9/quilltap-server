@@ -119,29 +119,6 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
   }
 
   /**
-   * Get or create plugin config for a user/plugin combination
-   * @param userId The user ID
-   * @param pluginName The plugin name
-   * @param defaultConfig Default configuration values to use if creating new
-   * @returns Promise<PluginConfig> The existing or newly created config
-   */
-  async getOrCreate(
-    userId: string,
-    pluginName: string,
-    defaultConfig: Record<string, unknown> = {}
-  ): Promise<PluginConfig> {
-    const existing = await this.findByUserAndPlugin(userId, pluginName);
-    if (existing) {
-      return existing;
-    }
-    return this.create({
-      userId,
-      pluginName,
-      config: defaultConfig,
-    });
-  }
-
-  /**
    * Update config for a user/plugin combination (creates if not exists)
    * @param userId The user ID
    * @param pluginName The plugin name
@@ -180,18 +157,5 @@ export class PluginConfigRepository extends UserOwnedBaseRepository<PluginConfig
       config,
       ...(enabled !== undefined && { enabled }),
     });
-  }
-
-  /**
-   * Delete all configs for a specific plugin (used when uninstalling)
-   * @param pluginName The plugin name
-   * @returns Promise<number> Number of configs deleted
-   */
-  async deleteByPlugin(pluginName: string): Promise<number> {
-    return this.safeQuery(
-      () => this.deleteMany({ pluginName }),
-      'Error deleting plugin configs',
-      { pluginName }
-    );
   }
 }

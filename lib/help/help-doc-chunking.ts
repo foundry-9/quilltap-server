@@ -3,11 +3,16 @@
  *
  * Slices a help document into section-sized pieces for embedding.
  *
- * Help docs are long and topically broad — `help/chat-settings.md` alone
- * covers a dozen unrelated subsystems — so a single whole-document embedding
- * is a smear that matches any specific question only weakly. Chunking gives
- * each section its own vector, which is what lets "how do I describe an image
- * for a model that can't see?" land on the paragraph that answers it.
+ * Help docs are long and topically broad — a settings page can cover a dozen
+ * unrelated subsystems — so a single whole-document embedding is a smear that
+ * matches any specific question only weakly. Chunking gives each section its
+ * own vector, which is what lets "how do I describe an image for a model that
+ * can't see?" land on the paragraph that answers it.
+ *
+ * Sections are also the only help text sent to an embedding provider: a doc's
+ * own vector is the average of its sections' (see the HELP_DOC branch of
+ * `lib/background-jobs/handlers/embedding-generate.ts`), because a whole page
+ * can outrun a provider's input ceiling and a section cannot (bug 168).
  *
  * The chunker itself is the Scriptorium's (`lib/mount-index/chunker.ts`) —
  * same Markdown-aware paragraph accumulation, same heading tracking, same
@@ -32,6 +37,21 @@ export const HELP_CHUNK_OPTIONS = {
   targetMaxTokens: 700,
   overlapTokens: 100,
 } as const
+
+/**
+ * The most tokens (OpenAI `cl100k_base`) the embedding text of any one help
+ * section may run to — title path included, as {@link helpChunkEmbeddingText}
+ * builds it.
+ *
+ * Sections are the only help text ever sent to an embedding provider (a doc's
+ * own vector is the average of its sections'), so this is the one size limit
+ * the help set has to respect. The chunker aims for at most
+ * `targetMaxTokens` by its own estimate; this ceiling leaves headroom over that
+ * while staying far below the 8,192-token input of OpenAI's embedding models.
+ * `__tests__/unit/lib/help/help-doc-size.test.ts` holds every file in `help/`
+ * to it.
+ */
+export const HELP_SECTION_EMBEDDING_MAX_TOKENS = 1000
 
 /** One slice of a help document, ready to be persisted. */
 export interface HelpDocChunkDraft {

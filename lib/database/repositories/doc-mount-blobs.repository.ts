@@ -23,7 +23,7 @@ import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { DocMountBlobMetadata, DocMountBlobMetadataSchema } from '@/lib/schemas/mount-index.types';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
 
 /**
  * Joined view: a blob row with the link metadata callers need to know where
@@ -115,13 +115,7 @@ export class DocMountBlobsRepository {
   private tableInitialized = false;
 
   private db() {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.tableInitialized) {
       db.exec(`
@@ -174,24 +168,6 @@ export class DocMountBlobsRepository {
         error: error instanceof Error ? error.message : String(error),
       });
       return null;
-    }
-  }
-
-  async findManyByFileIds(fileIds: string[]): Promise<DocMountBlobMetadata[]> {
-    if (fileIds.length === 0) return [];
-    try {
-      const placeholders = fileIds.map(() => '?').join(',');
-      const rows = this.db().prepare(
-        `SELECT id, fileId, sha256, sizeBytes, storedMimeType, createdAt, updatedAt
-         FROM "${TABLE}" WHERE fileId IN (${placeholders})`
-      ).all(...fileIds) as Array<Record<string, unknown>>;
-      return rows.map(rowToMetadata);
-    } catch (error) {
-      logger.warn('Failed to find blobs by fileIds', {
-        fileIdCount: fileIds.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
     }
   }
 

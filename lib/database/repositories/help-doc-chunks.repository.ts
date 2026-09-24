@@ -9,7 +9,7 @@
 import { HelpDocChunk, HelpDocChunkSchema } from '@/lib/schemas/help-doc-chunk.types';
 import { AbstractBaseRepository } from './base.repository';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
-import { registerBlobColumns } from '../manager';
+import { rawQuery, registerBlobColumns } from '../manager';
 
 /**
  * Help Document Chunks Repository
@@ -68,6 +68,35 @@ export class HelpDocChunksRepository extends AbstractBaseRepository<HelpDocChunk
       'Error finding help doc chunks by doc',
       { docId },
       []
+    );
+  }
+
+  /**
+   * Section and embedded-section counts for every help document that has any
+   * sections, in one GROUP BY. Reads no vectors — the embedding column is only
+   * tested for NULL — so the startup reconcile can find incomplete docs without
+   * decoding ~700 BLOBs. Docs with no sections are absent from the map.
+   */
+  async countByDoc(): Promise<Map<string, { total: number; embedded: number }>> {
+    return this.safeQuery(
+      async () => {
+        const rows = await rawQuery<
+          Array<{ docId: string; total: number | bigint; embedded: number | bigint | null }>
+        >(
+          `SELECT "docId" AS docId,
+                  COUNT(*) AS total,
+                  SUM(CASE WHEN "embedding" IS NOT NULL THEN 1 ELSE 0 END) AS embedded
+           FROM "help_doc_chunks"
+           GROUP BY "docId"`,
+          []
+        );
+        return new Map(
+          rows.map(r => [r.docId, { total: Number(r.total), embedded: Number(r.embedded ?? 0) }])
+        );
+      },
+      'Error counting help doc chunks by doc',
+      {},
+      new Map<string, { total: number; embedded: number }>()
     );
   }
 

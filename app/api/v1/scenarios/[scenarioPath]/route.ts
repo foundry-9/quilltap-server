@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -159,56 +159,54 @@ export const POST = createContextParamsHandler<{ scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { scenarioPath }) => {
     try {
       const includeArchived = readIncludeArchived(req);
-      const url = new URL(req.url);
-      const action = url.searchParams.get('action');
-      if (action !== 'rename') {
-        return badRequest('Unknown action — supported: rename');
-      }
+      return await dispatchAction(req, {
+        rename: async () => {
+        const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
+        if (!resolved.ok) return badRequest(resolved.error);
 
-      const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
-      if (!resolved.ok) return badRequest(resolved.error);
+        const lookup = await loadGeneralStore();
+        if (!lookup.ok) return lookup.response;
 
-      const lookup = await loadGeneralStore();
-      if (!lookup.ok) return lookup.response;
+        const body = await req.json();
+        const validated = renameScenarioSchema.parse(body);
 
-      const body = await req.json();
-      const validated = renameScenarioSchema.parse(body);
+        const cleaned = sanitizeFileName(validated.newFilename).replace(/\.md$/i, '');
+        if (!cleaned) return badRequest('newFilename cannot be empty after sanitisation');
+        const newPath = `${GENERAL_SCENARIOS_FOLDER}/${cleaned}.md`;
 
-      const cleaned = sanitizeFileName(validated.newFilename).replace(/\.md$/i, '');
-      if (!cleaned) return badRequest('newFilename cannot be empty after sanitisation');
-      const newPath = `${GENERAL_SCENARIOS_FOLDER}/${cleaned}.md`;
+        if (newPath === resolved.path) {
+          const fresh = await listGeneralScenarios({ includeArchived });
+          return successResponse({ path: newPath, scenarios: fresh.scenarios, warnings: fresh.warnings });
+        }
 
-      if (newPath === resolved.path) {
+        const existing = await repos.docMountDocuments.findByMountPointAndPath(
+          lookup.mountPointId,
+          resolved.path,
+        );
+        if (!existing) return notFound('Scenario');
+
+        const conflict = await repos.docMountDocuments.findByMountPointAndPath(
+          lookup.mountPointId,
+          newPath,
+        );
+        if (conflict) {
+          return badRequest(`A scenario named "${cleaned}" already exists`);
+        }
+
+        await moveDatabaseDocument(lookup.mountPointId, resolved.path, newPath);
+
         const fresh = await listGeneralScenarios({ includeArchived });
+
+        logger.info('[General v1] Renamed general scenario', {
+          userId: user.id,
+          mountPointId: lookup.mountPointId,
+          from: resolved.path,
+          to: newPath,
+        });
+
         return successResponse({ path: newPath, scenarios: fresh.scenarios, warnings: fresh.warnings });
-      }
-
-      const existing = await repos.docMountDocuments.findByMountPointAndPath(
-        lookup.mountPointId,
-        resolved.path,
-      );
-      if (!existing) return notFound('Scenario');
-
-      const conflict = await repos.docMountDocuments.findByMountPointAndPath(
-        lookup.mountPointId,
-        newPath,
-      );
-      if (conflict) {
-        return badRequest(`A scenario named "${cleaned}" already exists`);
-      }
-
-      await moveDatabaseDocument(lookup.mountPointId, resolved.path, newPath);
-
-      const fresh = await listGeneralScenarios({ includeArchived });
-
-      logger.info('[General v1] Renamed general scenario', {
-        userId: user.id,
-        mountPointId: lookup.mountPointId,
-        from: resolved.path,
-        to: newPath,
+        },
       });
-
-      return successResponse({ path: newPath, scenarios: fresh.scenarios, warnings: fresh.warnings });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);

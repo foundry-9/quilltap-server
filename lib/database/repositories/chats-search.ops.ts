@@ -10,7 +10,8 @@ import { QueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
 import { rawQuery } from '../manager';
 import { chatMessageFtsEligibilitySql } from '../backends/sqlite/chat-message-fts';
-import { buildFtsMatchExpression, escapeLikePattern } from './fts-query';
+import { buildFtsMatchExpression } from './fts-query';
+import { escapeLikeLiteral } from './like-escape';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatMessagesOps } from './chats-messages.ops';
 import { safeQuery } from './safe-query';
@@ -223,7 +224,7 @@ export class ChatSearchReplaceOps {
 
         if (rows === null) {
           const likePattern =
-            plan.kind === 'fallback' ? plan.likePattern : `%${escapeLikePattern(searchText)}%`;
+            plan.kind === 'fallback' ? plan.likePattern : `%${escapeLikeLiteral(searchText)}%`;
           rows = await rawQuery<GlobalSearchRow[]>(buildLikeSearchSql(chatIds.length), [
             ...chatIds,
             likePattern,

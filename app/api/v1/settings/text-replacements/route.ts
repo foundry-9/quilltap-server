@@ -11,7 +11,7 @@
 
 import { NextRequest } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { successResponse, badRequest, serverError, conflict, created } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/database/repositories';
@@ -21,8 +21,6 @@ import {
 } from '@/lib/schemas/text-replacement.types';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories/text-replacement-rules.repository';
 
-const POST_ACTIONS = ['bulk-replace'] as const;
-type PostAction = (typeof POST_ACTIONS)[number];
 
 /**
  * GET /api/v1/settings/text-replacements
@@ -47,17 +45,9 @@ export const GET = createContextHandler(async () => {
  * POST /api/v1/settings/text-replacements
  * Action-dispatched. Default is create one rule.
  */
-export const POST = createContextHandler(async (req: NextRequest) => {
-  const action = getActionParam(req);
-
-  if (action && isValidAction(action, POST_ACTIONS)) {
-    if ((action as PostAction) === 'bulk-replace') {
-      return handleBulkReplace(req);
-    }
-  }
-
-  return handleCreate(req);
-});
+export const POST = createContextHandler(async (req: NextRequest) =>
+  dispatchAction(req, { 'bulk-replace': () => handleBulkReplace(req) }, () => handleCreate(req))
+);
 
 async function handleCreate(req: NextRequest) {
   try {

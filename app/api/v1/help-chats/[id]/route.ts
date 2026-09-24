@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import type { ChatEvent } from '@/lib/schemas/types';
@@ -18,8 +18,6 @@ import { enrichParticipantSummary } from '@/lib/services/chat-enrichment.service
 
 const logger = createServiceLogger('HelpChatsItemRoute');
 
-const PATCH_ACTIONS = ['update-context'] as const;
-type PatchAction = typeof PATCH_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -205,23 +203,12 @@ export const GET = createContextParamsHandler<{ id: string }>(
  * Update help chat — rename or update context
  */
 export const PATCH = createContextParamsHandler<{ id: string }>(
-  async (req, context, { id }) => {
-    const action = getActionParam(req);
-
-    if (!action) {
-      return handleRename(req, context, id);
-    }
-
-    if (!isValidAction(action, PATCH_ACTIONS)) {
-      return badRequest(`Unknown action: ${action}. Available actions: ${PATCH_ACTIONS.join(', ')}`);
-    }
-
-    const actionHandlers: Record<PatchAction, () => Promise<NextResponse>> = {
-      'update-context': () => handleUpdateContext(req, context, id),
-    };
-
-    return actionHandlers[action]();
-  }
+  async (req, context, { id }) =>
+    dispatchAction(
+      req,
+      { 'update-context': () => handleUpdateContext(req, context, id) },
+      () => handleRename(req, context, id)
+    )
 );
 
 /**

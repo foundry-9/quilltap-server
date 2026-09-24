@@ -13,10 +13,8 @@ import { pluginRegistry } from '@/lib/plugins/registry';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 
-const PLUGIN_POST_ACTIONS = ['set-config'] as const;
-type PluginPostAction = typeof PLUGIN_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -217,30 +215,30 @@ export const GET = createContextParamsHandler<{ name: string }>(
     const { user } = context;
 
     try {
+      return await dispatchAction(
+        req,
+        { 'get-config': () => handleGetConfig(req, context, name) },
+        async () => {
+          if (!pluginRegistry.has(name)) {
+            logger.warn('[Plugins v1] Plugin not found', {
+              pluginName: name,
+              userId: user.id,
+            });
+            return notFound('Plugin');
+          }
 
-      const action = getActionParam(req);
-
-      if (action === 'get-config') {
-        return handleGetConfig(req, context, name);
-      }
-
-      if (!pluginRegistry.has(name)) {
-        logger.warn('[Plugins v1] Plugin not found', {
-          pluginName: name,
-          userId: user.id,
-        });
-        return notFound('Plugin');
-      }
-
-      const plugin = pluginRegistry.get(name);return NextResponse.json({
-        name: plugin?.manifest.name,
-        title: plugin?.manifest.title,
-        version: plugin?.manifest.version,
-        description: plugin?.manifest.description,
-        author: plugin?.manifest.author,
-        enabled: plugin?.enabled,
-        capabilities: plugin?.capabilities,
-      });
+          const plugin = pluginRegistry.get(name);
+          return NextResponse.json({
+            name: plugin?.manifest.name,
+            title: plugin?.manifest.title,
+            version: plugin?.manifest.version,
+            description: plugin?.manifest.description,
+            author: plugin?.manifest.author,
+            enabled: plugin?.enabled,
+            capabilities: plugin?.capabilities,
+          });
+        }
+      );
     } catch (error) {
       logger.error(
         '[Plugins v1] Error fetching plugin',
@@ -257,19 +255,8 @@ export const GET = createContextParamsHandler<{ name: string }>(
 // ============================================================================
 
 export const POST = createContextParamsHandler<{ name: string }>(
-  async (req: NextRequest, context, { name }) => {
-    const action = getActionParam(req);
-
-    if (!isValidAction(action, PLUGIN_POST_ACTIONS)) {
-      return badRequest(`Unknown action: ${action}. Available actions: ${PLUGIN_POST_ACTIONS.join(', ')}`);
-    }
-
-    const actionHandlers: Record<PluginPostAction, () => Promise<NextResponse>> = {
-      'set-config': () => handleSetConfig(req, context, name),
-    };
-
-    return actionHandlers[action]();
-  }
+  async (req: NextRequest, context, { name }) =>
+    dispatchAction(req, { 'set-config': () => handleSetConfig(req, context, name) })
 );
 
 // ============================================================================

@@ -18,15 +18,14 @@ export {
 
 // Action parameter middleware (v1 API consolidation)
 export {
+  dispatchAction,
   withActionDispatch,
   withCollectionActionDispatch,
-  dispatchAction,
   getActionParam,
   isValidAction,
   getQueryParamsWithoutAction,
   type ActionHandler,
   type ActionHandlerMap,
-  type ActionThunk,
   type ActionThunkMap,
 } from './actions';
 
