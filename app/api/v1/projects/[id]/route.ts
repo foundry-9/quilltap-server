@@ -18,10 +18,6 @@
  * POST /api/v1/projects/[id]?action=add-file - Associate file with project
  * DELETE /api/v1/projects/[id]?action=remove-file - Remove file from project
  *
- * GET /api/v1/projects/[id]?action=get-mount-point - Get project mount point config
- * PUT /api/v1/projects/[id]?action=set-mount-point - Set project mount point
- * DELETE /api/v1/projects/[id]?action=clear-mount-point - Clear project mount point (use system default)
- *
  * GET /api/v1/projects/[id]?action=get-state - Get project state
  * GET /api/v1/projects/[id]?action=get-background - Get project story background URL
  * PUT /api/v1/projects/[id]?action=set-state - Set project state

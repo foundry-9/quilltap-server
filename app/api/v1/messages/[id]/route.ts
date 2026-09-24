@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, getActionParam } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
 import {
   regenerateMessageAsSwipe,
@@ -230,19 +230,11 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
 // =============================================================================
 
 export const POST = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id: messageId }) => {
-    const action = getActionParam(req);
-
-    if (action === 'swipe') {
-      return handleSwipeAction(req, { user, repos }, messageId);
-    }
-
-    if (action === 'reattribute') {
-      return handleReattributeAction(req, { user, repos }, messageId);
-    }
-
-    return badRequest('Action parameter required: swipe or reattribute');
-  }
+  async (req, { user, repos }, { id: messageId }) =>
+    dispatchAction(req, {
+      swipe: () => handleSwipeAction(req, { user, repos }, messageId),
+      reattribute: () => handleReattributeAction(req, { user, repos }, messageId),
+    })
 );
 
 // =============================================================================

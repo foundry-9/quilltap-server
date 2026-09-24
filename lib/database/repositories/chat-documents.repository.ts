@@ -113,25 +113,6 @@ export class ChatDocumentsRepository extends AbstractBaseRepository<ChatDocument
   }
 
   /**
-   * Find recent inactive documents for a chat, sorted by most recently updated.
-   * Used by the document picker for quick-reopen options.
-   */
-  async findRecentForChat(chatId: string, limit = 5): Promise<ChatDocument[]> {
-    return this.safeQuery(
-      async () => {
-        const allDocs = await this.findByFilter({ chatId } as TypedQueryFilter<ChatDocument>);
-        return allDocs
-          .filter(doc => !doc.isActive)
-          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-          .slice(0, limit);
-      },
-      'Error finding recent documents for chat',
-      { chatId },
-      []
-    );
-  }
-
-  /**
    * Find the most recently updated documents across ALL chats, newest first.
    * Used by the Open-Document picker so recent files persist beyond the
    * current chat. Callers over-fetch and then dedupe by file identity and

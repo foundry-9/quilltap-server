@@ -425,26 +425,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   }
 
   /**
-   * Create or update an entity by ID.
-   * Used for sync operations where the ID is known.
-   */
-  async createOrUpdate(
-    id: string,
-    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: { createdAt?: string }
-  ): Promise<T> {
-    const existing = await this.findById(id);
-    if (existing) {
-      const updated = await this.update(id, data as Partial<T>);
-      if (!updated) {
-        throw new Error(`Failed to update entity ${id}`);
-      }
-      return updated;
-    }
-    return this.create(data, { id, createdAt: options?.createdAt });
-  }
-
-  /**
    * Count entities matching a filter
    *
    * Returns 0 when the query fails, so a caller cannot distinguish "no rows"

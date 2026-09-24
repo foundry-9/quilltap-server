@@ -120,19 +120,6 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
   }
 
   /**
-   * Create chat settings for a user
-   * @param userId The user ID
-   * @param data The chat settings data (without id, userId, createdAt, updatedAt)
-   * @returns Promise<ChatSettings> The created chat settings
-   */
-  async createForUser(
-    userId: string,
-    data: Omit<ChatSettings, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
-  ): Promise<ChatSettings> {
-    return this.create({ ...data, userId });
-  }
-
-  /**
    * Update chat settings for a user (creates if not exists)
    * @param userId The user ID
    * @param data Partial chat settings data to update

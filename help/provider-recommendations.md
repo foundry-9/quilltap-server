@@ -102,7 +102,7 @@ help_navigate(url: "/settings?tab=providers")
 
 - [Connection Profiles](connection-profiles.md) --- Creating and managing your AI connections
 - [AI Stack Setup Wizard](setup-wizard.md) --- Guided first-time setup
-- [Chat Settings](chat-settings.md) --- Configuring the cheap LLM and other options
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) --- Configuring the cheap LLM and other options
 - [Image Generation Profiles](image-generation-profiles.md) --- Setting up image generation
 - [Embedding Profiles](embedding-profiles.md) --- Configuring semantic memory search
 - [The Concierge](dangerous-content.md) --- Content routing and uncensored fallback

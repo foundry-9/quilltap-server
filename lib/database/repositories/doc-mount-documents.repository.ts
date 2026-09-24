@@ -94,23 +94,6 @@ export class DocMountDocumentsRepository extends AbstractDedicatedDbRepository<D
     );
   }
 
-  /**
-   * Batch fetch documents for a set of file IDs. Used to hydrate many
-   * documents at once when overlay loaders already have their links.
-   */
-  async findManyByFileIds(fileIds: string[]): Promise<DocMountDocument[]> {
-    if (fileIds.length === 0) return [];
-    return this.safeQuery(
-      async () =>
-        this.findByFilter({
-          fileId: { $in: fileIds },
-        } as TypedQueryFilter<DocMountDocument>),
-      'Error finding documents by file IDs',
-      { fileIdCount: fileIds.length },
-      []
-    );
-  }
-
   // ============================================================================
   // Joined-view helpers (document + link metadata)
   // ============================================================================

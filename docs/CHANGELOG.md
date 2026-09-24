@@ -22,11 +22,100 @@
   twin of `requireMountIndexDb()`.
 - Every repository now declares `dbTarget` (`'main' | 'mountIndex' | 'llmLogs'`), and a new unit
   test checks the background-job write partitioner's `MOUNT_INDEX_REPO_KEYS` /
-  `LLM_LOGS_REPO_KEYS` against those declarations. That check found `groupDocMountLinks` and
-  `groupCharacterMembers` missing from `MOUNT_INDEX_REPO_KEYS`, so a job child's buffered writes
-  to those two tables were applied inside the main database's transaction; they are now listed
-  and ride the mount-index partition like the other mount-index tables.
+  `LLM_LOGS_REPO_KEYS` against those declarations, so the `groupDocMountLinks` /
+  `groupCharacterMembers` omission fixed below cannot recur.
 - No DDL changes.
+#### Changed: one `?action=` dispatcher for every API route
+
+- New `dispatchAction(req, thunks, fallback?)` in `lib/api/middleware/actions.ts`, and
+  `withActionDispatch` is now built on it. The rule is in one place: no `action` parameter
+  runs the fallback (the plain CRUD verb), a known action runs its handler, and anything
+  else — an unknown name or a bare `?action=` — is a 400 listing the available actions.
+- Every route that read `?action=` by hand (`getActionParam` + `isValidAction` + a
+  `Record<Action, () => …>` map, or an `if (action === …)` chain) now calls the primitive:
+  api-keys, brahma-console, characters, chats (collection, item POST/PUT/PATCH/DELETE, files),
+  connection-profiles, embedding-profiles, files, groups, help-chats, help-docs, images,
+  image-profiles, memories, messages, mount-points, plugins, projects, scenarios (general,
+  project and group tiers), settings/text-replacements, system/conversation-summaries,
+  system/jobs, system/restore, system/tools, system/unlock, themes and user/profile. The
+  per-route `*_ACTIONS` constants and hand-built "Unknown action" messages are gone.
+- **Fixed as a result:** an unknown action no longer falls through to a destructive
+  default. `DELETE /api/v1/projects/[id]?action=<anything unknown>` used to delete the
+  project, `DELETE /api/v1/groups/[id]?action=<unknown>` deleted the group, and an unknown
+  `POST /api/v1/system/restore?action=` ran a full restore. Unknown actions on
+  `POST /api/v1/api-keys`, `/characters`, `/connection-profiles`, `/image-profiles`,
+  `/memories`, `/images`, `/mount-points`, `/settings/text-replacements` and
+  `/chats/[id]/files` also no longer create or upload by accident. The project and group
+  route headers had advertised `get-mount-point` / `set-mount-point` / `clear-mount-point`
+  and `stores` / `linkStore` / `unlinkStore` actions that never existed; those lines are
+  removed (group stores live under `/api/v1/groups/[id]/mount-points`).
+- `GET /api/v1/chats/[id]` still reads its actions inline; its default is a harmless read
+  and it is left for a follow-up.
+- `withActionDispatch` now treats a bare `?action=` as an unknown action (400) instead of
+  routing it to the default handler.
+- `POST /api/v1/chats/[id]/files` responses go through `successResponse` and one shared
+  payload builder; `handleLinkFile` takes the real `RepositoryContainer` type.
+- Tests: `dispatchAction` unit coverage, and regression tests for the project, group and
+  restore fall-throughs.
+
+#### Removed: dead code in `lib/database`
+
+- 33 repository methods with no callers (for example `CharactersRepository.getSystemPrompts`,
+  `MemoriesRepository.findByKeywords`, `UsersRepository.findByUsername`,
+  `FoldersRepository.createMany`, `EmbeddingStatusRepository.upsertByEntity`) and their
+  private helpers; unused backend/infra exports (`SQLiteBackend.addJsonColumn` /
+  `dropCollection` / prepared-statement cache, `json-columns.ts` `hydrateRow` /
+  `rowToDocument` / `detectJsonColumns` / `fromJson` / `jsonArrayLength`, manager
+  `healthCheck` / `listCollections` / `getBackendCapabilities` / `isDatabaseInitialized` /
+  `isDatabaseConnected` / `_setBackendForTesting`, child-client close/connected helpers) and
+  their barrel re-exports. About 980 lines. `jest.setup.ts` drops the matching stale mock keys.
+- `escapeLikePattern` (`fts-query.ts`) was a byte-identical copy of `escapeLikeLiteral`
+  (`like-escape.ts`); the copy is gone and both callers use the shared one.
+
+#### Fixed: data-layer consistency
+
+- `MOUNT_INDEX_REPO_KEYS` (`lib/background-jobs/host/write-partition.ts`) was missing
+  `groupDocMountLinks` and `groupCharacterMembers`, both backed by the mount-index database.
+  A buffered child write to either would have been committed inside the main database's
+  transaction. Added.
+- `MemoriesRepository` and `ConversationChunksRepository` cached "blob columns registered"
+  per instance, the pattern `HelpDocsRepository` documents as corrupting embeddings after a
+  backend reconnect. Both now re-assert the registration on every `getCollection()` (a no-op
+  when already registered), matching the help-doc repositories.
+- `DocMountBlobsRepository` used an inline copy of the mount-index degraded/uninitialized
+  guard; it now calls the shared `requireMountIndexDb()`.
+- Brahma's SQL prompt now tells the model that `chat_messages.content` (and the other
+  compressed text columns) must be read through `qt_text()` and never compared bare.
+
+#### Fixed: help docs failed to index
+
+- Bug 167: `EMBEDDING_REINDEX_ALL` synced help docs in the job child, where `upsertByPath`
+  returned a random synthetic id. Section chunks were keyed to that id, failed the
+  `help_doc_chunks` foreign key on replay, and rolled back the job's entire main-DB batch
+  (including every embedding job it queued). The job then went DEAD. `syncHelpDocs` now uses the
+  existing row's id or mints one and passes it to `create(fields, { id })`. `upsertByPath` is
+  removed.
+- Bug 168: the `HELP_DOC` job embedded each page in one call, so pages over the provider's input
+  limit (`chat-settings.md` over OpenAI's 8,192 tokens) failed and dropped out of `help_search`.
+  A doc's vector is now the normalised mean of its section vectors (`averageEmbeddings` in
+  `lib/embedding/embedding-service.ts`). A failed section is skipped; the job fails only if every
+  section fails. A doc with no chunk rows yet is sliced in memory.
+- New test `__tests__/unit/lib/help/help-doc-size.test.ts` counts `cl100k_base` tokens (new
+  devDependency `js-tiktoken`) of every help section's embedding text and fails above
+  `HELP_SECTION_EMBEDDING_MAX_TOKENS` (1,000).
+- `help/chat-settings.md` split into `chat-settings.md`, `chat-settings-composer.md` and
+  `chat-settings-ai-services.md`. Links in other help files and the help Guide categories
+  updated.
+- Help docs are reconciled at every startup (`reconcileHelpDocs`, instrumentation Phase 3.66),
+  not only when the set of help file names changes: every file is compared by content hash,
+  edited pages are rewritten and re-sliced, pages with no sections are sliced (per page, not
+  "any rows at all"), and a `HELP_DOC` job is queued for every page missing its own vector or
+  any section vector. `ensureHelpDocsSynced` now waits on the same once-per-process run.
+  `backfillHelpDocChunks`, `helpDocsDivergeFromDisk` and
+  `HelpDocsRepository.findAllNeedingEmbedding` removed; `HelpDocChunksRepository.countByDoc`
+  added. Only help docs are re-embedded; affected instances recover on the next restart.
+- A content change now also clears the doc's `embedding_status` row, so a stale FAILED status
+  no longer keeps it out of a mismatched-dim reindex.
 
 #### Removed: `GET /api/v1/chats?action=has-dangerous`
 

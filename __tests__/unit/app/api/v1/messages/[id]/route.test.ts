@@ -22,12 +22,30 @@ jest.mock('@/lib/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(), child: jest.fn().mockReturnThis() },
 }))
 
-jest.mock('@/lib/api/middleware', () => ({
-  createContextParamsHandler: (handler: (req: any, ctx: any, params: any) => Promise<any>) => {
-    return async (req: any, routeCtx: any) => handler(req, mockCtx, await routeCtx.params)
-  },
-  getActionParam: jest.fn(() => null),
-}))
+jest.mock('@/lib/api/middleware', () => {
+  // The fake requests carry no URL, so the action comes from this mock, which a
+  // test points at 'swipe' or 'reattribute'; dispatch then follows the real
+  // rule (no action → fallback or 400, unknown → 400).
+  const getActionParam = jest.fn(() => null as string | null)
+  return {
+    createContextParamsHandler: (handler: (req: any, ctx: any, params: any) => Promise<any>) => {
+      return async (req: any, routeCtx: any) => handler(req, mockCtx, await routeCtx.params)
+    },
+    getActionParam,
+    dispatchAction: (
+      _req: unknown,
+      handlers: Record<string, () => Promise<unknown>>,
+      fallback?: () => Promise<unknown>,
+    ) => {
+      const action = getActionParam()
+      if (action === null) {
+        return fallback ? fallback() : { __kind: 'badRequest', status: 400, msg: 'Action parameter required' }
+      }
+      const handler = handlers[action]
+      return handler ? handler() : { __kind: 'badRequest', status: 400, msg: `Unknown action: ${action}` }
+    },
+  }
+})
 
 jest.mock('@/lib/api/responses', () => ({
   notFound: (what: string) => ({ __kind: 'notFound', status: 404, what }),

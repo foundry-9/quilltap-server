@@ -41,11 +41,14 @@ export type WriteDbTarget = RepositoryDbTarget;
 
 /**
  * Repository keys whose rows live in the dedicated mount-index database
- * (`getRawMountIndexDatabase()`), not the main DB. Mirrors the repos whose
- * `dbTarget` is `'mountIndex'` — the `AbstractDedicatedDbRepository`
- * subclasses in `lib/database/repositories/` plus the blobs repository. A
- * unit test (`__tests__/unit/lib/background-jobs/write-partition-repo-keys`)
- * fails when this set and those declarations drift.
+ * (`getRawMountIndexDatabase()` / `requireMountIndexDb()`), not the main DB.
+ * Mirrors the repos whose `dbTarget` is `'mountIndex'` — the
+ * `AbstractDedicatedDbRepository` subclasses in `lib/database/repositories/`
+ * plus the blobs repository. A key missing here has its buffered child
+ * writes committed inside the *main* database's transaction, against the
+ * wrong connection, so a unit test
+ * (`__tests__/unit/lib/background-jobs/write-partition-repo-keys`) fails
+ * when this set and those declarations drift.
  */
 export const MOUNT_INDEX_REPO_KEYS: ReadonlySet<string> = new Set([
   'docMountPoints',

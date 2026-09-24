@@ -10,6 +10,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 
 const {
   getActionParam,
+  dispatchAction,
   withActionDispatch,
   withCollectionActionDispatch,
   isValidAction,
@@ -289,6 +290,124 @@ describe('API Action Middleware', () => {
         name: 'Test Name',
         tag: 'sci-fi',
       });
+    });
+  });
+
+  describe('dispatchAction', () => {
+    // The thunk map a route handler builds inside its own closure: each thunk
+    // has already captured req / ctx / the loaded entity.
+    function thunks() {
+      return {
+        'remove-character': jest.fn(async () => NextResponse.json({ removed: 'character' })),
+        'reset-state': jest.fn(async () => NextResponse.json({ reset: true })),
+      };
+    }
+
+    it('runs the fallback when there is no action parameter at all', async () => {
+      const request = new NextRequest('https://example.com/api/v1/projects/p1');
+      const map = thunks();
+      const fallback = jest.fn(async () => NextResponse.json({ deleted: true }));
+
+      const response = await dispatchAction(request, map, fallback);
+
+      expect(fallback).toHaveBeenCalledTimes(1);
+      expect(map['remove-character']).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toEqual({ deleted: true });
+    });
+
+    it('runs the matching thunk for a known action', async () => {
+      const request = new NextRequest('https://example.com/api/v1/projects/p1?action=reset-state');
+      const map = thunks();
+      const fallback = jest.fn(async () => NextResponse.json({ deleted: true }));
+
+      const response = await dispatchAction(request, map, fallback);
+
+      expect(map['reset-state']).toHaveBeenCalledTimes(1);
+      expect(fallback).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toEqual({ reset: true });
+    });
+
+    it('never lets an unknown action fall through to the fallback', async () => {
+      // This is the rule the whole helper exists for: on a DELETE route the
+      // fallback deletes the entity, so a typo must be a 400, not a deletion.
+      const request = new NextRequest('https://example.com/api/v1/projects/p1?action=clear-mount-point');
+      const map = thunks();
+      const fallback = jest.fn(async () => NextResponse.json({ deleted: true }));
+
+      const response = await dispatchAction(request, map, fallback);
+
+      expect(fallback).not.toHaveBeenCalled();
+      expect(map['remove-character']).not.toHaveBeenCalled();
+      expect(map['reset-state']).not.toHaveBeenCalled();
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'Unknown action: clear-mount-point',
+        availableActions: ['remove-character', 'reset-state'],
+      });
+    });
+
+    it('treats a bare ?action= as an unknown action, not as no action', async () => {
+      const request = new NextRequest('https://example.com/api/v1/projects/p1?action=');
+      const fallback = jest.fn(async () => NextResponse.json({ deleted: true }));
+
+      const response = await dispatchAction(request, thunks(), fallback);
+
+      expect(fallback).not.toHaveBeenCalled();
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toBe('Unknown action: ');
+    });
+
+    it('answers 400 "Action parameter required" when the route has no fallback and no action', async () => {
+      const request = new NextRequest('https://example.com/api/v1/files/f1');
+
+      const response = await dispatchAction(request, thunks());
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: 'Action parameter required',
+        availableActions: ['remove-character', 'reset-state'],
+      });
+    });
+
+    it('does not treat inherited object keys as actions', async () => {
+      const request = new NextRequest('https://example.com/api/v1/projects/p1?action=toString');
+
+      const response = await dispatchAction(request, thunks());
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toBe('Unknown action: toString');
+    });
+
+    it('passes a thunk\'s rejection through untouched', async () => {
+      const request = new NextRequest('https://example.com/api/v1/projects/p1?action=reset-state');
+      const boom = new Error('boom');
+      const map = { 'reset-state': jest.fn(async () => { throw boom; }) };
+
+      await expect(dispatchAction(request, map)).rejects.toBe(boom);
+    });
+
+    it('accepts plain Response thunks for routes that stream bytes', async () => {
+      const request = new NextRequest('https://example.com/api/v1/themes/t1?action=export');
+      const map = { export: async () => new Response('zip-bytes', { status: 200 }) };
+
+      const response = await dispatchAction(request, map, async () => NextResponse.json({}));
+
+      await expect(response.text()).resolves.toBe('zip-bytes');
+    });
+  });
+
+  describe('withActionDispatch — strict empty action', () => {
+    it('sends a bare ?action= to the unknown-action 400, not the default handler', async () => {
+      const request = new NextRequest('https://example.com/api/test?action=');
+      const defaultHandler = jest.fn(async () => NextResponse.json({ ok: true }));
+      const handler = withActionDispatch({ favorite: jest.fn(async () => NextResponse.json({})) }, defaultHandler);
+
+      const response = await handler(request, {} as RequestContext, {});
+
+      expect(defaultHandler).not.toHaveBeenCalled();
+      expect(response.status).toBe(400);
     });
   });
 });

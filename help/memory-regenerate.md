@@ -54,4 +54,4 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [Memory Housekeeping](memory-housekeeping.md) — Routine pruning of low-importance memories as characters approach their cap
 - [Embedding Profiles](embedding-profiles.md) — Regeneration writes new embeddings too, using whichever profile is currently active
-- [Chat Settings](chat-settings.md) — Where the dangerous-compatible profile and cheap-LLM routing are configured
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Where the dangerous-compatible profile and cheap-LLM routing are configured

@@ -87,42 +87,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
   }
 
   /**
-   * Insert or update a help document by its file path.
-   * If a doc with this path already exists, updates content fields
-   * (title, url, content, contentHash) but preserves the existing embedding.
-   * If no doc exists, creates a new one.
-   *
-   * @param path The relative file path
-   * @param data The document data (excluding id, timestamps, and embedding)
-   * @returns Promise<HelpDoc> The created or updated document
-   */
-  async upsertByPath(
-    path: string,
-    data: Omit<HelpDoc, 'id' | 'createdAt' | 'updatedAt' | 'embedding'>
-  ): Promise<HelpDoc> {
-    return this.safeQuery(
-      async () => {
-        const existing = await this.findByPath(path);
-        if (existing) {
-
-          const updated = await this._update(existing.id, {
-            title: data.title,
-            url: data.url,
-            content: data.content,
-            contentHash: data.contentHash,
-          });
-          if (!updated) throw new Error(`Failed to update help doc: ${path}`);
-          return updated;
-        }
-
-        return this._create(data as Omit<HelpDoc, 'id' | 'createdAt' | 'updatedAt'>);
-      },
-      'Error upserting help doc',
-      { path }
-    );
-  }
-
-  /**
    * Update just the embedding field on a help document.
    * @param id The document ID
    * @param embedding The new embedding vector
@@ -194,23 +158,6 @@ export class HelpDocsRepository extends AbstractBaseRepository<HelpDoc> {
         );
       },
       'Error finding help docs with embeddings',
-      {},
-      []
-    );
-  }
-
-  /**
-   * Find all help documents that need embedding (embedding is null).
-   * Used to identify docs that need to be sent through the embedding pipeline.
-   * @returns Promise<HelpDoc[]> Array of documents needing embeddings
-   */
-  async findAllNeedingEmbedding(): Promise<HelpDoc[]> {
-    return this.safeQuery(
-      async () => {
-        const allDocs = await this._findAll();
-        return allDocs.filter(doc => doc.embedding == null);
-      },
-      'Error finding help docs needing embedding',
       {},
       []
     );

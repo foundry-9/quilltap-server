@@ -33,6 +33,8 @@ jest.mock('@/lib/logger', () => {
 jest.mock('@/lib/api/middleware', () => ({
   createContextParamsHandler:
     (handler: (req: never, ctx: never, params: never) => Promise<unknown>) => handler,
+  // The real dispatcher: the ?action= rule under test is its rule.
+  dispatchAction: jest.requireActual('@/lib/api/middleware/actions').dispatchAction,
 }));
 
 jest.mock('@/lib/mount-index/database-store', () => ({
@@ -76,9 +78,9 @@ function handlers() {
   });
 }
 
-/** The request shape the handlers actually read: `url` and `json()`. */
+/** The request shape the handlers actually read: `url`, `nextUrl` and `json()`. */
 function req(url: string, body?: unknown) {
-  return { url, json: async () => body } as never;
+  return { url, nextUrl: new URL(url), json: async () => body } as never;
 }
 
 function ctx() {
@@ -281,7 +283,10 @@ describe('POST ?action=rename', () => {
     });
 
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toEqual({ error: 'Unknown action — supported: rename' });
+    await expect(res.json()).resolves.toEqual({
+      error: 'Unknown action: archive',
+      availableActions: ['rename'],
+    });
     expect(findOwner).not.toHaveBeenCalled();
   });
 

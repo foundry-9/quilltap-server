@@ -58,26 +58,3 @@ export function getReadonlyChildSQLiteClient(config: SQLiteConfig): DatabaseType
   readonlyDatabase = db;
   return readonlyDatabase;
 }
-
-export function closeReadonlyChildSQLiteClient(): void {
-  if (readonlyDatabase) {
-    try {
-      readonlyDatabase.close();
-    } catch (error) {
-      log.warn('Error closing readonly child SQLite connection', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    readonlyDatabase = null;
-  }
-}
-
-export function isReadonlyChildSQLiteConnected(): boolean {
-  if (!readonlyDatabase) return false;
-  try {
-    readonlyDatabase.prepare('SELECT 1').get();
-    return true;
-  } catch {
-    return false;
-  }
-}

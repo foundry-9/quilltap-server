@@ -181,6 +181,7 @@ There is precisely one embedding standard per Quilltap instance: whatever the de
 
 - **Switching the default triggers a full re-embed.** Making a *different* profile the default — or changing the default profile's provider, model, or dimensions — automatically queues **Re-embed Everything**. Every memory, conversation excerpt, document chunk, and help page is re-embedded with the new standard. (Narrowing only the Matryoshka truncation queues the cheaper local re-apply instead; widening it queues the full re-embed, since vectors cannot grow.)
 - **Every startup audits the ledger.** A conformance pass runs on each boot and inspects every embedding in every database against the default profile's dimension. Vectors from a previous standard are swept out of the search indices (they were invisible to search anyway) and a targeted re-embed is queued for exactly the non-conforming rows — conforming rows are never re-embedded, so a healthy instance pays nothing. Dormant chats are left to their slumber; their excerpts are re-embedded when you next open them.
+- **The help pages mind themselves.** On every startup Quilltap reads each of its own help pages and compares it with the copy it last indexed. A page that is new or has been rewritten since (as happens with nearly every upgrade) is re-indexed, and any page missing its embedding, or an embedding for one of its sections, is queued for one. Only help pages are touched, never your memories or document stores, so an upgrade never needs **Re-embed Everything** on the help's account. Each page is embedded section by section, so no page is too long for a given embedding model to read.
 
 Mind the meter: if a large corpus predates this housekeeping, the first restart after switching to a paid provider will queue a re-embedding of every stale row. The **Emb** badge in the header shows the queue draining.
 
@@ -462,9 +463,9 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for cloud embedding providers (OpenAI)
-- [Chat Settings](chat-settings.md) — Memory cascade settings that use embeddings
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Memory cascade settings that use embeddings
 - [Connection Profiles](connection-profiles.md) — LLM used in conjunction with embeddings for memory operations
-- [Chat Settings](chat-settings.md) — Context management depends on embeddings
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Context management depends on embeddings
 
 ## Glossary
 

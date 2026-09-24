@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
 import { createImageProvider } from '@/lib/llm';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
@@ -168,19 +168,19 @@ export const GET = createContextHandler(async (request, { user, repos }) => {
 // POST Handler - Upload/Import or Generate
 // ============================================================================
 
-export const POST = createContextHandler(async (request, { user, repos }) => {
-  const action = getActionParam(request);
-
-  // Handle generate action. Generation is synchronous here rather than queued,
-  // so it registers with the activity registry to keep the "Img" chip honest
-  // (the Concierge check inside counts under "Dgr" on its own).
-  if (action === 'generate') {
-    return trackActivity('image', () => handleGenerateImage(request, user, repos));
-  }
-
-  // Default: upload or import image
-  return handleUploadOrImport(request, user, repos);
-});
+export const POST = createContextHandler(async (request, { user, repos }) =>
+  dispatchAction(
+    request,
+    {
+      // Generation is synchronous here rather than queued, so it registers
+      // with the activity registry to keep the "Img" chip honest (the
+      // Concierge check inside counts under "Dgr" on its own).
+      generate: () => trackActivity('image', () => handleGenerateImage(request, user, repos)),
+    },
+    // Default: upload or import image
+    () => handleUploadOrImport(request, user, repos)
+  )
+);
 
 // ============================================================================
 // Helper: Generate Image

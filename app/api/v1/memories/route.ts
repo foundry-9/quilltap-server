@@ -33,7 +33,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createContextHandler,
-  getActionParam,
+  dispatchAction,
+  type RequestContext,
 } from '@/lib/api/middleware';
 import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
@@ -141,49 +142,33 @@ const extractionConcurrencySchema = z.object({
 // =============================================================================
 
 export const GET = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
   const { searchParams } = req.nextUrl;
   const characterId = searchParams.get('characterId');
   const chatId = searchParams.get('chatId');
   const messageId = searchParams.get('messageId');
 
-  // Handle action-based GET requests
-  if (action === 'housekeep') {
-    return handleHousekeepPreview(req, { user, repos }, characterId);
-  }
+  return dispatchAction(
+    req,
+    {
+      housekeep: () => handleHousekeepPreview(req, { user, repos }, characterId),
+      embeddings: () => handleEmbeddingStatus(req, { user, repos }, characterId),
+      'housekeeping-config': () => handleReadHousekeepingConfig(req, { user, repos }),
+      'extraction-limits-config': () => handleReadExtractionLimitsConfig(req, { user, repos }),
+      'recall-config': () => handleReadRecallConfig(req, { user, repos }),
+      'backfill-embeddings': () => handleBackfillProgress(req, { user, repos }),
+      'character-memory-counts': () => handleCharacterMemoryCounts(req, { user, repos }),
+      'extraction-concurrency': () => handleReadExtractionConcurrency(req, { user, repos }),
+      'regenerate-all': () => handleRegenerateAllStatus(req, { user, repos }),
+    },
+    () => handleListMemories(req, { user, repos }, { characterId, chatId, messageId })
+  );
+});
 
-  if (action === 'embeddings') {
-    return handleEmbeddingStatus(req, { user, repos }, characterId);
-  }
-
-  if (action === 'housekeeping-config') {
-    return handleReadHousekeepingConfig(req, { user, repos });
-  }
-
-  if (action === 'extraction-limits-config') {
-    return handleReadExtractionLimitsConfig(req, { user, repos });
-  }
-
-  if (action === 'recall-config') {
-    return handleReadRecallConfig(req, { user, repos });
-  }
-
-  if (action === 'backfill-embeddings') {
-    return handleBackfillProgress(req, { user, repos });
-  }
-
-  if (action === 'character-memory-counts') {
-    return handleCharacterMemoryCounts(req, { user, repos });
-  }
-
-  if (action === 'extraction-concurrency') {
-    return handleReadExtractionConcurrency(req, { user, repos });
-  }
-
-  if (action === 'regenerate-all') {
-    return handleRegenerateAllStatus(req, { user, repos });
-  }
-
+async function handleListMemories(
+  req: NextRequest,
+  { user, repos }: Pick<RequestContext, 'user' | 'repos'>,
+  { characterId, chatId, messageId }: { characterId: string | null; chatId: string | null; messageId: string | null }
+): Promise<NextResponse> {
   // Standard list operations - require a filter
   if (!characterId && !chatId && !messageId) {
     return badRequest('Query parameter required: characterId, chatId, or messageId');
@@ -210,73 +195,38 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
     logger.error('[Memories API] Error listing memories', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to list memories');
   }
-});
+}
 
 // =============================================================================
 // POST /api/v1/memories - Create memory or perform action
 // =============================================================================
 
-export const POST = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
-
-  // Action-based operations
-  if (action === 'search') {
-    return handleSearch(req, { user, repos });
-  }
-
-  if (action === 'housekeep') {
-    return handleHousekeep(req, { user, repos });
-  }
-
-  if (action === 'housekeep-sweep') {
-    return handleHousekeepSweep(req, { user });
-  }
-
-  if (action === 'embeddings') {
-    return handleGenerateEmbeddings(req, { user, repos });
-  }
-
-  if (action === 'housekeeping-config') {
-    return handleWriteHousekeepingConfig(req, { user, repos });
-  }
-
-  if (action === 'extraction-limits-config') {
-    return handleWriteExtractionLimitsConfig(req, { user, repos });
-  }
-
-  if (action === 'recall-config') {
-    return handleWriteRecallConfig(req, { user, repos });
-  }
-
-  if (action === 'backfill-embeddings') {
-    return handleBackfillStart(req, { user, repos });
-  }
-
-  if (action === 'regenerate-all') {
-    return handleRegenerateAll(req, { user, repos });
-  }
-
-  if (action === 'extraction-concurrency') {
-    return handleWriteExtractionConcurrency(req, { user, repos });
-  }
-
-  // Default: Create memory
-  return handleCreateMemory(req, { user, repos });
-});
+export const POST = createContextHandler(async (req, { user, repos }) =>
+  dispatchAction(
+    req,
+    {
+      search: () => handleSearch(req, { user, repos }),
+      housekeep: () => handleHousekeep(req, { user, repos }),
+      'housekeep-sweep': () => handleHousekeepSweep(req, { user }),
+      embeddings: () => handleGenerateEmbeddings(req, { user, repos }),
+      'housekeeping-config': () => handleWriteHousekeepingConfig(req, { user, repos }),
+      'extraction-limits-config': () => handleWriteExtractionLimitsConfig(req, { user, repos }),
+      'recall-config': () => handleWriteRecallConfig(req, { user, repos }),
+      'backfill-embeddings': () => handleBackfillStart(req, { user, repos }),
+      'regenerate-all': () => handleRegenerateAll(req, { user, repos }),
+      'extraction-concurrency': () => handleWriteExtractionConcurrency(req, { user, repos }),
+    },
+    () => handleCreateMemory(req, { user, repos })
+  )
+);
 
 // =============================================================================
 // PUT /api/v1/memories - Bulk operations (action-based only)
 // =============================================================================
 
-export const PUT = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
-
-  if (action === 'embeddings') {
-    return handleRebuildIndex(req, { user, repos });
-  }
-
-  return badRequest('PUT requires ?action=embeddings parameter');
-});
+export const PUT = createContextHandler(async (req, { user, repos }) =>
+  dispatchAction(req, { embeddings: () => handleRebuildIndex(req, { user, repos }) })
+);
 
 // =============================================================================
 // DELETE /api/v1/memories - Delete memories by filter

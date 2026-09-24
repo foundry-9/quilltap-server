@@ -24,7 +24,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
@@ -215,58 +215,56 @@ export function createScenarioItemHandlers(config: ScenarioItemRouteConfig): Sce
     async (req: NextRequest, { user, repos }: RequestContext, { id, scenarioPath }) => {
       try {
         const includeArchived = readIncludeArchived(req);
-        const url = new URL(req.url);
-        const action = url.searchParams.get('action');
-        if (action !== 'rename') {
-          return badRequest('Unknown action — supported: rename');
-        }
+        return await dispatchAction(req, {
+          rename: async () => {
+          const resolved = resolveScenarioPath(scenarioPath, scenariosFolder);
+          if (!resolved.ok) return badRequest(resolved.error);
 
-        const resolved = resolveScenarioPath(scenarioPath, scenariosFolder);
-        if (!resolved.ok) return badRequest(resolved.error);
+          const lookup = await loadOwnerAndStore(id, repos);
+          if (!lookup.ok) return lookup.response;
 
-        const lookup = await loadOwnerAndStore(id, repos);
-        if (!lookup.ok) return lookup.response;
+          const body = await req.json();
+          const validated = renameScenarioSchema.parse(body);
 
-        const body = await req.json();
-        const validated = renameScenarioSchema.parse(body);
+          const cleaned = sanitizeFileName(validated.newFilename).replace(/\.md$/i, '');
+          if (!cleaned) return badRequest('newFilename cannot be empty after sanitisation');
+          const newPath = `${scenariosFolder}/${cleaned}.md`;
 
-        const cleaned = sanitizeFileName(validated.newFilename).replace(/\.md$/i, '');
-        if (!cleaned) return badRequest('newFilename cannot be empty after sanitisation');
-        const newPath = `${scenariosFolder}/${cleaned}.md`;
+          if (newPath === resolved.path) {
+            // No-op rename — return current state.
+            const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
+            return successResponse({ path: newPath, scenarios, warnings });
+          }
 
-        if (newPath === resolved.path) {
-          // No-op rename — return current state.
+          const existing = await repos.docMountDocuments.findByMountPointAndPath(
+            lookup.mountPointId,
+            resolved.path,
+          );
+          if (!existing) return notFound('Scenario');
+
+          const conflict = await repos.docMountDocuments.findByMountPointAndPath(
+            lookup.mountPointId,
+            newPath,
+          );
+          if (conflict) {
+            return badRequest(`A scenario named "${cleaned}" already exists`);
+          }
+
+          await moveDatabaseDocument(lookup.mountPointId, resolved.path, newPath);
+
           const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
+
+          logger.info(`${logTag} Renamed ${owner} scenario`, {
+            [logIdKey]: id,
+            userId: user.id,
+            mountPointId: lookup.mountPointId,
+            from: resolved.path,
+            to: newPath,
+          });
+
           return successResponse({ path: newPath, scenarios, warnings });
-        }
-
-        const existing = await repos.docMountDocuments.findByMountPointAndPath(
-          lookup.mountPointId,
-          resolved.path,
-        );
-        if (!existing) return notFound('Scenario');
-
-        const conflict = await repos.docMountDocuments.findByMountPointAndPath(
-          lookup.mountPointId,
-          newPath,
-        );
-        if (conflict) {
-          return badRequest(`A scenario named "${cleaned}" already exists`);
-        }
-
-        await moveDatabaseDocument(lookup.mountPointId, resolved.path, newPath);
-
-        const { scenarios, warnings } = await listScenarios(lookup.mountPointId, { includeArchived });
-
-        logger.info(`${logTag} Renamed ${owner} scenario`, {
-          [logIdKey]: id,
-          userId: user.id,
-          mountPointId: lookup.mountPointId,
-          from: resolved.path,
-          to: newPath,
+          },
         });
-
-        return successResponse({ path: newPath, scenarios, warnings });
       } catch (error) {
         if (error instanceof z.ZodError) {
           return badRequest(`Invalid request body: ${error.issues.map(i => i.message).join('; ')}`);
