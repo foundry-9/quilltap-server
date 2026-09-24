@@ -9,7 +9,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { badRequest } from '@/lib/api/responses';
 import { handleAddCharacter, handleAddChat, handleAddFile, handleUpdateToolSettings } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 

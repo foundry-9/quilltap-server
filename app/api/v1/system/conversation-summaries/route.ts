@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, dispatchAction } from '@/lib/api/middleware';
-import { badRequest, serverError } from '@/lib/api/responses';
+import { serverError } from '@/lib/api/responses';
 import { enqueueRegenerateConversationSummaries } from '@/lib/background-jobs/queue-service';
 import { logger } from '@/lib/logger';
 

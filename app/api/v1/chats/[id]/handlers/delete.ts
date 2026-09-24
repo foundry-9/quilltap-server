@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError } from '@/lib/api/responses';
+import { notFound, serverError } from '@/lib/api/responses';
 import { handleResetState, handleStopImpersonate } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 

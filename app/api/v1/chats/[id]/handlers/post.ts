@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { notFound, badRequest } from '@/lib/api/responses';
+import { notFound } from '@/lib/api/responses';
 import {
   handleAddTag,
   handleRemoveTag,
@@ -66,7 +66,7 @@ export async function handlePost(
   ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
+  const { repos } = ctx;
 
   // Verify ownership first
   const chat = await repos.chats.findById(chatId);

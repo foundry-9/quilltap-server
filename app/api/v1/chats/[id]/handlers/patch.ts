@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchAction } from '@/lib/api/middleware/actions';
-import { notFound, badRequest } from '@/lib/api/responses';
+import { notFound } from '@/lib/api/responses';
 import { persistTurnSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
 
