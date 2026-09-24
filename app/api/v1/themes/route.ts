@@ -16,7 +16,7 @@
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
 import { successResponse, badRequest, serverError, created } from '@/lib/api/responses';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 // Dynamic imports prevent Turbopack from tracing the extensive filesystem
 // operations in the plugin/theme systems into the NFT list
 const getPluginInit = () => import('@/lib/startup/plugin-initialization');
@@ -24,10 +24,6 @@ const getThemeRegistry = () => import('@/lib/themes/theme-registry');
 const getBundleLoader = () => import('@/lib/themes/bundle-loader');
 const getRegistryClient = () => import('@/lib/themes/registry-client');
 
-const THEME_GET_ACTIONS = ['registry', 'registry-sources', 'updates'] as const;
-type ThemeGetAction = typeof THEME_GET_ACTIONS[number];
-const THEME_POST_ACTIONS = ['install', 'install-from-url', 'add-source', 'remove-source', 'refresh', 'install-registry'] as const;
-type ThemePostAction = typeof THEME_POST_ACTIONS[number];
 
 async function ensureInitialized() {
   const { isPluginSystemInitialized, initializePlugins } = await getPluginInit();
@@ -47,25 +43,15 @@ export async function GET(request: NextRequest) {
   try {
     await ensureInitialized();
 
-    const action = getActionParam(request);
-
-    if (!action) {
-      return handleGetThemes();
-    }
-
-    if (!isValidAction(action, THEME_GET_ACTIONS)) {
-      return badRequest(`Unknown action: ${action}`, {
-        availableActions: [...THEME_GET_ACTIONS],
-      });
-    }
-
-    const actionHandlers: Record<ThemeGetAction, () => Promise<Response>> = {
-      registry: () => handleGetRegistry(request),
-      'registry-sources': () => handleGetRegistrySources(),
-      updates: () => handleGetUpdates(),
-    };
-
-    return actionHandlers[action]();
+    return await dispatchAction(
+      request,
+      {
+        registry: () => handleGetRegistry(request),
+        'registry-sources': () => handleGetRegistrySources(),
+        updates: () => handleGetUpdates(),
+      },
+      () => handleGetThemes()
+    );
   } catch (error) {
     logger.error(
       'Failed to get themes',
@@ -132,30 +118,14 @@ export async function POST(request: NextRequest) {
   try {
     await ensureInitialized();
 
-    const action = getActionParam(request);
-
-    if (!action) {
-      return badRequest('Action parameter required', {
-        availableActions: [...THEME_POST_ACTIONS],
-      });
-    }
-
-    if (!isValidAction(action, THEME_POST_ACTIONS)) {
-      return badRequest(`Unknown action: ${action}`, {
-        availableActions: [...THEME_POST_ACTIONS],
-      });
-    }
-
-    const actionHandlers: Record<ThemePostAction, () => Promise<Response>> = {
+    return await dispatchAction(request, {
       install: () => handleInstall(request),
       'install-from-url': () => handleInstallFromUrl(request),
       'add-source': () => handleAddSource(request),
       'remove-source': () => handleRemoveSource(request),
       refresh: () => handleRefresh(),
       'install-registry': () => handleInstallFromRegistryAction(request),
-    };
-
-    return actionHandlers[action]();
+    });
   } catch (error) {
     logger.error(
       'Failed to process theme action',

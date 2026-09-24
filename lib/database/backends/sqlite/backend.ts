@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { Database as DatabaseType, Statement } from 'better-sqlite3';
+import { Database as DatabaseType } from 'better-sqlite3';
 import {
   DatabaseBackend,
   DatabaseCollection,
@@ -37,8 +37,8 @@ import { runMountIndexIntegrityCheck, startMountIndexPeriodicCheckpoints } from 
 import { acquireInstanceLock, releaseActiveInstanceLock, InstanceLockError } from './instance-lock';
 import { getInstanceLockPath } from '@/lib/paths';
 import { generateDDL, classifySchemaColumns } from '../../schema-translator';
-import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
-import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
+import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery } from './query-translator';
+import { documentToRow, fromJsonSafe, blobToEmbedding } from './json-columns';
 import { blobToText } from '@/lib/database/text-compression';
 import { parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
 import { logger } from '@/lib/logger';
@@ -59,7 +59,6 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
   private blobColumns: Set<string>;
   /** Large text/JSON columns stored brotli-compressed (lib/database/text-compression.ts). */
   private compressedColumns: Set<string>;
-  private preparedStatements: Map<string, Statement> = new Map();
 
   constructor(db: DatabaseType, name: string, jsonColumns: string[] = [], arrayColumns: string[] = [], booleanColumns: string[] = [], blobColumns: string[] = [], compressedColumns: string[] = []) {
     this.db = db;
@@ -69,16 +68,6 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
     this.booleanColumns = new Set(booleanColumns);
     this.blobColumns = new Set(blobColumns);
     this.compressedColumns = new Set(compressedColumns);
-  }
-
-  /**
-   * Get or create a prepared statement
-   */
-  private getStatement(key: string, sql: string): Statement {
-    if (!this.preparedStatements.has(key)) {
-      this.preparedStatements.set(key, this.db.prepare(sql));
-    }
-    return this.preparedStatements.get(key)!;
   }
 
   /**
@@ -483,12 +472,6 @@ export class SQLiteCollection<T = unknown> implements DatabaseCollection<T> {
     return result as T;
   }
 
-  /**
-   * Add a JSON column to the set
-   */
-  addJsonColumn(column: string): void {
-    this.jsonColumns.add(column);
-  }
 }
 
 // ============================================================================
@@ -800,31 +783,6 @@ export class SQLiteBackend implements DatabaseBackend {
       this.collectionBooleanColumns.set(name, booleanColumns);
     } catch (error) {
       logger.error('Failed to ensure collection', {
-        table: name,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Drop a collection (table)
-   */
-  async dropCollection(name: string): Promise<void> {
-    const db = this.requireDb();
-
-    try {
-      db.exec(`DROP TABLE IF EXISTS "${name}"`);
-      this.collectionSchemas.delete(name);
-      this.collectionJsonColumns.delete(name);
-      this.collectionArrayColumns.delete(name);
-      this.collectionBooleanColumns.delete(name);
-      this.collectionBlobColumns.delete(name);
-      this.collectionCompressedColumns.delete(name);
-
-      logger.info('Dropped collection', { table: name });
-    } catch (error) {
-      logger.error('Failed to drop collection', {
         table: name,
         error: error instanceof Error ? error.message : String(error),
       });

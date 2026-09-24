@@ -10,9 +10,9 @@
 
 import {
   buildFtsMatchExpression,
-  escapeLikePattern,
   tokenizeLikeUnicode61,
 } from '@/lib/database/repositories/fts-query'
+import { escapeLikeLiteral } from '@/lib/database/repositories/like-escape'
 
 describe('tokenizeLikeUnicode61', () => {
   it('splits on everything outside letters and numbers', () => {
@@ -35,19 +35,19 @@ describe('tokenizeLikeUnicode61', () => {
   })
 })
 
-describe('escapeLikePattern', () => {
+describe('escapeLikeLiteral (shared with like-escape)', () => {
   it('escapes the wildcards and the escape character itself', () => {
-    expect(escapeLikePattern('100%')).toBe('100\\%')
-    expect(escapeLikePattern('a_b')).toBe('a\\_b')
-    expect(escapeLikePattern('back\\slash')).toBe('back\\\\slash')
+    expect(escapeLikeLiteral('100%')).toBe('100\\%')
+    expect(escapeLikeLiteral('a_b')).toBe('a\\_b')
+    expect(escapeLikeLiteral('back\\slash')).toBe('back\\\\slash')
   })
 
   it('escapes the backslash first, so added escapes are not re-escaped', () => {
-    expect(escapeLikePattern('\\%')).toBe('\\\\\\%')
+    expect(escapeLikeLiteral('\\%')).toBe('\\\\\\%')
   })
 
   it('leaves regex metacharacters alone — this is LIKE, not a regex', () => {
-    expect(escapeLikePattern('Mr. Smith (esq.)')).toBe('Mr. Smith (esq.)')
+    expect(escapeLikeLiteral('Mr. Smith (esq.)')).toBe('Mr. Smith (esq.)')
   })
 })
 

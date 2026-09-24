@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import type { EmbeddingProfileProvider } from '@/lib/schemas/types';
@@ -27,25 +27,19 @@ import { isLocalEmbeddingProvider } from '@quilltap/plugin-types';
  * GET /api/v1/embedding-profiles?action=list-models - List available models
  * GET /api/v1/embedding-profiles?action=list-providers - List available providers
  */
-export const GET = createContextHandler(async (req, context) => {
-  const { user, repos } = context;
-  const action = getActionParam(req);
+export const GET = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    {
+      'list-models': () => handleListModels(req, context),
+      'fetch-models': () => handleFetchModels(req, context),
+      'list-providers': async () => handleListProviders(),
+    },
+    () => handleListProfiles(context)
+  )
+);
 
-  // Handle list-models action
-  if (action === 'list-models') {
-    return handleListModels(req, context);
-  }
-
-  // Handle fetch-models action (dynamic fetch from provider)
-  if (action === 'fetch-models') {
-    return handleFetchModels(req, context);
-  }
-
-  // Handle list-providers action
-  if (action === 'list-providers') {
-    return handleListProviders();
-  }
-
+async function handleListProfiles({ user, repos }: RequestContext): Promise<NextResponse> {
   try {
 
     // Get all embedding profiles for user
@@ -109,7 +103,7 @@ export const GET = createContextHandler(async (req, context) => {
     logger.error('[Embedding Profiles v1] Error listing profiles', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch embedding profiles');
   }
-});
+}
 
 /**
  * Handle list-providers action

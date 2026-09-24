@@ -72,24 +72,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
   }
 
   /**
-   * Find a user by username
-   */
-  async findByUsername(username: string): Promise<User | null> {
-    return this.safeQuery(
-      async () => {
-        const user = await this.findOneByFilter({ username });
-
-        if (!user) {
-          return null;
-        }
-        return user;
-      },
-      'Error finding user by username',
-      { username }
-    );
-  }
-
-  /**
    * Find all users
    */
   async findAll(): Promise<User[]> {
@@ -298,72 +280,6 @@ export class UsersRepository extends AbstractBaseRepository<User> {
         return validationResult.data || null;
       },
       'Error getting general settings',
-      { userId }
-    );
-  }
-
-  /**
-   * Update general settings (user + chat settings)
-   * Updates both collections atomically
-   */
-  async updateGeneralSettings(
-    userId: string,
-    data: Partial<GeneralSettings>
-  ): Promise<GeneralSettings | null> {
-    return this.safeQuery(
-      async () => {
-        // Get the chat settings repository from the database manager
-        const db = await (await import('../manager')).getDatabaseAsync();
-        const chatSettingsCollection = db.getCollection<ChatSettings>('chatSettings');
-
-        // Update user if provided
-        if (data.user) {
-          const updatedUser = await this.update(userId, data.user);
-          if (!updatedUser) {
-            logger.error('Failed to update user during general settings update', {
-              userId,
-            });
-            return null;
-          }
-        }
-
-        // Update chat settings if provided
-        if (data.chatSettings) {
-          const result = await chatSettingsCollection.updateMany(
-            { userId } as TypedQueryFilter<ChatSettings>,
-            {
-              $set: {
-                ...data.chatSettings,
-                updatedAt: this.getCurrentTimestamp(),
-              },
-            } as any
-          );
-
-          if (result.modifiedCount === 0) {
-            logger.error('Failed to update chat settings during general settings update', {
-              userId,
-            });
-            return null;
-          }
-        }
-
-        // Fetch and return the updated general settings
-        const generalSettings = await this.getGeneralSettings(userId);
-
-        if (!generalSettings) {
-          logger.error('Failed to retrieve updated general settings', {
-            userId,
-          });
-          return null;
-        }
-
-        logger.info('General settings updated successfully', {
-          userId,
-        });
-
-        return generalSettings;
-      },
-      'Error updating general settings',
       { userId }
     );
   }

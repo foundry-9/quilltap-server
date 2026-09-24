@@ -37,11 +37,14 @@ export type WriteDbTarget = 'main' | 'mountIndex' | 'llmLogs';
 
 /**
  * Repository keys whose rows live in the dedicated mount-index database
- * (`getRawMountIndexDatabase()`), not the main DB. Mirrors the repos that
- * override `getCollection()` to use `getRawMountIndexDatabase()` — see
- * `lib/database/repositories/doc-mount-*.repository.ts` and
- * `project-doc-mount-links.repository.ts`. Keep in sync when adding a repo
- * backed by the mount-index DB.
+ * (`getRawMountIndexDatabase()` / `requireMountIndexDb()`), not the main DB.
+ * Mirrors the repos that override `getCollection()` to use the mount-index
+ * connection — see `lib/database/repositories/doc-mount-*.repository.ts`,
+ * `project-doc-mount-links.repository.ts`, `group-doc-mount-links.repository.ts`
+ * and `group-character-members.repository.ts`. Keep in sync when adding a repo
+ * backed by the mount-index DB: a key missing here has its buffered child
+ * writes committed inside the *main* database's transaction, against the
+ * wrong connection.
  */
 export const MOUNT_INDEX_REPO_KEYS: ReadonlySet<string> = new Set([
   'docMountPoints',
@@ -52,6 +55,8 @@ export const MOUNT_INDEX_REPO_KEYS: ReadonlySet<string> = new Set([
   'docMountDocuments',
   'docMountBlobs',
   'projectDocMountLinks',
+  'groupDocMountLinks',
+  'groupCharacterMembers',
 ]);
 
 /**

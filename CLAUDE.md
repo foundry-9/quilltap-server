@@ -119,7 +119,7 @@ export const POST = createContextHandler<{ id: string }>(
 ```
 
 - **Context:** `createContextHandler` / `withContext` (`@/lib/api/middleware`)
-- **Action dispatch:** `withActionDispatch` / `withCollectionActionDispatch` (`@/lib/api/middleware/actions`)
+- **Action dispatch:** `withActionDispatch` / `withCollectionActionDispatch` for handlers that take `(request, context, params)`; `dispatchAction(req, { verb: () => … }, fallback?)` when the handler has already loaded the entity and its thunks close over it (`@/lib/api/middleware/actions`). **Never read `?action=` by hand** — the primitives are the one place the rule lives: no action → the fallback CRUD verb, a known action → its handler, anything else → 400. An unknown action must never fall through to a default that deletes, creates or restores.
 - **Responses:** `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, … (`@/lib/api/responses`)
 
 Legacy non-v1 routes were removed in v2.8. Exceptions that remain: `/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`. Note content/character/chat **API** paths stay at `/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects` even though their UI routes were renamed (below). Full reference: [API.md](docs/developer/API.md).

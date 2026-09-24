@@ -262,21 +262,15 @@ jest.mock('@/lib/database/manager', () => ({
   getDatabase: jest.fn(),
   getDatabaseAsync: jest.fn(),
   initializeDatabase: jest.fn(),
-  isDatabaseInitialized: jest.fn().mockReturnValue(false),
-  isDatabaseConnected: jest.fn().mockResolvedValue(false),
   closeDatabase: jest.fn().mockResolvedValue(undefined),
   suspendDatabase: jest.fn().mockResolvedValue(false),
   resumeDatabase: jest.fn().mockResolvedValue(null),
   getCollection: jest.fn(),
   ensureCollection: jest.fn().mockResolvedValue(undefined),
-  listCollections: jest.fn().mockResolvedValue([]),
   getBackendType: jest.fn().mockReturnValue(null),
-  getBackendCapabilities: jest.fn().mockReturnValue(null),
   supportsCapability: jest.fn().mockReturnValue(false),
-  healthCheck: jest.fn(),
   withTransaction: jest.fn(),
   _resetForTesting: jest.fn(),
-  _setBackendForTesting: jest.fn(),
 }))
 
 // Mock file storage manager - used by cascade-delete and other modules

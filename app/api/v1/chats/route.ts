@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
 import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
@@ -77,8 +77,6 @@ import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonom
 import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 
 type Repos = RepositoryContainer;
-const CHAT_POST_ACTIONS = ['import'] as const;
-type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -1528,34 +1526,14 @@ async function handleImport(req: NextRequest, context: RequestContext) {
 /**
  * GET /api/v1/chats - List (the collection has no GET actions)
  */
-export const GET = createContextHandler(async (req, context) => {
-  const action = getActionParam(req);
-
-  // `!== null`, not truthiness: a bare `?action` or `?action=` is still an action.
-  if (action !== null) {
-    return badRequest(`Unknown action: ${action}. GET /api/v1/chats takes no actions`);
-  }
-
-  return handleList(req, context);
-});
+export const GET = createContextHandler(async (req, context) =>
+  // An empty map: any `?action=` (a bare `?action=` included) is a 400.
+  dispatchAction(req, {}, () => handleList(req, context))
+);
 
 /**
  * POST /api/v1/chats - Action dispatch or create
  */
-export const POST = createContextHandler(async (req, context) => {
-  const action = getActionParam(req);
-
-  if (!action) {
-    return handleCreate(req, context);
-  }
-
-  if (!isValidAction(action, CHAT_POST_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_POST_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<ChatPostAction, () => Promise<NextResponse>> = {
-    import: () => handleImport(req, context),
-  };
-
-  return actionHandlers[action]();
-});
+export const POST = createContextHandler(async (req, context) =>
+  dispatchAction(req, { import: () => handleImport(req, context) }, () => handleCreate(req, context))
+);

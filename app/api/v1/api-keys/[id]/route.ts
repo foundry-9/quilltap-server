@@ -8,8 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { getUserRepositories } from '@/lib/repositories/factory';
 import { maskApiKey } from '@/lib/encryption';
 import { Provider } from '@/lib/schemas/types';
@@ -187,13 +187,14 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
  * POST /api/v1/api-keys/[id]?action=test - Test if an API key is valid
  */
 export const POST = createContextParamsHandler<{ id: string }>(
-  async (req, { user, repos }, { id }) => {
-    const action = getActionParam(req);
+  async (req, ctx, { id }) => dispatchAction(req, { test: () => handleTestKey(req, ctx, id) })
+);
 
-    if (action !== 'test') {
-      return badRequest(`Unknown action: ${action}. Available actions: test`);
-    }
-
+async function handleTestKey(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  id: string
+): Promise<NextResponse> {
     try {
 
       // Get the API key
@@ -240,5 +241,4 @@ export const POST = createContextParamsHandler<{ id: string }>(
       logger.error('[API Keys v1] Error testing key', { keyId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to test API key');
     }
-  }
-);
+}

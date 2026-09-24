@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { handlePutDefault, handleSetState } from '../actions';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -20,11 +20,9 @@ export async function handlePut(
   ctx: RequestContext,
   groupId: string
 ): Promise<NextResponse> {
-  const action = getActionParam(req);
-
-  if (action === 'set-state') {
-    return handleSetState(req, groupId, ctx);
-  }
-
-  return handlePutDefault(req, groupId, ctx);
+  return dispatchAction(
+    req,
+    { 'set-state': () => handleSetState(req, groupId, ctx) },
+    () => handlePutDefault(req, groupId, ctx)
+  );
 }

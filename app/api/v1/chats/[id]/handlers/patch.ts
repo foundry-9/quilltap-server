@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { notFound, badRequest } from '@/lib/api/responses';
 import { persistTurnSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -18,14 +18,15 @@ export async function handlePatch(
   ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
-  const action = getActionParam(req);
+  // `turn` is the only PATCH action: it persists the turn state.
+  return dispatchAction(req, { turn: () => handlePersistTurn(req, ctx, chatId) });
+}
 
-  // Only support turn action for PATCH
-  if (action !== 'turn') {
-    return badRequest('PATCH only supports action=turn for persisting turn state');
-  }
-
+async function handlePersistTurn(
+  req: NextRequest,
+  { repos }: RequestContext,
+  chatId: string
+): Promise<NextResponse> {
   // Verify ownership
   const chat = await repos.chats.findById(chatId);
   if (!chat) {

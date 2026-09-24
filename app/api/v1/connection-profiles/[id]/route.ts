@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, RequestContext, resolveEditorTags } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, forbidden, badRequest, serverError, conflict, successResponse } from '@/lib/api/responses';
@@ -32,12 +32,6 @@ const addTagSchema = z.object({
 const removeTagSchema = z.object({
   tagId: z.uuid(),
 });
-
-const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag', 'auto-configure'] as const;
-type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIONS[number];
-
-const CONNECTION_PROFILE_ITEM_GET_ACTIONS = ['get-tags'] as const;
-type ConnectionProfileItemGetAction = typeof CONNECTION_PROFILE_ITEM_GET_ACTIONS[number];
 
 /**
  * Helper to enrich profile with API key info
@@ -87,27 +81,19 @@ export const GET = createContextParamsHandler<{ id: string }>(
       // profile. Leniency here is what hid Bug 74's second layer: `get-tags`
       // did not exist, the GET ignored the parameter, and the caller read
       // `data.tags` off a `{ profile }` body as `undefined` — no tags, no error.
-      const action = getActionParam(req);
-      if (action) {
-        if (!isValidAction(action, CONNECTION_PROFILE_ITEM_GET_ACTIONS)) {
-          return badRequest(
-            `Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_GET_ACTIONS.join(', ')}`
-          );
-        }
-
-        const getActionHandlers: Record<ConnectionProfileItemGetAction, () => Promise<NextResponse>> = {
+      return await dispatchAction(
+        req,
+        {
           'get-tags': async () => {
             const tags = await resolveEditorTags(profile.tags, repos);
             return successResponse({ tags });
           },
-        };
-
-        return getActionHandlers[action]();
-      }
-
-      const enrichedProfile = await enrichProfile(profile, repos);
-
-      return NextResponse.json({ profile: enrichedProfile });
+        },
+        async () => {
+          const enrichedProfile = await enrichProfile(profile, repos);
+          return NextResponse.json({ profile: enrichedProfile });
+        }
+      );
     } catch (error) {
       logger.error('[Connection Profiles v1] Error fetching profile', { profileId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch connection profile');
@@ -442,19 +428,13 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
  */
 export const POST = createContextParamsHandler<{ id: string }>(
   async (req, { user, repos }, { id }) => {
-    const action = getActionParam(req);
-
     // Verify ownership first
     const profile = await repos.connections.findById(id);
     if (!profile) {
       return notFound('Connection profile');
     }
 
-    if (!isValidAction(action, CONNECTION_PROFILE_ITEM_POST_ACTIONS)) {
-      return badRequest(`Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_POST_ACTIONS.join(', ')}`);
-    }
-
-    const actionHandlers: Record<ConnectionProfileItemPostAction, () => Promise<NextResponse>> = {
+    return dispatchAction(req, {
       'add-tag': async () => {
         const body = await req.json();
         const validatedData = addTagSchema.parse(body);
@@ -539,8 +519,6 @@ export const POST = createContextParamsHandler<{ id: string }>(
           return serverError(error instanceof Error ? error.message : 'Failed to auto-configure connection profile');
         }
       },
-    };
-
-    return actionHandlers[action]();
+    });
   }
 );

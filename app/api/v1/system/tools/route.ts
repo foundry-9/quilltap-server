@@ -30,7 +30,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createHash } from 'crypto';
 import { createContextHandler } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, validationError } from '@/lib/api/responses';
 import { deleteAllUserData, previewDeleteAllUserData } from '@/lib/backup/restore-service';
@@ -56,33 +56,6 @@ import type { AIImportRequest, AIImportProgressEvent } from '@/lib/services/ai-i
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { ExportEntityType } from '@/lib/export/types';
-
-const TOOLS_GET_ACTIONS = [
-  'tasks-queue',
-  'job-concurrency',
-  'delete-data-preview',
-  'export-entities',
-  'export-preview',
-  'capabilities-report-list',
-  'capabilities-report-progress',
-  'capabilities-report-get',
-  'memory-dedup-preview',
-] as const;
-type ToolsGetAction = typeof TOOLS_GET_ACTIONS[number];
-
-const TOOLS_POST_ACTIONS = [
-  'delete-data',
-  'tasks-queue',
-  'job-concurrency',
-  'export',
-  'import-preview',
-  'import-execute',
-  'capabilities-report-generate',
-  'capabilities-report-delete',
-  'memory-dedup',
-  'ai-import-stream',
-] as const;
-type ToolsPostAction = typeof TOOLS_POST_ACTIONS[number];
 
 // ============================================================================
 // Helper Functions
@@ -1263,16 +1236,8 @@ async function handleAIImportStream(req: NextRequest, context: any) {
 // Request Handlers
 // ============================================================================
 
-export const GET = createContextHandler(async (req: NextRequest, context) => {
-  const action = getActionParam(req);
-
-  if (!isValidAction(action, TOOLS_GET_ACTIONS)) {
-    return badRequest(
-      `Unknown action: ${action}. Available GET actions: ${TOOLS_GET_ACTIONS.join(', ')}`
-    );
-  }
-
-  const actionHandlers: Record<ToolsGetAction, () => Promise<NextResponse>> = {
+export const GET = createContextHandler(async (req: NextRequest, context) =>
+  dispatchAction(req, {
     'tasks-queue': () => handleTasksQueue(req, context),
     'job-concurrency': () => handleJobConcurrency(req, context),
     'delete-data-preview': () => handleDeleteDataPreview(req, context),
@@ -1282,21 +1247,11 @@ export const GET = createContextHandler(async (req: NextRequest, context) => {
     'capabilities-report-progress': () => handleCapabilitiesReportProgress(req, context),
     'capabilities-report-get': () => handleCapabilitiesReportGet(req, context),
     'memory-dedup-preview': () => handleMemoryDedupPreview(req, context),
-  };
+  })
+);
 
-  return actionHandlers[action]();
-});
-
-export const POST = createContextHandler(async (req: NextRequest, context) => {
-  const action = getActionParam(req);
-
-  if (!isValidAction(action, TOOLS_POST_ACTIONS)) {
-    return badRequest(
-      `Unknown action: ${action}. Available POST actions: ${TOOLS_POST_ACTIONS.join(', ')}`
-    );
-  }
-
-  const actionHandlers: Record<ToolsPostAction, () => Promise<NextResponse>> = {
+export const POST = createContextHandler(async (req: NextRequest, context) =>
+  dispatchAction(req, {
     'delete-data': () => handleDeleteData(req, context),
     'tasks-queue': () => handleTasksQueueControl(req, context),
     'job-concurrency': () => handleJobConcurrencyControl(req, context),
@@ -1307,7 +1262,5 @@ export const POST = createContextHandler(async (req: NextRequest, context) => {
     'capabilities-report-delete': () => handleCapabilitiesReportDelete(req, context),
     'memory-dedup': () => handleMemoryDedup(req, context),
     'ai-import-stream': () => handleAIImportStream(req, context),
-  };
-
-  return actionHandlers[action]();
-});
+  })
+);

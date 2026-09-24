@@ -11,26 +11,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextHandler, getActionParam } from '@/lib/api/middleware';
+import { createContextHandler, dispatchAction } from '@/lib/api/middleware';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { enqueueRegenerateConversationSummaries } from '@/lib/background-jobs/queue-service';
 import { logger } from '@/lib/logger';
 
-export const GET = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
-  if (action === 'regenerate') {
-    return handleRegenerateStatus(req, { user, repos });
-  }
-  return badRequest('Unknown or missing action.');
-});
+export const GET = createContextHandler(async (req, { user, repos }) =>
+  dispatchAction(req, { regenerate: () => handleRegenerateStatus(req, { user, repos }) })
+);
 
-export const POST = createContextHandler(async (req, { user, repos }) => {
-  const action = getActionParam(req);
-  if (action === 'regenerate') {
-    return handleRegenerate(req, { user, repos });
-  }
-  return badRequest('Unknown or missing action.');
-});
+export const POST = createContextHandler(async (req, { user, repos }) =>
+  dispatchAction(req, { regenerate: () => handleRegenerate(req, { user, repos }) })
+);
 
 async function handleRegenerate(
   _req: NextRequest,

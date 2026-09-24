@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/character';
 import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, type WizardProgressEvent } from '@/lib/services/character-wizard.service';
 import { z } from 'zod';
@@ -136,8 +136,6 @@ const wizardRequestSchema = z.object({
 // Action List
 // ============================================================================
 
-const CHARACTERS_POST_ACTIONS = ['ai-wizard', 'ai-wizard-stream', 'import', 'quick-create', 'reset-builtins'] as const;
-type CharactersPostAction = typeof CHARACTERS_POST_ACTIONS[number];
 
 // ============================================================================
 // Helper Functions
@@ -585,19 +583,15 @@ export async function handlePost(
   req: NextRequest,
   ctx: RequestContext
 ): Promise<NextResponse> {
-  const action = getActionParam(req);
-
-  if (!action || !isValidAction(action, CHARACTERS_POST_ACTIONS)) {
-    return handleCreate(req, ctx);
-  }
-
-  const actionHandlers: Record<CharactersPostAction, () => Promise<NextResponse>> = {
-    'ai-wizard': () => handleAiWizard(req, ctx),
-    'ai-wizard-stream': () => handleAiWizardStream(req, ctx),
-    import: () => handleImport(req, ctx),
-    'quick-create': () => handleQuickCreate(req, ctx),
-    'reset-builtins': () => handleResetBuiltins(req, ctx),
-  };
-
-  return actionHandlers[action]();
+  return dispatchAction(
+    req,
+    {
+      'ai-wizard': () => handleAiWizard(req, ctx),
+      'ai-wizard-stream': () => handleAiWizardStream(req, ctx),
+      import: () => handleImport(req, ctx),
+      'quick-create': () => handleQuickCreate(req, ctx),
+      'reset-builtins': () => handleResetBuiltins(req, ctx),
+    },
+    () => handleCreate(req, ctx)
+  );
 }

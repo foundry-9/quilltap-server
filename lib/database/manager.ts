@@ -186,24 +186,6 @@ export async function getDatabaseAsync(): Promise<DatabaseBackend> {
   return initializeDatabase();
 }
 
-/**
- * Check if the database is initialized
- */
-export function isDatabaseInitialized(): boolean {
-  return isDbInitialized() && getDatabaseBackend() !== null;
-}
-
-/**
- * Check if the database is connected
- */
-export async function isDatabaseConnected(): Promise<boolean> {
-  const backend = getDatabaseBackend();
-  if (!backend) {
-    return false;
-  }
-  return backend.isConnected();
-}
-
 // ============================================================================
 // Suspend / Resume
 // ============================================================================
@@ -319,14 +301,6 @@ export async function registerBlobColumns(tableName: string, columns: string[]):
   }
 }
 
-/**
- * Get all collection names
- */
-export async function listCollections(): Promise<string[]> {
-  const backend = await getDatabaseAsync();
-  return backend.listCollections();
-}
-
 // ============================================================================
 // Capabilities
 // ============================================================================
@@ -339,13 +313,6 @@ export function getBackendType(): DatabaseBackendType | null {
 }
 
 /**
- * Get the current backend capabilities
- */
-export function getBackendCapabilities(): DatabaseCapabilities | null {
-  return getDatabaseBackend()?.capabilities || null;
-}
-
-/**
  * Check if the current backend supports a specific capability
  */
 export function supportsCapability(capability: keyof DatabaseCapabilities): boolean {
@@ -354,37 +321,6 @@ export function supportsCapability(capability: keyof DatabaseCapabilities): bool
     return false;
   }
   return Boolean(backend.capabilities[capability]);
-}
-
-// ============================================================================
-// Health Check
-// ============================================================================
-
-/**
- * Run a health check on the database
- */
-export async function healthCheck(): Promise<{
-  healthy: boolean;
-  backend: string;
-  latencyMs: number;
-  message?: string;
-}> {
-  const backend = getDatabaseBackend();
-  if (!backend) {
-    return {
-      healthy: false,
-      backend: 'none',
-      latencyMs: 0,
-      message: 'Database not initialized',
-    };
-  }
-
-  const result = await backend.healthCheck();
-
-  return {
-    ...result,
-    backend: backend.type,
-  };
 }
 
 // ============================================================================
@@ -441,12 +377,4 @@ export function _resetForTesting(): void {
   setDatabaseBackend(null);
   setInitPromise(null);
   setDbInitialized(false);
-}
-
-/**
- * Set a mock backend (for testing only)
- */
-export function _setBackendForTesting(backend: DatabaseBackend): void {
-  setDatabaseBackend(backend);
-  setDbInitialized(true);
 }

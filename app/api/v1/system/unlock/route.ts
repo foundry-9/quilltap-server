@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse, unauthorized } from '@/lib/api/responses';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,23 +74,31 @@ export async function GET() {
  * Dispatches database key actions.
  */
 export async function POST(request: NextRequest) {
-  const action = request.nextUrl.searchParams.get('action');
+  return dispatchAction(request, {
+    setup: () => runUnlockAction(request, 'setup', (body) => handleSetup(getPassphrase(body))),
+    unlock: () => runUnlockAction(request, 'unlock', (body) => handleUnlock(getPassphrase(body))),
+    store: () => runUnlockAction(request, 'store', (body) => handleStore(getPassphrase(body))),
+    'change-passphrase': () => runUnlockAction(request, 'change-passphrase', handleChangePassphrase),
+    lock: () => runUnlockAction(request, 'lock', () => handleLock()),
+  });
+}
 
-  if (!action) {
-    return badRequest('Missing action parameter. Use ?action=setup, ?action=unlock, ?action=store, ?action=change-passphrase, or ?action=lock');
-  }
-
-  if (!isUnlockAction(action)) {
-    return badRequest(`Unknown action: ${action}`);
-  }
-
+/**
+ * Parse the JSON body, run one key action against it, and turn a thrown error
+ * into a logged 500 — the shared shell every action above runs inside.
+ */
+async function runUnlockAction(
+  request: NextRequest,
+  action: UnlockAction,
+  run: (body: Record<string, unknown>) => Promise<NextResponse>
+): Promise<NextResponse> {
   const body = await parseRequestBody(request);
   if (body instanceof NextResponse) {
     return body;
   }
 
   try {
-    return dispatchUnlockAction(action, body);
+    return await run(body);
   } catch (error) {
     unlockLogger.error('Error in database key action', {
       action,
@@ -97,14 +106,6 @@ export async function POST(request: NextRequest) {
     });
     return serverError(error instanceof Error ? error.message : 'Internal server error');
   }
-}
-
-function isUnlockAction(action: string): action is UnlockAction {
-  return action === 'setup'
-    || action === 'unlock'
-    || action === 'store'
-    || action === 'change-passphrase'
-    || action === 'lock';
 }
 
 async function parseRequestBody(request: NextRequest): Promise<Record<string, unknown> | NextResponse> {
@@ -121,18 +122,6 @@ async function parseRequestBody(request: NextRequest): Promise<Record<string, un
 
 function getPassphrase(body: Record<string, unknown>): string {
   return typeof body.passphrase === 'string' ? body.passphrase : '';
-}
-
-function dispatchUnlockAction(action: UnlockAction, body: Record<string, unknown>): Promise<NextResponse> {
-  const actionHandlers: Record<UnlockAction, () => Promise<NextResponse>> = {
-    setup: () => handleSetup(getPassphrase(body)),
-    unlock: () => handleUnlock(getPassphrase(body)),
-    store: () => handleStore(getPassphrase(body)),
-    'change-passphrase': () => handleChangePassphrase(body),
-    lock: () => handleLock(),
-  };
-
-  return actionHandlers[action]();
 }
 
 /**

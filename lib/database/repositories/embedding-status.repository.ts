@@ -9,7 +9,6 @@ import { logger } from '@/lib/logger';
 import {
   EmbeddingStatus,
   EmbeddingStatusSchema,
-  EmbeddingStatusValue,
   EmbeddableEntityType,
 } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
@@ -113,24 +112,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
   }
 
   /**
-   * Find all pending statuses for a profile
-   */
-  async findPendingByProfileId(profileId: string): Promise<EmbeddingStatus[]> {
-    return this.safeQuery(
-      async () => {
-        const collection = await this.getCollection();
-        return await collection.find({
-          profileId,
-          status: 'PENDING',
-        });
-      },
-      'Error finding pending embedding statuses',
-      { profileId },
-      []
-    );
-  }
-
-  /**
    * Entity ids of a given type marked FAILED for a profile, as a Set.
    *
    * Used by the mismatched-dim reindex scope and the startup dimension
@@ -155,21 +136,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
       'Error listing FAILED embedding-status entity ids',
       { entityType, profileId },
       new Set<string>()
-    );
-  }
-
-  /**
-   * Find all statuses with a specific status value
-   */
-  async findByStatus(status: EmbeddingStatusValue): Promise<EmbeddingStatus[]> {
-    return this.safeQuery(
-      async () => {
-        const collection = await this.getCollection();
-        return await collection.find({ status });
-      },
-      'Error finding embedding statuses by status',
-      { status },
-      []
     );
   }
 
@@ -230,36 +196,6 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
       'Error updating embedding status',
       { id }
     );
-  }
-
-  /**
-   * Upsert status by entity (create or update)
-   */
-  async upsertByEntity(
-    entityType: EmbeddableEntityType,
-    entityId: string,
-    profileId: string,
-    data: Partial<Omit<EmbeddingStatus, 'id' | 'createdAt' | 'updatedAt' | 'entityType' | 'entityId' | 'profileId'>>
-  ): Promise<EmbeddingStatus> {
-    const existing = await this.findByEntity(entityType, entityId, profileId);
-
-    if (existing) {
-      const updated = await this.update(existing.id, data);
-      if (!updated) {
-        throw new Error(`Failed to update embedding status for ${entityType} ${entityId}`);
-      }
-      return updated;
-    }
-
-    return this.create({
-      userId: data.userId || '',
-      entityType,
-      entityId,
-      profileId,
-      status: data.status || 'PENDING',
-      embeddedAt: data.embeddedAt,
-      error: data.error,
-    });
   }
 
   /**
