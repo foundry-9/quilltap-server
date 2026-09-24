@@ -2,7 +2,6 @@
  * Chats API v1 - Collection Endpoint
  *
  * GET /api/v1/chats - List all chats for current user
- * GET /api/v1/chats?action=has-dangerous - Check if any dangerous chats exist
  * POST /api/v1/chats - Create a new chat
  * POST /api/v1/chats?action=import - Import a SillyTavern chat
  */
@@ -78,8 +77,6 @@ import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonom
 import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 
 type Repos = RepositoryContainer;
-const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
-type ChatGetAction = typeof CHAT_GET_ACTIONS[number];
 const CHAT_POST_ACTIONS = ['import'] as const;
 type ChatPostAction = typeof CHAT_POST_ACTIONS[number];
 
@@ -1011,26 +1008,6 @@ async function handleList(req: NextRequest, context: RequestContext) {
   }
 }
 
-/**
- * Does the user have anything for "Dangerous Chats" to hide?
- *
- * The toggle hides whatever takes the uncensored route — Flagged (the
- * Concierge's verdict) and Uncensored (the operator's) — so the affordance
- * appears on exactly that set, not on every chat carrying a preserved label.
- */
-async function handleHasDangerous(context: RequestContext) {
-  const { user, repos } = context;
-
-  try {
-    const allChats = await repos.chats.findByUserId(user.id);
-    const hasDangerous = allChats.some((c) => shouldUseUncensoredRoute(c));
-    return successResponse({ hasDangerous });
-  } catch (error) {
-    logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to check dangerous chats');
-  }
-}
-
 type CreateChatInput = z.infer<typeof createChatSchema>;
 
 /**
@@ -1549,24 +1526,17 @@ async function handleImport(req: NextRequest, context: RequestContext) {
 // ============================================================================
 
 /**
- * GET /api/v1/chats - Action dispatch or list
+ * GET /api/v1/chats - List (the collection has no GET actions)
  */
 export const GET = createContextHandler(async (req, context) => {
   const action = getActionParam(req);
 
-  if (!action) {
-    return handleList(req, context);
+  // `!== null`, not truthiness: a bare `?action` or `?action=` is still an action.
+  if (action !== null) {
+    return badRequest(`Unknown action: ${action}. GET /api/v1/chats takes no actions`);
   }
 
-  if (!isValidAction(action, CHAT_GET_ACTIONS)) {
-    return badRequest(`Unknown action: ${action}. Available actions: ${CHAT_GET_ACTIONS.join(', ')}`);
-  }
-
-  const actionHandlers: Record<ChatGetAction, () => Promise<NextResponse>> = {
-    'has-dangerous': () => handleHasDangerous(context),
-  };
-
-  return actionHandlers[action]();
+  return handleList(req, context);
 });
 
 /**

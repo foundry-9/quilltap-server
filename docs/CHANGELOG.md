@@ -4,6 +4,11 @@
 
 ### 4.10-dev
 
+#### Removed: `GET /api/v1/chats?action=has-dangerous`
+
+- The action had no callers after the `useHasDangerousChats` hook was removed. `GET
+  /api/v1/chats` now only lists chats and returns 400 for any `?action=`.
+
 #### Added: `@` character typeahead in the Salon composer
 
 - Typing `@` at the start of a word opens a menu of characters (chat cast first, then all
