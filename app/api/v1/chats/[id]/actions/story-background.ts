@@ -1,17 +1,68 @@
 /**
  * Chats API v1 - Story Background Actions
  *
+ * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * POST /api/v1/chats/[id]?action=regenerate-background - Queue regeneration of story background
  */
 
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { getFilePath } from '@/lib/api/middleware/file-path';
 import { enqueueStoryBackgroundGeneration } from '@/lib/background-jobs/queue-service';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
+import { getPhotoLinkSummaryBySha256 } from '@/lib/photos/photo-link-summary';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
+
+/**
+ * Handle get-background action
+ * Returns the story background URL for the chat, or nulls when there is none.
+ */
+export async function handleGetStoryBackground(
+  chatId: string,
+  ctx: RequestContext
+): Promise<NextResponse> {
+  const { repos } = ctx;
+
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    // Check if the chat has a story background image
+    if (!chat.storyBackgroundImageId) {
+      return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
+    }
+
+    // Get the file info to build the URL
+    const file = await repos.files.findById(chat.storyBackgroundImageId);
+    if (!file) {
+      logger.warn('[Chats v1] Story background file not found', {
+        chatId,
+        storyBackgroundImageId: chat.storyBackgroundImageId,
+      });
+      return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
+    }
+
+    const backgroundUrl = getFilePath(file);
+    const linkSummary = file.sha256
+      ? await getPhotoLinkSummaryBySha256(file.sha256, repos)
+      : null;
+    return NextResponse.json({
+      backgroundUrl,
+      fileId: file.id,
+      filename: file.originalFilename,
+      sha256: file.sha256,
+      linkSummary,
+    });
+  } catch (error) {
+    logger.error('[Chats v1] Failed to get story background', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to get story background');
+  }
+}
 
 /**
  * Handle regenerate-background action

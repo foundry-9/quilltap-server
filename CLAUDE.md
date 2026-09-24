@@ -119,7 +119,7 @@ export const POST = createContextHandler<{ id: string }>(
 ```
 
 - **Context:** `createContextHandler` / `withContext` (`@/lib/api/middleware`)
-- **Action dispatch:** `withActionDispatch` / `withCollectionActionDispatch` (`@/lib/api/middleware/actions`)
+- **Action dispatch:** `withActionDispatch` / `withCollectionActionDispatch` (`@/lib/api/middleware/actions`); a method handler that already holds `(req, ctx, id)` uses `dispatchAction(req, { action: () => … }, fallback?)` from the same module. Unknown or empty `?action=` is a 400 listing the registered actions — never a fall-through to the default body.
 - **Responses:** `successResponse`, `errorResponse`, `notFound`, `badRequest`, `validationError`, `created`, … (`@/lib/api/responses`)
 
 Legacy non-v1 routes were removed in v2.8. Exceptions that remain: `/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`. Note content/character/chat **API** paths stay at `/api/v1/characters`, `/api/v1/chats`, `/api/v1/projects` even though their UI routes were renamed (below). Full reference: [API.md](docs/developer/API.md).

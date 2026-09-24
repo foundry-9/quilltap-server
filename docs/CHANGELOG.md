@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Changed: `GET /api/v1/chats/[id]` dispatches `?action=` through `dispatchAction`
+
+- The handler's hand-written `if (action === '…')` ladder is gone. Every GET action
+  (`export`, `export-markdown`, `get-avatars`, `get-state`, `outfit`, `outfit-summary`,
+  `photo-albums`, `informs`, `group-stores`, `mailbox`, `accessible-stores`, `get-background`,
+  `gallery`, `cost`) is a registered key; an unknown or empty `?action=` now returns 400 with
+  `availableActions` instead of falling through to the chat body. No action's response changed.
+- New `dispatchAction(req, thunks, fallback?)` in `lib/api/middleware/actions.ts` for method
+  handlers that take `(req, ctx, id)` themselves; it shares its 400 shape with
+  `withActionDispatch`.
+- `get-background` moved to `handleGetStoryBackground` in
+  `app/api/v1/chats/[id]/actions/story-background.ts`, beside `regenerate-background`.
+
 #### Removed: `GET /api/v1/chats?action=has-dangerous`
 
 - The action had no callers after the `useHasDangerousChats` hook was removed. `GET

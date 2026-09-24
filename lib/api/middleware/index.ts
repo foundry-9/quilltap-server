@@ -20,11 +20,14 @@ export {
 export {
   withActionDispatch,
   withCollectionActionDispatch,
+  dispatchAction,
   getActionParam,
   isValidAction,
   getQueryParamsWithoutAction,
   type ActionHandler,
   type ActionHandlerMap,
+  type ActionThunk,
+  type ActionThunkMap,
 } from './actions';
 
 // File path utilities

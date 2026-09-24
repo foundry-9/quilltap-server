@@ -26,7 +26,7 @@ export { handleRng } from './rng';
 export { handleRunTool } from './run-tool';
 export { handleGetState, handleSetState, handleResetState } from './state';
 export { handleToggleAgentMode } from './agent-mode';
-export { handleRegenerateBackground } from './story-background';
+export { handleGetStoryBackground, handleRegenerateBackground } from './story-background';
 export { handleReclassifyDanger } from './danger-classification';
 export { handleGetOutfit, handleGetOutfitSummary, handleEquipSlot } from './outfit';
 export { handleToggleAvatarGeneration } from './toggle-avatar-generation';
