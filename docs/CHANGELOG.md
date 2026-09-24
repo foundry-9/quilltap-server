@@ -4,6 +4,11 @@
 
 ### 4.10-dev
 
+#### Removed: `GET /api/v1/chats?action=has-dangerous`
+
+- The action had no callers after the `useHasDangerousChats` hook was removed. `GET
+  /api/v1/chats` now only lists chats and returns 400 for any `?action=`.
+
 #### Fixed: `update_version.sh` put the branch name in the version
 
 - Any branch other than `main`, `release` or `bugfix` got its branch name as the prerelease
@@ -28,11 +33,6 @@
   images.
 - The sidebar footer's quick-hide button is now always shown; the `useHasDangerousChats`
   hook that gated it is removed.
-
-#### Removed: `GET /api/v1/chats?action=has-dangerous`
-
-- The action had no callers after the `useHasDangerousChats` hook was removed. `GET
-  /api/v1/chats` now only lists chats and returns 400 for any `?action=`.
 
 #### Fixed: creating a character scenario returned an id that was never stored (bug 165)
 
