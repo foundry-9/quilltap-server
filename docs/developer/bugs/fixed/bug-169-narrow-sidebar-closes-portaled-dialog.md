@@ -2,16 +2,26 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | **FIXED in v4 (2026-09-24)** |
 | **Found** | 2026-09-24, the v5 port's review of its body-portaled builder dialogs (v5's P4.116, the `d1c06cd9d` smalls unification) |
+| **Fixed** | 2026-09-24, v4.10-dev |
 | **Severity** | Medium — the dialog closes and an in-flight Host run is aborted, with no error shown; only in a narrow pane, but a split workspace pane is narrow on a desktop too |
 | **Who it bites** | anyone who opens **Ask the Host to set the scene** (or its **Save as scenario…** dialog) from the Salon's chat sidebar while the chat pane is narrower than 640 px |
 | **Provenance** | Original to v4. The narrow-pane overlay's outside-click collapse predates the Scenario Builder; the builder (`d1c06cd9d`) is the first dialog opened from inside the sidebar that portals out of it |
 | **Defect site** | `components/chat/ChatSidebar.tsx:417-429` (the overlay's `pointerdown` handler) |
+| **Fix site** | new `components/chat/sidebar-overlay-dismiss.ts` (`shouldDismissSidebarOverlay`), called from `ChatSidebar`'s overlay handler |
 | **v5 status** | Fixed in v5 as a deliberate divergence (2026-09-24): `apps/web/src/app/chat/sidebar/chat-sidebar.ts` ignores a click whose target is inside a `.qt-dialog-overlay`; pinned by a unit spec and a live e2e beat at a 600 px viewport |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-09-24).** The overlay's `pointerdown` handler now asks
+`shouldDismissSidebarOverlay(panel, target)` (`components/chat/sidebar-overlay-dismiss.ts`), which
+refuses to dismiss for a target inside the panel or inside a `.qt-dialog-overlay` (a text-node
+target is resolved to its parent element first). Pinned by
+`__tests__/unit/components/chat/sidebar-overlay-dismiss.test.ts`: a click inside a body-level
+dialog, on its backdrop, or on a text node within it leaves the sidebar open; a click elsewhere
+collapses it. The Escape behaviour under "Related, not fixed here" is unchanged.
 
 ## Symptom
 

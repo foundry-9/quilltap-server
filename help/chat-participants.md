@@ -528,7 +528,7 @@ The sidebar adapts to screen size:
 
 - **Wide screens** — Full expanded sidebar by default
 - **Medium screens** — Collapsed by default, expand on click
-- **Narrow screens** — Overlay mode, closes after action
+- **Narrow screens** — Overlay mode, closes after action. A click elsewhere on the page (or **Escape**) folds it back to its strip, but a click inside a dialog it opened — the Host's scene-setting apparatus, say, or **Save as scenario…** — is understood to be business with that dialog, and the cabinet stays politely open behind it
 
 ### Persistence
 

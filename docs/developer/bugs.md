@@ -5,7 +5,11 @@
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–168** are **fixed in v4**; none are open. **167** and **168** were found
+**Status**: Bugs **1–169** are **fixed in v4**; none are open. **169**, found 2026-09-24 in the v5
+port's review of its body-portaled dialogs: the narrow-pane chat sidebar overlay collapsed on the
+first click inside the Scenario Builder (a `<body>` portal fails the overlay's DOM `contains` check),
+unmounting the dialog and aborting its run; clicks inside a `.qt-dialog-overlay` no longer dismiss
+it. **167** and **168** were found
 together on 2026-09-24 while tracing recurring help-indexing errors on `Friday`. **167**: a full
 re-embed synced help docs in the job child and keyed their chunks to a synthetic id, so the whole
 reindex batch rolled back on a foreign key. **168**: a help page longer than the embedding model's
@@ -1152,7 +1156,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 166 | [the workspace New Chat dialog never offers group scenarios](bugs/fixed/bug-166-modal-no-group-scenarios.md) | 2026-09-23 | 2026-09-23 | Low | `NewChatModal` never passed `useNewChat`'s `groupScenarios` to `NewChatForm`, so the workspace **Start Chat** picker had no group tier; `/salon/new` did | `components/new-chat/NewChatModal.tsx` | Not assessed |
 | 167 | [a full re-embed rolls back whenever a help doc has changed](bugs/fixed/bug-167-help-reindex-fk-rollback.md) | 2026-09-24 | 2026-09-24 | **High** | `syncHelpDocs` ran in the job child during `EMBEDDING_REINDEX_ALL` and keyed chunk rows to the id `upsertByPath` returned — a random synthetic id there. The parent's replay updated the real row, every chunk insert failed its foreign key, and the whole main-DB batch (every queued embedding job with it) rolled back; the job went DEAD | `lib/help/help-doc-sync.ts` takes ids from the table read or mints them for `create(fields, { id })`; `upsertByPath` removed | Not assessed |
 | 168 | [a long help page is too big to embed and drops out of help search](bugs/fixed/bug-168-help-doc-embed-overflow.md) | 2026-09-24 | 2026-09-24 | Medium | The HELP_DOC job embedded a whole page in one call; `chat-settings.md` passed OpenAI's 8,192-token ceiling, failed permanently, and was left with no vector, so `help_search` skipped it and its sections were never embedded | The document vector is the normalised mean of its section vectors (`averageEmbeddings`); `help-doc-size.test.ts` holds every section to 1,000 tokens | Not assessed |
-| 169 | [in a narrow Salon pane, the first click inside the Scenario Builder closes it](bugs/bug-169-narrow-sidebar-closes-portaled-dialog.md) | 2026-09-24 | — | Medium | The narrow-pane sidebar overlay collapses on any `pointerdown` its DOM `contains` check calls outside; `BaseModal` portals the builder and save dialogs to `<body>`, so every click in them collapses the sidebar, unmounting `ChatScenarioControl`, closing the dialog and aborting the run | `components/chat/ChatSidebar.tsx:417-429` — ignore targets inside `.qt-dialog-overlay` | Fixed (divergence) |
+| 169 | [in a narrow Salon pane, the first click inside the Scenario Builder closes it](bugs/fixed/bug-169-narrow-sidebar-closes-portaled-dialog.md) | 2026-09-24 | 2026-09-24 | Medium | The narrow-pane sidebar overlay collapses on any `pointerdown` its DOM `contains` check calls outside; `BaseModal` portals the builder and save dialogs to `<body>`, so every click in them collapses the sidebar, unmounting `ChatScenarioControl`, closing the dialog and aborting the run | `shouldDismissSidebarOverlay` (`components/chat/sidebar-overlay-dismiss.ts`) ignores targets inside `.qt-dialog-overlay`; called from `ChatSidebar`'s overlay handler | Fixed in v5 (a divergence until v4 took the same fix) |
 
 ### Families and reading order
 
