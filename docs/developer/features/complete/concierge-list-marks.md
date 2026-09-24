@@ -161,6 +161,8 @@ The list shapes stop carrying the raw pair and carry the derived state instead:
   consumer reads them — the list route's `hasDangerous` at
   [chats/route.ts:898](../../../../app/api/v1/chats/route.ts) is the one server-side
   reader, and it moves to `conciergeStateUsesUncensoredRoute` (see Quick-hide below).
+  *(Later: the `has-dangerous` action was removed in 4.10 once the quick-hide
+  button became always visible.)*
 - **`RecentChat`** ([types.ts](../../../../components/homepage/types.ts)):
   `isDangerousChat` → `conciergeState: ConciergeState`, plus `dangerCategories?: string[]`.
   `getHomeData` ([home-data.service.ts:67](../../../../lib/services/home-data.service.ts))
@@ -196,7 +198,9 @@ The sidebar footer's "there is something to hide" affordance
 ([sidebar-footer.tsx:145](../../../../components/layout/left-sidebar/sidebar-footer.tsx))
 reads `hasDangerousChats` from the chats list route, which computes it from the raw
 label at line 898; that becomes "any chat on the uncensored row" so the toggle
-appears exactly when it would hide something. The `localStorage` key and the menu
+appears exactly when it would hide something. *(Superseded in 4.10: the quick-hide
+button is always shown, and both the `useHasDangerousChats` hook and the
+`GET /api/v1/chats?action=has-dangerous` action are gone.)* The `localStorage` key and the menu
 label ("Dangerous Chats") do not change — the word still fits what is hidden.
 
 ### A `ConciergeMark` component
@@ -361,7 +365,7 @@ Delegate 1, 2, and 6 freely — they are fully specified above.
   `ChatCardData` shapes and transforms; `home-data.service.ts` pass-through.
 - Character-conversations and Prospero chat-list serialisers: add `conciergeState`
   where missing.
-- `hasDangerous` in `chats/route.ts` → uncensored row.
+- `hasDangerous` in `chats/route.ts` → uncensored row. *(Action since removed; see above.)*
 - Tests: transforms (`lib/chat-utils` tests) and the home service test if one
   exists; otherwise a focused test that `getHomeData` emits the state for each of
   the four stored combinations.
