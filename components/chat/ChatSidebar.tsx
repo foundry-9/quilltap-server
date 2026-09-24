@@ -21,6 +21,7 @@ import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { CopyChatIdButton } from './CopyChatIdButton'
 import { ChatScenarioControl } from './ChatScenarioControl'
+import { shouldDismissSidebarOverlay } from './sidebar-overlay-dismiss'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -414,11 +415,12 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const effectiveCollapsed = isNarrow ? !narrowOpen : isCollapsed
   const isOverlay = isNarrow && narrowOpen
 
-  // Overlay: a click outside the panel, or Escape, collapses it to the strip.
+  // Overlay: a click outside the panel (but not inside a dialog portaled from it),
+  // or Escape, collapses it to the strip.
   useEffect(() => {
     if (!isOverlay) return
     const onPointerDown = (e: PointerEvent) => {
-      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) setNarrowOpen(false)
+      if (shouldDismissSidebarOverlay(sidebarRef.current, e.target)) setNarrowOpen(false)
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setNarrowOpen(false)

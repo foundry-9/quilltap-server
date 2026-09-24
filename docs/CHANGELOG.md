@@ -4,6 +4,15 @@
 
 ### 4.10-dev
 
+#### Fixed: narrow-pane chat sidebar closed the Scenario Builder on first click (bug 169)
+
+- When the Salon pane is narrower than 640 px the chat sidebar is an overlay that collapses on
+  any click outside it. `BaseModal` portals to `<body>`, so clicks inside **Ask the Host to set
+  the scene** and **Save as scenario…** counted as outside; the sidebar collapsed, unmounted
+  `ChatScenarioControl`, closed the dialog, and aborted any running build.
+- New `shouldDismissSidebarOverlay` (`components/chat/sidebar-overlay-dismiss.ts`) ignores
+  targets inside a `.qt-dialog-overlay`. Escape still collapses the sidebar, as before.
+
 #### Changed: one base class for the mount-index and LLM-logs repositories
 
 - New `AbstractDedicatedDbRepository` (`lib/database/repositories/dedicated-db.repository.ts`)
