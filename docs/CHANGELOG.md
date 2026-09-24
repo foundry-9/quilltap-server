@@ -4,6 +4,31 @@
 
 ### 4.10-dev
 
+#### Changed: one base class for the mount-index and LLM-logs repositories
+
+- New `AbstractDedicatedDbRepository` (`lib/database/repositories/dedicated-db.repository.ts`)
+  replaces the ten private copies of `getCollection()` in the nine mount-index repositories and
+  `llm-logs.repository.ts`. It takes the connection guard in its constructor, runs the generated
+  DDL once per instance, runs an `onTableEnsured(db)` hook for extra indexes / inline
+  `ALTER TABLE` migrations / repair scans, runs `afterTableReady(db)` once the table counts as
+  ensured (the folder backfill, which re-enters the repository), caches the column
+  classification once instead of recomputing it on every call, and builds the collection.
+- New `withRawDb(fallback, fn, errorMessage, context, mode?)` replaces the 26 hand-rolled
+  `const db = getRawMountIndexDatabase(); if (!db) return …` preambles in the chunks, documents,
+  files and file-links repositories. Every raw-SQL site now applies the same degraded /
+  uninitialized guard and ensures the table first; previously most skipped one or both.
+  `ensureRawDb()` covers the writers that must throw instead.
+- New `requireLLMLogsDb()` (`lib/database/backends/sqlite/llm-logs-guard.ts`), the LLM-logs
+  twin of `requireMountIndexDb()`.
+- The base takes a `blobColumns` option, and `DocMountChunksRepository` passes `['embedding']`
+  as before, so a chunk's `Float32Array` embedding is still written as a Float32 BLOB. A new
+  test round-trips an embedding through the real repository on in-memory SQLite.
+- Every repository now declares `dbTarget` (`'main' | 'mountIndex' | 'llmLogs'`), and a new unit
+  test checks the background-job write partitioner's `MOUNT_INDEX_REPO_KEYS` /
+  `LLM_LOGS_REPO_KEYS` against those declarations, so the `groupDocMountLinks` /
+  `groupCharacterMembers` omission fixed below cannot recur.
+- No DDL changes.
+
 #### Changed: `GET /api/v1/chats/[id]` dispatches `?action=` through `dispatchAction`
 
 - The handler's hand-written `if (action === '…')` ladder is gone. Every GET action

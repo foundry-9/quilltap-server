@@ -60,7 +60,8 @@ lib/database/
 │       ├── json-columns.ts       # JSON utilities
 │       └── query-translator.ts   # Query conversion
 └── repositories/
-    └── base.repository.ts  # Abstract base class
+    ├── base.repository.ts          # Abstract base class (main database)
+    └── dedicated-db.repository.ts  # Base for tables in the mount-index / LLM-logs databases
 ```
 
 ### Key Interfaces
@@ -260,7 +261,7 @@ The LLM logs database is isolated to prevent corruption in the high-churn debug 
 
 **Graceful degradation**: If the LLM logs database fails to open (corruption, permissions, etc.), the app continues normally with logging silently disabled. All repository operations have safe fallbacks (empty arrays, zero counts).
 
-The `LLMLogsRepository` overrides `getCollection()` to route all operations to the dedicated logs database instead of the main database. No other repository is affected.
+Repositories whose table lives in a dedicated database — `LLMLogsRepository`, and the mount-index repositories (`doc_mount_*`, `project_doc_mount_links`, `group_doc_mount_links`, `group_character_members`) — extend `AbstractDedicatedDbRepository` (`lib/database/repositories/dedicated-db.repository.ts`) instead of `AbstractBaseRepository`. The constructor takes the connection guard (`requireMountIndexDb` / `requireLLMLogsDb`, which throw while the database is degraded or uninitialized) and the base does the rest: runs the generated DDL once per instance, calls the `onTableEnsured(db)` hook for a subclass's extra indexes / inline `ALTER TABLE` migrations / repair scans, then `afterTableReady(db)` for once-only work that re-enters the repository (the folder backfill), caches the column classification, and builds the `SQLiteCollection`. Raw SQL in a subclass goes through `withRawDb(fallback, fn, errorMessage, context, mode?)` — fallback while the database is unavailable, `safeQuery` around the query — or `ensureRawDb()` when the caller must fail loudly. Every repository declares its `dbTarget` (`'main' | 'mountIndex' | 'llmLogs'`), and a unit test holds the background-job write partitioner's key sets to those declarations.
 
 ## Database Protection
 
