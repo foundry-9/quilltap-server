@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Added: quick-hide toggle for Salon images
+
+- New **Salon Images** toggle in the quick-hide menu's Content Filters. When on, the Salon
+  hides the story background (and the workspace backdrop it reports), avatars in messages,
+  the participant sidebar, the speaking-as portrait and the header breadcrumb, attached and
+  tool-result image thumbnails, and images embedded in message markdown. Off by default;
+  persisted in localStorage (`quilltap.quickHide.hideSalonImages`) like the other toggles.
+- The Salon passes the flag down through a new `ImagesHiddenProvider`
+  (`components/quick-hide/images-hidden-context.tsx`); `Avatar`, `MessageContent`,
+  `ToolMessage`, `SpeakingAsAvatar` and `MessageRow` read it. Other pages are unaffected.
+- The sidebar footer's quick-hide button is now always shown; the `useHasDangerousChats`
+  hook that gated it is removed.
+
 #### Fixed: creating a character scenario returned an id that was never stored (bug 165)
 
 - `CharactersRepository.addScenario` returned the id it minted, but a vault-backed character

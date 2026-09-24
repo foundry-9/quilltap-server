@@ -16,6 +16,7 @@
  */
 
 import { getAvatarSrc, type AvatarImageSource } from '@/components/ui/Avatar'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import { Icon } from '@/components/ui/icon'
 
 interface SpeakingAsAvatarProps {
@@ -43,7 +44,8 @@ export function SpeakingAsAvatar({
   className = '',
   voiceRehearsal = false,
 }: Readonly<SpeakingAsAvatarProps>) {
-  const avatarSrc = getAvatarSrc(src ?? null)
+  const imagesHidden = useImagesHidden()
+  const avatarSrc = imagesHidden ? null : getAvatarSrc(src ?? null)
   const initial = name.charAt(0).toUpperCase()
 
   return (

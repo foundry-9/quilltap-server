@@ -22,6 +22,7 @@ import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
 import { getImageAttachments } from './message-row/helpers'
+import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
 import type { RegenerationState } from '../hooks/useRegeneration'
@@ -187,6 +188,7 @@ function MessageRowInner({
   thinkingCollapsedByDefault = true,
   regeneration = null,
 }: MessageRowProps) {
+  const imagesHidden = useImagesHidden()
   const isWhisper = !!(message.targetParticipantIds && message.targetParticipantIds.length > 0)
 
   // Silent message styling is based solely on the persisted flag set when the message
@@ -479,14 +481,19 @@ function MessageRowInner({
                       type="button"
                       className="qt-button qt-chat-attachment-button"
                     >
-                      { }
-                      <img
-                        src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
-                        alt={attachment.filename}
-                        width={80}
-                        height={80}
-                        className="qt-chat-attachment-image"
-                      />
+                      {imagesHidden ? (
+                        <span className="qt-chat-attachment-image block w-20 h-20">
+                          <HiddenImageTile label={attachment.filename} />
+                        </span>
+                      ) : (
+                        <img
+                          src={`/${attachment.filepath.startsWith('/') ? attachment.filepath.slice(1) : attachment.filepath}`}
+                          alt={attachment.filename}
+                          width={80}
+                          height={80}
+                          className="qt-chat-attachment-image"
+                        />
+                      )}
                       <div className="qt-chat-attachment-overlay">
                         <Icon name="zoom-in" />
                       </div>

@@ -30,6 +30,7 @@ import {
 import { linkifyBareQtapUris } from '@/lib/chat/qtap-linkify'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import { QtapLink } from '@/components/qtap/QtapLink'
+import { HiddenInlineImage, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 // Internal links — same-origin, app-route paths starting with a single "/" —
 // must navigate via the Next.js router so they work inside the Electron shell
@@ -340,6 +341,10 @@ export default function MessageContent({
   // Use provided dialogue detection or fall back to default
   const dialogueConfig = dialogueDetection || DEFAULT_DIALOGUE_DETECTION
 
+  // Quick-hide "Salon Images": only the Salon provides this, so every other
+  // surface keeps its embedded images.
+  const imagesHidden = useImagesHidden()
+
   // Smart typography, Part A: curl quotes on DISPLAY only. Read here rather
   // than threaded down as a prop because this component is the message renderer
   // for every surface that has one — the Salon, streaming messages, thinking
@@ -512,9 +517,12 @@ export default function MessageContent({
         const encoded = resolvedSrc.split('/').map(encodeURIComponent).join('/')
         resolvedSrc = `/api/v1/mount-points/${blobMountPointId}/blobs/${encoded}`
       }
+      if (imagesHidden) {
+        return <HiddenInlineImage alt={alt || undefined} />
+      }
       return <img src={resolvedSrc} alt={alt || ''} title={title} {...props} />
     },
-  }), [compiledRules, dialogueConfig, blobMountPointId])
+  }), [compiledRules, dialogueConfig, blobMountPointId, imagesHidden])
 
   return (
     <>
