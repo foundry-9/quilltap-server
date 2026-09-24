@@ -111,18 +111,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
   }
 
   /**
-   * Find all models by model type (e.g., all chat models, all image models)
-   */
-  async findByModelType(modelType: ModelType): Promise<ProviderModel[]> {
-    return this.safeQuery(
-      () => this.findByFilter({ modelType }),
-      'Error finding provider models by model type',
-      { modelType },
-      []
-    );
-  }
-
-  /**
    * Find a specific model by provider, modelId, and model type
    */
   async findByProviderAndModelId(
@@ -255,36 +243,6 @@ export class ProviderModelsRepository extends AbstractBaseRepository<ProviderMod
       },
       'Error bulk upserting models for provider',
       { provider, modelType, baseUrl, modelCount: models.length }
-    );
-  }
-
-  /**
-   * Delete all models for a provider (optionally filtered by model type)
-   */
-  async deleteByProvider(provider: string, modelType?: ModelType, baseUrl?: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const query: Record<string, unknown> = { provider };
-        if (modelType) {
-          query.modelType = modelType;
-        }
-        if (baseUrl) {
-          query.baseUrl = baseUrl;
-        }
-
-        const count = await this.deleteMany(query as TypedQueryFilter<ProviderModel>);
-
-        logger.info('Provider models deleted successfully', {
-          provider,
-          modelType,
-          baseUrl,
-          deletedCount: count,
-        });
-
-        return count;
-      },
-      'Error deleting provider models by provider',
-      { provider, modelType, baseUrl }
     );
   }
 }

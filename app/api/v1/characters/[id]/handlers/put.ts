@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { exists } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { PronounsSchema, PhysicalDescriptionSchema } from '@/lib/schemas/character.types';
 import { JsonSchema } from '@/lib/schemas/common.types';
@@ -114,24 +114,38 @@ export async function handlePut(
     return notFound('Character');
   }
 
-  // Action dispatch: the depiction-guidelines (Ariel Clause) file lives in the
-  // character's vault root, not the character row.
-  if (getActionParam(req) === 'depiction-guidelines') {
-    const mountId = existingCharacter.characterDocumentMountPointId;
-    if (!mountId) {
-      return badRequest('Character has no document vault to store depiction guidelines');
-    }
-    const aestheticBody = await req.json().catch(() => ({}));
-    const content = typeof aestheticBody?.content === 'string' ? aestheticBody.content : '';
-    await writeStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME, content);
-    logger.info('[Characters v1] Depiction guidelines updated', {
-      characterId: id,
-      length: content.trim().length,
-      deleted: content.trim().length === 0,
-    });
-    return successResponse({ success: true });
-  }
+  return dispatchAction(
+    req,
+    {
+      // The depiction-guidelines (Ariel Clause) file lives in the character's
+      // vault root, not the character row.
+      'depiction-guidelines': async () => {
+        const mountId = existingCharacter.characterDocumentMountPointId;
+        if (!mountId) {
+          return badRequest('Character has no document vault to store depiction guidelines');
+        }
+        const aestheticBody = await req.json().catch(() => ({}));
+        const content = typeof aestheticBody?.content === 'string' ? aestheticBody.content : '';
+        await writeStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME, content);
+        logger.info('[Characters v1] Depiction guidelines updated', {
+          characterId: id,
+          length: content.trim().length,
+          deleted: content.trim().length === 0,
+        });
+        return successResponse({ success: true });
+      },
+    },
+    () => handleUpdateCharacter(req, ctx, id, existingCharacter)
+  );
+}
 
+async function handleUpdateCharacter(
+  req: NextRequest,
+  ctx: RequestContext,
+  id: string,
+  existingCharacter: Character
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
   const body = await req.json();
   const validatedData = updateCharacterSchema.parse(body);
 

@@ -194,22 +194,6 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
     );
   }
 
-  /**
-   * Reset token usage counters for a connection profile
-   */
-  async resetTokenUsage(profileId: string): Promise<ConnectionProfile | null> {
-    return this.safeQuery(
-      () => this.update(profileId, {
-        totalTokens: 0,
-        totalPromptTokens: 0,
-        totalCompletionTokens: 0,
-        messageCount: 0,
-      } as Partial<ConnectionProfile>),
-      'Error resetting token usage',
-      { profileId }
-    );
-  }
-
   // ============================================================================
   // API KEY OPERATIONS
   // ============================================================================

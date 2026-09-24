@@ -18,6 +18,7 @@ export {
 
 // Action parameter middleware (v1 API consolidation)
 export {
+  dispatchAction,
   withActionDispatch,
   withCollectionActionDispatch,
   getActionParam,
@@ -25,6 +26,7 @@ export {
   getQueryParamsWithoutAction,
   type ActionHandler,
   type ActionHandlerMap,
+  type ActionThunkMap,
 } from './actions';
 
 // File path utilities

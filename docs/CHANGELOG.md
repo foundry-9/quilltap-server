@@ -4,6 +4,105 @@
 
 ### 4.10-dev
 
+#### Changed: one base class for the mount-index and LLM-logs repositories
+
+- New `AbstractDedicatedDbRepository` (`lib/database/repositories/dedicated-db.repository.ts`)
+  replaces the ten private copies of `getCollection()` in the nine mount-index repositories and
+  `llm-logs.repository.ts`. It takes the connection guard in its constructor, runs the generated
+  DDL once per instance, runs an `onTableEnsured(db)` hook for extra indexes / inline
+  `ALTER TABLE` migrations / repair scans, runs `afterTableReady(db)` once the table counts as
+  ensured (the folder backfill, which re-enters the repository), caches the column
+  classification once instead of recomputing it on every call, and builds the collection.
+- New `withRawDb(fallback, fn, errorMessage, context, mode?)` replaces the 26 hand-rolled
+  `const db = getRawMountIndexDatabase(); if (!db) return …` preambles in the chunks, documents,
+  files and file-links repositories. Every raw-SQL site now applies the same degraded /
+  uninitialized guard and ensures the table first; previously most skipped one or both.
+  `ensureRawDb()` covers the writers that must throw instead.
+- New `requireLLMLogsDb()` (`lib/database/backends/sqlite/llm-logs-guard.ts`), the LLM-logs
+  twin of `requireMountIndexDb()`.
+- The base takes a `blobColumns` option, and `DocMountChunksRepository` passes `['embedding']`
+  as before, so a chunk's `Float32Array` embedding is still written as a Float32 BLOB. A new
+  test round-trips an embedding through the real repository on in-memory SQLite.
+- Every repository now declares `dbTarget` (`'main' | 'mountIndex' | 'llmLogs'`), and a new unit
+  test checks the background-job write partitioner's `MOUNT_INDEX_REPO_KEYS` /
+  `LLM_LOGS_REPO_KEYS` against those declarations, so the `groupDocMountLinks` /
+  `groupCharacterMembers` omission fixed below cannot recur.
+- No DDL changes.
+
+#### Changed: `GET /api/v1/chats/[id]` dispatches `?action=` through `dispatchAction`
+
+- The handler's hand-written `if (action === '…')` ladder is gone. Every GET action
+  (`export`, `export-markdown`, `get-avatars`, `get-state`, `outfit`, `outfit-summary`,
+  `photo-albums`, `informs`, `group-stores`, `mailbox`, `accessible-stores`, `get-background`,
+  `gallery`, `cost`) is a registered key; an unknown or empty `?action=` now returns 400 with
+  `availableActions` instead of falling through to the chat body. No action's response changed.
+- This is the follow-up the "one `?action=` dispatcher" entry below left open; the handler
+  now calls the same `dispatchAction` primitive as every other route.
+- `get-background` moved to `handleGetStoryBackground` in
+  `app/api/v1/chats/[id]/actions/story-background.ts`, beside `regenerate-background`.
+
+#### Changed: one `?action=` dispatcher for every API route
+
+- New `dispatchAction(req, thunks, fallback?)` in `lib/api/middleware/actions.ts`, and
+  `withActionDispatch` is now built on it. The rule is in one place: no `action` parameter
+  runs the fallback (the plain CRUD verb), a known action runs its handler, and anything
+  else — an unknown name or a bare `?action=` — is a 400 listing the available actions.
+- Every route that read `?action=` by hand (`getActionParam` + `isValidAction` + a
+  `Record<Action, () => …>` map, or an `if (action === …)` chain) now calls the primitive:
+  api-keys, brahma-console, characters, chats (collection, item POST/PUT/PATCH/DELETE, files),
+  connection-profiles, embedding-profiles, files, groups, help-chats, help-docs, images,
+  image-profiles, memories, messages, mount-points, plugins, projects, scenarios (general,
+  project and group tiers), settings/text-replacements, system/conversation-summaries,
+  system/jobs, system/restore, system/tools, system/unlock, themes and user/profile. The
+  per-route `*_ACTIONS` constants and hand-built "Unknown action" messages are gone.
+- **Fixed as a result:** an unknown action no longer falls through to a destructive
+  default. `DELETE /api/v1/projects/[id]?action=<anything unknown>` used to delete the
+  project, `DELETE /api/v1/groups/[id]?action=<unknown>` deleted the group, and an unknown
+  `POST /api/v1/system/restore?action=` ran a full restore. Unknown actions on
+  `POST /api/v1/api-keys`, `/characters`, `/connection-profiles`, `/image-profiles`,
+  `/memories`, `/images`, `/mount-points`, `/settings/text-replacements` and
+  `/chats/[id]/files` also no longer create or upload by accident. The project and group
+  route headers had advertised `get-mount-point` / `set-mount-point` / `clear-mount-point`
+  and `stores` / `linkStore` / `unlinkStore` actions that never existed; those lines are
+  removed (group stores live under `/api/v1/groups/[id]/mount-points`).
+- `GET /api/v1/chats/[id]` was left reading its actions inline here; the entry above
+  converts it.
+- `withActionDispatch` now treats a bare `?action=` as an unknown action (400) instead of
+  routing it to the default handler.
+- `POST /api/v1/chats/[id]/files` responses go through `successResponse` and one shared
+  payload builder; `handleLinkFile` takes the real `RepositoryContainer` type.
+- Tests: `dispatchAction` unit coverage, and regression tests for the project, group and
+  restore fall-throughs.
+
+#### Removed: dead code in `lib/database`
+
+- 33 repository methods with no callers (for example `CharactersRepository.getSystemPrompts`,
+  `MemoriesRepository.findByKeywords`, `UsersRepository.findByUsername`,
+  `FoldersRepository.createMany`, `EmbeddingStatusRepository.upsertByEntity`) and their
+  private helpers; unused backend/infra exports (`SQLiteBackend.addJsonColumn` /
+  `dropCollection` / prepared-statement cache, `json-columns.ts` `hydrateRow` /
+  `rowToDocument` / `detectJsonColumns` / `fromJson` / `jsonArrayLength`, manager
+  `healthCheck` / `listCollections` / `getBackendCapabilities` / `isDatabaseInitialized` /
+  `isDatabaseConnected` / `_setBackendForTesting`, child-client close/connected helpers) and
+  their barrel re-exports. About 980 lines. `jest.setup.ts` drops the matching stale mock keys.
+- `escapeLikePattern` (`fts-query.ts`) was a byte-identical copy of `escapeLikeLiteral`
+  (`like-escape.ts`); the copy is gone and both callers use the shared one.
+
+#### Fixed: data-layer consistency
+
+- `MOUNT_INDEX_REPO_KEYS` (`lib/background-jobs/host/write-partition.ts`) was missing
+  `groupDocMountLinks` and `groupCharacterMembers`, both backed by the mount-index database.
+  A buffered child write to either would have been committed inside the main database's
+  transaction. Added.
+- `MemoriesRepository` and `ConversationChunksRepository` cached "blob columns registered"
+  per instance, the pattern `HelpDocsRepository` documents as corrupting embeddings after a
+  backend reconnect. Both now re-assert the registration on every `getCollection()` (a no-op
+  when already registered), matching the help-doc repositories.
+- `DocMountBlobsRepository` used an inline copy of the mount-index degraded/uninitialized
+  guard; it now calls the shared `requireMountIndexDb()`.
+- Brahma's SQL prompt now tells the model that `chat_messages.content` (and the other
+  compressed text columns) must be read through `qt_text()` and never compared bare.
+
 #### Fixed: help docs failed to index
 
 - Bug 167: `EMBEDDING_REINDEX_ALL` synced help docs in the job child, where `upsertByPath`

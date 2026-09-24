@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { RequestContext } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { handleDownloadFile, handleGetThumbnail } from '../actions';
 
 export async function handleGet(
@@ -8,11 +8,9 @@ export async function handleGet(
   ctx: RequestContext,
   fileId: string
 ): Promise<NextResponse> {
-  const action = getActionParam(request);
-
-  if (action === 'thumbnail') {
-    return handleGetThumbnail(request, ctx, fileId);
-  }
-
-  return handleDownloadFile(ctx, fileId, request);
+  return dispatchAction(
+    request,
+    { thumbnail: () => handleGetThumbnail(request, ctx, fileId) },
+    () => handleDownloadFile(ctx, fileId, request)
+  );
 }

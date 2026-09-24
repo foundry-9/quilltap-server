@@ -38,6 +38,15 @@ export interface ValidationResult<T> {
   error?: string;
 }
 
+/**
+ * Which SQLite database a repository's rows live in. The main database is
+ * the default; a repository on one of the dedicated databases extends
+ * `AbstractDedicatedDbRepository` (`./dedicated-db.repository`) and says so
+ * here. The background-job applier partitions a child's buffered writes by
+ * this same set of targets (`lib/background-jobs/host/write-partition.ts`).
+ */
+export type RepositoryDbTarget = 'main' | 'mountIndex' | 'llmLogs';
+
 // ============================================================================
 // Abstract Base Repository
 // ============================================================================
@@ -47,6 +56,8 @@ export interface ValidationResult<T> {
  * that work with any database backend.
  */
 export abstract class AbstractBaseRepository<T extends BaseEntity> {
+  /** The database this repository's table lives in. */
+  readonly dbTarget: RepositoryDbTarget = 'main';
   protected readonly collectionName: string;
   protected readonly schema: z.ZodType;
   private collectionInitialized = false;
@@ -411,26 +422,6 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
 
       return true;
     }, 'Error deleting entity', { id });
-  }
-
-  /**
-   * Create or update an entity by ID.
-   * Used for sync operations where the ID is known.
-   */
-  async createOrUpdate(
-    id: string,
-    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: { createdAt?: string }
-  ): Promise<T> {
-    const existing = await this.findById(id);
-    if (existing) {
-      const updated = await this.update(id, data as Partial<T>);
-      if (!updated) {
-        throw new Error(`Failed to update entity ${id}`);
-      }
-      return updated;
-    }
-    return this.create(data, { id, createdAt: options?.createdAt });
   }
 
   /**

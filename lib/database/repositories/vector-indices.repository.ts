@@ -22,6 +22,12 @@ import { DatabaseCollection, TypedQueryFilter, UpdateSpec } from '../interfaces'
 // ============================================================================
 
 export class VectorIndicesRepository {
+  /**
+   * Both tables live in the main database — declared here as the
+   * `AbstractBaseRepository` family declares it, so the background-job write
+   * partitioner's key sets can be checked against every repository.
+   */
+  readonly dbTarget = 'main' as const;
   private initialized = false;
 
   /**

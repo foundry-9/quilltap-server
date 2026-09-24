@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { exists, enrichWithDefaultImage, getFilePath, resolveEditorTags } from '@/lib/api/middleware';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
 import { readCharacterAvatarBuffer } from '@/lib/photos/resolve-character-avatar';
@@ -24,8 +24,6 @@ import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/ae
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
 import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
-const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
-type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
 
 export async function handleGet(
   req: NextRequest,
@@ -33,7 +31,6 @@ export async function handleGet(
   id: string
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
-  const action = getActionParam(req);
 
   // First verify ownership for all actions
   const character = await repos.characters.findById(id);
@@ -41,7 +38,7 @@ export async function handleGet(
     return notFound('Character');
   }
 
-  if (!action || !isValidAction(action, CHARACTER_GET_ACTIONS)) {
+  const handleGetDefault = async (): Promise<NextResponse> => {
     try {
       const defaultImage = await enrichWithDefaultImage(character.defaultImageId, repos);
       const chats = await repos.chats.findByCharacterId(id);
@@ -59,9 +56,9 @@ export async function handleGet(
       logger.error('[Characters v1] Error fetching character', { characterId: id }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch character');
     }
-  }
+  };
 
-  const actionHandlers: Record<CharacterGetAction, () => Promise<NextResponse>> = {
+  return dispatchAction(req, {
     export: async () => {
       try {
         // A tombstone export would be a pruned shell, and the full bundle
@@ -378,7 +375,5 @@ export async function handleGet(
       const content = await readStoreFile(mountId, DEPICTION_GUIDELINES_FILENAME);
       return successResponse({ content: content ?? '' });
     },
-  };
-
-  return actionHandlers[action]();
+  }, handleGetDefault);
 }

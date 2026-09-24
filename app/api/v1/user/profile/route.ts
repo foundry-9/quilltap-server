@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext } from '@/lib/api/middleware';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { getFilePath } from '@/lib/api/middleware/file-path';
 import { themeRegistry } from '@/lib/themes/theme-registry';
 import { ThemePreferenceSchema, type ThemePreference } from '@/lib/themes/types';
@@ -48,40 +48,43 @@ const themePreferenceUpdateSchema = z.object({
 // GET Handler
 // ============================================================================
 
-export const GET = createContextHandler(async (req, context) => {
-  const { user, repos } = context;
-  const action = getActionParam(req);
+export const GET = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    { 'theme-preference': () => handleGetThemePreference(context) },
+    () => handleGetProfile(context)
+  )
+);
 
-  // Handle theme-preference action
-  if (action === 'theme-preference') {
-    // Get user's chat settings
-    let chatSettings = await repos.chatSettings.findByUserId(user.id);
+async function handleGetThemePreference({ user, repos }: RequestContext): Promise<NextResponse> {
+  // Get user's chat settings
+  let chatSettings = await repos.chatSettings.findByUserId(user.id);
 
-    // If no settings exist, create with defaults
-    if (!chatSettings) {
-      chatSettings = await repos.chatSettings.updateForUser(user.id, {
-        avatarDisplayMode: 'ALWAYS',
-        avatarDisplayStyle: 'CIRCULAR',
-        tagStyles: {},
-        themePreference: {
-          activeThemeId: null,
-          colorMode: 'system',
-          showNavThemeSelector: false,
-        },
-      });
-    }
-
-    // Extract theme preference (with fallback to defaults)
-    const themePreference: ThemePreference = chatSettings?.themePreference ?? {
-      activeThemeId: null,
-      colorMode: 'system',
-      showNavThemeSelector: false,
-    };
-
-    return successResponse({ data: themePreference });
+  // If no settings exist, create with defaults
+  if (!chatSettings) {
+    chatSettings = await repos.chatSettings.updateForUser(user.id, {
+      avatarDisplayMode: 'ALWAYS',
+      avatarDisplayStyle: 'CIRCULAR',
+      tagStyles: {},
+      themePreference: {
+        activeThemeId: null,
+        colorMode: 'system',
+        showNavThemeSelector: false,
+      },
+    });
   }
 
-  // Default: get profile
+  // Extract theme preference (with fallback to defaults)
+  const themePreference: ThemePreference = chatSettings?.themePreference ?? {
+    activeThemeId: null,
+    colorMode: 'system',
+    showNavThemeSelector: false,
+  };
+
+  return successResponse({ data: themePreference });
+}
+
+async function handleGetProfile({ user, repos }: RequestContext): Promise<NextResponse> {
   // Get full user record from database
   const userRecord = await repos.users.findById(user.id);
 
@@ -100,84 +103,90 @@ export const GET = createContextHandler(async (req, context) => {
       updatedAt: userRecord.updatedAt,
     },
   });
-});
+}
 
 // ============================================================================
 // PUT Handler
 // ============================================================================
 
-export const PUT = createContextHandler(async (req, context) => {
-  const { user, repos } = context;
-  const action = getActionParam(req);
+export const PUT = createContextHandler(async (req, context) =>
+  dispatchAction(
+    req,
+    { 'theme-preference': () => handleUpdateThemePreference(req, context) },
+    () => handleUpdateProfile(req, context)
+  )
+);
 
-  // Handle theme-preference action
-  if (action === 'theme-preference') {
-    const body = await req.json();
+async function handleUpdateThemePreference(
+  req: NextRequest,
+  { user, repos }: RequestContext
+): Promise<NextResponse> {
+  const body = await req.json();
 
-    // Validate the incoming data
-    const validated = themePreferenceUpdateSchema.parse(body);
+  // Validate the incoming data
+  const validated = themePreferenceUpdateSchema.parse(body);
 
-    // Validate colorMode if provided
-    if (validated.colorMode !== undefined) {
-      const validModes = ['light', 'dark', 'system'];
-      if (!validModes.includes(validated.colorMode)) {
-        return badRequest('Invalid color mode. Must be one of: light, dark, system');
-      }
+  // Validate colorMode if provided
+  if (validated.colorMode !== undefined) {
+    const validModes = ['light', 'dark', 'system'];
+    if (!validModes.includes(validated.colorMode)) {
+      return badRequest('Invalid color mode. Must be one of: light, dark, system');
     }
-
-    // Validate activeThemeId if provided (and not null)
-    if (validated.activeThemeId !== undefined && validated.activeThemeId !== null) {
-      if (!themeRegistry.has(validated.activeThemeId)) {
-        return badRequest(`Theme not found: ${validated.activeThemeId}`);
-      }
-    }
-
-    // Get current settings to merge with
-    let chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const currentPreference = chatSettings?.themePreference ?? {
-      activeThemeId: null,
-      colorMode: 'system',
-      showNavThemeSelector: false,
-    };
-
-    // Build updated preference
-    const updatedPreference: ThemePreference = {
-      ...currentPreference,
-      ...(validated.activeThemeId !== undefined && { activeThemeId: validated.activeThemeId }),
-      ...(validated.colorMode !== undefined && { colorMode: validated.colorMode }),
-      ...(validated.customOverrides !== undefined && { customOverrides: validated.customOverrides }),
-      ...(validated.showNavThemeSelector !== undefined && { showNavThemeSelector: validated.showNavThemeSelector }),
-    };
-
-    // Validate the complete preference
-    const validationResult = ThemePreferenceSchema.safeParse(updatedPreference);
-    if (!validationResult.success) {
-      logger.warn('[User Profile v1] Theme preference validation failed', {
-        userId: user.id,
-        errors: validationResult.error.issues,
-      });
-      return badRequest('Invalid theme preference data');
-    }
-
-    // Update chat settings with new theme preference
-    chatSettings = await repos.chatSettings.updateForUser(user.id, {
-      themePreference: validationResult.data,
-    });
-
-    if (!chatSettings) {
-      return serverError('Failed to update theme preference');
-    }
-
-    logger.info('[User Profile v1] Theme preference updated', {
-      userId: user.id,
-      activeThemeId: validationResult.data.activeThemeId,
-      colorMode: validationResult.data.colorMode,
-    });
-
-    return successResponse({ data: validationResult.data });
   }
 
-  // Default: update profile
+  // Validate activeThemeId if provided (and not null)
+  if (validated.activeThemeId !== undefined && validated.activeThemeId !== null) {
+    if (!themeRegistry.has(validated.activeThemeId)) {
+      return badRequest(`Theme not found: ${validated.activeThemeId}`);
+    }
+  }
+
+  // Get current settings to merge with
+  let chatSettings = await repos.chatSettings.findByUserId(user.id);
+  const currentPreference = chatSettings?.themePreference ?? {
+    activeThemeId: null,
+    colorMode: 'system',
+    showNavThemeSelector: false,
+  };
+
+  // Build updated preference
+  const updatedPreference: ThemePreference = {
+    ...currentPreference,
+    ...(validated.activeThemeId !== undefined && { activeThemeId: validated.activeThemeId }),
+    ...(validated.colorMode !== undefined && { colorMode: validated.colorMode }),
+    ...(validated.customOverrides !== undefined && { customOverrides: validated.customOverrides }),
+    ...(validated.showNavThemeSelector !== undefined && { showNavThemeSelector: validated.showNavThemeSelector }),
+  };
+
+  // Validate the complete preference
+  const validationResult = ThemePreferenceSchema.safeParse(updatedPreference);
+  if (!validationResult.success) {
+    logger.warn('[User Profile v1] Theme preference validation failed', {
+      userId: user.id,
+      errors: validationResult.error.issues,
+    });
+    return badRequest('Invalid theme preference data');
+  }
+
+  // Update chat settings with new theme preference
+  chatSettings = await repos.chatSettings.updateForUser(user.id, {
+    themePreference: validationResult.data,
+  });
+
+  if (!chatSettings) {
+    return serverError('Failed to update theme preference');
+  }
+
+  logger.info('[User Profile v1] Theme preference updated', {
+    userId: user.id,
+    activeThemeId: validationResult.data.activeThemeId,
+    colorMode: validationResult.data.colorMode,
+  });
+
+  return successResponse({ data: validationResult.data });
+}
+
+async function handleUpdateProfile(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
   const body = await req.json();
   const validatedData = updateProfileSchema.parse(body);
 
@@ -221,20 +230,17 @@ export const PUT = createContextHandler(async (req, context) => {
       updatedAt: updatedUser.updatedAt,
     },
   });
-});
+}
 
 // ============================================================================
 // PATCH Handler - Avatar
 // ============================================================================
 
-export const PATCH = createContextHandler(async (req, context) => {
-  const { user, repos } = context;
-  const action = getActionParam(req);
+export const PATCH = createContextHandler(async (req, context) =>
+  dispatchAction(req, { 'set-avatar': () => handleSetAvatar(req, context) })
+);
 
-  if (action !== 'set-avatar') {
-    return badRequest(`Unknown action: ${action}. Available actions: set-avatar`);
-  }
-
+async function handleSetAvatar(req: NextRequest, { user, repos }: RequestContext): Promise<NextResponse> {
   const body = await req.json();
   const { imageId } = avatarSchema.parse(body);
 
@@ -300,4 +306,4 @@ export const PATCH = createContextHandler(async (req, context) => {
       updatedAt: updatedUser.updatedAt,
     },
   });
-});
+}

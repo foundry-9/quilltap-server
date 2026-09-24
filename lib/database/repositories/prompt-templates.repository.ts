@@ -200,24 +200,6 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
   }
 
   /**
-   * Find all built-in prompt templates
-   */
-  async findBuiltIn(): Promise<PromptTemplate[]> {
-    return this.safeQuery(
-      async () => {
-        // Ensure built-in templates are seeded
-        await this.seedSamplePrompts();
-
-        const templates = await this.findByFilter({ isBuiltIn: true });
-        return templates;
-      },
-      'Error finding built-in prompt templates',
-      {},
-      []
-    );
-  }
-
-  /**
    * Find all templates available to a user (built-in + user's own templates)
    */
   async findAllForUser(userId: string): Promise<PromptTemplate[]> {

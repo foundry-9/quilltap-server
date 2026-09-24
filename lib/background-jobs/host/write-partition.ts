@@ -31,17 +31,24 @@
  */
 
 import type { ChildWritePayload } from '../ipc-types';
+import type { RepositoryDbTarget } from '@/lib/database/repositories/base.repository';
 
-/** Which dedicated SQLite database a buffered write targets. */
-export type WriteDbTarget = 'main' | 'mountIndex' | 'llmLogs';
+/**
+ * Which dedicated SQLite database a buffered write targets. The same set of
+ * targets every repository declares on itself as `dbTarget`.
+ */
+export type WriteDbTarget = RepositoryDbTarget;
 
 /**
  * Repository keys whose rows live in the dedicated mount-index database
- * (`getRawMountIndexDatabase()`), not the main DB. Mirrors the repos that
- * override `getCollection()` to use `getRawMountIndexDatabase()` — see
- * `lib/database/repositories/doc-mount-*.repository.ts` and
- * `project-doc-mount-links.repository.ts`. Keep in sync when adding a repo
- * backed by the mount-index DB.
+ * (`getRawMountIndexDatabase()` / `requireMountIndexDb()`), not the main DB.
+ * Mirrors the repos whose `dbTarget` is `'mountIndex'` — the
+ * `AbstractDedicatedDbRepository` subclasses in `lib/database/repositories/`
+ * plus the blobs repository. A key missing here has its buffered child
+ * writes committed inside the *main* database's transaction, against the
+ * wrong connection, so a unit test
+ * (`__tests__/unit/lib/background-jobs/write-partition-repo-keys`) fails
+ * when this set and those declarations drift.
  */
 export const MOUNT_INDEX_REPO_KEYS: ReadonlySet<string> = new Set([
   'docMountPoints',
@@ -52,6 +59,8 @@ export const MOUNT_INDEX_REPO_KEYS: ReadonlySet<string> = new Set([
   'docMountDocuments',
   'docMountBlobs',
   'projectDocMountLinks',
+  'groupDocMountLinks',
+  'groupCharacterMembers',
 ]);
 
 /**

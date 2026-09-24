@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextHandler } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { pluginRegistry } from '@/lib/plugins/registry';
 import { initializePlugins } from '@/lib/startup/plugin-initialization';
 import { installPluginFromNpm, uninstallPlugin } from '@/lib/plugins/installer';
@@ -17,11 +17,8 @@ import { checkForUpdatesWithMetadata } from '@/lib/plugins/version-checker';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse, created } from '@/lib/api/responses';
-import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 
-const PLUGINS_GET_ACTIONS = ['check-upgrades'] as const;
-const PLUGINS_POST_ACTIONS = ['search', 'install', 'uninstall'] as const;
-type PluginsPostAction = typeof PLUGINS_POST_ACTIONS[number];
 
 // ============================================================================
 // Schemas
@@ -243,15 +240,16 @@ async function handleCheckUpgrades(context: any) {
 // GET Handler
 // ============================================================================
 
-export const GET = createContextHandler(async (req: NextRequest, context) => {
+export const GET = createContextHandler(async (req: NextRequest, context) =>
+  dispatchAction(
+    req,
+    { 'check-upgrades': () => handleCheckUpgrades(context) },
+    () => handleListPlugins(req, context)
+  )
+);
+
+async function handleListPlugins(req: NextRequest, context: RequestContext): Promise<NextResponse> {
   try {
-    const action = getActionParam(req);
-
-    // Handle action-based requests
-    if (isValidAction(action, PLUGINS_GET_ACTIONS)) {
-      return handleCheckUpgrades(context);
-    }
-
     // Ensure plugin system is initialized before accessing registry
     // This handles cases where the API is called before startup initialization completes
     // or when hot-reloading resets module state in development
@@ -285,26 +283,16 @@ export const GET = createContextHandler(async (req: NextRequest, context) => {
     );
     return serverError('Failed to fetch plugins');
   }
-});
+}
 
 // ============================================================================
 // POST Handler
 // ============================================================================
 
-export const POST = createContextHandler(async (req: NextRequest, context) => {
-  const action = getActionParam(req);
-
-  if (!isValidAction(action, PLUGINS_POST_ACTIONS)) {
-    return badRequest(
-      `Unknown action: ${action}. Available actions: ${PLUGINS_POST_ACTIONS.join(', ')}`
-    );
-  }
-
-  const actionHandlers: Record<PluginsPostAction, () => Promise<NextResponse>> = {
+export const POST = createContextHandler(async (req: NextRequest, context) =>
+  dispatchAction(req, {
     search: () => handleSearch(req, context),
     install: () => handleInstall(req, context),
     uninstall: () => handleUninstall(req, context),
-  };
-
-  return actionHandlers[action]();
-});
+  })
+);

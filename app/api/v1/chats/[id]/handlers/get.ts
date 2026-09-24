@@ -6,30 +6,46 @@
  * GET /api/v1/chats/[id]?action=export-markdown - Export chat as a Markdown transcript
  * GET /api/v1/chats/[id]?action=cost - Get cost breakdown
  * GET /api/v1/chats/[id]?action=get-avatars - Get avatar overrides for chat
+ * GET /api/v1/chats/[id]?action=get-state - Get chat state (merged with project)
  * GET /api/v1/chats/[id]?action=get-background - Get story background URL
  * GET /api/v1/chats/[id]?action=outfit - Get equipped outfit state
- * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
+ * GET /api/v1/chats/[id]?action=outfit-summary - Equipped outfit with resolved item titles
+ * GET /api/v1/chats/[id]?action=photo-albums - Candidate save targets for an image
  * GET /api/v1/chats/[id]?action=informs - List the pending Inform batches
+ * GET /api/v1/chats/[id]?action=group-stores - Document stores of the persona's groups
+ * GET /api/v1/chats/[id]?action=mailbox&characterId=… - A player-character's mailbox letters
+ * GET /api/v1/chats/[id]?action=accessible-stores[&all=true] - Stores for the Open-Document picker
+ * GET /api/v1/chats/[id]?action=gallery - List every image in the conversation
+ *
+ * An unregistered `?action=` answers 400 with the list above; it never falls
+ * through to the chat body.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFilePath } from '@/lib/api/middleware/file-path';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { exportSTChatAsJSONL } from '@/lib/sillytavern/chat';
 import { getChatCostBreakdown, getDetailedChatCostBreakdown } from '@/lib/services/cost-estimation.service';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, serverError } from '@/lib/api/responses';
+import { notFound, serverError } from '@/lib/api/responses';
 import { resolveAgentModeSetting } from '@/lib/services/chat-message/agent-mode-resolver.service';
 import { reconcileTerminalSessionsForChat } from '@/lib/terminal/reconcile';
 import { surfaceOperatorMailForChat } from '@/lib/post-office/surface-operator-mail';
 import { maybeEnqueueColdChunkReembed } from '@/lib/scriptorium/cold-chunk-reembed';
 import { projectChatTranscript } from '@/lib/chat/transcript-projection';
-import { handleGetAvatars, handleGetState, handleGetOutfit, handleGetOutfitSummary, handleGetPhotoAlbums, handleGetGroupStores, handleAccessibleStores, handleGetMailbox, handleExportMarkdown, handleGetInforms } from '../actions';
 import {
-  getPhotoLinkSummaryBySha256,
-  type PhotoLinkSummary,
-} from '@/lib/photos/photo-link-summary';
+  handleGetAvatars,
+  handleGetState,
+  handleGetOutfit,
+  handleGetOutfitSummary,
+  handleGetPhotoAlbums,
+  handleGetGroupStores,
+  handleAccessibleStores,
+  handleGetMailbox,
+  handleExportMarkdown,
+  handleGetInforms,
+  handleGetStoryBackground,
+} from '../actions';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
 
@@ -41,233 +57,196 @@ export async function handleGet(
   ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
+  return dispatchAction(
+    req,
+    {
+      'export': () => handleExport(req, ctx, chatId),
+      'export-markdown': () => handleExportMarkdown(chatId, ctx),
+      'get-avatars': () => handleGetAvatars(chatId, ctx),
+      'get-state': () => handleGetState(chatId, ctx),
+      'outfit': () => handleGetOutfit(chatId, ctx),
+      'outfit-summary': () => handleGetOutfitSummary(chatId, ctx),
+      'photo-albums': () => handleGetPhotoAlbums(chatId, ctx),
+      'informs': () => handleGetInforms(chatId, ctx),
+      'group-stores': () => handleGetGroupStores(chatId, ctx),
+      'mailbox': () => handleGetMailbox(req, chatId, ctx),
+      // `?all=true` is the Open-Document picker's "look everywhere" mode
+      // (every enabled store, not just this chat's reach).
+      'accessible-stores': () =>
+        handleAccessibleStores(chatId, ctx, { all: req.nextUrl.searchParams.get('all') === 'true' }),
+      'get-background': () => handleGetStoryBackground(chatId, ctx),
+      'gallery': () => handleGallery(req, ctx, chatId),
+      'cost': () => handleCost(req, ctx, chatId),
+    },
+    () => handleGetChat(req, ctx, chatId)
+  );
+}
+
+/**
+ * Handle export action - the chat as a SillyTavern JSONL download
+ */
+async function handleExport(
+  _req: NextRequest,
+  ctx: RequestContext,
+  chatId: string
+): Promise<NextResponse> {
   const { user, repos } = ctx;
-  const action = getActionParam(req);
 
-  // Handle export action
-  if (action === 'export') {
-    try {
-      const chat = await repos.chats.findById(chatId);
-      if (!chat) {
-        return notFound('Chat');
-      }
-
-      const allEvents = await repos.chats.getMessages(chatId);
-      const messages = allEvents.filter((event) => event.type === 'message');
-
-      const characterParticipants = chat.participants.filter(
-        (p) => p.type === 'CHARACTER' && p.characterId
-      );
-      const primaryParticipant = characterParticipants[0];
-      if (!primaryParticipant?.characterId) {
-        return notFound('No character in chat');
-      }
-
-      // Load every character participant so each message can be attributed to
-      // its real author. The map is keyed by participant id (what messages
-      // carry in `participantId`); broken-vault characters are dropped by
-      // findByIds and simply fall back to the primary name in the export.
-      const characters = await repos.characters.findByIds(
-        characterParticipants
-          .map((p) => p.characterId)
-          .filter((id): id is string => typeof id === 'string')
-      );
-      const charactersById = new Map(characters.map((c) => [c.id, c]));
-      const participantNames = new Map<string, string>();
-      for (const p of characterParticipants) {
-        const name = p.characterId ? charactersById.get(p.characterId)?.name : undefined;
-        if (name) participantNames.set(p.id, name);
-      }
-
-      const primaryCharacter = charactersById.get(primaryParticipant.characterId);
-      if (!primaryCharacter) {
-        return notFound('Character');
-      }
-
-      const userName = user.name || 'User';
-
-      const formattedMessages = messages.map((msg) => ({
-        id: msg.id,
-        chatId,
-        role: msg.role,
-        content: msg.content,
-        createdAt: new Date(msg.createdAt),
-        updatedAt: new Date(msg.createdAt),
-        swipeGroupId: msg.swipeGroupId || null,
-        swipeIndex: msg.swipeIndex || null,
-        tokenCount: msg.tokenCount || null,
-        rawResponse: msg.rawResponse || null,
-        participantId: msg.participantId || null,
-      }));
-
-      const chatForExport = {
-        ...chat,
-        createdAt: new Date(chat.createdAt),
-        updatedAt: new Date(chat.updatedAt),
-      };
-
-      const jsonlContent = exportSTChatAsJSONL(
-        chatForExport,
-        formattedMessages,
-        primaryCharacter.name,
-        userName,
-        participantNames
-      );
-      const chatCreatedTime = new Date(chat.createdAt).getTime();
-      const filename = `${primaryCharacter.name}_chat_${chatCreatedTime}.jsonl`;
-
-      return new NextResponse(jsonlContent, {
-        headers: {
-          'Content-Type': 'application/x-ndjson',
-          'Content-Disposition': `attachment; filename="${filename}"`,
-        },
-      });
-    } catch (error) {
-      logger.error('[Chats v1] Error exporting chat', { chatId }, error instanceof Error ? error : undefined);
-      return serverError('Failed to export chat');
-    }
-  }
-
-  // Handle export-markdown action
-  if (action === 'export-markdown') {
-    return handleExportMarkdown(chatId, ctx);
-  }
-
-  // Handle get-avatars action
-  if (action === 'get-avatars') {
-    return handleGetAvatars(chatId, ctx);
-  }
-
-  // Handle get-state action
-  if (action === 'get-state') {
-    return handleGetState(chatId, ctx);
-  }
-
-  // Handle outfit action - return equipped outfit state
-  if (action === 'outfit') {
-    return handleGetOutfit(chatId, ctx);
-  }
-
-  // Handle outfit-summary action - equipped outfit with resolved item titles
-  if (action === 'outfit-summary') {
-    return handleGetOutfitSummary(chatId, ctx);
-  }
-
-  // Handle photo-albums action - resolve candidate save targets for an image
-  if (action === 'photo-albums') {
-    return handleGetPhotoAlbums(chatId, ctx);
-  }
-
-  // Handle informs action - pending Inform batches, for the composer's chip.
-  if (action === 'informs') {
-    return handleGetInforms(chatId, ctx);
-  }
-
-  // Handle group-stores action - document stores of groups the user persona belongs to
-  if (action === 'group-stores') {
-    return handleGetGroupStores(chatId, ctx);
-  }
-
-  // Handle mailbox action - letters in a player-character's Mail/ folder, for the
-  // Compose Mail modal's "In reply to" dropdown.
-  if (action === 'mailbox') {
-    return handleGetMailbox(req, chatId, ctx);
-  }
-
-  // Handle accessible-stores action - document stores for the Open-Document
-  // picker's right-column accordions. `?all=true` is the picker's "look
-  // everywhere" mode (every enabled store, not just this chat's reach).
-  if (action === 'accessible-stores') {
-    const all = req.nextUrl.searchParams.get('all') === 'true';
-    return handleAccessibleStores(chatId, ctx, { all });
-  }
-
-  // Handle get-background action - returns story background URL for the chat
-  if (action === 'get-background') {
-    try {
-      const chat = await repos.chats.findById(chatId);
-      if (!chat) {
-        return notFound('Chat');
-      }
-
-      // Check if the chat has a story background image
-      if (!chat.storyBackgroundImageId) {
-        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
-      }
-
-      // Get the file info to build the URL
-      const file = await repos.files.findById(chat.storyBackgroundImageId);
-      if (!file) {
-        logger.warn('[Chats v1] Story background file not found', {
-          chatId,
-          storyBackgroundImageId: chat.storyBackgroundImageId,
-        });
-        return NextResponse.json({ backgroundUrl: null, fileId: null, filename: null, sha256: null, linkSummary: null });
-      }
-
-      const backgroundUrl = getFilePath(file);
-      const linkSummary = file.sha256
-        ? await getPhotoLinkSummaryBySha256(file.sha256, repos)
-        : null;
-      return NextResponse.json({
-        backgroundUrl,
-        fileId: file.id,
-        filename: file.originalFilename,
-        sha256: file.sha256,
-        linkSummary,
-      });
-    } catch (error) {
-      logger.error('[Chats v1] Failed to get story background', { chatId }, error instanceof Error ? error : undefined);
-      return serverError('Failed to get story background');
-    }
-  }
-
-  // Handle gallery action — every image in the conversation, whatever made it.
-  // The nine sources and their dedup live in `lib/photos/chat-gallery.ts`; this
-  // route only answers with what the enumerator found.
-  if (action === 'gallery') {
-    try {
-      const chat = await repos.chats.findById(chatId);
-      if (!chat) {
-        return notFound('Chat');
-      }
-
-      const gallery = await getChatGallery(chatId, repos);
-      logger.debug('[Chats v1] Gallery listed', {
-        chatId,
-        total: gallery.total,
-        counts: gallery.counts,
-      });
-      return NextResponse.json(gallery);
-    } catch (error) {
-      logger.error('[Chats v1] Failed to list chat gallery', { chatId }, error instanceof Error ? error : undefined);
-      return serverError('Failed to list chat gallery');
-    }
-  }
-
-  // Handle cost action
-  if (action === 'cost') {
-    try {
-      const chat = await repos.chats.findById(chatId);
-      if (!chat) {
-        return notFound('Chat');
-      }
-
-      const searchParams = req.nextUrl.searchParams;
-      const detailed = searchParams.get('detailed') === 'true';
-
-      const breakdown = detailed
-        ? await getDetailedChatCostBreakdown(chatId, user.id)
-        : await getChatCostBreakdown(chatId, user.id);return NextResponse.json(breakdown);
-    } catch (error) {
-      logger.error('[Chats v1] Failed to get cost breakdown', { chatId }, error instanceof Error ? error : undefined);
-      return serverError('Failed to get cost breakdown');
-    }
-  }
-
-  // Default: get chat
   try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
 
+    const allEvents = await repos.chats.getMessages(chatId);
+    const messages = allEvents.filter((event) => event.type === 'message');
+
+    const characterParticipants = chat.participants.filter(
+      (p) => p.type === 'CHARACTER' && p.characterId
+    );
+    const primaryParticipant = characterParticipants[0];
+    if (!primaryParticipant?.characterId) {
+      return notFound('No character in chat');
+    }
+
+    // Load every character participant so each message can be attributed to
+    // its real author. The map is keyed by participant id (what messages
+    // carry in `participantId`); broken-vault characters are dropped by
+    // findByIds and simply fall back to the primary name in the export.
+    const characters = await repos.characters.findByIds(
+      characterParticipants
+        .map((p) => p.characterId)
+        .filter((id): id is string => typeof id === 'string')
+    );
+    const charactersById = new Map(characters.map((c) => [c.id, c]));
+    const participantNames = new Map<string, string>();
+    for (const p of characterParticipants) {
+      const name = p.characterId ? charactersById.get(p.characterId)?.name : undefined;
+      if (name) participantNames.set(p.id, name);
+    }
+
+    const primaryCharacter = charactersById.get(primaryParticipant.characterId);
+    if (!primaryCharacter) {
+      return notFound('Character');
+    }
+
+    const userName = user.name || 'User';
+
+    const formattedMessages = messages.map((msg) => ({
+      id: msg.id,
+      chatId,
+      role: msg.role,
+      content: msg.content,
+      createdAt: new Date(msg.createdAt),
+      updatedAt: new Date(msg.createdAt),
+      swipeGroupId: msg.swipeGroupId || null,
+      swipeIndex: msg.swipeIndex || null,
+      tokenCount: msg.tokenCount || null,
+      rawResponse: msg.rawResponse || null,
+      participantId: msg.participantId || null,
+    }));
+
+    const chatForExport = {
+      ...chat,
+      createdAt: new Date(chat.createdAt),
+      updatedAt: new Date(chat.updatedAt),
+    };
+
+    const jsonlContent = exportSTChatAsJSONL(
+      chatForExport,
+      formattedMessages,
+      primaryCharacter.name,
+      userName,
+      participantNames
+    );
+    const chatCreatedTime = new Date(chat.createdAt).getTime();
+    const filename = `${primaryCharacter.name}_chat_${chatCreatedTime}.jsonl`;
+
+    return new NextResponse(jsonlContent, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (error) {
+    logger.error('[Chats v1] Error exporting chat', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to export chat');
+  }
+}
+
+/**
+ * Handle gallery action — every image in the conversation, whatever made it.
+ * The nine sources and their dedup live in `lib/photos/chat-gallery.ts`; this
+ * route only answers with what the enumerator found.
+ */
+async function handleGallery(
+  _req: NextRequest,
+  ctx: RequestContext,
+  chatId: string
+): Promise<NextResponse> {
+  const { repos } = ctx;
+
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    const gallery = await getChatGallery(chatId, repos);
+    logger.debug('[Chats v1] Gallery listed', {
+      chatId,
+      total: gallery.total,
+      counts: gallery.counts,
+    });
+    return NextResponse.json(gallery);
+  } catch (error) {
+    logger.error('[Chats v1] Failed to list chat gallery', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to list chat gallery');
+  }
+}
+
+/**
+ * Handle cost action - the chat's cost breakdown (`?detailed=true` for the
+ * per-message form)
+ */
+async function handleCost(
+  req: NextRequest,
+  ctx: RequestContext,
+  chatId: string
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+
+  try {
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      return notFound('Chat');
+    }
+
+    const searchParams = req.nextUrl.searchParams;
+    const detailed = searchParams.get('detailed') === 'true';
+
+    const breakdown = detailed
+      ? await getDetailedChatCostBreakdown(chatId, user.id)
+      : await getChatCostBreakdown(chatId, user.id);
+    return NextResponse.json(breakdown);
+  } catch (error) {
+    logger.error('[Chats v1] Failed to get cost breakdown', { chatId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to get cost breakdown');
+  }
+}
+
+/**
+ * Default: the chat itself, with its enriched participants and projected
+ * transcript
+ */
+async function handleGetChat(
+  _req: NextRequest,
+  ctx: RequestContext,
+  chatId: string
+): Promise<NextResponse> {
+  const { user, repos } = ctx;
+
+  try {
     const chatMetadata = await repos.chats.findById(chatId);
     if (!chatMetadata) {
       return notFound('Chat');

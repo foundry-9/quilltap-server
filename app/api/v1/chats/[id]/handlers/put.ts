@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getActionParam } from '@/lib/api/middleware/actions';
+import { dispatchAction } from '@/lib/api/middleware/actions';
 import { enrichParticipantDetail } from '@/lib/services/chat-enrichment.service';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, errorResponse } from '@/lib/api/responses';
@@ -23,14 +23,18 @@ export async function handlePut(
   ctx: RequestContext,
   chatId: string
 ): Promise<NextResponse> {
-  const { user, repos } = ctx;
-  const action = getActionParam(req);
+  return dispatchAction(
+    req,
+    { 'set-state': () => handleSetState(req, chatId, ctx) },
+    () => handleUpdateChat(req, chatId, ctx)
+  );
+}
 
-  // Handle set-state action
-  if (action === 'set-state') {
-    return handleSetState(req, chatId, ctx);
-  }
-
+async function handleUpdateChat(
+  req: NextRequest,
+  chatId: string,
+  { user, repos }: RequestContext
+): Promise<NextResponse> {
   const existingChat = await repos.chats.findById(chatId);
   if (!existingChat) {
     return notFound('Chat');
