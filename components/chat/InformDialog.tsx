@@ -56,6 +56,7 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
 import { FloatingDialog } from '@/components/ui/FloatingDialog'
 import { queryKeys } from '@/lib/query/keys'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 
 /** Derived from the formatting toolbar's own CSS — see the header comment. */
 const TOOLBAR_MIN_WIDTH = 720
@@ -87,6 +88,7 @@ export default function InformDialog({
   audienceCandidates = [],
   onPosted,
 }: InformDialogProps) {
+  const imagesHidden = useImagesHidden()
   const queryClient = useQueryClient()
   const [content, setContent] = useState('')
   // Chosen seats. EMPTY MEANS EVERYONE — the default, and what a full
@@ -219,7 +221,7 @@ export default function InformDialog({
                         picked ? 'qt-bg-primary/20' : 'hover:qt-bg-primary/10'
                       }`}
                     >
-                      {p.avatarUrl ? (
+                      {p.avatarUrl && !imagesHidden ? (
                         <img
                           src={p.avatarUrl}
                           alt=""

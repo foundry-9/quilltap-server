@@ -276,7 +276,7 @@ Chats that take the uncensored route can be hidden from the sidebar using the qu
 
 What the toggle hides is a matter of the *route*, not of anyone's opinion: a chat wearing the red mark (**Flagged**, by the Concierge's own reckoning) and a chat wearing the blue one (**Uncensored**, by yours) both go behind the curtain, since both take the spicy road. A chat you have **Vouched Safe** does not, however old and lurid a classification it may still be carrying about in its pocket — you said it was fine, and the toggle takes you at your word. A **Monitored** chat, naturally, stays where it is.
 
-The eye icon itself appears in the sidebar footer only when there is in fact something for it to hide.
+The eye icon is always present in the sidebar footer, since its menu also carries the **Salon Images** toggle — see [Quick-Hide](quick-hide.md).
 
 The toggle is persisted in your browser's local storage, so your preference is remembered across sessions.
 
