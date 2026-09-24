@@ -26,6 +26,13 @@
   `$textBeforeCursor` / `$isGluedToPreviousRun` moved from `CharTypeaheadPlugin` into
   `components/chat/lexical/typeahead/trigger-context.ts` so both typeaheads share them.
 
+#### Fixed: `update_version.sh` put the branch name in the version
+
+- Any branch other than `main`, `release` or `bugfix` got its branch name as the prerelease
+  channel (e.g. `4.10.0-claude-some-branch.50`), which also landed in the README badge.
+  Every non-`release`/non-`bugfix` branch now uses the `dev` channel. `bugfix` and
+  `bugfix/*` use `bugfix`; `release` and `release/*` still get no channel.
+
 #### Added: quick-hide toggle for Salon images
 
 - New **Salon Images** toggle in the quick-hide menu's Content Filters. When on, the Salon
