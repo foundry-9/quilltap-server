@@ -112,6 +112,12 @@ function rowToMetadata(row: Record<string, unknown>): DocMountBlobMetadata {
 }
 
 export class DocMountBlobsRepository {
+  /**
+   * The database this repository's table lives in — declared here as the
+   * `AbstractBaseRepository` family declares it, so the background-job
+   * write partitioner's key set can be checked against every repository.
+   */
+  readonly dbTarget = 'mountIndex' as const;
   private tableInitialized = false;
 
   private db() {

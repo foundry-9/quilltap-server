@@ -2,9 +2,9 @@
  * LLM Logs Repository
  *
  * Backend-agnostic repository for LLMLog entities.
- * Overrides getCollection() to route all operations to the dedicated
- * LLM logs database (quilltap-llm-logs.db), isolating high-churn debug
- * data from the main database.
+ * Lives in the dedicated LLM logs database (quilltap-llm-logs.db) via
+ * `AbstractDedicatedDbRepository`, isolating high-churn debug data from
+ * the main database.
  *
  * When the logs DB is in degraded mode (corruption, permissions, etc.),
  * getCollection() throws and all safeQuery fallbacks kick in — returning
@@ -13,11 +13,11 @@
 
 import { logger } from '@/lib/logger';
 import { LLMLog, LLMLogSchema, LLMLogType } from '@/lib/schemas/types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter, QueryOptions } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter, QueryOptions } from '../interfaces';
 import { getRawLLMLogsDatabase, isLLMLogsDegraded } from '../backends/sqlite/llm-logs-client';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
+import { requireLLMLogsDb } from '../backends/sqlite/llm-logs-guard';
 
 /**
  * The usage/latency/failure projection shared by every per-group roll-up:
@@ -67,57 +67,16 @@ function profileKey(groupBy: ProfileGroupBy): { keyExpr: string; notNullClause: 
 /**
  * LLM Logs Repository
  * Implements CRUD operations and advanced queries for LLM logs.
- * Uses AbstractBaseRepository since LLMLog schema uses Date type for timestamps.
+ * Extends AbstractDedicatedDbRepository (over AbstractBaseRepository, not the
+ * user-owned base) since LLMLog schema uses Date type for timestamps.
  */
-export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
-  private llmLogsCollectionInitialized = false;
-
+export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   constructor() {
-    super('llm_logs', LLMLogSchema);
-  }
-
-  /**
-   * Override getCollection to return a collection from the dedicated LLM logs
-   * database instead of the main database.
-   */
-  protected async getCollection(): Promise<DatabaseCollection<LLMLog>> {
-    if (isLLMLogsDegraded()) {
-      throw new Error('LLM logs database is in degraded mode');
-    }
-
-    const db = getRawLLMLogsDatabase();
-    if (!db) {
-      throw new Error('LLM logs database not initialized');
-    }
-
-    // Ensure the table exists in the logs DB on first access
-    if (!this.llmLogsCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-        this.llmLogsCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure llm_logs table in LLM logs database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    // Detect JSON, array, and boolean columns from schema
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<LLMLog>(
-      db,
-      this.collectionName,
-      jsonColumns,
-      arrayColumns,
-      booleanColumns,
-      [],
-      LLM_LOG_COMPRESSED_COLUMNS,
-    );
+    super('llm_logs', LLMLogSchema, {
+      dbTarget: 'llmLogs',
+      acquireDb: requireLLMLogsDb,
+      compressedColumns: LLM_LOG_COMPRESSED_COLUMNS,
+    });
   }
 
   /**

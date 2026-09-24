@@ -16,6 +16,7 @@
  * doc_mount_files.
  */
 
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import * as posixPath from 'path/posix';
 import { logger } from '@/lib/logger';
@@ -27,12 +28,9 @@ import {
   DocMountFileLinkWithContent,
   EDITABLE_TEXT_FILE_TYPES,
 } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase } from '../backends/sqlite/mount-index-client';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { normalizeLinkBlobImage } from '@/lib/mount-index/normalize-blob-image';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
@@ -388,55 +386,34 @@ export interface DocMountLinkTextMatch {
   updatedAt: string;
 }
 
-export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMountFileLink> {
-  private mountIndexCollectionInitialized = false;
-
+export class DocMountFileLinksRepository extends AbstractDedicatedDbRepository<DocMountFileLink> {
   constructor() {
-    super('doc_mount_file_links', DocMountFileLinkSchema);
+    super('doc_mount_file_links', DocMountFileLinkSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
   }
 
-  protected async getCollection(): Promise<DatabaseCollection<DocMountFileLink>> {
-    const db = requireMountIndexDb();
+  /**
+   * Extra DDL, run once after the generated statements on first access.
+   */
+  protected override onTableEnsured(db: DatabaseType): void {
+    // Align linkGroupId before anything reads the table — a missing column
+    // presents as every document silently not existing. See the helper.
+    ensureLinkGroupColumn(db);
 
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-
-        // Align linkGroupId before anything reads the table — a missing column
-        // presents as every document silently not existing. See the helper.
-        ensureLinkGroupColumn(db);
-
-        // Case-insensitive (mountPointId, relativePath) uniqueness: one file
-        // per location, where `Notes.md` and `notes.md` are the same location
-        // (all path lookups already compare via LOWER()). Runs a repair scan
-        // every init (catching out-of-band edits, and swapping out the legacy
-        // case-sensitive index on older databases) before guaranteeing the
-        // NOCASE index.
-        ensureLinkNocaseUniqueIndex(db);
-        db.exec(
-          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
-          `ON "${this.collectionName}" ("fileId")`
-        );
-        db.exec(
-          `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mountPointId" ` +
-          `ON "${this.collectionName}" ("mountPointId")`
-        );
-
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure doc_mount_file_links table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<DocMountFileLink>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
+    // Case-insensitive (mountPointId, relativePath) uniqueness: one file
+    // per location, where `Notes.md` and `notes.md` are the same location
+    // (all path lookups already compare via LOWER()). Runs a repair scan
+    // every init (catching out-of-band edits, and swapping out the legacy
+    // case-sensitive index on older databases) before guaranteeing the
+    // NOCASE index.
+    ensureLinkNocaseUniqueIndex(db);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
+      `ON "${this.collectionName}" ("fileId")`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS "idx_${this.collectionName}_mountPointId" ` +
+      `ON "${this.collectionName}" ("mountPointId")`
+    );
   }
 
   // ============================================================================
@@ -450,22 +427,27 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     // Enforce: a filesystem-source file may have at most one link, because
     // its bytes live at a single basePath/relativePath. Database-source
     // files can be hard-linked freely.
-    const db = getRawMountIndexDatabase();
-    if (db) {
-      const existing = db.prepare(
-        `SELECT f.source AS source, COUNT(l.id) AS linkCount
-         FROM doc_mount_files f
-         LEFT JOIN doc_mount_file_links l ON l.fileId = f.id
-         WHERE f.id = ?
-         GROUP BY f.id`
-      ).get(data.fileId) as { source: string; linkCount: number } | undefined;
-      if (existing && existing.source === 'filesystem' && existing.linkCount > 0) {
-        throw new Error(
-          `Cannot create a second link for filesystem-source file ${data.fileId}: ` +
-          `filesystem files are constrained to one link per file.`
-        );
-      }
-    }
+    await this.withRawDb(
+      undefined,
+      (db) => {
+        const existing = db.prepare(
+          `SELECT f.source AS source, COUNT(l.id) AS linkCount
+           FROM doc_mount_files f
+           LEFT JOIN doc_mount_file_links l ON l.fileId = f.id
+           WHERE f.id = ?
+           GROUP BY f.id`
+        ).get(data.fileId) as { source: string; linkCount: number } | undefined;
+        if (existing && existing.source === 'filesystem' && existing.linkCount > 0) {
+          throw new Error(
+            `Cannot create a second link for filesystem-source file ${data.fileId}: ` +
+            `filesystem files are constrained to one link per file.`
+          );
+        }
+      },
+      'Error checking the one-link constraint for a filesystem-source file',
+      { fileId: data.fileId },
+      'rethrow',
+    );
     return this._create(data, options);
   }
 
@@ -487,10 +469,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * Stored as 0/1; the rest of the code sees booleans (see {@link coerceAllow}).
    */
   async updatePolicyFlags(linkId: string, policy: LinkPolicyFlags): Promise<void> {
-    await this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return;
+    await this.withRawDb(
+      undefined,
+      async (db) => {
         db.prepare(
           `UPDATE doc_mount_file_links
              SET allowEmbed = ?, allowCharacterRead = ?, allowCharacterWrite = ?, updatedAt = ?
@@ -504,7 +485,8 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         );
       },
       'Error updating document policy flags',
-      { linkId }
+      { linkId },
+      'rethrow'
     );
   }
 
@@ -601,18 +583,16 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * tombstone the file row after a link delete.
    */
   async countByFileId(fileId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return 0;
+    return this.withRawDb(
+      0,
+      async (db) => {
         const row = db.prepare(
           'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
         ).get(fileId) as { count: number } | undefined;
         return row?.count ?? 0;
       },
       'Error counting file links by file ID',
-      { fileId },
-      0
+      { fileId }
     );
   }
 
@@ -634,12 +614,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     limit: number
   ): Promise<DocMountLinkTextMatch[]> {
     if (mountPointIds.length === 0 || query.length === 0) return [];
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return [];
-        await this.getCollection();
-
+    return this.withRawDb(
+      [],
+      async (db) => {
         const placeholders = mountPointIds.map(() => '?').join(',');
         const typePlaceholders = EDITABLE_TEXT_FILE_TYPES.map(() => '?').join(',');
         const pattern = likeContainsPattern(query);
@@ -665,8 +642,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return rows;
       },
       'Error searching file links by name or path',
-      { mountPointIdCount: mountPointIds.length, queryLength: query.length },
-      []
+      { mountPointIdCount: mountPointIds.length, queryLength: query.length }
     );
   }
 
@@ -687,11 +663,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * @returns the group id both links now carry, or null if either link is gone
    */
   async bindLinkGroup(sourceLinkId: string, destLinkId: string): Promise<string | null> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return null;
-
+    return this.withRawDb(
+      null,
+      async (db) => {
         const now = new Date().toISOString();
         const tx = db.transaction(() => {
           const source = db.prepare(
@@ -718,8 +692,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return groupId;
       },
       'Error binding hard-link group',
-      { sourceLinkId, destLinkId },
-      null
+      { sourceLinkId, destLinkId }
     );
   }
 
@@ -755,11 +728,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     linkId: string,
     times: { lastModified?: string; createdAt?: string }
   ): Promise<boolean> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return false;
-
+    return this.withRawDb(
+      false,
+      async (db) => {
         const sets: string[] = [];
         const values: unknown[] = [];
         if (times.lastModified !== undefined) {
@@ -781,8 +752,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return result.changes > 0;
       },
       'Error setting file link timestamps',
-      { linkId },
-      false
+      { linkId }
     );
   }
 
@@ -799,11 +769,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * boolean indicating whether the underlying file was garbage-collected.
    */
   async deleteWithGC(linkId: string): Promise<{ fileId: string | null; fileGC: boolean }> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return { fileId: null, fileGC: false };
-
+    return this.withRawDb(
+      { fileId: null, fileGC: false },
+      async (db) => {
         const link = db.prepare(
           'SELECT fileId, mountPointId, linkGroupId FROM doc_mount_file_links WHERE id = ?'
         ).get(linkId) as
@@ -844,8 +812,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return { fileId: link.fileId, fileGC };
       },
       'Error deleting file link with GC',
-      { linkId },
-      { fileId: null, fileGC: false }
+      { linkId }
     );
   }
 
@@ -855,11 +822,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * files garbage-collected.
    */
   async deleteByMountPointId(mountPointId: string): Promise<{ linksDeleted: number; filesGC: number }> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return { linksDeleted: 0, filesGC: 0 };
-
+    return this.withRawDb(
+      { linksDeleted: 0, filesGC: 0 },
+      async (db) => {
         // Snapshot the affected fileIds so we can ref-count them after the
         // bulk link delete.
         const affectedFileIds = db.prepare(
@@ -899,8 +864,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return { linksDeleted, filesGC };
       },
       'Error deleting file links by mount point ID',
-      { mountPointId },
-      { linksDeleted: 0, filesGC: 0 }
+      { mountPointId }
     );
   }
 
@@ -926,16 +890,11 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     /** Hard-link group members repointed by this write. */
     groupSiblings: GroupSibling[];
   }> {
-    const db = getRawMountIndexDatabase();
-    if (!db) throw new Error('Mount index database not initialized');
+    const db = await this.ensureRawDb();
 
     // Normalize image bytes BEFORE the hash is computed, so the stored sha256
     // describes the bytes that actually land in the row.
     const input = await normalizeLinkBlobImage(rawInput);
-
-    // Ensure all relevant tables are initialized via repository getCollection
-    // calls. Cheap when the tables already exist.
-    await this.getCollection();
 
     const now = new Date().toISOString();
     const sizeBytes = input.data.length;
@@ -1147,10 +1106,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     /** Hard-link group members repointed by this write; each needs re-chunking. */
     groupSiblings: GroupSibling[];
   }> {
-    const db = getRawMountIndexDatabase();
-    if (!db) throw new Error('Mount index database not initialized');
-
-    await this.getCollection();
+    const db = await this.ensureRawDb();
 
     const now = new Date().toISOString();
 
@@ -1332,10 +1288,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * attempted).
    */
   async linkFilesystemFile(input: LinkFilesystemFileInput): Promise<DocMountFileLinkWithContent> {
-    const db = getRawMountIndexDatabase();
-    if (!db) throw new Error('Mount index database not initialized');
-
-    await this.getCollection();
+    const db = await this.ensureRawDb();
 
     const now = new Date().toISOString();
 
@@ -1451,10 +1404,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * suspect a writer bypassed deleteWithGC.
    */
   async sweepOrphanedFiles(): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return 0;
+    return this.withRawDb(
+      0,
+      async (db) => {
         const res = db.prepare(
           `DELETE FROM doc_mount_files
            WHERE id NOT IN (SELECT DISTINCT fileId FROM doc_mount_file_links)`
@@ -1465,8 +1417,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return res.changes;
       },
       'Error sweeping orphaned files',
-      {},
-      0
+      {}
     );
   }
 
@@ -1484,12 +1435,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * no surviving link — which the link reap above may have just caused.
    */
   async sweepOrphanedStoreChildren(): Promise<OrphanedStoreChildrenSwept> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return { links: 0, folders: 0, documents: 0 };
-        await this.getCollection();
-
+    return this.withRawDb(
+      { links: 0, folders: 0, documents: 0 },
+      async (db) => {
         const swept = reapOrphanedStoreChildren(db);
         if (swept.links > 0 || swept.folders > 0 || swept.documents > 0) {
           logger.info('Swept orphaned doc-store children', swept);
@@ -1499,8 +1447,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
         return swept;
       },
       'Error sweeping orphaned store children',
-      {},
-      { links: 0, folders: 0, documents: 0 }
+      {}
     );
   }
 
@@ -1514,65 +1461,66 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
    * the bound parameters.
    */
   private async queryJoined(whereClause: string, params: unknown[]): Promise<DocMountFileLinkWithContent[]> {
-    const db = getRawMountIndexDatabase();
-    if (!db) return [];
+    return this.withRawDb(
+      [],
+      (db) => {
+        const sql = `
+          SELECT
+            l.id, l.fileId, l.mountPointId, l.relativePath, l.fileName,
+            l.folderId, l.originalFileName, l.originalMimeType,
+            l.description, l.descriptionUpdatedAt,
+            l.conversionStatus, l.conversionError, l.plainTextLength,
+            l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
+            l.chunkCount, l.allowEmbed, l.allowCharacterRead, l.allowCharacterWrite,
+            l.linkGroupId,
+            l.lastModified, l.createdAt, l.updatedAt,
+            f.sha256, f.fileSizeBytes, f.fileType, f.source
+          FROM doc_mount_file_links l
+          JOIN doc_mount_files f ON f.id = l.fileId
+          ${whereClause}
+        `;
 
-    // Make sure the tables exist (calling getCollection runs the DDL).
-    await this.getCollection();
-
-    const sql = `
-      SELECT
-        l.id, l.fileId, l.mountPointId, l.relativePath, l.fileName,
-        l.folderId, l.originalFileName, l.originalMimeType,
-        l.description, l.descriptionUpdatedAt,
-        l.conversionStatus, l.conversionError, l.plainTextLength,
-        l.extractedText, l.extractedTextSha256, l.extractionStatus, l.extractionError,
-        l.chunkCount, l.allowEmbed, l.allowCharacterRead, l.allowCharacterWrite,
-        l.linkGroupId,
-        l.lastModified, l.createdAt, l.updatedAt,
-        f.sha256, f.fileSizeBytes, f.fileType, f.source
-      FROM doc_mount_file_links l
-      JOIN doc_mount_files f ON f.id = l.fileId
-      ${whereClause}
-    `;
-
-    const rows = db.prepare(sql).all(...params) as JoinedRow[];
-    return rows.map(row => ({
-      id: row.id,
-      fileId: row.fileId,
-      mountPointId: row.mountPointId,
-      relativePath: row.relativePath,
-      fileName: row.fileName,
-      folderId: row.folderId ?? null,
-      originalFileName: row.originalFileName ?? null,
-      originalMimeType: row.originalMimeType ?? null,
-      description: row.description ?? '',
-      descriptionUpdatedAt: row.descriptionUpdatedAt ?? null,
-      conversionStatus: row.conversionStatus,
-      conversionError: row.conversionError ?? null,
-      plainTextLength: row.plainTextLength ?? null,
-      extractedText: row.extractedText ?? null,
-      extractedTextSha256: row.extractedTextSha256 ?? null,
-      extractionStatus: row.extractionStatus,
-      extractionError: row.extractionError ?? null,
-      chunkCount: row.chunkCount ?? 0,
-      // SQLite stores these as 0/1; coerce to booleans (mirrors `enabled`).
-      // Absent (pre-migration drift before the align guard runs) → permissive.
-      allowEmbed: coerceAllow(row.allowEmbed),
-      allowCharacterRead: coerceAllow(row.allowCharacterRead),
-      allowCharacterWrite: coerceAllow(row.allowCharacterWrite),
-      // Hard-link group id. Without this in the projection, every joined read
-      // reported linkGroupId: undefined and reindexLinkGroupSiblings dead-ended
-      // its early-out, so hard-linked siblings served stale chunks (Bug 15).
-      linkGroupId: row.linkGroupId ?? null,
-      lastModified: row.lastModified,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      sha256: row.sha256,
-      fileSizeBytes: row.fileSizeBytes,
-      fileType: row.fileType,
-      source: row.source,
-    }));
+        const rows = db.prepare(sql).all(...params) as JoinedRow[];
+        return rows.map(row => ({
+          id: row.id,
+          fileId: row.fileId,
+          mountPointId: row.mountPointId,
+          relativePath: row.relativePath,
+          fileName: row.fileName,
+          folderId: row.folderId ?? null,
+          originalFileName: row.originalFileName ?? null,
+          originalMimeType: row.originalMimeType ?? null,
+          description: row.description ?? '',
+          descriptionUpdatedAt: row.descriptionUpdatedAt ?? null,
+          conversionStatus: row.conversionStatus,
+          conversionError: row.conversionError ?? null,
+          plainTextLength: row.plainTextLength ?? null,
+          extractedText: row.extractedText ?? null,
+          extractedTextSha256: row.extractedTextSha256 ?? null,
+          extractionStatus: row.extractionStatus,
+          extractionError: row.extractionError ?? null,
+          chunkCount: row.chunkCount ?? 0,
+          // SQLite stores these as 0/1; coerce to booleans (mirrors `enabled`).
+          // Absent (pre-migration drift before the align guard runs) → permissive.
+          allowEmbed: coerceAllow(row.allowEmbed),
+          allowCharacterRead: coerceAllow(row.allowCharacterRead),
+          allowCharacterWrite: coerceAllow(row.allowCharacterWrite),
+          // Hard-link group id. Without this in the projection, every joined read
+          // reported linkGroupId: undefined and reindexLinkGroupSiblings dead-ended
+          // its early-out, so hard-linked siblings served stale chunks (Bug 15).
+          linkGroupId: row.linkGroupId ?? null,
+          lastModified: row.lastModified,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          sha256: row.sha256,
+          fileSizeBytes: row.fileSizeBytes,
+          fileType: row.fileType,
+          source: row.source,
+        }));
+      },
+      'Error querying joined file links',
+      { whereClause },
+    );
   }
 
 }

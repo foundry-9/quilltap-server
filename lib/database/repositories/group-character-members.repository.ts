@@ -3,8 +3,8 @@
  *
  * Backend-agnostic repository for GroupCharacterMember entities — the
  * many-to-many join table between groups and characters.
- * Overrides getCollection() to route all operations to the dedicated
- * mount index database (quilltap-mount-index.db), co-located with the other
+ * Lives in the dedicated mount index database (quilltap-mount-index.db)
+ * via `AbstractDedicatedDbRepository`, co-located with the other
  * group join table (group_doc_mount_links).
  *
  * Note: both groupId and characterId reference rows in the main database
@@ -16,53 +16,20 @@
  * empty arrays, null, etc. The rest of the app continues normally.
  */
 
-import { logger } from '@/lib/logger';
 import { GroupCharacterMember, GroupCharacterMemberSchema } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
 
 /**
  * Group Character Members Repository
  * Implements CRUD operations for the group-to-character join table.
  * Uses the mount index database instead of the main database.
  */
-export class GroupCharacterMembersRepository extends AbstractBaseRepository<GroupCharacterMember> {
-  private mountIndexCollectionInitialized = false;
-
+export class GroupCharacterMembersRepository extends AbstractDedicatedDbRepository<GroupCharacterMember> {
   constructor() {
-    super('group_character_members', GroupCharacterMemberSchema);
-  }
-
-  /**
-   * Override getCollection to return a collection from the dedicated mount index
-   * database instead of the main database.
-   */
-  protected async getCollection(): Promise<DatabaseCollection<GroupCharacterMember>> {
-    const db = requireMountIndexDb();
-
-    // Ensure the table exists in the mount index DB on first access
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure group_character_members table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    // Detect JSON, array, and boolean columns from schema
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<GroupCharacterMember>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
+    super('group_character_members', GroupCharacterMemberSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
   }
 
   // ============================================================================

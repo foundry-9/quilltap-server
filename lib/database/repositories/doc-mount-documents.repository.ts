@@ -11,14 +11,12 @@
  * first and then call findByFileId here.
  */
 
-import { logger } from '@/lib/logger';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { DocMountDocument, DocMountDocumentSchema } from '@/lib/schemas/mount-index.types';
-import { AbstractBaseRepository, CreateOptions } from './base.repository';
-import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
-import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase } from '../backends/sqlite/mount-index-client';
+import { CreateOptions } from './base.repository';
+import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
+import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { ensureLinkGroupColumn } from './mount-index-case-repair';
 
 /**
@@ -39,49 +37,26 @@ export interface DocMountDocumentWithLink extends DocMountDocument {
   linkGroupId: string | null;
 }
 
-export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMountDocument> {
-  private mountIndexCollectionInitialized = false;
-
+export class DocMountDocumentsRepository extends AbstractDedicatedDbRepository<DocMountDocument> {
   constructor() {
-    super('doc_mount_documents', DocMountDocumentSchema);
+    super('doc_mount_documents', DocMountDocumentSchema, { dbTarget: 'mountIndex', acquireDb: requireMountIndexDb });
   }
 
-  protected async getCollection(): Promise<DatabaseCollection<DocMountDocument>> {
-    const db = requireMountIndexDb();
-
-    if (!this.mountIndexCollectionInitialized) {
-      try {
-        const ddlStatements = generateDDL(this.collectionName, this.schema);
-        for (const sql of ddlStatements) {
-          db.exec(sql);
-        }
-
-        // fileId is the natural key; UNIQUE so one document per file row.
-        db.exec(
-          `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
-          `ON "${this.collectionName}" ("fileId")`
-        );
-
-        // The joined views below select l.linkGroupId off doc_mount_file_links.
-        // This repository's init is reachable without the links repository's
-        // having run, so align that column here too rather than depending on
-        // initialization order (a missing column reads as "document not found").
-        ensureLinkGroupColumn(db);
-
-        this.mountIndexCollectionInitialized = true;
-      } catch (error) {
-        logger.error('Failed to ensure doc_mount_documents table in mount index database', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
-
-    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
-
-    return new SQLiteCollection<DocMountDocument>(
-      db, this.collectionName, jsonColumns, arrayColumns, booleanColumns
+  /**
+   * Extra DDL, run once after the generated statements on first access.
+   */
+  protected override onTableEnsured(db: DatabaseType): void {
+    // fileId is the natural key; UNIQUE so one document per file row.
+    db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${this.collectionName}_fileId" ` +
+      `ON "${this.collectionName}" ("fileId")`
     );
+
+    // The joined views below select l.linkGroupId off doc_mount_file_links.
+    // This repository's init is reachable without the links repository's
+    // having run, so align that column here too rather than depending on
+    // initialization order (a missing column reads as "document not found").
+    ensureLinkGroupColumn(db);
   }
 
   // ============================================================================
@@ -153,11 +128,9 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     mountPointId: string,
     relativePath: string
   ): Promise<DocMountDocumentWithLink | null> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return null;
-        await this.getCollection();
+    return this.withRawDb(
+      null,
+      async (db) => {
         const row = db.prepare(
           `SELECT
              d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
@@ -174,8 +147,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
         return row ?? null;
       },
       'Error finding document by mount point and path',
-      { mountPointId, relativePath },
-      null
+      { mountPointId, relativePath }
     );
   }
 
@@ -189,11 +161,9 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     relativePath: string
   ): Promise<DocMountDocumentWithLink[]> {
     if (mountPointIds.length === 0) return [];
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return [];
-        await this.getCollection();
+    return this.withRawDb(
+      [],
+      async (db) => {
         const placeholders = mountPointIds.map(() => '?').join(',');
         return db.prepare(
           `SELECT
@@ -210,8 +180,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
         ).all(...mountPointIds, relativePath) as DocMountDocumentWithLink[];
       },
       'Error finding documents by mount point IDs and path',
-      { mountPointIdCount: mountPointIds.length, relativePath },
-      []
+      { mountPointIdCount: mountPointIds.length, relativePath }
     );
   }
 
@@ -236,11 +205,9 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
     const prefixLower = prefix.toLowerCase();
     const extensionLower = extension.toLowerCase();
     const recursive = options.recursive === true;
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return [];
-        await this.getCollection();
+    return this.withRawDb(
+      [],
+      async (db) => {
         const placeholders = mountPointIds.map(() => '?').join(',');
         const rows = db.prepare(
           `SELECT
@@ -265,8 +232,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
         });
       },
       'Error finding documents by mount point IDs and folder',
-      { mountPointIdCount: mountPointIds.length, folder, extension, recursive },
-      []
+      { mountPointIdCount: mountPointIds.length, folder, extension, recursive }
     );
   }
 
@@ -276,11 +242,9 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
    * relativePath, fileName, etc.
    */
   async findByMountPointId(mountPointId: string): Promise<DocMountDocumentWithLink[]> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return [];
-        await this.getCollection();
+    return this.withRawDb(
+      [],
+      async (db) => {
         return db.prepare(
           `SELECT
              d.id, d.fileId, d.content, d.contentSha256, d.plainTextLength,
@@ -295,8 +259,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
         ).all(mountPointId) as DocMountDocumentWithLink[];
       },
       'Error finding documents by mount point ID',
-      { mountPointId },
-      []
+      { mountPointId }
     );
   }
 
@@ -310,11 +273,9 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
    * without going through the link table.
    */
   async deleteByMountPointId(mountPointId: string): Promise<number> {
-    return this.safeQuery(
-      async () => {
-        const db = getRawMountIndexDatabase();
-        if (!db) return 0;
-        await this.getCollection();
+    return this.withRawDb(
+      0,
+      async (db) => {
         const res = db.prepare(
           `DELETE FROM doc_mount_documents
            WHERE fileId IN (
@@ -324,7 +285,8 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
         return res.changes;
       },
       'Error deleting documents by mount point ID',
-      { mountPointId }
+      { mountPointId },
+      'rethrow'
     );
   }
 }
