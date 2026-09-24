@@ -47,7 +47,7 @@ import {
   type TextNode,
 } from 'lexical'
 
-import { findTrigger, isTriggerOpenerContext } from '@/lib/char-insert/trigger'
+import { findTrigger } from '@/lib/char-insert/trigger'
 import { searchChars, findByAlias, findByCodePoint } from '@/lib/char-insert/search'
 import { isInsideMathSpan } from '@/lib/char-insert/math-span'
 import type { CharEntry, CharIndex, CharProfile } from '@/lib/char-insert/types'
@@ -57,7 +57,7 @@ import {
   toMenuTextMatch,
   $insertWithoutTrailingSpace,
 } from '../typeahead/useTypeaheadShell'
-import { $isInCodeContext } from '../utils/code-context'
+import { $textBeforeCursor, $isGluedToPreviousRun } from '../typeahead/trigger-context'
 import { recordRecent } from '../../char-insert/recents-storage'
 import { CHAR_INSERT_TAG } from '../../char-insert/insert-char'
 
@@ -74,45 +74,6 @@ function toOption(profile: CharProfile, entry: CharEntry): TypeaheadOption<CharE
     },
     entry,
   )
-}
-
-/**
- * The text of the anchor node up to the cursor — the same slice Lexical's own
- * trigger machinery works from, so our offsets and its node-splitting agree.
- *
- * Returns null in every position a typing aid must stay out of. Must run inside
- * a read/update context.
- */
-function $textBeforeCursor(): { node: TextNode; text: string } | null {
-  const selection = $getSelection()
-  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null
-  if ($isInCodeContext(selection)) return null
-
-  const anchor = selection.anchor
-  if (anchor.type !== 'text') return null
-
-  const node = anchor.getNode()
-  if (!$isTextNode(node) || !node.isSimpleText()) return null
-
-  return { node, text: node.getTextContent().slice(0, anchor.offset) }
-}
-
-/**
- * A trigger at offset 0 of the anchor node is only really at a word opening if
- * nothing is glued to it in the preceding inline run — `**bold**:smi` must not
- * open a menu. The rule itself comes from Tier B rather than being re-derived.
- */
-function $isGluedToPreviousRun(node: TextNode, start: number): boolean {
-  if (start !== 0) return false
-
-  const previous = node.getPreviousSibling()
-  if (!previous) return false
-
-  const previousText = previous.getTextContent()
-  const lastChar = previousText[previousText.length - 1]
-  if (!lastChar) return false
-
-  return !isTriggerOpenerContext(lastChar)
 }
 
 /**

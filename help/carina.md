@@ -12,6 +12,8 @@ Carina is Quilltap's reference desk. She does not speak as herself — she has n
 
 To consult a Carina answerer from any message in the Salon, place an `@Name` invocation at the beginning of a line. The character name must be followed immediately by either a colon (`:`) for a public answer or a question mark (`?`) for a whispered one.
 
+You need not spell the name out in full: type `@` and the first letters, and the composer's name list will finish it for you with **Enter** or **Tab**. At the start of a line the `@` stays in place so long as you follow the name with `:` or `?` and a space, which is precisely what a query wants.
+
 ### Public queries (`@Name:`)
 
 ```
@@ -95,7 +97,7 @@ So the rule, stated plainly: if the one asking is an answerer, they may reach ev
 
 ## Consulting the Brahma Console
 
-There is one answerer at the reference desk who keeps no character file at all, and yet may be rung by name: **Brahma**. The Brahma Console — Quilltap's plain, persona-free line to a large language model, with leave to inspect your records and read your document stores — answers to `@Brahma:` and `@Brahma?` exactly as any reference character would, and may likewise be reached by an LLM character through the `ask_carina` tool. Put a question to Brahma and the reply lands in your chat as a tidy reference card, whispered or public as you please.
+There is one answerer at the reference desk who keeps no character file at all, and yet may be rung by name: **Brahma**. The Brahma Console — Quilltap's plain, persona-free line to a large language model, with leave to inspect your records and read your document stores — answers to `@Brahma:` and `@Brahma?` exactly as any reference character would, and may likewise be reached by an LLM character through the `ask_carina` tool. Put a question to Brahma and the reply lands in your chat as a tidy reference card, whispered or public as you please. Type `@` at the start of a line and Brahma appears in the composer's name list alongside your characters.
 
 ```
 @Brahma: How many chats reference the character "Aria"?

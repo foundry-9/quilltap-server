@@ -9,6 +9,28 @@
 - The action had no callers after the `useHasDangerousChats` hook was removed. `GET
   /api/v1/chats` now only lists chats and returns 400 for any `?action=`.
 
+#### Added: `@` character typeahead in the Salon composer
+
+- Typing `@` at the start of a word opens a menu of characters (chat cast first, then all
+  non-archived characters from `/api/v1/characters`), filtered by name or word prefix.
+- Enter, Tab or click completes the highlighted name; Space completes it when at least one
+  query character was typed and keeps the space. A bare `@` plus Space is left alone.
+- The completed text is the plain name with the `@` removed, except at the start of a line
+  (top-level paragraph, or after a soft line break): there the `@` is kept only if the name is
+  followed by `:` or `?` and whitespace (a Carina / Brahma query); anything else removes it in
+  an update merged into the same undo step. Names the Carina parser cannot address (hyphen,
+  apostrophe, non-ASCII, single character) drop the `@` immediately; the parser's name grammar
+  is now exported as `isCarinaInvocableName` (`lib/chat/carina-parser.ts`) and shared.
+- At the start of a line the menu also offers Brahma (`BRAHMA_MENTION`), unless a character
+  named Brahma already exists.
+- While the character list is loading the menu shows a loading label (an error label if the
+  fetch fails) instead of "no match", and holds Enter/Tab so a half-typed `@name` is not sent.
+- An undo or redo that restores a line-start `@Name` to its undecided form re-arms the
+  keep-or-strip check.
+- New `MentionTypeaheadPlugin` and pure logic in `lib/mentions/mention-typeahead.ts`.
+  `$textBeforeCursor` / `$isGluedToPreviousRun` moved from `CharTypeaheadPlugin` into
+  `components/chat/lexical/typeahead/trigger-context.ts` so both typeaheads share them.
+
 #### Fixed: `update_version.sh` put the branch name in the version
 
 - Any branch other than `main`, `release` or `bugfix` got its branch name as the prerelease

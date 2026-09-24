@@ -49,7 +49,18 @@ const QUOTE_PAIRS: Readonly<Record<string, string>> = {
  * the remainder of the line. Quote handling for the remainder happens in
  * `extractQuestion` so smart quotes pair correctly.
  */
-const LINE_RE = /^@([\w][\w ]*\w)([?:])\s*(.*)$/;
+const NAME_SOURCE = '[\\w][\\w ]*\\w';
+const LINE_RE = new RegExp(`^@(${NAME_SOURCE})([?:])\\s*(.*)$`);
+const NAME_RE = new RegExp(`^${NAME_SOURCE}$`);
+
+/**
+ * Whether `name` can be addressed as `@name:` / `@name?` — the same name
+ * grammar `parseCarinaQuery` applies, shared so the composer's `@` typeahead
+ * never keeps an `@` in front of a name no query could ever fire for.
+ */
+export function isCarinaInvocableName(name: string): boolean {
+  return NAME_RE.test(name);
+}
 
 /**
  * Extract the question from the post-separator remainder. When the first
