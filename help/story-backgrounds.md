@@ -112,5 +112,5 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Topics
 
 - [Image Generation Profiles](image-generation-profiles.md)
-- [Chat Settings](chat-settings.md)
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md#story-backgrounds-settings)
 - [Projects](projects.md)

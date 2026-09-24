@@ -1,11 +1,16 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-09-23
+**Last Updated**: 2026-09-24
 **Codebase**: Quilltap v4.10.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–164** are **fixed in v4**; none are open. **163** and **164** were found
+**Status**: Bugs **1–168** are **fixed in v4**; none are open. **167** and **168** were found
+together on 2026-09-24 while tracing recurring help-indexing errors on `Friday`. **167**: a full
+re-embed synced help docs in the job child and keyed their chunks to a synthetic id, so the whole
+reindex batch rolled back on a foreign key. **168**: a help page longer than the embedding model's
+input was embedded whole, failed, and dropped out of help search; a page's vector is now the average
+of its sections'. **163** and **164** were found
 together on 2026-09-23 while explaining why a live `Friday` chat retitled three times had one story
 background. Both trace to the context-summary fold, which writes a fresh title after every pass.
 **163**: that write never cued the Lantern, because only the checkpoint title check queued a
@@ -1145,6 +1150,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 164 | [the summary fold overwrites a title the user set by hand](bugs/fixed/bug-164-fold-overwrites-manual-title.md) | 2026-09-23 | 2026-09-23 | **Medium** | `isManuallyRenamed` was honoured only by `handleTitleUpdate`. The fold called `generateTitleFromSummary` and wrote the result regardless, so a renamed chat (or a named autonomous room) lost its title at every fold | `applyAutoTitle` refuses a hand-renamed chat unless `clearManualRename` (the explicit Regenerate); the fold skips its title call up front | Not assessed |
 | 165 | [creating a character scenario returns an id that is never stored](bugs/fixed/bug-165-scenario-create-transient-id.md) | 2026-09-23 | 2026-09-23 | Low | `addScenario` returned the id `addToSubArray` minted, but a vault-backed character re-keys scenarios from their file path on read, so `POST /api/v1/characters/[id]/scenarios` handed back a dead id. The Scenario Builder could not select a scenario it had just saved to a character | `addScenario` re-reads and returns the projected entry | Not assessed |
 | 166 | [the workspace New Chat dialog never offers group scenarios](bugs/fixed/bug-166-modal-no-group-scenarios.md) | 2026-09-23 | 2026-09-23 | Low | `NewChatModal` never passed `useNewChat`'s `groupScenarios` to `NewChatForm`, so the workspace **Start Chat** picker had no group tier; `/salon/new` did | `components/new-chat/NewChatModal.tsx` | Not assessed |
+| 167 | [a full re-embed rolls back whenever a help doc has changed](bugs/fixed/bug-167-help-reindex-fk-rollback.md) | 2026-09-24 | 2026-09-24 | **High** | `syncHelpDocs` ran in the job child during `EMBEDDING_REINDEX_ALL` and keyed chunk rows to the id `upsertByPath` returned — a random synthetic id there. The parent's replay updated the real row, every chunk insert failed its foreign key, and the whole main-DB batch (every queued embedding job with it) rolled back; the job went DEAD | `lib/help/help-doc-sync.ts` takes ids from the table read or mints them for `create(fields, { id })`; `upsertByPath` removed | Not assessed |
+| 168 | [a long help page is too big to embed and drops out of help search](bugs/fixed/bug-168-help-doc-embed-overflow.md) | 2026-09-24 | 2026-09-24 | Medium | The HELP_DOC job embedded a whole page in one call; `chat-settings.md` passed OpenAI's 8,192-token ceiling, failed permanently, and was left with no vector, so `help_search` skipped it and its sections were never embedded | The document vector is the normalised mean of its section vectors (`averageEmbeddings`); `help-doc-size.test.ts` holds every section to 1,000 tokens | Not assessed |
 
 ### Families and reading order
 

@@ -7,11 +7,11 @@
 
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { EMBEDDING_MAX_CHARS, generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
+import { EMBEDDING_MAX_CHARS, averageEmbeddings, generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
 import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
-import { helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
+import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
@@ -320,80 +320,144 @@ async function handleConversationChunkEmbedding(
   }
 }
 
+/** One section of a help doc as the embedding pass sees it. */
+interface HelpDocSection {
+  /** Stored chunk row id; absent for a slice made on the fly (no rows yet). */
+  id?: string;
+  chunkIndex: number;
+  heading: string | null;
+  content: string;
+  embedding: Float32Array | null;
+}
+
 /**
- * Embed every section chunk of a help document that still lacks a vector.
+ * Give every section of a help document a vector, and return them.
  *
- * Chunks that already carry an embedding are skipped, which makes a retry of
- * a partially-completed job cheap: the rows are recreated with null embeddings
- * whenever the doc's content changes, and a full reindex clears them, so a
- * populated embedding is always current for its text.
+ * Sections are the stored `help_doc_chunks` rows. When a doc has none yet (a
+ * sync whose slicing has not landed), it is sliced here in memory so the
+ * document still gets a vector; those slices are not persisted — the next sync
+ * or backfill writes the rows.
  *
- * A single chunk's failure is logged and skipped rather than thrown. The
- * document's own embedding has already been stored by the caller, so the doc
- * stays findable at whole-document granularity; throwing here would fail a job
- * whose main work succeeded, and the next sync or reindex will retry the
- * stragglers.
+ * A stored vector is reused, which makes a retry cheap: rows are recreated with
+ * null embeddings whenever the doc's content changes and a full reindex clears
+ * them, so a populated vector is current for its text. A stored vector whose
+ * width differs from a freshly generated one belongs to an earlier profile and
+ * is re-embedded rather than averaged in.
  *
- * @returns the number of chunks embedded on this pass
+ * A single section's failure is logged and skipped; the rest still stand for
+ * the document. If every section fails, the last error is thrown so the job's
+ * permanent/transient handling decides what happens next.
+ *
+ * Vectors are collected in memory rather than re-read: in the job child the
+ * `updateEmbedding` writes are buffered, and a read would not see them.
  */
-async function embedHelpDocChunks(
+async function embedHelpDocSections(
   job: BackgroundJob,
   payload: EmbeddingGeneratePayload,
   repos: ReturnType<typeof getRepositories>,
-  doc: { id: string; title: string }
-): Promise<number> {
+  doc: { id: string; title: string; content: string }
+): Promise<{ vectors: Float32Array[]; embedded: number; reused: number; failed: number }> {
+  const stored = await repos.helpDocChunks.findByDocId(doc.id);
+  const sections: HelpDocSection[] = stored.length > 0
+    ? stored.map(chunk => ({
+      id: chunk.id,
+      chunkIndex: chunk.chunkIndex,
+      heading: chunk.heading ?? null,
+      content: chunk.content,
+      embedding: chunk.embedding && chunk.embedding.length > 0 ? chunk.embedding : null,
+    }))
+    : buildHelpDocChunks(doc.content).map(draft => ({ ...draft, embedding: null }));
+
+  logger.debug('[EmbeddingGenerate] Embedding help doc sections', {
+    context: 'handleEmbeddingGenerate',
+    jobId: job.id,
+    docId: doc.id,
+    sections: sections.length,
+    storedRows: stored.length,
+  });
+
   let embedded = 0;
+  let failed = 0;
+  let lastError: unknown = null;
 
-  try {
-    const chunks = await repos.helpDocChunks.findByDocId(doc.id);
-
-    for (const chunk of chunks) {
-      if (chunk.embedding && chunk.embedding.length > 0) {
-        continue;
-      }
-
-      const text = helpChunkEmbeddingText(doc.title, chunk.heading, chunk.content);
-      if (text.trim().length === 0) {
-        continue;
-      }
-
-      try {
-        const result = await generateEmbeddingForUser(
-          text,
-          job.userId,
-          payload.profileId,
-          { priority: 'background' }
-        );
-        await repos.helpDocChunks.updateEmbedding(chunk.id, result.embedding);
-        embedded++;
-      } catch (error) {
-        logger.warn('[EmbeddingGenerate] Help doc chunk embedding failed — skipping chunk', {
-          context: 'handleEmbeddingGenerate',
-          jobId: job.id,
-          docId: doc.id,
-          chunkId: chunk.id,
-          chunkIndex: chunk.chunkIndex,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+  const embedSection = async (section: HelpDocSection): Promise<void> => {
+    const text = helpChunkEmbeddingText(doc.title, section.heading, section.content);
+    if (text.trim().length === 0) {
+      return;
     }
-  } catch (error) {
-    logger.warn('[EmbeddingGenerate] Could not embed help doc chunks', {
-      context: 'handleEmbeddingGenerate',
-      jobId: job.id,
-      docId: doc.id,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    try {
+      const result = await generateEmbeddingForUser(
+        text,
+        job.userId,
+        payload.profileId,
+        { priority: 'background' }
+      );
+      section.embedding = result.embedding;
+      if (section.id) {
+        await repos.helpDocChunks.updateEmbedding(section.id, result.embedding);
+      }
+      embedded++;
+    } catch (error) {
+      failed++;
+      lastError = error;
+      section.embedding = null;
+      logger.warn('[EmbeddingGenerate] Help doc section embedding failed — skipping section', {
+        context: 'handleEmbeddingGenerate',
+        jobId: job.id,
+        docId: doc.id,
+        chunkId: section.id,
+        chunkIndex: section.chunkIndex,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const reusedAtStart = new Set(sections.filter(s => s.embedding));
+  for (const section of sections) {
+    if (!section.embedding) {
+      await embedSection(section);
+    }
   }
 
-  return embedded;
+  // Settle on the current profile's width: that of any fresh vector, else of
+  // the first reused one. Reused vectors of another width are re-embedded.
+  const fresh = sections.find(s => s.embedding && !reusedAtStart.has(s));
+  const width = (fresh ?? sections.find(s => s.embedding))?.embedding?.length;
+  if (width !== undefined) {
+    for (const section of sections) {
+      if (section.embedding && section.embedding.length !== width) {
+        reusedAtStart.delete(section);
+        await embedSection(section);
+      }
+    }
+  }
+
+  const vectors = sections
+    .map(s => s.embedding)
+    .filter((v): v is Float32Array => !!v && v.length === width);
+
+  if (vectors.length === 0 && lastError) {
+    throw lastError;
+  }
+
+  return {
+    vectors,
+    embedded,
+    reused: [...reusedAtStart].filter(s => s.embedding).length,
+    failed,
+  };
 }
 
 /**
  * Handle embedding generation for a help document.
- * Uses the same embedding infrastructure as memories but stores
- * the embedding directly on the help doc row (Float32 BLOB, same format),
- * then fills in the per-section chunk vectors.
+ *
+ * The document's own vector is the normalised mean of its section vectors
+ * ({@link averageEmbeddings}), never an embedding of the whole text. A help
+ * page can run past any provider's input ceiling — `chat-settings.md` passed
+ * OpenAI's 8,192 tokens and was left with no vector at all, and so invisible
+ * to `help_search` (bug 168) — while a section never can. Both vectors are
+ * stored on the parent process's connection via the same buffered writes as
+ * before (Float32 BLOB, same format as memories).
  */
 async function handleHelpDocEmbedding(
   job: BackgroundJob,
@@ -418,29 +482,30 @@ async function handleHelpDocEmbedding(
   }
 
   try {
-    const textToEmbed = `${doc.title}\n\n${doc.content}`;
-    if (await skipIfOversize(textToEmbed, 'HELP_DOC', payload, job, repos, {
-      docId: doc.id,
-      title: doc.title,
-    })) {
+    const sections = await embedHelpDocSections(job, payload, repos, doc);
+    const docEmbedding = averageEmbeddings(sections.vectors);
+
+    if (!docEmbedding) {
+      // No section had any text — the same deterministic dead end as an empty
+      // memory, so it is marked failed without a retry.
+      logger.warn('[EmbeddingGenerate] Skipping empty entity', {
+        context: 'handleEmbeddingGenerate',
+        jobId: job.id,
+        entityType: 'HELP_DOC',
+        entityId: doc.id,
+        title: doc.title,
+      });
+      await repos.embeddingStatus.markAsFailed(
+        'HELP_DOC',
+        payload.entityId,
+        payload.profileId,
+        'Empty input — nothing to embed',
+        job.userId
+      );
       return;
     }
-    const embeddingResult = await generateEmbeddingForUser(
-      textToEmbed,
-      job.userId,
-      payload.profileId,
-      { priority: 'background' }
-    );
 
-    await repos.helpDocs.updateEmbedding(doc.id, embeddingResult.embedding);
-
-    // Section-level vectors, in the same job as the whole-document one. Doing
-    // it here rather than through a HELP_DOC_CHUNK entity type of its own
-    // keeps one unit of work per document: the reindex enqueue, the
-    // embedding_status bookkeeping, and the dimension reconcile all continue
-    // to count help_docs rows, and chunks can never carry a dimension the
-    // parent doc doesn't — they are always written together.
-    const chunksEmbedded = await embedHelpDocChunks(job, payload, repos, doc);
+    await repos.helpDocs.updateEmbedding(doc.id, docEmbedding);
 
     await repos.embeddingStatus.markAsEmbedded(
       'HELP_DOC',
@@ -454,8 +519,11 @@ async function handleHelpDocEmbedding(
       jobId: job.id,
       docId: doc.id,
       title: doc.title,
-      dimensions: embeddingResult.dimensions,
-      chunksEmbedded,
+      dimensions: docEmbedding.length,
+      sectionsAveraged: sections.vectors.length,
+      sectionsEmbedded: sections.embedded,
+      sectionsReused: sections.reused,
+      sectionsFailed: sections.failed,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

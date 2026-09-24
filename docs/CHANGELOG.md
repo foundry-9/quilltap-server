@@ -66,6 +66,36 @@
 - Brahma's SQL prompt now tells the model that `chat_messages.content` (and the other
   compressed text columns) must be read through `qt_text()` and never compared bare.
 
+#### Fixed: help docs failed to index
+
+- Bug 167: `EMBEDDING_REINDEX_ALL` synced help docs in the job child, where `upsertByPath`
+  returned a random synthetic id. Section chunks were keyed to that id, failed the
+  `help_doc_chunks` foreign key on replay, and rolled back the job's entire main-DB batch
+  (including every embedding job it queued). The job then went DEAD. `syncHelpDocs` now uses the
+  existing row's id or mints one and passes it to `create(fields, { id })`. `upsertByPath` is
+  removed.
+- Bug 168: the `HELP_DOC` job embedded each page in one call, so pages over the provider's input
+  limit (`chat-settings.md` over OpenAI's 8,192 tokens) failed and dropped out of `help_search`.
+  A doc's vector is now the normalised mean of its section vectors (`averageEmbeddings` in
+  `lib/embedding/embedding-service.ts`). A failed section is skipped; the job fails only if every
+  section fails. A doc with no chunk rows yet is sliced in memory.
+- New test `__tests__/unit/lib/help/help-doc-size.test.ts` counts `cl100k_base` tokens (new
+  devDependency `js-tiktoken`) of every help section's embedding text and fails above
+  `HELP_SECTION_EMBEDDING_MAX_TOKENS` (1,000).
+- `help/chat-settings.md` split into `chat-settings.md`, `chat-settings-composer.md` and
+  `chat-settings-ai-services.md`. Links in other help files and the help Guide categories
+  updated.
+- Help docs are reconciled at every startup (`reconcileHelpDocs`, instrumentation Phase 3.66),
+  not only when the set of help file names changes: every file is compared by content hash,
+  edited pages are rewritten and re-sliced, pages with no sections are sliced (per page, not
+  "any rows at all"), and a `HELP_DOC` job is queued for every page missing its own vector or
+  any section vector. `ensureHelpDocsSynced` now waits on the same once-per-process run.
+  `backfillHelpDocChunks`, `helpDocsDivergeFromDisk` and
+  `HelpDocsRepository.findAllNeedingEmbedding` removed; `HelpDocChunksRepository.countByDoc`
+  added. Only help docs are re-embedded; affected instances recover on the next restart.
+- A content change now also clears the doc's `embedding_status` row, so a stale FAILED status
+  no longer keeps it out of a mismatched-dim reindex.
+
 #### Removed: `GET /api/v1/chats?action=has-dangerous`
 
 - The action had no callers after the `useHasDangerousChats` hook was removed. `GET

@@ -74,4 +74,4 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [Embedding Profiles](embedding-profiles.md) — Housekeeping's merge pass uses the same embeddings the gate uses
-- [Chat Settings](chat-settings.md) — Memory cascade preferences for message deletion
+- [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Memory cascade preferences for message deletion
