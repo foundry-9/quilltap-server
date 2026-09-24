@@ -125,6 +125,8 @@ interface ChatComposerProps {
    * Informational only — the gate itself lives in `useImpersonationVoice`.
    */
   voiceRehearsalArmed?: boolean
+  /** Character ids the `@` typeahead lists first — this chat's cast. */
+  mentionPriorityCharacterIds?: readonly string[]
 }
 
 export function ChatComposer({
@@ -177,6 +179,7 @@ export function ChatComposer({
   isTerminalModeActive,
   speakingAs,
   voiceRehearsalArmed = false,
+  mentionPriorityCharacterIds,
 }: ChatComposerProps) {
   // Every input surface in here is shut by either flag, so ask the question
   // once rather than at each control.
@@ -516,6 +519,7 @@ export function ChatComposer({
               onImagePaste={onImagePaste}
               documentEditingMode={documentEditingMode}
               disabled={composerLocked || !hasActiveCharacters}
+              mentionPriorityCharacterIds={mentionPriorityCharacterIds}
               placeholder={!hasActiveCharacters ? "Add a character to start chatting..." : attachedFiles.length > 0 ? "Add a message (optional)..." : ""}
             />
           </div>

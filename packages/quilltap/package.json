@@ -1,6 +1,6 @@
 {
   "name": "quilltap",
-  "version": "4.10.0-claude-brave-hawking-lavprk.50",
+  "version": "4.10.0-dev.70",
   "description": "Self-hosted AI workspace for writers, worldbuilders, and roleplayers. Run with npx quilltap.",
   "author": {
     "name": "Charles Sebold",
