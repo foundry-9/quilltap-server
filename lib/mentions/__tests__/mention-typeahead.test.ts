@@ -85,6 +85,14 @@ describe('classifyLineStartMention', () => {
     expect(classifyLineStartMention(line, 'Aristarchus')).toBe(verdict);
   });
 
+  it.each(['Jean-Luc', 'Zoë', "O'Neil", 'X'])(
+    'strips at once for %j, which the Carina parser cannot address',
+    (name) => {
+      expect(classifyLineStartMention(`@${name}`, name)).toBe('strip');
+      expect(classifyLineStartMention(`@${name}: hello`, name)).toBe('strip');
+    },
+  );
+
   it('handles names with interior spaces', () => {
     expect(classifyLineStartMention('@Lady Arabella: hello', 'Lady Arabella')).toBe('keep');
     expect(classifyLineStartMention('@Lady Arabella said', 'Lady Arabella')).toBe('strip');

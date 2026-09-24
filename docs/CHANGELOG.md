@@ -13,7 +13,9 @@
 - The completed text is the plain name with the `@` removed, except at the start of a line
   (top-level paragraph, or after a soft line break): there the `@` is kept only if the name is
   followed by `:` or `?` and whitespace (a Carina / Brahma query); anything else removes it in
-  an update merged into the same undo step.
+  an update merged into the same undo step. Names the Carina parser cannot address (hyphen,
+  apostrophe, non-ASCII, single character) drop the `@` immediately; the parser's name grammar
+  is now exported as `isCarinaInvocableName` (`lib/chat/carina-parser.ts`) and shared.
 - New `MentionTypeaheadPlugin` and pure logic in `lib/mentions/mention-typeahead.ts`.
   `$textBeforeCursor` / `$isGluedToPreviousRun` moved from `CharTypeaheadPlugin` into
   `components/chat/lexical/typeahead/trigger-context.ts` so both typeaheads share them.

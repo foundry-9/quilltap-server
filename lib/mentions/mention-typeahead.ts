@@ -21,6 +21,7 @@
  * @module lib/mentions/mention-typeahead
  */
 
+import { isCarinaInvocableName } from '@/lib/chat/carina-parser';
 import { findTrigger } from '@/lib/char-insert/trigger';
 import type { TriggerConfig, TriggerMatch } from '@/lib/char-insert/types';
 
@@ -109,15 +110,28 @@ export function rankMentionCandidates<T extends MentionCandidate>(
  *
  * - `pending` — undecided: nothing typed yet, or only the `:` / `?` separator.
  * - `keep`    — `@Name:` or `@Name?` followed by whitespace: a Carina query.
- * - `strip`   — anything else followed the name: drop the `@`.
+ * - `strip`   — anything else followed the name, or the name is one the
+ *               Carina parser cannot address: drop the `@`.
  * - `abandon` — the line no longer starts with `@Name` (edited, deleted,
  *               undone): leave it alone and stop watching.
  */
+/**
+ * Whether a line-start completion of `name` should keep its `@` pending a
+ * verdict — only when `@name:` could actually be parsed as a Carina query
+ * (`isCarinaInvocableName`, the parser's own name grammar). `Jean-Luc`, `Zoë`
+ * or a one-letter name drop the `@` at once, as they would mid-line.
+ */
+export function canKeepLineStartAt(name: string): boolean {
+  return isCarinaInvocableName(name);
+}
+
 export type LineStartMentionVerdict = 'pending' | 'keep' | 'strip' | 'abandon';
 
 export function classifyLineStartMention(line: string, name: string): LineStartMentionVerdict {
   const head = `@${name}`;
   if (!line.startsWith(head)) return 'abandon';
+  // A name the Carina parser cannot address never earns a kept `@`.
+  if (!canKeepLineStartAt(name)) return 'strip';
 
   const rest = line.slice(head.length);
   if (rest.length === 0) return 'pending';

@@ -44,6 +44,7 @@ const CHARACTERS = [
   { id: 'c-aris', name: 'Aristarchus', title: 'the astronomer' },
   { id: 'c-arab', name: 'Arabella' },
   { id: 'c-barn', name: 'Barnaby' },
+  { id: 'c-jean', name: 'Jean-Luc' },
 ]
 
 beforeAll(() => {
@@ -141,7 +142,7 @@ describe('MentionTypeaheadPlugin', () => {
     it('opens on a bare @ with every character', async () => {
       const editor = mount()
       await openMenu(editor, 'hello @')
-      expect(screen.queryAllByRole('option')).toHaveLength(3)
+      expect(screen.queryAllByRole('option')).toHaveLength(CHARACTERS.length)
     })
 
     it('narrows as the writer types', async () => {
@@ -196,6 +197,13 @@ describe('MentionTypeaheadPlugin', () => {
       const { defaultPrevented } = pressKey(editor, ' ')
       expect(defaultPrevented).toBe(false)
       expect(readText(editor)).toBe('meet me @')
+
+      // Not consumed, so the browser inserts the space itself — apply it the
+      // way the editor would and confirm nothing else happens to the text.
+      type(editor, ' ')
+      await settle()
+      expect(readText(editor)).toBe('meet me @ ')
+      expect(screen.queryAllByRole('option')).toHaveLength(0)
     })
   })
 
@@ -243,6 +251,13 @@ describe('MentionTypeaheadPlugin', () => {
       await openMenu(editor, '@ari')
       pressKey(editor, ' ')
       expect(readText(editor)).toBe('Aristarchus ')
+    })
+
+    it('drops the @ at once for a name the Carina parser cannot address', async () => {
+      const editor = mount()
+      await openMenu(editor, '@jea')
+      press(editor, KEY_ENTER_COMMAND)
+      expect(readText(editor)).toBe('Jean-Luc')
     })
 
     it('treats the line after a soft break as a line start', async () => {

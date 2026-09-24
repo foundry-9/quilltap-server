@@ -49,6 +49,7 @@ import {
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import {
+  canKeepLineStartAt,
   classifyLineStartMention,
   findMentionTrigger,
   rankMentionCandidates,
@@ -246,8 +247,9 @@ export function MentionTypeaheadPlugin({
         const lineStart = $lineStartOf(nodeToReplace)
 
         // `@Name ` can never become a Carina query, so a Space commit drops the
-        // `@` even at the start of a line.
-        if (lineStart && !withSpace) {
+        // `@` even at the start of a line — as does a name the Carina parser
+        // cannot address (`Jean-Luc`, `Zoë`).
+        if (lineStart && !withSpace && canKeepLineStartAt(name)) {
           $insertTypeaheadText(nodeToReplace, `@${name}`, { trailingSpace: false })
           pendingRef.current = {
             paragraphKey: lineStart.paragraph.getKey(),
