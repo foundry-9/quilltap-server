@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Changed: `GET /api/v1/chats/[id]` dispatches `?action=` through `dispatchAction`
+
+- The handler's hand-written `if (action === '…')` ladder is gone. Every GET action
+  (`export`, `export-markdown`, `get-avatars`, `get-state`, `outfit`, `outfit-summary`,
+  `photo-albums`, `informs`, `group-stores`, `mailbox`, `accessible-stores`, `get-background`,
+  `gallery`, `cost`) is a registered key; an unknown or empty `?action=` now returns 400 with
+  `availableActions` instead of falling through to the chat body. No action's response changed.
+- This is the follow-up the "one `?action=` dispatcher" entry below left open; the handler
+  now calls the same `dispatchAction` primitive as every other route.
+- `get-background` moved to `handleGetStoryBackground` in
+  `app/api/v1/chats/[id]/actions/story-background.ts`, beside `regenerate-background`.
+
 #### Changed: one `?action=` dispatcher for every API route
 
 - New `dispatchAction(req, thunks, fallback?)` in `lib/api/middleware/actions.ts`, and
@@ -28,8 +40,8 @@
   route headers had advertised `get-mount-point` / `set-mount-point` / `clear-mount-point`
   and `stores` / `linkStore` / `unlinkStore` actions that never existed; those lines are
   removed (group stores live under `/api/v1/groups/[id]/mount-points`).
-- `GET /api/v1/chats/[id]` still reads its actions inline; its default is a harmless read
-  and it is left for a follow-up.
+- `GET /api/v1/chats/[id]` was left reading its actions inline here; the entry above
+  converts it.
 - `withActionDispatch` now treats a bare `?action=` as an unknown action (400) instead of
   routing it to the default handler.
 - `POST /api/v1/chats/[id]/files` responses go through `successResponse` and one shared
