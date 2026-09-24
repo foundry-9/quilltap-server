@@ -150,7 +150,7 @@ export function useImpersonation({
   const handleSetActiveSpeaker = useCallback(async (participantId: string) => {
     try {
       const res = await fetch(`/api/v1/chats/${chatId}?action=set-active-speaker`, {
-        method: 'PUT',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantId }),
       })

@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Fixed: switching the Salon's "speaking as" seat raised "Unknown action" (bug 170)
+
+- `useImpersonation.handleSetActiveSpeaker` sent `?action=set-active-speaker` as PUT; the chat
+  route serves it on POST only. Before the single `?action=` dispatcher the PUT fell through to a
+  no-op chat update, so the switch showed in the composer but never persisted server-side. After
+  it, the request was a 400. It now sends POST. Regression test added.
+
 #### Fixed: narrow-pane chat sidebar closed the Scenario Builder on first click (bug 169)
 
 - When the Salon pane is narrower than 640 px the chat sidebar is an overlay that collapses on
