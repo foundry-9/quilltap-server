@@ -53,6 +53,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   nudge: 'invited to speak',
   timestamp: 'time',
   refusal: 'provider refusal',
+  'background-refused': 'backdrop refused',
 }
 
 export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
@@ -87,6 +88,7 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       return 'announcement'
     case 'lantern':
       if (c.includes('projected a new backdrop')) return 'background'
+      if (c.includes('would not take the scene')) return 'background-refused'
       if (c.includes('acting upon the instructions of')) return 'character-image'
       return 'image'
     case 'aurora':
@@ -289,7 +291,7 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     '*': 'medium',
   },
   concierge: { danger: 'high', refusal: 'high', '*': 'high' },
-  lantern: { background: 'medium', 'character-image': 'medium', image: 'medium', '*': 'medium' },
+  lantern: { background: 'medium', 'background-refused': 'high', 'character-image': 'medium', image: 'medium', '*': 'medium' },
   aurora: { avatar: 'medium', 'outfit-change': 'medium', 'opening-outfit': 'medium', wardrobe: 'medium', '*': 'medium' },
   ariel: { 'session-opened': 'medium', 'session-closed': 'medium', terminal: 'medium', '*': 'medium' },
   prospero: {

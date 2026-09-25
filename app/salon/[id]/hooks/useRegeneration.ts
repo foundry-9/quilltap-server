@@ -30,6 +30,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { showErrorToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import { parseSSEData, type ResponseStatus } from './useSSEStreaming'
+import { describeRetryRefusal } from '../concierge-retry'
 
 /** What the message row needs to render a line that is being re-rolled. */
 export interface RegenerationState {
@@ -64,7 +65,16 @@ export interface RegenerationController {
      * one, because reconciliation carries their previous swipe selection.
      */
     selectSwipeVariant?: (messageId: string) => void,
+    options?: RegenerateOptions,
   ) => Promise<void>
+}
+
+export interface RegenerateOptions {
+  /**
+   * Stream from this endpoint instead of the ordinary swipe. The Concierge's
+   * "Try uncensored" uses it: same narration, same swipe, a different desk.
+   */
+  url?: string
 }
 
 export function useRegeneration(): RegenerationController {
@@ -105,6 +115,7 @@ export function useRegeneration(): RegenerationController {
     messageId: string,
     fetchChat: () => Promise<void>,
     selectSwipeVariant?: (messageId: string) => void,
+    options?: RegenerateOptions,
   ) => {
     if (inFlightRef.current) return
     inFlightRef.current = true
@@ -114,14 +125,16 @@ export function useRegeneration(): RegenerationController {
     setRegenerationStatus({ stage: 'regenerating', message: 'Regenerating...' })
 
     try {
-      const res = await fetch(`/api/v1/messages/${messageId}?action=swipe&stream=1`, {
+      const res = await fetch(options?.url ?? `/api/v1/messages/${messageId}?action=swipe&stream=1`, {
         method: 'POST',
       })
 
       if (!res.ok) {
-        // The stream never opened, so the body is an ordinary JSON error.
+        // The stream never opened, so the body is an ordinary JSON error. A
+        // 409 is the Concierge declining a "Try uncensored" — say why in words.
         const info = await res.json().catch(() => null)
-        throw new Error(info?.error || 'Failed to generate alternative response')
+        const refusal = res.status === 409 ? describeRetryRefusal(info?.error) : null
+        throw new Error(refusal || info?.error || 'Failed to generate alternative response')
       }
 
       const reader = res.body?.getReader()

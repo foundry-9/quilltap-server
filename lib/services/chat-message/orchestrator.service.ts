@@ -548,7 +548,12 @@ async function processMessage(
     encoder,
   })
 
-  let dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
+  const dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
+  // Flagged by the pre-screen, or headed straight for the uncensored desk on an
+  // Unmoderated chat (which writes no per-message flags): either way the
+  // failover service reads an empty body as a refusal and clears stand-ins
+  // for the content.
+  const contentTreatedAsDangerous = (dangerFlags?.length ?? 0) > 0 || dangerState.routedDirect
   const conciergePolicy = dangerState.conciergePolicy
 
   // Mutable streaming state — threaded through failover and finalization by reference
@@ -1485,7 +1490,7 @@ async function processMessage(
     // stand-in must be cleared for it, or the fallback would hand the content
     // straight back to the moderation that refused it.
     isDangerousRouted:
-      (dangerFlags?.length ?? 0) > 0 || streamingState.effectiveProfile.id !== connectionProfile.id,
+      contentTreatedAsDangerous || streamingState.effectiveProfile.id !== connectionProfile.id,
     conciergePolicy,
     streaming: streamingState,
     controller,
@@ -1620,7 +1625,7 @@ async function processMessage(
     })
   }
 
-  const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
+  const contentWasFlaggedDangerous = contentTreatedAsDangerous
   const { uncensoredRetryAttempted, sameProviderRetryAttempted, chainAttempts } =
     await attemptEmptyResponseRecovery({
       state: streamingState,

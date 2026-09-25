@@ -2,7 +2,7 @@
  * Chat Message Danger Orchestrator Service
  *
  * Resolves the Concierge policy for the chat, optionally pre-screens the current
- * user message, synthesizes message flags for Unmoderated chats, and routes to
+ * user message (flagging it when the pre-screen finds it dangerous), and routes to
  * the uncensored desk when the policy says so (an Unmoderated chat routes
  * direct; a Moderated chat's pre-screen flag reroutes when failover is allowed).
  */
@@ -71,19 +71,16 @@ export async function resolveMessageDangerState({
   })
 
   // Unmoderated chat: straight to the uncensored desk, no pre-screen needed.
+  //
+  // No per-message flags are written here. The chat's route is already decided
+  // by its state, so a badge on every user message would say nothing the
+  // header pill and the assistant row's route trail do not already say (the
+  // orchestrator tags the turn `routeVia: 'concierge'` when the profile was
+  // swapped). `routedDirect` carries the one thing the flags used to carry for
+  // the failover service: this turn's content is headed for the uncensored
+  // desk, so an empty body reads as a refusal and a stand-in must be cleared
+  // for it.
   if (conciergePolicy.routeDirect && !isContinueMode && content) {
-
-    const categories = chat.dangerCategories && chat.dangerCategories.length > 0
-      ? chat.dangerCategories
-      : ['unspecified']
-
-    dangerFlags = categories.map(cat => ({
-      category: cat,
-      score: 1.0,
-      userOverridden: false,
-      wasRerouted: false,
-    }))
-
     if (!effectiveProfile.isDangerousCompatible) {
       const routeResult = await resolveProviderForDangerousContent(
         effectiveProfile,
@@ -95,8 +92,6 @@ export async function resolveMessageDangerState({
       if (routeResult.rerouted) {
         effectiveProfile = routeResult.connectionProfile
         effectiveApiKey = routeResult.apiKey
-
-        dangerFlags = markFlagsAsRerouted(dangerFlags, routeResult.connectionProfile.provider, routeResult.connectionProfile.modelName)
 
         logger.info('[DangerousContent] Rerouted to uncensored provider (Unmoderated chat)', {
           chatId,
@@ -118,7 +113,8 @@ export async function resolveMessageDangerState({
 
     return {
       conciergePolicy,
-      dangerFlags,
+      dangerFlags: undefined,
+      routedDirect: true,
       effectiveProfile,
       effectiveApiKey,
     }
@@ -219,6 +215,7 @@ export async function resolveMessageDangerState({
   return {
     conciergePolicy,
     dangerFlags,
+    routedDirect: false,
     effectiveProfile,
     effectiveApiKey,
   }

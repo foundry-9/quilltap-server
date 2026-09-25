@@ -14,13 +14,7 @@ import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware
 import { badRequest, notFound, serverError, successResponse, created } from '@/lib/api/responses';
 import {
   regenerateMessageAsSwipe,
-  encodeContentChunk,
-  encodeReasoningChunk,
-  encodeStatusEvent,
-  encodeErrorEvent,
-  safeClose,
-  safeEnqueue,
-  sseStreamResponse,
+  streamSwipeRegeneration,
 } from '@/lib/services/chat-message';
 import { deleteMemoriesBySourceMessagesWithVectors, deleteMemoryWithVector } from '@/lib/memory/memory-service';
 import { invalidateContextSummaryIfMessageCovered } from '@/lib/chat/context-summary';
@@ -314,56 +308,19 @@ async function handleGenerateSwipeStreaming(
   if (!target.ok) return target.response;
   const { result } = target;
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        const newSwipe = await regenerateMessageAsSwipe({
-          repos,
-          userId,
-          chat: result.chat,
-          targetMessage: result.message,
-          allMessages: result.allMessages.filter(
-            (m): m is MessageEvent => m.type === 'message'
-          ),
-          activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
-          onProgress: (event) => {
-            if (event.kind === 'status') {
-              safeEnqueue(controller, encodeStatusEvent(encoder, event));
-            } else if (event.kind === 'delta') {
-              safeEnqueue(controller, encodeContentChunk(encoder, event.content));
-            } else {
-              safeEnqueue(controller, encodeReasoningChunk(encoder, event.reasoning));
-            }
-          },
-        });
-
-        safeEnqueue(
-          controller,
-          encoder.encode(`data: ${JSON.stringify({ done: true, message: newSwipe })}\n\n`)
-        );
-      } catch (error) {
-        logger.error(
-          '[Messages API v1] Streaming swipe generation failed',
-          { messageId, chatId: result.chat.id },
-          error instanceof Error ? error : undefined
-        );
-        safeEnqueue(
-          controller,
-          encodeErrorEvent(
-            encoder,
-            'Failed to generate alternative response',
-            'regenerate_failed',
-            error instanceof Error ? error.message : String(error)
-          )
-        );
-      } finally {
-        safeClose(controller);
-      }
+  return streamSwipeRegeneration(
+    {
+      repos,
+      userId,
+      chat: result.chat,
+      targetMessage: result.message,
+      allMessages: result.allMessages.filter(
+        (m): m is MessageEvent => m.type === 'message'
+      ),
+      activeUserParticipantId: result.chat.activeTypingParticipantId ?? null,
     },
-  });
-
-  return sseStreamResponse(stream);
+    '[Messages API v1]'
+  );
 }
 
 async function handleGenerateSwipe(

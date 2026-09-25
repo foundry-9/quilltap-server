@@ -55,6 +55,13 @@ interface ToolMessageProps {
    *  `qt-chat-tool-embedded`. Used by MessageRow for character-initiated tool
    *  calls so they read as separate paragraphs under the character's prose. */
   readonly embedded?: boolean
+  /**
+   * The Concierge's "Try uncensored": redraw this `generate_image` picture on
+   * the uncensored desk. Absent on a Locked chat (and for every other tool),
+   * which hides the button. Offered on refused, failed and delivered pictures
+   * alike — a sanitized picture is a refusal no detector can see.
+   */
+  readonly onTryUncensored?: (toolMessageId: string) => void
 }
 
 interface ToolResult {
@@ -213,7 +220,7 @@ function formatResultContent(toolData: ToolResult): string {
   }
 }
 
-export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar, embedded = false }: ToolMessageProps) {
+export default function ToolMessage({ message, character, onImageClick, onAttachmentDeleted, headerAvatar, embedded = false, onTryUncensored }: ToolMessageProps) {
   const [showRequest, setShowRequest] = useState(false)
   const [showResponse, setShowResponse] = useState(false)
   const [missingImages, setMissingImages] = useState<Set<string>>(new Set())
@@ -484,6 +491,18 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
             <div className="mt-1 flex items-center gap-2 qt-text-label-xs" aria-label="Image profiles tried">
               <span>Tried:</span>
               <RouteTrailBadge routeTrail={message.routeTrail} size="xs" />
+            </div>
+          )}
+
+          {onTryUncensored && toolData.toolName === 'generate_image' && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => onTryUncensored(message.id)}
+                className="qt-button qt-button-secondary qt-button-sm"
+              >
+                Try uncensored
+              </button>
             </div>
           )}
 

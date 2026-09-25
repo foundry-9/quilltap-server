@@ -4,6 +4,48 @@
 
 ### 4.10-dev
 
+#### Added: Salon polish for the Concierge (Concierge overhaul, phase 5)
+
+- **Try uncensored, text.** New action `POST /api/v1/chats/[id]/messages/[messageId]?action=retry-uncensored`
+  (`&stream=1` for the regeneration's SSE narration). Regenerates the assistant message as a new
+  swipe on the Concierge's uncensored understudy (`resolveUncensoredTextUnderstudy`, excluding the
+  responder's profile and every profile on the original's trail). Same inform semantics as a
+  swipe. The new swipe's `routeTrail` keeps the original's failed/refused rows and ends on the
+  understudy with `via: 'concierge'`. Returns `409 { error: 'locked' }` on a Locked chat and
+  `409 { error: 'no-understudy' }` when nobody can take it. Never changes the chat's state. Off
+  duty does not block it (it is the operator's request, not the Concierge's).
+- **Try uncensored, pictures.** New action `POST /api/v1/chats/[id]?action=retry-image-uncensored`.
+  Body `{ toolMessageId }` re-runs a `generate_image` call's arguments on the uncensored image
+  understudy and posts a new TOOL message 1 ms after the original (so it sits beside it) with the
+  images and a trail via `'concierge'`; the Concierge posts `refusal-rerouted` when the original
+  had a refused row. Body `{ kind: 'background' }` queues a story background with the new payload
+  field `forceUncensored`, which paints on the understudy (candid prompt) and abandons quietly if
+  the chat was Locked or the understudy vanished before the job ran. Same `409` codes.
+- `regenerateMessageAsSwipe` accepts `profileOverride` and `routeTrail`; the swipe SSE transport
+  moved to `streamSwipeRegeneration` (`lib/services/chat-message/regenerate-swipe-stream.ts`),
+  shared by both routes. `ImageToolExecutionContext.primaryVia` labels a pre-chosen profile.
+  Retry gate and lookups live in `lib/services/dangerous-content/retry-uncensored.ts`.
+- Salon: a shield icon ("Try uncensored") on character lines' action bars, a "Try uncensored"
+  button on `generate_image` tool blocks and on the Lantern's refused-backdrop bubble. All hidden
+  on Locked chats. A 409 toasts the reason.
+- **"Not Dangerous" clears the blur.** `MessageRow` blurs/collapses only while some flag is not
+  overridden; overridden chips stay, struck through. The row's memo now notices the override.
+- **The Lantern's refusals reach the chat.** When the painter refuses a story background and no
+  understudy answers (none, Locked, off duty, or the understudy failed too), the job posts a
+  Lantern bubble (`systemSender: 'lantern'`, `systemKind: 'background-refused'`, trail attached,
+  not gated by the image-alert setting) and **completes** instead of failing. The Concierge's own
+  `refusal-no-understudy` / `refusal-not-permitted` bubble is not posted for the Lantern (new
+  chokepoint option `announceUnresolvedRefusal: false`).
+- **No synthesised flags on Unmoderated chats.** The danger orchestrator no longer writes
+  `dangerFlags` (or the "Rerouted" chip) on every user message of an Unmoderated chat; the route
+  trail's `via: 'concierge'` carries the reroute. A new `routedDirect` flag on the orchestrator's
+  result keeps such turns treated as dangerous by the empty-body recovery and fallback chain, as
+  the flags used to. The spec's `resolvedDisplay` field on `GET /api/v1/chats/[id]` was not added:
+  phase 4 already resolves the chat's display on the client (`resolveConciergeSettings(...).display`).
+- The spec's `conciergeMeta` bubble field was not added (it would have needed a column): the
+  Lantern bubble is recognised by its `systemKind`, and the picture retry lives on the TOOL block,
+  which exists by the time the operator can press it (the Concierge's bubble is posted before it).
+
 #### Changed: the Concierge's own Settings tab (Concierge overhaul, phase 4)
 
 - New Settings tab **The Concierge** (`/settings?tab=concierge`) with five cards: On duty

@@ -185,6 +185,27 @@ describe('generateImageWithConciergeFailover', () => {
     expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-no-understudy' }))
   })
 
+  it('stays silent on an unresolved refusal when the caller reports it itself (the Lantern)', async () => {
+    mockResolve.mockResolvedValue(null as never)
+    const attempt = jest.fn(async () => { throw refusal() })
+    await expect(generateImageWithConciergeFailover(
+      { profile: PRIMARY, apiKey: 'k' },
+      attempt,
+      { ...ctx(), announceUnresolvedRefusal: false },
+    )).rejects.toThrow('Gemini image blocked')
+    expect(mockAnnounce).not.toHaveBeenCalled()
+  })
+
+  it('stays silent on a Locked refusal when the caller reports it itself', async () => {
+    const attempt = jest.fn(async () => { throw refusal() })
+    await expect(generateImageWithConciergeFailover(
+      { profile: PRIMARY, apiKey: 'k' },
+      attempt,
+      { ...ctx(), chat: { conciergeMode: 'locked' }, announceUnresolvedRefusal: false },
+    )).rejects.toThrow('Gemini image blocked')
+    expect(mockAnnounce).not.toHaveBeenCalled()
+  })
+
   it('refused, understudy answers → rerouted, two-entry trail, refusal-rerouted', async () => {
     const attempt = jest.fn(async (profile: ImageProfile, key: string) => {
       if (profile.id === PRIMARY.id) throw refusal()

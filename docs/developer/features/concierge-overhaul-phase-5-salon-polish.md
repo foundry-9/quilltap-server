@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 5: Salon Polish
 
-**Status:** Proposed (4.10-dev, 2026-09-25)
+**Status:** Implemented (4.10-dev, 2026-09-25)
 **Scope:** quilltap-server Salon UI and two chat actions. No migration, no settings change, no plugin or package change.
 **Prerequisites:** [Phase 1](concierge-overhaul-phase-1-refusal-failover.md) landed (`generateImageWithConciergeFailover`, `resolveUncensored*Understudy`, image route trails, the refusal announcements). Phases 2–4 are **not** required; where this spec names a three-state value it also gives the four-state equivalent so it can ship before phase 3.
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 5 of 5).
@@ -94,3 +94,20 @@ Two changes:
 - `docs/developer/API.md`: both actions and `resolvedDisplay`.
 - `lib/chat/staff-display-names.ts`: no new sender; `system-message-labels.ts`: label for `background-refused`.
 - `.claude/commands/update-documentation.md`: catalog row.
+
+## As built (2026-09-25)
+
+Where the shipped code departs from, or settles a question left open by, the plan above:
+
+- **There is no refused-turn placard row.** An empty turn saves no assistant message (the `emptyResponse` done event is a toast), so there is nothing for a placard button to sit on. "Try uncensored" for text is instead a shield icon in the action bar of every character line (hidden on Locked chats). That also covers the soft refusal — a polite paragraph — which is the case the button is most needed for. A hard refusal with an understudy available is already rerouted by the failover service.
+- **The text retry is a swipe, not an orchestrator turn.** Regeneration runs through `regenerateMessageAsSwipe`, not the orchestrator, so there is no `forceUncensoredRoute` orchestrator option. The action resolves the understudy up front (`resolveTextRetryUnderstudy`, `lib/services/dangerous-content/retry-uncensored.ts`), so a 409 is returned before any stream opens, and hands it to the swipe as `profileOverride` with a composed `routeTrail`. The swipe's SSE transport moved to `streamSwipeRegeneration` so the ordinary swipe and the retry share it; the client reuses `useRegeneration` with a `url` override.
+- **Excluded from the understudy lookup:** the responder's own connection profile and every profile on the target's trail (text); the chat's image profile and every image profile on the TOOL message's trail (pictures).
+- **Off duty does not block the retry.** Off duty stops the Concierge acting on his own; this is the operator's explicit request. Only Locked blocks it (server-side too: `409 locked`).
+- **The retry's trail is never NULL.** It carries the original's refused/failed rows and ends on the understudy with `via: 'concierge'`, so the badge shows the retry even when the understudy answered first time (`composeRetryRouteTrail`).
+- **The picture retry reads its arguments from the TOOL message** (the persisted content JSON carries `arguments`), not from the preceding assistant's `toolCalls`, and does not go through `validateAndLoadProfile`: the understudy's id becomes the tool context's `profileId`, and a new `ImageToolExecutionContext.primaryVia` labels it `'concierge'`. The new TOOL message is filed 1 ms after the original so it renders beside it. `refusal-rerouted` is posted only when the original trail has a refused row; a sanitized picture has no refuser to name.
+- **No `conciergeMeta` field.** It would have needed a `chat_messages` column (the spec also says "no migration"). The Lantern bubble is recognised by `systemSender: 'lantern'` + `systemKind: 'background-refused'`, and the Concierge's `refusal-*` bubbles for `generate_image` are posted before the TOOL message exists, so the retry lives on the TOOL block instead.
+- **The Lantern's refusal bubble is not gated by the image-alert setting** — it is a report to the operator, not a picture shown to the cast. It is posted whenever the chokepoint rethrows with a refused row and no answered row (no understudy, Locked, off duty, or the understudy failed too). The chokepoint gained `announceUnresolvedRefusal: false` so the Concierge's `refusal-no-understudy` / `refusal-not-permitted` stays silent for the Lantern; `refusal-rerouted` still posts on a successful reroute.
+- **`forceUncensored` re-checks at run time.** The job repeats the gate (the chat may have been Locked, or the understudy removed, while it waited) and completes quietly if it fails. A forced backdrop's prompt is crafted candidly (`uncensoredImageTarget`), since it is bound for the uncensored desk.
+- **No `resolvedDisplay` on `GET /api/v1/chats/[id]`.** Phase 4 already computes the chat's display on the client with `resolveConciergeSettings(chatSettings, chat).display` (client-safe), which is what the field would have carried.
+- **Synthesised flags removed with a successor.** The flags also told the failover service that the turn's content was dangerous (an empty body reads as a refusal; stand-ins must be cleared). The danger orchestrator now returns `routedDirect`, and the orchestrator treats `dangerFlags.length > 0 || routedDirect` exactly as it treated the flags. The reroute itself was already recorded as `routeVia: 'concierge'`.
+- **`MessageRow`'s memo** now compares whether any flag is still standing, or an override would not re-render the row.

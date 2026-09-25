@@ -322,6 +322,12 @@ export interface ProcessMessageResult {
 export interface DangerResolutionResult {
   conciergePolicy: ResolvedConciergePolicy
   dangerFlags?: import('@/lib/schemas/chat.types').DangerFlag[]
+  /**
+   * The turn went the Unmoderated chat's direct route to the uncensored desk.
+   * Such a turn carries no per-message flags, but its content is treated as
+   * dangerous by the failover service exactly as flagged content is.
+   */
+  routedDirect: boolean
   effectiveProfile: ConnectionProfile
   effectiveApiKey: string
 }

@@ -193,6 +193,13 @@ export interface StoryBackgroundGenerationPayload {
   sceneContext?: string;
   /** Optional project ID if the chat belongs to a project */
   projectId?: string | null;
+  /**
+   * "Try uncensored": paint on the Concierge's uncensored understudy instead
+   * of `imageProfileId` (which is then only excluded from the lookup). Set by
+   * `POST /api/v1/chats/[id]?action=retry-image-uncensored` with
+   * `{ kind: 'background' }`. Never changes the chat's state.
+   */
+  forceUncensored?: boolean;
 }
 
 /**

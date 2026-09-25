@@ -36,6 +36,7 @@
  * POST /api/v1/chats/[id]?action=equip - Equip/unequip wardrobe item in a slot
  * POST /api/v1/chats/[id]?action=toggle-avatar-generation - Toggle avatar generation
  * POST /api/v1/chats/[id]?action=regenerate-avatar - Regenerate character avatar
+ * POST /api/v1/chats/[id]?action=retry-image-uncensored - Redraw a picture (or the story background) on the Concierge's uncensored desk
  * POST /api/v1/chats/[id]?action=render-conversation - Queue Scriptorium render with full re-embed
  * POST /api/v1/chats/[id]?action=announcement - Post an ad-hoc announcement bubble
  * POST /api/v1/chats/[id]?action=scenario - Change (or clear) the chat's scenario mid-conversation

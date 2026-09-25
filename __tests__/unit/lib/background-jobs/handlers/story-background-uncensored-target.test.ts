@@ -33,7 +33,10 @@ import {
 } from '@/lib/memory/cheap-llm-tasks'
 import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
-import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer'
+import {
+  postLanternImageNotification,
+  postLanternRefusalNotification,
+} from '@/lib/services/lantern-notifications/writer'
 import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
 import {
   resolveCharacterAppearances,
@@ -89,6 +92,7 @@ jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
 }))
 jest.mock('@/lib/services/lantern-notifications/writer', () => ({
   postLanternImageNotification: jest.fn().mockResolvedValue(undefined),
+  postLanternRefusalNotification: jest.fn().mockResolvedValue(null),
 }))
 
 const USER = 'user-1'
@@ -126,6 +130,7 @@ const mockDeriveScene = jest.mocked(deriveSceneContext)
 const mockResolveReroute = jest.mocked(resolveUncensoredImageUnderstudy)
 const mockAnnounceRefusal = jest.mocked(postConciergeRefusalAnnouncement)
 const mockPostLantern = jest.mocked(postLanternImageNotification)
+const mockPostLanternRefusal = jest.mocked(postLanternRefusalNotification)
 const mockWriteLantern = jest.mocked(writeLanternBackgroundToMountStore)
 const mockResolveAppearances = jest.mocked(resolveCharacterAppearances)
 const mockSanitizeAppearances = jest.mocked(sanitizeAppearancesIfNeeded)
@@ -134,7 +139,7 @@ const SELECTION = {
   provider: 'openai', modelName: 'm', connectionProfileId: 'p1', isLocal: false,
 } as never
 
-function makeJob(characterIds: string[] = []) {
+function makeJob(characterIds: string[] = [], extra: Record<string, unknown> = {}) {
   return {
     id: 'job-1',
     userId: USER,
@@ -144,6 +149,7 @@ function makeJob(characterIds: string[] = []) {
       imageProfileId: 'profile-1',
       sceneContext: 'the morning after',
       projectId: null,
+      ...extra,
     },
   } as never
 }
@@ -440,7 +446,7 @@ describe('story-background handler — moderation reroute', () => {
     expect(repos.files.create.mock.calls[0][0]).toMatchObject({ generationModel: 'uncensored-model' })
   })
 
-  it('does not reroute while the Concierge is off duty, keeps even an Unmoderated chat\'s prompt concealed, and says why', async () => {
+  it('does not reroute while the Concierge is off duty, keeps even an Unmoderated chat\'s prompt concealed, and the Lantern says so', async () => {
     mockShouldUseUncensoredRoute.mockReturnValue(true)
     mockResolveDanger.mockReturnValue(policyFor('unmoderated', {
       enabled: false,
@@ -448,22 +454,61 @@ describe('story-background handler — moderation reroute', () => {
     }))
     rejectThenReroute()
 
-    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(/Image generation failed/)
+    // A refusal is an outcome: the job completes and the backdrop stays.
+    await handleStoryBackgroundGeneration(makeJob())
 
     expect(craftTargetFlag(0)).toBe(false)
     expect(mockResolveReroute).not.toHaveBeenCalled()
     expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+    expect(mockPostLanternRefusal).toHaveBeenCalledTimes(1)
+    expect(mockPostLantern).not.toHaveBeenCalled()
   })
 
-  it('fails the job, and says so, when there is no uncensored understudy', async () => {
+  it('completes the job with one Lantern refusal bubble, and no Concierge bubble, when there is no uncensored understudy', async () => {
     markDangerous(false)
     rejectThenReroute()
     mockResolveReroute.mockResolvedValue(null as never)
 
-    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(
-      /Image generation failed/,
-    )
-    expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-no-understudy' }))
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+    expect(mockPostLanternRefusal).toHaveBeenCalledTimes(1)
+    const bubble = mockPostLanternRefusal.mock.calls[0][0] as {
+      chatId: string
+      refusal: { kind: string }
+      routeTrail?: Array<{ outcome: string }>
+    }
+    expect(bubble.chatId).toBe(CHAT_ID)
+    expect(bubble.refusal.kind).toBe('background-refused')
+    expect(bubble.routeTrail?.map(a => a.outcome)).toEqual(['refused'])
+    // No new backdrop was set.
+    const repos = mockGetRepositories() as never as { chats: { update: jest.Mock } }
+    expect(repos.chats.update).not.toHaveBeenCalledWith(CHAT_ID, expect.objectContaining({ storyBackgroundImageId: expect.anything() }))
+  })
+
+  it('"Try uncensored" paints on the understudy first, crafts candidly, and marks the trail via the Concierge', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
+
+    await handleStoryBackgroundGeneration(makeJob([], { forceUncensored: true }))
+
+    expect(mockResolveReroute).toHaveBeenCalledWith(expect.objectContaining({ exclude: ['profile-1'] }))
+    expect(craftTargetFlag(0)).toBe(true)
+    expect(mockCreateImageProvider).toHaveBeenCalledTimes(1)
+    const [, key] = imageProviderMock().generateImage.mock.calls[0] as [unknown, string]
+    expect(key).toBe('sk-uncensored')
+    const lanternCall = mockPostLantern.mock.calls[0][0] as { routeTrail?: Array<{ via: string; outcome: string }> }
+    expect(lanternCall.routeTrail).toEqual([expect.objectContaining({ via: 'concierge', outcome: 'answered', profileId: UNCENSORED.id })])
+  })
+
+  it('"Try uncensored" abandons quietly when there is no understudy at run time', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
+    mockResolveReroute.mockResolvedValue(null as never)
+
+    await handleStoryBackgroundGeneration(makeJob([], { forceUncensored: true }))
+
+    expect(mockCreateImageProvider).not.toHaveBeenCalled()
+    expect(mockCraftPrompt).not.toHaveBeenCalled()
   })
 
   it('resends the already-candid prompt for an Unmoderated chat, without re-crafting', async () => {

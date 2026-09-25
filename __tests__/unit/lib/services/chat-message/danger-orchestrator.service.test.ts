@@ -100,7 +100,7 @@ describe('danger-orchestrator.service', () => {
     expect(providerRoutingService.resolveProviderForDangerousContent).not.toHaveBeenCalled()
   })
 
-  it('synthesizes flags for Unmoderated chats and routes them direct to the uncensored desk', async () => {
+  it('routes Unmoderated chats direct to the uncensored desk without synthesizing flags', async () => {
     const uncensoredProfile = {
       id: 'profile-2',
       name: 'Uncensored',
@@ -134,14 +134,9 @@ describe('danger-orchestrator.service', () => {
 
     expect(result.effectiveProfile).toEqual(uncensoredProfile)
     expect(result.effectiveApiKey).toBe('sk-uncensored')
-    expect(result.dangerFlags).toEqual([
-      expect.objectContaining({
-        category: 'nsfw',
-        wasRerouted: true,
-        reroutedProvider: 'LOCAL',
-        reroutedModel: 'llama-uncensored',
-      }),
-    ])
+    // No per-message flags on an Unmoderated chat: the route trail carries it.
+    expect(result.dangerFlags).toBeUndefined()
+    expect(result.routedDirect).toBe(true)
     expect(result.conciergePolicy.routeDirect).toBe(true)
     expect(providerRoutingService.resolveProviderForDangerousContent).toHaveBeenCalledWith(
       baseProfile,
@@ -150,6 +145,31 @@ describe('danger-orchestrator.service', () => {
       'user-1',
     )
     expect(gatekeeperService.classifyContent).not.toHaveBeenCalled()
+  })
+
+  it('marks an Unmoderated turn as routed direct even when the profile is already uncensored-compatible', async () => {
+    const compatibleProfile = { ...baseProfile, isDangerousCompatible: true }
+
+    const result = await resolveMessageDangerState({
+      repos: { chats: { addMessage: jest.fn() } } as any,
+      chatId: 'chat-1',
+      userId: 'user-1',
+      chat: { conciergeMode: 'unmoderated', isDangerousChat: true } as any,
+      chatSettings: conciergeOn(),
+      character: { id: 'char-1', name: 'Alice' } as any,
+      isContinueMode: false,
+      content: 'dangerous request',
+      cheapLLMSelection: null,
+      connectionProfile: compatibleProfile as any,
+      apiKey: 'sk-safe',
+      controller,
+      encoder,
+    })
+
+    expect(result.effectiveProfile).toBe(compatibleProfile)
+    expect(result.dangerFlags).toBeUndefined()
+    expect(result.routedDirect).toBe(true)
+    expect(providerRoutingService.resolveProviderForDangerousContent).not.toHaveBeenCalled()
   })
 
   it('classifies dangerous content, emits status events, and records a classification system message', async () => {

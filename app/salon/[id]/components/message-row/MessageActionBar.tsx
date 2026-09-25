@@ -25,6 +25,11 @@ interface MessageActionBarProps {
   onDelete: (messageId: string) => void
   onGenerateSwipe: (messageId: string) => void
   /**
+   * The Concierge's "Try uncensored": re-roll this line on the uncensored
+   * desk. Offered on character lines only, and absent on a Locked chat.
+   */
+  onTryUncensored?: (messageId: string) => void
+  /**
    * Inert while the line is being re-rolled: nothing here is safe to press at a
    * message whose content is mid-replacement (deleting it, or asking for a
    * second re-roll, most of all).
@@ -60,6 +65,7 @@ export function MessageActionBar({
   onEditStart,
   onDelete,
   onGenerateSwipe,
+  onTryUncensored,
   disabled = false,
   onReattribute,
   onViewLLMLogs,
@@ -164,6 +170,19 @@ export function MessageActionBar({
               aria-label="Regenerate response"
             >
               <Icon name="refresh" />
+            </button>
+          </Tooltip>
+        )}
+        {/* Try uncensored (character lines only; absent on a Locked chat) */}
+        {message.role === 'ASSISTANT' && !message.systemSender && onTryUncensored && (
+          <Tooltip content="Try uncensored — regenerate on the Concierge's uncensored desk">
+            <button
+              type="button"
+              onClick={() => onTryUncensored(message.id)}
+              className="qt-chat-message-action-icon"
+              aria-label="Try uncensored"
+            >
+              <Icon name="shield" />
             </button>
           </Tooltip>
         )}

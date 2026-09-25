@@ -59,3 +59,4 @@ export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';
 export { handleGetGroupStores } from './group-stores';
 export { handleExportMarkdown } from './export-markdown';
 export { handleSetScenario } from './scenario';
+export { handleRetryImageUncensored } from './retry-image-uncensored';

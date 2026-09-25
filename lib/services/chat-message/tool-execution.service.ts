@@ -190,7 +190,12 @@ export async function saveToolMessages(
   generatedImagePaths: GeneratedImage[],
   characterId?: string,
   participantId?: string,
-  whisperContext?: ToolWhisperContext
+  whisperContext?: ToolWhisperContext,
+  /**
+   * `createdAt` files the rows at a chosen moment instead of now — the
+   * Concierge's "Try uncensored" puts a retried picture beside the original.
+   */
+  options?: { createdAt?: string }
 ): Promise<{ firstToolMessageId: string | null; generatedImageIds: string[] }> {
   let firstToolMessageId: string | null = null
   const generatedImageIds: string[] = generatedImagePaths.map(img => img.id)
@@ -233,7 +238,7 @@ export async function saveToolMessages(
         model: toolMsg.metadata?.model,
         prompt: toolMsg.metadata?.expandedPrompt,
       }),
-      createdAt: new Date().toISOString(),
+      createdAt: options?.createdAt ?? new Date().toISOString(),
       attachments: toolAttachments,
       // An image refused on the way carries the Concierge's call sheet — the
       // image profiles tried, in order (`generateImageWithConciergeFailover`).

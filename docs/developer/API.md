@@ -2918,6 +2918,38 @@ Queue a story background regeneration job.
 }
 ```
 
+#### `POST /api/v1/chats/[id]?action=retry-image-uncensored`
+
+"Try uncensored" on a picture (Concierge overhaul phase 5). Never changes the chat's Concierge state.
+
+**Request body**: either
+
+```json
+{ "toolMessageId": "uuid" }
+```
+
+— re-run a `generate_image` TOOL message's arguments on the Concierge's uncensored image understudy
+(`resolveUncensoredImageUnderstudy`, excluding the chat's image profile and every image profile on
+the message's trail). The result is saved as a new TOOL message filed 1 ms after the original, with
+the images attached and a `routeTrail` that keeps the original's refused/failed rows and ends on the
+understudy with `via: "concierge"`. When the original trail has a refused row the Concierge posts
+`refusal-rerouted` (`purpose: "tool"`). Response `200 OK`:
+`{ "toolMessageId": "uuid", "images": [...], "routeTrail": [...] }`. `404` for an unknown message,
+`400` for a TOOL message that is not `generate_image`, `502` when the understudy produced nothing.
+
+or
+
+```json
+{ "kind": "background" }
+```
+
+— queue a story background with `payload.forceUncensored: true` (same response as
+`regenerate-background`). The job paints on the understudy and abandons quietly if the chat became
+Locked or the understudy disappeared before it ran.
+
+**Errors**: `409 { "error": "locked" }` on a Locked chat; `409 { "error": "no-understudy" }` when no
+uncensored image profile is available. Off duty does not block it.
+
 ---
 
 ### Custom Tools (Pascal the Croupier)
@@ -3784,6 +3816,24 @@ Send a message and receive the streaming LLM response. Returns `text/event-strea
 #### `POST /api/v1/chats/[id]/messages/[messageId]?action=override-danger-flag`
 
 Override the Concierge danger flags on a message.
+
+#### `POST /api/v1/chats/[id]/messages/[messageId]?action=retry-uncensored`
+
+"Try uncensored" on a text line (Concierge overhaul phase 5). Regenerates the assistant message as a
+new swipe (same semantics as `POST /api/v1/messages/[id]?action=swipe`: context strictly before the
+target, informs re-applied and never consumed) on the Concierge's uncensored text understudy
+(`resolveUncensoredTextUnderstudy`, excluding the responder's profile and every connection profile
+on the target's trail). The swipe's `routeTrail` keeps the original's refused/failed rows and ends
+on the understudy with `via: "concierge"`. Never changes the chat's Concierge state; off duty does
+not block it.
+
+- Without `stream=1`: `201 Created` with `{ "message": <swipe> }`.
+- With `&stream=1`: `text/event-stream`, the same narration as the swipe stream (`status`,
+  `content` deltas, cumulative `reasoning`, then `{ done: true, message }`, or an `error` event).
+
+**Errors**: `404` chat or message; `400` for a non-assistant or Staff message;
+`409 { "error": "locked" }` on a Locked chat; `409 { "error": "no-understudy" }` when no uncensored
+text profile is available.
 
 #### `POST /api/v1/chats/[id]/messages/[messageId]?action=resolve-external-turn`
 
