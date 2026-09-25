@@ -6,13 +6,8 @@
  * refusal into `ModerationRejectionError` (`code: 'MODERATION_REJECTED'`), and
  * leaves every other failure exactly as thrown; the streaming text paths carry
  * the finish reason that says a refusal happened.
- *
- * `@quilltap/plugin-types` is resolved from the workspace source here rather
- * than the installed package, so these run against the class the plugins will
- * bundle once 2.8.0 is published.
  */
 
-jest.mock('@quilltap/plugin-types', () => jest.requireActual('../../../packages/plugin-types/src/index'))
 jest.mock('@google/genai', () => ({ GoogleGenAI: jest.fn() }), { virtual: true })
 
 import { classifyRefusal } from '@/lib/services/dangerous-content/refusal'

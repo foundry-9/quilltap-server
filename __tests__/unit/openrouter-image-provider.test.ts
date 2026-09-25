@@ -22,11 +22,6 @@ jest.mock('@quilltap/plugin-utils', () => ({
   getQuilltapUserAgent: () => 'Quilltap/Test',
 }))
 
-// The plugin throws `ModerationRejectionError`, which the plugin bundles from
-// the workspace's own `@quilltap/plugin-types`; resolve it from there rather
-// than from whatever version is installed at the root.
-jest.mock('@quilltap/plugin-types', () => jest.requireActual('../../packages/plugin-types/src/index'))
-
 import { OpenRouterImageProvider } from '@/plugins/dist/qtap-plugin-openrouter/image-provider'
 
 const FALLBACK_IMAGE_MODELS = [

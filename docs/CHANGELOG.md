@@ -44,7 +44,8 @@
 - `extractFinishReason` also reads Google's `promptFeedback.blockReason` and OpenRouter's camelCase
   `finishReason`.
 - `@quilltap/plugin-types` 2.8.0: `ModerationRejectionError` (`code: 'MODERATION_REJECTED'`,
-  `providerReason`). Needs `npm publish` before the plugins below can be installed/built.
+  `providerReason`). Published; the root dependency is now `^2.8.0` and the five plugins below
+  are rebuilt against it.
 - Plugins (all require plugin-types `^2.8.0`):
   - `qtap-plugin-openai` 1.0.65: image `moderation_blocked` / `content_policy_violation` /
     "safety system" → typed; streamed and non-streamed raw responses carry the real finish reason

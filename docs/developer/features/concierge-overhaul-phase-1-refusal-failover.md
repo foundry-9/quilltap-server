@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 1: Refusal-Driven Failover Everywhere
 
-**Status:** Implemented (4.10-dev, 2026-09-25). `@quilltap/plugin-types` 2.8.0 awaits `npm publish`; the five changed plugins are bumped but not rebuilt until it is installed. See [As built](#as-built).
+**Status:** Implemented (4.10-dev, 2026-09-25). `@quilltap/plugin-types` 2.8.0 published; the five changed plugins rebuilt against it. See [As built](#as-built).
 **Scope:** quilltap-server backend, six provider plugins, `@quilltap/plugin-types`. No settings UI change, no per-chat state change, no migration. One new optional field on the message route-trail schema.
 **Prerequisites:** none. This spec starts from the code as it stands on 2026-09-25 and is complete on its own.
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 1 of 5).
@@ -340,6 +340,5 @@ Shipped in 4.10-dev. Where the code departs from the plan above:
   `refusal` note and a reroute — it needs a real provider that actually refuses,
   so it cannot run by default. The new jest suites join the script's guard run.
   It has not been run against a live instance from this branch.
-- **Tests of the plugins** (`__tests__/unit/plugins/concierge-moderation-rejections.test.ts`)
-  resolve `@quilltap/plugin-types` from the workspace source, so they pass
-  before 2.8.0 is published.
+- **Tests of the plugins** live in `__tests__/unit/plugins/concierge-moderation-rejections.test.ts`
+  and run against the installed `@quilltap/plugin-types` 2.8.0.
