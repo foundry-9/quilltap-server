@@ -48,6 +48,7 @@ import {
 } from '../actions';
 import { getChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
+import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 /**
  * GET handler for individual chat
@@ -325,6 +326,9 @@ async function handleGetChat(
     }
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
+    // The Concierge's tally, for the helper text of a chat he moved after
+    // refusals ("after N refusals"). Emptied when the chat returns to Moderated.
+    const conciergeLedger = await repos.chats.getModerationRefusalLedger(chatId);
     const resolvedAgentMode = resolveAgentModeSetting(chatMetadata, project, primaryCharacter, chatSettings);
 
     const chat = {
@@ -393,7 +397,10 @@ async function handleGetChat(
       avatarGenerationEnabled: chatMetadata.avatarGenerationEnabled ?? null,
       isDangerousChat: chatMetadata.isDangerousChat ?? null,
       dangerCategories: chatMetadata.dangerCategories || [],
-      conciergeOverride: chatMetadata.conciergeOverride ?? null,
+      conciergeState: getConciergeState(chatMetadata),
+      conciergeSetBy: getConciergeProvenance(chatMetadata),
+      conciergeReason: getConciergeReason(chatMetadata),
+      conciergeRefusalCount: conciergeLedger.count,
       documentEditingMode: chatMetadata.documentEditingMode ?? false,
       documentMode: chatMetadata.documentMode || 'normal',
       dividerPosition: chatMetadata.dividerPosition ?? 45,

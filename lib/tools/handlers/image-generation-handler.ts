@@ -43,7 +43,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -60,6 +60,9 @@ import {
   resolveDepictionGuidelines,
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
+
+/** The part of a chat the Concierge reads: its state. */
+type ConciergeChat = { conciergeMode?: ConciergeState | null };
 
 /**
  * Execution context for image generation tool
@@ -343,7 +346,8 @@ async function generateImagesWithProvider(
   dangerSettings: DangerousContentSettings,
   chatId?: string,
   callingParticipantId?: string,
-  primaryVia: RouteAttemptVia = 'primary'
+  primaryVia: RouteAttemptVia = 'primary',
+  chat?: ConciergeChat | null
 ): Promise<ProviderGenerationResult> {
   // One call against one profile. Owns everything profile-specific: the
   // shared builder merges that profile's defaults under the tool's input,
@@ -415,7 +419,7 @@ async function generateImagesWithProvider(
     outcome = await generateImageWithConciergeFailover(
       { profile: imageProfile as ImageProfile, apiKey: imageProfile.apiKey.key_value as string },
       attempt,
-      { userId, chatId, purpose: 'tool', settings: dangerSettings, primaryVia },
+      { userId, chatId, purpose: 'tool', settings: dangerSettings, chat, primaryVia },
     );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
@@ -1078,12 +1082,12 @@ async function expandPromptWithContext(
 async function loadSettingsAndBuildCheapLLM(
   userId: string,
   chatSettings: ChatSettings | undefined,
-  chat?: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null
+  chat?: ConciergeChat | null
 ): Promise<{
   dangerSettings: DangerousContentSettings;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings (chat may carry an operator override)
+  // 4b. Resolve dangerous content settings (the chat's Concierge state applies)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
 
@@ -1144,14 +1148,14 @@ async function runImageGenerationTool(
       });
     }
 
-    // Fetch chat once so any operator Concierge override is honored everywhere downstream.
-    let chatForOverride: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null = null;
+    // Fetch chat once so its Concierge state is honored everywhere downstream.
+    let chatForOverride: ConciergeChat | null = null;
     if (context.chatId) {
       try {
         const fetched = await repos.chats.findById(context.chatId);
         if (fetched) chatForOverride = fetched;
       } catch (err) {
-        logger.warn('[Image Generation] Could not load chat for Concierge override check', {
+        logger.warn('[Image Generation] Could not load chat for its Concierge state', {
           chatId: context.chatId,
           errorMessage: getErrorMessage(err),
         });
@@ -1223,7 +1227,8 @@ async function runImageGenerationTool(
       dangerSettings,
       context.chatId,
       context.callingParticipantId,
-      finalProfile.id !== imageProfile.id ? 'concierge' : 'primary'
+      finalProfile.id !== imageProfile.id ? 'concierge' : 'primary',
+      chatForOverride
     );
 
     // 8. Return success response. Names the profile that actually answered —

@@ -1,18 +1,19 @@
 /**
  * Tests for lib/services/dangerous-content/manual-flip.ts
  *
- * Covers all 12 ordered transitions of the four-state control (stored pair +
- * announcement kind) and the no-op behavior when the requested state already
- * matches the stored one; the refusal-ledger reset on a return to Monitored;
- * and the Concierge's own `{ by: 'concierge' }` switch.
+ * Covers all six ordered transitions of the three-state control (stored
+ * columns + announcement kind), the no-op when state and provenance already
+ * match, the provenance-only update when the operator adopts the Concierge's
+ * switch, the telemetry and ledger reset on a return to Moderated, and the
+ * Concierge's own switches (refusals and classifier) through the chokepoint.
  */
 
-import {
-  applyConciergeFlip,
-  currentConciergeState,
-} from '@/lib/services/dangerous-content/manual-flip'
+import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip'
 import { getRepositories } from '@/lib/repositories/factory'
-import { postConciergeManualAnnouncement } from '@/lib/services/concierge-notifications/writer'
+import {
+  postConciergeDangerAnnouncement,
+  postConciergeManualAnnouncement,
+} from '@/lib/services/concierge-notifications/writer'
 import type { ChatMetadata } from '@/lib/schemas/types'
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -30,18 +31,23 @@ jest.mock('@/lib/repositories/factory', () => ({
 
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeManualAnnouncement: jest.fn().mockResolvedValue(null),
+  postConciergeDangerAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 
 const chatsUpdate = jest.fn().mockResolvedValue(null)
+const setMode = jest.fn().mockResolvedValue(true)
 const resetLedger = jest.fn().mockResolvedValue(undefined)
 ;(getRepositories as jest.Mock).mockReturnValue({
-  chats: { update: chatsUpdate, resetModerationRefusalLedger: resetLedger },
+  chats: { update: chatsUpdate, setConciergeMode: setMode, resetModerationRefusalLedger: resetLedger },
 })
 
 beforeEach(() => {
   chatsUpdate.mockClear()
+  setMode.mockClear()
+  setMode.mockResolvedValue(true)
   resetLedger.mockClear()
   ;(postConciergeManualAnnouncement as jest.Mock).mockClear()
+  ;(postConciergeDangerAnnouncement as jest.Mock).mockClear()
 })
 
 function makeChat(overrides: Partial<ChatMetadata> = {}): ChatMetadata {
@@ -85,143 +91,169 @@ function makeChat(overrides: Partial<ChatMetadata> = {}): ChatMetadata {
   } as ChatMetadata
 }
 
-describe('currentConciergeState', () => {
-  it('returns "vouched" when conciergeOverride is OFF (even if isDangerousChat=true)', () => {
-    expect(currentConciergeState({ conciergeOverride: 'OFF', isDangerousChat: true })).toBe('vouched')
-  })
+const FROM = {
+  moderated: { conciergeMode: 'moderated' as const, conciergeModeSetBy: null, conciergeModeReason: null },
+  unmoderated: { conciergeMode: 'unmoderated' as const, conciergeModeSetBy: 'operator' as const, conciergeModeReason: 'manual' as const },
+  locked: { conciergeMode: 'locked' as const, conciergeModeSetBy: 'operator' as const, conciergeModeReason: 'manual' as const },
+}
 
-  it('returns "uncensored" when conciergeOverride is UNCENSORED (either label underneath)', () => {
-    expect(currentConciergeState({ conciergeOverride: 'UNCENSORED', isDangerousChat: true })).toBe('uncensored')
-    expect(currentConciergeState({ conciergeOverride: 'UNCENSORED', isDangerousChat: false })).toBe('uncensored')
-  })
-
-  it('returns "flagged" when isDangerousChat=true and no operator override', () => {
-    expect(currentConciergeState({ conciergeOverride: null, isDangerousChat: true })).toBe('flagged')
-  })
-
-  it('returns "monitored" when neither flag is set', () => {
-    expect(currentConciergeState({ conciergeOverride: null, isDangerousChat: false })).toBe('monitored')
-    expect(currentConciergeState({ conciergeOverride: null, isDangerousChat: null })).toBe('monitored')
-  })
-})
+const TO_MODERATED = { conciergeMode: 'moderated', conciergeModeSetBy: null, conciergeModeReason: null }
+const CLEAR_TELEMETRY = {
+  isDangerousChat: false,
+  dangerScore: null,
+  dangerCategories: [],
+  dangerClassifiedAt: null,
+  dangerClassifiedAtMessageCount: null,
+}
+const TO_UNMODERATED = { conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' }
+const TO_LOCKED = { conciergeMode: 'locked', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' }
 
 describe('applyConciergeFlip', () => {
-  // Stored-field fixtures for each starting state.
-  const FROM = {
-    monitored: { conciergeOverride: null, isDangerousChat: false },
-    flagged: { conciergeOverride: null, isDangerousChat: true },
-    vouched: { conciergeOverride: 'OFF' as const, isDangerousChat: true },
-    uncensored: { conciergeOverride: 'UNCENSORED' as const, isDangerousChat: true },
-  }
-
-  it.each(['monitored', 'flagged', 'vouched', 'uncensored'] as const)(
-    'is a no-op when %s is requested again', async (state) => {
-      const chat = makeChat(FROM[state])
-      const result = await applyConciergeFlip('chat-1', state, chat)
+  it.each(['moderated', 'unmoderated', 'locked'] as const)(
+    'is a no-op when %s is requested again by the operator', async (state) => {
+      const result = await applyConciergeFlip('chat-1', state, makeChat(FROM[state]))
       expect(result).toEqual({ newState: state, changed: false })
       expect(chatsUpdate).not.toHaveBeenCalled()
+      expect(setMode).not.toHaveBeenCalled()
+      expect(resetLedger).not.toHaveBeenCalled()
       expect(postConciergeManualAnnouncement).not.toHaveBeenCalled()
     })
 
-  // All 12 ordered transitions: [from, to, expected update, announcement kind].
-  const STAMP = expect.objectContaining({ conciergeOverride: null, isDangerousChat: true })
-  const CLEAR = expect.objectContaining({
-    conciergeOverride: null,
-    isDangerousChat: false,
-    dangerScore: null,
-    dangerClassifiedAt: null,
-    dangerClassifiedAtMessageCount: null,
-  })
-  const VOUCH = { conciergeOverride: 'OFF' }
-  const UNCENSOR = { conciergeOverride: 'UNCENSORED' }
-
-  const TRANSITIONS = [
-    ['monitored', 'flagged', STAMP, 'manual-flagged'],
-    ['monitored', 'vouched', VOUCH, 'manual-vouched'],
-    ['monitored', 'uncensored', UNCENSOR, 'manual-uncensored'],
-    ['flagged', 'monitored', CLEAR, 'manual-safe'],
-    ['flagged', 'vouched', VOUCH, 'manual-vouched'],
-    ['flagged', 'uncensored', UNCENSOR, 'manual-uncensored'],
-    ['vouched', 'monitored', CLEAR, 'manual-resumed'],
-    ['vouched', 'flagged', STAMP, 'manual-flagged'],
-    ['vouched', 'uncensored', UNCENSOR, 'manual-uncensored'],
-    ['uncensored', 'monitored', CLEAR, 'manual-resumed'],
-    ['uncensored', 'flagged', STAMP, 'manual-flagged'],
-    ['uncensored', 'vouched', VOUCH, 'manual-vouched'],
-  ] as const
-
-  it.each(TRANSITIONS)('%s -> %s writes the stored pair and announces the right kind',
-    async (from, to, expectedUpdate, kind) => {
-      const chat = makeChat(FROM[from])
-      const result = await applyConciergeFlip('chat-1', to, chat)
-      expect(result).toEqual({ newState: to, changed: true })
-      expect(chatsUpdate).toHaveBeenCalledWith('chat-1', expectedUpdate)
-      expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({ chatId: 'chat-1', kind })
-    })
-
-  it('Monitored -> Flagged stamps classification metadata at the current message count', async () => {
-    const chat = makeChat({ isDangerousChat: false, conciergeOverride: null, messageCount: 42 })
-    await applyConciergeFlip('chat-1', 'flagged', chat)
-    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', expect.objectContaining({
-      conciergeOverride: null,
-      isDangerousChat: true,
-      dangerClassifiedAtMessageCount: 42,
-    }))
+  it('reads a NULL column as Moderated (no-op)', async () => {
+    const result = await applyConciergeFlip('chat-1', 'moderated', makeChat({ conciergeMode: null }))
+    expect(result.changed).toBe(false)
+    expect(setMode).not.toHaveBeenCalled()
   })
 
-  it('operator states preserve isDangerousChat (the update never touches the label)', async () => {
-    for (const to of ['vouched', 'uncensored'] as const) {
-      chatsUpdate.mockClear()
-      const chat = makeChat({ isDangerousChat: true, conciergeOverride: null })
-      await applyConciergeFlip('chat-1', to, chat)
-      const [, update] = chatsUpdate.mock.calls[0]
-      expect(update).not.toHaveProperty('isDangerousChat')
+  it.each([
+    ['moderated', 'unmoderated', TO_UNMODERATED, 'set-unmoderated'],
+    ['moderated', 'locked', TO_LOCKED, 'set-locked'],
+    ['unmoderated', 'moderated', TO_MODERATED, 'set-moderated'],
+    ['unmoderated', 'locked', TO_LOCKED, 'set-locked'],
+    ['locked', 'moderated', TO_MODERATED, 'set-moderated'],
+    ['locked', 'unmoderated', TO_UNMODERATED, 'set-unmoderated'],
+  ] as const)('%s → %s writes the columns and announces %s', async (from, to, update, kind) => {
+    const result = await applyConciergeFlip('chat-1', to, makeChat(FROM[from]))
+    expect(result).toEqual({ newState: to, changed: true })
+    // The operator's choice is unconditional: no expected state.
+    expect(setMode).toHaveBeenCalledTimes(1)
+    expect(setMode).toHaveBeenCalledWith('chat-1', update, undefined)
+    expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({ chatId: 'chat-1', kind })
+    // The state never rides a whole-row update, and the legacy column is never written.
+    for (const [, patch] of chatsUpdate.mock.calls) {
+      expect(patch).not.toHaveProperty('conciergeMode')
+      expect(patch).not.toHaveProperty('conciergeOverride')
+    }
+    if (to === 'moderated') {
+      expect(chatsUpdate).toHaveBeenCalledWith('chat-1', CLEAR_TELEMETRY)
+    } else {
+      expect(chatsUpdate).not.toHaveBeenCalled()
     }
   })
 
-  it.each(['flagged', 'vouched', 'uncensored'] as const)(
-    '%s -> monitored resets the refusal ledger', async (from) => {
-      await applyConciergeFlip('chat-1', 'monitored', makeChat(FROM[from]))
-      expect(resetLedger).toHaveBeenCalledWith('chat-1')
-    })
-
-  it.each([
-    ['monitored', 'flagged'], ['monitored', 'vouched'], ['monitored', 'uncensored'],
-    ['flagged', 'vouched'], ['vouched', 'flagged'], ['uncensored', 'flagged'],
-  ] as const)('%s -> %s leaves the refusal ledger alone', async (from, to) => {
-    await applyConciergeFlip('chat-1', to, makeChat(FROM[from]))
+  it('empties the refusal ledger only on a return to Moderated', async () => {
+    await applyConciergeFlip('chat-1', 'moderated', makeChat(FROM.unmoderated))
+    expect(resetLedger).toHaveBeenCalledWith('chat-1')
+    resetLedger.mockClear()
+    await applyConciergeFlip('chat-1', 'locked', makeChat(FROM.moderated))
+    await applyConciergeFlip('chat-1', 'unmoderated', makeChat(FROM.moderated))
     expect(resetLedger).not.toHaveBeenCalled()
   })
 
-  it('a no-op Monitored request does not reset the ledger', async () => {
-    await applyConciergeFlip('chat-1', 'monitored', makeChat(FROM.monitored))
-    expect(resetLedger).not.toHaveBeenCalled()
-  })
+  describe('provenance', () => {
+    const byConcierge = { conciergeMode: 'unmoderated' as const, conciergeModeSetBy: 'concierge' as const, conciergeModeReason: 'refusals' as const }
 
-  it('the default options keep the operator flag byte-identical', async () => {
-    await applyConciergeFlip('chat-1', 'flagged', makeChat(FROM.monitored))
-    const [, update] = chatsUpdate.mock.calls[0]
-    expect(update.dangerCategories).toEqual([])
-    expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({ chatId: 'chat-1', kind: 'manual-flagged' })
-  })
-
-  it("the Concierge's refusal switch stamps its category and posts the auto kind", async () => {
-    const refusals = { count: 2, lastProvider: 'GOOGLE', lastModel: 'gemini-2.5-flash' }
-    const result = await applyConciergeFlip('chat-1', 'flagged', makeChat(FROM.monitored), {
-      by: 'concierge',
-      reason: 'refusals',
-      refusals,
+    it('updates provenance silently when the operator adopts the Concierge’s switch', async () => {
+      const result = await applyConciergeFlip('chat-1', 'unmoderated', makeChat(byConcierge))
+      expect(result).toEqual({ newState: 'unmoderated', changed: true })
+      expect(setMode).toHaveBeenCalledWith('chat-1', { conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' })
+      expect(postConciergeManualAnnouncement).not.toHaveBeenCalled()
     })
-    expect(result).toEqual({ newState: 'flagged', changed: true })
-    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', expect.objectContaining({
-      conciergeOverride: null,
-      isDangerousChat: true,
-      dangerCategories: ['moderation-refusals'],
-    }))
-    expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({
-      chatId: 'chat-1',
-      kind: 'auto-flagged-refusals',
-      details: refusals,
+
+    it('never lets the Concierge re-attribute the operator’s choice', async () => {
+      const result = await applyConciergeFlip('chat-1', 'unmoderated', makeChat(FROM.unmoderated), {
+        by: 'concierge',
+        reason: 'refusals',
+      })
+      expect(result.changed).toBe(false)
+      expect(setMode).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("the Concierge's own switch", () => {
+    it('announces nothing when the compare-and-set misses (the operator changed the chat meanwhile)', async () => {
+      setMode.mockResolvedValue(false)
+      const result = await applyConciergeFlip('chat-1', 'unmoderated', makeChat(FROM.moderated), {
+        by: 'concierge',
+        reason: 'classifier',
+        classification: { score: 0.9, threshold: 0.7, categories: [] },
+      })
+      expect(result).toEqual({ newState: 'moderated', changed: false })
+      expect(postConciergeManualAnnouncement).not.toHaveBeenCalled()
+      expect(postConciergeDangerAnnouncement).not.toHaveBeenCalled()
+    })
+
+    it('refuses to run in the job child, where a buffered write cannot report whether it landed', async () => {
+      process.env.QUILLTAP_JOB_CHILD = '1'
+      try {
+        const result = await applyConciergeFlip('chat-1', 'unmoderated', makeChat(FROM.moderated), {
+          by: 'concierge',
+          reason: 'refusals',
+        })
+        expect(result.changed).toBe(false)
+        expect(setMode).not.toHaveBeenCalled()
+      } finally {
+        delete process.env.QUILLTAP_JOB_CHILD
+      }
+    })
+
+    it('refusals: Moderated → Unmoderated with provenance and the auto-unmoderated announcement', async () => {
+      const refusals = { count: 2, lastProvider: 'GOOGLE', lastModel: 'gemini' }
+      const result = await applyConciergeFlip('chat-1', 'unmoderated', makeChat(FROM.moderated), {
+        by: 'concierge',
+        reason: 'refusals',
+        refusals,
+      })
+      expect(result).toEqual({ newState: 'unmoderated', changed: true })
+      // A compare-and-set against the state the Concierge read.
+      expect(setMode).toHaveBeenCalledWith('chat-1', {
+        conciergeMode: 'unmoderated',
+        conciergeModeSetBy: 'concierge',
+        conciergeModeReason: 'refusals',
+      }, 'moderated')
+      expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({
+        chatId: 'chat-1',
+        kind: 'auto-unmoderated',
+        details: refusals,
+      })
+      expect(postConciergeDangerAnnouncement).not.toHaveBeenCalled()
+    })
+
+    it("classifier: Moderated → Unmoderated with the verdict's announcement", async () => {
+      const classification = { score: 0.9, threshold: 0.7, categories: [{ category: 'sexual', score: 0.9 }] }
+      await applyConciergeFlip('chat-1', 'unmoderated', makeChat(FROM.moderated), {
+        by: 'concierge',
+        reason: 'classifier',
+        classification,
+      })
+      expect(setMode).toHaveBeenCalledWith('chat-1', {
+        conciergeMode: 'unmoderated',
+        conciergeModeSetBy: 'concierge',
+        conciergeModeReason: 'classifier',
+      }, 'moderated')
+      expect(postConciergeDangerAnnouncement).toHaveBeenCalledWith({ chatId: 'chat-1', details: classification })
+      expect(postConciergeManualAnnouncement).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['locked', 'unmoderated'],
+      ['moderated', 'locked'],
+      ['unmoderated', 'moderated'],
+    ] as const)('refuses to move %s → %s', async (from, to) => {
+      const result = await applyConciergeFlip('chat-1', to, makeChat(FROM[from]), { by: 'concierge', reason: 'refusals' })
+      expect(result.changed).toBe(false)
+      expect(setMode).not.toHaveBeenCalled()
+      expect(postConciergeManualAnnouncement).not.toHaveBeenCalled()
     })
   })
 })

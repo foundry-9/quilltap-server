@@ -304,3 +304,55 @@ describe('applyWritesUnsafe — refusal-ledger commit hook', () => {
     ], 'STORY_BACKGROUND_GENERATION')).resolves.toBeUndefined();
   });
 });
+
+jest.mock('@/lib/services/dangerous-content/classifier-switch', () => ({
+  maybeSwitchAfterClassification: jest.fn(async () => ({ switched: false })),
+}));
+
+describe('applyWritesUnsafe — classifier-switch commit hook', () => {
+  let maybeSwitchAfterClassification: jest.Mock;
+  const telemetry = (dangerous: boolean) => ({
+    isDangerousChat: dangerous, dangerScore: 0.5, dangerCategories: [],
+    dangerClassifiedAt: '2026-09-25T00:00:00Z', dangerClassifiedAtMessageCount: 4,
+  });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
+    jest.mocked(getRawMountIndexDatabase).mockReturnValue(fakeDb() as never);
+    jest.mocked(getRawLLMLogsDatabase).mockReturnValue(fakeDb() as never);
+    const { repos } = makeRepos();
+    const setDangerClassification = jest.fn().mockResolvedValue(null);
+    jest.mocked(getRepositories).mockReturnValue({
+      ...repos,
+      chats: { ...repos.chats, setDangerClassification },
+    } as never);
+    ({ maybeSwitchAfterClassification } = jest.requireMock('@/lib/services/dangerous-content/classifier-switch'));
+  });
+
+  it('asks the switch, after commit, for each chat the batch classified dangerous, with its verdict', async () => {
+    const verdict = { score: 0.9, threshold: 0.7, categories: [] };
+    await applyWritesUnsafe('job-classify', [
+      { method: 'chats.setDangerClassification', args: ['c1', telemetry(true), verdict] },
+      { method: 'chats.setDangerClassification', args: ['c2', telemetry(false), null] },
+    ], 'CHAT_DANGER_CLASSIFICATION');
+
+    expect(maybeSwitchAfterClassification).toHaveBeenCalledTimes(1);
+    expect(maybeSwitchAfterClassification).toHaveBeenCalledWith('c1', verdict);
+  });
+
+  it('does not run when the main partition fails to commit', async () => {
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb({ failCommit: 'main boom' }) as never);
+    await expect(applyWritesUnsafe('job-fail', [
+      { method: 'chats.setDangerClassification', args: ['c1', telemetry(true), null] },
+    ], 'CHAT_DANGER_CLASSIFICATION')).rejects.toThrow('main boom');
+    expect(maybeSwitchAfterClassification).not.toHaveBeenCalled();
+  });
+
+  it('a failing switch never fails the committed job', async () => {
+    maybeSwitchAfterClassification.mockRejectedValueOnce(new Error('flip failed'));
+    await expect(applyWritesUnsafe('job-switch-fails', [
+      { method: 'chats.setDangerClassification', args: ['c1', telemetry(true), null] },
+    ], 'CHAT_DANGER_CLASSIFICATION')).resolves.toBeUndefined();
+  });
+});

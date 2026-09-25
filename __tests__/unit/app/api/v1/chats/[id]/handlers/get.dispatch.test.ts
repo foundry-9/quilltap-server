@@ -112,6 +112,7 @@ function buildCtx() {
         }),
         getMessages: jest.fn().mockResolvedValue([]),
         getTranscriptVersion: jest.fn().mockResolvedValue(3),
+        getModerationRefusalLedger: jest.fn().mockResolvedValue({ count: 0, lastAt: null }),
       },
       projects: { findById: jest.fn() },
       characters: { findById: jest.fn(), findByIds: jest.fn().mockResolvedValue([]) },

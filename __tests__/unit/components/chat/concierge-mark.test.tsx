@@ -1,8 +1,8 @@
 /**
  * The Concierge mark and the chat card that wears it.
  *
- * The mark reads the derived four-state, never the raw danger label, so what
- * matters here is that Monitored draws nothing, that the other three each get
+ * The mark reads the derived three-state, never the raw danger label, so what
+ * matters here is that Moderated draws nothing, that the other two each get
  * their own tone, and that the words come from the one presentation table —
  * the same words the Salon header's pill and the sidebar's helper text use.
  */
@@ -45,42 +45,50 @@ function chatCard(overrides: Partial<ChatCardData> = {}): ChatCardData {
     participants: [],
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
-    conciergeState: 'monitored',
+    conciergeState: 'moderated',
     dangerCategories: [],
     ...overrides,
   }
 }
 
 describe('ConciergeMark', () => {
-  it('renders nothing for Monitored — the default wears no mark', () => {
-    const { container } = render(<ConciergeMark conciergeState="monitored" />)
+  it('renders nothing for Moderated — the default wears no mark', () => {
+    const { container } = render(<ConciergeMark conciergeState="moderated" />)
     expect(container).toBeEmptyDOMElement()
   })
 
   it.each([
-    ['flagged', 'Concierge: Flagged', ''],
-    ['vouched', 'Concierge: Vouched Safe', 'qt-concierge-mark-muted'],
-    ['uncensored', 'Concierge: Uncensored', 'qt-concierge-mark-info'],
+    ['unmoderated', 'Concierge: Unmoderated', ''],
+    ['locked', 'Concierge: Locked', 'qt-concierge-mark-muted'],
   ] as const)('marks %s with an asterisk labelled "%s"', (state, label, modifier) => {
     render(<ConciergeMark conciergeState={state} />)
 
     const mark = screen.getByLabelText(label)
     expect(mark).toHaveTextContent('*')
     expect(mark).toHaveClass('qt-concierge-mark')
-    // Danger is the base rule; only the two operator states add a modifier.
+    // Danger is the base rule; only Locked adds a modifier.
     expect(mark.className).toBe(['qt-concierge-mark', modifier].filter(Boolean).join(' '))
   })
 
-  it('appends the caller\'s classes without losing the tone', () => {
-    render(<ConciergeMark conciergeState="uncensored" className="text-sm flex-shrink-0" />)
+  it('keeps one tone for Unmoderated whoever set it — provenance is never a colour', () => {
+    const { unmount } = render(<ConciergeMark conciergeState="unmoderated" conciergeSetBy="concierge" conciergeReason="classifier" />)
+    expect(screen.getByLabelText('Concierge: Unmoderated').className).toBe('qt-concierge-mark')
+    unmount()
 
-    const mark = screen.getByLabelText('Concierge: Uncensored')
-    expect(mark).toHaveClass('qt-concierge-mark', 'qt-concierge-mark-info', 'text-sm', 'flex-shrink-0')
+    render(<ConciergeMark conciergeState="unmoderated" conciergeSetBy="operator" conciergeReason="manual" />)
+    expect(screen.getByLabelText('Concierge: Unmoderated').className).toBe('qt-concierge-mark')
+  })
+
+  it('appends the caller\'s classes without losing the tone', () => {
+    render(<ConciergeMark conciergeState="locked" className="text-sm flex-shrink-0" />)
+
+    const mark = screen.getByLabelText('Concierge: Locked')
+    expect(mark).toHaveClass('qt-concierge-mark', 'qt-concierge-mark-muted', 'text-sm', 'flex-shrink-0')
   })
 
   it('carries no native title — the drawn tooltip would double up on it', () => {
-    render(<ConciergeMark conciergeState="flagged" />)
-    expect(screen.getByLabelText('Concierge: Flagged')).not.toHaveAttribute('title')
+    render(<ConciergeMark conciergeState="unmoderated" />)
+    expect(screen.getByLabelText('Concierge: Unmoderated')).not.toHaveAttribute('title')
   })
 
   describe('the tooltip', () => {
@@ -92,7 +100,7 @@ describe('ConciergeMark', () => {
       act(() => { jest.advanceTimersByTime(250) })
     }
 
-    it.each(['flagged', 'vouched', 'uncensored'] as ConciergeState[])(
+    it.each(['unmoderated', 'locked'] as ConciergeState[])(
       'speaks the presentation table\'s words for %s',
       (state) => {
         const { title, detail, hint } = describeConciergeState(state)
@@ -107,20 +115,55 @@ describe('ConciergeMark', () => {
       }
     )
 
-    it('lists the classifier\'s categories on a Flagged chat', () => {
-      render(<ConciergeMark conciergeState="flagged" dangerCategories={['NSFW', 'Violence']} />)
+    it('speaks the operator\'s sentence when the operator set Unmoderated', () => {
+      render(<ConciergeMark conciergeState="unmoderated" conciergeSetBy="operator" conciergeReason="manual" />)
 
-      hover(screen.getByLabelText('Concierge: Flagged'))
+      hover(screen.getByLabelText('Concierge: Unmoderated'))
+
+      const bubble = screen.getByRole('tooltip', { hidden: true })
+      expect(bubble).toHaveTextContent(/opened the uncensored door yourself/)
+      expect(bubble).not.toHaveTextContent(/The Concierge moved this chat/)
+    })
+
+    it('speaks the Concierge\'s sentence when the Concierge set Unmoderated', () => {
+      render(<ConciergeMark conciergeState="unmoderated" conciergeSetBy="concierge" conciergeReason="classifier" />)
+
+      hover(screen.getByLabelText('Concierge: Unmoderated'))
+
+      const bubble = screen.getByRole('tooltip', { hidden: true })
+      expect(bubble).toHaveTextContent(/The Concierge moved this chat to the uncensored desk on reading the conversation/)
+      expect(bubble).not.toHaveTextContent(/opened the uncensored door yourself/)
+    })
+
+    it('lists the classifier\'s categories when the classifier moved the chat', () => {
+      render(
+        <ConciergeMark
+          conciergeState="unmoderated"
+          conciergeSetBy="concierge"
+          conciergeReason="classifier"
+          dangerCategories={['NSFW', 'Violence']}
+        />
+      )
+
+      hover(screen.getByLabelText('Concierge: Unmoderated'))
 
       const bubble = screen.getByRole('tooltip', { hidden: true })
       expect(bubble).toHaveTextContent('Categories')
       expect(bubble).toHaveTextContent('NSFW, Violence')
     })
 
-    it('omits the categories line on the operator states', () => {
-      render(<ConciergeMark conciergeState="vouched" dangerCategories={['NSFW']} />)
+    it('omits the categories line when the operator set the state', () => {
+      render(<ConciergeMark conciergeState="unmoderated" conciergeSetBy="operator" dangerCategories={['NSFW']} />)
 
-      hover(screen.getByLabelText('Concierge: Vouched Safe'))
+      hover(screen.getByLabelText('Concierge: Unmoderated'))
+
+      expect(screen.getByRole('tooltip', { hidden: true })).not.toHaveTextContent('Categories')
+    })
+
+    it('omits the categories line on Locked', () => {
+      render(<ConciergeMark conciergeState="locked" dangerCategories={['NSFW']} />)
+
+      hover(screen.getByLabelText('Concierge: Locked'))
 
       expect(screen.getByRole('tooltip', { hidden: true })).not.toHaveTextContent('Categories')
     })
@@ -129,9 +172,9 @@ describe('ConciergeMark', () => {
 
 describe('ConciergeTooltipBody', () => {
   it('renders title, detail and hint, and drops an absent categories line', () => {
-    render(<ConciergeTooltipBody {...describeConciergeState('uncensored')} />)
+    render(<ConciergeTooltipBody {...describeConciergeState('unmoderated', { setBy: 'operator' })} />)
 
-    expect(screen.getByText('Uncensored')).toBeInTheDocument()
+    expect(screen.getByText('Unmoderated')).toBeInTheDocument()
     expect(screen.getByText(/opened the uncensored door yourself/)).toBeInTheDocument()
     expect(screen.getByText("Change it from the Salon sidebar's Chat section.")).toBeInTheDocument()
     expect(screen.queryByText('Categories')).not.toBeInTheDocument()
@@ -139,8 +182,8 @@ describe('ConciergeTooltipBody', () => {
 })
 
 describe('ChatCard — the Concierge mark', () => {
-  it('draws no mark for a Monitored chat', () => {
-    const { container } = render(<ChatCard chat={chatCard({ conciergeState: 'monitored' })} />)
+  it('draws no mark for a Moderated chat', () => {
+    const { container } = render(<ChatCard chat={chatCard({ conciergeState: 'moderated' })} />)
     expect(container.querySelector('.qt-concierge-mark')).toBeNull()
   })
 
@@ -150,9 +193,8 @@ describe('ChatCard — the Concierge mark', () => {
   })
 
   it.each([
-    ['flagged', 'Concierge: Flagged', ''],
-    ['vouched', 'Concierge: Vouched Safe', 'qt-concierge-mark-muted'],
-    ['uncensored', 'Concierge: Uncensored', 'qt-concierge-mark-info'],
+    ['unmoderated', 'Concierge: Unmoderated', ''],
+    ['locked', 'Concierge: Locked', 'qt-concierge-mark-muted'],
   ] as const)('marks a %s chat', (conciergeState, label, modifier) => {
     const { container } = render(<ChatCard chat={chatCard({ conciergeState })} />)
 
@@ -164,6 +206,22 @@ describe('ChatCard — the Concierge mark', () => {
     } else {
       expect(container.querySelector('.qt-concierge-mark-muted')).toBeNull()
       expect(container.querySelector('.qt-concierge-mark-info')).toBeNull()
+    }
+  })
+
+  it('passes provenance through to the mark\'s tooltip', () => {
+    jest.useFakeTimers()
+    try {
+      render(<ChatCard chat={chatCard({ conciergeState: 'unmoderated', conciergeSetBy: 'concierge', conciergeReason: 'classifier', dangerCategories: ['NSFW'] })} />)
+      fireEvent.pointerEnter(screen.getByLabelText('Concierge: Unmoderated'))
+      act(() => { jest.advanceTimersByTime(250) })
+
+      const bubble = screen.getByRole('tooltip', { hidden: true })
+      expect(bubble).toHaveTextContent(/The Concierge moved this chat/)
+      expect(bubble).toHaveTextContent('NSFW')
+    } finally {
+      jest.runOnlyPendingTimers()
+      jest.useRealTimers()
     }
   })
 })

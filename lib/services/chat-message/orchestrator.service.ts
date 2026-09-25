@@ -68,7 +68,7 @@ import {
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -1626,6 +1626,7 @@ async function processMessage(
       toolMessagesLength: toolMessages.length,
       contentWasFlaggedDangerous,
       dangerSettings,
+      conciergeState: getConciergeState(chat),
       connectionProfile,
       formattedMessages,
       modelParams,

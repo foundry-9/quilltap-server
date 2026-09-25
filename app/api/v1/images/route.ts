@@ -202,7 +202,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
   }
 
   // Concierge settings, resolved WITH the chat when one asked, so a chat's own
-  // Concierge state (Vouched Safe, Uncensored) governs its pictures too.
+  // Concierge state (Locked, Unmoderated) governs its pictures too.
   // Fail safe, like the classification below: a settings read that fails
   // leaves the Concierge at its defaults rather than failing the picture.
   let chatSettings = null;
@@ -345,6 +345,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       chatId: chatId ?? null,
       purpose: 'dialog',
       settings: dangerSettings,
+      chat: chatForConcierge,
       profileKind: 'connection',
       primaryVia: profile.id !== profileId ? 'concierge' : 'primary',
       resolveUnderstudy: (exclude) => resolveUncensoredTextUnderstudy({

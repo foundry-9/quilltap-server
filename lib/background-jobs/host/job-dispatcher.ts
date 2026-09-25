@@ -38,6 +38,7 @@ import {
 } from './write-partition';
 import fs from 'fs';
 import path from 'path';
+import type { ConciergeDangerDetails } from '@/lib/services/concierge-notifications/writer';
 
 const log = logger.child({ module: 'jobs:dispatcher' });
 
@@ -386,6 +387,7 @@ export async function applyWritesUnsafe(
   // runs here, where the count is authoritative. Still inside the apply chain,
   // so the flip's own writes cannot land in another job's open transaction.
   await runRefusalLedgerChecks(writes, jobId);
+  await runClassifierSwitchChecks(writes, jobId);
 }
 
 /** The buffered write that records a moderation refusal on a chat. */
@@ -435,6 +437,58 @@ async function runRefusalLedgerChecks(writes: ChildWritePayload[], jobId: string
     }
   } catch (err) {
     log.error('Refusal-ledger auto-switch check failed after a committed batch', {
+      jobId,
+      error: getErrorMessage(err),
+    });
+  }
+}
+
+/** The buffered write that records the chat-level danger classifier's verdict. */
+export const DANGER_CLASSIFICATION_WRITE = 'chats.setDangerClassification';
+
+/**
+ * Every chat this batch classified dangerous, once each, with the verdict the
+ * write carried (its optional third argument; the last one wins). Pure;
+ * exported for tests.
+ */
+export function chatsWithDangerVerdicts(
+  writes: ChildWritePayload[],
+): Map<string, ConciergeDangerDetails | null> {
+  const chats = new Map<string, ConciergeDangerDetails | null>();
+  for (const w of writes) {
+    if (w.method !== DANGER_CLASSIFICATION_WRITE) continue;
+    const [chatId, telemetry, verdict] = w.args as [unknown, unknown, unknown];
+    if (typeof chatId !== 'string' || !chatId) continue;
+    const dangerous = !!telemetry && typeof telemetry === 'object'
+      && (telemetry as { isDangerousChat?: unknown }).isDangerousChat === true;
+    if (!dangerous) continue;
+    chats.set(chatId, verdict && typeof verdict === 'object' ? verdict as ConciergeDangerDetails : null);
+  }
+  return chats;
+}
+
+/**
+ * Ask whether each chat a committed child batch classified dangerous should
+ * move to Unmoderated — decided here, in the parent, against the chat as it
+ * stands now. Best-effort like the refusal-ledger check: the batch is already
+ * committed, so a failure is logged and never fails the job.
+ */
+async function runClassifierSwitchChecks(writes: ChildWritePayload[], jobId: string): Promise<void> {
+  const chats = chatsWithDangerVerdicts(writes);
+  if (chats.size === 0) return;
+  log.debug('Child batch recorded a dangerous classification; running the classifier switch', {
+    jobId,
+    chatIds: [...chats.keys()],
+  });
+  try {
+    const { maybeSwitchAfterClassification } = await import(
+      '@/lib/services/dangerous-content/classifier-switch'
+    );
+    for (const [chatId, verdict] of chats) {
+      await maybeSwitchAfterClassification(chatId, verdict);
+    }
+  } catch (err) {
+    log.error('Classifier switch failed after a committed batch', {
       jobId,
       error: getErrorMessage(err),
     });

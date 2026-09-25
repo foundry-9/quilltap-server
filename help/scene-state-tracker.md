@@ -33,7 +33,7 @@ The scene state feeds into several systems:
 
 ## Dangerous Content Handling
 
-For chats classified as dangerous by the Concierge, the scene tracker automatically uses the uncensored LLM provider (if configured) to ensure accurate scene descriptions aren't refused by content filters.
+For **Unmoderated** chats (whether the Concierge or you set them so), the scene tracker automatically uses the uncensored LLM provider (if configured) to ensure accurate scene descriptions aren't refused by content filters.
 
 ## Performance
 

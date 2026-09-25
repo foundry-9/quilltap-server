@@ -1,5 +1,7 @@
 # The Concierge — Choosing the State on the New Chat Form
 
+> **Superseded by [concierge-overhaul-phase-3-three-states.md](../concierge-overhaul-phase-3-three-states.md) (4.10).** The four states described here are now three — Moderated / Unmoderated / Locked, stored in `conciergeMode` with provenance in `conciergeModeSetBy` / `conciergeModeReason`. `conciergeOverride` is no longer written. This document is kept as the historical record of the four-state design.
+
 **Status:** Implemented (4.9-dev, 2026-09-02)
 **Scope:** quilltap-server — New Chat form (modal and `/salon/new` page), `POST /api/v1/chats`, greeting routing; no schema change, no migration, no shell impact
 **Builds on:** [concierge-four-state.md](concierge-four-state.md) (the four states and their storage) and [concierge-list-marks.md](concierge-list-marks.md) (the shared presentation table)

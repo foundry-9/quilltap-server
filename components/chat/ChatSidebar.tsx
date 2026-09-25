@@ -26,10 +26,12 @@ import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerUrlDownload } from '@/lib/download-utils'
-import { getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { CONCIERGE_STATES, getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneTextClass,
+  describeConciergeState,
+  type ConciergeProvenanceNote,
 } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
@@ -169,7 +171,6 @@ export interface ChatSidebarProps {
   onParticipantSettingsChange?: (participantId: string, updates: { isActive?: boolean; status?: 'active' | 'silent' | 'absent' | 'removed' }) => void
   chatId: string
   onRegenerateAvatar?: (participantId: string) => void
-  isDangerousChat?: boolean
 
   // --- Chat section ---
   agentModeEnabled?: boolean | null
@@ -188,8 +189,10 @@ export interface ChatSidebarProps {
   avatarGenerationEnabled?: boolean | null
   /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
   timelineMode?: 'realtime' | 'narrative' | null
-  /** Per-chat Concierge override ('OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored, null = follow global). */
-  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
+  /** The chat's Concierge state, as the server derived it. Absent reads as Moderated. */
+  conciergeState?: ConciergeState
+  /** Who set the Concierge state and why — the helper text's note. */
+  conciergeProvenance?: ConciergeProvenanceNote
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -540,8 +543,8 @@ export function ChatSidebar(props: ChatSidebarProps) {
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
             avatarGenerationEnabled={props.avatarGenerationEnabled}
             timelineMode={props.timelineMode}
-            isDangerousChat={props.isDangerousChat}
-            conciergeOverride={props.conciergeOverride}
+            conciergeState={props.conciergeState}
+            conciergeProvenance={props.conciergeProvenance}
             onToolSettingsClick={props.onToolSettingsClick}
             onRunToolClick={props.onRunToolClick}
             storyBackgroundsEnabled={props.storyBackgroundsEnabled}
@@ -869,7 +872,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
               onRegenerateAvatar={p.onRegenerateAvatar}
-              isDangerousChat={shouldShowDangerStyling({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
+              isDangerousChat={shouldShowDangerStyling({ conciergeState: p.conciergeState })}
             />
           )
         })}
@@ -914,8 +917,8 @@ interface ChatSectionProps {
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
   timelineMode?: 'realtime' | 'narrative' | null
-  isDangerousChat?: boolean
-  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
+  conciergeState?: ConciergeState
+  conciergeProvenance?: ConciergeProvenanceNote
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -940,8 +943,8 @@ function ChatSection({
   alertCharactersOfLanternImages,
   avatarGenerationEnabled,
   timelineMode,
-  isDangerousChat,
-  conciergeOverride,
+  conciergeState: conciergeStateProp,
+  conciergeProvenance,
   onToolSettingsClick,
   onRunToolClick,
   storyBackgroundsEnabled,
@@ -1097,13 +1100,11 @@ function ChatSection({
         throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
       }
       showSuccessToast(
-        next === 'monitored'
+        next === 'moderated'
           ? 'The Concierge is on watch'
-          : next === 'flagged'
-            ? 'Marked as flagged'
-            : next === 'vouched'
-              ? 'You have vouched for this chat'
-              : 'The uncensored door stands open'
+          : next === 'unmoderated'
+            ? 'The uncensored door stands open'
+            : 'Locked to the usual desks'
       )
       onChatUpdated?.()
     } catch (error) {
@@ -1139,16 +1140,14 @@ function ChatSection({
     ? 'inherit'
     : alertCharactersOfLanternImages ? 'enabled' : 'disabled'
 
-  const conciergeState = getConciergeState({ isDangerousChat, conciergeOverride })
-  // Four states, one 2×2: rows are the route (ordinary vs uncensored),
-  // columns are the provenance (the Concierge's classifier vs the operator).
-  // The optgroups carry the provenance structurally; the helper text names
-  // the actor; the icon/color pair gives a third, colorblind-safe channel.
-  // All of it comes from the presentation table, which this section's own
-  // sentences seeded — so the list marks and the header pill say the same
+  const conciergeState = getConciergeState({ conciergeState: conciergeStateProp })
+  // Three states in a flat list. Who set Unmoderated — you or the Concierge —
+  // is a note in the helper text, never a separate option; the icon/colour
+  // pair is a second, colourblind-safe channel. All of it comes from the
+  // presentation table, so the list marks and the header pill say the same
   // words, and a copy edit here lands in all three.
   const conciergePresentation = CONCIERGE_STATE_PRESENTATION[conciergeState]
-  const conciergeHelperText = conciergePresentation.detail
+  const conciergeHelperText = describeConciergeState(conciergeState, conciergeProvenance).detail
   const conciergeStateIcon = {
     name: conciergePresentation.icon,
     className: conciergeToneTextClass(conciergePresentation.tone),
@@ -1156,7 +1155,7 @@ function ChatSection({
 
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-chat flex flex-col gap-3">
-      {/* The Concierge — per-chat four-state */}
+      {/* The Concierge — per-chat state */}
       <label className="qt-label">
         <span className="mb-1 flex items-center gap-1.5">
           The Concierge
@@ -1168,14 +1167,9 @@ function ChatSection({
           disabled={conciergeSaving}
           className="qt-select text-sm"
         >
-          <optgroup label="The Concierge decides">
-            <option value="monitored">Monitored</option>
-            <option value="flagged">Flagged</option>
-          </optgroup>
-          <optgroup label="You decide">
-            <option value="vouched">Vouched Safe</option>
-            <option value="uncensored">Uncensored</option>
-          </optgroup>
+          {CONCIERGE_STATES.map((value) => (
+            <option key={value} value={value}>{CONCIERGE_STATE_PRESENTATION[value].label}</option>
+          ))}
         </select>
         <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
       </label>

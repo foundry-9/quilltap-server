@@ -37,6 +37,11 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 }))
 
 const mockPostConciergeRefusalAnnouncement = jest.fn(async (_params: unknown) => null)
+const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+jest.mock('@/lib/services/dangerous-content/current-state', () => ({
+  readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+}))
+
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeRefusalAnnouncement: (params: unknown) => mockPostConciergeRefusalAnnouncement(params),
 }))
@@ -597,6 +602,57 @@ describe('provider-failover.service — the route trail', () => {
     await recover(state)
 
     expect(state.routeFailures[0]).toMatchObject({ profileId: 'unc-1', via: 'concierge' })
+  })
+
+  describe('a Locked chat', () => {
+    it('never asks the uncensored understudy, and says the refusal stands', async () => {
+      mockIsModerationFinishReason.mockReturnValue(true)
+      const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+      await recover(state, {
+        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+        conciergeState: 'locked',
+      })
+
+      expect(mockResolveUncensoredTextUnderstudy).not.toHaveBeenCalled()
+      expect(mockPostConciergeRefusalAnnouncement).toHaveBeenCalledWith(expect.objectContaining({
+        chatId: 'chat-1',
+        kind: 'refusal-not-permitted',
+        details: expect.objectContaining({ purpose: 'text', reason: 'locked' }),
+      }))
+      expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads the state at refusal time: a chat locked mid-turn is not rerouted', async () => {
+      mockIsModerationFinishReason.mockReturnValue(true)
+      mockReadCurrentConciergeState.mockResolvedValueOnce('locked')
+      const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+      await recover(state, {
+        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+        conciergeState: 'moderated',
+      })
+
+      expect(mockReadCurrentConciergeState).toHaveBeenCalledWith('chat-1', 'moderated')
+      expect(mockResolveUncensoredTextUnderstudy).not.toHaveBeenCalled()
+      expect(mockPostConciergeRefusalAnnouncement).toHaveBeenCalledWith(expect.objectContaining({
+        kind: 'refusal-not-permitted',
+        details: expect.objectContaining({ reason: 'locked' }),
+      }))
+    })
+
+    it('posts nothing for a plain empty body on a Locked chat', async () => {
+      mockStreamMessage.mockReturnValueOnce(makeStream([{ done: true, rawResponse: null }]))
+      const state = freshState()
+
+      await recover(state, {
+        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+        conciergeState: 'locked',
+      })
+
+      expect(mockResolveUncensoredTextUnderstudy).not.toHaveBeenCalled()
+      expect(mockPostConciergeRefusalAnnouncement).not.toHaveBeenCalled()
+    })
   })
 
   describe('the refusal ledger', () => {

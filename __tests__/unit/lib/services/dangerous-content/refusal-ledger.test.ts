@@ -10,10 +10,18 @@ jest.mock('@/lib/logging/create-logger', () => ({
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeManualAnnouncement: jest.fn(async () => null),
+  postConciergeDangerAnnouncement: jest.fn(async () => null),
 }))
+// The real transition chokepoint, wrapped in a spy so the tests can see what
+// the auto-switch asked of it.
+jest.mock('@/lib/services/dangerous-content/manual-flip', () => {
+  const actual = jest.requireActual('@/lib/services/dangerous-content/manual-flip')
+  return { ...actual, applyConciergeFlip: jest.fn(actual.applyConciergeFlip) }
+})
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { postConciergeManualAnnouncement } from '@/lib/services/concierge-notifications/writer'
+import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip'
 import {
   isRecordableRefusalEvidence,
   maybeAutoSwitchAfterRefusal,
@@ -23,13 +31,16 @@ import {
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
 const mockAnnounce = jest.mocked(postConciergeManualAnnouncement)
+const mockFlip = jest.mocked(applyConciergeFlip)
 
 interface FakeChat {
   id: string
   userId: string
   messageCount: number
   isDangerousChat: boolean | null
-  conciergeOverride: 'OFF' | 'UNCENSORED' | null
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked' | null
+  conciergeModeSetBy: 'operator' | 'concierge' | null
+  conciergeModeReason: 'manual' | 'refusals' | 'classifier' | 'migration' | null
   chatType: string
 }
 
@@ -41,6 +52,17 @@ const chatsUpdate = jest.fn(async (_id: string, patch: Partial<FakeChat>) => {
   chat = { ...chat, ...patch }
   return chat
 })
+// A faithful compare-and-set: writes only when the stored state (NULL =
+// moderated) still matches `expected`.
+const setMode = jest.fn(async (
+  _id: string,
+  cols: Pick<FakeChat, 'conciergeMode' | 'conciergeModeSetBy' | 'conciergeModeReason'>,
+  expected?: 'moderated' | 'unmoderated' | 'locked',
+) => {
+  if (expected && (chat.conciergeMode ?? 'moderated') !== expected) return false
+  chat = { ...chat, ...cols }
+  return true
+})
 const increment = jest.fn(async () => ++ledgerCount)
 const reset = jest.fn(async () => { ledgerCount = 0 })
 
@@ -49,6 +71,7 @@ function installRepos() {
     chats: {
       findById: jest.fn(async () => ({ ...chat })),
       update: chatsUpdate,
+      setConciergeMode: setMode,
       incrementModerationRefusalCount: increment,
       getModerationRefusalLedger: jest.fn(async () => ({ count: ledgerCount, lastAt: null })),
       resetModerationRefusalLedger: reset,
@@ -74,7 +97,7 @@ const record = (overrides: Partial<RefusalRecord> = {}): RefusalRecord => ({
   ...overrides,
 })
 
-const flagCalls = () => mockAnnounce.mock.calls.filter(([a]) => a.kind === 'auto-flagged-refusals')
+const flagCalls = () => mockAnnounce.mock.calls.filter(([a]) => a.kind === 'auto-unmoderated')
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -84,7 +107,9 @@ beforeEach(() => {
     userId: 'user-1',
     messageCount: 7,
     isDangerousChat: false,
-    conciergeOverride: null,
+    conciergeMode: null,
+    conciergeModeSetBy: null,
+    conciergeModeReason: null,
     chatType: 'salon',
   }
   ledgerCount = 0
@@ -124,7 +149,7 @@ describe('recordModerationRefusal', () => {
     expect(chatsUpdate).not.toHaveBeenCalled()
   })
 
-  it('switches a Monitored Auto-Route chat exactly once, on the N-th refusal', async () => {
+  it('switches a Moderated Auto-Route chat to Unmoderated exactly once, on the N-th refusal', async () => {
     const first = await recordModerationRefusal(record())
     const second = await recordModerationRefusal(record({ provider: 'OPENAI', modelName: 'gpt-image-1' }))
     const third = await recordModerationRefusal(record())
@@ -132,16 +157,32 @@ describe('recordModerationRefusal', () => {
     expect(first.switched).toBe(false)
     expect(second).toEqual({ count: 2, switched: true })
     expect(third.switched).toBe(false)
-    expect(chat.isDangerousChat).toBe(true)
-    expect(chatsUpdate).toHaveBeenCalledTimes(1)
-    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', expect.objectContaining({
-      isDangerousChat: true,
-      dangerCategories: ['moderation-refusals'],
-    }))
+
+    // The switch goes through the one chokepoint, as the Concierge, for refusals.
+    expect(mockFlip).toHaveBeenCalledTimes(1)
+    expect(mockFlip).toHaveBeenCalledWith('chat-1', 'unmoderated', expect.anything(), {
+      by: 'concierge',
+      reason: 'refusals',
+      refusals: { count: 2, lastProvider: 'OPENAI', lastModel: 'gpt-image-1' },
+    })
+
+    expect(chat.conciergeMode).toBe('unmoderated')
+    expect(chat.conciergeModeSetBy).toBe('concierge')
+    expect(chat.conciergeModeReason).toBe('refusals')
+    // A compare-and-set against Moderated, never a whole-row update.
+    expect(setMode).toHaveBeenCalledTimes(1)
+    expect(setMode).toHaveBeenCalledWith('chat-1', {
+      conciergeMode: 'unmoderated',
+      conciergeModeSetBy: 'concierge',
+      conciergeModeReason: 'refusals',
+    }, 'moderated')
+    expect(chatsUpdate).not.toHaveBeenCalled()
+    // The classifier's telemetry is not the switch's to write any more.
+    expect(chat.isDangerousChat).toBe(false)
     expect(flagCalls()).toHaveLength(1)
     expect(flagCalls()[0][0]).toEqual({
       chatId: 'chat-1',
-      kind: 'auto-flagged-refusals',
+      kind: 'auto-unmoderated',
       details: { count: 2, lastProvider: 'OPENAI', lastModel: 'gpt-image-1' },
     })
   })
@@ -168,14 +209,23 @@ describe('recordModerationRefusal', () => {
   })
 
   it.each([
-    ['Vouched Safe', { conciergeOverride: 'OFF' as const }],
-    ['Uncensored', { conciergeOverride: 'UNCENSORED' as const }],
-    ['Flagged', { isDangerousChat: true }],
+    ['Locked', { conciergeMode: 'locked' as const, conciergeModeSetBy: 'operator' as const, conciergeModeReason: 'manual' as const }],
+    ['operator-Unmoderated', { conciergeMode: 'unmoderated' as const, conciergeModeSetBy: 'operator' as const, conciergeModeReason: 'manual' as const }],
+    ['Concierge-Unmoderated', { conciergeMode: 'unmoderated' as const, conciergeModeSetBy: 'concierge' as const, conciergeModeReason: 'classifier' as const }],
   ])('never switches a %s chat', async (_label, patch) => {
     chat = { ...chat, ...patch }
     for (let i = 0; i < 3; i++) await recordModerationRefusal(record())
+    expect(mockFlip).not.toHaveBeenCalled()
     expect(chatsUpdate).not.toHaveBeenCalled()
     expect(mockAnnounce).not.toHaveBeenCalled()
+  })
+
+  it('reads the classifier telemetry as no reason to skip: a Moderated chat labelled dangerous still switches', async () => {
+    // isDangerousChat is telemetry now; only conciergeMode says who is on duty.
+    chat = { ...chat, isDangerousChat: true }
+    await recordModerationRefusal(record())
+    expect((await recordModerationRefusal(record())).switched).toBe(true)
+    expect(chat.conciergeMode).toBe('unmoderated')
   })
 
   it('never switches under Detect Only', async () => {
@@ -219,15 +269,16 @@ describe('maybeAutoSwitchAfterRefusal', () => {
     const repos = jest.mocked(getRepositories)() as unknown as {
       chatSettings: { findByUserId: jest.Mock }
     }
-    // The operator vouches for the chat while the check reads the settings.
+    // The operator locks the chat while the check reads the settings.
     repos.chatSettings.findByUserId.mockImplementationOnce(async () => {
-      chat = { ...chat, conciergeOverride: 'OFF' }
+      chat = { ...chat, conciergeMode: 'locked', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' }
       return { dangerousContentSettings: { mode: 'AUTO_ROUTE', autoSwitchAfterRefusals: 2 } }
     })
 
     expect(await maybeAutoSwitchAfterRefusal('chat-1', { provider: 'GOOGLE' })).toEqual({ switched: false })
+    expect(mockFlip).not.toHaveBeenCalled()
     expect(chatsUpdate).not.toHaveBeenCalled()
-    expect(chat.conciergeOverride).toBe('OFF')
+    expect(chat.conciergeMode).toBe('locked')
     expect(flagCalls()).toHaveLength(0)
   })
 
@@ -241,13 +292,13 @@ describe('maybeAutoSwitchAfterRefusal', () => {
     expect(flagCalls()).toHaveLength(1)
   })
 
-  it('an operator return to Monitored empties the ledger, so the next refusal starts afresh', async () => {
+  it('an operator return to Moderated empties the ledger, so the next refusal starts afresh', async () => {
     await recordModerationRefusal(record())
     await recordModerationRefusal(record())
-    expect(chat.isDangerousChat).toBe(true)
+    expect(chat.conciergeMode).toBe('unmoderated')
 
-    const { applyConciergeFlip } = await import('@/lib/services/dangerous-content/manual-flip')
-    await applyConciergeFlip('chat-1', 'monitored', chat as never)
+    await applyConciergeFlip('chat-1', 'moderated', chat as never)
+    expect(chat.conciergeMode).toBe('moderated')
     expect(reset).toHaveBeenCalledWith('chat-1')
     expect(ledgerCount).toBe(0)
 

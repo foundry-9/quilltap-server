@@ -212,7 +212,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // than draping a sheet over a scene nobody asked to have covered.
   //
   // Only under Auto-Route: a candid prompt is never crafted for a route that
-  // cannot reroute, or a Flagged chat under Detect Only would send its franker
+  // cannot reroute, or an uncensored-route chat under Detect Only would send its franker
   // prompt straight to the moderated provider.
   const uncensoredImageTarget =
     isDangerousChat && hasUncensoredImageProvider && dangerSettings.mode === 'AUTO_ROUTE';
@@ -614,8 +614,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 10. Generate the image — through the Concierge's failover chokepoint.
   //
   // A refusal is retried once on an uncensored understudy under Auto-Route,
-  // in any chat state. The old gate (bug 133) barred that for a chat still
-  // Monitored, on the ground that a refusal should not "promote" the chat.
+  // in any chat that is not Locked (the chokepoint asks `mayFailOver`). The
+  // old gate (bug 133) barred that for a chat still Monitored (now Moderated), on the ground that a refusal should not "promote" the chat.
   // That concern belongs to the chat *switch*, not to a retry that resends the
   // same prompt to a provider that will take it: the prompt is never
   // re-crafted here, so a moderated chat's concealed prompt stays concealed.
@@ -687,7 +687,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     failover = await generateImageWithConciergeFailover(
       { profile: imageProfile, apiKey: apiKey.key_value },
       attemptBackground,
-      { userId: job.userId, chatId: payload.chatId, purpose: 'lantern', settings: dangerSettings },
+      { userId: job.userId, chatId: payload.chatId, purpose: 'lantern', settings: dangerSettings, chat },
     );
   } catch (error) {
     const errorMessage = getErrorMessage(error);

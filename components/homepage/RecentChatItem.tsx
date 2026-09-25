@@ -74,6 +74,8 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
           {chat.conciergeState && (
             <ConciergeMark
               conciergeState={chat.conciergeState}
+              conciergeSetBy={chat.conciergeSetBy}
+              conciergeReason={chat.conciergeReason}
               dangerCategories={chat.dangerCategories}
             />
           )}

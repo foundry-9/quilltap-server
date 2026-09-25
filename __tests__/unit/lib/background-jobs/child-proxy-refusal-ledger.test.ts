@@ -50,7 +50,7 @@ import {
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
 import { classifyWriteTarget } from '@/lib/background-jobs/host/write-partition';
-import { chatsWithRecordedRefusals } from '@/lib/background-jobs/host/job-dispatcher';
+import { chatsWithDangerVerdicts, chatsWithRecordedRefusals } from '@/lib/background-jobs/host/job-dispatcher';
 import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger';
 
 const mockedRepoSource = mockedRealRepositories as jest.MockedFunction<typeof mockedRealRepositories>;
@@ -107,5 +107,30 @@ describe('child proxy — the refusal ledger', () => {
     expect([...chatsWithRecordedRefusals(writes)]).toEqual([
       ['chat-7', { provider: 'GOOGLE', modelName: 'gemini-2.5-flash-image' }],
     ]);
+  });
+
+  it("buffers the classifier's verdict as telemetry and leaves the switch to the parent hook", async () => {
+    const repos = { chats: { setDangerClassification: jest.fn(), findById: jest.fn(), setConciergeMode: jest.fn() } };
+    mockedRepoSource.mockReturnValue(repos as never);
+    const verdict = { score: 0.9, threshold: 0.7, categories: [{ category: 'sexual', score: 0.9 }], providerName: 'OPENAI' };
+    const telemetry = (dangerous: boolean) => ({
+      isDangerousChat: dangerous, dangerScore: dangerous ? 0.9 : 0.1, dangerCategories: [],
+      dangerClassifiedAt: 't', dangerClassifiedAtMessageCount: 3,
+    });
+
+    const writes = await runWithJobScope('job-classify', async () => {
+      const chats = (require('@/lib/repositories/factory').getRepositories() as {
+        chats: { setDangerClassification: (...args: unknown[]) => unknown };
+      }).chats;
+      await chats.setDangerClassification('chat-8', telemetry(true), verdict);
+      await chats.setDangerClassification('chat-9', telemetry(false), null);
+      return flushPendingWrites();
+    });
+
+    expect(repos.chats.setDangerClassification).not.toHaveBeenCalled();
+    expect(repos.chats.setConciergeMode).not.toHaveBeenCalled();
+    expect(writes.map((w) => w.method)).toEqual(['chats.setDangerClassification', 'chats.setDangerClassification']);
+    // Only the dangerous verdict reaches the parent's switch, carrying its details.
+    expect([...chatsWithDangerVerdicts(writes)]).toEqual([['chat-8', verdict]]);
   });
 });

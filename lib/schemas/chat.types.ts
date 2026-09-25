@@ -108,6 +108,23 @@ export function isModerationExemptChatType(chatType: string | null | undefined):
   return chatType === 'help' || chatType === 'brahma';
 }
 
+/**
+ * The three Concierge postures a chat can be in (`chats.conciergeMode`):
+ * `'moderated'` (ordinary providers first, uncensored on refusal),
+ * `'unmoderated'` (the uncensored desk only) and `'locked'` (ordinary only,
+ * never failover). These are also the wire values of `conciergeState`.
+ */
+export const ConciergeModeSchema = z.enum(['moderated', 'unmoderated', 'locked']);
+export type ConciergeMode = z.infer<typeof ConciergeModeSchema>;
+
+/** Who put a chat in its Concierge posture (`chats.conciergeModeSetBy`). */
+export const ConciergeModeSetBySchema = z.enum(['operator', 'concierge']);
+export type ConciergeModeSetBy = z.infer<typeof ConciergeModeSetBySchema>;
+
+/** Why a chat is in its Concierge posture (`chats.conciergeModeReason`). */
+export const ConciergeModeReasonSchema = z.enum(['manual', 'refusals', 'classifier', 'migration']);
+export type ConciergeModeReason = z.infer<typeof ConciergeModeReasonSchema>;
+
 // ============================================================================
 // AUTONOMOUS-ROOM RUN STATE
 // ============================================================================
@@ -929,7 +946,8 @@ export const ChatMetadataSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
-   * Per-chat Concierge mode override. NULL means follow the global Concierge
+   * LEGACY (phase 3 stopped writing it; see `conciergeMode`). Per-chat
+   * Concierge mode override. NULL means follow the global Concierge
    * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
    * Vouched Safe: the operator vouches for the chat, disabling every
    * Concierge effect (no classification, no scanning, no uncensored reroute,
@@ -941,6 +959,19 @@ export const ChatMetadataSchema = z.object({
    * where the classifier left off.
    */
   conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
+  /**
+   * The chat's Concierge posture (Concierge overhaul phase 3), and the only
+   * stored field any routing or display decision reads. NULL reads as
+   * `'moderated'`. Read it through `getConciergeState`
+   * (`lib/services/dangerous-content/chat-override.ts`), write it only through
+   * `applyConciergeFlip` (`manual-flip.ts`). `conciergeOverride` above is
+   * legacy — no longer written, kept so an old row or bundle can be derived.
+   */
+  conciergeMode: ConciergeModeSchema.nullable().optional(),
+  /** Who put the chat in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeSetBy: ConciergeModeSetBySchema.nullable().optional(),
+  /** Why the chat is in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeReason: ConciergeModeReasonSchema.nullable().optional(),
 
   /**
    * Per-chat answer-confirmation override. NULL means inherit (from the chat's
@@ -1306,7 +1337,8 @@ export const ChatMetadataBaseSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
-   * Per-chat Concierge mode override. NULL means follow the global Concierge
+   * LEGACY (phase 3 stopped writing it; see `conciergeMode`). Per-chat
+   * Concierge mode override. NULL means follow the global Concierge
    * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
    * Vouched Safe: the operator vouches for the chat, disabling every
    * Concierge effect (no classification, no scanning, no uncensored reroute,
@@ -1318,6 +1350,19 @@ export const ChatMetadataBaseSchema = z.object({
    * where the classifier left off.
    */
   conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
+  /**
+   * The chat's Concierge posture (Concierge overhaul phase 3), and the only
+   * stored field any routing or display decision reads. NULL reads as
+   * `'moderated'`. Read it through `getConciergeState`
+   * (`lib/services/dangerous-content/chat-override.ts`), write it only through
+   * `applyConciergeFlip` (`manual-flip.ts`). `conciergeOverride` above is
+   * legacy — no longer written, kept so an old row or bundle can be derived.
+   */
+  conciergeMode: ConciergeModeSchema.nullable().optional(),
+  /** Who put the chat in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeSetBy: ConciergeModeSetBySchema.nullable().optional(),
+  /** Why the chat is in its current `conciergeMode`; NULL when Moderated by default. */
+  conciergeModeReason: ConciergeModeReasonSchema.nullable().optional(),
 
   /**
    * Per-chat answer-confirmation override. NULL means inherit (from the chat's

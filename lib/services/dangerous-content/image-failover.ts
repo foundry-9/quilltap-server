@@ -15,7 +15,9 @@
  *   3. a refusal → record it on the trail, and on the chat's refusal ledger
  *      (`recordModerationRefusal`) once the outcome is known — whether or not
  *      the reroute later succeeds;
- *   4. mode is not `AUTO_ROUTE` → announce `refusal-not-permitted`, rethrow;
+ *   4. the chat may not fail over (`mayFailOver` — it is Locked) → announce
+ *      `refusal-not-permitted` with `reason: 'locked'`, rethrow; mode is not
+ *      `AUTO_ROUTE` → announce `refusal-not-permitted`, rethrow;
  *   5. ask the understudy resolver (excluding the primary). Nobody →
  *      announce `refusal-no-understudy`, rethrow;
  *   6. ask the understudy once. It answers → announce `refusal-rerouted` and
@@ -39,6 +41,8 @@ import {
   postConciergeRefusalAnnouncement,
   type ConciergeRefusalKind,
 } from '@/lib/services/concierge-notifications/writer'
+import { conciergeStateMayFailOver, getConciergeState, type ConciergeState } from './chat-override'
+import { readCurrentConciergeState } from './current-state'
 import { classifyRefusal, type RefusalVerdict } from './refusal'
 import { recordModerationRefusal } from './refusal-ledger'
 import { resolveUncensoredImageUnderstudy } from './understudy'
@@ -60,6 +64,13 @@ export interface ImageFailoverContext<P extends FailoverProfile = ImageProfile> 
   purpose: 'tool' | 'lantern' | 'avatar' | 'dialog'
   /** Already resolved WITH the chat where there is one. */
   settings: DangerousContentSettings
+  /**
+   * The chat's Concierge state when the call began, where there is a chat. A
+   * Locked chat never fails over, whatever the mode says. At refusal time the
+   * chokepoint re-reads the chat (by `chatId`) and uses this only if that read
+   * fails. Absent (the dialog) reads as Moderated.
+   */
+  chat?: { conciergeMode?: ConciergeState | null } | null
   /**
    * Who could stand in, excluding the given ids. Defaults to
    * `resolveUncensoredImageUnderstudy`. The legacy dialog, which still draws
@@ -147,6 +158,7 @@ async function announce(
   kind: ConciergeRefusalKind,
   refusing: FailoverProfile,
   answeringProfileName?: string,
+  reason?: 'locked' | 'mode',
 ): Promise<void> {
   if (!ctx.chatId) {
     logger.debug('No chat to announce the refusal in', { kind, purpose: ctx.purpose })
@@ -160,6 +172,7 @@ async function announce(
       refusingModel: refusing.modelName,
       answeringProfileName,
       purpose: ctx.purpose,
+      ...(reason ? { reason } : {}),
     },
   })
 }
@@ -243,8 +256,20 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
     mode: ctx.settings.mode,
   })
 
-  // 4. The caller's policy, stated here where a reader can see it: failover
-  //    obeys Auto-Route in this phase.
+  // 4. The caller's policy, stated here where a reader can see it: a Locked
+  //    chat never fails over, and otherwise failover obeys Auto-Route. The
+  //    state is read now, not when the call began: the operator may have
+  //    locked the chat while the provider was thinking.
+  const conciergeState = await readCurrentConciergeState(ctx.chatId, getConciergeState(ctx.chat))
+  if (!conciergeStateMayFailOver(conciergeState)) {
+    logger.info('Refusal not rerouted: the chat is Locked', {
+      ...logContext,
+      conciergeState,
+    })
+    await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-not-permitted', primary.profile, undefined, 'locked')
+    await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)
+    throw attachTrail(primaryError, trail)
+  }
   if (ctx.settings.mode !== 'AUTO_ROUTE') {
     logger.info('Refusal not rerouted: the Concierge mode does not permit it', {
       ...logContext,

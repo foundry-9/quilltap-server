@@ -23,7 +23,8 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
 import { ConciergeMark } from '@/components/chat/ConciergeMark'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 
 // ============================================================================
 // Types
@@ -78,9 +79,13 @@ export interface ChatCardData {
   previewText?: string | null
   /** Story background image URL - displayed instead of avatars when present */
   storyBackgroundUrl?: string | null
-  /** The derived Concierge four-state — never the raw danger label */
+  /** The derived Concierge state — never a stored column */
   conciergeState?: ConciergeState
-  /** The classifier's categories, shown on the mark's tooltip when Flagged */
+  /** Who put the chat in its state; `null` for Moderated */
+  conciergeSetBy?: ConciergeProvenance
+  /** Why the chat is in its state; `null` for Moderated */
+  conciergeReason?: ConciergeModeReason | null
+  /** The classifier's categories, shown on the mark's tooltip */
   dangerCategories?: string[]
   /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
@@ -292,6 +297,8 @@ export function ChatCard({
               {chat.conciergeState && (
                 <ConciergeMark
                   conciergeState={chat.conciergeState}
+                  conciergeSetBy={chat.conciergeSetBy}
+                  conciergeReason={chat.conciergeReason}
                   dangerCategories={chat.dangerCategories}
                   className="text-sm flex-shrink-0"
                 />

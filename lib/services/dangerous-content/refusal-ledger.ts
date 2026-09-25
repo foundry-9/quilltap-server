@@ -3,10 +3,10 @@
  *
  * Every stated moderation refusal the phase-1 chokepoints detect on a chat is
  * counted here (`chats.moderationRefusalCount`, `lastModerationRefusalAt`).
- * After `autoSwitchAfterRefusals` of them on a Monitored chat under Auto-Route,
- * the Concierge switches the chat to Flagged through `applyConciergeFlip`
+ * After `autoSwitchAfterRefusals` of them on a Moderated chat under Auto-Route,
+ * the Concierge switches the chat to Unmoderated through `applyConciergeFlip`
  * (`{ by: 'concierge', reason: 'refusals' }`) and says why. The operator's
- * return to Monitored empties the ledger.
+ * return to Moderated empties the ledger.
  *
  * Two rules keep it honest:
  *
@@ -30,7 +30,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { getRepositories } from '@/lib/repositories/factory'
-import { getConciergeState } from './chat-override'
+import { getConciergeState, isClassifierOnDuty } from './chat-override'
 import { applyConciergeFlip } from './manual-flip'
 import type { RefusalEvidence } from './refusal'
 import {
@@ -59,7 +59,7 @@ export interface RecordRefusalResult {
    * when the increment was buffered in the job child and cannot be read back.
    */
   count: number | null
-  /** Whether this refusal switched the chat to Flagged. Always false in the child. */
+  /** Whether this refusal switched the chat to Unmoderated. Always false in the child. */
   switched: boolean
 }
 
@@ -88,7 +88,7 @@ function isJobChild(): boolean {
 /**
  * The auto-switch check in flight per chat, in this process. Two refusals
  * landing together (a text turn and an image job's commit, say) would each
- * read the chat as Monitored before either flip lands and announce twice;
+ * read the chat as Moderated before either flip lands and announce twice;
  * chaining them means the second reads the first's outcome.
  */
 const switchChecks = new Map<string, Promise<unknown>>()
@@ -146,12 +146,12 @@ export async function recordModerationRefusal(rec: RefusalRecord): Promise<Recor
 }
 
 /**
- * Switch a Monitored chat to Flagged if its ledger has reached the threshold.
+ * Switch a Moderated chat to Unmoderated if its ledger has reached the threshold.
  *
  * Parent process only. Called by {@link recordModerationRefusal} right after
  * an in-parent increment, and by the job dispatcher after it commits a child
  * batch that incremented this chat's ledger. Idempotent: a chat that is not
- * Monitored is left alone, and `applyConciergeFlip` is a no-op on a match.
+ * Moderated (Unmoderated already, or Locked) is left alone, and `applyConciergeFlip` is a no-op on a match.
  * Never throws.
  */
 export async function maybeAutoSwitchAfterRefusal(
@@ -186,8 +186,8 @@ async function runAutoSwitchCheck(
     }
 
     const state = getConciergeState(chat)
-    if (state !== 'monitored') {
-      logger.debug('Auto-switch check skipped: the chat is not Monitored', { chatId, state })
+    if (!isClassifierOnDuty(chat)) {
+      logger.debug('Auto-switch check skipped: the chat is not Moderated', { chatId, state })
       return { switched: false }
     }
 
@@ -212,21 +212,21 @@ async function runAutoSwitchCheck(
 
     // The settings and ledger reads above awaited; the operator may have moved
     // the chat meanwhile. Re-read and re-check on the row the flip will
-    // actually compare against, so a newer operator choice (Vouched Safe,
-    // Uncensored) is never overwritten by a decision made on a stale snapshot.
+    // actually compare against, so a newer operator choice (Locked,
+    // Unmoderated) is never overwritten by a decision made on a stale snapshot.
     // Nothing awaits between this read and `applyConciergeFlip`'s own write
     // but the repository call itself.
     const fresh = await repos.chats.findById(chatId)
     const freshState = fresh ? getConciergeState(fresh) : null
-    if (!fresh || freshState !== 'monitored') {
-      logger.info('Auto-switch abandoned: the chat left Monitored during the check', {
+    if (!fresh || !isClassifierOnDuty(fresh)) {
+      logger.info('Auto-switch abandoned: the chat left Moderated during the check', {
         ...decision,
         state: freshState,
       })
       return { switched: false }
     }
 
-    const result = await applyConciergeFlip(chatId, 'flagged', fresh, {
+    const result = await applyConciergeFlip(chatId, 'unmoderated', fresh, {
       by: 'concierge',
       reason: 'refusals',
       refusals: {
@@ -236,7 +236,7 @@ async function runAutoSwitchCheck(
       },
     })
 
-    logger.info('The Concierge switched a chat to Flagged after repeated refusals', {
+    logger.info('The Concierge switched a chat to Unmoderated after repeated refusals', {
       ...decision,
       changed: result.changed,
       lastProvider: lastRefusal?.provider,

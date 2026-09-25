@@ -19,6 +19,11 @@ import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
 import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { classifyRefusal, type RefusalEvidence } from '@/lib/services/dangerous-content/refusal'
 import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
+import {
+  conciergeStateMayFailOver,
+  type ConciergeState,
+} from '@/lib/services/dangerous-content/chat-override'
+import { readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
@@ -86,6 +91,13 @@ export interface AttemptEmptyResponseRecoveryOptions {
   toolMessagesLength: number
   contentWasFlaggedDangerous: boolean
   dangerSettings: DangerousContentSettings
+  /**
+   * The chat's Concierge state when the turn began. A Locked chat never
+   * reroutes a refusal to the uncensored desk, whatever the mode says. The
+   * chat is re-read at refusal time; this is used only if that read fails.
+   * Absent reads as Moderated.
+   */
+  conciergeState?: ConciergeState
   connectionProfile: ConnectionProfile
   formattedMessages: Array<{
     role: string
@@ -138,6 +150,7 @@ export async function attemptEmptyResponseRecovery({
   toolMessagesLength,
   contentWasFlaggedDangerous,
   dangerSettings,
+  conciergeState,
   formattedMessages,
   modelParams,
   actualTools,
@@ -261,7 +274,31 @@ export async function attemptEmptyResponseRecovery({
     }
   }
 
-  if (state.fullResponse.trim().length === 0 && dangerSettings.mode === 'AUTO_ROUTE') {
+  // Read at refusal time, not when the turn began: the operator may have
+  // locked the chat while the provider was thinking.
+  const lockedOut = state.fullResponse.trim().length === 0
+    && !conciergeStateMayFailOver(await readCurrentConciergeState(chatId, conciergeState))
+  if (state.fullResponse.trim().length === 0 && lockedOut && turnRefusal) {
+    // A Locked chat's refusal stands. Say so, once, and let the ordinary
+    // chain below have its turn.
+    logger.info('[EmptyResponse] Refusal not rerouted: the chat is Locked', {
+      chatId,
+      provider: turnRefusal.profile.provider,
+      model: turnRefusal.profile.modelName,
+    })
+    await postConciergeRefusalAnnouncement({
+      chatId,
+      kind: 'refusal-not-permitted',
+      details: {
+        refusingProvider: turnRefusal.profile.provider,
+        refusingModel: turnRefusal.profile.modelName,
+        purpose: 'text',
+        reason: 'locked',
+      },
+    })
+  }
+
+  if (state.fullResponse.trim().length === 0 && !lockedOut && dangerSettings.mode === 'AUTO_ROUTE') {
     const uncensored = await attemptUncensoredRetry({
       state,
       dangerSettings,
@@ -884,6 +921,13 @@ export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOption
    * chain. Absent means no uncensored retry.
    */
   dangerSettings?: DangerousContentSettings
+  /**
+   * The chat's Concierge state when the turn began. A Locked chat never
+   * reroutes a refusal to the uncensored desk, whatever the mode says. The
+   * chat is re-read at refusal time; this is used only if that read fails.
+   * Absent reads as Moderated.
+   */
+  conciergeState?: ConciergeState
 }
 
 /**
@@ -956,7 +1000,24 @@ export async function attemptHardErrorFailover(
     const refusingProfile = state.effectiveProfile
 
     const alreadyTried = [...context.alreadyTried]
-    // The caller's gate, stated here: the Concierge reroutes under Auto-Route only.
+    // The caller's gate, stated here: a Locked chat's refusal stands, and
+    // otherwise the Concierge reroutes under Auto-Route only.
+    // Read at refusal time, not when the turn began.
+    if (!conciergeStateMayFailOver(await readCurrentConciergeState(chatId, opts.conciergeState))) {
+      logger.info('[Failover] Refusal not rerouted to an uncensored profile: the chat is Locked', { chatId })
+      await postConciergeRefusalAnnouncement({
+        chatId,
+        kind: 'refusal-not-permitted',
+        details: {
+          refusingProvider: refusingProfile.provider,
+          refusingModel: refusingProfile.modelName,
+          purpose: 'text',
+          reason: 'locked',
+        },
+      })
+      await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
+      return walkFallbackChain(opts, openingAttempt)
+    }
     if (opts.dangerSettings?.mode === 'AUTO_ROUTE') {
       const uncensored = await attemptUncensoredRetry({
         state,

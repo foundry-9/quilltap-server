@@ -4,6 +4,89 @@
 
 ### 4.10-dev
 
+#### Fixed: Concierge state races (PR #75 review)
+
+- `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` are patch-only on `chats`: a
+  whole-row `update` that does not name them leaves them out of its `$set`, so a concurrent title
+  or telemetry write can no longer rewind a newer state. New `patchOnlyFields()` hook on
+  `AbstractBaseRepository`.
+- New `ChatsRepository.setConciergeMode(chatId, columns, expected?)`, the only writer of the state.
+  With `expected` it is a compare-and-set (NULL counts as moderated). `applyConciergeFlip` uses it
+  for every transition; the Concierge's own moves pass the state he read and announce nothing on a
+  miss, and are refused in the job child.
+- The classifier job no longer flips the chat. It records telemetry with
+  `chats.setDangerClassification` (verdict carried, not stored); the job dispatcher's new commit
+  hook calls `maybeSwitchAfterClassification` in the parent, which moves the chat only if it is
+  still Moderated.
+- The image failover chokepoint and both text failover paths re-read the chat's state when a
+  refusal arrives (`readCurrentConciergeState`), so a chat locked mid-request is never rerouted.
+- `POST /api/v1/chats` now returns the Concierge columns as they stand after the requested state
+  is applied; it used to return the row as first inserted, so a chat created Unmoderated or
+  Locked came back looking Moderated.
+
+#### Docs: phase 3 leftovers scheduled in phase 4
+
+- `concierge-overhaul-phase-4-concierge-tab.md` gains a "Carried over from phase 3" checklist:
+  drop `chats.conciergeOverride` (keeping the legacy derivation in import and restore, and the
+  deprecated export-schema field), and remove the unused `-info` Concierge tone CSS (with its
+  theme-storybook mirror and publish). Phase 3 spec and the overview index point to it.
+
+#### Changed: three Concierge states — Moderated, Unmoderated, Locked (Concierge overhaul, phase 3)
+
+- The four per-chat states (Monitored, Flagged, Vouched Safe, Uncensored) are now three:
+  **Moderated** (default; ordinary providers first, uncensored on refusal; the Concierge may switch
+  the chat), **Unmoderated** (uncensored desk only) and **Locked** (ordinary providers only; a
+  refusal stands). Who set Unmoderated (operator or Concierge) is provenance, shown in the tooltip
+  and helper text, not a separate state or colour.
+- Three new columns on `chats`: `conciergeMode` (TEXT, default 'moderated'; NULL reads as
+  moderated), `conciergeModeSetBy` ('operator' | 'concierge'), `conciergeModeReason` ('manual' |
+  'refusals' | 'classifier' | 'migration'). Migration `add-chat-concierge-mode-v1` backfills them:
+
+  | `conciergeOverride` | `isDangerousChat` | new state | set by | reason |
+  |---|---|---|---|---|
+  | `'UNCENSORED'` | any | unmoderated | operator | migration |
+  | `'OFF'` | any | locked | operator | migration |
+  | NULL | true | unmoderated | concierge | classifier |
+  | NULL | else | moderated | NULL | NULL |
+
+- `conciergeOverride` is no longer written (kept, marked deprecated in the export schema).
+  `isDangerousChat` and the other `danger*` fields are classifier telemetry only; no routing or
+  display decision reads them. `.qtap` import and backup restore derive `conciergeMode` from the
+  legacy pair when a chat carries none (`withConciergeModeFromLegacy`).
+- `chat-override.ts`: `ConciergeState` is the three values; new `getConciergeProvenance`,
+  `getConciergeReason`, `mayFailOver` / `conciergeStateMayFailOver` (false only for Locked),
+  `CONCIERGE_STATES`, `deriveConciergeModeFromLegacy`. `isClassifierOnDuty` now means Moderated.
+- Resolver sources: `chat-locked` and `chat-unmoderated` replace `chat-vouched` and
+  `chat-uncensored`. `VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS` renamed
+  `LOCKED_DANGEROUS_CONTENT_SETTINGS`.
+- `applyConciergeFlip` writes only the three new columns (Moderated also clears the classifier
+  telemetry and the refusal ledger). Announcement kinds `set-moderated`, `set-unmoderated`,
+  `set-locked`, `auto-unmoderated` replace `manual-flagged`, `manual-safe`, `manual-resumed`,
+  `manual-vouched`, `manual-uncensored`, `auto-flagged-refusals`. An operator choosing Unmoderated
+  on a chat the Concierge moved there updates provenance silently. The Concierge may only move a
+  Moderated chat to Unmoderated.
+- The classifier job and the refusal-ledger auto-switch both move the chat through
+  `applyConciergeFlip(..., 'unmoderated', ..., { by: 'concierge', reason })`. The auto-switch no
+  longer stamps `dangerCategories: ['moderation-refusals']`.
+- Failover: the image chokepoint and the text empty-response / hard-error failover check
+  `mayFailOver` before the mode. A stated refusal on a Locked chat posts `refusal-not-permitted`
+  with `reason: 'locked'` and is never rerouted to an uncensored profile. The creation greeting's
+  content-filter fallback never runs for Locked.
+- Wire: `conciergeState` on `PUT /api/v1/chats/[id]` and `POST /api/v1/chats` is
+  `'moderated' | 'unmoderated' | 'locked'`; the old four values return 400. GET returns
+  `conciergeState`, `conciergeSetBy`, `conciergeReason`, `conciergeRefusalCount`, and no longer
+  `conciergeOverride`. List payloads add `conciergeSetBy` and `conciergeReason`.
+- UI: flat three-option selects on the New Chat form and the sidebar; header pill and list mark
+  are red for Unmoderated, grey for Locked (`shield` icon), nothing for Moderated. Quick-hide's
+  "Dangerous Chats" hides Unmoderated chats. The `-info` badge/mark CSS variants have no user now;
+  left in place for themes.
+- `scripts/concierge-four-state-test.sh` renamed `scripts/concierge-three-state-test.sh` and
+  rewritten for the three states (adds a check that a retired value is rejected).
+- Docs: `help/dangerous-content.md`, `chats.md`, `quick-hide.md`, `homepage.md`,
+  `autonomous-rooms.md`, `story-backgrounds.md`, `scene-state-tracker.md`,
+  `image-generation-profiles.md`; DDL, API, export schema, CLAUDE.md; the four-state, list-marks
+  and default-at-creation specs are marked superseded.
+
 #### Added: the Concierge's refusal ledger and auto-switch (Concierge overhaul, phase 2)
 
 - Two columns on `chats`: `moderationRefusalCount` (INTEGER NOT NULL DEFAULT 0) and

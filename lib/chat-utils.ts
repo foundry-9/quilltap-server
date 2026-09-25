@@ -10,7 +10,8 @@
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import type { ChatCardData } from '@/components/chat/ChatCard'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 
 // ----------------------------------------------------------------------------
 // Salon list — chats with full participant + project metadata
@@ -42,6 +43,8 @@ export interface SalonChatShape {
   project: { id: string; name: string; color: string | null } | null
   storyBackground: { id: string; filepath: string } | null
   conciergeState?: ConciergeState
+  conciergeSetBy?: ConciergeProvenance
+  conciergeReason?: ConciergeModeReason | null
   dangerCategories?: string[]
   chatType?: 'salon' | 'help' | 'autonomous' | 'brahma'
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
@@ -73,6 +76,8 @@ export function transformSalonChatToCardData(chat: SalonChatShape): ChatCardData
     project: chat.project,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     conciergeState: chat.conciergeState,
+    conciergeSetBy: chat.conciergeSetBy,
+    conciergeReason: chat.conciergeReason,
     dangerCategories: chat.dangerCategories,
     isAutonomous: chat.chatType === 'autonomous',
     scriptoriumStatus: chat.scriptoriumStatus ?? 'none',
@@ -102,6 +107,8 @@ export interface CharacterChatShape {
   messages: CharacterChatMessageShape[]
   tags?: Array<{ tag: { id: string; name: string } }>
   conciergeState?: ConciergeState
+  conciergeSetBy?: ConciergeProvenance
+  conciergeReason?: ConciergeModeReason | null
   dangerCategories?: string[]
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   _count?: { messages: number; memories?: number }
@@ -131,6 +138,8 @@ export function transformCharacterChatToCardData(chat: CharacterChatShape): Chat
     previewText: getCharacterChatPreview(chat.messages),
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     conciergeState: chat.conciergeState,
+    conciergeSetBy: chat.conciergeSetBy,
+    conciergeReason: chat.conciergeReason,
     dangerCategories: chat.dangerCategories,
     scriptoriumStatus: chat.scriptoriumStatus || 'none',
   }

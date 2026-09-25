@@ -20,7 +20,7 @@ import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveSamplingParams } from '@/lib/llm/sampling-params';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
-import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { mayFailOver, shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
@@ -31,6 +31,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatMetadata, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
+import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
@@ -136,14 +137,15 @@ const createChatSchema = z.object({
   roleplayTemplateId: z.uuid().nullable().optional(),
   /**
    * Per-chat Concierge state to set at creation, using the same enum as the
-   * sidebar's PUT `conciergeState`. Omitted or 'monitored' → the chat is created
-   * Monitored exactly as today (no write, no announcement). Any other value is
+   * sidebar's PUT `conciergeState` ('moderated' | 'unmoderated' | 'locked').
+   * Omitted or 'moderated' → the chat is created Moderated (no write, no
+   * announcement). The retired four-state values are rejected with 400. Any other value is
    * applied through `applyConciergeFlip` after the system-prompt message and
    * before any staff announcement or greeting, so the Concierge's bubble sits
    * where the history says the state was set and the opening greeting is
    * generated under the chosen state.
    */
-  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
+  conciergeState: ConciergeModeSchema.optional(),
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
   /**
@@ -364,19 +366,29 @@ async function writeSystemPromptMessage(
  * Apply a Concierge state requested at creation. Runs after the system-prompt
  * message and before any staff announcement or greeting, so the Concierge's
  * bubble is the first thing in the history after the prompt and the greeting is
- * generated under the chosen state. Monitored (or absence) is a no-op:
+ * generated under the chosen state. Moderated (or absence) is a no-op:
  * `applyConciergeFlip` compares against the fresh row and does nothing.
  *
  * The route runs in the parent process, so the announcement's write lands
  * immediately — every later reader (the greeting's own `findById`, the
- * scheduled danger scan, memory extraction, story backgrounds) sees the pair.
+ * scheduled danger scan, memory extraction, story backgrounds) sees the state.
+ *
+ * Returns the chat's Concierge columns as they stand afterwards, re-read when
+ * the flip wrote anything, so the create response reports the state that was
+ * actually applied rather than the row as it was first inserted.
  */
 async function applyRequestedConciergeState(
   chat: ChatMetadata,
   requested: ConciergeState | undefined,
   progress: CreationProgressEmitter,
-): Promise<void> {
-  if (!requested || requested === 'monitored') return;
+  repos: RepositoryContainer,
+): Promise<ConciergeColumns> {
+  const asCreated: ConciergeColumns = {
+    conciergeMode: chat.conciergeMode ?? null,
+    conciergeModeSetBy: chat.conciergeModeSetBy ?? null,
+    conciergeModeReason: chat.conciergeModeReason ?? null,
+  };
+  if (!requested || requested === 'moderated') return asCreated;
   progress.status('Briefing the Concierge…');
   const result = await applyConciergeFlip(chat.id, requested, chat);
   logger.debug('[Chats v1] Applied Concierge state at creation', {
@@ -384,7 +396,19 @@ async function applyRequestedConciergeState(
     requested,
     changed: result.changed,
   });
+  if (!result.changed) return asCreated;
+  const fresh = await repos.chats.findById(chat.id);
+  return fresh
+    ? {
+        conciergeMode: fresh.conciergeMode ?? null,
+        conciergeModeSetBy: fresh.conciergeModeSetBy ?? null,
+        conciergeModeReason: fresh.conciergeModeReason ?? null,
+      }
+    : asCreated;
 }
+
+/** The chat's stored Concierge columns, as the create response carries them. */
+type ConciergeColumns = Pick<ChatMetadata, 'conciergeMode' | 'conciergeModeSetBy' | 'conciergeModeReason'>;
 
 interface ScenarioAndStaffOptions {
   /**
@@ -715,8 +739,8 @@ async function autoGenerateFirstMessage(
   };
 
   // The chat's own Concierge state decides which desk this greeting goes to.
-  // `applyRequestedConciergeState` has already written the pair by the time the
-  // scenario-and-staff phase reaches the greeting, so a chat created Uncensored
+  // `applyRequestedConciergeState` has already written the state by the time the
+  // scenario-and-staff phase reaches the greeting, so a chat created Unmoderated
   // asks the frank desk first instead of discovering it after a refusal.
   const chatRow = await repos.chats.findById(chatId);
 
@@ -726,9 +750,9 @@ async function autoGenerateFirstMessage(
    * uncensored profile is configured, its key is unusable) or the attempt came
    * back empty, so the caller falls through to the participant's own profile.
    *
-   * The resolver is asked WITH the chat: a Vouched Safe chat collapses to
-   * `mode: 'OFF'` and never reroutes, and an Uncensored chat reroutes even when
-   * the global mode is `OFF`.
+   * The resolver is asked WITH the chat: a Locked chat collapses to
+   * `mode: 'OFF'` and never reroutes, and an Unmoderated chat reroutes even
+   * when the global mode is `OFF`.
    */
   const generateViaUncensoredDesk = async (
     trigger: 'chat-state' | 'content-filter',
@@ -821,9 +845,9 @@ async function autoGenerateFirstMessage(
     return NO_GREETING;
   };
 
-  // Attempt 0: a Flagged or Uncensored chat opens at the uncensored desk. The
+  // Attempt 0: an Unmoderated chat opens at the uncensored desk. The
   // three-attempt ladder below (with memories → without → uncensored on a
-  // content filter) stays the path for Monitored and Vouched Safe chats.
+  // content filter) stays the path for Moderated and Locked chats.
   let uncensoredDeskTried = false;
   if (shouldUseUncensoredRoute(chatRow)) {
     uncensoredDeskTried = true;
@@ -908,11 +932,11 @@ async function autoGenerateFirstMessage(
     }
   }
 
-  // Attempt 3: If a content filter was detected, try the Concierge uncensored
-  // provider — unless the chat's own state already sent us there first, in which
-  // case there is nothing new to try. A Vouched Safe chat resolves to
-  // `mode: 'OFF'` inside the helper and never reroutes, whatever the globe says.
-  if (contentFilterHit && !uncensoredDeskTried) {
+  // Attempt 3: If a content filter was detected on a Moderated chat, try the
+  // Concierge uncensored provider — unless the chat's own state already sent us
+  // there first, in which case there is nothing new to try. A Locked chat's
+  // refusal stands: it never reaches the uncensored desk, whatever the globe says.
+  if (contentFilterHit && !uncensoredDeskTried && mayFailOver(chatRow)) {
     try {
       logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
         characterId: context.character.id,
@@ -1356,7 +1380,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   }
 
   // One opening sequence for every flavour of chat: system prompt → the
-  // Concierge's note (when a non-Monitored state was picked on the New Chat
+  // Concierge's note (when a non-Moderated state was picked on the New Chat
   // form) → [continuation only: backfill from source + turn-state replication
   // + cross-link bubbles] → scenario/staff (Prospero, Host scenario, Host adds,
   // Aurora outfits, avatar gen) and, for an ordinary chat, the greeting
@@ -1371,7 +1395,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     progress.status('Setting the opening scene…');
   }
   await writeSystemPromptMessage(chat.id, chatContext, repos);
-  await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+  const conciergeColumns = await applyRequestedConciergeState(chat, validatedData.conciergeState, progress, repos);
   if (validatedData.continuationFromChatId) {
     try {
       await applyChatContinuation({
@@ -1433,7 +1457,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   progress.status('The players are ready.');
   progress.finish();
 
-  return created({ chat: { ...chat, participants: enrichedParticipants } });
+  return created({ chat: { ...chat, ...conciergeColumns, participants: enrichedParticipants } });
 }
 
 /**

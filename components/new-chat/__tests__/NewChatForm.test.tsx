@@ -116,7 +116,7 @@ jest.mock('@/hooks/usePersonaDisplayName', () => ({
 function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState {
   return {
     imageProfileId: '',
-    conciergeState: 'monitored',
+    conciergeState: 'moderated',
     roleplayTemplateId: null,
     roleplayTemplateTouched: false,
     scenario: '',
@@ -428,26 +428,26 @@ describe('NewChatForm Concierge picker', () => {
   const conciergeSelect = () =>
     screen.getByRole('combobox', { name: /The Concierge/i }) as HTMLSelectElement
 
-  it('offers the four states in the sidebar’s two optgroups', () => {
+  it('offers the three states as a flat list, no optgroups', () => {
     renderForm()
     const select = conciergeSelect()
 
-    const groups = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label)
-    expect(groups).toEqual(['The Concierge decides', 'You decide'])
+    expect(select.querySelectorAll('optgroup')).toHaveLength(0)
 
     const options = Array.from(select.querySelectorAll('option')).map((o) => o.value)
-    expect(options).toEqual(['monitored', 'flagged', 'vouched', 'uncensored'])
+    expect(options).toEqual(['moderated', 'unmoderated', 'locked'])
   })
 
-  it('starts on Monitored and marks it the default', () => {
+  it('starts on Moderated and marks it the default', () => {
     renderForm()
-    expect(conciergeSelect().value).toBe('monitored')
-    expect(screen.getByRole('option', { name: 'Monitored (default)' })).toBeInTheDocument()
-    // Only Monitored carries the suffix.
-    expect(screen.getByRole('option', { name: 'Uncensored' })).toBeInTheDocument()
+    expect(conciergeSelect().value).toBe('moderated')
+    expect(screen.getByRole('option', { name: 'Moderated (default)' })).toBeInTheDocument()
+    // Only Moderated carries the suffix.
+    expect(screen.getByRole('option', { name: 'Unmoderated' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Locked' })).toBeInTheDocument()
   })
 
-  it.each(['monitored', 'flagged', 'vouched', 'uncensored'] as const)(
+  it.each(['moderated', 'unmoderated', 'locked'] as const)(
     'shows the shared presentation helper sentence for %s',
     (state) => {
       renderForm({ conciergeState: state })
@@ -460,11 +460,11 @@ describe('NewChatForm Concierge picker', () => {
   it('records the chosen state on the form state', () => {
     const { setState } = renderForm()
 
-    fireEvent.change(conciergeSelect(), { target: { value: 'uncensored' } })
+    fireEvent.change(conciergeSelect(), { target: { value: 'unmoderated' } })
 
     expect(setState).toHaveBeenCalledTimes(1)
     const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
-    expect(updater(makeState()).conciergeState).toBe('uncensored')
+    expect(updater(makeState()).conciergeState).toBe('unmoderated')
   })
 })
 

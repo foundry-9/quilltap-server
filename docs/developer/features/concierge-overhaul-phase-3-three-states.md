@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 3: Moderated, Unmoderated, Locked
 
-**Status:** Proposed (4.10-dev, 2026-09-25)
+**Status:** Implemented (4.10-dev, 2026-09-25) — see [As built](#as-built) for where the shipped code departs from the plan.
 **Scope:** quilltap-server. Three new columns on `chats` and one data migration; the `ConciergeState` union, its predicates and presentation table; the PUT and POST wire contract; the sidebar and New Chat controls; the header pill, list marks and quick-hide; export schema and DDL. No settings change, no plugin or package change.
 **Prerequisites:** [Phase 1](concierge-overhaul-phase-1-refusal-failover.md) and [Phase 2](concierge-overhaul-phase-2-refusal-ledger.md) landed. This spec assumes `applyConciergeFlip(chatId, requested, chat, { by, reason })` exists and that refusals are counted. It can be read on its own; every file it touches is cited.
 **Supersedes:** [concierge-four-state.md](complete/concierge-four-state.md) §1, §3, §5, §6 and [concierge-list-marks.md](complete/concierge-list-marks.md) §"Design".
@@ -29,7 +29,7 @@ Who put the chat in Unmoderated — the Concierge (after refusals, or the classi
 
 - The global mode (retired in phase 4). In this phase Unmoderated forces `AUTO_ROUTE` exactly as the old Uncensored did; Moderated obeys the global mode.
 - Settings UI (phase 4).
-- Removing the old columns. They stop being written; removal is a later housekeeping migration.
+- Removing the old columns. They stop being written; removal is a later housekeeping migration, scheduled in [phase 4's carry-over checklist](concierge-overhaul-phase-4-concierge-tab.md#carried-over-from-phase-3).
 
 ## Known State (verified 2026-09-25)
 
@@ -137,7 +137,7 @@ The announcement kinds `manual-flagged` / `manual-safe` / `manual-resumed` / `ma
 
 `describeConciergeState(state, provenance, dangerCategories?, refusalCount?)` picks the helper variant. The New Chat select (`NewChatForm.tsx:688-717`) and sidebar select (`ChatSidebar.tsx:1142-1180`) drop the optgroups for a flat three-option list, Moderated marked "(default)" on the form. The header pill (`SalonView.tsx:1151-1177`) renders nothing for Moderated, the danger tone for Unmoderated with the provenance in the tooltip, muted for Locked. `ConciergeMark` and `shouldHideChat` follow `conciergeStateUsesUncensoredRoute`, which now means Unmoderated. `useNewChat.ts:148` default becomes `'moderated'`; continuation seeds the source chat's state as before.
 
-CSS: the `-info` variants of `.qt-danger-badge` and `.qt-concierge-mark` lose their only user. Leave the rules in place this phase (a theme may hook them) and note them for the dead-code sweep; the storybook mirror is untouched.
+CSS: the `-info` variants of `.qt-danger-badge` and `.qt-concierge-mark` lose their only user. Leave the rules in place this phase (a theme may hook them); their removal is scheduled in [phase 4's carry-over checklist](concierge-overhaul-phase-4-concierge-tab.md#carried-over-from-phase-3). The storybook mirror is untouched.
 
 ### 7. Greeting at creation
 
@@ -177,3 +177,72 @@ CSS: the `-info` variants of `.qt-danger-badge` and `.qt-concierge-mark` lose th
 - `CLAUDE.md` chokepoint bullet: *"A chat's Concierge posture is three states with a provenance note"*, listing the new predicates; `GEMINI.md` mirror.
 - `docs/developer/DDL.md`, `public/schemas/qtap-export.schema.json`, `migrations/README.md`, `docs/developer/API.md` (PUT/POST/GET shapes).
 - Move `concierge-four-state.md`, `concierge-list-marks.md`, `concierge-default-at-creation.md` to a "Superseded by" note at their top pointing here; update their catalog rows in `.claude/commands/update-documentation.md` and add this spec's.
+
+## As built
+
+Implemented 2026-09-25. Departures from the plan above, each for a stated reason:
+
+- **`conciergeMode` is nullable, and NULL reads as `'moderated'`.** §1 asked for `TEXT NOT NULL
+  DEFAULT 'moderated'`. The migration adds `TEXT DEFAULT 'moderated'` (so every existing row gets
+  the value), but a fresh database's `chats` table is generated from the Zod schema, where the
+  field is `.nullable().optional()` — a `.default()` would have made the field required on the
+  `ChatMetadata` type and broken every fixture, and a `NOT NULL` column would reject any create or
+  import that carried an explicit `null`. `getConciergeState` treats NULL as Moderated, so the two
+  shapes behave identically.
+- **The three columns are in `ChatMetadataSchema` but patch-only.** They must travel in exports and
+  restores, so they stay in the schema. But `BaseRepository._update` rebuilds the whole row from a
+  snapshot it read a moment earlier, so a concurrent title or telemetry write could have rewound a
+  newer state (review of #75). `ChatsRepository.patchOnlyFields()` names them, and `_update`
+  leaves a patch-only field out of its `$set` unless the patch sets it. The state itself is
+  written only by `ChatsRepository.setConciergeMode`.
+- **The Concierge's moves are a compare-and-set.** `setConciergeMode(chatId, columns, expected?)`
+  writes only if the stored state is still `expected` (NULL = moderated). `applyConciergeFlip`
+  passes the state it read for a Concierge-initiated move and announces nothing when the set
+  misses, so a decision made on a snapshot can never overwrite the operator's newer choice. The
+  operator's moves are unconditional. Because a buffered write cannot report whether it landed,
+  `applyConciergeFlip` refuses a Concierge move in the job child.
+- **The classifier's switch is decided in the parent.** The classifier job runs in the job child
+  and its LLM call takes seconds, so it records only telemetry
+  (`ChatsRepository.setDangerClassification`, the verdict carried as an unstored third argument).
+  The dispatcher's commit hook (`chatsWithDangerVerdicts` → `runClassifierSwitchChecks`) calls
+  `maybeSwitchAfterClassification` (`classifier-switch.ts`), which re-reads the chat and flips it
+  only if it is still Moderated; run in the parent, the job calls it directly. The same shape as
+  the refusal ledger's auto-switch.
+- **Failover reads the state at refusal time.** A turn or a picture reads its chat before a
+  provider call that can take many seconds; the image chokepoint and both text failover paths now
+  call `readCurrentConciergeState` (`current-state.ts`) when a refusal arrives, falling back to
+  the snapshot only if that read fails, so a chat locked mid-request is never rerouted.
+- **`mayFailOver` is false only for Locked**, not "`state === 'moderated'`". An Unmoderated chat's
+  primary is already the uncensored desk; should that profile still refuse, trying another
+  uncensored profile is what the operator (or the Concierge) already chose. The spec's "n/a" for
+  Unmoderated is kept in spirit: nothing reaches a *moderated* provider.
+- **The Locked icon is `shield`.** The registry has no `lock`, and adding one means a new default
+  asset plus a theme-storybook icon story (a package publish); the spec allowed the fallback.
+- **List payloads also carry `conciergeReason`**, and GET carries `conciergeReason` and
+  `conciergeRefusalCount` (from `getModerationRefusalLedger`). The list mark's tooltip otherwise
+  could not tell "after two refusals" from "on reading the conversation".
+- **The helpers read a server-derived payload too.** `getConciergeState` / `getConciergeProvenance`
+  / `getConciergeReason` read `conciergeMode` first and fall back to `conciergeState` /
+  `conciergeSetBy` / `conciergeReason`, so the Salon (which only sees the GET payload) asks the
+  same functions as the server.
+- **The legacy derivation is one function**, `deriveConciergeModeFromLegacy` (with
+  `withConciergeModeFromLegacy` for whole chats), used by the migration, the `.qtap` importer
+  (both the duplicate and the ordinary path) and the backup restore — the spec named only the
+  importer; a pre-phase-3 backup would otherwise restore every chat as Moderated.
+- **The classifier's switch posts the classifier's own announcement.** `applyConciergeFlip` with
+  `{ by: 'concierge', reason: 'classifier', classification }` calls
+  `postConciergeDangerAnnouncement` (the detailed verdict) instead of an `auto-unmoderated`
+  bubble, so the chat gets one announcement, not two.
+- **`applyConciergeFlip` refuses a Concierge-initiated move other than Moderated → Unmoderated**,
+  and never lets the Concierge re-attribute a state the operator chose. Callers already check
+  `isClassifierOnDuty`; the chokepoint now enforces it too.
+- **The text chokepoints take a `conciergeState` option.** `attemptEmptyResponseRecovery` and
+  `attemptHardErrorFailover` post `refusal-not-permitted` with `reason: 'locked'` for a stated
+  refusal on a Locked chat and skip the uncensored retry; the ordinary fallback chain still runs.
+  The empty-body path announces only a stated refusal, never a plain empty body.
+- **`currentConciergeState` and `ConciergeUIState`** (deprecated aliases in `manual-flip.ts`) and
+  `MODERATION_REFUSALS_CATEGORY` were removed: nothing outside tests used them, and the
+  auto-switch no longer stamps `dangerCategories`.
+- **The new-chat and sidebar selects map over `CONCIERGE_STATES`** (exported from
+  `chat-override.ts`) rather than spelling the options by hand.
+

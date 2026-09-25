@@ -35,9 +35,9 @@ interface QuickHideContextValue {
   shouldHideByIds: (tagIds?: Array<string | null | undefined>) => boolean
   /**
    * THE quick-hide rule for a chat, in one place. "Dangerous Chats" hides
-   * whatever takes the uncensored route — Flagged (the Concierge's verdict)
-   * and Uncensored (the operator's) — never a Vouched Safe chat that merely
-   * carries a preserved label underneath.
+   * whatever takes the uncensored route — an Unmoderated chat, whether the
+   * Concierge or the operator put it there — never a Moderated or Locked chat
+   * that merely carries the classifier's telemetry underneath.
    */
   shouldHideChat: (chat: { characterTags?: Array<string | null | undefined>; conciergeState?: ConciergeState }) => boolean
 }

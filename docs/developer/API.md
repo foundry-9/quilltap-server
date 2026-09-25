@@ -20,12 +20,16 @@ API reference for Quilltap v4.3 and later.
 > - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
 > - **Scriptorium per-document policy flags** — mounted markdown may carry `embed` / `character_read` / `character_write` frontmatter flags (stored on `doc_mount_file_links`), governing characters only.
 
+> **Freshness note (v4.10-dev):** Additions since v4.9:
+>
+> - **Three-state Concierge** — `conciergeState` on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]` is now `'moderated' | 'unmoderated' | 'locked'`; the four retired values (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) are rejected with `400`. `GET /api/v1/chats/[id]` returns `conciergeState`, `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` and `conciergeRefusalCount`, and no longer returns `conciergeOverride`. List payloads (Salon list, homepage recent chats, project chats, character conversations) carry `conciergeState`, `conciergeSetBy`, `conciergeReason` and `dangerCategories`.
+>
 > **Freshness note (v4.9-dev):** Additions since v4.7:
 >
 > - **Realtime invalidation socket** — `GET /api/v1/system/realtime/stream` (WebSocket). Frames say *what* changed, never *what it changed to*; the client invalidates and re-reads through this API. See [System Realtime Stream](#system-realtime-stream).
 > - **Connection-profile fallback chains** — `fallbackProfileId` (the understudy) and `allowTierFallback` on connection profiles. Chains are capped at three attempts and never recurse. See [Connection Profiles](#connection-profiles).
 > - **Image-profile LoRA adapters and model options** — the reserved `loras` parameter key (validated by `ImageLoraSpecSchema`), the per-model `loraSupport` block on the models response, and `POST /api/v1/image-profiles?action=lora-metadata` for reading a LoRA source's public HuggingFace card.
-> - **Four-state Concierge** — `conciergeState` (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]`, applied through the one transition chokepoint `applyConciergeFlip`.
+> - **Four-state Concierge** — `conciergeState` (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]`, applied through the one transition chokepoint `applyConciergeFlip`. *Superseded in 4.10 by the three states; see below.*
 > - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `photo-albums`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `scenario`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`. This supersedes the v4.3 list above.
 > - **Scenario changed mid-chat** — `POST /api/v1/chats/[id]?action=scenario`; the Host announces the change as a revision.
 > - **Archivable scenarios and wardrobe items** — archived rows drop out of every listing unless `includeArchived` is passed.
@@ -2159,7 +2163,7 @@ Create a new chat.
 
 **Note**: `roleplayTemplateId` is optional and tri-state. Omit the key to fall back to the default chain (project default > user/global default > none). Send a template UUID to force that template, or send an explicit `null` for "no template" — both beat the defaults. A UUID that doesn't resolve returns `400 Roleplay template not found`.
 
-**Note**: `conciergeState` is optional — `'monitored' | 'flagged' | 'vouched' | 'uncensored'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted or `'monitored'` leaves the chat Monitored exactly as before (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, *after* the system-prompt message and *before* any staff announcement or greeting — so the Concierge's bubble sits where the history says the state was set, and the opening greeting is generated under the chosen state (an Uncensored chat's greeting goes to the uncensored desk first; a Vouched Safe chat's is never rerouted). A value outside the four is a `400` validation error.
+**Note**: `conciergeState` is optional — `'moderated' | 'unmoderated' | 'locked'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted or `'moderated'` leaves the chat Moderated (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, *after* the system-prompt message and *before* any staff announcement or greeting — so the Concierge's bubble sits where the history says the state was set, and the opening greeting is generated under the chosen state (an Unmoderated chat's greeting goes to the uncensored desk first; a Locked chat's is never rerouted, even after a content filter). A value outside the three — including the retired `'monitored' | 'flagged' | 'vouched' | 'uncensored'` — is a `400` validation error. The `201` response's `chat` carries `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` as they stand after the state is applied.
 
 **Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
 
@@ -2222,11 +2226,11 @@ Each SSE frame is `data: <json>\n\n` where the payload is one of:
 
 #### `GET /api/v1/chats/[id]`
 
-Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`).
+Get a chat with full message history. The response includes `chatType` (e.g. `"standard"`, `"autonomous"`), and the chat's Concierge posture, derived server-side: `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`), `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` (`'manual' | 'refusals' | 'classifier' | 'migration' | null`) and `conciergeRefusalCount` (the refusal ledger's count). `isDangerousChat` and `dangerCategories` remain as the classifier's telemetry; the legacy `conciergeOverride` is not returned.
 
 #### `PUT /api/v1/chats/[id]`
 
-Update chat metadata.
+Update chat metadata. `conciergeState` (`'moderated' | 'unmoderated' | 'locked'`) changes the chat's Concierge posture through `applyConciergeFlip`, which writes the state and provenance and posts the Concierge's announcement; it is a no-op when nothing would change, and silently re-attributes an Unmoderated chat to the operator when the operator confirms the Concierge's switch. The retired four-state values are a `400`.
 
 #### `DELETE /api/v1/chats/[id]`
 

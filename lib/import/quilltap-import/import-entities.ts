@@ -20,6 +20,7 @@ import type {
   Group,
 } from '@/lib/schemas/types';
 import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
+import { withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
 import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -347,7 +348,9 @@ export async function importChats(
           idMaps.chats.set(chat.id, newId);
           const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
           const newChat = await repos.chats.create({
-            ...stripScenarioSeededSummary(chatData),
+            // A bundle from before the three Concierge states carries only the
+            // legacy pair; derive the state so the chat keeps its behaviour.
+            ...withConciergeModeFromLegacy(stripScenarioSeededSummary(chatData)),
             title: `${chatData.title} (imported)`,
           });
 
@@ -375,7 +378,9 @@ export async function importChats(
       // well as `scenarioText`; the migration that cleared those rows has long
       // since run in this instance, so the import is the only thing standing
       // between a stale bundle and the bug coming back.
-      const cleaned = stripScenarioSeededSummary(chatData);
+      // …and a pre-phase-3 bundle carries only the legacy Concierge pair, so
+      // the chat's three-state posture is derived from it here.
+      const cleaned = withConciergeModeFromLegacy(stripScenarioSeededSummary(chatData));
       const createData = options.preserveIds ? { ...cleaned, id: chat.id } : cleaned;
       const createOptions = getPreserveIdsCreateOptions(chat.id, options);
       const newChat = await repos.chats.create(createData, createOptions);

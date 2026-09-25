@@ -136,7 +136,7 @@ export function DangerousContentSettings({
             {/* Refusal auto-switch */}
             <div className="space-y-2">
               <label htmlFor="concierge-auto-switch-after-refusals" className="block font-medium text-foreground">
-                Switch a chat to Flagged after this many refusals (0 = never)
+                Switch a chat to Unmoderated after this many refusals (0 = never)
               </label>
               <input
                 id="concierge-auto-switch-after-refusals"
@@ -154,7 +154,7 @@ export function DangerousContentSettings({
                 className="qt-input w-24"
               />
               <p className="qt-text-small">
-                When a provider plainly declines a Monitored chat on grounds of propriety this many times, the Concierge moves the whole conversation to the uncensored desk and says so. Only under Auto-Route; returning the chat to Monitored clears the tally.
+                When a provider plainly declines a Moderated chat on grounds of propriety this many times, the Concierge moves the whole conversation to the uncensored desk and says so. Only under Auto-Route; returning the chat to Moderated clears the tally.
               </p>
             </div>
 

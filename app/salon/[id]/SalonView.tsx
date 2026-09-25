@@ -19,7 +19,12 @@ import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { ImagesHiddenProvider } from '@/components/quick-hide/images-hidden-context'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
-import { getConciergeState, shouldShowDangerStyling } from '@/lib/services/dangerous-content/chat-override'
+import {
+  getConciergeProvenance,
+  getConciergeReason,
+  getConciergeState,
+  shouldShowDangerStyling,
+} from '@/lib/services/dangerous-content/chat-override'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneSuffix,
@@ -1149,15 +1154,24 @@ export function SalonView({ chatId }: SalonViewProps) {
             </button>
           )}
           {(() => {
-            // Monitored is the default and renders no badge — the pill means
+            // Moderated is the default and renders no badge — the pill means
             // "something other than the default is set." Everything the pill
             // says comes from the presentation table, so it speaks the same
-            // words as the list marks and the sidebar's helper text.
+            // words as the list marks and the sidebar's helper text; who set
+            // Unmoderated goes in the tooltip, never the colour.
             const conciergeState = getConciergeState(chat)
-            if (conciergeState === 'monitored') return null
+            if (conciergeState === 'moderated') return null
 
             const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
-            const description = describeConciergeState(conciergeState, chat.dangerCategories ?? undefined)
+            const description = describeConciergeState(
+              conciergeState,
+              {
+                setBy: getConciergeProvenance(chat),
+                reason: getConciergeReason(chat),
+                refusalCount: chat.conciergeRefusalCount,
+              },
+              chat.dangerCategories ?? undefined,
+            )
             const toneSuffix = conciergeToneSuffix(tone)
 
             return (
@@ -1188,7 +1202,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
     return () => setLeftContent(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- llmCharacterKey is a stable string proxy for the llmCharacters array
-  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.isDangerousChat, chat?.dangerCategories, chat?.conciergeOverride, llmCharacterKey, setLeftContent, visibleStoryBackgroundUrl, hideSalonImages, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
+  }, [chat?.projectId, chat?.projectName, chat?.title, chat?.conciergeState, chat?.conciergeSetBy, chat?.conciergeReason, chat?.conciergeRefusalCount, chat?.dangerCategories, llmCharacterKey, setLeftContent, visibleStoryBackgroundUrl, hideSalonImages, storyBackgroundFileId, storyBackgroundFilename, setModalImage])
 
   // Set cost summary and inspector button in toolbar right section
   useEffect(() => {
@@ -1982,7 +1996,6 @@ export function SalonView({ chatId }: SalonViewProps) {
           onWhisper={handleWhisper}
           chatId={id}
           onRegenerateAvatar={handleRegenerateAvatar}
-          isDangerousChat={chat?.isDangerousChat === true}
           // Chat section
           agentModeEnabled={chatControls.agentModeEnabled}
           onAgentModeToggle={chatControls.handleToggleAgentMode}
@@ -1996,7 +2009,12 @@ export function SalonView({ chatId }: SalonViewProps) {
           alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}
           avatarGenerationEnabled={chat?.avatarGenerationEnabled}
           timelineMode={chat?.timelineMode}
-          conciergeOverride={chat?.conciergeOverride}
+          conciergeState={getConciergeState(chat)}
+          conciergeProvenance={{
+            setBy: getConciergeProvenance(chat),
+            reason: getConciergeReason(chat),
+            refusalCount: chat?.conciergeRefusalCount,
+          }}
           onToolSettingsClick={modals.openToolSettings}
           onRunToolClick={modals.openRunTool}
           storyBackgroundsEnabled={chatControls.storyBackgroundsEnabled}

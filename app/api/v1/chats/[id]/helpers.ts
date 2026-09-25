@@ -596,9 +596,9 @@ export async function processChatUpdates(
     }
   }
 
-  // Per-chat Concierge tri-state. Routed through the manual-flip helper so
-  // each transition does the right combination of DB updates + Concierge
-  // announcement in one place.
+  // Per-chat Concierge state (Moderated / Unmoderated / Locked). Routed
+  // through the one transition chokepoint so each change does the right DB
+  // writes and posts the Concierge's announcement in one place.
   if (validatedData.conciergeState) {
     const flipResult = await applyConciergeFlip(chatId, validatedData.conciergeState, updatedChat);
     if (flipResult.changed) {

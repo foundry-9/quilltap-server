@@ -44,6 +44,12 @@ import { ChatMessagesOps, ChatMessageRowSchema } from './chats-messages.ops';
 import { ChatSearchReplaceOps } from './chats-search.ops';
 
 /**
+ * The chat's Concierge state columns — patch-only on this table (see
+ * `ChatsRepository.patchOnlyFields`).
+ */
+const CONCIERGE_MODE_FIELDS: readonly string[] = ['conciergeMode', 'conciergeModeSetBy', 'conciergeModeReason'];
+
+/**
  * Chats repository with database abstraction layer backend
  */
 export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
@@ -540,6 +546,103 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   // ============================================================================
+  // CONCIERGE STATE
+  // ============================================================================
+  //
+  // `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` live in the
+  // schema (they travel in exports and restores), but they are patch-only: a
+  // whole-row `update` that does not name them leaves them alone, so a
+  // concurrent title or telemetry write cannot rewind a newer Concierge state
+  // from its stale snapshot. The one sanctioned writer is `applyConciergeFlip`
+  // (`lib/services/dangerous-content/manual-flip.ts`), through
+  // `setConciergeMode` below.
+
+  protected override patchOnlyFields(): readonly string[] {
+    return CONCIERGE_MODE_FIELDS;
+  }
+
+  /**
+   * Write a chat's Concierge state. With `expected`, the write is a
+   * compare-and-set: it lands only if the stored state is still `expected`
+   * (NULL counts as `'moderated'`), so a decision made on a snapshot can never
+   * overwrite a state that changed since. Returns whether a row was written.
+   *
+   * In the forked job child this is a buffered write (`set*` prefix) and
+   * returns nothing meaningful; the Concierge's own moves therefore run in the
+   * parent only.
+   */
+  async setConciergeMode(
+    chatId: string,
+    columns: {
+      conciergeMode: 'moderated' | 'unmoderated' | 'locked';
+      conciergeModeSetBy: 'operator' | 'concierge' | null;
+      conciergeModeReason: 'manual' | 'refusals' | 'classifier' | 'migration' | null;
+    },
+    expected?: 'moderated' | 'unmoderated' | 'locked',
+  ): Promise<boolean> {
+    const filter: Record<string, unknown> = { id: chatId };
+    if (expected) {
+      filter.$or = expected === 'moderated'
+        ? [{ conciergeMode: 'moderated' }, { conciergeMode: null }]
+        : [{ conciergeMode: expected }];
+    }
+    const written = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne(
+        filter as QueryFilter,
+        { $set: columns } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to write the Concierge state', { chatId }, false);
+    logger.debug('Concierge state write', {
+      chatId,
+      ...columns,
+      expected,
+      written,
+    });
+    return written;
+  }
+
+  /**
+   * Record the chat-level danger classifier's verdict: its telemetry
+   * (`isDangerousChat`, score, categories, when, at which message count).
+   * Telemetry only — it never moves the chat's Concierge state.
+   *
+   * In the forked job child this is a buffered write (`set*` prefix). The
+   * parent's commit hook reads `verdict` off it and, for a dangerous verdict,
+   * asks `maybeSwitchAfterClassification` whether to move the chat.
+   *
+   * @param verdict What the Concierge's announcement would report, carried to
+   *   the parent's commit hook. Not stored.
+   */
+  async setDangerClassification(
+    chatId: string,
+    telemetry: {
+      isDangerousChat: boolean;
+      dangerScore: number | null;
+      dangerCategories: string[];
+      dangerClassifiedAt: string;
+      dangerClassifiedAtMessageCount: number;
+    },
+    verdict?: {
+      score: number;
+      threshold: number;
+      categories: Array<{ category: string; score: number; label?: string }>;
+      source?: 'moderation' | 'llm';
+      providerName?: string;
+    } | null,
+  ): Promise<ChatMetadata | null> {
+    const updated = await this.update(chatId, telemetry);
+    logger.debug('Chat danger classification recorded', {
+      chatId,
+      isDangerousChat: telemetry.isDangerousChat,
+      dangerScore: telemetry.dangerScore,
+      hasVerdict: !!verdict,
+    });
+    return updated;
+  }
+
+  // ============================================================================
   // CONCIERGE REFUSAL LEDGER
   // ============================================================================
   //
@@ -613,7 +716,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
   /**
    * Empty the chat's refusal ledger. Called by `applyConciergeFlip` when the
-   * operator returns a chat to Monitored — a fresh start, so stale refusals
+   * operator returns a chat to Moderated — a fresh start, so stale refusals
    * cannot immediately undo the operator's decision.
    */
   async resetModerationRefusalLedger(chatId: string): Promise<void> {

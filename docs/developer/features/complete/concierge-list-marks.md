@@ -1,5 +1,7 @@
 # Concierge Marks on Chat Lists
 
+> **Superseded by [concierge-overhaul-phase-3-three-states.md](../concierge-overhaul-phase-3-three-states.md) (4.10).** The four states described here are now three — Moderated / Unmoderated / Locked, stored in `conciergeMode` with provenance in `conciergeModeSetBy` / `conciergeModeReason`. `conciergeOverride` is no longer written. This document is kept as the historical record of the four-state design.
+
 **Status:** Implemented (4.9-dev, 2026-09-02)
 **Scope:** quilltap-server — homepage Recent Chats (primary), Quick-hide's
 "Dangerous Chats" filter, Salon header badge and sidebar (shared copy), `ChatCard`

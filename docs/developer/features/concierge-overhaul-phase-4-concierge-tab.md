@@ -31,6 +31,43 @@ After this phase the Settings page has an eighth tab, **The Concierge**, with fi
 - Salon controls (phase 5).
 - Removing the old `dangerousContentSettings` column. It stops being read; a later housekeeping migration drops it.
 
+## Carried over from phase 3
+
+Phase 3 ([concierge-overhaul-phase-3-three-states.md](concierge-overhaul-phase-3-three-states.md))
+deliberately left two leftovers in place for one release so nothing was removed in the same change
+that stopped using it. Do them in this phase — this phase already ships a migration and already
+rewrites the Concierge's docs — and tick them here when done. Neither may be skipped: each is dead
+weight that a later reader would otherwise take for live behaviour.
+
+- [ ] **Drop `chats.conciergeOverride`.** Phase 3 stopped writing it; nothing reads it but the
+  legacy derivation. Remove it in a new `chats` migration (`drop-chat-concierge-override-v1`,
+  `dependsOn: ['add-chat-concierge-mode-v1']`, with its `PRETTY_LABELS` entry). SQLite's
+  `ALTER TABLE chats DROP COLUMN "conciergeOverride"` is enough — no index or trigger names it —
+  and `migrations/scripts/drop-api-key-encryption-columns.ts` is the pattern. Then:
+  - remove the field from `ChatMetadataSchema` and `ChatMetadataBaseSchema`
+    (`lib/schemas/chat.types.ts`) and its row from `docs/developer/DDL.md`;
+  - **keep** `deriveConciergeModeFromLegacy` / `withConciergeModeFromLegacy`
+    (`lib/services/dangerous-content/chat-override.ts`) and their calls in the `.qtap` importer
+    (`lib/import/quilltap-import/import-entities.ts`) and the backup restore
+    (`lib/backup/restore/restore.ts`). Old bundles and backups still carry the field, and both
+    paths read raw JSON and derive *before* `repos.chats.create` strips undeclared keys, so
+    removing the schema field does not lose it — add a test that proves this for each path;
+  - **keep** `conciergeOverride` in `public/schemas/qtap-export.schema.json`, marked deprecated, so
+    old bundles still validate;
+  - `add-chat-concierge-mode-v1` already tolerates the column being absent
+    (`legacyRowFilter`), so the ordering between the two migrations is safe either way.
+- [ ] **Remove the orphaned `-info` tone.** Since phase 3 no state uses `tone: 'info'`, so
+  `.qt-danger-badge-info` and `.qt-concierge-mark-info` (`app/styles/qt-components/_chat.css`) have
+  no user in the app. Check the bundled themes (`themes/bundled/`) and `create-quilltap-theme` for
+  hooks on them first; if none, remove both rules, the `'info'` member of `ConciergeTone`, and its
+  branches in `conciergeToneSuffix` / `conciergeToneTextClass`
+  (`lib/services/dangerous-content/concierge-state-presentation.ts`) and their tests. The same
+  removal must be mirrored in `packages/theme-storybook/src/css/qt-components.css` (the
+  `.qt-danger-badge-info` and `.qt-concierge-mark-info` rules), which means a patch bump of
+  `@quilltap/theme-storybook` and **stopping for a manual `npm publish`** before committing — the
+  standing `qt-*` mirroring rule. If a theme does hook either class, keep the rules and record why
+  here instead.
+
 ## Known State (verified 2026-09-25)
 
 ### Tabs
@@ -180,6 +217,7 @@ Every `mode` read is replaced by the question it was asking:
 
 ## Implementation order
 
+0. The two phase-3 carry-overs above (the `conciergeOverride` drop rides the same release as this phase's migration; the `-info` removal waits on its storybook publish).
 1. Schema, migration, DDL, backup remap, API validation, `useChatSettings` handler.
 2. `resolveConciergeSettings` and the mode-check replacement table (§4); the sweep gate.
 3. Tab, cards, deletions from the Chat tab, subsystem defaults, foundry redirect, help-guide category, tool examples, snapshot.

@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 #
-# concierge-four-state-test.sh
+# concierge-three-state-test.sh
 # ---------------------------------------------------------------------------
-# Acceptance checks for the Concierge per-chat danger-status four-state:
+# Acceptance checks for the Concierge per-chat danger-status three-state:
 #
-#   CT-1  Sidebar four-state control    (Monitored / Flagged / Vouched Safe /
-#                                        Uncensored)
-#   CT-2  Operator states stay put      (no auto-override out of Vouched Safe
-#                                        or Uncensored)
+#   CT-1  Sidebar three-state control    (Moderated / Unmoderated / Locked)
+#   CT-2  Locked and Unmoderated stay    (no auto-override out of Locked or
+#         put                            Unmoderated; retired values rejected)
 #   CT-3  State chosen at creation       (New Chat form's Concierge picker →
 #                                        POST /api/v1/chats conciergeState)
 #   CT-4  A refused picture is rerouted  (Concierge overhaul phase 1; opt-in —
@@ -19,9 +18,12 @@
 #     Chat Sidebar uses (applyConciergeFlip). The Next.js server is the sole
 #     DB writer, so we never write to the encrypted DB directly.
 #   * Assertions are READ-ONLY quilltap CLI queries (`db --json`).
-#   * The pill in the Salon header is a pure derivation of
-#     (conciergeOverride, isDangerousChat) — verifying that pair verifies
-#     what the pill will render.
+#   * The pill in the Salon header is a pure derivation of `conciergeMode`
+#     (NULL reads as 'moderated') — verifying that column, plus its
+#     provenance pair `conciergeModeSetBy` / `conciergeModeReason`, verifies
+#     what the pill will render. `isDangerousChat` is classifier telemetry
+#     only now — it is asserted just once, where the Moderated transition
+#     clears it, and never used to derive state.
 #   * CT-2's "scheduled-danger-scan skips it" is an absence-over-time fact, so
 #     it's checked with --arm (stamp a baseline) / --recheck (after a real
 #     ~10-min scan tick). CT-2's "chat-danger-classification bails at handler
@@ -30,14 +32,14 @@
 #
 # Requires: a running dev server (npm run dev), jq, and the quilltap CLI.
 #
-# WARNING: each full run appends ~15 synthetic Concierge bubbles to the target
+# WARNING: each full run appends ~9 synthetic Concierge bubbles to the target
 #          chat's history (they're honest "mode changed" announcements, but
 #          they accumulate). Point this at a THROWAWAY / test chat, not a
 #          conversation you care about. The chat's effective state is restored
 #          at the end unless --keep is given.
 #
 # Usage:
-#   scripts/concierge-four-state-test.sh --chat <chatId> [options]
+#   scripts/concierge-three-state-test.sh --chat <chatId> [options]
 #
 #   --chat <id>        Target chat UUID (required; or set $CHAT, or pass first arg)
 #   --instance <name>  Quilltap instance (default: Friday)
@@ -86,7 +88,7 @@ while [ $# -gt 0 ]; do
     --keep)      RESTORE=0; shift ;;
     --ct4-profile) CT4_PROFILE="$2"; shift 2 ;;
     --ct4-prompt)  CT4_PROMPT="$2"; shift 2 ;;
-    -h|--help)   sed -n '2,57p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   sed -n '2,60p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          echo "Unknown option: $1" >&2; exit 2 ;;
     *)           CHAT="$1"; shift ;;
   esac
@@ -110,22 +112,25 @@ q()  { node "$CLI_JS" db --instance "$INSTANCE" --json "$1" 2>/dev/null; }
 # scalar query: every query must alias its single column as `v`
 qv() { local out; out="$(q "$1" | jq -r '.[0].v // "null"')"; [ "$out" = "null" ] && out="null"; printf '%s' "$out"; }
 
-ov_of()  { qv "SELECT conciergeOverride AS v FROM chats WHERE id='$CHAT'"; }
-dg_of()  { qv "SELECT isDangerousChat AS v FROM chats WHERE id='$CHAT'"; }
+mode_of()  { local v; v="$(qv "SELECT conciergeMode AS v FROM chats WHERE id='$CHAT'")"; [ "$v" = "null" ] && v="moderated"; printf '%s' "$v"; }
+setby_of() { qv "SELECT conciergeModeSetBy AS v FROM chats WHERE id='$CHAT'"; }
+reason_of(){ qv "SELECT conciergeModeReason AS v FROM chats WHERE id='$CHAT'"; }
+dg_of()    { qv "SELECT isDangerousChat AS v FROM chats WHERE id='$CHAT'"; }
 ann_marker() { qv "SELECT COALESCE(MAX(createdAt),'') AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge'"; }
 
-derived_pill() { # ov dg -> pill label (Monitored renders no pill)
-  if [ "$1" = "OFF" ]; then echo "Vouched Safe"
-  elif [ "$1" = "UNCENSORED" ]; then echo "Uncensored"
-  elif [ "$2" = "1" ]; then echo "Flagged"
-  else echo "(none)"; fi
+derived_pill() { # mode -> pill label (Moderated renders no pill)
+  case "$1" in
+    unmoderated) echo "Unmoderated" ;;
+    locked)      echo "Locked" ;;
+    *)           echo "(none)" ;;
+  esac
 }
-effective_state() { # ov dg -> monitored|flagged|vouched|uncensored
-  if [ "$1" = "OFF" ]; then echo vouched
-  elif [ "$1" = "UNCENSORED" ]; then echo uncensored
-  elif [ "$2" = "1" ]; then echo flagged
-  else echo monitored; fi
-}
+
+# The columns the operator PUT/POST write are the same regardless of the
+# state transitioned *from* — moderated always clears provenance, the other
+# two always stamp (operator, manual).
+expected_setby()  { case "$1" in moderated) echo null ;; *) echo operator ;; esac; }
+expected_reason() { case "$1" in moderated) echo null ;; *) echo manual ;; esac; }
 
 # ----- API driver (the only writer; server-mediated) -----------------------
 api_set_state() { # state
@@ -141,13 +146,13 @@ api_set_state() { # state
 }
 
 # ----- assertions ----------------------------------------------------------
-check_pair() { # expected_ov expected_dg label
-  local ov dg pill
-  ov="$(ov_of)"; dg="$(dg_of)"; pill="$(derived_pill "$ov" "$dg")"
-  if [ "$ov" = "$1" ] && [ "$dg" = "$2" ]; then
-    ok "$3 — (conciergeOverride=$ov, isDangerousChat=$dg) → pill: $pill"
+check_triplet() { # expected_mode expected_setby expected_reason label
+  local mode setby reason pill
+  mode="$(mode_of)"; setby="$(setby_of)"; reason="$(reason_of)"; pill="$(derived_pill "$mode")"
+  if [ "$mode" = "$1" ] && [ "$setby" = "$2" ] && [ "$reason" = "$3" ]; then
+    ok "$4 — (conciergeMode=$mode, setBy=$setby, reason=$reason) → pill: $pill"
   else
-    bad "$3 — expected (ov=$1, dg=$2), got (ov=$ov, dg=$dg)"
+    bad "$4 — expected (mode=$1, setBy=$2, reason=$3), got (mode=$mode, setBy=$setby, reason=$reason)"
   fi
 }
 
@@ -161,11 +166,36 @@ check_ann() { # phrase since_iso label
   fi
 }
 
-transition() { # state expected_ov expected_dg phrase label
-  local m; m="$(ann_marker)"
-  api_set_state "$1" || return
-  check_pair "$2" "$3" "$5: DB pair"
-  [ -n "$4" ] && check_ann "$4" "$m" "$5: announcement"
+transition() { # state phrase label
+  local state="$1" phrase="$2" label="$3" m exp_setby exp_reason
+  exp_setby="$(expected_setby "$state")"; exp_reason="$(expected_reason "$state")"
+  m="$(ann_marker)"
+  api_set_state "$state" || return
+  check_triplet "$state" "$exp_setby" "$exp_reason" "$label: DB state"
+  if [ "$state" = "moderated" ]; then
+    local dg; dg="$(dg_of)"
+    if [ "$dg" = "0" ] || [ "$dg" = "null" ]; then
+      ok "$label: isDangerousChat cleared"
+    else
+      bad "$label: isDangerousChat not cleared (got $dg)"
+    fi
+  fi
+  [ -n "$phrase" ] && check_ann "$phrase" "$m" "$label: announcement"
+}
+
+# ----- live check: retired values are rejected -----------------------------
+check_retired_rejected() { # value
+  local value="$1" code
+  if [ "$MODE" = "dry" ]; then info "[dry] would PUT conciergeState=$value and expect HTTP 400"; return; fi
+  code="$(curl -s -o /tmp/ct_resp.json -w '%{http_code}' \
+            -X PUT "$BASE_URL/api/v1/chats/$CHAT" \
+            -H 'Content-Type: application/json' \
+            -d "{\"conciergeState\":\"$value\"}")"
+  if [ "$code" = "400" ]; then
+    ok "PUT conciergeState=$value (retired) -> HTTP 400 as expected"
+  else
+    bad "PUT conciergeState=$value (retired) -> HTTP $code, expected 400"
+  fi
 }
 
 # ----- preflight -----------------------------------------------------------
@@ -177,7 +207,7 @@ preflight() {
   [ "$code" = "200" ] || die "server not reachable at $BASE_URL (HTTP $code). Is 'npm run dev' running?"
   local title; title="$(qv "SELECT title AS v FROM chats WHERE id='$CHAT'")"
   [ "$title" = "null" ] && die "chat '$CHAT' not found in instance '$INSTANCE'"
-  printf "%sConcierge four-state test%s\n" "$C_HDR" "$C_RST"
+  printf "%sConcierge three-state test%s\n" "$C_HDR" "$C_RST"
   info "instance=$INSTANCE  base=$BASE_URL"
   info "chat=$CHAT  (\"$title\")"
 }
@@ -187,9 +217,9 @@ BASELINE_FILE="${TMPDIR:-/tmp}/ct-scan-baseline-$CHAT.json"
 
 arm_scan() {
   preflight
-  section "CT-2 scan-skip: arm baseline (Uncensored — the new state must skip too)"
-  api_set_state uncensored || die "could not set chat Uncensored"
-  check_pair "UNCENSORED" "$(dg_of)" "Uncensored confirmed"   # dg preserved, whatever it is
+  section "CT-2 scan-skip: arm baseline (Locked — the Concierge may only move a Moderated chat)"
+  api_set_state locked || die "could not set chat Locked"
+  check_triplet "locked" "operator" "manual" "Locked confirmed"
   local maxj now
   maxj="$(qv "SELECT COALESCE(MAX(createdAt),'') AS v FROM background_jobs WHERE type='CHAT_DANGER_CLASSIFICATION' AND payload LIKE '%$CHAT%'")"
   now="$(qv "SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS v")"
@@ -202,19 +232,20 @@ recheck_scan() {
   preflight
   section "CT-2 scan-skip: recheck"
   [ -f "$BASELINE_FILE" ] || die "no baseline ($BASELINE_FILE). Run --arm first."
-  local maxj armedAt n ov dg
+  local maxj armedAt n mode
   maxj="$(jq -r .maxJob "$BASELINE_FILE")"; armedAt="$(jq -r .armedAt "$BASELINE_FILE")"
-  ov="$(ov_of)"; dg="$(dg_of)"
-  case "$ov" in
-    OFF|UNCENSORED) ok "still operator-decided (conciergeOverride=$ov, isDangerousChat=$dg)" ;;
-    *) bad "no longer operator-decided (conciergeOverride=$ov) — something flipped it!" ;;
-  esac
+  mode="$(mode_of)"
+  if [ "$mode" = "locked" ]; then
+    ok "still Locked (conciergeMode=$mode) — the scan may only touch a Moderated chat"
+  else
+    bad "no longer Locked (conciergeMode=$mode) — something flipped it!"
+  fi
   n="$(qv "SELECT COUNT(*) AS v FROM background_jobs WHERE type='CHAT_DANGER_CLASSIFICATION' AND payload LIKE '%$CHAT%' AND createdAt > '$maxj'")"
   [ "$n" = "null" ] && n=0
   if [ "$n" -eq 0 ] 2>/dev/null; then
-    ok "scheduled scan enqueued NO classification job for this operator-decided chat since $armedAt"
+    ok "scheduled scan enqueued NO classification job for this Locked chat since $armedAt"
   else
-    bad "scan enqueued $n classification job(s) for an operator-decided chat — scan-skip FAILED"
+    bad "scan enqueued $n classification job(s) for a Locked chat — scan-skip FAILED"
   fi
   info "(If the server hasn't been up ≥10 min since arming, the scan may not have ticked yet — re-run later.)"
 }
@@ -224,31 +255,11 @@ recheck_scan() {
 # The Concierge picker moved onto the creation form, so `POST /api/v1/chats`
 # now takes a `conciergeState`. The route applies it through the same
 # `applyConciergeFlip` chokepoint the sidebar uses, between the SYSTEM prompt
-# message and everything else — so the created chat must carry the right stored
-# pair AND exactly one Concierge bubble, sitting after the prompt and before
-# the opening line. Every assertion is a read-only CLI query; the throwaway
-# chats are deleted through the API afterwards.
-
-# Expected (conciergeOverride, isDangerousChat) for a chat CREATED in a state.
-# The flag is only written by the Flagged branch; Vouched Safe and Uncensored
-# preserve whatever was underneath, which on a fresh row is nothing — so
-# "unflagged" is spelled `unset` and satisfied by either NULL or 0.
-ct3_state_pair() { # state -> "ov dg"
-  case "$1" in
-    flagged)    echo "null 1" ;;
-    vouched)    echo "OFF unset" ;;
-    uncensored) echo "UNCENSORED unset" ;;
-    *)          echo "null unset" ;;
-  esac
-}
-
-dg_matches() { # expected actual
-  if [ "$1" = "unset" ]; then
-    [ "$2" = "null" ] || [ "$2" = "0" ]
-  else
-    [ "$1" = "$2" ]
-  fi
-}
+# message and everything else — so the created chat must carry the right
+# stored triplet AND exactly one Concierge bubble (none for Moderated),
+# sitting after the prompt and before the opening line. Every assertion is a
+# read-only CLI query; the throwaway chats are deleted through the API
+# afterwards.
 
 ct3_create_chat() { # characterId profileId state ("" for "omit the field") -> new chat id
   local body id
@@ -264,20 +275,20 @@ ct3_delete_chat() { # chatId
 }
 
 ct3_case() { # state characterId profileId
-  local state="$1" charId="$2" profId="$3" newId pair exp_ov exp_dg ov dg n sys_rid con_rid
+  local state="$1" charId="$2" profId="$3" newId mode setby reason n sys_rid con_rid
   newId="$(ct3_create_chat "$charId" "$profId" "$state")"
   if [ -z "$newId" ]; then
     bad "CT-3 $state: POST /api/v1/chats returned no chat"
     return
   fi
 
-  pair="$(ct3_state_pair "$state")"; exp_ov="${pair%% *}"; exp_dg="${pair##* }"
-  ov="$(qv "SELECT conciergeOverride AS v FROM chats WHERE id='$newId'")"
-  dg="$(qv "SELECT isDangerousChat AS v FROM chats WHERE id='$newId'")"
-  if [ "$ov" = "$exp_ov" ] && dg_matches "$exp_dg" "$dg"; then
-    ok "CT-3 $state: created with (conciergeOverride=$ov, isDangerousChat=$dg) → pill: $(derived_pill "$ov" "$dg")"
+  mode="$(qv "SELECT COALESCE(conciergeMode,'moderated') AS v FROM chats WHERE id='$newId'")"
+  setby="$(qv "SELECT conciergeModeSetBy AS v FROM chats WHERE id='$newId'")"
+  reason="$(qv "SELECT conciergeModeReason AS v FROM chats WHERE id='$newId'")"
+  if [ "$mode" = "$state" ] && [ "$setby" = "operator" ] && [ "$reason" = "manual" ]; then
+    ok "CT-3 $state: created with (conciergeMode=$mode, setBy=$setby, reason=$reason) → pill: $(derived_pill "$mode")"
   else
-    bad "CT-3 $state: expected (ov=$exp_ov, dg=$exp_dg), got (ov=$ov, dg=$dg)"
+    bad "CT-3 $state: expected (mode=$state, setBy=operator, reason=manual), got (mode=$mode, setBy=$setby, reason=$reason)"
   fi
 
   n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$newId' AND systemSender='concierge'")"
@@ -304,7 +315,7 @@ ct3_case() { # state characterId profileId
 
 run_ct3() {
   section "CT-3: the state chosen on the New Chat form (creation-time)"
-  local charId profId newId n ov dg
+  local charId profId newId n mode setby reason
   charId="$(qv "SELECT id AS v FROM characters WHERE controlledBy='llm' AND archivedAt IS NULL ORDER BY createdAt LIMIT 1")"
   profId="$(qv "SELECT id AS v FROM connection_profiles ORDER BY createdAt LIMIT 1")"
   if [ "$charId" = "null" ] || [ "$profId" = "null" ]; then
@@ -320,29 +331,29 @@ run_ct3() {
   else
     n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$newId' AND systemSender='concierge'")"
     [ "$n" = "null" ] && n=0
-    ov="$(qv "SELECT conciergeOverride AS v FROM chats WHERE id='$newId'")"
-    dg="$(qv "SELECT isDangerousChat AS v FROM chats WHERE id='$newId'")"
-    if [ "$ov" = "null" ] && dg_matches unset "$dg" && [ "$n" = "0" ]; then
-      ok "CT-3 omitted: created Monitored, no Concierge bubble"
+    mode="$(qv "SELECT COALESCE(conciergeMode,'moderated') AS v FROM chats WHERE id='$newId'")"
+    setby="$(qv "SELECT conciergeModeSetBy AS v FROM chats WHERE id='$newId'")"
+    reason="$(qv "SELECT conciergeModeReason AS v FROM chats WHERE id='$newId'")"
+    if [ "$mode" = "moderated" ] && [ "$setby" = "null" ] && [ "$reason" = "null" ] && [ "$n" = "0" ]; then
+      ok "CT-3 omitted: created Moderated, no Concierge bubble"
     else
-      bad "CT-3 omitted: expected Monitored with no bubble, got (ov=$ov, dg=$dg, bubbles=$n)"
+      bad "CT-3 omitted: expected Moderated with no bubble, got (mode=$mode, setBy=$setby, reason=$reason, bubbles=$n)"
     fi
     ct3_delete_chat "$newId"
   fi
 
-  ct3_case flagged    "$charId" "$profId"
-  ct3_case vouched    "$charId" "$profId"
-  ct3_case uncensored "$charId" "$profId"
+  ct3_case unmoderated "$charId" "$profId"
+  ct3_case locked      "$charId" "$profId"
 }
 
-# ----- CT-4: a refused picture on a Monitored chat is rerouted -------------
+# ----- CT-4: a refused picture on a Moderated chat is rerouted -------------
 # Drives the legacy image route (POST /api/v1/images?action=generate), which
 # now runs through generateImageWithConciergeFailover. Opt-in, because it needs
 # a real provider that actually refuses the prompt — there is no way to force a
 # refusal from outside. The deterministic half is the jest suites below.
 run_ct4() {
-  section "CT-4: a refused picture on a Monitored chat is rerouted (live)"
-  api_set_state monitored >/dev/null 2>&1 || true
+  section "CT-4: a refused picture on a Moderated chat is rerouted (live)"
+  api_set_state moderated >/dev/null 2>&1 || true
   local m code n
   m="$(qv "SELECT COALESCE(MAX(createdAt),'') AS v FROM chat_messages WHERE chatId='$CHAT'")"
   code="$(curl -s -o /tmp/ct4_resp.json -w '%{http_code}' \
@@ -378,10 +389,13 @@ run_jest() {
     "__tests__/unit/lib/services/dangerous-content/understudy.test.ts"
     "__tests__/unit/lib/services/dangerous-content/image-failover.test.ts"
     "__tests__/unit/lib/tools/image-generation-concierge-failover.test.ts"
+    "__tests__/unit/migrations/add-chat-concierge-mode.test.ts"
+    "__tests__/unit/lib/services/dangerous-content/concierge-state-presentation.test.ts"
+    "__tests__/unit/lib/services/chat-message/provider-failover-refusal.test.ts"
   )
   if (cd "$ROOT" && npx jest "${suites[@]}" --silent >/tmp/ct_jest.log 2>&1); then
-    ok "manual-flip + chat-override + resolver + chat-danger-classification + refusal-failover suites passed"
-    info "covers: four-state → (override,flag) writes & announcements, predicates, resolver overrides, handler bail, refusal classification + image failover (the bikini case)"
+    ok "manual-flip + chat-override + resolver + chat-danger-classification + migration + presentation + refusal-failover suites passed"
+    info "covers: three-state → (conciergeMode, setBy, reason) writes & announcements, predicates, resolver overrides, handler bail, the four→three-state migration, presentation labels, refusal classification + image failover (the bikini case)"
   else
     bad "guard suites failed — see /tmp/ct_jest.log (if native ABI mismatch: npm rebuild better-sqlite3)"
   fi
@@ -395,16 +409,16 @@ esac
 
 preflight
 
-ORIG_OV="$(ov_of)"; ORIG_DG="$(dg_of)"; ORIG_STATE="$(effective_state "$ORIG_OV" "$ORIG_DG")"
-info "original state: $ORIG_STATE (ov=$ORIG_OV, dg=$ORIG_DG)"
+ORIG_MODE="$(mode_of)"
+info "original state: $ORIG_MODE"
 
 if [ "$MODE" = "dry" ]; then
   section "DRY RUN — plumbing check, no writes"
   ok "server reachable, CLI queryable, chat found"
-  check_pair "$ORIG_OV" "$ORIG_DG" "current pair readable"
-  info "planned CT-1 walk: monitored → flagged → monitored → vouched → monitored → uncensored → monitored → flagged → vouched → uncensored"
-  info "planned CT-2: flagged → vouched (preserve flag) → uncensored (preserve flag), then jest guards"
-  info "planned CT-3: create+delete four throwaway chats (omitted, flagged, vouched, uncensored)"
+  check_triplet "$ORIG_MODE" "$(setby_of)" "$(reason_of)" "current state readable"
+  info "planned CT-1 walk: moderated → unmoderated → moderated → locked → moderated → unmoderated → locked → unmoderated"
+  info "planned CT-2: PUT conciergeState=flagged (retired) → expect HTTP 400, then jest guards"
+  info "planned CT-3: create+delete three throwaway chats (omitted, unmoderated, locked)"
   printf "\n%sDry run OK.%s Re-run without --dry-run to execute (mutates the chat).\n" "$C_OK" "$C_RST"
   exit 0
 fi
@@ -413,26 +427,20 @@ printf "\n%s⚠ This appends synthetic Concierge bubbles to chat %s. Ctrl-C with
 sleep 3
 
 # normalize to a known starting point (unasserted setup)
-api_set_state monitored >/dev/null 2>&1 || true
+api_set_state moderated >/dev/null 2>&1 || true
 
-section "CT-1: sidebar four-state control"
-#          state      ov         dg  announce-phrase              label
-transition flagged    null       1   "thrown the switch"          "Monitored→Flagged"
-transition monitored  null       0   "stands down for the moment" "Flagged→Monitored"
-transition vouched    OFF        0   "takes the afternoon off"    "Monitored→Vouched Safe (flag preserved=0)"
-transition monitored  null       0   "returns to his post"        "Vouched Safe→Monitored"
-transition uncensored UNCENSORED 0   "uncensored door stands open" "Monitored→Uncensored (flag preserved=0)"
-transition monitored  null       0   "returns to his post"        "Uncensored→Monitored"
-transition flagged    null       1   ""                           "Monitored→Flagged (setup)"
-transition vouched    OFF        1   "takes the afternoon off"    "Flagged→Vouched Safe (flag preserved=1)"
-transition uncensored UNCENSORED 1   "uncensored door stands open" "Vouched Safe→Uncensored (flag preserved=1)"
-transition flagged    null       1   "thrown the switch"          "Uncensored→Flagged"
+section "CT-1: sidebar three-state control"
+#          state        phrase                            label
+transition unmoderated  "uncensored door stands open"      "Moderated→Unmoderated"
+transition moderated    "Moderated once more"              "Unmoderated→Moderated"
+transition locked       "locked the present company"       "Moderated→Locked"
+transition moderated    "Moderated once more"              "Locked→Moderated"
+transition unmoderated  "uncensored door stands open"       "Moderated→Unmoderated (again)"
+transition locked       "locked the present company"       "Unmoderated→Locked"
+transition unmoderated  "uncensored door stands open"       "Locked→Unmoderated"
 
-section "CT-2: operator states stay put (live, deterministic parts)"
-transition vouched    OFF        1   "takes the afternoon off"    "→Vouched Safe preserves Flagged"
-check_pair "OFF" "1" "Vouched Safe is stable (override wins, flag preserved underneath)"
-transition uncensored UNCENSORED 1   "uncensored door stands open" "→Uncensored preserves Flagged"
-check_pair "UNCENSORED" "1" "Uncensored is stable (override wins, flag preserved underneath)"
+section "CT-2: Locked and Unmoderated stay put (live, deterministic parts)"
+check_retired_rejected "flagged"
 info "scan-skip over a live 10-min tick: run '$0 --chat $CHAT --arm' then '--recheck' later"
 
 [ "$RUN_CT3" -eq 1 ] && run_ct3
@@ -442,7 +450,7 @@ if [ -n "$CT4_PROFILE" ] && [ -n "$CT4_PROMPT" ]; then run_ct4; else info "CT-4 
 # restore
 if [ "$RESTORE" -eq 1 ]; then
   section "restore"
-  api_set_state "$ORIG_STATE" >/dev/null 2>&1 && info "restored effective state → $ORIG_STATE" \
+  api_set_state "$ORIG_MODE" >/dev/null 2>&1 && info "restored effective state → $ORIG_MODE" \
     || info "could not restore (left as-is)"
 fi
 

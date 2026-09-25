@@ -22,7 +22,7 @@ import { badRequest, notFound, serverError, successResponse } from '@/lib/api/re
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
-import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 
 export async function handleGet(
@@ -218,6 +218,8 @@ export async function handleGet(
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
               conciergeState: getConciergeState(chat),
+              conciergeSetBy: getConciergeProvenance(chat),
+              conciergeReason: getConciergeReason(chat),
               dangerCategories: chat.dangerCategories ?? [],
               _count: {
                 messages: messageCount,

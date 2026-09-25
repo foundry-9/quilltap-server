@@ -71,6 +71,8 @@ export async function getHomeData(
     updatedAt: chat.updatedAt,
     lastMessageAt: chat.lastMessageAt,
     conciergeState: chat.conciergeState,
+    conciergeSetBy: chat.conciergeSetBy,
+    conciergeReason: chat.conciergeReason,
     dangerCategories: chat.dangerCategories,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     participants: chat.participants.map((p) => ({

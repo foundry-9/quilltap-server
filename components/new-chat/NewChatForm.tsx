@@ -10,7 +10,7 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { CONCIERGE_STATES, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneTextClass,
@@ -704,14 +704,11 @@ export function NewChatForm({
             disabled={creating}
             className="qt-select"
           >
-            <optgroup label="The Concierge decides">
-              <option value="monitored">Monitored (default)</option>
-              <option value="flagged">Flagged</option>
-            </optgroup>
-            <optgroup label="You decide">
-              <option value="vouched">Vouched Safe</option>
-              <option value="uncensored">Uncensored</option>
-            </optgroup>
+            {CONCIERGE_STATES.map((value) => (
+              <option key={value} value={value}>
+                {CONCIERGE_STATE_PRESENTATION[value].label}{value === 'moderated' ? ' (default)' : ''}
+              </option>
+            ))}
           </select>
           <p className="qt-text-xs qt-text-muted mt-1">{conciergePresentation.detail}</p>
         </div>

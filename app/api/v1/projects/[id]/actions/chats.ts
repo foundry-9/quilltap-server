@@ -13,7 +13,7 @@ import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addChatSchema, removeChatSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
 import { byChatActivityDesc } from '@/lib/chat/chat-activity';
-import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 /**
  * List chats associated with project (paginated)
@@ -101,6 +101,8 @@ export async function handleListChats(
           tags: chatTags,
           storyBackground,
           conciergeState: getConciergeState(chat),
+          conciergeSetBy: getConciergeProvenance(chat),
+          conciergeReason: getConciergeReason(chat),
           dangerCategories: chat.dangerCategories ?? [],
           lastMessageAt: chat.lastMessageAt ?? null,
           updatedAt: chat.updatedAt,

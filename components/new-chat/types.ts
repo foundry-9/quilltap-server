@@ -148,7 +148,7 @@ export interface NewChatFormState {
   /**
    * The Concierge state the chat is created with — the sidebar's four-state
    * control, moved earlier in time so the choice is in force for the opening
-   * greeting. `'monitored'` is the default and is omitted from the create
+   * greeting. `'moderated'` is the default and is omitted from the create
    * request; anything else is applied server-side through `applyConciergeFlip`
    * right after the system-prompt message.
    */

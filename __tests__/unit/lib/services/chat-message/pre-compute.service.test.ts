@@ -316,13 +316,13 @@ describe('pre-compute.service', () => {
       )
     })
 
-    it('routes through the uncensored cheap-LLM selection in dangerous chats', async () => {
+    it('routes through the uncensored cheap-LLM selection in Unmoderated chats', async () => {
       const uncensored = { provider: 'LOCAL', modelName: 'unc' } as any
       ;(mockResolveUncensoredCheapLLMSelection as jest.Mock).mockReturnValue(uncensored)
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: false })
 
       await runPreContextPreCompute(baseOptions({
-        chat: { ...baseChat, isDangerousChat: true } as any,
+        chat: { ...baseChat, conciergeMode: 'unmoderated' } as any,
         cheapLLMSelection: baseCheapLLM,
         existingMessages: [
           { type: 'message', role: 'ASSISTANT', content: 'past', participantId: 'p-char' } as any,

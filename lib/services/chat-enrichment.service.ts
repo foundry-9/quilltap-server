@@ -25,8 +25,9 @@ import {
 } from '@/lib/photos/resolve-character-avatar'
 import { logger } from '@/lib/logger'
 import { byChatActivityDesc } from '@/lib/chat/chat-activity'
-import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
-import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
 
 type Repos = RepositoryContainer
 
@@ -220,12 +221,16 @@ export interface EnrichedChatSummary {
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
   /**
-   * The derived Concierge four-state. Lists carry this instead of the raw
-   * `isDangerousChat` / `conciergeOverride` pair so nothing downstream has to
-   * read the two stored fields together (and get it wrong).
+   * The derived Concierge state (Moderated / Unmoderated / Locked). Lists
+   * carry this instead of the stored columns so nothing downstream has to
+   * read them (and get it wrong).
    */
   conciergeState: ConciergeState
-  /** The classifier's categories, surfaced only for `'flagged'`. `[]` when none. */
+  /** Who put the chat in its state; `null` for Moderated. */
+  conciergeSetBy: ConciergeProvenance
+  /** Why the chat is in its state; `null` for Moderated. */
+  conciergeReason: ConciergeModeReason | null
+  /** The classifier's categories, for the mark's tooltip. `[]` when none. */
   dangerCategories: string[]
   chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
   /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
@@ -611,6 +616,8 @@ export async function enrichChatForList(
     project,
     storyBackground,
     conciergeState: getConciergeState(chat),
+    conciergeSetBy: getConciergeProvenance(chat),
+    conciergeReason: getConciergeReason(chat),
     dangerCategories: chat.dangerCategories ?? [],
     chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma',
     scriptoriumStatus,

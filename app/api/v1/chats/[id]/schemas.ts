@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { OutfitSelectionSchema } from '@/lib/schemas/wardrobe.types';
+import { ConciergeModeSchema } from '@/lib/schemas/chat.types';
 
 export const updateChatSchema = z.object({
   title: z.string().optional(),
@@ -117,14 +118,15 @@ export const chatUpdateRequestSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shortcut, same as chat.imageProfileId)
   /**
-   * Four-state per-chat Concierge mode set from the sidebar:
-   *   - 'monitored'  : moderation runs as usual, classifier may auto-flip → 'flagged'
-   *   - 'flagged'    : the Concierge's verdict — dangerous (uncensored routing, etc.)
-   *   - 'vouched'    : the operator vouches the chat safe (no moderation, ordinary providers)
-   *   - 'uncensored' : the operator asserts the chat spicy (uncensored routing, no moderation)
-   * The handler maps this onto chats.conciergeOverride + chats.isDangerousChat.
+   * Per-chat Concierge state set from the sidebar:
+   *   - 'moderated'   : ordinary providers first, uncensored on refusal; the
+   *                     Concierge may move the chat to 'unmoderated' himself
+   *   - 'unmoderated' : the uncensored desk only, candid prompts
+   *   - 'locked'      : ordinary providers only; a refusal stands
+   * Applied through `applyConciergeFlip`. The retired four-state values
+   * ('monitored', 'flagged', 'vouched', 'uncensored') are rejected with 400.
    */
-  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
+  conciergeState: ConciergeModeSchema.optional(),
 });
 
 export const addTagSchema = z.object({
