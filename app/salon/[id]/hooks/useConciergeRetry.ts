@@ -13,7 +13,7 @@
  * @module app/salon/[id]/hooks/useConciergeRetry
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { showErrorToast, showInfoToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import { describeRetryRefusal } from '../concierge-retry'
@@ -77,5 +77,7 @@ export function useConciergeRetry(
     }
   }, [chatId, startBackgroundPolling])
 
-  return { retryPicture, retryBackground }
+  // Stable identity: the Salon memoises its retry handlers on this, and every
+  // transcript row compares those handlers by identity.
+  return useMemo(() => ({ retryPicture, retryBackground }), [retryPicture, retryBackground])
 }

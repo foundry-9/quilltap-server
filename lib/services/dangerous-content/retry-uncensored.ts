@@ -17,7 +17,12 @@
  * - **Off duty does not bar it.** "Off duty" stops the Concierge acting on his
  *   own; this is the operator acting, explicitly, on one request.
  * - The understudy comes from the one resolver (`understudy.ts`), excluding the
- *   profile that answered (or refused) the original.
+ *   profile that answered (or refused) the original — by id where the trail or
+ *   the chat's configuration names it, and by provider + model, which is what
+ *   the original message records, so a profile reassigned since cannot hand
+ *   the retry back to the model that already answered.
+ * - The desk is the one *configured* (`resolveConfiguredConciergeDesk`), not
+ *   the policy's, which is empty off duty.
  *
  * Reads only.
  *
@@ -26,11 +31,15 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver'
-import type { getRepositories } from '@/lib/repositories/factory'
+import { getRepositories } from '@/lib/repositories/factory'
 import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { ChatMetadataBase, ChatSettings, MessageEvent } from '@/lib/schemas/types'
 import { conciergeStateMayFailOver, getConciergeState } from './chat-override'
-import { resolveConciergeSettings } from './resolver.service'
+import {
+  resolveConciergeSettings,
+  resolveConfiguredConciergeDesk,
+  type ResolvedConciergePolicy,
+} from './resolver.service'
 import {
   resolveUncensoredImageUnderstudy,
   resolveUncensoredTextUnderstudy,
@@ -54,6 +63,35 @@ export function mayRetryUncensored(chat: Pick<ChatMetadataBase, 'conciergeMode'>
   return conciergeStateMayFailOver(getConciergeState(chat))
 }
 
+/** Who answered the original, as the message records it. */
+export interface AnsweredBy {
+  provider?: string | null
+  modelName?: string | null
+}
+
+/**
+ * The policy an explicit retry resolves the understudy with: the chat's own,
+ * but with the desk as configured. Off duty the policy's desk is empty, and an
+ * operator who named an uncensored profile must not be told there is none.
+ */
+function retryPolicy(chatSettings: ChatSettings | null, chat: ChatMetadataBase): ResolvedConciergePolicy {
+  return {
+    ...resolveConciergeSettings(chatSettings, chat),
+    desk: resolveConfiguredConciergeDesk(chatSettings),
+  }
+}
+
+/** Ids of the profiles that share the original's provider and model. */
+function sameModelIds(
+  profiles: Array<{ id: string; provider: string; modelName: string }>,
+  answeredBy: AnsweredBy | undefined,
+): string[] {
+  if (!answeredBy?.provider || !answeredBy.modelName) return []
+  return profiles
+    .filter((p) => p.provider === answeredBy.provider && p.modelName === answeredBy.modelName)
+    .map((p) => p.id)
+}
+
 /** Profile ids named on a trail, filtered by kind (absent kind reads as `'connection'`). */
 function trailProfileIds(
   trail: RouteAttempt[] | null | undefined,
@@ -67,8 +105,9 @@ function trailProfileIds(
 /**
  * Who would take a text retry of `targetMessage`, or why nobody will.
  *
- * Excludes the responder's own profile and every connection profile already
- * on the message's trail, so the retry never lands where the original did.
+ * Excludes the responder's own profile, every connection profile already on
+ * the message's trail, and every profile on the model that answered it, so the
+ * retry never lands where the original did.
  */
 export async function resolveTextRetryUnderstudy(opts: {
   repos: Repos
@@ -103,10 +142,20 @@ export async function resolveTextRetryUnderstudy(opts: {
       })
     }
   }
+  try {
+    const connections = await repos.connections.findAll()
+    for (const id of sameModelIds(connections, targetMessage)) exclude.add(id)
+  } catch (error) {
+    logger.debug('Could not list connection profiles to exclude the answering model from the retry', {
+      chatId: chat.id,
+      messageId: targetMessage.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   const understudy = await resolveUncensoredTextUnderstudy({
     userId,
-    conciergePolicy: resolveConciergeSettings(chatSettings, chat),
+    conciergePolicy: retryPolicy(chatSettings, chat),
     exclude: [...exclude],
   })
 
@@ -122,7 +171,9 @@ export async function resolveTextRetryUnderstudy(opts: {
 
 /**
  * Who would take an image retry, or why nobody will. `excludeProfileIds` is
- * the image profile that drew (or refused) the original, plus any on its trail.
+ * the image profile that drew (or refused) the original, plus any on its trail;
+ * `answeredBy` (the picture's recorded provider and model) excludes every image
+ * profile on that model too.
  */
 export async function resolveImageRetryUnderstudy(opts: {
   userId: string
@@ -130,8 +181,9 @@ export async function resolveImageRetryUnderstudy(opts: {
   chatSettings: ChatSettings | null
   excludeProfileIds: Array<string | null | undefined>
   trail?: RouteAttempt[] | null
+  answeredBy?: AnsweredBy
 }): Promise<RetryUnderstudyResult<ImageUnderstudy>> {
-  const { userId, chat, chatSettings, excludeProfileIds, trail } = opts
+  const { userId, chat, chatSettings, excludeProfileIds, trail, answeredBy } = opts
 
   if (!mayRetryUncensored(chat)) {
     logger.info('Uncensored image retry refused: the chat is Locked', { chatId: chat.id })
@@ -144,9 +196,22 @@ export async function resolveImageRetryUnderstudy(opts: {
       ...trailProfileIds(trail, 'image'),
     ]),
   ]
+  if (answeredBy?.provider && answeredBy.modelName) {
+    try {
+      const imageProfiles = await getRepositories().imageProfiles.findAll()
+      for (const id of sameModelIds(imageProfiles, answeredBy)) {
+        if (!exclude.includes(id)) exclude.push(id)
+      }
+    } catch (error) {
+      logger.debug('Could not list image profiles to exclude the answering model from the retry', {
+        chatId: chat.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
   const understudy = await resolveUncensoredImageUnderstudy({
     userId,
-    conciergePolicy: resolveConciergeSettings(chatSettings, chat),
+    conciergePolicy: retryPolicy(chatSettings, chat),
     exclude,
   })
 

@@ -13,7 +13,10 @@
   swipe. The new swipe's `routeTrail` keeps the original's failed/refused rows and ends on the
   understudy with `via: 'concierge'`. Returns `409 { error: 'locked' }` on a Locked chat and
   `409 { error: 'no-understudy' }` when nobody can take it. Never changes the chat's state. Off
-  duty does not block it (it is the operator's request, not the Concierge's).
+  duty does not block it (it is the operator's request, not the Concierge's), and the configured
+  desk is used even off duty (`resolveConfiguredConciergeDesk`). Profiles on the provider and
+  model that answered the original are excluded too, so a profile reassigned since cannot hand
+  the retry back to the same model (text and pictures alike).
 - **Try uncensored, pictures.** New action `POST /api/v1/chats/[id]?action=retry-image-uncensored`.
   Body `{ toolMessageId }` re-runs a `generate_image` call's arguments on the uncensored image
   understudy and posts a new TOOL message 1 ms after the original (so it sits beside it) with the

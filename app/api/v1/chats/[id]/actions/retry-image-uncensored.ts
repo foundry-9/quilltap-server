@@ -40,6 +40,9 @@ const retryImageSchema = z.union([
 interface StoredToolContent {
   toolName?: string;
   arguments?: Record<string, unknown>;
+  /** The image provider and model that answered (absent on a failed call). */
+  provider?: string;
+  model?: string;
 }
 
 function parseToolContent(content: string): StoredToolContent | null {
@@ -104,6 +107,7 @@ export async function handleRetryImageUncensored(
     chatSettings,
     excludeProfileIds: [chat.imageProfileId],
     trail: toolMessage.routeTrail,
+    answeredBy: { provider: stored.provider, modelName: stored.model },
   });
   if (!gate.ok) {
     logger.info('[DangerousContent] Uncensored picture retry refused', {

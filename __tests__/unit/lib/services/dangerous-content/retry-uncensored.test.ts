@@ -17,6 +17,16 @@ import {
   resolveUncensoredTextUnderstudy,
 } from '@/lib/services/dangerous-content/understudy'
 
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(() => ({
+    imageProfiles: {
+      findAll: jest.fn().mockResolvedValue([
+        { id: 'img-same-model', provider: 'GOOGLE', modelName: 'imagen' },
+        { id: 'img-other', provider: 'OPENROUTER', modelName: 'flux' },
+      ]),
+    },
+  })),
+}))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
   resolveUncensoredTextUnderstudy: jest.fn(),
   resolveUncensoredImageUnderstudy: jest.fn(),
@@ -44,12 +54,22 @@ const repos = {
   characters: {
     findById: jest.fn().mockResolvedValue({ id: 'char-1', defaultConnectionProfileId: 'responder-profile' }),
   },
+  connections: {
+    findAll: jest.fn().mockResolvedValue([
+      // Reassigned since: the character now points elsewhere, but this profile
+      // is on the model that answered the target.
+      { id: 'old-profile', provider: 'OPENAI', modelName: 'gpt-answered' },
+      { id: 'unrelated', provider: 'OPENROUTER', modelName: 'free-model' },
+    ]),
+  },
 } as never
 
 const target = {
   id: 'msg-1',
   role: 'ASSISTANT',
   participantId: 'seat-1',
+  provider: 'OPENAI',
+  modelName: 'gpt-answered',
   routeTrail: [
     { profileId: 'refuser', profileName: 'Prim', provider: 'OPENAI', modelName: 'gpt', via: 'primary', outcome: 'refused' },
     { profileId: 'tier', profileName: 'Tier', provider: 'OPENAI', modelName: 'mini', via: 'tier-pick', outcome: 'answered' },
@@ -93,20 +113,22 @@ describe('resolveTextRetryUnderstudy', () => {
     })
     expect(result).toEqual({ ok: true, understudy: UNDERSTUDY })
     const lookup = mockText.mock.calls[0][0]
-    expect(new Set(lookup.exclude)).toEqual(new Set(['refuser', 'tier', 'responder-profile']))
+    expect(new Set(lookup.exclude)).toEqual(new Set(['refuser', 'tier', 'responder-profile', 'old-profile']))
     expect(lookup.userId).toBe('u1')
   })
 
-  it('works whatever the duty roster says: off duty does not bar the operator', async () => {
+  it('works whatever the duty roster says: off duty still offers the configured desk', async () => {
     mockText.mockResolvedValue(UNDERSTUDY as never)
     const result = await resolveTextRetryUnderstudy({
       repos,
       userId: 'u1',
       chat: makeChat(),
-      chatSettings: { conciergeSettings: { enabled: false } } as never,
+      chatSettings: { conciergeSettings: { enabled: false, uncensoredTextProfileId: 'desk-1' } } as never,
       targetMessage: target,
     })
     expect(result.ok).toBe(true)
+    // The off-duty policy's desk is empty; the retry's must not be.
+    expect(mockText.mock.calls[0][0].conciergePolicy.desk.textProfileId).toBe('desk-1')
   })
 })
 
@@ -132,6 +154,29 @@ describe('resolveImageRetryUnderstudy', () => {
       ],
     })
     expect(new Set(mockImage.mock.calls[0][0].exclude)).toEqual(new Set(['img-1', 'img-refuser']))
+  })
+
+  it('excludes every image profile on the model that drew the original', async () => {
+    mockImage.mockResolvedValue(UNDERSTUDY as never)
+    await resolveImageRetryUnderstudy({
+      userId: 'u1',
+      chat: makeChat(),
+      chatSettings: null,
+      excludeProfileIds: ['img-1'],
+      answeredBy: { provider: 'GOOGLE', modelName: 'imagen' },
+    })
+    expect(new Set(mockImage.mock.calls[0][0].exclude)).toEqual(new Set(['img-1', 'img-same-model']))
+  })
+
+  it('offers the configured image desk while the Concierge is off duty', async () => {
+    mockImage.mockResolvedValue(UNDERSTUDY as never)
+    await resolveImageRetryUnderstudy({
+      userId: 'u1',
+      chat: makeChat(),
+      chatSettings: { conciergeSettings: { enabled: false, uncensoredImageProfileId: 'desk-img' } } as never,
+      excludeProfileIds: [],
+    })
+    expect(mockImage.mock.calls[0][0].conciergePolicy.desk.imageProfileId).toBe('desk-img')
   })
 })
 
