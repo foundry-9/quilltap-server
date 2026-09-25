@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Fixed: Concierge state races (PR #75 review)
+
+- `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` are patch-only on `chats`: a
+  whole-row `update` that does not name them leaves them out of its `$set`, so a concurrent title
+  or telemetry write can no longer rewind a newer state. New `patchOnlyFields()` hook on
+  `AbstractBaseRepository`.
+- New `ChatsRepository.setConciergeMode(chatId, columns, expected?)`, the only writer of the state.
+  With `expected` it is a compare-and-set (NULL counts as moderated). `applyConciergeFlip` uses it
+  for every transition; the Concierge's own moves pass the state he read and announce nothing on a
+  miss, and are refused in the job child.
+- The classifier job no longer flips the chat. It records telemetry with
+  `chats.setDangerClassification` (verdict carried, not stored); the job dispatcher's new commit
+  hook calls `maybeSwitchAfterClassification` in the parent, which moves the chat only if it is
+  still Moderated.
+- The image failover chokepoint and both text failover paths re-read the chat's state when a
+  refusal arrives (`readCurrentConciergeState`), so a chat locked mid-request is never rerouted.
+
 #### Docs: phase 3 leftovers scheduled in phase 4
 
 - `concierge-overhaul-phase-4-concierge-tab.md` gains a "Carried over from phase 3" checklist:

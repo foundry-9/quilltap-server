@@ -41,7 +41,8 @@ import {
   postConciergeRefusalAnnouncement,
   type ConciergeRefusalKind,
 } from '@/lib/services/concierge-notifications/writer'
-import { getConciergeState, mayFailOver, type ConciergeState } from './chat-override'
+import { conciergeStateMayFailOver, getConciergeState, type ConciergeState } from './chat-override'
+import { readCurrentConciergeState } from './current-state'
 import { classifyRefusal, type RefusalVerdict } from './refusal'
 import { recordModerationRefusal } from './refusal-ledger'
 import { resolveUncensoredImageUnderstudy } from './understudy'
@@ -64,8 +65,10 @@ export interface ImageFailoverContext<P extends FailoverProfile = ImageProfile> 
   /** Already resolved WITH the chat where there is one. */
   settings: DangerousContentSettings
   /**
-   * The chat's Concierge state, where there is a chat. A Locked chat never
-   * fails over, whatever the mode says. Absent (the dialog) reads as Moderated.
+   * The chat's Concierge state when the call began, where there is a chat. A
+   * Locked chat never fails over, whatever the mode says. At refusal time the
+   * chokepoint re-reads the chat (by `chatId`) and uses this only if that read
+   * fails. Absent (the dialog) reads as Moderated.
    */
   chat?: { conciergeMode?: ConciergeState | null } | null
   /**
@@ -254,11 +257,14 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
   })
 
   // 4. The caller's policy, stated here where a reader can see it: a Locked
-  //    chat never fails over, and otherwise failover obeys Auto-Route.
-  if (!mayFailOver(ctx.chat)) {
+  //    chat never fails over, and otherwise failover obeys Auto-Route. The
+  //    state is read now, not when the call began: the operator may have
+  //    locked the chat while the provider was thinking.
+  const conciergeState = await readCurrentConciergeState(ctx.chatId, getConciergeState(ctx.chat))
+  if (!conciergeStateMayFailOver(conciergeState)) {
     logger.info('Refusal not rerouted: the chat is Locked', {
       ...logContext,
-      conciergeState: getConciergeState(ctx.chat),
+      conciergeState,
     })
     await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-not-permitted', primary.profile, undefined, 'locked')
     await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)

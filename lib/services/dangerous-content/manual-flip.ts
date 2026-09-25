@@ -14,7 +14,15 @@
  *   - 'locked'      → conciergeMode 'locked', setBy 'operator', reason 'manual'
  *
  * `conciergeOverride` is never written: it is legacy, kept only so an old row
- * can be derived. Every transition posts a brief Concierge bubble so the
+ * can be derived.
+ *
+ * The state is written through `ChatsRepository.setConciergeMode`, never a
+ * whole-row `update`. The Concierge's own moves are a compare-and-set against
+ * the state he decided on, so a decision made on a snapshot (a classifier run
+ * that took seconds, a refusal check that awaited settings) can never
+ * overwrite a state the operator chose meanwhile; when the set misses, nothing
+ * is announced. Because a buffered write cannot report whether it landed, the
+ * Concierge's moves run in the parent process only. Every transition posts a brief Concierge bubble so the
  * history stays honest about which state was in effect when; a change of
  * provenance alone (the operator confirming the Concierge's switch) is
  * written silently.
@@ -114,7 +122,8 @@ export async function applyConciergeFlip(
       return { newState: requested, changed: false };
     }
     const repos = getRepositories();
-    await repos.chats.update(chatId, {
+    await repos.chats.setConciergeMode(chatId, {
+      conciergeMode: current,
       conciergeModeSetBy: nextBy,
       conciergeModeReason: nextReason,
     });
@@ -141,7 +150,30 @@ export async function applyConciergeFlip(
     return { newState: current, changed: false };
   }
 
+  if (by === 'concierge' && process.env.QUILLTAP_JOB_CHILD === '1') {
+    logger.warn('Concierge flip refused in the job child; the parent decides', { chatId, to: requested, reason });
+    return { newState: current, changed: false };
+  }
+
   const repos = getRepositories();
+
+  // The operator's choice is authoritative and lands unconditionally; the
+  // Concierge's lands only if the chat is still in the state he read.
+  const written = await repos.chats.setConciergeMode(
+    chatId,
+    { conciergeMode: requested, conciergeModeSetBy: nextBy, conciergeModeReason: nextReason },
+    by === 'concierge' ? current : undefined,
+  );
+  if (!written) {
+    logger.info('Concierge flip abandoned: the chat changed state since it was read', {
+      chatId,
+      expected: current,
+      to: requested,
+      by,
+      reason,
+    });
+    return { newState: current, changed: false };
+  }
 
   switch (requested) {
     case 'moderated': {
@@ -150,9 +182,6 @@ export async function applyConciergeFlip(
       // stale refusals from immediately undoing the operator's choice — future
       // moderation behaves as if the question had never been settled.
       await repos.chats.update(chatId, {
-        conciergeMode: 'moderated',
-        conciergeModeSetBy: null,
-        conciergeModeReason: null,
         isDangerousChat: false,
         dangerScore: null,
         dangerCategories: [],
@@ -164,11 +193,6 @@ export async function applyConciergeFlip(
       break;
     }
     case 'unmoderated': {
-      await repos.chats.update(chatId, {
-        conciergeMode: 'unmoderated',
-        conciergeModeSetBy: nextBy,
-        conciergeModeReason: nextReason,
-      });
       if (by === 'operator') {
         await postConciergeManualAnnouncement({ chatId, kind: 'set-unmoderated' });
       } else if (reason === 'classifier') {
@@ -183,11 +207,6 @@ export async function applyConciergeFlip(
       break;
     }
     case 'locked': {
-      await repos.chats.update(chatId, {
-        conciergeMode: 'locked',
-        conciergeModeSetBy: 'operator',
-        conciergeModeReason: 'manual',
-      });
       await postConciergeManualAnnouncement({ chatId, kind: 'set-locked' });
       break;
     }

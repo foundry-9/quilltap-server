@@ -189,9 +189,29 @@ Implemented 2026-09-25. Departures from the plan above, each for a stated reason
   `ChatMetadata` type and broken every fixture, and a `NOT NULL` column would reject any create or
   import that carried an explicit `null`. `getConciergeState` treats NULL as Moderated, so the two
   shapes behave identically.
-- **The column is inside `ChatMetadataSchema`, so a whole-row `update` can rewind it** — the same
-  exposure `conciergeOverride` had, and unlike the refusal ledger, which phase 2 kept outside the
-  schema for that reason. Kept inside because it must travel in exports and restores.
+- **The three columns are in `ChatMetadataSchema` but patch-only.** They must travel in exports and
+  restores, so they stay in the schema. But `BaseRepository._update` rebuilds the whole row from a
+  snapshot it read a moment earlier, so a concurrent title or telemetry write could have rewound a
+  newer state (review of #75). `ChatsRepository.patchOnlyFields()` names them, and `_update`
+  leaves a patch-only field out of its `$set` unless the patch sets it. The state itself is
+  written only by `ChatsRepository.setConciergeMode`.
+- **The Concierge's moves are a compare-and-set.** `setConciergeMode(chatId, columns, expected?)`
+  writes only if the stored state is still `expected` (NULL = moderated). `applyConciergeFlip`
+  passes the state it read for a Concierge-initiated move and announces nothing when the set
+  misses, so a decision made on a snapshot can never overwrite the operator's newer choice. The
+  operator's moves are unconditional. Because a buffered write cannot report whether it landed,
+  `applyConciergeFlip` refuses a Concierge move in the job child.
+- **The classifier's switch is decided in the parent.** The classifier job runs in the job child
+  and its LLM call takes seconds, so it records only telemetry
+  (`ChatsRepository.setDangerClassification`, the verdict carried as an unstored third argument).
+  The dispatcher's commit hook (`chatsWithDangerVerdicts` → `runClassifierSwitchChecks`) calls
+  `maybeSwitchAfterClassification` (`classifier-switch.ts`), which re-reads the chat and flips it
+  only if it is still Moderated; run in the parent, the job calls it directly. The same shape as
+  the refusal ledger's auto-switch.
+- **Failover reads the state at refusal time.** A turn or a picture reads its chat before a
+  provider call that can take many seconds; the image chokepoint and both text failover paths now
+  call `readCurrentConciergeState` (`current-state.ts`) when a refusal arrives, falling back to
+  the snapshot only if that read fails, so a chat locked mid-request is never rerouted.
 - **`mayFailOver` is false only for Locked**, not "`state === 'moderated'`". An Unmoderated chat's
   primary is already the uncensored desk; should that profile still refuse, trying another
   uncensored profile is what the operator (or the Concierge) already chose. The spec's "n/a" for

@@ -13,6 +13,10 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeRefusalAnnouncement: jest.fn(async () => null),
 }))
+// The refusal-time state read; by default it agrees with the snapshot.
+jest.mock('@/lib/services/dangerous-content/current-state', () => ({
+  readCurrentConciergeState: jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated'),
+}))
 jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
   recordModerationRefusal: jest.fn(async () => ({ count: 1, switched: false })),
 }))
@@ -20,6 +24,7 @@ jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
 import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
+import { readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import {
   generateImageWithConciergeFailover,
   getConciergeTrail,
@@ -104,6 +109,22 @@ describe('generateImageWithConciergeFailover', () => {
       details: expect.objectContaining({ reason: 'locked' }),
     }))
     expect(getConciergeTrail(err)).toHaveLength(1)
+  })
+
+  it('reads the state at refusal time: a chat locked while the provider was thinking never fails over', async () => {
+    jest.mocked(readCurrentConciergeState).mockResolvedValueOnce('locked')
+    const err = refusal()
+    await expect(generateImageWithConciergeFailover(
+      { profile: PRIMARY, apiKey: 'k' },
+      jest.fn(async () => { throw err }),
+      { ...ctx('AUTO_ROUTE'), chat: { conciergeMode: 'moderated' } },
+    )).rejects.toBe(err)
+    expect(readCurrentConciergeState).toHaveBeenCalledWith('chat-1', 'moderated')
+    expect(mockResolve).not.toHaveBeenCalled()
+    expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'refusal-not-permitted',
+      details: expect.objectContaining({ reason: 'locked' }),
+    }))
   })
 
   it('refused on an Unmoderated chat still asks another uncensored understudy', async () => {

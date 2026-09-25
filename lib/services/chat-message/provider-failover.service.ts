@@ -23,6 +23,7 @@ import {
   conciergeStateMayFailOver,
   type ConciergeState,
 } from '@/lib/services/dangerous-content/chat-override'
+import { readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
@@ -91,8 +92,10 @@ export interface AttemptEmptyResponseRecoveryOptions {
   contentWasFlaggedDangerous: boolean
   dangerSettings: DangerousContentSettings
   /**
-   * The chat's Concierge state. A Locked chat never reroutes a refusal to the
-   * uncensored desk, whatever the mode says. Absent reads as Moderated.
+   * The chat's Concierge state when the turn began. A Locked chat never
+   * reroutes a refusal to the uncensored desk, whatever the mode says. The
+   * chat is re-read at refusal time; this is used only if that read fails.
+   * Absent reads as Moderated.
    */
   conciergeState?: ConciergeState
   connectionProfile: ConnectionProfile
@@ -271,7 +274,10 @@ export async function attemptEmptyResponseRecovery({
     }
   }
 
-  const lockedOut = !conciergeStateMayFailOver(conciergeState ?? 'moderated')
+  // Read at refusal time, not when the turn began: the operator may have
+  // locked the chat while the provider was thinking.
+  const lockedOut = state.fullResponse.trim().length === 0
+    && !conciergeStateMayFailOver(await readCurrentConciergeState(chatId, conciergeState))
   if (state.fullResponse.trim().length === 0 && lockedOut && turnRefusal) {
     // A Locked chat's refusal stands. Say so, once, and let the ordinary
     // chain below have its turn.
@@ -916,8 +922,10 @@ export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOption
    */
   dangerSettings?: DangerousContentSettings
   /**
-   * The chat's Concierge state. A Locked chat never reroutes a refusal to the
-   * uncensored desk, whatever the mode says. Absent reads as Moderated.
+   * The chat's Concierge state when the turn began. A Locked chat never
+   * reroutes a refusal to the uncensored desk, whatever the mode says. The
+   * chat is re-read at refusal time; this is used only if that read fails.
+   * Absent reads as Moderated.
    */
   conciergeState?: ConciergeState
 }
@@ -994,7 +1002,8 @@ export async function attemptHardErrorFailover(
     const alreadyTried = [...context.alreadyTried]
     // The caller's gate, stated here: a Locked chat's refusal stands, and
     // otherwise the Concierge reroutes under Auto-Route only.
-    if (!conciergeStateMayFailOver(opts.conciergeState ?? 'moderated')) {
+    // Read at refusal time, not when the turn began.
+    if (!conciergeStateMayFailOver(await readCurrentConciergeState(chatId, opts.conciergeState))) {
       logger.info('[Failover] Refusal not rerouted to an uncensored profile: the chat is Locked', { chatId })
       await postConciergeRefusalAnnouncement({
         chatId,

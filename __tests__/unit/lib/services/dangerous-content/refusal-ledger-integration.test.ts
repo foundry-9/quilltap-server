@@ -63,6 +63,11 @@ beforeEach(() => {
     chats: {
       findById: jest.fn(async () => ({ ...chat })),
       update: jest.fn(async (_id: string, patch: object) => { chat = { ...chat, ...patch }; return chat }),
+      setConciergeMode: jest.fn(async (_id: string, cols: object, expected?: string) => {
+        if (expected && ((chat as { conciergeMode?: string | null }).conciergeMode ?? 'moderated') !== expected) return false
+        chat = { ...chat, ...cols }
+        return true
+      }),
       incrementModerationRefusalCount: increment,
       getModerationRefusalLedger: jest.fn(async () => ({ count: ledger, lastAt: null })),
       resetModerationRefusalLedger: jest.fn(),

@@ -53,12 +53,11 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
   resolveDangerousContentSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
+  // The real derivation and failover gates (anything but Locked may fail
+  // over), read by the resolver and the image failover chokepoint the handler
+  // calls through; only the route question is steered per test.
+  ...jest.requireActual('@/lib/services/dangerous-content/chat-override'),
   shouldUseUncensoredRoute: jest.fn(),
-  // The real derivation, for tests that wire the real resolver through.
-  getConciergeState: jest.requireActual('@/lib/services/dangerous-content/chat-override').getConciergeState,
-  // The real failover gate (anything but Locked may fail over), read by the
-  // image failover chokepoint the handler calls through.
-  mayFailOver: jest.requireActual('@/lib/services/dangerous-content/chat-override').mayFailOver,
 }))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
   resolveUncensoredImageUnderstudy: jest.fn(),

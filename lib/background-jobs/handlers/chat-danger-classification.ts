@@ -8,9 +8,10 @@
  * - Prefers compressed chat contextSummary as input
  * - Falls back to the chat's chosen scenario before its first summary fold
  * - Falls back to concatenated raw messages (truncated to 4000 chars) when neither exists
- * - A dangerous verdict moves the chat to Unmoderated through `applyConciergeFlip`
- *   (`{ by: 'concierge', reason: 'classifier' }`); the classifier only runs on
- *   Moderated chats, so it never re-checks one it has moved
+ * - A dangerous verdict moves the chat to Unmoderated through
+ *   `maybeSwitchAfterClassification` in the parent (after the batch commits);
+ *   the classifier only runs on Moderated chats, so it never re-checks one it
+ *   has moved
  * - Once classified as safe, stays safe (sticky) unless new messages are added
  * - Bails if mode is OFF or no content available (no summary AND no messages)
  */
@@ -22,7 +23,7 @@ import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override';
-import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
+import { maybeSwitchAfterClassification } from '@/lib/services/dangerous-content/classifier-switch';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { ChatDangerClassificationPayload } from '../queue-service';
@@ -205,37 +206,36 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   const updatedChat = await repos.chats.findById(payload.chatId);
   const finalMessageCount = updatedChat?.messageCount ?? chat.messageCount ?? 0;
 
-  // Update chat with classification results
+  // Record the verdict as telemetry. A dangerous verdict also moves the chat
+  // to Unmoderated — but that decision is the parent's, made against the chat
+  // as it stands when this batch commits (the operator may have locked it
+  // while the classifier was thinking): the job dispatcher's commit hook reads
+  // the verdict off this write and calls `maybeSwitchAfterClassification`.
+  // Run in the parent instead, we call it ourselves.
   const now = new Date().toISOString();
-  await repos.chats.update(payload.chatId, {
-    isDangerousChat: result.isDangerous,
-    dangerScore: result.score,
-    dangerCategories: result.categories.map(c => c.category),
-    dangerClassifiedAt: now,
-    dangerClassifiedAtMessageCount: finalMessageCount,
-  });
-
-  // A dangerous verdict moves the chat to Unmoderated, through the one
-  // transition chokepoint, which also posts the verdict's announcement. The
-  // guard at the top of this handler means we only get here for a Moderated
-  // chat, so the Concierge announces exactly once per chat. The telemetry above
-  // is written first; the flip is what routing reads.
-  if (result.isDangerous) {
-    const flip = await applyConciergeFlip(payload.chatId, 'unmoderated', updatedChat ?? chat, {
-      by: 'concierge',
-      reason: 'classifier',
-      classification: {
+  const verdict = result.isDangerous
+    ? {
         score: result.score,
         threshold: dangerSettings.threshold,
         categories: result.categories,
         source: result.source,
         providerName: result.providerName,
-      },
-    });
-    logger.debug('[ChatDangerClassification] Dangerous verdict applied', {
+      }
+    : null;
+  await repos.chats.setDangerClassification(payload.chatId, {
+    isDangerousChat: result.isDangerous,
+    dangerScore: result.score,
+    dangerCategories: result.categories.map(c => c.category),
+    dangerClassifiedAt: now,
+    dangerClassifiedAtMessageCount: finalMessageCount,
+  }, verdict);
+
+  if (verdict && process.env.QUILLTAP_JOB_CHILD !== '1') {
+    const { switched } = await maybeSwitchAfterClassification(payload.chatId, verdict);
+    logger.debug('[ChatDangerClassification] Dangerous verdict applied in the parent', {
       jobId: job.id,
       chatId: payload.chatId,
-      changed: flip.changed,
+      switched,
     });
   }
 

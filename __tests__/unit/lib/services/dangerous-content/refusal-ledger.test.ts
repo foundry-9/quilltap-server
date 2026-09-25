@@ -52,6 +52,17 @@ const chatsUpdate = jest.fn(async (_id: string, patch: Partial<FakeChat>) => {
   chat = { ...chat, ...patch }
   return chat
 })
+// A faithful compare-and-set: writes only when the stored state (NULL =
+// moderated) still matches `expected`.
+const setMode = jest.fn(async (
+  _id: string,
+  cols: Pick<FakeChat, 'conciergeMode' | 'conciergeModeSetBy' | 'conciergeModeReason'>,
+  expected?: 'moderated' | 'unmoderated' | 'locked',
+) => {
+  if (expected && (chat.conciergeMode ?? 'moderated') !== expected) return false
+  chat = { ...chat, ...cols }
+  return true
+})
 const increment = jest.fn(async () => ++ledgerCount)
 const reset = jest.fn(async () => { ledgerCount = 0 })
 
@@ -60,6 +71,7 @@ function installRepos() {
     chats: {
       findById: jest.fn(async () => ({ ...chat })),
       update: chatsUpdate,
+      setConciergeMode: setMode,
       incrementModerationRefusalCount: increment,
       getModerationRefusalLedger: jest.fn(async () => ({ count: ledgerCount, lastAt: null })),
       resetModerationRefusalLedger: reset,
@@ -157,12 +169,14 @@ describe('recordModerationRefusal', () => {
     expect(chat.conciergeMode).toBe('unmoderated')
     expect(chat.conciergeModeSetBy).toBe('concierge')
     expect(chat.conciergeModeReason).toBe('refusals')
-    expect(chatsUpdate).toHaveBeenCalledTimes(1)
-    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', {
+    // A compare-and-set against Moderated, never a whole-row update.
+    expect(setMode).toHaveBeenCalledTimes(1)
+    expect(setMode).toHaveBeenCalledWith('chat-1', {
       conciergeMode: 'unmoderated',
       conciergeModeSetBy: 'concierge',
       conciergeModeReason: 'refusals',
-    })
+    }, 'moderated')
+    expect(chatsUpdate).not.toHaveBeenCalled()
     // The classifier's telemetry is not the switch's to write any more.
     expect(chat.isDangerousChat).toBe(false)
     expect(flagCalls()).toHaveLength(1)

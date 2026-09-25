@@ -30,6 +30,11 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
   resolveUncensoredTextUnderstudy: (lookup: Record<string, unknown>) => mockResolveUnderstudy(lookup),
 }))
 
+const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+jest.mock('@/lib/services/dangerous-content/current-state', () => ({
+  readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+}))
+
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeRefusalAnnouncement: (params: Record<string, unknown>) => mockAnnounce(params),
 }))
@@ -191,6 +196,21 @@ describe('attemptHardErrorFailover — thrown refusals', () => {
 
     expect(mockResolveUnderstudy).not.toHaveBeenCalled()
     expect(state.routeFailures[0]).toMatchObject({ outcome: 'refused', trigger: 'moderation-refusal' })
+  })
+
+  it('reads the state at refusal time: a chat locked while the provider was thinking is not rerouted', async () => {
+    const primary = makeProfile()
+    const state = makeState(primary)
+    mockReadCurrentConciergeState.mockResolvedValueOnce('locked')
+
+    await attemptHardErrorFailover({ ...opts(state, [primary], policyError(), autoRoute), conciergeState: 'moderated' })
+
+    expect(mockReadCurrentConciergeState).toHaveBeenCalledWith('chat-1', 'moderated')
+    expect(mockResolveUnderstudy).not.toHaveBeenCalled()
+    expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'refusal-not-permitted',
+      details: expect.objectContaining({ reason: 'locked' }),
+    }))
   })
 
   it('never asks the uncensored desk on a Locked chat, even under Auto-Route, and says why', async () => {
