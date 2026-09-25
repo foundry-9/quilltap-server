@@ -372,13 +372,23 @@ async function writeSystemPromptMessage(
  * The route runs in the parent process, so the announcement's write lands
  * immediately — every later reader (the greeting's own `findById`, the
  * scheduled danger scan, memory extraction, story backgrounds) sees the state.
+ *
+ * Returns the chat's Concierge columns as they stand afterwards, re-read when
+ * the flip wrote anything, so the create response reports the state that was
+ * actually applied rather than the row as it was first inserted.
  */
 async function applyRequestedConciergeState(
   chat: ChatMetadata,
   requested: ConciergeState | undefined,
   progress: CreationProgressEmitter,
-): Promise<void> {
-  if (!requested || requested === 'moderated') return;
+  repos: RepositoryContainer,
+): Promise<ConciergeColumns> {
+  const asCreated: ConciergeColumns = {
+    conciergeMode: chat.conciergeMode ?? null,
+    conciergeModeSetBy: chat.conciergeModeSetBy ?? null,
+    conciergeModeReason: chat.conciergeModeReason ?? null,
+  };
+  if (!requested || requested === 'moderated') return asCreated;
   progress.status('Briefing the Concierge…');
   const result = await applyConciergeFlip(chat.id, requested, chat);
   logger.debug('[Chats v1] Applied Concierge state at creation', {
@@ -386,7 +396,19 @@ async function applyRequestedConciergeState(
     requested,
     changed: result.changed,
   });
+  if (!result.changed) return asCreated;
+  const fresh = await repos.chats.findById(chat.id);
+  return fresh
+    ? {
+        conciergeMode: fresh.conciergeMode ?? null,
+        conciergeModeSetBy: fresh.conciergeModeSetBy ?? null,
+        conciergeModeReason: fresh.conciergeModeReason ?? null,
+      }
+    : asCreated;
 }
+
+/** The chat's stored Concierge columns, as the create response carries them. */
+type ConciergeColumns = Pick<ChatMetadata, 'conciergeMode' | 'conciergeModeSetBy' | 'conciergeModeReason'>;
 
 interface ScenarioAndStaffOptions {
   /**
@@ -1373,7 +1395,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     progress.status('Setting the opening scene…');
   }
   await writeSystemPromptMessage(chat.id, chatContext, repos);
-  await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+  const conciergeColumns = await applyRequestedConciergeState(chat, validatedData.conciergeState, progress, repos);
   if (validatedData.continuationFromChatId) {
     try {
       await applyChatContinuation({
@@ -1435,7 +1457,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   progress.status('The players are ready.');
   progress.finish();
 
-  return created({ chat: { ...chat, participants: enrichedParticipants } });
+  return created({ chat: { ...chat, ...conciergeColumns, participants: enrichedParticipants } });
 }
 
 /**

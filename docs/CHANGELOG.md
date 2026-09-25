@@ -20,6 +20,9 @@
   still Moderated.
 - The image failover chokepoint and both text failover paths re-read the chat's state when a
   refusal arrives (`readCurrentConciergeState`), so a chat locked mid-request is never rerouted.
+- `POST /api/v1/chats` now returns the Concierge columns as they stand after the requested state
+  is applied; it used to return the row as first inserted, so a chat created Unmoderated or
+  Locked came back looking Moderated.
 
 #### Docs: phase 3 leftovers scheduled in phase 4
 

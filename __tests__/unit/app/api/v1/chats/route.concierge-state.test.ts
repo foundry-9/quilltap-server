@@ -341,6 +341,28 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     }
   )
 
+  it('reports the applied state in the create response, not the row as first inserted', async () => {
+    const created = { ...chatRow }
+    mockRepos.chats.create.mockImplementation(async () => created as any)
+    // After the flip, the stored row carries the new state.
+    mockRepos.chats.findById.mockImplementation(async (id: string) =>
+      id === NEW_CHAT_ID
+        ? ({ ...created, conciergeMode: 'locked', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' } as any)
+        : null
+    )
+
+    const res = await POST(createMockRequest(baseBody({ conciergeState: 'locked' })))
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.chat).toMatchObject({
+      id: NEW_CHAT_ID,
+      conciergeMode: 'locked',
+      conciergeModeSetBy: 'operator',
+      conciergeModeReason: 'manual',
+    })
+  })
+
   it('flips after the system-prompt message and before the staff and the greeting', async () => {
     // A general shelf makes Prospero's chat-start announcement — the first
     // staff bubble of the scenario-and-staff phase — actually fire.
