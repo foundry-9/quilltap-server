@@ -11,6 +11,9 @@
  *     (`useProjectScenarios` vs `useGeneralScenarios`)
  *   - `scopeLabel` — used in placeholders and the "(scope default)" tag
  *   - `emptyMessage` — shown when the list is empty
+ *   - `shelf` — which shelf this is, for the Host's Scenario Builder button:
+ *     the builder reads that shelf's stores, and its Save offers every home
+ *     with this one preselected
  *
  * Surfaces soft warnings (e.g. multiple files marked default) above the list.
  *
@@ -21,10 +24,37 @@
  */
 
 import { useCallback, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { showConfirmation, showPrompt } from '@/lib/alert'
+import { STAFF_AVATARS } from '@/lib/chat/staff-display-names'
+import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
+import type { SaveScenarioTargetKey } from '@/components/scenario-builder/ScenarioBuilderDialog'
 import { ScenarioEditorModal } from './ScenarioEditorModal'
 import { ScenarioRow } from './ScenarioRow'
 import type { Scenario, ScenarioMutator } from './types'
+
+// Loaded on demand: the builder stays out of this surface's bundle until the Host is asked.
+const ScenarioBuilderDialog = dynamic(
+  () => import('@/components/scenario-builder/ScenarioBuilderDialog').then((m) => m.ScenarioBuilderDialog),
+  { ssr: false },
+)
+
+/** Which scenarios shelf a manager is showing — General, one project's, or one group's. */
+export type ScenarioShelf =
+  | { kind: 'general' }
+  | { kind: 'project'; projectId: string; projectName?: string | null }
+  | { kind: 'group'; groupId: string }
+
+function shelfSaveTarget(shelf: ScenarioShelf): SaveScenarioTargetKey {
+  switch (shelf.kind) {
+    case 'general':
+      return 'general'
+    case 'project':
+      return `project:${shelf.projectId}`
+    case 'group':
+      return `group:${shelf.groupId}`
+  }
+}
 
 interface ScenariosManagerProps {
   mutator: ScenarioMutator
@@ -32,13 +62,18 @@ interface ScenariosManagerProps {
   scopeLabel: string
   /** Empty-state copy. Defaults to a generic message. */
   emptyMessage?: string
+  /** The shelf being managed; offers the Host's Scenario Builder when set. */
+  shelf?: ScenarioShelf
 }
 
 export function ScenariosManager({
   mutator,
   scopeLabel,
   emptyMessage = "No scenarios yet. Create one and it'll be offered when starting new chats.",
+  shelf,
 }: ScenariosManagerProps) {
+  const imagesHidden = useImagesHidden()
+  const [builderOpen, setBuilderOpen] = useState(false)
   const {
     scenarios,
     warnings,
@@ -52,6 +87,7 @@ export function ScenariosManager({
     setScenarioArchived,
     showArchived,
     setShowArchived,
+    refresh,
   } = mutator
 
   const [editorOpen, setEditorOpen] = useState(false)
@@ -162,9 +198,27 @@ export function ScenariosManager({
           />
           Show archived
         </label>
-        <button onClick={openCreate} className="qt-button qt-button-primary qt-button-sm">
-          + New scenario
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {shelf && (
+            <button
+              type="button"
+              onClick={() => setBuilderOpen(true)}
+              className="qt-button qt-button-secondary qt-button-sm inline-flex items-center gap-1.5"
+            >
+              {!imagesHidden && (
+                <img
+                  src={STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'}
+                  alt=""
+                  className="h-4 w-4 rounded-full"
+                />
+              )}
+              Ask the Host to set the scene
+            </button>
+          )}
+          <button onClick={openCreate} className="qt-button qt-button-primary qt-button-sm">
+            + New scenario
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -195,6 +249,21 @@ export function ScenariosManager({
         onClose={() => setEditorOpen(false)}
         onSave={handleSave}
       />
+
+      {shelf && builderOpen && (
+        <ScenarioBuilderDialog
+          isOpen={builderOpen}
+          onClose={() => setBuilderOpen(false)}
+          cast={[]}
+          projectId={shelf.kind === 'project' ? shelf.projectId : null}
+          projectName={shelf.kind === 'project' ? shelf.projectName : null}
+          groupIds={shelf.kind === 'group' ? [shelf.groupId] : undefined}
+          saveTargets="everywhere"
+          defaultSaveTarget={shelfSaveTarget(shelf)}
+          // Wherever it was filed, this shelf may have gained a row.
+          onSaved={() => void refresh({ silent: true })}
+        />
+      )}
     </div>
   )
 }

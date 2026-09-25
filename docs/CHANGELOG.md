@@ -4,6 +4,25 @@
 
 ### 4.10-dev
 
+#### Added: Scenario Builder on the scenario shelves
+
+- The **Ask the Host to set the scene** button now also appears on the General Scenarios page,
+  on a project's Scenarios card, and on a group's Scenarios card. Launched there, the dialog has
+  no "Use this scene"; "Save as scenario…" is the primary action.
+- From a shelf, the save dialog offers every home: General, every project, every group, and every
+  non-archived character. The shelf the builder was opened from is preselected. The shelf's list
+  refreshes after each save.
+- The builder's store pool follows the shelf: General only; the project's stores plus General; or
+  the group's official and linked stores plus General. New `groupIds` field on
+  `POST /api/v1/scenario-builder?action=build`; unknown group ids are dropped. New helper
+  `resolveMountPointIdsForGroup` in `lib/mount-index/tiered-mount-pool.ts`, now also used by
+  `resolveGroupMountPointIdsForCharacter`.
+- Groups get a Scenarios card on their page (`GroupScenariosCard`), using the shared
+  `ScenariosManager` over the existing `/api/v1/groups/[id]/scenarios` API. Previously the group
+  page had no scenarios UI.
+- Save-dialog target keys are now `project:<id>` rather than `project` in every mode.
+- New query key `queryKeys.groups.list()`.
+
 #### Changed: dependency update across the app, packages and plugins
 
 `npm update -S` was run on the root project, every package under `packages/`, and all 15 distributed

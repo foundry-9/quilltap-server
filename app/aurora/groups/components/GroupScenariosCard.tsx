@@ -1,30 +1,29 @@
 'use client'
 
 /**
- * Scenarios Card
+ * Group Scenarios Card
  *
- * Per-project Scenarios management card on the Prospero project page. The
- * collapsible header lives here; the CRUD body is rendered by the shared
- * `ScenariosManager`, fed by the project-scoped `useProjectScenarios` hook.
+ * The group's `Scenarios/` shelf on its page, collapsible like the Members and
+ * Linked Stores cards beside it. The CRUD body is the shared
+ * `ScenariosManager` (the same one the project card and the General page
+ * render), fed by `useScenarioMutator` over `/api/v1/groups/[id]/scenarios`.
  *
- * @module app/prospero/[id]/components/ScenariosCard
+ * @module app/aurora/groups/components/GroupScenariosCard
  */
 
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
 import { ScenariosIcon } from '@/components/scenarios/ScenariosIcon'
 import { ScenariosManager } from '@/components/scenarios/ScenariosManager'
-import { useProjectScenarios } from '../hooks'
+import { useScenarioMutator } from '@/components/scenarios/use-scenario-mutator'
 
-interface ScenariosCardProps {
-  projectId: string
-  /** Offered as the Host's default save home ("Project: <name>"). */
-  projectName?: string | null
+interface GroupScenariosCardProps {
+  groupId: string
   expanded: boolean
   onToggle: () => void
 }
 
-export function ScenariosCard({ projectId, projectName, expanded, onToggle }: ScenariosCardProps) {
-  const mutator = useProjectScenarios(projectId)
+export function GroupScenariosCard({ groupId, expanded, onToggle }: GroupScenariosCardProps) {
+  const mutator = useScenarioMutator(`/api/v1/groups/${groupId}/scenarios`)
 
   return (
     <div className="qt-card qt-bg-card qt-border rounded-lg">
@@ -39,7 +38,7 @@ export function ScenariosCard({ projectId, projectName, expanded, onToggle }: Sc
           <div className="text-left">
             <h3 className="qt-heading-4 text-foreground">Scenarios ({mutator.scenarios.length})</h3>
             <p className="qt-text-small qt-text-secondary">
-              Reusable starting scenes for new chats in this project
+              Reusable starting scenes offered whenever a member takes a seat
             </p>
           </div>
         </div>
@@ -50,9 +49,9 @@ export function ScenariosCard({ projectId, projectName, expanded, onToggle }: Sc
         <div className="border-t qt-border-default p-4">
           <ScenariosManager
             mutator={mutator}
-            scopeLabel="project"
-            shelf={{ kind: 'project', projectId, projectName }}
-            emptyMessage="No scenarios yet. Create one and it'll be offered when starting new chats in this project."
+            scopeLabel="group"
+            shelf={{ kind: 'group', groupId }}
+            emptyMessage="No scenarios yet. Create one and it'll be offered whenever a member of this group joins a new chat."
           />
         </div>
       )}

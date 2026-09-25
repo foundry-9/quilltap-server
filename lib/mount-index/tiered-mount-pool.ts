@@ -181,6 +181,31 @@ export async function resolveProjectMountPointIds(
 }
 
 /**
+ * One group's stores: its official store plus every store linked to it. For a
+ * caller that holds a group rather than a member (the Scenario Builder launched
+ * from a group's page). Returns `[]` on any lookup failure (fails soft).
+ */
+export async function resolveMountPointIdsForGroup(
+  groupId: string | null | undefined,
+): Promise<string[]> {
+  if (!groupId) return [];
+  try {
+    const repos = getRepositories();
+    const ids = new Set<string>();
+    // findByIdRaw avoids a store read on this hot path — we only need the
+    // group's officialMountPointId pointer, not its hydrated content.
+    const group = await repos.groups.findByIdRaw(groupId);
+    if (group?.officialMountPointId) ids.add(group.officialMountPointId);
+    const links = await repos.groupDocMountLinks.findByGroupId(groupId);
+    for (const link of links) ids.add(link.mountPointId);
+    return [...ids];
+  } catch (error) {
+    logger.warn('Group store lookup failed', { groupId, error: errMsg(error) });
+    return [];
+  }
+}
+
+/**
  * Resolve just the group tier — the union of the official store and every linked
  * store across all groups the given character is a member of. Keyed on the
  * RESPONDING character (never the chat): a character only ever sees its own
@@ -197,20 +222,7 @@ export async function resolveGroupMountPointIdsForCharacter(
     if (memberships.length === 0) return [];
     const ids = new Set<string>();
     for (const membership of memberships) {
-      try {
-        // findByIdRaw avoids a store read on this hot path — we only need the
-        // group's officialMountPointId pointer, not its hydrated content.
-        const group = await repos.groups.findByIdRaw(membership.groupId);
-        if (group?.officialMountPointId) ids.add(group.officialMountPointId);
-        const links = await repos.groupDocMountLinks.findByGroupId(membership.groupId);
-        for (const link of links) ids.add(link.mountPointId);
-      } catch (error) {
-        logger.warn('Group store lookup failed for membership', {
-          groupId: membership.groupId,
-          characterId,
-          error: errMsg(error),
-        });
-      }
+      for (const id of await resolveMountPointIdsForGroup(membership.groupId)) ids.add(id);
     }
     return [...ids];
   } catch (error) {

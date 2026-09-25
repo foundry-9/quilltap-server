@@ -57,6 +57,8 @@ export interface ScenarioBuilderInput {
   projectId?: string | null
   /** Cast ids already vetted by the caller (readable by this user). */
   characterIds: string[]
+  /** Groups named outright, already vetted by the caller (the group's Scenarios card). */
+  groupIds?: string[]
   /** In-chat: the chat whose scene is being replaced (already ownership-checked). */
   chat?: { id: string; scenarioText?: string | null; contextSummary?: string | null } | null
   priorDraft?: string | null
@@ -131,11 +133,13 @@ export async function runScenarioBuilder(
       userId,
       projectId: input.projectId ?? null,
       characterIds: input.characterIds,
+      groupIds: input.groupIds ?? [],
     })
 
     logger.debug('Scenario Builder run starting', {
       mode: input.mode,
       castCount: input.characterIds.length,
+      namedGroupCount: input.groupIds?.length ?? 0,
       inChat: !!input.chat,
       revising: input.revision != null,
       profileId: connectionProfile.id,

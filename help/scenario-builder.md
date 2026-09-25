@@ -10,10 +10,15 @@ There are evenings when one knows precisely where the story ought to begin — *
 
 ## Where to Find Him
 
-Beside the **Starting Scenario** box there is a small button bearing the Host's likeness: **Ask the Host to set the scene**. You will find it in two places:
+Wherever scenarios are written or chosen there is a small button bearing the Host's likeness: **Ask the Host to set the scene**. You will find it in five places:
 
 - **On the new-chat form** (in its own page at `/salon/new`, and in the new-chat dialog that opens within the workspace), on the same line as the **Starting Scenario** label.
 - **In an open chat**, in the **Chat Sidebar**'s **Chat** drawer, beneath the **Scenario** picker and its **Show archived** box.
+- **On the General Scenarios page** (`/scenarios`), beside **+ New scenario**.
+- **On a project's page**, in its **Scenarios** card, beside **+ New scenario**.
+- **On a group's page**, in its **Scenarios** card, beside **+ New scenario**.
+
+The first two set the scene for a particular chat. The last three are for stocking the shelves: there is no chat to put the scene into, so the Host brings it back only to be filed (see *Called to a Shelf*, below).
 
 ## The Four Questions
 
@@ -29,6 +34,8 @@ Beneath these sits the **Model** drop-down, which chooses the connection profile
 ## Where He Looks
 
 **In-world** places are researched entirely from your own document stores — and only those this company could see in the chat you are about to begin: the character vaults of everyone you have cast (your own persona's included), the stores of every group any of them belongs to, the stores of the chosen project, and the household shelf, **Quilltap General**. He searches them (documents and `Knowledge/` folders alike) and reads what he finds. He never consults the wider world for an in-world place, and he never reads anyone's memories or past conversations.
+
+Called from a shelf, there is no cast yet, so the Host reads the stores that shelf belongs to: from the General Scenarios page, **Quilltap General** alone; from a project's card, that project's stores and Quilltap General; from a group's card, that group's own store, the stores linked to it, and Quilltap General. From a project or a group he assumes an in-world place unless you say otherwise; from the General page, a real one.
 
 **Real** places are researched on the web — he runs searches, and reads pages where the **curl** plugin permits — *and* in the same stores an in-world run would read, in case you have already written something about the place yourself.
 
@@ -67,6 +74,17 @@ When he returns, the scene appears in an editor of its own. Amend it by hand as 
   - ***Someone*'s scenarios** — one cast character's own collection.
 
   After a save, the picker switches to the newly filed scenario wherever that picker can offer it (a character's own scenarios are offered only when exactly one AI character is cast); otherwise your text stays in the custom box. Saving does not close the dialog, so you may still **Use** the scene afterwards. A name already taken is refused with a note, and the save window stays open for you to choose another.
+
+## Called to a Shelf
+
+Summoned from the General Scenarios page, or from a project's or group's **Scenarios** card, the Host's dialog has no **Use this scene** — there is no chat awaiting it — and **Save as scenario…** takes its place as the principal button. Here the save window offers *every* home a scenario may have, not merely those one chat could reach:
+
+- **Quilltap General**;
+- every **Project**;
+- every **Group**;
+- every character's own scenarios (archived characters excepted, since they take no new ones).
+
+The home you came from is chosen for you — General from the General page, the project from its card, the group from its card — and you may change it to any other. The shelf you called him from refreshes after each save, and the dialog stays open, so you may revise the scene and file a variation elsewhere before pressing **Close**.
 
 Nothing about a run is kept on the server: no chat is created, and no messages are written. The only record is the line in the LLM logs, marked **Scenario Builder**.
 

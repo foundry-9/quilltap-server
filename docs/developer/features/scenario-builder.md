@@ -8,6 +8,11 @@
 - §5.3: `buildTools` gained `docToolsMode` in place of its document-editing boolean and a trailing `extras` argument (`pluginToolAllowlist`, `documentsOnlySearch`, `webSearch`) rather than more positional flags.
 - §6.4: `GET /api/v1/groups?characterIds=` was added for the Save dialog's group list (`groups/scenarios` omits groups with no scenarios).
 - §6.1: the dialog is loaded with `next/dynamic` on both surfaces.
+
+**Extension (2026-09-25): the scenario shelves.** The builder is also launched from the three scenario *shelves* — the General Scenarios page (`/scenarios`), a project's Scenarios card, and a group's Scenarios card (new: `app/aurora/groups/components/GroupScenariosCard.tsx`; the group page previously had no scenarios UI) — via an optional `shelf` prop on `ScenariosManager`. On a shelf:
+- There is no cast and no custom box: `cast` is `[]` and `onUse` is omitted, so the dialog shows no **Use this scene** and **Save as scenario…** becomes its primary button (Cancel reads **Close**).
+- The pool is the shelf's: General reads Quilltap General only; a project adds `projectId`; a group passes the new request field `groupIds`, whose stores (official + linked, via the new `resolveMountPointIdsForGroup` in `tiered-mount-pool.ts`) join the group tier. The route keeps only group ids that exist. Mode defaults to in-world whenever a cast, project or group is present.
+- `SaveScenarioDialog` takes `targets: 'everywhere'` and `defaultTarget`: it lists General, every project, every group and every live character (`GET /api/v1/projects`, `/api/v1/groups`, `/api/v1/characters`), preselecting the shelf's own home. Target keys are now `general` / `project:<id>` / `group:<id>` / `character:<id>` on both modes. After a save the shelf refreshes silently; the builder stays open.
 **Owner subsystems:** The Host (persona and voice), The Salon (both surfaces), The Scriptorium (the stores it reads).
 **Implementation note:** This spec is written to be executed by Claude Code. Follow the CLAUDE.md standing rules throughout: changelog entry, help docs with `url` + In-Chat Navigation, debug logging on every touched backend path, Zod-first tool definitions, `qt-*` classes not raw Tailwind, `npx tsc` not `npm run build`. The decisions in §2 were settled with the operator before this spec was written. **Do not reopen them.**
 

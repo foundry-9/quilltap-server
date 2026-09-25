@@ -7,7 +7,9 @@
  * Running (the Host's enquiries, live), and Review (an editable draft with a
  * Revise box, Save as scenario…, and Use this scene). Surface-agnostic: the New
  * Chat form and the Salon sidebar each decide what "use" and "saved" mean for
- * their own picker via `onUse` / `onSaved`.
+ * their own picker via `onUse` / `onSaved`. A scenarios shelf (General, a
+ * project's, a group's) has no box to use a scene in, so it passes no `onUse`:
+ * the dialog then offers only Save, to any home, its own preselected.
  *
  * A failed run never traps a draft: Revise failures leave the draft editable,
  * and Use / Save stay enabled whatever the provider did.
@@ -29,10 +31,15 @@ import { useScenarioBuilderRun } from './hooks/useScenarioBuilderRun'
 import {
   SaveScenarioDialog,
   type SavedScenarioTarget,
+  type SaveScenarioTargetKey,
   type ScenarioBuilderCastMember,
 } from './SaveScenarioDialog'
 
-export type { SavedScenarioTarget, ScenarioBuilderCastMember } from './SaveScenarioDialog'
+export type {
+  SavedScenarioTarget,
+  SaveScenarioTargetKey,
+  ScenarioBuilderCastMember,
+} from './SaveScenarioDialog'
 
 type Mode = 'real' | 'in-world'
 
@@ -43,12 +50,18 @@ export interface ScenarioBuilderDialogProps {
   cast: ScenarioBuilderCastMember[]
   projectId?: string | null
   projectName?: string | null
+  /** Groups named outright (a group's Scenarios card): their stores join the pool. */
+  groupIds?: string[]
   /** Set when launched from inside a chat: the Host also sees its current scene. */
   chatId?: string | null
-  /** "Use this scene": the surface puts the text in its custom box. */
-  onUse: (scene: string) => void
-  /** After a save: the surface may select the new preset in its picker. */
+  /** "Use this scene": the surface puts the text in its custom box. Omit where there is no box. */
+  onUse?: (scene: string) => void
+  /** After a save: the surface may select the new preset in its picker, or refresh its shelf. */
   onSaved?: (target: SavedScenarioTarget) => void
+  /** Which homes Save offers — see `SaveScenarioDialog`. */
+  saveTargets?: 'cast' | 'everywhere'
+  /** The home Save preselects. */
+  defaultSaveTarget?: SaveScenarioTargetKey
 }
 
 const HOST_AVATAR = STAFF_AVATARS.host ?? '/images/avatars/host-avatar.webp'
@@ -88,14 +101,20 @@ export function ScenarioBuilderDialog({
   cast,
   projectId,
   projectName,
+  groupIds,
   chatId,
   onUse,
   onSaved,
+  saveTargets,
+  defaultSaveTarget,
 }: ScenarioBuilderDialogProps) {
   const { profiles, loading: profilesLoading } = useConnectionProfiles()
   const builder = useScenarioBuilderRun()
 
-  const [mode, setMode] = useState<Mode>(cast.length > 0 ? 'in-world' : 'real')
+  // Anything that brings stores of its own — a cast, a project, a group — suggests an invented world.
+  const [mode, setMode] = useState<Mode>(
+    cast.length > 0 || !!projectId || (groupIds?.length ?? 0) > 0 ? 'in-world' : 'real',
+  )
   const [location, setLocation] = useState('')
   const [time, setTime] = useState('')
   const [details, setDetails] = useState('')
@@ -147,6 +166,7 @@ export function ScenarioBuilderDialog({
       connectionProfileId: profileId,
       projectId: projectId ?? null,
       characterIds,
+      groupIds: groupIds ?? [],
       chatId: chatId ?? null,
       ...(revise ?? {}),
     })
@@ -169,7 +189,7 @@ export function ScenarioBuilderDialog({
   }
 
   const handleUse = () => {
-    if (draft === null) return
+    if (draft === null || !onUse) return
     onUse(draft)
     onClose()
   }
@@ -200,21 +220,36 @@ export function ScenarioBuilderDialog({
       </div>
     ) : (
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setSaveOpen(true)}
-          disabled={!draft?.trim()}
-          className="qt-button-secondary"
-        >
-          Save as scenario…
-        </button>
+        {onUse ? (
+          <button
+            type="button"
+            onClick={() => setSaveOpen(true)}
+            disabled={!draft?.trim()}
+            className="qt-button-secondary"
+          >
+            Save as scenario…
+          </button>
+        ) : (
+          <span />
+        )}
         <div className="flex gap-2">
           <button type="button" onClick={handleClose} className="qt-button-secondary">
-            Cancel
+            {onUse ? 'Cancel' : 'Close'}
           </button>
-          <button type="button" onClick={handleUse} disabled={!draft?.trim()} className="qt-button-primary">
-            Use this scene
-          </button>
+          {onUse ? (
+            <button type="button" onClick={handleUse} disabled={!draft?.trim()} className="qt-button-primary">
+              Use this scene
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSaveOpen(true)}
+              disabled={!draft?.trim()}
+              className="qt-button-primary"
+            >
+              Save as scenario…
+            </button>
+          )}
         </div>
       </div>
     )
@@ -446,6 +481,8 @@ export function ScenarioBuilderDialog({
           projectId={projectId}
           projectName={projectName}
           cast={cast}
+          targets={saveTargets}
+          defaultTarget={defaultSaveTarget}
           onSaved={(target) => onSaved?.(target)}
         />
       )}

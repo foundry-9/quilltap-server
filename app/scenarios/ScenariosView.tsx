@@ -50,6 +50,7 @@ export function ScenariosView() {
           <ScenariosManager
             mutator={mutator}
             scopeLabel="general"
+            shelf={{ kind: 'general' }}
             emptyMessage="No general scenarios yet. Compose one and it'll appear in every New Chat dialog from now on."
           />
         </div>

@@ -434,3 +434,119 @@ describe('ScenarioBuilderDialog — saving', () => {
     expect(screen.getByText('File this scene as a scenario')).toBeInTheDocument()
   })
 })
+
+describe('ScenarioBuilderDialog — launched from a scenarios shelf', () => {
+  /** Layers the every-home list endpoints (and a group save) over the base router. */
+  function mockEverywhereLists() {
+    const base = (global.fetch as jest.Mock).getMockImplementation()
+    ;(global.fetch as jest.Mock).mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/v1/projects') {
+        return { ok: true, status: 200, json: async () => ({ projects: [{ id: 'proj-1', name: 'The Estate' }] }) }
+      }
+      if (url === '/api/v1/groups') {
+        return { ok: true, status: 200, json: async () => ({ groups: [{ id: 'grp-1', name: 'Aeronauts Club' }] }) }
+      }
+      if (url === '/api/v1/characters') {
+        return { ok: true, status: 200, json: async () => ({ characters: [{ id: 'char-9', name: 'Riya' }] }) }
+      }
+      if (url === '/api/v1/groups/grp-1/scenarios' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => ({ path: 'Scenarios/rain.md' }) }
+      }
+      return base!(url, init)
+    })
+  }
+
+  function renderShelf(props: Partial<React.ComponentProps<typeof ScenarioBuilderDialog>> = {}) {
+    const onSaved = jest.fn()
+    const onClose = jest.fn()
+    renderWithQuery(
+      <ScenarioBuilderDialog
+        isOpen
+        onClose={onClose}
+        cast={[]}
+        groupIds={['grp-1']}
+        saveTargets="everywhere"
+        defaultSaveTarget="group:grp-1"
+        onSaved={onSaved}
+        {...props}
+      />,
+    )
+    return { onSaved, onClose }
+  }
+
+  it('sends the named group ids and defaults to in-world', async () => {
+    const router = installFetchRouter()
+    router.buildFrames.push([{ done: true, scenario: 'Rain on the cobbles.' }])
+    renderShelf()
+    fillInputs()
+    fireEvent.click(screen.getByRole('button', { name: 'Set the scene' }))
+
+    await waitFor(() => expect(router.buildBodies).toHaveLength(1))
+    expect(router.buildBodies[0]).toMatchObject({ mode: 'in-world', characterIds: [], groupIds: ['grp-1'] })
+  })
+
+  it('offers no "Use this scene"; Save is the primary action', async () => {
+    const router = installFetchRouter()
+    router.buildFrames.push([{ done: true, scenario: 'Rain on the cobbles.' }])
+    renderShelf()
+    fillInputs()
+    fireEvent.click(screen.getByRole('button', { name: 'Set the scene' }))
+    await waitFor(() => expect(screen.getByLabelText('The scene')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: 'Use this scene' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Save as scenario…' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+  })
+
+  it('Save lists every home, preselects the shelf, and files it there', async () => {
+    const router = installFetchRouter()
+    router.buildFrames.push([{ done: true, scenario: 'Rain on the cobbles.' }])
+    const { onSaved } = renderShelf()
+    fillInputs()
+    fireEvent.click(screen.getByRole('button', { name: 'Set the scene' }))
+    await waitFor(() => expect(screen.getByLabelText('The scene')).toBeInTheDocument())
+
+    mockEverywhereLists()
+    fireEvent.click(screen.getByRole('button', { name: 'Save as scenario…' }))
+
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Group: Aeronauts Club' })).toBeInTheDocument())
+    expect(screen.getByRole('option', { name: 'Project: The Estate' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('option', { name: /Riya.s scenarios/ })).toBeInTheDocument())
+    expect((screen.getByLabelText('Where it lives') as HTMLSelectElement).value).toBe('group:grp-1')
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Rain' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(onSaved).toHaveBeenCalledWith({ kind: 'group', groupId: 'grp-1', path: 'Scenarios/rain.md' }),
+    )
+  })
+
+  it('saving to another project posts to that project', async () => {
+    const router = installFetchRouter()
+    router.buildFrames.push([{ done: true, scenario: 'Rain on the cobbles.' }])
+    const { onSaved } = renderShelf({ groupIds: undefined, defaultSaveTarget: 'general' })
+    fillInputs()
+    fireEvent.click(screen.getByRole('button', { name: 'Set the scene' }))
+    await waitFor(() => expect(screen.getByLabelText('The scene')).toBeInTheDocument())
+
+    mockEverywhereLists()
+    const base = (global.fetch as jest.Mock).getMockImplementation()
+    ;(global.fetch as jest.Mock).mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/v1/projects/proj-1/scenarios' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => ({ path: 'Scenarios/rain.md' }) }
+      }
+      return base!(url, init)
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save as scenario…' }))
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Project: The Estate' })).toBeInTheDocument())
+    expect((screen.getByLabelText('Where it lives') as HTMLSelectElement).value).toBe('general')
+
+    fireEvent.change(screen.getByLabelText('Where it lives'), { target: { value: 'project:proj-1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(onSaved).toHaveBeenCalledWith({ kind: 'project', projectId: 'proj-1', path: 'Scenarios/rain.md' }),
+    )
+  })
+})

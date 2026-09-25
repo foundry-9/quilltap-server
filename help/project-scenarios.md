@@ -51,6 +51,7 @@ The **Scenarios** card on each project's page is your atelier. Every project aut
 - **Delete** a scenario with the **Delete** button, after a moment's confirmation. The file is removed from the document store; chats that already used it are unaffected, since the scenario text is woven into the chat at the moment of its creation.
 - **Set the default** by clicking the radio button at the start of a row. The newly elected default has its frontmatter rewritten to `isDefault: true`, and any sibling that previously claimed the title is gently demoted.
 - **Archive** a scenario with the **Archive** button, which retires it from the drop-downs without destroying it. See below.
+- **Ask the Host to set the scene** — the button beside **+ New scenario** — sends the Host off to draft a scene from a place and a time, reading this project's stores and Quilltap General. When he returns, **Save as scenario…** files it here by default, or in General, another project, any group, or any character's own collection. See [The Scenario Builder](scenario-builder.md).
 
 When the card is pinched for room — as it so often is in the three-abreast project grid — the quartet of **Edit**, **Rename**, **Archive**, and **Delete** withdraw behind a single **⋮** menu at the end of each row; a click unfurls them. Where the card has elbow room to spare, the four present themselves inline, as plainly as ever. The radio button minding the default keeps its post on the left regardless.
 

@@ -2,10 +2,16 @@
 
 /**
  * Save as scenario… — files the Host's scene in one of the four scenario homes:
- * Quilltap General, the project, a cast member's group, or one cast
- * character's own scenarios. Posts to that tier's existing create endpoint; no
- * new storage. A filename collision comes back as a 400 and keeps the dialog
- * open so the user can rename.
+ * Quilltap General, a project, a group, or one character's own scenarios.
+ * Posts to that tier's existing create endpoint; no new storage. A filename
+ * collision comes back as a 400 and keeps the dialog open so the user can
+ * rename.
+ *
+ * Which homes are offered depends on where the builder was opened. Beside a
+ * chat's scenario box (`targets: 'cast'`) they are the ones that chat could
+ * use: General, its project, its cast's groups, its cast. From a scenarios
+ * shelf (`targets: 'everywhere'`) every home is offered — every project, every
+ * group, every live character — with the shelf's own home preselected.
  */
 
 import { useMemo, useState } from 'react'
@@ -27,6 +33,12 @@ export type SavedScenarioTarget =
   | { kind: 'group'; groupId: string; path: string }
   | { kind: 'character'; characterId: string; scenarioId: string; title: string; content: string }
 
+/**
+ * A save target as the Location select spells it: `general`,
+ * `project:<id>`, `group:<id>` or `character:<id>`.
+ */
+export type SaveScenarioTargetKey = 'general' | `project:${string}` | `group:${string}` | `character:${string}`
+
 interface SaveScenarioDialogProps {
   isOpen: boolean
   onClose: () => void
@@ -37,13 +49,19 @@ interface SaveScenarioDialogProps {
   projectName?: string | null
   /** The cast — their groups and their own scenario lists are offered. */
   cast: ScenarioBuilderCastMember[]
+  /** `cast` (default): the homes this chat could use. `everywhere`: every home there is. */
+  targets?: 'cast' | 'everywhere'
+  /** Preselected home; falls back to General when it is not on offer. */
+  defaultTarget?: SaveScenarioTargetKey
   onSaved: (target: SavedScenarioTarget) => void
 }
 
-interface GroupRow {
+interface NamedRow {
   id: string
   name: string
 }
+
+const byName = (a: NamedRow, b: NamedRow) => a.name.localeCompare(b.name)
 
 export function SaveScenarioDialog({
   isOpen,
@@ -53,27 +71,73 @@ export function SaveScenarioDialog({
   projectId,
   projectName,
   cast,
+  targets = 'cast',
+  defaultTarget,
   onSaved,
 }: SaveScenarioDialogProps) {
   const queryClient = useQueryClient()
+  const everywhere = targets === 'everywhere'
   const [name, setName] = useState(defaultName)
   const [description, setDescription] = useState('')
-  const [target, setTarget] = useState('general')
+  // Null until the user picks; until then the preselected home stands in (once
+  // the lists that offer it have arrived).
+  const [chosenTarget, setTarget] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const castKey = useMemo(() => cast.map((c) => c.id).sort().join(','), [cast])
 
-  const { data: groupData } = useQuery({
+  const { data: castGroupData } = useQuery({
     queryKey: queryKeys.groups.byCharacters(castKey),
     queryFn: ({ signal }) =>
-      apiFetch<{ groups: GroupRow[] }>(
+      apiFetch<{ groups: NamedRow[] }>(
         `/api/v1/groups?characterIds=${encodeURIComponent(castKey)}`,
         { signal },
       ),
-    enabled: isOpen && castKey.length > 0,
+    enabled: isOpen && !everywhere && castKey.length > 0,
   })
-  const groups = groupData?.groups ?? []
+  const { data: allGroupData } = useQuery({
+    queryKey: queryKeys.groups.list(),
+    queryFn: ({ signal }) => apiFetch<{ groups: NamedRow[] }>('/api/v1/groups', { signal }),
+    enabled: isOpen && everywhere,
+  })
+  const { data: projectData } = useQuery({
+    queryKey: queryKeys.projects.list(),
+    queryFn: ({ signal }) => apiFetch<{ projects: NamedRow[] }>('/api/v1/projects', { signal }),
+    enabled: isOpen && everywhere,
+  })
+  // The list endpoint already leaves archived characters out: a tombstone takes no new scenarios.
+  const { data: characterData } = useQuery({
+    queryKey: queryKeys.characters.list(),
+    queryFn: ({ signal }) => apiFetch<{ characters: NamedRow[] }>('/api/v1/characters', { signal }),
+    enabled: isOpen && everywhere,
+  })
+
+  const projects: NamedRow[] = useMemo(() => {
+    if (everywhere) return [...(projectData?.projects ?? [])].sort(byName)
+    return projectId ? [{ id: projectId, name: projectName || 'this project' }] : []
+  }, [everywhere, projectData, projectId, projectName])
+  const groups: NamedRow[] = useMemo(
+    () => [...((everywhere ? allGroupData?.groups : castGroupData?.groups) ?? [])].sort(byName),
+    [everywhere, allGroupData, castGroupData],
+  )
+  const characters: NamedRow[] = useMemo(
+    () => (everywhere ? [...(characterData?.characters ?? [])].sort(byName) : cast),
+    [everywhere, characterData, cast],
+  )
+
+  const offered = useMemo(
+    () =>
+      new Set<string>([
+        'general',
+        ...projects.map((p) => `project:${p.id}`),
+        ...groups.map((g) => `group:${g.id}`),
+        ...characters.map((c) => `character:${c.id}`),
+      ]),
+    [projects, groups, characters],
+  )
+  const target =
+    chosenTarget ?? (defaultTarget && offered.has(defaultTarget) ? defaultTarget : 'general')
 
   const handleSave = async () => {
     const trimmedName = name.trim()
@@ -97,8 +161,8 @@ export function SaveScenarioDialog({
       if (target === 'general') {
         url = '/api/v1/scenarios'
         payload = fileBody
-      } else if (target === 'project' && projectId) {
-        url = `/api/v1/projects/${projectId}/scenarios`
+      } else if (target.startsWith('project:')) {
+        url = `/api/v1/projects/${target.slice('project:'.length)}/scenarios`
         payload = fileBody
       } else if (target.startsWith('group:')) {
         url = `/api/v1/groups/${target.slice('group:'.length)}/scenarios`
@@ -129,8 +193,8 @@ export function SaveScenarioDialog({
       let saved: SavedScenarioTarget | null = null
       if (target === 'general' && data.path) {
         saved = { kind: 'general', path: data.path }
-      } else if (target === 'project' && projectId && data.path) {
-        saved = { kind: 'project', projectId, path: data.path }
+      } else if (target.startsWith('project:') && data.path) {
+        saved = { kind: 'project', projectId: target.slice('project:'.length), path: data.path }
       } else if (target.startsWith('group:') && data.path) {
         saved = { kind: 'group', groupId: target.slice('group:'.length), path: data.path }
       } else if (target.startsWith('character:') && data.scenario?.id) {
@@ -218,17 +282,33 @@ export function SaveScenarioDialog({
             className="qt-select"
           >
             <option value="general">Quilltap General</option>
-            {projectId && <option value="project">Project: {projectName || 'this project'}</option>}
-            {groups.map((g) => (
-              <option key={g.id} value={`group:${g.id}`}>
-                Group: {g.name}
-              </option>
-            ))}
-            {cast.map((c) => (
-              <option key={c.id} value={`character:${c.id}`}>
-                {c.name}&rsquo;s scenarios
-              </option>
-            ))}
+            {projects.length > 0 && (
+              <optgroup label="Projects">
+                {projects.map((p) => (
+                  <option key={p.id} value={`project:${p.id}`}>
+                    Project: {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {groups.length > 0 && (
+              <optgroup label="Groups">
+                {groups.map((g) => (
+                  <option key={g.id} value={`group:${g.id}`}>
+                    Group: {g.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {characters.length > 0 && (
+              <optgroup label="Characters">
+                {characters.map((c) => (
+                  <option key={c.id} value={`character:${c.id}`}>
+                    {c.name}&rsquo;s scenarios
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
         {error && (

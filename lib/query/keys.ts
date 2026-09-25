@@ -88,6 +88,7 @@ export const queryKeys = {
   },
   groups: {
     all: ['groups'] as const,
+    list: () => ['groups', 'list'] as const,
     state: (id: string) => ['groups', id, 'state'] as const,
     /** Groups any of these characters belongs to; keyed by comma-joined, sorted ids. */
     byCharacters: (characterIdsKey: string) => ['groups', 'by-characters', characterIdsKey] as const,

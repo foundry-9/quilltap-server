@@ -85,6 +85,20 @@ async function handleBuild(req: NextRequest, context: RequestContext): Promise<N
     })
   }
 
+  // Named groups (the builder launched from a group's page): keep only ones that exist.
+  const groupIds: string[] = []
+  for (const id of [...new Set(body.groupIds)]) {
+    try {
+      const group = await repos.groups.findByIdRaw(id)
+      if (group) groupIds.push(id)
+    } catch (error) {
+      logger.warn('Scenario Builder dropped an unreadable group id', {
+        groupId: id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
   // In-chat: the chat must be the user's, and a Salon or autonomous room.
   let chat: { id: string; scenarioText?: string | null; contextSummary?: string | null } | null = null
   if (body.chatId) {
@@ -101,6 +115,7 @@ async function handleBuild(req: NextRequest, context: RequestContext): Promise<N
   logger.debug('Scenario Builder request accepted', {
     mode: body.mode,
     castCount: characterIds.length,
+    groupCount: groupIds.length,
     hasProject: !!body.projectId,
     inChat: !!chat,
     revising: body.revision != null,
@@ -145,6 +160,7 @@ async function handleBuild(req: NextRequest, context: RequestContext): Promise<N
               details: body.details,
               projectId: body.projectId ?? null,
               characterIds,
+              groupIds,
               chat,
               priorDraft: body.priorDraft ?? null,
               revision: body.revision ?? null,

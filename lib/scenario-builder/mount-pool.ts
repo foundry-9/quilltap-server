@@ -4,7 +4,9 @@
  * The Scenario Builder runs a character-less tool loop that must read exactly
  * the stores a chat with this cast (and project) would reach: every cast
  * member's vault, the union of every cast member's group stores, the project's
- * stores, and Quilltap General. `resolveTieredMountPool` cannot express that —
+ * stores, and Quilltap General. Launched from a group's page, the run also
+ * names that group outright (`groupIds`), whose stores join the group tier
+ * whether or not any cast member belongs to it. `resolveTieredMountPool` cannot express that —
  * its group tier is keyed on a single responding character — so the pool is
  * assembled here by hand from the same per-tier helpers, in precedence order,
  * and deduped with the same rule (`dedupeTierTriple`).
@@ -24,6 +26,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   dedupeTierTriple,
   resolveGroupMountPointIdsForCharacter,
+  resolveMountPointIdsForGroup,
   resolveProjectMountPointIds,
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool'
@@ -37,8 +40,11 @@ export async function resolveScenarioBuilderMountPool(opts: {
   userId: string
   projectId?: string | null
   characterIds: string[]
+  /** Groups named outright (the builder launched from a group's page). */
+  groupIds?: string[]
 }): Promise<TieredMountPool> {
   const { userId, projectId, characterIds } = opts
+  const namedGroupIds = [...new Set((opts.groupIds ?? []).filter(Boolean))]
   const repos = getRepositories()
   const castIds = [...new Set(characterIds.filter(Boolean))]
 
@@ -70,8 +76,12 @@ export async function resolveScenarioBuilderMountPool(opts: {
     }
   }
 
-  // 2. Group stores — the union over the whole cast (the helper fails soft).
+  // 2. Group stores — the named groups, then the union over the whole cast
+  //    (both helpers fail soft).
   const groupIds: string[] = []
+  for (const groupId of namedGroupIds) {
+    groupIds.push(...(await resolveMountPointIdsForGroup(groupId)))
+  }
   for (const characterId of liveCastIds) {
     groupIds.push(...(await resolveGroupMountPointIdsForCharacter(characterId)))
   }
@@ -106,6 +116,7 @@ export async function resolveScenarioBuilderMountPool(opts: {
   logger.debug('Resolved Scenario Builder mount pool', {
     castCount: castIds.length,
     liveCastCount: liveCastIds.length,
+    namedGroupCount: namedGroupIds.length,
     participants: pool.participantMountPointIds.length,
     groups: pool.groupMountPointIds.length,
     projects: pool.projectMountPointIds.length,

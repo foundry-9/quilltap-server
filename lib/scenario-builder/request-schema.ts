@@ -19,6 +19,8 @@ export const scenarioBuildRequestSchema = z
     projectId: UUIDSchema.nullish(),
     /** Cast character ids: New Chat selection, or the chat's participants. */
     characterIds: z.array(UUIDSchema).max(32).default([]),
+    /** Groups named outright — the builder launched from a group's Scenarios card. */
+    groupIds: z.array(UUIDSchema).max(32).default([]),
     /** Present when launched from the in-chat control. Adds the chat's own context. */
     chatId: UUIDSchema.nullish(),
     /** Revise: the draft as currently edited, and the instruction. Both or neither. */

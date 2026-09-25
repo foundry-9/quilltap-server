@@ -183,6 +183,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
         />
         <ScenariosCard
           projectId={projectId}
+          projectName={project.name}
           expanded={cardState.scenarios}
           onToggle={() => toggleCard('scenarios')}
         />

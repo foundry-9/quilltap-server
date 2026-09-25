@@ -2,7 +2,7 @@
  * Tests for `resolveScenarioBuilderMountPool` — the by-hand assembly of "what
  * this chat could see" for a cast that has no chat (and no acting character)
  * yet. Runs against the REAL `lib/mount-index/tiered-mount-pool` helpers
- * (`dedupeTierTriple`, `resolveGroupMountPointIdsForCharacter`,
+ * (`dedupeTierTriple`, `resolveGroupMountPointIdsForCharacter`, `resolveMountPointIdsForGroup`,
  * `resolveProjectMountPointIds`); only `getRepositories` and
  * `getGeneralMountPointId` are mocked, matching the style of
  * `lib/doc-edit/__tests__/path-resolver-opacity-group-stores.test.ts`.
@@ -104,6 +104,54 @@ describe('resolveScenarioBuilderMountPool', () => {
       expect.arrayContaining(['mp-group-1', 'mp-group-2']),
     )
     expect(pool.groupMountPointIds).toHaveLength(2)
+  })
+
+  it('a group named outright joins the group tier — official and linked stores — with no cast', async () => {
+    mockWorld({
+      characters: {},
+      groups: { 'grp-1': { id: 'grp-1', officialMountPointId: 'mp-group-1' } },
+      groupDocMountLinks: { 'grp-1': [{ mountPointId: 'mp-linked' }] },
+    })
+
+    const pool = await resolveScenarioBuilderMountPool({
+      userId: USER,
+      characterIds: [],
+      groupIds: ['grp-1'],
+    })
+
+    expect(pool.groupMountPointIds).toEqual(expect.arrayContaining(['mp-group-1', 'mp-linked']))
+    expect(pool.groupMountPointIds).toHaveLength(2)
+    expect(pool.participantMountPointIds).toEqual([])
+  })
+
+  it('a named group the cast also belongs to is not counted twice', async () => {
+    mockWorld({
+      characters: {
+        'char-a': { id: 'char-a', userId: USER, characterDocumentMountPointId: 'vault-a' },
+      },
+      memberships: { 'char-a': [{ groupId: 'grp-1' }] },
+      groups: { 'grp-1': { id: 'grp-1', officialMountPointId: 'mp-group-1' } },
+    })
+
+    const pool = await resolveScenarioBuilderMountPool({
+      userId: USER,
+      characterIds: ['char-a'],
+      groupIds: ['grp-1'],
+    })
+
+    expect(pool.groupMountPointIds).toEqual(['mp-group-1'])
+  })
+
+  it('an unknown named group contributes nothing and does not throw', async () => {
+    mockWorld({ characters: {} })
+
+    const pool = await resolveScenarioBuilderMountPool({
+      userId: USER,
+      characterIds: [],
+      groupIds: ['grp-missing'],
+    })
+
+    expect(pool.groupMountPointIds).toEqual([])
   })
 
   it('an archived character contributes no vault and no groups', async () => {

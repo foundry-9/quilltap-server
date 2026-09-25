@@ -80,6 +80,8 @@ const PROFILE_ID = '00000000-0000-4000-8000-000000000002'
 const CHAR_ID_1 = '00000000-0000-4000-8000-000000000003'
 const CHAR_ID_2 = '00000000-0000-4000-8000-000000000004'
 const CHAT_ID = '00000000-0000-4000-8000-000000000005'
+const GROUP_ID_1 = '00000000-0000-4000-8000-000000000006'
+const GROUP_ID_2 = '00000000-0000-4000-8000-000000000007'
 
 function profile(overrides: Record<string, unknown> = {}) {
   return {
@@ -98,6 +100,7 @@ function makeRepos(overrides: Record<string, unknown> = {}) {
     connections: { findById: jest.fn(async () => profile()) },
     characters: { findById: jest.fn(async (id: string) => ({ id })) },
     chats: { findById: jest.fn(async () => null) },
+    groups: { findByIdRaw: jest.fn(async (id: string) => ({ id })) },
     ...overrides,
   }
 }
@@ -237,6 +240,25 @@ describe('POST /api/v1/scenario-builder?action=build — cast scoping', () => {
 
     const options = runBuilder.mock.calls[0][0] as { input: { characterIds: string[] } }
     expect(options.input.characterIds).toEqual([CHAR_ID_1])
+  })
+})
+
+describe('POST /api/v1/scenario-builder?action=build — named groups', () => {
+  it('passes existing group ids through and drops unknown ones', async () => {
+    const findByIdRaw = jest.fn(async (id: string) => (id === GROUP_ID_1 ? { id } : null))
+    const repos = makeRepos({ groups: { findByIdRaw } })
+
+    await POST(req(buildBody({ groupIds: [GROUP_ID_1, GROUP_ID_2] }), { action: 'build' }), ctx(repos))
+
+    const options = runBuilder.mock.calls[0][0] as { input: { groupIds: string[] } }
+    expect(options.input.groupIds).toEqual([GROUP_ID_1])
+  })
+
+  it('defaults to no named groups', async () => {
+    await POST(req(buildBody(), { action: 'build' }), ctx())
+
+    const options = runBuilder.mock.calls[0][0] as { input: { groupIds: string[] } }
+    expect(options.input.groupIds).toEqual([])
   })
 })
 

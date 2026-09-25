@@ -8,6 +8,10 @@ url: /scenarios
 
 A scenario, as a reminder, is the sealed envelope handed to your characters at the moment a chat opens — a brief paragraph that sets the stage. **General Scenarios** are the envelopes you'd like Quilltap to keep on the hall table, ready to hand to every new conversation regardless of which project it belongs to (or whether it belongs to a project at all). They are the household standbys; the ones you don't want to draft afresh in every wing of the estate.
 
+## Asking the Host
+
+Beside **+ New scenario** stands **Ask the Host to set the scene**, which sends the Host off to draft a scene from a place and a time, reading Quilltap General (and, for a real place, the wider world). When he returns you may file the scene here — the General shelf is chosen for you — or in any project, any group, or any character's own collection. See [The Scenario Builder](scenario-builder.md).
+
 ## The Three Scopes, Briefly
 
 Quilltap now keeps scenarios in three places, each pitched at a different scale:
