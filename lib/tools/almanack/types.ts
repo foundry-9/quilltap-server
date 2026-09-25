@@ -241,12 +241,29 @@ export interface CharacterBreakdownInfo {
 
 /** The feature dials, as configured. */
 export interface FeatureConfigInfo {
-  dangerousContent: {
-    mode: string;
-    threshold: number;
-    scanTextChat: boolean;
-    scanImagePrompts: boolean;
-    scanImageGeneration: boolean;
+  /** The Concierge's own settings (`conciergeSettings`), with profile ids reduced to "is one set?". */
+  concierge: {
+    enabled: boolean;
+    newChatsStartAs: string;
+    /** 0 = never. */
+    autoSwitchAfterRefusals: number;
+    display: { mode: string; showWarningBadges: boolean };
+    /** Whether each uncensored-desk profile is pinned (false = auto-detect / none). */
+    desk: {
+      textProfileSet: boolean;
+      imageProfileSet: boolean;
+      visionProfileSet: boolean;
+      imagePromptProfileSet: boolean;
+    };
+    preScreen: {
+      enabled: boolean;
+      threshold: number;
+      scanTextChat: boolean;
+      scanImagePrompts: boolean;
+      scanImageGeneration: boolean;
+      customClassificationPrompt: boolean;
+    };
+    summaryClassification: boolean;
   };
   contextCompression: { enabled: boolean; windowSize: number; compressionTargetTokens: number };
   agentMode: { maxTurns: number; defaultEnabled: boolean };
@@ -278,7 +295,7 @@ export interface FeatureConfigInfo {
   impersonationVoiceRewrite: boolean;
   autoScrollOnResponseComplete: boolean;
   imageDescriptionProfileConfigured: boolean;
-  uncensoredImageDescriptionProfileConfigured: boolean;
+  uncensoredVisionProfileConfigured: boolean;
 }
 
 export interface InstanceSettingsInfo {

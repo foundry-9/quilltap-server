@@ -3,7 +3,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
 import { createSystemEvent } from '@/lib/services/system-events.service'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash'
 
@@ -41,10 +41,33 @@ jest.mock('@/lib/services/system-events.service', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest
-    .fn()
-    .mockReturnValue({ settings: { mode: 'OFF', threshold: 0.7 }, source: 'default' }),
+  resolveConciergeSettings: jest.fn(),
 }))
+
+/** A hand-built policy (chat.types is mocked here, so the real resolver cannot run). */
+function policy(overrides: Record<string, unknown> = {}) {
+  return {
+    onDuty: true,
+    state: 'moderated',
+    failoverAllowed: true,
+    routeDirect: false,
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: false,
+      scanImagePrompts: false,
+      scanImageGeneration: false,
+      customClassificationPrompt: null,
+    },
+    summaryClassification: false,
+    autoSwitchAfterRefusals: 2,
+    desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null },
+    display: { mode: 'SHOW', showWarningBadges: true },
+    newChatsStartAs: 'moderated',
+    source: 'default',
+    ...overrides,
+  }
+}
 
 jest.mock('@/lib/services/dangerous-content/gatekeeper.service', () => ({
   classifyContent: jest
@@ -64,7 +87,7 @@ const mockResolveUncensoredCheapLLMSelection = resolveUncensoredCheapLLMSelectio
 const mockUpdateSceneState = updateSceneState as jest.MockedFunction<typeof updateSceneState>
 const mockExtractVisibleConversation = extractVisibleConversation as jest.MockedFunction<typeof extractVisibleConversation>
 const mockCreateSystemEvent = createSystemEvent as jest.MockedFunction<typeof createSystemEvent>
-const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>
+const mockResolveConciergeSettings = resolveConciergeSettings as jest.MockedFunction<typeof resolveConciergeSettings>
 const mockClassifyContent = classifyContent as jest.MockedFunction<typeof classifyContent>
 
 const buildJob = (overrides: Record<string, unknown> = {}) => ({
@@ -174,10 +197,7 @@ describe('handleSceneStateTracking', () => {
     mockResolveUncensoredCheapLLMSelection.mockReturnValue(null)
     mockExtractVisibleConversation.mockReturnValue(twoMessages as any)
     mockUpdateSceneState.mockResolvedValue(successResult as any)
-    mockResolveDangerousContentSettings.mockReturnValue({
-      settings: { mode: 'OFF', threshold: 0.7 },
-      source: 'default',
-    } as any)
+    mockResolveConciergeSettings.mockReturnValue(policy() as any)
     mockClassifyContent.mockResolvedValue({ isDangerous: false, score: 0, categories: [] } as any)
   })
 
@@ -422,14 +442,10 @@ describe('handleSceneStateTracking', () => {
   // ─── 10: Detects refusal and retries with uncensored ────────────────────────
 
   it('retries with uncensored provider when result location is "Unknown"', async () => {
-    // Set up an uncensored profile in cheapLLMSettings
-    repos.chatSettings.findByUserId.mockResolvedValue({
-      cheapLLMSettings: {
-        strategy: 'PROVIDER_CHEAPEST',
-        fallbackToLocal: true,
-        imagePromptProfileId: 'profile-uncensored',
-      },
-    })
+    // Set up an image-prompt crafter at the Concierge's uncensored desk
+    mockResolveConciergeSettings.mockReturnValue(policy({
+      desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: 'profile-uncensored' },
+    }) as any)
     repos.connections.findByUserId.mockResolvedValue([
       { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4o-mini' },
       { id: 'profile-uncensored', provider: 'OLLAMA', modelName: 'llama3', baseUrl: 'http://localhost:11434' },
@@ -470,7 +486,7 @@ describe('handleSceneStateTracking', () => {
   // ─── 11: Does not retry when no uncensored selection available ───────────────
 
   it('does not retry when no uncensored provider is available', async () => {
-    // No imagePromptProfileId → uncensoredLLMSelection stays null
+    // No desk imagePromptProfileId → uncensoredLLMSelection stays null
     repos.chatSettings.findByUserId.mockResolvedValue({
       cheapLLMSettings: { strategy: 'PROVIDER_CHEAPEST', fallbackToLocal: true },
     })
@@ -529,7 +545,7 @@ describe('handleSceneStateTracking', () => {
     expect(mockResolveUncensoredCheapLLMSelection).toHaveBeenCalledWith(
       cheapLLMSelection,
       true,
-      expect.objectContaining({ mode: 'OFF' }),
+      expect.objectContaining({ source: 'default' }),
       expect.any(Array)
     )
   })
@@ -566,6 +582,44 @@ describe('handleSceneStateTracking', () => {
         expect.objectContaining({ characterId: 'char-1' }),
         expect.objectContaining({ characterId: 'char-2' }),
       ])
+    )
+  })
+
+  // ─── The Concierge policy ───────────────────────────────────────────────────
+
+  const withCrafter = (overrides: Record<string, unknown> = {}) => policy({
+    desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: 'profile-uncensored' },
+    ...overrides,
+  })
+
+  it('pre-classifies only when the pre-screen is on', async () => {
+    repos.connections.findByUserId.mockResolvedValue([
+      { id: 'profile-1', provider: 'OPENAI', modelName: 'gpt-4o-mini' },
+      { id: 'profile-uncensored', provider: 'OLLAMA', modelName: 'llama3' },
+    ])
+
+    mockResolveConciergeSettings.mockReturnValue(withCrafter() as any)
+    await handleSceneStateTracking(buildJob() as any)
+    expect(mockClassifyContent).not.toHaveBeenCalled()
+
+    mockResolveConciergeSettings.mockReturnValue(withCrafter({
+      preScreen: { ...policy().preScreen, enabled: true, scanTextChat: true },
+    }) as any)
+    await handleSceneStateTracking(buildJob() as any)
+    expect(mockClassifyContent).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers the uncensored fallback only where the policy allows failover', async () => {
+    mockResolveConciergeSettings.mockReturnValue(policy({ failoverAllowed: false, source: 'chat-locked' }) as any)
+    await handleSceneStateTracking(buildJob() as any)
+    expect(mockUpdateSceneState.mock.calls[0][4]).toBeUndefined()
+
+    mockUpdateSceneState.mockClear()
+    const allowed = policy()
+    mockResolveConciergeSettings.mockReturnValue(allowed as any)
+    await handleSceneStateTracking(buildJob() as any)
+    expect(mockUpdateSceneState.mock.calls[0][4]).toEqual(
+      expect.objectContaining({ conciergePolicy: allowed, availableProfiles: expect.any(Array) }),
     )
   })
 })

@@ -116,6 +116,11 @@ describe('Help Guide Categories', () => {
       expect(getCategoryForUrl('/settings?tab=templates')).toBe('settings-system');
     });
 
+    it('should return content-routing for /settings?tab=concierge', () => {
+      expect(getCategoryForUrl('/settings?tab=concierge')).toBe('content-routing');
+      expect(getCategoryForUrl('/settings?tab=concierge&section=uncensored-desk')).toBe('content-routing');
+    });
+
     it('should return content-routing for /settings?tab=images', () => {
       expect(getCategoryForUrl('/settings?tab=images')).toBe('content-routing');
     });

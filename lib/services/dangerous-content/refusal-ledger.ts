@@ -3,7 +3,8 @@
  *
  * Every stated moderation refusal the phase-1 chokepoints detect on a chat is
  * counted here (`chats.moderationRefusalCount`, `lastModerationRefusalAt`).
- * After `autoSwitchAfterRefusals` of them on a Moderated chat under Auto-Route,
+ * After `autoSwitchAfterRefusals` of them on a Moderated chat (0 = never, and
+ * always 0 when the Concierge is off duty),
  * the Concierge switches the chat to Unmoderated through `applyConciergeFlip`
  * (`{ by: 'concierge', reason: 'refusals' }`) and says why. The operator's
  * return to Moderated empties the ledger.
@@ -33,10 +34,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getConciergeState, isClassifierOnDuty } from './chat-override'
 import { applyConciergeFlip } from './manual-flip'
 import type { RefusalEvidence } from './refusal'
-import {
-  DEFAULT_AUTO_SWITCH_AFTER_REFUSALS,
-  resolveDangerousContentSettings,
-} from './resolver.service'
+import { resolveConciergeSettings } from './resolver.service'
 
 const logger = createServiceLogger('ConciergeRefusalLedger')
 
@@ -192,17 +190,21 @@ async function runAutoSwitchCheck(
     }
 
     const chatSettings = await repos.chatSettings.findByUserId(chat.userId)
-    const { settings, source } = resolveDangerousContentSettings(chatSettings, chat)
-    const threshold = settings.autoSwitchAfterRefusals ?? DEFAULT_AUTO_SWITCH_AFTER_REFUSALS
+    const conciergePolicy = resolveConciergeSettings(chatSettings, chat)
+    // 0 when the auto-switch is off, the Concierge is off duty, or the chat
+    // is not Moderated — the policy folds all three into the one number.
+    const threshold = conciergePolicy.autoSwitchAfterRefusals
     const { count } = await repos.chats.getModerationRefusalLedger(chatId)
 
-    const decision = { chatId, count, threshold, mode: settings.mode, source }
-    if (threshold <= 0) {
-      logger.debug('Auto-switch check: the auto-switch is off', decision)
-      return { switched: false }
+    const decision = {
+      chatId,
+      count,
+      threshold,
+      conciergeSource: conciergePolicy.source,
+      onDuty: conciergePolicy.onDuty,
     }
-    if (settings.mode !== 'AUTO_ROUTE') {
-      logger.debug('Auto-switch check: the Concierge mode does not permit it', decision)
+    if (threshold <= 0) {
+      logger.debug('Auto-switch check: the auto-switch is off for this chat', decision)
       return { switched: false }
     }
     if (count < threshold) {

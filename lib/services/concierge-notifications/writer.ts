@@ -372,9 +372,9 @@ export async function postConciergeDangerAnnouncement(
  * dedupe: a refusal is rare, and every one is actionable.
  *
  * - `refusal-rerouted`      — refused, and the uncensored understudy answered.
- * - `refusal-no-understudy` — refused under Auto-Route, and nobody to ask.
- * - `refusal-not-permitted` — refused, and a reroute is barred: by the mode
- *   (Off / Detect Only), or — `reason: 'locked'` — because the chat is Locked.
+ * - `refusal-no-understudy` — refused, failover allowed, and nobody to ask.
+ * - `refusal-not-permitted` — refused, and a reroute is barred because the
+ *   chat is Locked. (An off-duty Concierge announces nothing at all.)
  */
 export type ConciergeRefusalKind =
   | 'refusal-rerouted'
@@ -392,11 +392,8 @@ export interface ConciergeRefusalDetails {
   /** Name the user gave the answering profile — `refusal-rerouted` only. */
   answeringProfileName?: string;
   purpose: ConciergeRefusalPurpose;
-  /**
-   * `refusal-not-permitted` only: what barred the reroute. `'locked'` — the
-   * chat is Locked; `'mode'` (the default) — the Concierge mode.
-   */
-  reason?: 'locked' | 'mode';
+  /** `refusal-not-permitted` only: what barred the reroute — the chat is Locked. */
+  reason?: 'locked';
 }
 
 export interface ConciergeRefusalAnnouncement {
@@ -430,10 +427,7 @@ export function buildRefusalContent(kind: ConciergeRefusalKind, details: Concier
     case 'refusal-no-understudy':
       return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety, and he knows of no more obliging establishment to take it to. Should you care to name one, tick "Uncensored-compatible" on a suitable profile, or choose one in the Concierge's settings.`;
     case 'refusal-not-permitted':
-      if (details.reason === 'locked') {
-        return `The Concierge observes that ${house} (${painter}) declined ${voiced} on grounds of propriety. This conversation is Locked to the usual desks, so the refusal stands; set it to Moderated should you wish him to take such things elsewhere.`;
-      }
-      return `The Concierge observes that ${house} (${painter}) declined ${voiced} on grounds of propriety. His present instructions forbid him from taking it elsewhere; were he set to Auto-Route, he would have done so.`;
+      return `The Concierge observes that ${house} (${painter}) declined ${voiced} on grounds of propriety. This conversation is Locked to the usual desks, so the refusal stands; set it to Moderated should you wish him to take such things elsewhere.`;
   }
 }
 
@@ -446,10 +440,7 @@ export function buildRefusalOpaqueContent(kind: ConciergeRefusalKind, details: C
     case 'refusal-no-understudy':
       return `Provider ${who} refused ${plain} on content grounds. No uncensored profile is available to retry it; mark a profile "Uncensored-compatible" or choose one in the Concierge settings.`;
     case 'refusal-not-permitted':
-      if (details.reason === 'locked') {
-        return `Provider ${who} refused ${plain} on content grounds. This chat is Locked, so it was not rerouted; set it to Moderated to allow an uncensored retry.`;
-      }
-      return `Provider ${who} refused ${plain} on content grounds. The Concierge mode does not permit rerouting; Auto-Route would have retried it on an uncensored profile.`;
+      return `Provider ${who} refused ${plain} on content grounds. This chat is Locked, so it was not rerouted; set it to Moderated to allow an uncensored retry.`;
   }
 }
 

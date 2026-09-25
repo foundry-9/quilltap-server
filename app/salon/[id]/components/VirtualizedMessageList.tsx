@@ -109,6 +109,12 @@ interface VirtualizedMessageListProps {
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /**
+   * How flagged content looks in this chat — `resolveConciergeSettings(...).display`,
+   * resolved per chat by the caller (plain when off duty, no badges on an
+   * Unmoderated chat).
+   */
+  conciergeDisplay?: NonNullable<ChatSettings['conciergeSettings']>['display']
   /** Resolved per-chat thinking visibility (chat.showThinking ?? global default). DISPLAY ONLY. */
   showThinking?: boolean
   /** Whether thinking blocks start collapsed (global default). */
@@ -168,6 +174,7 @@ export function VirtualizedMessageList({
   currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
+  conciergeDisplay,
   showThinking = false,
   thinkingCollapsedByDefault = true,
   streamingReasoning = '',
@@ -319,7 +326,7 @@ export function VirtualizedMessageList({
                   waitingForResponse={waitingForResponse}
                   userParticipantId={userParticipantId}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
-                  dangerousContentSettings={chatSettings?.dangerousContentSettings}
+                  conciergeDisplay={conciergeDisplay}
                   onOverrideDangerFlag={onOverrideDangerFlag}
                   character={getCharacterForMessage(message)}
                   chatId={chatId}

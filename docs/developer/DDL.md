@@ -551,7 +551,6 @@ CREATE TABLE "chats" (
   "dangerCategories" TEXT DEFAULT '[]',
   "dangerClassifiedAt" TEXT DEFAULT NULL,
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
-  "conciergeOverride" TEXT DEFAULT NULL,  -- LEGACY (no longer written since 4.10; superseded by conciergeMode, kept so old rows and bundles can be derived): NULL = follow global; 'OFF' = Vouched Safe; 'UNCENSORED' = operator-asserted uncensored
   "conciergeMode" TEXT DEFAULT 'moderated',  -- The chat's Concierge state, the only stored field any routing or display decision reads: 'moderated' (ordinary providers first, uncensored on refusal; the Concierge may switch it) | 'unmoderated' (uncensored desk only) | 'locked' (ordinary only; a refusal stands). NULL reads as 'moderated' (a fresh database's schema-generated column has no default). Read via getConciergeState; written only by applyConciergeFlip (lib/services/dangerous-content/manual-flip.ts). Added and backfilled from the legacy pair by add-chat-concierge-mode-v1.
   "conciergeModeSetBy" TEXT DEFAULT NULL,  -- 'operator' | 'concierge'; who put the chat in its conciergeMode. NULL when Moderated. Added by add-chat-concierge-mode-v1.
   "conciergeModeReason" TEXT DEFAULT NULL,  -- 'manual' | 'refusals' | 'classifier' | 'migration'; why the chat is in its conciergeMode. NULL when Moderated. Added by add-chat-concierge-mode-v1.
@@ -913,7 +912,7 @@ CREATE TABLE "chat_settings" (
   "tagStyles" TEXT DEFAULT '{}',
   "cheapLLMSettings" TEXT DEFAULT '{}',
   "imageDescriptionProfileId" TEXT,
-  "uncensoredImageDescriptionProfileId" TEXT, -- added in 4.4 (add-uncensored-image-description-profile-field-v1): vision-LLM fallback used when the primary refuses
+  "uncensoredImageDescriptionProfileId" TEXT, -- DEPRECATED in 4.10: no longer read; moved to conciergeSettings.uncensoredVisionProfileId by add-concierge-settings-v1. Column retained until a housekeeping migration drops it. (Added in 4.4 by add-uncensored-image-description-profile-field-v1.)
   "defaultRoleplayTemplateId" TEXT,
   "themePreference" TEXT DEFAULT '{}',
   "sidebarWidth" INTEGER DEFAULT 256,
@@ -930,7 +929,8 @@ CREATE TABLE "chat_settings" (
   "autoDetectRng" INTEGER DEFAULT 1,
   "agentModeSettings" TEXT DEFAULT '{"maxTurns":10,"defaultEnabled":false}',
   "storyBackgroundsSettings" TEXT DEFAULT '{"enabled":false,"defaultImageProfileId":null}',
-  "dangerousContentSettings" TEXT DEFAULT '{"mode":"OFF","threshold":0.7,"scanTextChat":true,"scanImagePrompts":true,"scanImageGeneration":false,"displayMode":"SHOW","showWarningBadges":true}',
+  "dangerousContentSettings" TEXT DEFAULT '{"mode":"OFF","threshold":0.7,"scanTextChat":true,"scanImagePrompts":true,"scanImageGeneration":false,"displayMode":"SHOW","showWarningBadges":true}', -- DEPRECATED in 4.10: no longer read (dropped from ChatSettingsSchema); translated into conciergeSettings by add-concierge-settings-v1. Column retained until a housekeeping migration drops it.
+  "conciergeSettings" TEXT DEFAULT NULL, -- added in 4.10 (add-concierge-settings-v1): the Concierge's settings as JSON { enabled, uncensoredTextProfileId, uncensoredImageProfileId, uncensoredVisionProfileId, imagePromptProfileId, autoSwitchAfterRefusals, newChatsStartAs: 'moderated'|'unmoderated', display: { mode: 'SHOW'|'BLUR'|'COLLAPSE', showWarningBadges }, preScreen: { enabled, threshold, scanTextChat, scanImagePrompts, scanImageGeneration, customClassificationPrompt, summaryClassification } }. Backfilled from dangerousContentSettings (mode OFF → enabled false; DETECT_ONLY/AUTO_ROUTE → enabled, preScreen and summaryClassification on), uncensoredImageDescriptionProfileId and cheapLLMSettings.imagePromptProfileId (which is no longer read either). Read the effective policy through resolveConciergeSettings (lib/services/dangerous-content/resolver.service.ts).
   "autoLockSettings" TEXT DEFAULT '{"enabled":false,"idleMinutes":15}',
   "compositionModeDefault" INTEGER DEFAULT 0,
   "composerSpellcheck" INTEGER DEFAULT 1, -- added in 4.6 (add-composer-spellcheck-field-v1): governs browser spellcheck on Salon composer + Document Mode rich editor

@@ -946,26 +946,14 @@ export const ChatMetadataSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
-   * LEGACY (phase 3 stopped writing it; see `conciergeMode`). Per-chat
-   * Concierge mode override. NULL means follow the global Concierge
-   * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
-   * Vouched Safe: the operator vouches for the chat, disabling every
-   * Concierge effect (no classification, no scanning, no uncensored reroute,
-   * no synthetic Concierge messages) while the ordinary providers still
-   * apply. 'UNCENSORED' is the operator's own assertion that the chat is
-   * spicy: every uncensored route the Flagged state takes, with zero
-   * classification and zero danger styling. Both operator states preserve
-   * `isDangerousChat` underneath so returning to Monitored/Flagged picks up
-   * where the classifier left off.
-   */
-  conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
-  /**
    * The chat's Concierge posture (Concierge overhaul phase 3), and the only
    * stored field any routing or display decision reads. NULL reads as
    * `'moderated'`. Read it through `getConciergeState`
    * (`lib/services/dangerous-content/chat-override.ts`), write it only through
-   * `applyConciergeFlip` (`manual-flip.ts`). `conciergeOverride` above is
-   * legacy — no longer written, kept so an old row or bundle can be derived.
+   * `applyConciergeFlip` (`manual-flip.ts`). The legacy `conciergeOverride`
+   * column was dropped in 4.10 (`drop-chat-concierge-override-v1`); old
+   * bundles and backups that still carry it are derived through
+   * `withConciergeModeFromLegacy` before the row reaches this schema.
    */
   conciergeMode: ConciergeModeSchema.nullable().optional(),
   /** Who put the chat in its current `conciergeMode`; NULL when Moderated by default. */
@@ -1337,26 +1325,14 @@ export const ChatMetadataBaseSchema = z.object({
   /** Message count at which danger was last classified (to detect changes for re-check) */
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
-   * LEGACY (phase 3 stopped writing it; see `conciergeMode`). Per-chat
-   * Concierge mode override. NULL means follow the global Concierge
-   * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
-   * Vouched Safe: the operator vouches for the chat, disabling every
-   * Concierge effect (no classification, no scanning, no uncensored reroute,
-   * no synthetic Concierge messages) while the ordinary providers still
-   * apply. 'UNCENSORED' is the operator's own assertion that the chat is
-   * spicy: every uncensored route the Flagged state takes, with zero
-   * classification and zero danger styling. Both operator states preserve
-   * `isDangerousChat` underneath so returning to Monitored/Flagged picks up
-   * where the classifier left off.
-   */
-  conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
-  /**
    * The chat's Concierge posture (Concierge overhaul phase 3), and the only
    * stored field any routing or display decision reads. NULL reads as
    * `'moderated'`. Read it through `getConciergeState`
    * (`lib/services/dangerous-content/chat-override.ts`), write it only through
-   * `applyConciergeFlip` (`manual-flip.ts`). `conciergeOverride` above is
-   * legacy — no longer written, kept so an old row or bundle can be derived.
+   * `applyConciergeFlip` (`manual-flip.ts`). The legacy `conciergeOverride`
+   * column was dropped in 4.10 (`drop-chat-concierge-override-v1`); old
+   * bundles and backups that still carry it are derived through
+   * `withConciergeModeFromLegacy` before the row reaches this schema.
    */
   conciergeMode: ConciergeModeSchema.nullable().optional(),
   /** Who put the chat in its current `conciergeMode`; NULL when Moderated by default. */

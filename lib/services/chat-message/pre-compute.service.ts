@@ -41,7 +41,7 @@ import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { ChatEvent } from '@/lib/schemas/chat.types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger = createServiceLogger('PreContextPreCompute')
 
@@ -66,7 +66,7 @@ export interface RunPreContextPreComputeOptions {
   compressionEnabled: boolean
   bypassCompression: boolean
   cheapLLMSelection: CheapLLMSelection | null
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   allProfiles: ConnectionProfile[]
   controller: ReadableStreamDefaultController<Uint8Array>
   encoder: TextEncoder
@@ -190,7 +190,7 @@ async function proactiveRecallTask(
   const {
     chatId, userId, chat, character, characterParticipant,
     presentAboutCharacterIds, isContinueMode, content, existingMessages,
-    cheapLLMSelection, dangerSettings, allProfiles,
+    cheapLLMSelection, conciergePolicy, allProfiles,
     controller, encoder,
   } = opts
 
@@ -237,13 +237,13 @@ async function proactiveRecallTask(
 
   // For dangerous chats, use uncensored provider for keyword extraction.
   // Gate on the canonical accessor so an Off-duty chat never reroutes here,
-  // independent of how `dangerSettings` was resolved upstream.
+  // independent of how `conciergePolicy` was resolved upstream.
   let recallSelection = cheapLLMSelection
   if (shouldUseUncensoredRoute(chat)) {
     recallSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,
-      dangerSettings,
+      conciergePolicy,
       allProfiles
     )
   }

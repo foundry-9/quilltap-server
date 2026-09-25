@@ -17,7 +17,7 @@ import {
   resolveUserCharacterParticipant,
   type TurnTranscript,
 } from '@/lib/services/chat-message/turn-transcript';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
@@ -91,7 +91,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   }
 
   const availableProfiles = await repos.connections.findByUserId(job.userId);
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   // Orienting context (background only, never a memory source): the project's
@@ -147,7 +147,7 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
     connectionProfile,
     cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
-    dangerSettings,
+    conciergePolicy,
     isDangerousChat: shouldUseUncensoredRoute(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,

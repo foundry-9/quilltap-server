@@ -1,7 +1,7 @@
 /**
  * A thrown text refusal reroutes like an empty one (Concierge overhaul, phase
  * 1): the refusal is recorded on the trail as a refusal, the uncensored
- * understudy is asked under Auto-Route, and only then the profile's chain —
+ * understudy is asked when the Concierge policy allows failover, and only then the profile's chain —
  * cleared for the content.
  */
 
@@ -31,8 +31,10 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 }))
 
 const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+const mockReadCurrentConciergeOnDuty = jest.fn(async (_userId: unknown, snapshot: boolean) => snapshot)
 jest.mock('@/lib/services/dangerous-content/current-state', () => ({
   readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+  readCurrentConciergeOnDuty: (userId: unknown, snapshot: boolean) => mockReadCurrentConciergeOnDuty(userId, snapshot),
 }))
 
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
@@ -46,7 +48,7 @@ const { buildRouteTrail } =
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { StreamingState } from '@/lib/services/chat-message/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { resolveConciergeSettings, type ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 function makeProfile(overrides: Partial<ConnectionProfile> = {}): ConnectionProfile {
   return {
@@ -90,13 +92,16 @@ function answering(text: string) {
   }
 }
 
-const autoRoute = { mode: 'AUTO_ROUTE' } as DangerousContentSettings
+/** On duty, Moderated: a refusal may fail over to the uncensored desk. */
+const autoRoute = resolveConciergeSettings({ conciergeSettings: { enabled: true } } as any)
+/** Off duty: no failover. */
+const offDuty = resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any)
 
-function opts(state: StreamingState, profiles: ConnectionProfile[], error: unknown, dangerSettings?: DangerousContentSettings) {
+function opts(state: StreamingState, profiles: ConnectionProfile[], error: unknown, conciergePolicy?: ResolvedConciergePolicy) {
   return {
     state,
     error,
-    dangerSettings,
+    conciergePolicy,
     repos: makeRepos(profiles),
     context: {
       userId: 'u1', purpose: 'chat' as const, dangerous: false,
@@ -188,11 +193,22 @@ describe('attemptHardErrorFailover — thrown refusals', () => {
     }))
   })
 
-  it('does not ask the uncensored desk outside Auto-Route', async () => {
+  it('does not ask the uncensored desk when the Concierge was sent off duty mid-turn', async () => {
+    const primary = makeProfile()
+    const state = makeState(primary)
+    mockReadCurrentConciergeOnDuty.mockResolvedValueOnce(false)
+
+    await attemptHardErrorFailover(opts(state, [primary], policyError(), autoRoute))
+
+    expect(mockReadCurrentConciergeOnDuty).toHaveBeenCalledWith('u1', true)
+    expect(mockResolveUnderstudy).not.toHaveBeenCalled()
+  })
+
+  it('does not ask the uncensored desk when the policy does not allow failover', async () => {
     const primary = makeProfile()
     const state = makeState(primary)
 
-    await attemptHardErrorFailover(opts(state, [primary], policyError(), { mode: 'DETECT_ONLY' } as DangerousContentSettings))
+    await attemptHardErrorFailover(opts(state, [primary], policyError(), offDuty))
 
     expect(mockResolveUnderstudy).not.toHaveBeenCalled()
     expect(state.routeFailures[0]).toMatchObject({ outcome: 'refused', trigger: 'moderation-refusal' })
@@ -213,7 +229,7 @@ describe('attemptHardErrorFailover — thrown refusals', () => {
     }))
   })
 
-  it('never asks the uncensored desk on a Locked chat, even under Auto-Route, and says why', async () => {
+  it('never asks the uncensored desk on a Locked chat, even with the Concierge on duty, and says why', async () => {
     const primary = makeProfile()
     const state = makeState(primary)
 

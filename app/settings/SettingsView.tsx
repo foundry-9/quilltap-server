@@ -10,6 +10,7 @@ import { ChatTabContent } from '@/components/settings/tabs/ChatTabContent'
 import { AppearanceTabContent } from '@/components/settings/tabs/AppearanceTabContent'
 import { MemorySearchTabContent } from '@/components/settings/tabs/MemorySearchTabContent'
 import { ImagesTabContent } from '@/components/settings/tabs/ImagesTabContent'
+import { ConciergeTabContent } from '@/components/settings/tabs/ConciergeTabContent'
 import { TemplatesPromptsTabContent } from '@/components/settings/tabs/TemplatesPromptsTabContent'
 import { DataSystemTabContent } from '@/components/settings/tabs/DataSystemTabContent'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
@@ -21,6 +22,7 @@ import type { SubsystemId } from '@/lib/foundry/subsystem-defaults'
 const TAB_SUBSYSTEM_MAP: Record<string, SubsystemId> = {
   providers: 'forge',
   chat: 'salon',
+  concierge: 'concierge',
   appearance: 'calliope',
   memory: 'commonplace-book',
   images: 'lantern',
@@ -31,6 +33,7 @@ const TAB_SUBSYSTEM_MAP: Record<string, SubsystemId> = {
 const SETTINGS_TABS: Tab[] = [
   { id: 'providers', label: 'AI Providers', icon: <Icon name="wrench" className="w-4 h-4" /> },
   { id: 'chat', label: 'Chat', icon: <Icon name="chat" className="w-4 h-4" /> },
+  { id: 'concierge', label: 'The Concierge', icon: <Icon name="shield" className="w-4 h-4" /> },
   { id: 'appearance', label: 'Appearance', icon: <Icon name="themes" className="w-4 h-4" /> },
   { id: 'memory', label: 'Commonplace Book', icon: <Icon name="book" className="w-4 h-4" /> },
   { id: 'images', label: 'Images', icon: <Icon name="image" className="w-4 h-4" /> },
@@ -44,6 +47,8 @@ function SettingsTabContent({ activeTab }: { activeTab: string }) {
       return <ProvidersTabContent />
     case 'chat':
       return <ChatTabContent />
+    case 'concierge':
+      return <ConciergeTabContent />
     case 'appearance':
       return <AppearanceTabContent />
     case 'memory':

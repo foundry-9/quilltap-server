@@ -552,8 +552,8 @@ describe('RecentChatItem — the Concierge mark', () => {
   })
 
   it.each([
-    ['unmoderated', 'Concierge: Unmoderated', ['qt-concierge-mark-muted', 'qt-concierge-mark-info']],
-    ['locked', 'Concierge: Locked', ['qt-concierge-mark-info']],
+    ['unmoderated', 'Concierge: Unmoderated', ['qt-concierge-mark-muted']],
+    ['locked', 'Concierge: Locked', [] as string[]],
   ] as const)('marks a %s chat and labels it "%s"', (conciergeState, label, absentModifiers) => {
     const { container } = render(
       <RecentChatItem chat={createMockRecentChat({ conciergeState })} />

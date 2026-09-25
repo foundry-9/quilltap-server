@@ -24,7 +24,7 @@ import {
   triggerContextSummaryCheck,
   type MemoryChatSettings,
 } from '@/lib/services/chat-message/memory-trigger.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import {
   saveImageToAlbum,
   SaveImageToAlbumError,
@@ -177,10 +177,10 @@ async function handleResolveExternalTurn(
     }
 
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
+    const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings?.cheapLLMSettings,
-      dangerSettings,
+      conciergePolicy,
       isDangerousChat: chat.isDangerousChat === true,
     };
 

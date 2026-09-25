@@ -23,7 +23,7 @@ import { imageQualitySchema } from '@/lib/image-gen/quality';
 import { successResponse, badRequest, serverError } from '@/lib/api/responses';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -218,17 +218,45 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       error: getErrorMessage(error),
     });
   }
-  const dangerSettings = resolveDangerousContentSettings(chatSettings ?? null, chatForConcierge).settings;
-  logger.debug('[Images v1] Generate: resolved Concierge settings', {
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chatForConcierge);
+  logger.debug('[Images v1] Generate: resolved Concierge policy', {
     chatId: chatId ?? null,
-    mode: dangerSettings.mode,
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    preScreen: conciergePolicy.preScreen.enabled,
     withChat: !!chatForConcierge,
   });
 
-  // the Concierge integration: classify prompt and potentially reroute provider
+  // the Concierge integration: route an Unmoderated chat direct, or classify
+  // the prompt and potentially reroute the provider
   try {
+      if (conciergePolicy.routeDirect) {
+        // The verdict is already in — no pre-screen to wait on.
+        const direct = await resolveUncensoredTextUnderstudy({
+          userId: user.id,
+          conciergePolicy,
+          exclude: [profile.id],
+          filter: (candidate) => supportsImageGeneration(candidate.provider),
+        });
+        if (direct) {
+          logger.info('[Images v1] Unmoderated chat routed direct to uncensored connection profile', {
+            userId: user.id,
+            chatId: chatId ?? null,
+            originalProfileId: profileId,
+            uncensoredProfileId: direct.profile.id,
+            uncensoredProfileName: direct.profile.name,
+          });
+          profile = direct.profile;
+        } else {
+          logger.debug('[Images v1] Unmoderated chat has no uncensored image-capable profile; using original', {
+            userId: user.id,
+            chatId: chatId ?? null,
+          });
+        }
+      }
 
-      if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
+
+      if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts) {
         // Build cheap LLM selection for classification
         const allProfiles = await repos.connections.findByUserId(user.id);
         const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
@@ -251,7 +279,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
             prompt,
             cheapLLMSelection,
             user.id,
-            dangerSettings
+            conciergePolicy
           );
 
           if (classification.isDangerous) {
@@ -259,11 +287,11 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
               userId: user.id,
               score: classification.score,
               categories: classification.categories.map(c => c.category),
-              mode: dangerSettings.mode,
+              conciergeSource: conciergePolicy.source,
             });
 
-            // If AUTO_ROUTE, try to find an uncensored provider
-            if (dangerSettings.mode === 'AUTO_ROUTE') {
+            // Where failover is allowed, try to find an uncensored provider
+            if (conciergePolicy.failoverAllowed) {
               const uncensoredProfile = allProfiles.find(
                 (p: any) => p.isDangerousCompatible === true && p.id !== profile.id
               );
@@ -344,13 +372,13 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
       userId: user.id,
       chatId: chatId ?? null,
       purpose: 'dialog',
-      settings: dangerSettings,
+      conciergePolicy,
       chat: chatForConcierge,
       profileKind: 'connection',
       primaryVia: profile.id !== profileId ? 'concierge' : 'primary',
       resolveUnderstudy: (exclude) => resolveUncensoredTextUnderstudy({
         userId: user.id,
-        settings: dangerSettings,
+        conciergePolicy,
         exclude,
         filter: (candidate) => supportsImageGeneration(candidate.provider),
       }),

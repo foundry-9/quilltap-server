@@ -87,7 +87,7 @@ export async function finalizeMessageResponse({
 }: FinalizeMessageResponseOptions): Promise<ProcessMessageResult> {
   const { fullResponse, effectiveProfile, usage, cacheUsage, attachmentResults, rawResponse, thoughtSignature, reasoningContent, reasoningSegments } = streaming
   const { existingMessages, content, builtContext, compressionEnabled, cheapLLMSelection, contextCompressionSettings, allProfiles } = compression
-  const { dangerSettings, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
+  const { conciergePolicy, chatSettings, participantCharacters, resolvedIdentity, userCharacterId } = triggers
   const normalizedResponse = normalizeContentBlockFormat(fullResponse)
   const leadingStripped = stripCharacterNamePrefix(normalizedResponse, character.name, character.aliases)
 
@@ -216,7 +216,7 @@ export async function finalizeMessageResponse({
     globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true,
     cheapLLMSelection,
     connectionProfile,
-    dangerSettings,
+    conciergePolicy,
     allProfiles,
     onConfirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
       stage: 'confirming',
@@ -354,7 +354,7 @@ export async function finalizeMessageResponse({
         userId,
         characterName: character.name,
         userName: 'User',
-        dangerSettings,
+        conciergePolicy,
         availableProfiles: allProfiles,
       },
     })
@@ -496,7 +496,7 @@ export async function finalizeMessageResponse({
   if (chatSettings) {
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
-      dangerSettings,
+      conciergePolicy,
       isDangerousChat: shouldUseUncensoredRoute(chat),
     }
 
@@ -558,7 +558,7 @@ export async function finalizeMessageResponse({
       connectionProfile,
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
-        dangerSettings,
+        conciergePolicy,
         isDangerousChat: shouldUseUncensoredRoute(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),

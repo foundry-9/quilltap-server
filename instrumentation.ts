@@ -809,6 +809,8 @@ export async function register() {
         const { scheduleMaintenance } = await import('./lib/background-jobs/scheduled-maintenance');
         scheduleMaintenance();
 
+        // Opt-in: starts only when some user has the Concierge on duty with
+        // summary classification switched on (Settings → The Concierge).
         const { scheduleDangerScan } = await import('./lib/background-jobs/scheduled-danger-scan');
         await scheduleDangerScan();
 

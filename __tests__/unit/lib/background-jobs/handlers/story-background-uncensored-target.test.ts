@@ -7,12 +7,13 @@
  * a sheet draped over it.
  *
  * Also locks the moderation-reroute path. Since the Concierge overhaul (phase
- * 1) a refused background is retried once on an uncensored understudy under
- * Auto-Route in any chat state but Locked — the old bug-133 gate that barred a
- * Moderated chat is gone — but the prompt is never re-crafted: a moderated chat's
- * concealed prompt is resent concealed, and an Unmoderated chat's candid prompt is
- * resent as-is. Under Detect Only nothing reroutes and the prompt stays
- * concealed even for an Unmoderated chat, and the Concierge says why.
+ * 1) a refused background is retried once on an uncensored understudy while
+ * the Concierge is on duty, in any chat state but Locked — the old bug-133
+ * gate that barred a Moderated chat is gone — but the prompt is never
+ * re-crafted: a moderated chat's concealed prompt is resent concealed, and an
+ * Unmoderated chat's candid prompt is resent as-is. With the Concierge off
+ * duty nothing reroutes and the prompt stays concealed even for an
+ * Unmoderated chat, and the Concierge says why.
  *
  * Scaffolding mirrors story-background-sha256.test.ts: subject import first,
  * bare jest.mock() factories, behaviour wired in beforeEach.
@@ -22,7 +23,7 @@ import { handleStoryBackgroundGeneration } from '@/lib/background-jobs/handlers/
 import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
@@ -50,7 +51,8 @@ jest.mock('@/lib/logger', () => {
 jest.mock('@/lib/llm/plugin-factory', () => ({ createImageProvider: jest.fn() }))
 jest.mock('@/lib/files/webp-conversion', () => ({ convertToWebP: jest.fn() }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
+  ...jest.requireActual('@/lib/services/dangerous-content/resolver.service'),
+  resolveConciergeSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   // The real derivation and failover gates (anything but Locked may fail
@@ -99,7 +101,22 @@ const CANDID_PROMPT = 'a shuttered bedroom, a woman lying nude in tousled sheets
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
-const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
+const mockResolveDanger = jest.mocked(resolveConciergeSettings)
+
+const actualResolver = jest.requireActual(
+  '@/lib/services/dangerous-content/resolver.service',
+) as typeof import('@/lib/services/dangerous-content/resolver.service')
+
+/** A real policy, from the real resolver, for the given global settings and chat state. */
+function policyFor(
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked',
+  settings: Record<string, unknown> = {},
+) {
+  return actualResolver.resolveConciergeSettings(
+    { conciergeSettings: { ...actualResolver.DEFAULT_CONCIERGE_SETTINGS, ...settings } } as never,
+    { conciergeMode },
+  )
+}
 const mockShouldUseUncensoredRoute = jest.mocked(shouldUseUncensoredRoute)
 const mockGetCheapLLM = jest.mocked(getCheapLLMProvider)
 const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelection)
@@ -162,13 +179,9 @@ function craftTargetFlag(call = 0): boolean | undefined {
 /** Wire the Concierge to a dangerous chat, with or without an uncensored image profile. */
 function markDangerous(withUncensoredImageProfile: boolean) {
   mockShouldUseUncensoredRoute.mockReturnValue(true)
-  mockResolveDanger.mockReturnValue({
-    settings: {
-      mode: 'AUTO_ROUTE',
-      scanImagePrompts: true,
-      uncensoredImageProfileId: withUncensoredImageProfile ? 'uncensored-image-profile' : null,
-    },
-  } as never)
+  mockResolveDanger.mockReturnValue(policyFor('unmoderated', {
+    uncensoredImageProfileId: withUncensoredImageProfile ? 'uncensored-image-profile' : null,
+  }))
   // Dangerous chats swap the cheap LLM for the uncensored text profile.
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)
 }
@@ -212,7 +225,7 @@ beforeEach(() => {
     files: { create: jest.fn().mockResolvedValue({ id: 'file-1' }) },
   } as never)
 
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as never)
+  mockResolveDanger.mockReturnValue(policyFor('moderated', { enabled: false }))
   mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockGetCheapLLM.mockReturnValue(SELECTION)
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)
@@ -267,15 +280,14 @@ describe('story-background handler — uncensoredImageTarget', () => {
     expect(craftTargetFlag()).toBe(true)
   })
 
-  it('crafts candidly for an operator-Unmoderated chat even under a global OFF (real predicate + resolver)', async () => {
+  it('crafts candidly for an operator-Unmoderated chat with the pre-screen off (real predicate + resolver)', async () => {
     // The regression that motivated the operator's own state control: the operator
-    // asserts the chat spicy, the global Concierge mode is OFF, and the
-    // prompt must still go out candid and bound for the uncensored profile —
-    // with every scan disabled (nothing left to classify).
+    // asserts the chat spicy, the pre-screen is off, and the prompt must still
+    // go out candid and bound for the uncensored profile — with every scan
+    // disabled (nothing left to classify).
     const actualOverride = jest.requireActual('@/lib/services/dangerous-content/chat-override')
-    const actualResolver = jest.requireActual('@/lib/services/dangerous-content/resolver.service')
     mockShouldUseUncensoredRoute.mockImplementation(actualOverride.shouldUseUncensoredRoute)
-    mockResolveDanger.mockImplementation(actualResolver.resolveDangerousContentSettings)
+    mockResolveDanger.mockImplementation(actualResolver.resolveConciergeSettings)
 
     const repos = mockGetRepositories() as never as {
       chats: { findById: jest.Mock }
@@ -287,14 +299,8 @@ describe('story-background handler — uncensoredImageTarget', () => {
       conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', isDangerousChat: false,
     })
     repos.chatSettings.findByUserId.mockResolvedValue({
-      dangerousContentSettings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
+      conciergeSettings: {
+        ...actualResolver.DEFAULT_CONCIERGE_SETTINGS,
         uncensoredImageProfileId: 'uncensored-image-profile',
       },
     })
@@ -302,15 +308,41 @@ describe('story-background handler — uncensoredImageTarget', () => {
     await handleStoryBackgroundGeneration(makeJob())
 
     expect(craftTargetFlag()).toBe(true)
-    // The resolver's settings actually reached the handler with the forced
-    // AUTO_ROUTE and every scan off.
-    const resolved = mockResolveDanger.mock.results[0].value as {
-      settings: { mode: string; scanImagePrompts: boolean }
-      source: string
-    }
+    // The resolver's policy actually reached the handler routing direct,
+    // with every scan off.
+    const resolved = mockResolveDanger.mock.results[0].value as ReturnType<typeof resolveConciergeSettings>
     expect(resolved.source).toBe('chat-unmoderated')
-    expect(resolved.settings.mode).toBe('AUTO_ROUTE')
-    expect(resolved.settings.scanImagePrompts).toBe(false)
+    expect(resolved.routeDirect).toBe(true)
+    expect(resolved.preScreen.scanImagePrompts).toBe(false)
+  })
+
+  it('conceals even an Unmoderated chat while the Concierge is off duty (real predicate + resolver)', async () => {
+    const actualOverride = jest.requireActual('@/lib/services/dangerous-content/chat-override')
+    mockShouldUseUncensoredRoute.mockImplementation(actualOverride.shouldUseUncensoredRoute)
+    mockResolveDanger.mockImplementation(actualResolver.resolveConciergeSettings)
+
+    const repos = mockGetRepositories() as never as {
+      chats: { findById: jest.Mock }
+      chatSettings: { findByUserId: jest.Mock }
+    }
+    repos.chats.findById.mockResolvedValue({
+      id: CHAT_ID, projectId: null, title: 'The Morning After',
+      sceneState: null, messageCount: 0, contextSummary: null,
+      conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', isDangerousChat: false,
+    })
+    repos.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: {
+        ...actualResolver.DEFAULT_CONCIERGE_SETTINGS,
+        enabled: false,
+        uncensoredImageProfileId: 'uncensored-image-profile',
+      },
+    })
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag()).toBe(false)
+    const resolved = mockResolveDanger.mock.results[0].value as ReturnType<typeof resolveConciergeSettings>
+    expect(resolved.source).toBe('off-duty')
   })
 })
 
@@ -380,10 +412,8 @@ describe('story-background handler — moderation reroute', () => {
     return (first.generateImage.mock.calls[0][0] as { prompt: string }).prompt
   }
 
-  it('reroutes a Moderated chat under Auto-Route, resending the concealed prompt unchanged', async () => {
-    mockResolveDanger.mockReturnValue({
-      settings: { mode: 'AUTO_ROUTE', scanImagePrompts: false, uncensoredImageProfileId: null },
-    } as never)
+  it('reroutes a Moderated chat while the Concierge is on duty, resending the concealed prompt unchanged', async () => {
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
     rejectThenReroute()
 
     await handleStoryBackgroundGeneration(makeJob())
@@ -410,18 +440,19 @@ describe('story-background handler — moderation reroute', () => {
     expect(repos.files.create.mock.calls[0][0]).toMatchObject({ generationModel: 'uncensored-model' })
   })
 
-  it('does not reroute under Detect Only, keeps even an Unmoderated chat\'s prompt concealed, and says why', async () => {
+  it('does not reroute while the Concierge is off duty, keeps even an Unmoderated chat\'s prompt concealed, and says why', async () => {
     mockShouldUseUncensoredRoute.mockReturnValue(true)
-    mockResolveDanger.mockReturnValue({
-      settings: { mode: 'DETECT_ONLY', scanImagePrompts: true, uncensoredImageProfileId: 'uncensored-image-profile' },
-    } as never)
+    mockResolveDanger.mockReturnValue(policyFor('unmoderated', {
+      enabled: false,
+      uncensoredImageProfileId: 'uncensored-image-profile',
+    }))
     rejectThenReroute()
 
     await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(/Image generation failed/)
 
     expect(craftTargetFlag(0)).toBe(false)
     expect(mockResolveReroute).not.toHaveBeenCalled()
-    expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-not-permitted' }))
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
   })
 
   it('fails the job, and says so, when there is no uncensored understudy', async () => {
@@ -451,8 +482,24 @@ describe('story-background handler — moderation reroute', () => {
     expect(sent.prompt).toContain(CANDID_PROMPT)
   })
 
+  it('sends an Unmoderated chat straight to the uncensored desk: the ordinary painter never sees the candid prompt', async () => {
+    markDangerous(true)
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
+    mockCraftPrompt.mockResolvedValue({ success: true, result: CANDID_PROMPT } as never)
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    // One provider built, and it is the desk's — no refusal needed to get there.
+    expect(mockCreateImageProvider).toHaveBeenCalledTimes(1)
+    const first = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    const [params, key] = first.generateImage.mock.calls[0] as [{ prompt: string; model?: string }, string]
+    expect(key).toBe('sk-uncensored')
+    expect(params.prompt).toContain(CANDID_PROMPT)
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+  })
+
   it('leaves a non-moderation failure alone: no reroute, no announcement', async () => {
-    mockResolveDanger.mockReturnValue({ settings: { mode: 'AUTO_ROUTE', scanImagePrompts: false } } as never)
+    mockResolveDanger.mockReturnValue(policyFor('moderated'))
     mockCreateImageProvider.mockImplementation(() => ({
       generateImage: jest.fn().mockRejectedValue(new Error('429 Too Many Requests')),
     }) as never)

@@ -1,4 +1,12 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+
+/** The Concierge on duty with a Moderated chat: a refusal may fail over. */
+const failoverPolicy = (uncensoredTextProfileId: string) =>
+  resolveConciergeSettings({ conciergeSettings: { enabled: true, uncensoredTextProfileId } } as any)
+/** The Concierge off duty: no failover at all. */
+const offDutyPolicy = (uncensoredTextProfileId?: string) =>
+  resolveConciergeSettings({ conciergeSettings: { enabled: false, uncensoredTextProfileId } } as any)
 
 const mockStreamMessage = jest.fn()
 const mockResolveUncensoredTextUnderstudy = jest.fn()
@@ -38,8 +46,10 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 
 const mockPostConciergeRefusalAnnouncement = jest.fn(async (_params: unknown) => null)
 const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+const mockReadCurrentConciergeOnDuty = jest.fn(async (_userId: unknown, snapshot: boolean) => snapshot)
 jest.mock('@/lib/services/dangerous-content/current-state', () => ({
   readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+  readCurrentConciergeOnDuty: (userId: unknown, snapshot: boolean) => mockReadCurrentConciergeOnDuty(userId, snapshot),
 }))
 
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
@@ -123,7 +133,7 @@ describe('provider-failover.service', () => {
       state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: false,
-      dangerSettings: { mode: 'OFF', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: offDutyPolicy('unc-1'),
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -184,7 +194,7 @@ describe('provider-failover.service', () => {
       state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: false,
-      dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: failoverPolicy('unc-1'),
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -224,7 +234,7 @@ describe('provider-failover.service', () => {
       state,
       toolMessagesLength: 0,
       contentWasFlaggedDangerous: true,
-      dangerSettings: { mode: 'DETECT_ONLY', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: offDutyPolicy('unc-1'),
       connectionProfile: baseProfile,
       formattedMessages: [{ role: 'user', content: 'Hello' }],
       modelParams: {},
@@ -321,7 +331,7 @@ describe('provider-failover.service', () => {
         state,
         toolMessagesLength: 0,
         contentWasFlaggedDangerous: false,
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-text' } as any,
+        conciergePolicy: failoverPolicy('unc-text'),
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
@@ -358,7 +368,7 @@ describe('provider-failover.service', () => {
         state: freshState(),
         toolMessagesLength: 0,
         contentWasFlaggedDangerous: false,
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-text' } as any,
+        conciergePolicy: failoverPolicy('unc-text'),
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
@@ -401,7 +411,7 @@ describe('provider-failover.service', () => {
         state: freshState(),
         toolMessagesLength: 0,
         contentWasFlaggedDangerous: false,
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-vision' } as any,
+        conciergePolicy: failoverPolicy('unc-vision'),
         connectionProfile: visionPrimary,
         formattedMessages: messagesWithImage(),
         modelParams: {},
@@ -477,7 +487,7 @@ describe('provider-failover.service — the route trail', () => {
     state,
     toolMessagesLength: 0,
     contentWasFlaggedDangerous: false,
-    dangerSettings: { mode: 'OFF', uncensoredTextProfileId: 'unc-1' } as any,
+    conciergePolicy: offDutyPolicy('unc-1'),
     connectionProfile: baseProfile,
     formattedMessages: [{ role: 'user', content: 'Hello' }],
     modelParams: {},
@@ -538,7 +548,7 @@ describe('provider-failover.service — the route trail', () => {
 
     await recover(state, {
       contentWasFlaggedDangerous: true,
-      dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: failoverPolicy('unc-1'),
     })
 
     expect(state.routeVia).toBe('concierge')
@@ -565,7 +575,7 @@ describe('provider-failover.service — the route trail', () => {
     const state = freshState()
 
     await recover(state, {
-      dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+      conciergePolicy: failoverPolicy('unc-1'),
     })
 
     // The existing code never swaps `effectiveProfile` for an uncensored
@@ -582,7 +592,7 @@ describe('provider-failover.service — the route trail', () => {
     mockIsModerationFinishReason.mockReturnValue(true)
     const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
 
-    await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+    await recover(state, { conciergePolicy: offDutyPolicy() })
 
     expect(state.routeFailures[0]).toMatchObject({
       outcome: 'refused',
@@ -610,7 +620,7 @@ describe('provider-failover.service — the route trail', () => {
       const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
 
       await recover(state, {
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+        conciergePolicy: failoverPolicy('unc-1'),
         conciergeState: 'locked',
       })
 
@@ -629,7 +639,7 @@ describe('provider-failover.service — the route trail', () => {
       const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
 
       await recover(state, {
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+        conciergePolicy: failoverPolicy('unc-1'),
         conciergeState: 'moderated',
       })
 
@@ -646,7 +656,7 @@ describe('provider-failover.service — the route trail', () => {
       const state = freshState()
 
       await recover(state, {
-        dangerSettings: { mode: 'AUTO_ROUTE', uncensoredTextProfileId: 'unc-1' } as any,
+        conciergePolicy: failoverPolicy('unc-1'),
         conciergeState: 'locked',
       })
 
@@ -660,7 +670,7 @@ describe('provider-failover.service — the route trail', () => {
       mockIsModerationFinishReason.mockReturnValue(true)
       const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
 
-      await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+      await recover(state, { conciergePolicy: offDutyPolicy() })
 
       expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
       expect(mockRecordModerationRefusal).toHaveBeenCalledWith(expect.objectContaining({
@@ -676,7 +686,7 @@ describe('provider-failover.service — the route trail', () => {
       ]))
       const state = freshState()
 
-      await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+      await recover(state, { conciergePolicy: offDutyPolicy() })
 
       expect(state.routeFailures.map((a: any) => [a.via, a.outcome])).toEqual([
         ['primary', 'failed'],
@@ -692,7 +702,7 @@ describe('provider-failover.service — the route trail', () => {
       mockStreamMessage.mockReturnValueOnce(makeStream([{ done: true, rawResponse: null }]))
       const state = freshState()
 
-      await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+      await recover(state, { conciergePolicy: offDutyPolicy() })
 
       expect(mockRecordModerationRefusal).not.toHaveBeenCalled()
     })

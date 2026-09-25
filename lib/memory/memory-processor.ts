@@ -40,7 +40,8 @@ import { getCheapLLMProvider, CheapLLMConfig, CheapLLMSelection, resolveUncensor
 import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { ConnectionProfile, CheapLLMSettings, Character } from '@/lib/schemas/types'
 import type { Pronouns } from '@/lib/schemas/character.types'
-import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
+import type { MemoryExtractionLimits } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
 import { resolveEpisodicAnchors } from './episodic-anchors'
@@ -95,7 +96,7 @@ function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): Mem
 /**
  * Per-turn memory extraction context. The transcript carries everything the
  * extraction passes need; the rest is environment (cheap LLM selection,
- * danger settings, rate limits).
+ * Concierge policy, rate limits).
  */
 export interface TurnMemoryExtractionContext {
   transcript: TurnTranscript
@@ -126,7 +127,7 @@ export interface TurnMemoryExtractionContext {
   connectionProfile: ConnectionProfile
   cheapLLMSettings: CheapLLMSettings
   availableProfiles?: ConnectionProfile[]
-  dangerSettings?: DangerousContentSettings
+  conciergePolicy?: ResolvedConciergePolicy
   isDangerousChat?: boolean
   memoryExtractionLimits?: MemoryExtractionLimits
   /** Override the source-message timestamp on derived memories — used by batch re-extraction to backfill historical timing. */
@@ -390,13 +391,13 @@ export async function processTurnForMemory(
     selection = resolveUncensoredCheapLLMSelection(
       selection,
       ctx.isDangerousChat ?? false,
-      ctx.dangerSettings,
+      ctx.conciergePolicy,
       ctx.availableProfiles ?? []
     )
 
     const uncensoredFallback: UncensoredFallbackOptions | undefined =
-      ctx.dangerSettings && ctx.availableProfiles
-        ? { dangerSettings: ctx.dangerSettings, availableProfiles: ctx.availableProfiles }
+      ctx.conciergePolicy && ctx.availableProfiles
+        ? { conciergePolicy: ctx.conciergePolicy, availableProfiles: ctx.availableProfiles }
         : undefined
 
     const cheapMaxTokens = resolveMaxTokens(ctx.connectionProfile)

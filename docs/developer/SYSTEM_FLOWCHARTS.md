@@ -272,7 +272,7 @@ flowchart TD
         CS6 --> CS7[Save to chat.contextSummary]
         CS7 --> CS8[Update lastRenameCheckInterchange]
         CS8 --> CS9["Chain: title update job"]
-        CS8 --> CS10["Chain: CHAT_DANGER_CLASSIFICATION job"]
+        CS8 --> CS10["Chain: CHAT_DANGER_CLASSIFICATION job<br/><i>only when summaryClassification is on (opt-in)</i>"]
     end
 
     subgraph SceneState["Scene State Tracking Pipeline"]
@@ -403,10 +403,11 @@ Key files: `lib/services/chat-message/danger-orchestrator.service.ts`, `lib/serv
 
 ```mermaid
 flowchart TD
-    subgraph Modes["Operating Modes"]
-        M1["OFF: No scanning or routing"]
-        M2["DETECT_ONLY: Flag content, don't reroute"]
-        M3["AUTO_ROUTE: Flag AND reroute to<br/>uncensored provider"]
+    subgraph Policy["Concierge policy (resolveConciergeSettings)"]
+        M1["Off duty (conciergeSettings.enabled = false):<br/>no failover, no pre-screen, no auto-switch"]
+        M2["On duty, Moderated chat: failover on refusal;<br/>pre-screen below only if preScreen.enabled (opt-in)"]
+        M3["On duty, Unmoderated chat: routeDirect<br/>(uncensored desk, no classification)"]
+        M4["Locked chat: ordinary providers only"]
     end
 
     subgraph Classification["Content Classification"]
@@ -424,8 +425,8 @@ flowchart TD
         RESULT["Classification Result:<br/>isDangerous: boolean<br/>categories: nsfw, violence, hate_speech,<br/>self_harm, illegal_activity, disturbing<br/>scores: 0-1 per category"]
     end
 
-    subgraph Routing["Provider Routing (AUTO_ROUTE mode)"]
-        RESULT --> ROUTE{"isDangerous<br/>AND mode =<br/>AUTO_ROUTE?"}
+    subgraph Routing["Provider Routing (pre-screen flag)"]
+        RESULT --> ROUTE{"isDangerous<br/>AND failoverAllowed?"}
         ROUTE -->|No| ORIG[Use original provider]
         ROUTE -->|Yes| R1{"Explicit uncensored<br/>profile configured?"}
         R1 -->|Yes| R2[Use configured uncensored profile]
@@ -453,7 +454,7 @@ flowchart TD
 
     subgraph Background["Scheduled Background Scans"]
         BG["Scheduled danger scan<br/><i>Every 10 minutes</i>"]
-        BG --> BG1{"Any user has<br/>danger mode enabled?"}
+        BG --> BG1{"Any user opted into<br/>preScreen.summaryClassification?"}
         BG1 -->|No| BG2[Skip]
         BG1 -->|Yes| BG3[Find unclassified chats]
         BG3 --> BG4["Enqueue CHAT_DANGER_CLASSIFICATION<br/>jobs for each"]

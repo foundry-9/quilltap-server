@@ -1004,7 +1004,7 @@ exports[`tool definitions: derived OpenAI parameters helpNavigate: parameters sn
   "additionalProperties": false,
   "properties": {
     "url": {
-      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=chat&section=dangerous-content", "/settings?tab=appearance", "/aurora", "/salon"",
+      "description": "The internal Quilltap URL to navigate to. Must start with /. Examples: "/settings?tab=concierge&section=uncensored-desk", "/settings?tab=appearance", "/aurora", "/salon"",
       "minLength": 1,
       "type": "string",
     },
@@ -1046,10 +1046,11 @@ exports[`tool definitions: derived OpenAI parameters helpSettings: parameters sn
   "additionalProperties": false,
   "properties": {
     "category": {
-      "description": "Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, agent mode, and content settings. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.",
+      "description": "Which settings category to read. "overview" returns a high-level summary of all categories. "chat" returns token display, context compression, memory cascade, timestamps, and agent mode settings. "concierge" returns the Concierge settings: whether he is on duty, the uncensored desk profiles, the refusal auto-switch, display of flagged content, and the optional classifier pre-screen. "connections" returns configured LLM providers and models (API keys are never shown). "embeddings" returns embedding/memory search profiles. "images" returns image generation profiles and story background settings. "appearance" returns theme and avatar settings. "templates" returns roleplay templates. "system" returns plugin list and logging settings.",
       "enum": [
         "overview",
         "chat",
+        "concierge",
         "connections",
         "embeddings",
         "images",

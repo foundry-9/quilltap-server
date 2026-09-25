@@ -39,6 +39,8 @@ export function NewChatPageClient() {
     state,
     setState,
     handleCreateChat,
+    conciergeOnDuty,
+    conciergeDefaultState,
   } = useNewChat({
     initialCharacterId: characterIdParam,
     projectId: projectIdParam,
@@ -140,6 +142,8 @@ export function NewChatPageClient() {
             showSingleCharacterControls={false}
             autonomousSettingsHint={autonomousHint}
             onScenarioTiersChanged={refetchScenarioTiers}
+            conciergeOnDuty={conciergeOnDuty}
+            conciergeDefaultState={conciergeDefaultState}
           />
         </div>
 

@@ -28,7 +28,7 @@ import {
   recordModerationRefusal,
   type RefusalRecord,
 } from '@/lib/services/dangerous-content/refusal-ledger'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ConciergeSettings } from '@/lib/schemas/settings.types'
 
 const mockAnnounce = jest.mocked(postConciergeManualAnnouncement)
 const mockFlip = jest.mocked(applyConciergeFlip)
@@ -46,7 +46,7 @@ interface FakeChat {
 
 let chat: FakeChat
 let ledgerCount: number
-let dangerSettings: Partial<DangerousContentSettings>
+let conciergeSettings: Partial<ConciergeSettings>
 
 const chatsUpdate = jest.fn(async (_id: string, patch: Partial<FakeChat>) => {
   chat = { ...chat, ...patch }
@@ -78,7 +78,7 @@ function installRepos() {
     },
     chatSettings: {
       findByUserId: jest.fn(async () => ({
-        dangerousContentSettings: { mode: 'AUTO_ROUTE', autoSwitchAfterRefusals: 2, ...dangerSettings },
+        conciergeSettings: { enabled: true, autoSwitchAfterRefusals: 2, ...conciergeSettings },
       })),
     },
   } as never)
@@ -113,7 +113,7 @@ beforeEach(() => {
     chatType: 'salon',
   }
   ledgerCount = 0
-  dangerSettings = {}
+  conciergeSettings = {}
   installRepos()
 })
 
@@ -188,14 +188,14 @@ describe('recordModerationRefusal', () => {
   })
 
   it('never switches when N = 0', async () => {
-    dangerSettings = { autoSwitchAfterRefusals: 0 }
+    conciergeSettings = { autoSwitchAfterRefusals: 0 }
     for (let i = 0; i < 5; i++) await recordModerationRefusal(record())
     expect(ledgerCount).toBe(5)
     expect(chatsUpdate).not.toHaveBeenCalled()
   })
 
   it('honours a higher threshold', async () => {
-    dangerSettings = { autoSwitchAfterRefusals: 3 }
+    conciergeSettings = { autoSwitchAfterRefusals: 3 }
     await recordModerationRefusal(record())
     await recordModerationRefusal(record())
     expect(chatsUpdate).not.toHaveBeenCalled()
@@ -203,7 +203,7 @@ describe('recordModerationRefusal', () => {
   })
 
   it('defaults to 2 when the stored settings predate the key', async () => {
-    dangerSettings = { autoSwitchAfterRefusals: undefined }
+    conciergeSettings = { autoSwitchAfterRefusals: undefined }
     await recordModerationRefusal(record())
     expect((await recordModerationRefusal(record())).switched).toBe(true)
   })
@@ -228,8 +228,8 @@ describe('recordModerationRefusal', () => {
     expect(chat.conciergeMode).toBe('unmoderated')
   })
 
-  it('never switches under Detect Only', async () => {
-    dangerSettings = { mode: 'DETECT_ONLY' }
+  it('never switches while the Concierge is off duty', async () => {
+    conciergeSettings = { enabled: false }
     for (let i = 0; i < 3; i++) await recordModerationRefusal(record())
     expect(chatsUpdate).not.toHaveBeenCalled()
   })
@@ -272,7 +272,7 @@ describe('maybeAutoSwitchAfterRefusal', () => {
     // The operator locks the chat while the check reads the settings.
     repos.chatSettings.findByUserId.mockImplementationOnce(async () => {
       chat = { ...chat, conciergeMode: 'locked', conciergeModeSetBy: 'operator', conciergeModeReason: 'manual' }
-      return { dangerousContentSettings: { mode: 'AUTO_ROUTE', autoSwitchAfterRefusals: 2 } }
+      return { conciergeSettings: { enabled: true, autoSwitchAfterRefusals: 2 } }
     })
 
     expect(await maybeAutoSwitchAfterRefusal('chat-1', { provider: 'GOOGLE' })).toEqual({ switched: false })

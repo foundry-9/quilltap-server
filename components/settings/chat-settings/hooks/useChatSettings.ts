@@ -26,8 +26,9 @@ import {
   AgentModeSettings,
   DEFAULT_AGENT_MODE_SETTINGS,
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
-  DangerousContentSettings,
-  DEFAULT_DANGEROUS_CONTENT_SETTINGS,
+  ConciergeSettings,
+  ConciergeSettingsUpdate,
+  DEFAULT_CONCIERGE_SETTINGS,
   AutonomousRoomSettings,
   ThinkingDisplaySettings,
   DEFAULT_THINKING_DISPLAY_SETTINGS,
@@ -52,7 +53,6 @@ interface UseChatSettingsReturn {
   handleAvatarStyleChange: (style: AvatarDisplayStyle) => Promise<void>
   handleCheapLLMUpdate: (updates: Partial<CheapLLMSettings>) => Promise<void>
   handleImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
-  handleUncensoredImageDescriptionProfileChange: (profileId: string | null) => Promise<void>
   handleMemoryCascadeUpdate: (updates: Partial<MemoryCascadePreferences>) => Promise<void>
   handleTokenDisplayChange: (key: keyof TokenDisplaySettings, value: boolean) => Promise<void>
   handleContextCompressionUpdate: (updates: Partial<ContextCompressionSettings>) => Promise<void>
@@ -70,7 +70,7 @@ interface UseChatSettingsReturn {
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
-  handleDangerousContentUpdate: (updates: Partial<DangerousContentSettings>) => Promise<void>
+  handleConciergeUpdate: (updates: ConciergeSettingsUpdate) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
   handleThinkingDisplayUpdate: (updates: Partial<ThinkingDisplaySettings>) => Promise<void>
@@ -255,20 +255,6 @@ export function useChatSettings(): UseChatSettingsReturn {
         { imageDescriptionProfileId: profileId },
         'Failed to update settings',
         'Failed to update image description profile'
-      )
-    },
-    [patchChatSettings]
-  )
-
-  /**
-   * Update uncensored image description fallback profile
-   */
-  const handleUncensoredImageDescriptionProfileChange = useCallback(
-    async (profileId: string | null) => {
-      await patchChatSettings(
-        { uncensoredImageDescriptionProfileId: profileId },
-        'Failed to update settings',
-        'Failed to update uncensored image description profile'
       )
     },
     [patchChatSettings]
@@ -658,20 +644,29 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
-   * Update dangerous content settings
+   * Update the Concierge's settings. Top-level fields replace; `display` and
+   * `preScreen` deep-merge, so a card can send just the field it changed.
    * Uses settingsRef to prevent race conditions with concurrent updates
    */
-  const handleDangerousContentUpdate = useCallback(
-    async (updates: Partial<DangerousContentSettings>) => {
+  const handleConciergeUpdate = useCallback(
+    async (updates: ConciergeSettingsUpdate) => {
       // Use ref for latest state to prevent race conditions
       const latestSettings = settingsRef.current
       if (!latestSettings) return
 
-      const currentSettings = latestSettings.dangerousContentSettings || DEFAULT_DANGEROUS_CONTENT_SETTINGS
+      const current = latestSettings.conciergeSettings || DEFAULT_CONCIERGE_SETTINGS
+      const { display, preScreen, ...topLevel } = updates
+      const next: ConciergeSettings = {
+        ...DEFAULT_CONCIERGE_SETTINGS,
+        ...current,
+        ...topLevel,
+        display: { ...DEFAULT_CONCIERGE_SETTINGS.display, ...current.display, ...(display ?? {}) },
+        preScreen: { ...DEFAULT_CONCIERGE_SETTINGS.preScreen, ...current.preScreen, ...(preScreen ?? {}) },
+      }
       await patchChatSettings(
-        { dangerousContentSettings: { ...currentSettings, ...updates } },
-        'Failed to update dangerous content settings',
-        'Failed to update dangerous content settings'
+        { conciergeSettings: next },
+        "Failed to update the Concierge's settings",
+        'Failed to update Concierge settings'
       )
     },
     [patchChatSettings]
@@ -708,7 +703,6 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAvatarStyleChange,
     handleCheapLLMUpdate,
     handleImageDescriptionProfileChange,
-    handleUncensoredImageDescriptionProfileChange,
     handleMemoryCascadeUpdate,
     handleTokenDisplayChange,
     handleContextCompressionUpdate,
@@ -726,7 +720,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
-    handleDangerousContentUpdate,
+    handleConciergeUpdate,
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,

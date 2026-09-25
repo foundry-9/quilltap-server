@@ -23,7 +23,7 @@ import {
 } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createTitleGenerationEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
@@ -101,14 +101,14 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
     return;
   }
 
-  // For dangerous chats, use uncensored provider to avoid content refusals.
-  // Off-duty chats are explicitly opted out of uncensored routing.
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  // Unmoderated chats go to the uncensored desk to avoid content refusals
+  // (the policy's `routeDirect`); off duty or Locked, they never do.
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
   if (shouldUseUncensoredRoute(chat)) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,
-      dangerSettings,
+      conciergePolicy,
       availableProfiles
     );
   }

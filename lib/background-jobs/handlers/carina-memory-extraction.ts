@@ -21,7 +21,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
@@ -117,7 +117,7 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
   const participantCharacters = new Map<string, Character>([[answerer.id, answerer]]);
 
   const availableProfiles = await repos.connections.findByUserId(job.userId);
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   // Anchor derived memories to the carina message's own timestamp rather than
@@ -132,7 +132,7 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     connectionProfile,
     cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
-    dangerSettings,
+    conciergePolicy,
     isDangerousChat: shouldUseUncensoredRoute(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,

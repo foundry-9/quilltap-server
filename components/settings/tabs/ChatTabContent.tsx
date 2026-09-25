@@ -21,7 +21,6 @@ import { AgentModeSettings } from '@/components/settings/chat-settings/AgentMode
 import { ThinkingDisplaySettings } from '@/components/settings/chat-settings/ThinkingDisplaySettings'
 import { AnswerConfirmationSettings } from '@/components/settings/chat-settings/AnswerConfirmationSettings'
 import { SmartTypographySettings } from '@/components/settings/chat-settings/SmartTypographySettings'
-import { DangerousContentSettings } from '@/components/settings/chat-settings/DangerousContentSettings'
 import { DataRetentionSettings } from '@/components/settings/chat-settings/DataRetentionSettings'
 import { BrahmaConsoleSettings } from '@/components/settings/chat-settings/BrahmaConsoleSettings'
 import { TabooSettings } from '@/components/settings/chat-settings/TabooSettings'
@@ -37,7 +36,6 @@ export function ChatTabContent() {
     loading,
     saving,
     connectionProfiles,
-    imageProfiles,
     loadingProfiles,
     handleTokenDisplayChange,
     handleCompositionModeDefaultChange,
@@ -50,13 +48,10 @@ export function ChatTabContent() {
     handleContextCompressionUpdate,
     handleMemoryCascadeUpdate,
     handleImageDescriptionProfileChange,
-    handleUncensoredImageDescriptionProfileChange,
     handleAutoDetectRngChange,
     handleCustomToolsChange,
     handleAgentModeDefaultEnabledChange,
     handleAgentModeMaxTurnsChange,
-    handleDangerousContentUpdate,
-    handleCheapLLMUpdate,
     handleAutonomousRoomSettingsUpdate,
     handleThinkingDisplayUpdate,
     handleAnswerConfirmationUpdate,
@@ -166,7 +161,6 @@ export function ChatTabContent() {
             loadingProfiles={loadingProfiles}
             connectionProfiles={connectionProfiles}
             onProfileChange={handleImageDescriptionProfileChange}
-            onUncensoredProfileChange={handleUncensoredImageDescriptionProfileChange}
           />
         </CollapsibleCard>
 
@@ -212,19 +206,6 @@ export function ChatTabContent() {
             settings={settings}
             saving={saving}
             onUpdate={handleAnswerConfirmationUpdate}
-          />
-        </CollapsibleCard>
-
-        <CollapsibleCard title="Dangerous Content" description="Configure content detection, routing, and display behavior" sectionId="dangerous-content" forceOpen={activeSection === 'dangerous-content'}>
-          <DangerousContentSettings
-            settings={settings}
-            saving={saving}
-            connectionProfiles={connectionProfiles}
-            imageProfiles={imageProfiles}
-            loadingProfiles={loadingProfiles}
-            onUpdate={handleDangerousContentUpdate}
-            imagePromptProfileId={settings.cheapLLMSettings.imagePromptProfileId}
-            onImagePromptProfileChange={(id) => handleCheapLLMUpdate({ imagePromptProfileId: id })}
           />
         </CollapsibleCard>
 

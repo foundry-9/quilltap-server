@@ -26,8 +26,9 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge'
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
 
 jest.mock('@/lib/logger', () => {
   const makeLogger = () => ({
@@ -42,7 +43,11 @@ jest.mock('@/lib/wardrobe/avatar-prompt', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
+  resolveConciergeSettings: jest.fn(),
+}))
+
+jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
+  resolveImageProviderForDangerousContent: jest.fn(),
 }))
 
 jest.mock('@/lib/llm/plugin-factory', () => ({
@@ -72,7 +77,7 @@ const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
 const mockBuildPrompt = jest.mocked(buildCharacterAvatarPrompt)
-const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
+const mockResolveDanger = jest.mocked(resolveConciergeSettings)
 const mockWriteVault = jest.mocked(writeCharacterAvatarToVault)
 
 function makeJob() {
@@ -145,7 +150,7 @@ beforeEach(() => {
   } as any)
 
   // Dangerous-content scanning OFF → the entire classifier block is skipped.
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as any)
+  mockResolveDanger.mockReturnValue({ onDuty: false, state: 'moderated', failoverAllowed: false, routeDirect: false, preScreen: { enabled: false, threshold: 0.7, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null }, summaryClassification: false, autoSwitchAfterRefusals: 0, desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null }, display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'off-duty' } as any)
 
   mockCreateImageProvider.mockReturnValue({
     generateImage: jest.fn().mockResolvedValue({
@@ -240,5 +245,26 @@ describe('character-avatar handler — orientation + measured dimensions', () =>
     // No registry plugin in the unit env → host fallback (prompt hint, no size).
     expect(genArg.size).toBeUndefined()
     expect(genArg.prompt).toMatch(/portrait/i)
+  })
+
+  it('sends an Unmoderated chat straight to the uncensored desk before the call', async () => {
+    const desk = { id: 'desk-1', apiKeyId: 'key-2', modelName: 'desk-model', provider: 'grok', name: 'Kestrel Studio' }
+    mockResolveDanger.mockReturnValue({
+      onDuty: true, state: 'unmoderated', failoverAllowed: true, routeDirect: true,
+      preScreen: { enabled: false, threshold: 1, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null },
+      summaryClassification: false, autoSwitchAfterRefusals: 0,
+      desk: { textProfileId: null, imageProfileId: 'desk-1', visionProfileId: null, imagePromptProfileId: null },
+      display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'chat-unmoderated',
+    } as any)
+    jest.mocked(resolveImageProviderForDangerousContent).mockResolvedValue({
+      rerouted: true, imageProfile: desk, apiKey: 'sk-desk',
+    } as any)
+
+    await handleCharacterAvatarGeneration(makeJob())
+
+    expect(mockCreateImageProvider).toHaveBeenCalledTimes(1)
+    expect(mockCreateImageProvider).toHaveBeenCalledWith('grok')
+    const providerInstance = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    expect(providerInstance.generateImage.mock.calls[0][1]).toBe('sk-desk')
   })
 })

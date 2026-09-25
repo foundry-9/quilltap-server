@@ -268,13 +268,20 @@ Cast sizes:
 
 ### Feature Configuration
 
-#### The Concierge (Dangerous Content)
+#### The Concierge
 
-- **Mode**: AUTO_ROUTE
-- **Threshold**: 0.7
+- **On Duty**: Yes
+- **New Chats Start As**: moderated
+- **Auto-Switch After Refusals**: 2
+- **Display**: SHOW (warning badges: Yes)
+- **Uncensored Desk**: text pinned, image auto-detect, vision none, image-prompt crafter pinned
+- **Pre-Screen**: Yes
+- **Pre-Screen Threshold**: 0.7
 - **Scan Text Chat**: Yes
 - **Scan Image Prompts**: Yes
 - **Scan Image Generation**: No
+- **Custom Classification Prompt**: No
+- **Summary Classification**: Yes
 
 #### Context Compression
 

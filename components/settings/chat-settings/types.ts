@@ -3,7 +3,13 @@
  * Defines all TypeScript types and interfaces used in the chat settings module
  */
 
-import type { LLMLoggingSettings as LLMLoggingSettingsType, DangerousContentSettings as DangerousContentSettingsType } from '@/lib/schemas/settings.types'
+import type {
+  LLMLoggingSettings as LLMLoggingSettingsType,
+  ConciergeSettings as ConciergeSettingsType,
+  ConciergeDisplaySettings,
+  ConciergePreScreenSettings,
+} from '@/lib/schemas/settings.types'
+import { DEFAULT_CONCIERGE_SETTINGS as SERVER_DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service'
 
 export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
@@ -36,8 +42,6 @@ export interface CheapLLMSettings {
    */
   allowCheapFallback?: boolean
   embeddingProvider: EmbeddingProvider
-  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
-  imagePromptProfileId?: string | null
 }
 
 export interface TimestampConfig {
@@ -74,7 +78,6 @@ export interface ChatSettings {
   avatarDisplayStyle: AvatarDisplayStyle
   cheapLLMSettings: CheapLLMSettings
   imageDescriptionProfileId?: string | null
-  uncensoredImageDescriptionProfileId?: string | null
   defaultTimestampConfig?: TimestampConfig
   memoryCascadePreferences?: MemoryCascadePreferences
   tokenDisplaySettings?: TokenDisplaySettings
@@ -102,8 +105,8 @@ export interface ChatSettings {
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings?: StoryBackgroundsSettings
-  /** Dangerous content handling settings */
-  dangerousContentSettings?: DangerousContentSettings
+  /** The Concierge: failover, the uncensored desk, display, and the optional pre-screen */
+  conciergeSettings?: ConciergeSettings
   /** Default IANA timezone for timestamp formatting */
   timezone?: string | null
   /** 4.6 Private Character Rooms — user-level defaults */
@@ -524,21 +527,22 @@ export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
 }
 
 /**
- * Dangerous Content Settings
+ * The Concierge's settings.
  * Re-exported from schema types for use in chat settings components
  */
-export type DangerousContentSettings = DangerousContentSettingsType
+export type ConciergeSettings = ConciergeSettingsType
 
 /**
- * Default dangerous content settings
+ * A partial Concierge update: top-level fields replace, `display` and
+ * `preScreen` deep-merge (see `handleConciergeUpdate` in `useChatSettings`).
  */
-export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
-  mode: 'OFF',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-  autoSwitchAfterRefusals: 2,
-}
+export type ConciergeSettingsUpdate =
+  Partial<Omit<ConciergeSettings, 'display' | 'preScreen'>> & {
+    display?: Partial<ConciergeDisplaySettings>
+    preScreen?: Partial<ConciergePreScreenSettings>
+  }
+
+/**
+ * Default Concierge settings — the server's defaults, single-sourced.
+ */
+export const DEFAULT_CONCIERGE_SETTINGS: ConciergeSettings = SERVER_DEFAULT_CONCIERGE_SETTINGS

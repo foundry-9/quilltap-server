@@ -3,8 +3,8 @@
  *
  * One order for text and images alike:
  *
- *   1. the explicitly configured profile (`uncensoredTextProfileId` /
- *      `uncensoredImageProfileId`), if the user owns it, it is not excluded,
+ *   1. the explicitly configured profile (the policy's `desk.textProfileId` /
+ *      `desk.imageProfileId`), if the user owns it, it is not excluded,
  *      and its key decrypts;
  *   2. otherwise the user's `isDangerousCompatible` profiles not excluded
  *      (text: attachment-capable first), first with a usable key;
@@ -15,8 +15,8 @@
  * the Concierge picker on "Auto-detect" got pre-flight reroutes and never a
  * post-hoc one.
  *
- * **The resolver is not the policy.** It never reads `settings.mode` or any
- * chat state; it only says who *could* stand in. Every caller states its own
+ * **The resolver is not the policy.** It never reads `failoverAllowed`, `routeDirect`
+ * or any chat state; it only says who *could* stand in. Every caller states its own
  * gate, in code, where a reader can see it.
  *
  * Reads only — safe in the forked job child.
@@ -29,13 +29,14 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getErrorMessage } from '@/lib/error-utils'
 import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from './resolver.service'
 
 const logger = createServiceLogger('ConciergeUnderstudy')
 
 export interface UnderstudyLookup {
   userId: string
-  settings: DangerousContentSettings
+  /** The chat's resolved Concierge policy; only its `desk` is read here. */
+  conciergePolicy: ResolvedConciergePolicy
   /** Profile ids that must not be offered — the one that just refused, and any already tried. */
   exclude?: string[]
 }
@@ -93,7 +94,7 @@ function profileCanCarryTurn(profile: ConnectionProfile, mimeTypes: string[]): b
 export async function resolveUncensoredTextUnderstudy(
   lookup: TextUnderstudyLookup,
 ): Promise<TextUnderstudy | null> {
-  const { userId, settings, exclude = [], turnAttachmentMimeTypes = [], filter } = lookup
+  const { userId, conciergePolicy, exclude = [], turnAttachmentMimeTypes = [], filter } = lookup
   const excluded = new Set(exclude)
   const repos = getRepositories()
 
@@ -104,7 +105,7 @@ export async function resolveUncensoredTextUnderstudy(
     (filter ? filter(p) : true)
 
   try {
-    const explicitId = settings.uncensoredTextProfileId
+    const explicitId = conciergePolicy.desk.textProfileId
     if (explicitId && !excluded.has(explicitId)) {
       const explicit = await repos.connections.findById(explicitId)
       if (explicit && eligible(explicit)) {
@@ -177,12 +178,12 @@ export async function resolveUncensoredTextUnderstudy(
 export async function resolveUncensoredImageUnderstudy(
   lookup: UnderstudyLookup,
 ): Promise<ImageUnderstudy | null> {
-  const { userId, settings, exclude = [] } = lookup
+  const { userId, conciergePolicy, exclude = [] } = lookup
   const excluded = new Set(exclude)
   const repos = getRepositories()
 
   try {
-    const explicitId = settings.uncensoredImageProfileId
+    const explicitId = conciergePolicy.desk.imageProfileId
     if (explicitId && !excluded.has(explicitId)) {
       const explicit = await repos.imageProfiles.findById(explicitId)
       if (explicit && explicit.userId === userId) {

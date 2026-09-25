@@ -224,6 +224,7 @@ async function handleLinkFile(
 async function ensureImageDescription(
   repos: RepositoryContainer,
   userId: string,
+  chatId: string,
   blob: { id: string; linkId: string; storedMimeType: string; description: string; originalFileName: string; sizeBytes: number },
 ): Promise<string> {
   if (!blob.storedMimeType.toLowerCase().startsWith('image/')) {
@@ -256,7 +257,7 @@ async function ensureImageDescription(
     data: bytes.toString('base64'),
   };
 
-  const result = await generateImageDescription(fileAttachment, repos, userId);
+  const result = await generateImageDescription(fileAttachment, repos, userId, { chatId });
   if (result.type !== 'image_description' || !result.imageDescription) {
     logger.warn('[Chats v1 Files] Image description generation did not return a description', {
       blobId: blob.id,
@@ -404,7 +405,7 @@ async function handleAttachMountFile(
     }
   }
   if (!description) {
-    description = await ensureImageDescription(repos, userId, blob);
+    description = await ensureImageDescription(repos, userId, chatId, blob);
     if (description) {
       descriptionSource = blob.description?.trim() ? 'vision-llm-cached' : 'vision-llm-generated';
     }

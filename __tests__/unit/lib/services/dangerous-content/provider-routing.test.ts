@@ -8,7 +8,12 @@ import {
   resolveImageProviderForDangerousContent,
 } from '@/lib/services/dangerous-content/provider-routing.service'
 import { getRepositories } from '@/lib/repositories/factory'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import {
+  DEFAULT_CONCIERGE_SETTINGS,
+  resolveConciergeSettings,
+  type ResolvedConciergePolicy,
+} from '@/lib/services/dangerous-content/resolver.service'
+import type { ConciergeSettings } from '@/lib/schemas/settings.types'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -50,45 +55,34 @@ const uncensoredProfile: ConnectionProfile = {
   isDangerousCompatible: true,
 }
 
-const offSettings: DangerousContentSettings = {
-  mode: 'OFF',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
+function policyFor(
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked',
+  settings: Partial<ConciergeSettings> = {},
+): ResolvedConciergePolicy {
+  return resolveConciergeSettings(
+    { conciergeSettings: { ...DEFAULT_CONCIERGE_SETTINGS, ...settings } },
+    { conciergeMode },
+  )
 }
 
-const detectOnlySettings: DangerousContentSettings = {
-  mode: 'DETECT_ONLY',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-}
+/** The Concierge off duty: nothing reroutes. */
+const offSettings = resolveConciergeSettings({
+  conciergeSettings: { ...DEFAULT_CONCIERGE_SETTINGS, enabled: false },
+})
 
-const autoRouteSettings: DangerousContentSettings = {
-  mode: 'AUTO_ROUTE',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-}
+/** A Locked chat: no failover, no direct route. */
+const lockedSettings = policyFor('locked')
 
-const explicitRouteSettings: DangerousContentSettings = {
-  mode: 'AUTO_ROUTE',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-  uncensoredTextProfileId: 'uncensored-1',
+/** A Moderated chat: failover allowed. */
+const autoRouteSettings = policyFor('moderated')
+
+/** An Unmoderated chat: routes direct. */
+const routeDirectSettings = policyFor('unmoderated')
+
+const explicitRouteSettings = policyFor('moderated', { uncensoredTextProfileId: 'uncensored-1' })
+
+function withImageDesk(imageProfileId: string): ResolvedConciergePolicy {
+  return policyFor('moderated', { uncensoredImageProfileId: imageProfileId })
 }
 
 describe('resolveProviderForDangerousContent', () => {
@@ -98,8 +92,8 @@ describe('resolveProviderForDangerousContent', () => {
     jest.clearAllMocks()
   })
 
-  describe('mode-based routing', () => {
-    it('returns original profile when mode is OFF', async () => {
+  describe('policy-based routing', () => {
+    it('returns original profile when the Concierge is off duty', async () => {
       const mockRepos = {
         connections: {
           findById: jest.fn(),
@@ -118,10 +112,10 @@ describe('resolveProviderForDangerousContent', () => {
       expect(result.rerouted).toBe(false)
       expect(result.connectionProfile).toEqual(originalProfile)
       expect(result.apiKey).toBe(originalApiKey)
-      expect(result.reason).toContain('Mode is OFF')
+      expect(result.reason).toContain('off-duty')
     })
 
-    it('returns original profile when mode is DETECT_ONLY', async () => {
+    it('returns original profile when the chat is Locked', async () => {
       const mockRepos = {
         connections: {
           findById: jest.fn(),
@@ -133,14 +127,14 @@ describe('resolveProviderForDangerousContent', () => {
       const result = await resolveProviderForDangerousContent(
         originalProfile,
         originalApiKey,
-        detectOnlySettings,
+        lockedSettings,
         userId
       )
 
       expect(result.rerouted).toBe(false)
       expect(result.connectionProfile).toEqual(originalProfile)
       expect(result.apiKey).toBe(originalApiKey)
-      expect(result.reason).toContain('Mode is DETECT_ONLY')
+      expect(result.reason).toContain('chat-locked')
     })
   })
 
@@ -264,6 +258,29 @@ describe('resolveProviderForDangerousContent', () => {
       expect(result.rerouted).toBe(true)
       expect(result.connectionProfile.isDangerousCompatible).toBe(true)
       expect(mockRepos.connections.findAll).toHaveBeenCalled()
+    })
+
+    it('reroutes an Unmoderated chat (the policy routes direct)', async () => {
+      const mockRepos = {
+        connections: {
+          findById: jest.fn(),
+          findAll: jest.fn().mockResolvedValue([originalProfile, uncensoredProfile]),
+          findApiKeyByIdAndUserId: jest.fn().mockResolvedValue({
+            key_value: 'sk-uncensored-key',
+          }),
+        },
+      }
+      ;(getRepositories as jest.Mock).mockReturnValue(mockRepos)
+
+      const result = await resolveProviderForDangerousContent(
+        originalProfile,
+        originalApiKey,
+        routeDirectSettings,
+        userId
+      )
+
+      expect(result.rerouted).toBe(true)
+      expect(result.connectionProfile.id).toBe('uncensored-1')
     })
 
     it('returns first isDangerousCompatible profile found', async () => {
@@ -454,9 +471,7 @@ describe('resolveProviderForDangerousContent', () => {
       supportsImageUpload: true,
     }
 
-    const scanOnlySettings: DangerousContentSettings = {
-      ...autoRouteSettings,
-    }
+    const scanOnlySettings = autoRouteSettings
 
     function reposWith(profiles: ConnectionProfile[]) {
       return {
@@ -553,8 +568,8 @@ describe('resolveImageProviderForDangerousContent', () => {
     jest.clearAllMocks()
   })
 
-  describe('mode-based routing', () => {
-    it('returns original profile when mode is OFF', async () => {
+  describe('policy-based routing', () => {
+    it('returns original profile when the Concierge is off duty', async () => {
       const mockRepos = {
         imageProfiles: {
           findById: jest.fn(),
@@ -572,10 +587,10 @@ describe('resolveImageProviderForDangerousContent', () => {
 
       expect(result.rerouted).toBe(false)
       expect(result.imageProfile).toEqual(originalImageProfile)
-      expect(result.reason).toContain('Mode is OFF')
+      expect(result.reason).toContain('off-duty')
     })
 
-    it('returns original profile when mode is DETECT_ONLY', async () => {
+    it('returns original profile when the chat is Locked', async () => {
       const mockRepos = {
         imageProfiles: {
           findById: jest.fn(),
@@ -587,7 +602,7 @@ describe('resolveImageProviderForDangerousContent', () => {
       const result = await resolveImageProviderForDangerousContent(
         originalImageProfile,
         originalApiKey,
-        detectOnlySettings,
+        lockedSettings,
         userId
       )
 
@@ -598,10 +613,7 @@ describe('resolveImageProviderForDangerousContent', () => {
 
   describe('explicit uncensored image profile', () => {
     it('reroutes to explicitly configured uncensored image profile', async () => {
-      const explicitImageSettings: DangerousContentSettings = {
-        ...autoRouteSettings,
-        uncensoredImageProfileId: 'img-uncensored-1',
-      }
+      const explicitImageSettings = withImageDesk('img-uncensored-1')
 
       const mockRepos = {
         imageProfiles: {
@@ -632,10 +644,7 @@ describe('resolveImageProviderForDangerousContent', () => {
     })
 
     it('falls back to scanning when explicit image profile not found', async () => {
-      const explicitImageSettings: DangerousContentSettings = {
-        ...autoRouteSettings,
-        uncensoredImageProfileId: 'nonexistent',
-      }
+      const explicitImageSettings = withImageDesk('nonexistent')
 
       const mockRepos = {
         imageProfiles: {
@@ -811,10 +820,7 @@ describe('resolveImageProviderForDangerousContent', () => {
       }
       ;(getRepositories as jest.Mock).mockReturnValue(mockRepos)
 
-      const explicitImageSettings: DangerousContentSettings = {
-        ...autoRouteSettings,
-        uncensoredImageProfileId: 'img-uncensored-1',
-      }
+      const explicitImageSettings = withImageDesk('img-uncensored-1')
 
       const result = await resolveImageProviderForDangerousContent(
         originalImageProfile,

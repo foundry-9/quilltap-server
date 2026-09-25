@@ -1,5 +1,4 @@
 import { triggerChatDangerClassification } from '@/lib/services/chat-message/memory-trigger.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { enqueueChatDangerClassification } from '@/lib/background-jobs/queue-service';
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -28,25 +27,31 @@ jest.mock('@/lib/services/cost-estimation.service', () => ({
   estimateMessageCost: jest.fn(),
 }));
 
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
-}));
-
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueChatDangerClassification: jest.fn(),
 }));
 
-const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>;
 const mockEnqueue = enqueueChatDangerClassification as jest.MockedFunction<typeof enqueueChatDangerClassification>;
 
-const buildRepos = (chatOverrides: Record<string, unknown> = {}) => ({
+// The real Concierge resolver runs: the summary classifier is on duty when the
+// Concierge is enabled, the chat is Moderated, and the operator opted in.
+const summaryClassifierOn = {
+  conciergeSettings: {
+    enabled: true,
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: true,
+    },
+  },
+};
+
+const buildRepos = (chatOverrides: Record<string, unknown> = {}, chatSettings: unknown = summaryClassifierOn) => ({
   chatSettings: {
-    findByUserId: jest.fn().mockResolvedValue({
-      dangerousContentSettings: {
-        mode: 'DETECT_ONLY',
-        threshold: 0.7,
-      },
-    }),
+    findByUserId: jest.fn().mockResolvedValue(chatSettings),
   },
   chats: {
     findById: jest.fn().mockResolvedValue({
@@ -74,19 +79,6 @@ const baseOptions = {
 beforeEach(() => {
   jest.clearAllMocks();
 
-  mockResolveDangerousContentSettings.mockReturnValue({
-    settings: {
-      mode: 'DETECT_ONLY',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    },
-    source: 'global',
-  });
-
   mockEnqueue.mockResolvedValue({ jobId: 'job-1', isNew: true });
 });
 
@@ -101,21 +93,26 @@ describe('triggerChatDangerClassification', () => {
     });
   });
 
-  it('skips when mode is OFF', async () => {
-    mockResolveDangerousContentSettings.mockReturnValue({
-      settings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
-      },
-      source: 'default',
+  it('skips when the operator has not opted into the summary classifier', async () => {
+    const repos = buildRepos({}, {
+      conciergeSettings: { ...summaryClassifierOn.conciergeSettings, preScreen: { ...summaryClassifierOn.conciergeSettings.preScreen, summaryClassification: false } },
     });
+    await triggerChatDangerClassification(repos as any, baseOptions);
 
-    const repos = buildRepos();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it('skips when the Concierge is off duty', async () => {
+    const repos = buildRepos({}, {
+      conciergeSettings: { ...summaryClassifierOn.conciergeSettings, enabled: false },
+    });
+    await triggerChatDangerClassification(repos as any, baseOptions);
+
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it('skips when no Concierge settings are stored (summary classifier off by default)', async () => {
+    const repos = buildRepos({}, null);
     await triggerChatDangerClassification(repos as any, baseOptions);
 
     expect(mockEnqueue).not.toHaveBeenCalled();

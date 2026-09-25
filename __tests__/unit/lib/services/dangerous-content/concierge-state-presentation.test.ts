@@ -62,10 +62,9 @@ describe('CONCIERGE_STATE_PRESENTATION', () => {
 })
 
 describe('conciergeToneSuffix', () => {
-  it('leaves the danger base rule unsuffixed and names the two modifiers', () => {
+  it('leaves the danger base rule unsuffixed and names the one modifier', () => {
     expect(conciergeToneSuffix('danger')).toBe('')
     expect(conciergeToneSuffix('muted')).toBe('-muted')
-    expect(conciergeToneSuffix('info')).toBe('-info')
   })
 
   it('falls through to the base for success (Moderated draws no badge and no mark)', () => {

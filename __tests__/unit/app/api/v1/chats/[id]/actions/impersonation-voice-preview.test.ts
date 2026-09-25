@@ -31,7 +31,7 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({ settings: { mode: 'AUTO_ROUTE' } })),
+  resolveConciergeSettings: jest.fn(() => ({ routeDirect: true, source: 'chat-unmoderated' })),
 }))
 
 jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({

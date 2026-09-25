@@ -25,6 +25,7 @@ import {
 import { resolveStaleChatDays, retentionCutoff } from '@/lib/background-jobs/maintenance/retention-constants';
 import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
 import { getErrorMessage } from '@/lib/error-utils';
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { mainCount, mainRow, mainRows, num } from './db';
 import type {
   AutonomousRoomInfo,
@@ -606,13 +607,7 @@ export async function collectCharacterBreakdown(userId: string): Promise<Charact
  */
 export function defaultFeatureConfig(): FeatureConfigInfo {
   return {
-    dangerousContent: {
-      mode: 'OFF',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-    },
+    concierge: conciergeFeatureConfig(null),
     contextCompression: { enabled: true, windowSize: 5, compressionTargetTokens: 800 },
     agentMode: { maxTurns: 10, defaultEnabled: false },
     storyBackgrounds: { enabled: false, hasDefaultImageProfile: false },
@@ -646,7 +641,38 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     impersonationVoiceRewrite: false,
     autoScrollOnResponseComplete: false,
     imageDescriptionProfileConfigured: false,
-    uncensoredImageDescriptionProfileConfigured: false,
+    uncensoredVisionProfileConfigured: false,
+  };
+}
+
+/**
+ * The Concierge's settings as the report prints them — read through
+ * `readConciergeSettings`, so a missing row or field reads as its default.
+ */
+function conciergeFeatureConfig(
+  chatSettings: Parameters<typeof readConciergeSettings>[0],
+): FeatureConfigInfo['concierge'] {
+  const cs = readConciergeSettings(chatSettings);
+  return {
+    enabled: cs.enabled,
+    newChatsStartAs: cs.newChatsStartAs,
+    autoSwitchAfterRefusals: cs.autoSwitchAfterRefusals,
+    display: { mode: cs.display.mode, showWarningBadges: cs.display.showWarningBadges },
+    desk: {
+      textProfileSet: !!cs.uncensoredTextProfileId,
+      imageProfileSet: !!cs.uncensoredImageProfileId,
+      visionProfileSet: !!cs.uncensoredVisionProfileId,
+      imagePromptProfileSet: !!cs.imagePromptProfileId,
+    },
+    preScreen: {
+      enabled: cs.preScreen.enabled,
+      threshold: cs.preScreen.threshold,
+      scanTextChat: cs.preScreen.scanTextChat,
+      scanImagePrompts: cs.preScreen.scanImagePrompts,
+      scanImageGeneration: cs.preScreen.scanImageGeneration,
+      customClassificationPrompt: !!cs.preScreen.customClassificationPrompt,
+    },
+    summaryClassification: cs.preScreen.summaryClassification,
   };
 }
 
@@ -654,7 +680,6 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
 export async function collectFeatureConfig(userId: string): Promise<FeatureConfigInfo> {
   const chatSettings = await getRepositories().chatSettings.findByUserId(userId);
 
-  const dc = chatSettings?.dangerousContentSettings;
   const cc = chatSettings?.contextCompressionSettings;
   const am = chatSettings?.agentModeSettings;
   const sb = chatSettings?.storyBackgroundsSettings;
@@ -676,13 +701,7 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
   ]);
 
   return {
-    dangerousContent: {
-      mode: dc?.mode ?? 'OFF',
-      threshold: dc?.threshold ?? 0.7,
-      scanTextChat: dc?.scanTextChat ?? true,
-      scanImagePrompts: dc?.scanImagePrompts ?? true,
-      scanImageGeneration: dc?.scanImageGeneration ?? false,
-    },
+    concierge: conciergeFeatureConfig(chatSettings),
     contextCompression: {
       enabled: cc?.enabled ?? true,
       windowSize: cc?.windowSize ?? 5,
@@ -742,8 +761,8 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     impersonationVoiceRewrite: chatSettings?.impersonationVoiceRewrite ?? false,
     autoScrollOnResponseComplete: chatSettings?.autoScrollOnResponseComplete ?? false,
     imageDescriptionProfileConfigured: !!chatSettings?.imageDescriptionProfileId,
-    uncensoredImageDescriptionProfileConfigured:
-      !!chatSettings?.uncensoredImageDescriptionProfileId,
+    uncensoredVisionProfileConfigured:
+      !!readConciergeSettings(chatSettings).uncensoredVisionProfileId,
   };
 }
 

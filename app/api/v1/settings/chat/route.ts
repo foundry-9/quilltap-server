@@ -10,9 +10,27 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, DangerousContentSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
+
+/**
+ * The keys a PUT may no longer carry: `dangerousContentSettings`,
+ * `uncensoredImageDescriptionProfileId` and `cheapLLMSettings.imagePromptProfileId`
+ * all moved into `conciergeSettings`.
+ */
+function findRetiredConciergeKeys(body: unknown): string[] {
+  if (!body || typeof body !== 'object') return []
+  const b = body as Record<string, unknown>
+  const retired: string[] = []
+  if (typeof b.dangerousContentSettings !== 'undefined') retired.push('dangerousContentSettings')
+  if (typeof b.uncensoredImageDescriptionProfileId !== 'undefined') retired.push('uncensoredImageDescriptionProfileId')
+  const cheap = b.cheapLLMSettings
+  if (cheap && typeof cheap === 'object' && typeof (cheap as Record<string, unknown>).imagePromptProfileId !== 'undefined') {
+    retired.push('cheapLLMSettings.imagePromptProfileId')
+  }
+  return retired
+}
 
 /**
  * Validate and update chat settings
@@ -25,7 +43,6 @@ async function updateChatSettings(
   tagStyles?: unknown,
   cheapLLMSettings?: unknown,
   imageDescriptionProfileId?: string | null,
-  uncensoredImageDescriptionProfileId?: string | null,
   themePreference?: unknown,
   defaultRoleplayTemplateId?: string | null,
   sidebarWidth?: number,
@@ -37,7 +54,7 @@ async function updateChatSettings(
   agentModeSettings?: unknown,
   storyBackgroundsSettings?: unknown,
   contextCompressionSettings?: unknown,
-  dangerousContentSettings?: unknown,
+  conciergeSettings?: unknown,
   autoLockSettings?: unknown,
   compositionModeDefault?: boolean,
   composerSpellcheck?: boolean,
@@ -98,9 +115,6 @@ async function updateChatSettings(
   }
   if (typeof imageDescriptionProfileId !== 'undefined') {
     updateData.imageDescriptionProfileId = imageDescriptionProfileId
-  }
-  if (typeof uncensoredImageDescriptionProfileId !== 'undefined') {
-    updateData.uncensoredImageDescriptionProfileId = uncensoredImageDescriptionProfileId
   }
   if (typeof themePreference !== 'undefined') {
     const validatedThemePreference = ThemePreferenceSchema.parse(themePreference)
@@ -178,9 +192,18 @@ async function updateChatSettings(
     }
     updateData.contextCompressionSettings = contextCompressionSettings
   }
-  if (typeof dangerousContentSettings !== 'undefined') {
-    const validatedDangerousContentSettings = DangerousContentSettingsSchema.parse(dangerousContentSettings)
-    updateData.dangerousContentSettings = validatedDangerousContentSettings
+  if (typeof conciergeSettings !== 'undefined') {
+    const parsed = ConciergeSettingsSchema.safeParse(conciergeSettings)
+    if (!parsed.success) {
+      throw new Error(`Invalid conciergeSettings: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
+    }
+    logger.debug('[Settings v1] Updating Concierge settings', {
+      userId,
+      enabled: parsed.data.enabled,
+      preScreen: parsed.data.preScreen.enabled,
+      summaryClassification: parsed.data.preScreen.summaryClassification,
+    })
+    updateData.conciergeSettings = parsed.data
   }
   if (typeof autoLockSettings !== 'undefined') {
     const validatedAutoLockSettings = AutoLockSettingsSchema.parse(autoLockSettings)
@@ -332,13 +355,23 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
 export const PUT = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
     const body = await req.json()
+
+    // Settings the Concierge's own object replaced (phase 4). A stale client
+    // must fail loudly rather than write a column nothing reads any more.
+    const retired = findRetiredConciergeKeys(body)
+    if (retired.length > 0) {
+      logger.warn('[Settings v1] Rejected a PUT carrying retired Concierge settings', { userId: user.id, retired })
+      return badRequest(
+        `Invalid settings: ${retired.join(', ')} ${retired.length === 1 ? 'was' : 'were'} replaced by conciergeSettings`,
+      )
+    }
+
     const {
       avatarDisplayMode,
       avatarDisplayStyle,
       tagStyles,
       cheapLLMSettings,
       imageDescriptionProfileId,
-      uncensoredImageDescriptionProfileId,
       themePreference,
       defaultRoleplayTemplateId,
       sidebarWidth,
@@ -350,7 +383,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
-      dangerousContentSettings,
+      conciergeSettings,
       autoLockSettings,
       compositionModeDefault,
       composerSpellcheck,
@@ -373,7 +406,6 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       tagStyles,
       cheapLLMSettings,
       imageDescriptionProfileId,
-      uncensoredImageDescriptionProfileId,
       themePreference,
       defaultRoleplayTemplateId,
       sidebarWidth,
@@ -385,7 +417,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       agentModeSettings,
       storyBackgroundsSettings,
       contextCompressionSettings,
-      dangerousContentSettings,
+      conciergeSettings,
       autoLockSettings,
       compositionModeDefault,
       composerSpellcheck,

@@ -10,7 +10,8 @@ import type { FallbackResult } from '@/lib/chat/file-attachment-fallback'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { DangerousContentSettings, ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
 
 /**
@@ -316,10 +317,10 @@ export interface ProcessMessageResult {
 }
 
 /**
- * Resolved dangerous-content state for a message send.
+ * Resolved Concierge policy and danger flags for a message send.
  */
 export interface DangerResolutionResult {
-  dangerSettings: import('@/lib/schemas/settings.types').DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   dangerFlags?: import('@/lib/schemas/chat.types').DangerFlag[]
   effectiveProfile: ConnectionProfile
   effectiveApiKey: string
@@ -391,7 +392,7 @@ export interface CompressionContext {
  * Background trigger context for memory, danger classification, and scene tracking.
  */
 export interface TriggerContext {
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   chatSettings: ChatSettings | null
   participantCharacters: Map<string, Character>
   resolvedIdentity: { name: string; description: string; characterId?: string | null }

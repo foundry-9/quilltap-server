@@ -24,7 +24,7 @@ import { MessageActionBar } from './message-row/MessageActionBar'
 import { getImageAttachments } from './message-row/helpers'
 import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import type { MessageAvatarInfo } from './message-row/types'
-import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
+import type { Message, TokenDisplaySettings, ConciergeSettings, CharacterData } from '../types'
 import type { RegenerationState } from '../hooks/useRegeneration'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -62,8 +62,11 @@ interface MessageRowProps {
   userParticipantId: string | null
   /** Token display settings */
   tokenDisplaySettings?: TokenDisplaySettings
-  /** Dangerous content display settings */
-  dangerousContentSettings?: DangerousContentSettings
+  /**
+   * How the Concierge shows flagged content. The list passes the plain
+   * display (SHOW, no badges) when the Concierge is off duty.
+   */
+  conciergeDisplay?: ConciergeSettings['display']
   /** Callback to override danger flags on a message */
   onOverrideDangerFlag?: (messageId: string) => void
   /** Whether this message has LLM logs available */
@@ -151,7 +154,7 @@ function MessageRowInner({
   waitingForResponse,
   userParticipantId,
   tokenDisplaySettings,
-  dangerousContentSettings,
+  conciergeDisplay,
   onOverrideDangerFlag,
   hasLLMLogs,
   onViewLLMLogs,
@@ -204,10 +207,10 @@ function MessageRowInner({
   }
 
   const hasDangerFlags = message.dangerFlags && message.dangerFlags.length > 0
-  const dangerDisplayMode = hasDangerFlags && dangerousContentSettings?.displayMode
-    ? dangerousContentSettings.displayMode
+  const dangerDisplayMode = hasDangerFlags && conciergeDisplay?.mode
+    ? conciergeDisplay.mode
     : 'SHOW'
-  const showDangerBadges = hasDangerFlags && dangerousContentSettings?.showWarningBadges !== false
+  const showDangerBadges = hasDangerFlags && conciergeDisplay?.showWarningBadges !== false
 
   // Character-initiated tool calls folded into this assistant message
   // (group-tool-messages.ts) and reasoning ("thinking") segments are spliced
@@ -641,8 +644,8 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevDangerFlags = prev.message.dangerFlags || []
   const nextDangerFlags = next.message.dangerFlags || []
   if (prevDangerFlags.length !== nextDangerFlags.length) return false
-  if (prev.dangerousContentSettings?.displayMode !== next.dangerousContentSettings?.displayMode) return false
-  if (prev.dangerousContentSettings?.showWarningBadges !== next.dangerousContentSettings?.showWarningBadges) return false
+  if (prev.conciergeDisplay?.mode !== next.conciergeDisplay?.mode) return false
+  if (prev.conciergeDisplay?.showWarningBadges !== next.conciergeDisplay?.showWarningBadges) return false
 
   // Whisper props
   if (prev.isOverheardWhisper !== next.isOverheardWhisper) return false

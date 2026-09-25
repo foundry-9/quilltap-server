@@ -25,6 +25,7 @@ import {
   getConciergeState,
   shouldShowDangerStyling,
 } from '@/lib/services/dangerous-content/chat-override'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneSuffix,
@@ -1549,6 +1550,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
           isDangerousChat={shouldShowDangerStyling(chat)}
+          conciergeDisplay={resolveConciergeSettings(chatSettings, chat).display}
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
           thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
           streamingReasoning={sseStreaming.streamingReasoning}

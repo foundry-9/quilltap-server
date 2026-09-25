@@ -110,8 +110,8 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
   concierge: {
     id: 'concierge',
     name: 'The Concierge',
-    description: 'Dangerous content detection and routing settings',
-    href: '/settings?tab=chat',
+    description: 'Who gets asked when the usual providers refuse, and how flagged content is shown',
+    href: '/settings?tab=concierge',
     thumbnail: '/images/thumbnails/concierge.webp',
     backgroundImage: '/images/concierge.webp',
   },
@@ -159,12 +159,13 @@ export const DEFAULT_SUBSYSTEM_DEFINITIONS: Record<SubsystemId, SubsystemDefinit
 
 /**
  * Ordered list of child subsystem IDs shown as settings tabs.
- * concierge, pascal, and saquel are still valid SubsystemIds
- * (for theme compatibility) but are merged into other tabs.
+ * pascal and saquel are still valid SubsystemIds (for theme
+ * compatibility) but are merged into other tabs.
  */
 export const CHILD_SUBSYSTEM_IDS: SubsystemId[] = [
   'forge',
   'salon',
+  'concierge',
   'calliope',
   'commonplace-book',
   'lantern',

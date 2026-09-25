@@ -70,20 +70,20 @@ These settings govern which model is called upon to do the describing.
 **Setting Options:**
 
 - **Primary image description profile** — the model that describes your images. Only profiles with the vision checkbox ticked appear in the list. Leaving it on **Auto-select vision-capable profile** does *not* disable descriptions; it lets Quilltap choose for you, preferring a profile you have marked **Cheap** and otherwise taking the first sighted profile it finds. Since the choice is then somewhat arbitrary, naming one explicitly is the wiser course.
-- **Uncensored fallback profile** — optional, and consulted only when the primary refuses the commission or returns something unusable. A more permissive model is the usual choice: a local Ollama LLaVA variant, an uncensored model by way of OpenRouter. Left blank, there is no second attempt, and a refusal stands as a refusal. Unlike the primary, this one is **never** auto-selected; if you have not named it, it does not exist.
+- **The uncensored fallback has moved.** The describer of last resort — consulted only when the primary refuses the commission or returns something unusable — is now the **Uncensored vision profile** on the Concierge's desk (**The Concierge** tab, `/settings?tab=concierge&section=uncensored-desk`). A more permissive model is the usual choice: a local Ollama LLaVA variant, an uncensored model by way of OpenRouter. See [The Concierge](the-concierge.md).
 
 **How to configure:**
 
-1. Tick **Supports image attachments (vision input)** on at least one connection profile whose model can actually read pictures — otherwise both dropdowns will be empty.
+1. Tick **Supports image attachments (vision input)** on at least one connection profile whose model can actually read pictures — otherwise the dropdown will be empty.
 2. Select that profile as your **primary**. Small, quick, inexpensive models do this job admirably: `gpt-4o-mini`, `claude-haiku-4-5`, `gemini-2.0-flash`. Reasoning models are a poor fit — slow, dear, and inclined to spend their whole allowance thinking rather than answering.
-3. Optionally name an **uncensored fallback**, if your chats venture where a well-mannered describer will decline to follow.
+3. Optionally name an **Uncensored vision profile** on the Concierge's tab, if your chats venture where a well-mannered describer will decline to follow.
 
 **What happens:**
 
 - For portraits and scenes conjured by the establishment's own hand — a character's avatar, a story backdrop, an image summoned by the tools — no describer is troubled at all: the very prompt that painted the picture is kept on file and read back verbatim, instantly and without charge. The same courtesy extends to any uploaded image that already carries a description on its file record.
 - Failing that, the primary profile is sent the image with an instruction to describe it in thorough detail — every visible element, colour, composition, mood, and scrap of text.
 - The resulting description is inserted into the message as plain words, plainly labelled as an AI's description of an attachment. Your correspondent reads about the picture; it does not see it.
-- Should the primary refuse — or return an empty answer, or something so terse and hedged that it reads as a refusal ("I cannot…", "unable to…") — the uncensored fallback, if you have named one, is given its turn. If both decline, the message explains as much rather than pretending the attachment never arrived.
+- Should the primary refuse — or return an empty answer, or something so terse and hedged that it reads as a refusal ("I cannot…", "unable to…") — the Concierge's uncensored vision profile, if one is available, is given its turn. If both decline, the message explains as much rather than pretending the attachment never arrived.
 - Every consultation is entered in the LLM logs as an **IMAGE_DESCRIPTION** call, so its cost, its latency, and its refusals are all a matter of record.
 - Should a describer prove sluggish, the consultation is abandoned after a minute so a single slow portrait can never hold your correspondent's reply hostage.
 - **The describer's word is checked before it is believed.** A gateway that fronts hundreds of models — NanoGPT, OpenRouter and their kind — may accept your picture with every appearance of politeness and route it to a model that quietly disregards it. The model, asked to describe an image it was never shown, will describe *an* image: fluently, at length, in tidy sections, and entirely out of its own head. Quilltap now examines the bill. A consultation charged for the instruction alone did not look at your picture, whatever prose came back, and the answer is discarded unread rather than filed. So too when the provider itself reports the attachment as never sent. In either case the failure names the offending profile and the fallbacks take their turn as they would after any other refusal.
@@ -316,9 +316,9 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 
 **Solution:**
 
-- Confirm at least one connection profile has **Supports image attachments (vision input)** ticked — with none, the describer dropdowns are empty and no description can be produced
+- Confirm at least one connection profile has **Supports image attachments (vision input)** ticked — with none, the describer dropdown is empty and no description can be produced
 - Confirm that profile's model can genuinely read images; a ticked box on a sightless model yields an empty answer, which Quilltap reports rather than passes off as a description
-- If the description reads like a polite refusal, name an **uncensored fallback profile** — without one, a refusal is final
+- If the description reads like a polite refusal, name an **Uncensored vision profile** on the Concierge's tab (`/settings?tab=concierge&section=uncensored-desk`) — without one, a refusal is final
 - If descriptions appear for uploads but a Quilltap-generated image seems described oddly, remember that generated images are described by the prompt that painted them rather than by any describer
 - If nothing appears and no error does either, check the LLM logs for an **IMAGE_DESCRIPTION** entry: a minute-long call that ends in a timeout means the describing model is too slow for inline duty
 - Reasoning models (`o1`, `o3`, `gpt-5`, and kin) make poor describers — they spend their tokens thinking. Prefer `gpt-4o-mini`, `claude-haiku-4-5`, or `gemini-2.0-flash`

@@ -5,7 +5,10 @@
  */
 
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import {
+  DEFAULT_CONCIERGE_SETTINGS,
+  resolveConciergeSettings,
+} from '@/lib/services/dangerous-content/resolver.service'
 
 // Mock the dependencies using the same pattern as other codebase tests
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
@@ -55,25 +58,27 @@ const testSelection: CheapLLMSelection = {
 const testUserId = 'test-user-id'
 const testChatId = 'test-chat-id'
 
-const dangerOffSettings: DangerousContentSettings = {
-  mode: 'OFF',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
+function conciergePolicy(
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked',
+  opts: { enabled?: boolean; preScreen?: boolean } = {},
+) {
+  return resolveConciergeSettings(
+    {
+      conciergeSettings: {
+        ...DEFAULT_CONCIERGE_SETTINGS,
+        enabled: opts.enabled ?? true,
+        preScreen: { ...DEFAULT_CONCIERGE_SETTINGS.preScreen, enabled: opts.preScreen ?? true },
+      },
+    },
+    { conciergeMode },
+  )
 }
 
-const dangerOnSettings: DangerousContentSettings = {
-  mode: 'DETECT_ONLY',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-}
+/** The Concierge off duty. */
+const dangerOffSettings = conciergePolicy('moderated', { enabled: false })
+
+/** A Moderated chat with the pre-screen on. */
+const dangerOnSettings = conciergePolicy('moderated')
 
 // Helper to add required timestamp fields
 const ts = '2025-01-01T00:00:00.000Z'
@@ -500,8 +505,27 @@ describe('Appearance Resolution Module', () => {
       },
     ]
 
-    describe('Sanitization skipped when OFF', () => {
-      it('should return unchanged when Concierge mode is OFF', async () => {
+    describe('Sanitization skipped when the policy neither pre-screens nor routes direct', () => {
+      it.each([
+        ['a Moderated chat without the pre-screen', () => conciergePolicy('moderated', { preScreen: false })],
+        ['a Locked chat', () => conciergePolicy('locked')],
+      ])('should return unchanged for %s', async (_label, makePolicy) => {
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          makePolicy(),
+          false,
+          false,
+          testSelection,
+          testUserId,
+          testChatId
+        )
+
+        expect(mockClassifyContent).not.toHaveBeenCalled()
+        expect(mockSanitizeAppearance).not.toHaveBeenCalled()
+        expect(result).toBe(sampleAppearances)
+      })
+
+      it('should return unchanged when the Concierge is off duty', async () => {
         const result = await sanitizeAppearancesIfNeeded(
           sampleAppearances,
           dangerOffSettings,
@@ -651,6 +675,33 @@ describe('Appearance Resolution Module', () => {
 
         expect(mockSanitizeAppearance).not.toHaveBeenCalled()
         expect(result).toBe(sampleAppearances)
+      })
+
+      it('should sanitize an Unmoderated chat whose scene cannot reach the uncensored desk', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [{ characterId: 'char-1', appearanceText: 'A young woman in casual clothes' }],
+        })
+
+        // The pre-screen is off for an Unmoderated chat; routeDirect keeps the check.
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          conciergePolicy('unmoderated'),
+          true,
+          false, // no uncensored image profile to route to
+          testSelection,
+          testUserId,
+          testChatId
+        )
+
+        expect(mockClassifyContent).toHaveBeenCalledTimes(1)
+        expect(mockSanitizeAppearance).toHaveBeenCalledTimes(1)
+        expect(result[0].wasSanitized).toBe(true)
       })
 
       // Bug 133. The fourth argument used to be "an uncensored profile is

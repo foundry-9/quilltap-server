@@ -15,7 +15,11 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
-import { withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
+import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
+import {
+  withConciergeSettingsFromLegacy,
+  type SettingsWithLegacyConcierge,
+} from '@/lib/services/dangerous-content/legacy-concierge-settings';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
@@ -377,7 +381,22 @@ export async function restore(
 
     // 16. Chat Settings
     let chatSettingsRestored = 0;
-    for (const settings of data.chatSettings || []) {
+    // A pre-4.10 backup carries the retired Concierge settings and no
+    // conciergeSettings; translate them before the schema strips the old keys.
+    const backupHasUnmoderatedChats = (data.chats || []).some(
+      (chat) => getConciergeState(withConciergeModeFromLegacy(chat as Parameters<typeof withConciergeModeFromLegacy>[0])) === 'unmoderated',
+    );
+    for (const rawSettings of data.chatSettings || []) {
+      const settings = withConciergeSettingsFromLegacy(
+        rawSettings as SettingsWithLegacyConcierge<typeof rawSettings>,
+        backupHasUnmoderatedChats,
+      ) as typeof rawSettings;
+      if (settings !== rawSettings) {
+        moduleLogger.debug('Translated pre-4.10 Concierge settings for restore', {
+          settingsId: rawSettings.id,
+          backupHasUnmoderatedChats,
+        });
+      }
       try {
         const { id, createdAt, updatedAt, ...settingsData } = settings;
         await globalRepos.chatSettings.create(settingsData, { id });

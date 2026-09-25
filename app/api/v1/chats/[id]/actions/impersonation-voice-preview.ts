@@ -21,7 +21,7 @@ import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import { generateInSceneVoicedLine } from '@/lib/services/announcer/in-scene-voiced';
 import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { impersonationVoicePreviewSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -93,20 +93,25 @@ export async function handleImpersonationVoicePreview(
     profileSource,
   });
 
-  // A chat the Concierge has flagged already runs its turns on the uncensored
-  // route; the rehearsal follows the turn rather than asking a moderated
-  // provider to restate what it would refuse. A refusal here is an ordinary
-  // preview failure and never escalates on its own (bug 133's principle).
+  // An Unmoderated chat already runs its turns on the uncensored route; the
+  // rehearsal follows the turn rather than asking a moderated provider to
+  // restate what it would refuse. A refusal here is an ordinary preview
+  // failure and never escalates on its own (bug 133's principle).
   if (shouldUseUncensoredRoute(chat)) {
     const chatSettings = await repos.chatSettings.findByUserId(user.id);
-    const dangerSettings = resolveDangerousContentSettings(chatSettings, chat).settings;
-    if (dangerSettings.mode === 'AUTO_ROUTE' && !profile.isDangerousCompatible) {
+    const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
+    logger.debug('[Chats v1] Impersonation voice preview: Unmoderated chat, checking uncensored route', {
+      chatId,
+      conciergeSource: conciergePolicy.source,
+      routeDirect: conciergePolicy.routeDirect,
+    });
+    if (conciergePolicy.routeDirect && !profile.isDangerousCompatible) {
       // The api key the helper hands back is discarded — `executeCheapLLMTask`
       // resolves its own from the profile. Only the profile choice is wanted.
       const routeResult = await resolveProviderForDangerousContent(
         profile,
         '',
-        dangerSettings,
+        conciergePolicy,
         user.id,
       );
       if (routeResult.rerouted) {

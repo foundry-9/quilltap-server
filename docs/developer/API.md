@@ -22,6 +22,7 @@ API reference for Quilltap v4.3 and later.
 
 > **Freshness note (v4.10-dev):** Additions since v4.9:
 >
+> - **The Concierge's own settings** — `GET`/`PUT /api/v1/settings/chat` carry `conciergeSettings` (on-duty switch, the uncensored desk, the refusal auto-switch, `newChatsStartAs`, display, the opt-in pre-screen); `dangerousContentSettings`, `uncensoredImageDescriptionProfileId` and `cheapLLMSettings.imagePromptProfileId` are gone from the payload and a `PUT` carrying any of them is a `400`. `POST /api/v1/chats` without `conciergeState` starts the chat in `conciergeSettings.newChatsStartAs`. The `help_settings` tool gained a `concierge` category (its `chat` category no longer returns Concierge settings).
 > - **Three-state Concierge** — `conciergeState` on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]` is now `'moderated' | 'unmoderated' | 'locked'`; the four retired values (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) are rejected with `400`. `GET /api/v1/chats/[id]` returns `conciergeState`, `conciergeSetBy` (`'operator' | 'concierge' | null`), `conciergeReason` and `conciergeRefusalCount`, and no longer returns `conciergeOverride`. List payloads (Salon list, homepage recent chats, project chats, character conversations) carry `conciergeState`, `conciergeSetBy`, `conciergeReason` and `dangerCategories`.
 >
 > **Freshness note (v4.9-dev):** Additions since v4.7:
@@ -463,7 +464,26 @@ Get chat settings for the current user.
   "tokenDisplaySettings": {},
   "memoryCascadePreferences": {},
   "llmLoggingSettings": {},
-  "autoDetectRng": true
+  "autoDetectRng": true,
+  "conciergeSettings": {
+    "enabled": true,
+    "uncensoredTextProfileId": null,
+    "uncensoredImageProfileId": null,
+    "uncensoredVisionProfileId": null,
+    "imagePromptProfileId": null,
+    "autoSwitchAfterRefusals": 2,
+    "newChatsStartAs": "moderated",
+    "display": { "mode": "SHOW", "showWarningBadges": true },
+    "preScreen": {
+      "enabled": false,
+      "threshold": 0.7,
+      "scanTextChat": true,
+      "scanImagePrompts": true,
+      "scanImageGeneration": false,
+      "customClassificationPrompt": null,
+      "summaryClassification": false
+    }
+  }
 }
 ```
 
@@ -495,9 +515,12 @@ Update chat settings.
     "onSwipeRegenerate": "DELETE_MEMORIES" | "KEEP_MEMORIES" | "REGENERATE_MEMORIES"
   },
   "llmLoggingSettings": {},
-  "autoDetectRng": true
+  "autoDetectRng": true,
+  "conciergeSettings": { "enabled": true, "display": { "mode": "BLUR", "showWarningBadges": true }, "...": "the whole object, as in GET" }
 }
 ```
+
+`conciergeSettings` is validated with `ConciergeSettingsSchema` (a malformed object is a `400`). The retired Concierge settings — `dangerousContentSettings`, the top-level `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId` — are rejected with `400` so a stale client fails loudly instead of writing a column nothing reads.
 
 #### `GET /api/v1/settings/data-retention`
 
@@ -2163,7 +2186,7 @@ Create a new chat.
 
 **Note**: `roleplayTemplateId` is optional and tri-state. Omit the key to fall back to the default chain (project default > user/global default > none). Send a template UUID to force that template, or send an explicit `null` for "no template" — both beat the defaults. A UUID that doesn't resolve returns `400 Roleplay template not found`.
 
-**Note**: `conciergeState` is optional — `'moderated' | 'unmoderated' | 'locked'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted or `'moderated'` leaves the chat Moderated (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, *after* the system-prompt message and *before* any staff announcement or greeting — so the Concierge's bubble sits where the history says the state was set, and the opening greeting is generated under the chosen state (an Unmoderated chat's greeting goes to the uncensored desk first; a Locked chat's is never rerouted, even after a content filter). A value outside the three — including the retired `'monitored' | 'flagged' | 'vouched' | 'uncensored'` — is a `400` validation error. The `201` response's `chat` carries `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` as they stand after the state is applied.
+**Note**: `conciergeState` is optional — `'moderated' | 'unmoderated' | 'locked'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted, it defaults to the user's `conciergeSettings.newChatsStartAs`. `'moderated'` leaves the chat Moderated (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, *after* the system-prompt message and *before* any staff announcement or greeting — so the Concierge's bubble sits where the history says the state was set, and the opening greeting is generated under the chosen state (an Unmoderated chat's greeting goes to the uncensored desk first; a Locked chat's is never rerouted, even after a content filter). A value outside the three — including the retired `'monitored' | 'flagged' | 'vouched' | 'uncensored'` — is a `400` validation error. The `201` response's `chat` carries `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` as they stand after the state is applied.
 
 **Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
 

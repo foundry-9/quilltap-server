@@ -68,7 +68,7 @@ import {
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
-import { getConciergeState, shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -549,7 +549,7 @@ async function processMessage(
   })
 
   let dangerFlags: DangerFlag[] | undefined = dangerState.dangerFlags
-  const dangerSettings = dangerState.dangerSettings
+  const conciergePolicy = dangerState.conciergePolicy
 
   // Mutable streaming state — threaded through failover and finalization by reference
   const streamingState: StreamingState = {
@@ -1148,7 +1148,7 @@ async function processMessage(
     compressionEnabled,
     bypassCompression,
     cheapLLMSelection,
-    dangerSettings,
+    conciergePolicy,
     allProfiles,
     controller,
     encoder,
@@ -1210,10 +1210,11 @@ async function processMessage(
       preSearchedMemories,
       recallSignals,
       preSearchedQueryEmbedding,
-      // Memory recap: uncensored fallback for dangerous chats. Off-duty
-      // chats opt out, so the fallback is not engaged for them.
-      uncensoredFallbackOptions: (shouldUseUncensoredRoute(chat) && dangerSettings && cheapLLMSelection)
-        ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
+      // Memory recap: uncensored fallback for Unmoderated chats. The policy
+      // routes direct only when the Concierge is on duty and the chat is
+      // Unmoderated, so off-duty and exempt chats never engage it.
+      uncensoredFallbackOptions: (conciergePolicy?.routeDirect && cheapLLMSelection)
+        ? { conciergePolicy, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
       // Status callback for budget-driven compression phases
       onStatusChange: (stage: string, message: string) => {
@@ -1485,7 +1486,7 @@ async function processMessage(
     // straight back to the moderation that refused it.
     isDangerousRouted:
       (dangerFlags?.length ?? 0) > 0 || streamingState.effectiveProfile.id !== connectionProfile.id,
-    dangerSettings,
+    conciergePolicy,
     streaming: streamingState,
     controller,
     encoder,
@@ -1625,7 +1626,7 @@ async function processMessage(
       state: streamingState,
       toolMessagesLength: toolMessages.length,
       contentWasFlaggedDangerous,
-      dangerSettings,
+      conciergePolicy,
       conciergeState: getConciergeState(chat),
       connectionProfile,
       formattedMessages,
@@ -1734,7 +1735,7 @@ async function processMessage(
         allProfiles,
       },
       triggers: {
-        dangerSettings,
+        conciergePolicy,
         chatSettings,
         participantCharacters,
         resolvedIdentity,
@@ -1805,7 +1806,8 @@ async function processMessage(
       })),
       finishReason: emptyFinishReason,
       moderationRefusal: isModerationFinishReason(emptyFinishReason),
-      dangerMode: dangerSettings.mode,
+      conciergeSource: conciergePolicy.source,
+      conciergeState: conciergePolicy.state,
       provider: streamingState.effectiveProfile.provider,
       model: streamingState.effectiveProfile.modelName,
     })

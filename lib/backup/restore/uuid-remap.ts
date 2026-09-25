@@ -9,6 +9,11 @@
  */
 
 import { UuidRemapper } from '../uuid-remapper';
+import { getConciergeState, withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
+import {
+  withConciergeSettingsFromLegacy,
+  type SettingsWithLegacyConcierge,
+} from '@/lib/services/dangerous-content/legacy-concierge-settings';
 import type {
   BackupData,
   ChatWithMessages,
@@ -287,11 +292,29 @@ export function remapBackupData(
     userId: targetUserId,
   })) as PluginConfig[];
 
-  // Remap chat settings
+  // Remap chat settings. A backup from before 4.10 carries the retired
+  // Concierge settings (dangerousContentSettings, the top-level vision
+  // fallback, the crafter under cheapLLMSettings) and no conciergeSettings;
+  // translate them here, exactly as add-concierge-settings-v1 does, before
+  // the repository's schema strips the old keys.
+  const backupHasUnmoderatedChats = (data.chats || []).some(
+    (chat) => getConciergeState(withConciergeModeFromLegacy(chat as Parameters<typeof withConciergeModeFromLegacy>[0])) === 'unmoderated',
+  );
   const remappedChatSettings = (data.chatSettings || []).map((settings) => {
     const remapped = {
-      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'uncensoredImageDescriptionProfileId', 'defaultRoleplayTemplateId']),
+      ...remapper.remapFields(settings, ['id', 'imageDescriptionProfileId', 'defaultRoleplayTemplateId']),
       userId: targetUserId,
+    };
+    const concierge = withConciergeSettingsFromLegacy(
+      settings as SettingsWithLegacyConcierge<ChatSettings>,
+      backupHasUnmoderatedChats,
+    ).conciergeSettings as ChatSettings['conciergeSettings'];
+    remapped.conciergeSettings = {
+      ...concierge,
+      ...(concierge.uncensoredTextProfileId ? { uncensoredTextProfileId: remapper.remap(concierge.uncensoredTextProfileId) } : {}),
+      ...(concierge.uncensoredImageProfileId ? { uncensoredImageProfileId: remapper.remap(concierge.uncensoredImageProfileId) } : {}),
+      ...(concierge.uncensoredVisionProfileId ? { uncensoredVisionProfileId: remapper.remap(concierge.uncensoredVisionProfileId) } : {}),
+      ...(concierge.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(concierge.imagePromptProfileId) } : {}),
     };
     // Remap nested cheapLLMSettings UUID fields
     if (remapped.cheapLLMSettings) {
@@ -299,15 +322,6 @@ export function remapBackupData(
         ...remapped.cheapLLMSettings,
         ...(remapped.cheapLLMSettings.userDefinedProfileId ? { userDefinedProfileId: remapper.remap(remapped.cheapLLMSettings.userDefinedProfileId) } : {}),
         ...(remapped.cheapLLMSettings.defaultCheapProfileId ? { defaultCheapProfileId: remapper.remap(remapped.cheapLLMSettings.defaultCheapProfileId) } : {}),
-        ...(remapped.cheapLLMSettings.imagePromptProfileId ? { imagePromptProfileId: remapper.remap(remapped.cheapLLMSettings.imagePromptProfileId) } : {}),
-      };
-    }
-    // Remap nested dangerousContentSettings UUID fields
-    if (remapped.dangerousContentSettings) {
-      remapped.dangerousContentSettings = {
-        ...remapped.dangerousContentSettings,
-        ...(remapped.dangerousContentSettings.uncensoredTextProfileId ? { uncensoredTextProfileId: remapper.remap(remapped.dangerousContentSettings.uncensoredTextProfileId) } : {}),
-        ...(remapped.dangerousContentSettings.uncensoredImageProfileId ? { uncensoredImageProfileId: remapper.remap(remapped.dangerousContentSettings.uncensoredImageProfileId) } : {}),
       };
     }
     // Remap nested storyBackgroundsSettings UUID fields

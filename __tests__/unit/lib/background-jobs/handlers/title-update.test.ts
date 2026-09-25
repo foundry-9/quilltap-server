@@ -6,7 +6,6 @@ import {
   extractVisibleConversation,
 } from '@/lib/memory/cheap-llm-tasks'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 
@@ -31,9 +30,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   resolveUncensoredCheapLLMSelection: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({
-    settings: { mode: 'OFF', threshold: 0.7 }, source: 'default',
-  })),
+  resolveConciergeSettings: jest.fn(() => ({ onDuty: false, routeDirect: false, failoverAllowed: false, source: 'off-duty' })),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: () => false,

@@ -11,6 +11,7 @@ import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardro
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import { CONCIERGE_STATES, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { ConciergeOffDutyHint } from '@/components/chat/ConciergeOffDutyHint'
 import {
   CONCIERGE_STATE_PRESENTATION,
   conciergeToneTextClass,
@@ -124,6 +125,13 @@ interface NewChatFormProps {
    * works as custom text; it just can't be selected as a preset.
    */
   onScenarioTiersChanged?: () => Promise<RefetchedScenarioTiers>
+  /**
+   * False when the Concierge is off duty globally: the Concierge select is
+   * disabled and points at Settings → The Concierge. Defaults to true.
+   */
+  conciergeOnDuty?: boolean
+  /** The state a chat gets when none is named (`newChatsStartAs`); labelled "(default)". */
+  conciergeDefaultState?: ConciergeState
 }
 
 export function NewChatForm({
@@ -152,6 +160,8 @@ export function NewChatForm({
   previousOutfitSummary,
   autonomousSettingsHint,
   onScenarioTiersChanged,
+  conciergeOnDuty = true,
+  conciergeDefaultState = 'moderated',
 }: NewChatFormProps) {
   const { formatCharacterName } = useUserCharacterDisplayName()
 
@@ -701,16 +711,20 @@ export function NewChatForm({
             id="new-chat-concierge"
             value={state.conciergeState}
             onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
-            disabled={creating}
+            disabled={creating || !conciergeOnDuty}
             className="qt-select"
           >
             {CONCIERGE_STATES.map((value) => (
               <option key={value} value={value}>
-                {CONCIERGE_STATE_PRESENTATION[value].label}{value === 'moderated' ? ' (default)' : ''}
+                {CONCIERGE_STATE_PRESENTATION[value].label}{value === conciergeDefaultState ? ' (default)' : ''}
               </option>
             ))}
           </select>
-          <p className="qt-text-xs qt-text-muted mt-1">{conciergePresentation.detail}</p>
+          {conciergeOnDuty ? (
+            <p className="qt-text-xs qt-text-muted mt-1">{conciergePresentation.detail}</p>
+          ) : (
+            <ConciergeOffDutyHint className="block qt-text-xs qt-text-muted mt-1" />
+          )}
         </div>
 
         <div>

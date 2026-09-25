@@ -27,7 +27,7 @@ import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resol
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser, selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
-import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
+import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import type { ChatSettings, ImageProfile } from '@/lib/schemas/types';
 import {
   equippedWardrobeItemsForAppearance,
@@ -41,7 +41,8 @@ import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/error-utils';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
-  resolveDangerousContentSettings,
+  resolveConciergeSettings,
+  type ResolvedConciergePolicy,
 } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import {
@@ -62,7 +63,7 @@ import {
 } from '@/lib/image-gen/aesthetic';
 
 /** The part of a chat the Concierge reads: its state. */
-type ConciergeChat = { conciergeMode?: ConciergeState | null };
+type ConciergeChat = { conciergeMode?: ConciergeState | null; chatType?: string | null };
 
 /**
  * Execution context for image generation tool
@@ -336,14 +337,14 @@ interface ProviderGenerationResult {
  *
  * The provider call runs through `generateImageWithConciergeFailover`: a
  * content-moderation refusal is retried once on an uncensored understudy
- * (under Auto-Route), and whatever happened is returned as a route trail for
+ * (when the Concierge policy allows failover), and whatever happened is returned as a route trail for
  * the TOOL message.
  */
 async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   userId: string,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   chatId?: string,
   callingParticipantId?: string,
   primaryVia: RouteAttemptVia = 'primary',
@@ -419,7 +420,7 @@ async function generateImagesWithProvider(
     outcome = await generateImageWithConciergeFailover(
       { profile: imageProfile as ImageProfile, apiKey: imageProfile.apiKey.key_value as string },
       attempt,
-      { userId, chatId, purpose: 'tool', settings: dangerSettings, chat, primaryVia },
+      { userId, chatId, purpose: 'tool', conciergePolicy, chat, primaryVia },
     );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
@@ -506,7 +507,8 @@ async function expandPromptWithDescriptions(
   cheapLLMSettings?: CheapLLMSettings,
   styleOptions?: PromptExpansionOptions,
   isDangerous?: boolean,
-  resolvedAppearances?: ResolvedCharacterAppearance[]
+  resolvedAppearances?: ResolvedCharacterAppearance[],
+  imagePromptProfileId?: string | null
 ): Promise<{ expandedPrompt: string; wasExpanded: boolean }> {
   try {
     // Map ImageProvider string to the enum type
@@ -540,10 +542,11 @@ async function expandPromptWithDescriptions(
     const repos = getRepositories();
     const allProfiles = await repos.connections.findByUserId(userId);
 
-    // Use the uncensored image prompt profile only when the prompt was flagged as dangerous
+    // Use the Concierge desk's image prompt crafter only when the prompt was
+    // flagged as dangerous (or the chat routes direct)
     let cheapLLMSelection: CheapLLMSelection | null = null;
-    if (isDangerous && cheapLLMSettings?.imagePromptProfileId) {
-      const imagePromptProfile = allProfiles.find(p => p.id === cheapLLMSettings.imagePromptProfileId);
+    if (isDangerous && imagePromptProfileId) {
+      const imagePromptProfile = allProfiles.find(p => p.id === imagePromptProfileId);
       if (imagePromptProfile) {
         // Create a direct selection from the uncensored override profile
         const isLocal = imagePromptProfile.provider === 'OLLAMA';
@@ -562,7 +565,7 @@ async function expandPromptWithDescriptions(
       } else {
         logger.warn('[Image Generation] Uncensored image prompt profile not found, falling back to global cheap LLM', {
           context: 'llm-api',
-          configuredProfileId: cheapLLMSettings.imagePromptProfileId,
+          configuredProfileId: imagePromptProfileId,
         });
       }
     }
@@ -717,7 +720,7 @@ async function classifyAndRouteForDangerousContent(
   toolInput: ImageGenerationToolInput,
   imageProfile: any,
   chatSettings: ChatSettings | undefined,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
   context: ImageToolExecutionContext
 ): Promise<{
@@ -749,14 +752,52 @@ async function classifyAndRouteForDangerousContent(
     }
   }
 
+  // 5a. An Unmoderated chat goes straight to the uncensored desk: the verdict
+  // is already in, so there is no pre-screen to wait on (`routeDirect`).
+  if (conciergePolicy.routeDirect) {
+    imagePromptDangerous = true;
+    try {
+      const routeResult = await resolveImageProviderForDangerousContent(
+        imageProfile,
+        imageProfile.apiKey.key_value,
+        conciergePolicy,
+        context.userId
+      );
+      if (routeResult.rerouted) {
+        effectiveImageProfile = { ...routeResult.imageProfile, apiKey: imageProfile.apiKey };
+        const reroutedProfileResult = await loadAndValidateProfile(routeResult.imageProfile.id, context.userId);
+        if (reroutedProfileResult.success && reroutedProfileResult.profile) {
+          effectiveImageProfile = reroutedProfileResult.profile;
+        }
+        logger.info('[Image Generation] Unmoderated chat routed direct to uncensored image provider', {
+          chatId: context.chatId,
+          originalProfile: imageProfile.name,
+          uncensoredProfile: routeResult.imageProfile.name,
+          reason: routeResult.reason,
+        });
+      } else {
+        logger.debug('[Image Generation] Unmoderated chat has no uncensored image provider; using original', {
+          chatId: context.chatId,
+          reason: routeResult.reason,
+        });
+      }
+    } catch (error) {
+      // Fail safe — the post-hoc failover still stands behind the call
+      logger.error('[Image Generation] Direct uncensored routing failed, continuing on the original profile', {
+        chatId: context.chatId,
+        error: getErrorMessage(error),
+      });
+    }
+  }
+
   // 5b. Classify user's image prompt before expansion (scanImagePrompts)
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts && cheapLLMSelection) {
+  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts && cheapLLMSelection) {
     try {
       const promptClassification = await classifyDangerousContent(
         toolInput.prompt,
         cheapLLMSelection,
         context.userId,
-        dangerSettings,
+        conciergePolicy,
         context.chatId
       );
 
@@ -766,15 +807,15 @@ async function classifyAndRouteForDangerousContent(
           chatId: context.chatId,
           score: promptClassification.score,
           categories: promptClassification.categories.map(c => c.category),
-          mode: dangerSettings.mode,
+          conciergeSource: conciergePolicy.source,
         });
 
-        // If AUTO_ROUTE, reroute the image provider
-        if (dangerSettings.mode === 'AUTO_ROUTE') {
+        // Where failover is allowed, reroute the image provider
+        if (conciergePolicy.failoverAllowed) {
           const routeResult = await resolveImageProviderForDangerousContent(
             imageProfile,
             imageProfile.apiKey.key_value,
-            dangerSettings,
+            conciergePolicy,
             context.userId
           );
 
@@ -839,7 +880,7 @@ async function classifyAndRouteForDangerousContent(
 async function resolveAppearances(
   toolInput: ImageGenerationToolInput,
   chatSettings: ChatSettings | undefined,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
   context: ImageToolExecutionContext
 ): Promise<{
@@ -892,7 +933,7 @@ async function resolveAppearances(
         appearanceLLMSelection = resolveUncensoredCheapLLMSelection(
           appearanceLLMSelection,
           true,
-          dangerSettings,
+          conciergePolicy,
           profilesForUncensored
         );
       }
@@ -951,17 +992,18 @@ async function resolveAppearances(
           );
           resolvedAppearances = resolutionResult.appearances;
 
-          // This handler classifies each prompt and reroutes on the spot, but
-          // only under AUTO_ROUTE — under DETECT_ONLY a dangerous appearance
-          // stays on the moderated provider and must be sanitized (bug 133).
+          // Only an Unmoderated chat with an uncensored image profile goes
+          // straight to the uncensored desk (step 5a); anywhere else a
+          // dangerous appearance may stay on the moderated provider and must
+          // be sanitized (bug 133).
           const routesDangerousToUncensored =
-            dangerSettings.mode === 'AUTO_ROUTE' &&
-            Boolean(dangerSettings.uncensoredImageProfileId);
+            conciergePolicy.routeDirect &&
+            Boolean(conciergePolicy.desk.imageProfileId);
 
           // Sanitize appearances through the Concierge
           resolvedAppearances = await sanitizeAppearancesIfNeeded(
             resolvedAppearances,
-            dangerSettings,
+            conciergePolicy,
             isDangerousChat,
             routesDangerousToUncensored,
             appearanceLLMSelection,
@@ -992,7 +1034,7 @@ async function expandPromptWithContext(
   imageProfile: any,
   effectiveImageProfile: any,
   chatSettings: ChatSettings | undefined,
-  dangerSettings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   cheapLLMSelection: CheapLLMSelection | null,
   imagePromptDangerous: boolean,
   styleOptions: PromptExpansionOptions | undefined,
@@ -1014,7 +1056,8 @@ async function expandPromptWithContext(
       chatSettings?.cheapLLMSettings,
       styleOptions,
       imagePromptDangerous,
-      resolvedAppearances
+      resolvedAppearances,
+      conciergePolicy.desk.imagePromptProfileId
     );
     expandedPrompt = expandResult.expandedPrompt;
   } catch (error) {
@@ -1024,13 +1067,13 @@ async function expandPromptWithContext(
   }
 
   // 6b. Classify expanded prompt before image generation (scanImageGeneration)
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
+  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImageGeneration && cheapLLMSelection && expandedPrompt !== toolInput.prompt) {
     try {
       const expandedClassification = await classifyDangerousContent(
         expandedPrompt,
         cheapLLMSelection,
         context.userId,
-        dangerSettings,
+        conciergePolicy,
         context.chatId
       );
 
@@ -1040,14 +1083,14 @@ async function expandPromptWithContext(
           chatId: context.chatId,
           score: expandedClassification.score,
           categories: expandedClassification.categories.map(c => c.category),
-          mode: dangerSettings.mode,
+          conciergeSource: conciergePolicy.source,
         });
 
-        if (dangerSettings.mode === 'AUTO_ROUTE' && effectiveImageProfile === imageProfile) {
+        if (conciergePolicy.failoverAllowed && effectiveImageProfile === imageProfile) {
           const routeResult = await resolveImageProviderForDangerousContent(
             imageProfile,
             imageProfile.apiKey.key_value,
-            dangerSettings,
+            conciergePolicy,
             context.userId
           );
 
@@ -1084,16 +1127,25 @@ async function loadSettingsAndBuildCheapLLM(
   chatSettings: ChatSettings | undefined,
   chat?: ConciergeChat | null
 ): Promise<{
-  dangerSettings: DangerousContentSettings;
+  conciergePolicy: ResolvedConciergePolicy;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings (the chat's Concierge state applies)
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
-  const dangerSettings = dangerousContentResolved.settings;
+  // 4b. Resolve the Concierge policy (the chat's Concierge state applies)
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
+  logger.debug('[Image Generation] Concierge policy resolved', {
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    preScreen: conciergePolicy.preScreen.enabled,
+    failoverAllowed: conciergePolicy.failoverAllowed,
+    routeDirect: conciergePolicy.routeDirect,
+  });
 
-  // 4c. Build cheap LLM selection for dangerous content classification
+  // 4c. Build cheap LLM selection for the pre-screen classifier
   let cheapLLMSelection: CheapLLMSelection | null = null;
-  if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
+  if (
+    conciergePolicy.preScreen.enabled &&
+    (conciergePolicy.preScreen.scanImagePrompts || conciergePolicy.preScreen.scanImageGeneration)
+  ) {
     try {
       const resolved = await resolveCheapLLMSelectionForUser(getRepositories(), userId, chatSettings);
       cheapLLMSelection = resolved?.selection ?? null;
@@ -1104,7 +1156,7 @@ async function loadSettingsAndBuildCheapLLM(
     }
   }
 
-  return { dangerSettings, cheapLLMSelection };
+  return { conciergePolicy, cheapLLMSelection };
 }
 
 /**
@@ -1162,8 +1214,8 @@ async function runImageGenerationTool(
       }
     }
 
-    // 4b-4c. Resolve dangerous content settings and build cheap LLM selection
-    const { dangerSettings, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
+    // 4b-4c. Resolve the Concierge policy and build cheap LLM selection
+    const { conciergePolicy, cheapLLMSelection } = await loadSettingsAndBuildCheapLLM(
       context.userId,
       chatSettings,
       chatForOverride
@@ -1178,7 +1230,7 @@ async function runImageGenerationTool(
       toolInput,
       imageProfile,
       chatSettings,
-      dangerSettings,
+      conciergePolicy,
       cheapLLMSelection,
       context
     );
@@ -1189,7 +1241,7 @@ async function runImageGenerationTool(
     } = await resolveAppearances(
       toolInput,
       chatSettings,
-      dangerSettings,
+      conciergePolicy,
       cheapLLMSelection,
       context
     );
@@ -1203,7 +1255,7 @@ async function runImageGenerationTool(
       imageProfile,
       profileAfterClassification,
       chatSettings,
-      dangerSettings,
+      conciergePolicy,
       cheapLLMSelection,
       imagePromptDangerous,
       styleOptions,
@@ -1224,7 +1276,7 @@ async function runImageGenerationTool(
       finalInput,
       finalProfile,
       context.userId,
-      dangerSettings,
+      conciergePolicy,
       context.chatId,
       context.callingParticipantId,
       finalProfile.id !== imageProfile.id ? 'concierge' : 'primary',

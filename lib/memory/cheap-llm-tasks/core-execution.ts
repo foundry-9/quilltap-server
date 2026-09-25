@@ -415,13 +415,13 @@ function shouldAttemptUncensoredFallback(
   // No fallback options provided
   if (!uncensoredFallback) return null
 
-  const { dangerSettings, availableProfiles } = uncensoredFallback
+  const { conciergePolicy, availableProfiles } = uncensoredFallback
 
-  // Only attempt in AUTO_ROUTE mode
-  if (dangerSettings.mode !== 'AUTO_ROUTE') return null
+  // Only attempt when the Concierge policy allows a refusal to fail over
+  if (!conciergePolicy.failoverAllowed) return null
 
   // Need an uncensored text profile configured
-  if (!dangerSettings.uncensoredTextProfileId) return null
+  if (!conciergePolicy.desk.textProfileId) return null
 
   // Check if current profile is already dangerous-compatible
   // For dangerous chats, allow uncensored→uncensored fallback on empty (the configured
@@ -430,7 +430,7 @@ function shouldAttemptUncensoredFallback(
   if (currentProfile?.isDangerousCompatible && !uncensoredFallback?.isDangerousChat) return null
 
   // Find the uncensored profile
-  const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
+  const uncensoredProfile = availableProfiles.find(p => p.id === conciergePolicy.desk.textProfileId)
   if (!uncensoredProfile) return null
 
   // Build a CheapLLMSelection for the uncensored profile

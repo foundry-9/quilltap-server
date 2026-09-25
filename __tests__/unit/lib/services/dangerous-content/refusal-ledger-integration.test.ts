@@ -32,7 +32,7 @@ import {
 import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { generateImageWithConciergeFailover } from '@/lib/services/dangerous-content/image-failover'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import type { ImageProfile } from '@/lib/schemas/types'
 
 const HOUSE = { id: 'house', name: 'House Painter', provider: 'GOOGLE', modelName: 'imagen' } as unknown as ImageProfile
@@ -74,7 +74,7 @@ beforeEach(() => {
     },
     chatSettings: {
       findByUserId: jest.fn(async () => ({
-        dangerousContentSettings: { mode: 'AUTO_ROUTE', autoSwitchAfterRefusals: 2 },
+        conciergeSettings: { enabled: true, autoSwitchAfterRefusals: 2 },
       })),
     },
   } as never)
@@ -98,7 +98,7 @@ async function commissionPicture() {
     userId: 'user-1',
     chatId: 'chat-1',
     purpose: 'tool',
-    settings: { mode: 'AUTO_ROUTE' } as DangerousContentSettings,
+    conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: true } } as never, chat),
   })
 }
 

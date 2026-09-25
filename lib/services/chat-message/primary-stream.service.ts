@@ -51,7 +51,7 @@ import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { AttachedFile, ProcessMessageResult, StreamingState } from './types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger = createServiceLogger('PrimaryStream')
 
@@ -179,10 +179,11 @@ export interface RunPrimaryStreamOptions {
    */
   isDangerousRouted?: boolean
   /**
-   * The chat's Concierge settings. A thrown content refusal is retried on the
-   * uncensored understudy under Auto-Route before the fallback chain runs.
+   * The chat's Concierge policy. A thrown content refusal is retried on the
+   * uncensored understudy, when the policy allows failover, before the
+   * fallback chain runs.
    */
-  dangerSettings?: DangerousContentSettings
+  conciergePolicy?: ResolvedConciergePolicy
   /** Mutated in place. */
   streaming: StreamingState
   controller: ReadableStreamDefaultController<Uint8Array>
@@ -207,7 +208,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
     previousResponseId, stop, preGeneratedAssistantMessageId,
-    attachedFiles, originalMessage, connectionProfile, isDangerousRouted, dangerSettings,
+    attachedFiles, originalMessage, connectionProfile, isDangerousRouted, conciergePolicy,
     streaming, controller, encoder, preservePartialOnError,
     repos,
   } = opts
@@ -396,7 +397,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
     const failover = await attemptHardErrorFailover({
       state: streaming,
       error: streamingError,
-      dangerSettings,
+      conciergePolicy,
       conciergeState: getConciergeState(chat),
       repos,
       context: {

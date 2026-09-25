@@ -117,6 +117,14 @@ interface UseNewChatReturn {
   refetchScenarioTiers: () => Promise<RefetchedScenarioTiers>
   // Actions
   handleCreateChat: () => Promise<{ chatId: string } | null>
+  /**
+   * False when the Concierge is off duty globally
+   * (`conciergeSettings.enabled === false`): the form's Concierge select is
+   * then disabled and points at Settings → The Concierge.
+   */
+  conciergeOnDuty: boolean
+  /** The state the server gives a new chat that names none (`newChatsStartAs`). */
+  conciergeDefaultState: ConciergeState
 }
 
 /**
@@ -232,6 +240,13 @@ export function useNewChat({
 
   const seededRef = useRef(false)
   const prevLlmIdsRef = useRef<string>('')
+  // The Concierge's global posture, read from chat settings: whether he is on
+  // duty, and the state the server gives a new chat whose request names none.
+  const [conciergeOnDuty, setConciergeOnDuty] = useState(true)
+  const [conciergeServerDefault, setConciergeServerDefault] = useState<ConciergeState>('moderated')
+  // `newChatsStartAs` pre-selects the form once; later reference-data loads
+  // (a project change, a cast change) must not undo the user's own choice.
+  const conciergeSeededRef = useRef(false)
 
   // Memoise the joined character-ID list so the fetchData useEffect doesn't
   // churn when the parent passes a fresh array reference each render.
@@ -413,10 +428,18 @@ export function useNewChat({
         // The user's global roleplay-template default; the project default (read
         // below) outranks it, mirroring the server's resolution at create time.
         let userDefaultRoleplayTemplateId: string | null = null
+        let conciergeNewChatsStartAs: ConciergeState | null = null
         if (chatSettingsRes && chatSettingsRes.ok) {
           try {
             const settings = await chatSettingsRes.json()
             userDefaultRoleplayTemplateId = settings?.defaultRoleplayTemplateId ?? null
+            const onDuty = settings?.conciergeSettings?.enabled !== false
+            // Off duty the server ignores `newChatsStartAs` and every chat is
+            // created Moderated, so that is the default the form shows too.
+            conciergeNewChatsStartAs =
+              onDuty && settings?.conciergeSettings?.newChatsStartAs === 'unmoderated' ? 'unmoderated' : 'moderated'
+            setConciergeServerDefault(conciergeNewChatsStartAs)
+            setConciergeOnDuty(onDuty)
             const hint = toAutonomousSettingsHint(settings)
             autonomousSeedFreshnessHours = hint?.defaultFreshnessHours ?? null
             autonomousSeedDestructivePolicyAlwaysRefuse = hint?.destructiveToolPolicy === 'always_refuse'
@@ -605,8 +628,15 @@ export function useNewChat({
         // available even before the user flips the toggle on. The roleplay
         // template rides along: re-seeded on every reference-data load (a new
         // project, a changed cast) until the user picks one by hand.
+        // Continuation mode's inherited state outranks the global default.
+        const seedConciergeState =
+          conciergeNewChatsStartAs !== null && !conciergeSeededRef.current && initialConciergeState == null
+            ? conciergeNewChatsStartAs
+            : null
+        if (conciergeNewChatsStartAs !== null) conciergeSeededRef.current = true
         setState((prev) => ({
           ...prev,
+          conciergeState: seedConciergeState ?? prev.conciergeState,
           roleplayTemplateId: prev.roleplayTemplateTouched
             ? prev.roleplayTemplateId
             : defaultTemplateStillExists
@@ -790,10 +820,11 @@ export function useNewChat({
         requestBody.imageProfileId = state.imageProfileId
       }
 
-      // Omitted when Moderated so a plain create stays byte-identical to what it
-      // has always been; the server treats absence and 'moderated' the same way
-      // (no write, no Concierge bubble).
-      if (state.conciergeState !== 'moderated') {
+      // Omitted when Moderated and Moderated is also what the server would
+      // choose (`newChatsStartAs`), so a plain create stays byte-identical to
+      // what it has always been. When the global default is Unmoderated,
+      // absence would mean Unmoderated, so an explicit Moderated is sent.
+      if (state.conciergeState !== 'moderated' || conciergeServerDefault !== 'moderated') {
         requestBody.conciergeState = state.conciergeState
       }
 
@@ -980,5 +1011,7 @@ export function useNewChat({
     state,
     setState,
     handleCreateChat,
+    conciergeOnDuty,
+    conciergeDefaultState: conciergeServerDefault,
   }
 }
