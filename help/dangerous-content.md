@@ -67,6 +67,10 @@ A slider from 0.1 to 1.0 that controls sensitivity:
 
 When set to auto-detect, the system scans all your profiles marked as "Uncensored-Compatible" and uses the first available one.
 
+### Switch a Chat to Flagged After This Many Refusals
+
+A number from 0 to 10 (default **2**). When a provider has plainly declined a Monitored chat this many times on grounds of propriety, the Concierge moves the whole conversation to the uncensored desk and says so. Set it to **0** and he never does. It acts only under Auto-Route; see [When the Concierge Switches a Chat](#when-the-concierge-switches-a-chat) below.
+
 ### Display Settings
 
 - **Show**: Display flagged content normally with a warning badge
@@ -234,6 +238,17 @@ The picture's own announcement, and the tool block for a character's `generate_i
 
 A provider must *say* it refused for any of this to happen. A picture quietly softened — a sanitized image, a "revised" prompt — counts as a success to the provider and to the Concierge alike. NanoGPT answers a filtered prompt with the same generic complaint it uses for a dozen other faults, so its refusals are not recognised at all.
 
+### When the Concierge Switches a Chat
+
+The Concierge keeps a private ledger for every chat, and each refusal goes into it — a text turn, a background errand, a character's picture, a backdrop, a portrait — whether or not he managed to carry the work across the street afterward. On a **Monitored** chat under **Auto-Route**, once the ledger reaches the number set under *Switch a chat to Flagged after this many refusals* (two, unless you have said otherwise), he stops sending the conversation to a desk that keeps declining it: he switches the chat to **Flagged** and leaves a note to that effect, naming how many refusals it took and who refused last. From then on the chat's text, its errands and its pictures go to the uncensored desk first.
+
+A few particulars, since the ledger is a stickler:
+
+- **Only a stated refusal counts.** The provider must have said it was declining on grounds of content — an error to that effect, a moderation stop reason, the familiar wording. An empty reply on a chat the classifier had already marked, which the Concierge reads as a probable refusal, does not go into the ledger: a guess is not evidence.
+- **Only Monitored chats are switched.** A chat already Flagged has nowhere further to go; a chat you have vouched for, or sent uncensored yourself, is yours, and the Concierge does not overrule you. Refusals on those chats are still noted in his ledger, but nothing is done with them.
+- **Returning a chat to Monitored clears the ledger.** If you move a chat back from Flagged to Monitored by hand, the Concierge starts his tally afresh, so an old refusal cannot immediately undo your decision.
+- **The ledger does not forget on its own.** One refusal last month and one today make two.
+
 ### When the Turn Is Carrying a Picture
 
 A reroute swaps the model but keeps the conversation already assembled — and if the profile you began the turn with reads pictures, that assembly has a picture *in* it, in the raw. Hand that bundle to a substitute that reads only words and the gateway will not even trouble the model with it: it returns a flat refusal of its own, the character says nothing at all, and the whole rescue is spent before it starts. This was, for a time, precisely what happened, and with a faultlessly configured pair of profiles on either side of the swap.
@@ -266,7 +281,7 @@ The default footing. The global Concierge settings apply: the gatekeeper makes h
 
 ### Flagged
 
-The Concierge has this chat down as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of two ways: the Concierge has flipped it himself after classification, or the operator has thrown the switch by hand. To throw it back, simply select Monitored; the Concierge will stand down for the moment, and resume his customary watch on the next user message.
+The Concierge has this chat down as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of three ways: the Concierge has flipped it himself after classification, he has flipped it after the providers refused the chat too often (see [When the Concierge Switches a Chat](#when-the-concierge-switches-a-chat)), or the operator has thrown the switch by hand. To throw it back, simply select Monitored; the Concierge will stand down for the moment, clear his ledger of refusals, and resume his customary watch on the next user message.
 
 ### Vouched Safe
 

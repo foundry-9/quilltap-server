@@ -152,7 +152,7 @@ check_pair() { # expected_ov expected_dg label
 }
 
 check_ann() { # phrase since_iso label
-  local n; n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge' AND content LIKE '%$1%' AND createdAt > '$2'")"
+  local n; n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge' AND qt_text(content) LIKE '%$1%' AND createdAt > '$2'")"
   [ "$n" = "null" ] && n=0
   if [ "$n" -ge 1 ] 2>/dev/null; then
     ok "$3 — Concierge announcement posted (\"…$1…\")"
@@ -358,7 +358,7 @@ run_ct4() {
     bad "CT-4: no Concierge refusal note (HTTP $code) — did the provider actually refuse? see /tmp/ct4_resp.json"
     return
   fi
-  n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge' AND systemKind='refusal' AND content LIKE '%across the street%' AND createdAt > '$m'")"
+  n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge' AND systemKind='refusal' AND qt_text(content) LIKE '%across the street%' AND createdAt > '$m'")"
   if [ "$code" = "200" ] && [ "$n" -ge 1 ] 2>/dev/null; then
     ok "CT-4: rerouted — the picture was drawn by the uncensored understudy"
   else

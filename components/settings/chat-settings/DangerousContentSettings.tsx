@@ -58,6 +58,7 @@ const DEFAULT_SETTINGS: DangerousContentSettingsType = {
   scanImageGeneration: false,
   displayMode: 'SHOW',
   showWarningBadges: true,
+  autoSwitchAfterRefusals: 2,
 }
 
 export function DangerousContentSettings({
@@ -129,6 +130,31 @@ export function DangerousContentSettings({
               />
               <p className="qt-text-small">
                 Lower values are more sensitive (more content flagged). Higher values only flag strongly dangerous content.
+              </p>
+            </div>
+
+            {/* Refusal auto-switch */}
+            <div className="space-y-2">
+              <label htmlFor="concierge-auto-switch-after-refusals" className="block font-medium text-foreground">
+                Switch a chat to Flagged after this many refusals (0 = never)
+              </label>
+              <input
+                id="concierge-auto-switch-after-refusals"
+                type="number"
+                min={0}
+                max={10}
+                step={1}
+                value={dangerSettings.autoSwitchAfterRefusals ?? 2}
+                onChange={(e) => {
+                  const parsed = parseInt(e.target.value, 10)
+                  if (Number.isNaN(parsed)) return
+                  onUpdate({ autoSwitchAfterRefusals: Math.min(10, Math.max(0, parsed)) })
+                }}
+                disabled={saving}
+                className="qt-input w-24"
+              />
+              <p className="qt-text-small">
+                When a provider plainly declines a Monitored chat on grounds of propriety this many times, the Concierge moves the whole conversation to the uncensored desk and says so. Only under Auto-Route; returning the chat to Monitored clears the tally.
               </p>
             </div>
 

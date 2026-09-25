@@ -13,9 +13,13 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeRefusalAnnouncement: jest.fn(async () => null),
 }))
+jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
+  recordModerationRefusal: jest.fn(async () => ({ count: 1, switched: false })),
+}))
 
 import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
+import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
 import {
   generateImageWithConciergeFailover,
   getConciergeTrail,
@@ -25,6 +29,7 @@ import type { ImageProfile } from '@/lib/schemas/types'
 
 const mockResolve = jest.mocked(resolveUncensoredImageUnderstudy)
 const mockAnnounce = jest.mocked(postConciergeRefusalAnnouncement)
+const mockLedger = jest.mocked(recordModerationRefusal)
 
 const PRIMARY = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -182,5 +187,63 @@ describe('generateImageWithConciergeFailover', () => {
     expect(mockResolve).not.toHaveBeenCalled()
     expect(outcome.trail[0]).toMatchObject({ via: 'concierge' })
     expect(outcome.trail.every((a) => a.profileKind === undefined)).toBe(true)
+  })
+
+  describe('the refusal ledger', () => {
+    const refusingRow = expect.objectContaining({
+      chatId: 'chat-1',
+      kind: 'image',
+      purpose: 'tool',
+      refusedProfileId: PRIMARY.id,
+      refusedProfileName: 'House Painter',
+      provider: 'GOOGLE',
+      modelName: 'gemini-2.5-flash-image',
+      evidence: 'typed-error',
+    })
+
+    it('records the primary refusal once when the reroute answers', async () => {
+      const attempt = jest.fn(async (profile: ImageProfile) => {
+        if (profile.id === PRIMARY.id) throw refusal()
+        return 'ok'
+      })
+      await generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, ctx())
+      expect(mockLedger).toHaveBeenCalledTimes(1)
+      expect(mockLedger).toHaveBeenCalledWith(refusingRow)
+      expect(mockLedger.mock.calls[0][0].rerouted).toBe(true)
+    })
+
+    it.each([
+      ['not permitted', () => ctx('DETECT_ONLY'), () => undefined],
+      ['no understudy', () => ctx(), () => mockResolve.mockResolvedValue(null as never)],
+    ])('records the refusal when %s', async (_label, makeCtx, arrange) => {
+      arrange()
+      const attempt = jest.fn(async () => { throw refusal() })
+      await generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, makeCtx()).catch(() => undefined)
+      expect(mockLedger).toHaveBeenCalledTimes(1)
+      expect(mockLedger.mock.calls[0][0]).toMatchObject({ rerouted: false, evidence: 'typed-error' })
+    })
+
+    it('records the primary (not the understudy) when both refuse', async () => {
+      const attempt = jest.fn(async (profile: ImageProfile) => {
+        if (profile.id === PRIMARY.id) throw refusal()
+        throw new Error('Generated image rejected by content moderation.')
+      })
+      await generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, ctx()).catch(() => undefined)
+      expect(mockLedger).toHaveBeenCalledTimes(1)
+      expect(mockLedger).toHaveBeenCalledWith(refusingRow)
+    })
+
+    it('records nothing for a non-refusal failure, or without a chat', async () => {
+      const busy = jest.fn(async () => { throw Object.assign(new Error('429'), { status: 429 }) })
+      await generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, busy, ctx()).catch(() => undefined)
+      const refused = jest.fn(async (profile: ImageProfile) => {
+        if (profile.id === PRIMARY.id) throw refusal()
+        return 'ok'
+      })
+      await generateImageWithConciergeFailover(
+        { profile: PRIMARY, apiKey: 'k' }, refused, { ...ctx(), chatId: null, purpose: 'dialog' },
+      )
+      expect(mockLedger).not.toHaveBeenCalled()
+    })
   })
 })

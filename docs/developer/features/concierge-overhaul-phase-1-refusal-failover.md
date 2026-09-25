@@ -230,7 +230,7 @@ Add `postConciergeRefusalAnnouncement({ chatId, kind, details })` with three kin
 | `refusal-no-understudy` | refused, `AUTO_ROUTE`, nobody to ask | refusing provider/model, purpose, and a pointer to Settings |
 | `refusal-not-permitted` | refused, mode is `OFF` / `DETECT_ONLY` | refusing provider/model, purpose |
 
-Voice: steampunk/Wodehouse, one or two sentences. Example for `refusal-rerouted`: *"The house's usual painter declined the commission on grounds of propriety; I have taken it across the street to Kestrel Studio, who were happy to oblige. The result is attached above."* `opaqueContent`: *"Image provider X refused this request on content grounds. The Concierge rerouted it to Y."*
+Voice: steampunk/Wodehouse, one or two sentences. Example for `refusal-rerouted`: *"The house's usual painter declined the commission on grounds of propriety; I have taken it across the street to Kestrel Studio, who were happy to oblige."* `opaqueContent`: *"Image provider X refused this request on content grounds. The Concierge rerouted it to Y."*
 
 No dedupe. A refusal is rare and every one is actionable. `system-message-labels.ts:96-97` maps `concierge` to its existing label; add `refusal` to whatever kind→label table exists there.
 

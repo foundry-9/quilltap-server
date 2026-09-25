@@ -23,6 +23,12 @@ export interface ResolvedDangerousContentSettings {
 }
 
 /**
+ * Stated moderation refusals on a Monitored chat before the Concierge switches
+ * it to Flagged, when the setting is absent. Mirrors the schema default.
+ */
+export const DEFAULT_AUTO_SWITCH_AFTER_REFUSALS = 2
+
+/**
  * Default dangerous content settings when not configured
  */
 export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
@@ -33,6 +39,7 @@ export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
   scanImageGeneration: false,
   displayMode: 'SHOW',
   showWarningBadges: true,
+  autoSwitchAfterRefusals: DEFAULT_AUTO_SWITCH_AFTER_REFUSALS,
 }
 
 /**
@@ -50,6 +57,7 @@ export const VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings =
   scanImageGeneration: false,
   displayMode: 'SHOW',
   showWarningBadges: false,
+  autoSwitchAfterRefusals: 0,
 }
 
 /**

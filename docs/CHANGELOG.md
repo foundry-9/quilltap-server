@@ -4,6 +4,40 @@
 
 ### 4.10-dev
 
+#### Added: the Concierge's refusal ledger and auto-switch (Concierge overhaul, phase 2)
+
+- Two columns on `chats`: `moderationRefusalCount` (INTEGER NOT NULL DEFAULT 0) and
+  `lastModerationRefusalAt` (TEXT). Migration `add-chat-refusal-ledger-v1`. Both are kept out of
+  `ChatMetadataSchema` (same reason as `transcriptVersion`: a whole-row `update` could rewind the
+  counter), so they are not in `.qtap` exports. New `ChatsRepository` methods:
+  `incrementModerationRefusalCount` (atomic `+ 1`), `getModerationRefusalLedger`,
+  `resetModerationRefusalLedger`.
+- `recordModerationRefusal` (`lib/services/dangerous-content/refusal-ledger.ts`) is the only
+  writer. Called by `generateImageWithConciergeFailover` (primary refused, whatever the reroute's
+  outcome; nothing without a chat), by the text empty-response recovery and hard-error failover,
+  and by the cheap-LLM path when an empty body carries a moderation finish reason. Only
+  `typed-error`, `provider-code`, `finish-reason` and `message-pattern` evidence counts;
+  `inferred` never does.
+- Auto-switch: once the count reaches `autoSwitchAfterRefusals` on a Monitored chat under
+  Auto-Route, the Concierge switches it to Flagged via
+  `applyConciergeFlip(chatId, 'flagged', chat, { by: 'concierge', reason: 'refusals' })`, which
+  stamps `dangerCategories: ['moderation-refusals']` and posts the new `auto-flagged-refusals`
+  announcement (count and last refusing provider). Never on Flagged, Vouched Safe, Uncensored,
+  moderation-exempt chats, or under Detect Only / Off. Runs in the parent only: after an in-parent
+  increment, or from a new commit hook in `applyWritesUnsafe` for increments buffered by the job
+  child. Concurrent checks for one chat are serialized so the switch is announced once.
+- New setting `dangerousContentSettings.autoSwitchAfterRefusals` (0-10, default 2, 0 = never),
+  shown as a number field on the Dangerous Content card. Vouched Safe settings carry 0.
+- `applyConciergeFlip` gains an optional `{ by, reason, refusals }` argument (default: the
+  operator; existing transitions unchanged). Its `'monitored'` case now also resets the ledger.
+- Review fixes: the auto-switch re-reads the chat right before flipping and abandons the switch if
+  it left Monitored during the check, so it cannot overwrite an operator's newer choice; a
+  threshold of 1 no longer announces "More than once now"; a moderation stop stated by the
+  same-provider retry after a plain empty opening is now recorded (once per turn).
+- Phase-1 review carry-overs: the `refusal-rerouted` bubble no longer says the picture is
+  "attached above" (the note posts before the picture); `scripts/concierge-four-state-test.sh`
+  wraps `content` in `qt_text()` in `check_ann` and CT-4.
+
 #### Docs: phase 2 spec carries two deferred phase-1 review fixes
 
 - `concierge-overhaul-phase-2-refusal-ledger.md` gains a "Carried over from phase 1 review"

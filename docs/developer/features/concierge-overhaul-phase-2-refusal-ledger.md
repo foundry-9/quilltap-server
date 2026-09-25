@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 2: The Refusal Ledger and the Auto-Switch
 
-**Status:** Proposed (4.10-dev, 2026-09-25)
+**Status:** Implemented (4.10-dev, 2026-09-25) — see [As built](#as-built) for where the shipped code departs from the plan.
 **Scope:** quilltap-server. Two new columns on `chats`, one migration, one new setting inside `dangerousContentSettings`, one new announcement kind, one new repository method. No settings UI beyond a single number field on the existing Dangerous Content card. No plugin or package change.
 **Prerequisites:** [Phase 1](concierge-overhaul-phase-1-refusal-failover.md) landed — specifically `classifyRefusal` (`lib/services/dangerous-content/refusal.ts`), `generateImageWithConciergeFailover` (`image-failover.ts`), and the `moderation-refusal` handling in `attemptHardErrorFailover`. If phase 1 has not landed, this phase's hook points do not exist; do not attempt to wire the ledger into the five pre-phase-1 reroute sites.
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 2 of 5).
@@ -141,7 +141,7 @@ were acknowledged there and deferred to the next code push. Do them first in
 this phase — both touch files this phase also edits — and tick them here when
 done.
 
-- [ ] **The `refusal-rerouted` bubble claims a location it cannot know.**
+- [x] **The `refusal-rerouted` bubble claims a location it cannot know.**
   `buildRefusalContent` in `lib/services/concierge-notifications/writer.ts`
   ends the rerouted copy with "The result is attached above." The chokepoint
   (`generateImageWithConciergeFailover`, `image-failover.ts`) posts the note
@@ -151,7 +151,7 @@ done.
   picture is. Update the matching `refusal-rerouted` example in
   `help/dangerous-content.md` if its wording changes, and the phase-1 spec's
   §8 example sentence, which has the same claim.
-- [ ] **`scripts/concierge-four-state-test.sh` matches compressed text raw.**
+- [x] **`scripts/concierge-four-state-test.sh` matches compressed text raw.**
   `chat_messages.content` is a compressed column (CLAUDE.md: raw SQL that
   reads one wraps it in `qt_text()`). Two queries break the rule and would
   report false failures: `check_ann` (`… AND content LIKE '%$1%' …`) and
@@ -186,3 +186,48 @@ done.
 - `docs/developer/BACKGROUND_JOBS_CHILD.md`: the commit-hook call.
 - `.claude/commands/update-documentation.md`: catalog row.
 - `CLAUDE.md` chokepoints: extend the Concierge bullet — *`applyConciergeFlip` takes `{ by, reason }`; the refusal ledger is written only by `recordModerationRefusal`, and the auto-switch runs only in the parent.*
+
+## As built
+
+Implemented 2026-09-25. Departures from the plan above, each for a stated reason:
+
+- **The two columns are not in `ChatMetadataSchema` / `ChatMetadataBaseSchema`, and therefore not
+  in `.qtap` exports.** §1 asked for both. But `base.repository.ts:_update` rewrites the whole
+  validated row from a snapshot it read a moment earlier, so a counter declared in the schema can
+  be rewound by any concurrent chat-row write — the exact failure `transcriptVersion` documents
+  and avoids the same way. Zod strips undeclared keys, so no `update` can touch the ledger; it is
+  read with `ChatsRepository.getModerationRefusalLedger` and reset with
+  `resetModerationRefusalLedger`. An imported chat starts with an empty ledger, which is also the
+  right answer for a chat moved between instances. `qtap-export.schema.json` is unchanged.
+- **`incrementModerationRefusalCount(chatId, at, refusedBy?)`** carries an optional third argument
+  naming who refused. It is not stored; it goes to the repository's debug log and, for a buffered
+  child write, to the parent's commit hook, which needs it for the announcement's "most recently
+  …" clause (§5).
+- **`recordModerationRefusal` returns `{ count: number | null, switched }`.** `null` when nothing was
+  recorded or the increment was buffered in the child.
+- **`applyConciergeFlip`'s options also carry `refusals?: { count, lastProvider, lastModel }`**, the
+  announcement's details. `dangerCategories: ['moderation-refusals']` is exported as
+  `MODERATION_REFUSALS_CATEGORY`.
+- **The ledger entry is written once the call's outcome is known**, not at step 3, so its `rerouted`
+  field is true rather than a guess. Every exit of the image chokepoint after a primary refusal
+  records it exactly once; the understudy's own refusal is never recorded.
+- **Text hook sites:** the empty-response path records its *opening* verdict in
+  `attemptEmptyResponseRecovery` (the same-provider retry's verdict is not a second refusal of the
+  turn); the hard-error path records in `attemptHardErrorFailover`'s `moderation-refusal` branch.
+  `attemptUncensoredRetry` itself records nothing — it only sees the understudy.
+- **Cheap LLM:** `sendToProvider` now returns the provider's `finishReason`; an empty body whose
+  finish reason `classifyRefusal` reads as a moderation stop is recorded whether or not the
+  uncensored fallback then runs.
+- **The commit hook** is `runRefusalLedgerChecks` at the end of `applyWritesUnsafe`
+  (`lib/background-jobs/host/job-dispatcher.ts`), inside the apply chain so the flip's writes cannot
+  land in another job's open transaction, after every partition has committed, and best-effort. The
+  pure selector `chatsWithRecordedRefusals` is exported for tests.
+- **Concurrent checks for one chat are chained** in-process (`maybeAutoSwitchAfterRefusal`), so two
+  refusals that land together cannot both read the chat as Monitored and announce twice.
+- **Moderation-exempt chats** (Help, Brahma) never switch: the resolver returns the Vouched Safe
+  settings for them, whose `autoSwitchAfterRefusals` is 0 and mode `OFF`.
+
+Tests: `refusal-ledger.test.ts`, `refusal-ledger-integration.test.ts` (two refused pictures flip
+the chat; the third goes straight to the uncensored desk and records nothing),
+`manual-flip.test.ts`, `image-failover.test.ts`, `child-proxy-refusal-ledger.test.ts`,
+`job-dispatcher-apply.test.ts` and `add-chat-refusal-ledger.test.ts`.

@@ -412,6 +412,8 @@ export const DangerousContentSettingsSchema = z.object({
   showWarningBadges: z.boolean().default(true),
   /** Custom classification prompt to append to the default classification system prompt */
   customClassificationPrompt: z.string().nullable().optional(),
+  /** After this many stated moderation refusals on a Monitored chat, the Concierge flips it to Flagged. 0 = never. */
+  autoSwitchAfterRefusals: z.number().int().min(0).max(10).default(2),
 });
 
 export type DangerousContentSettings = z.infer<typeof DangerousContentSettingsSchema>;
@@ -690,6 +692,7 @@ export const ChatSettingsSchema = z.object({
     scanImageGeneration: false,
     displayMode: 'SHOW',
     showWarningBadges: true,
+    autoSwitchAfterRefusals: 2,
   }),
   /** Auto-lock settings for automatic idle timeout locking */
   autoLockSettings: AutoLockSettingsSchema.default({

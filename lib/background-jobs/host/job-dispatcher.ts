@@ -380,6 +380,65 @@ export async function applyWritesUnsafe(
   // safe even when a best-effort secondary partition was dropped.
   cleanupStagingDirs(writes, jobId);
   dispatchInvalidations(writes);
+
+  // The Concierge's refusal ledger: a child can buffer an increment but can
+  // neither read the resulting count nor act on it, so the auto-switch check
+  // runs here, where the count is authoritative. Still inside the apply chain,
+  // so the flip's own writes cannot land in another job's open transaction.
+  await runRefusalLedgerChecks(writes, jobId);
+}
+
+/** The buffered write that records a moderation refusal on a chat. */
+export const REFUSAL_LEDGER_INCREMENT = 'chats.incrementModerationRefusalCount';
+
+/**
+ * Every chat whose refusal ledger this batch incremented, once each, with the
+ * last refusing provider the batch named for it (the increment's optional
+ * third argument). Pure; exported for tests.
+ */
+export function chatsWithRecordedRefusals(
+  writes: ChildWritePayload[],
+): Map<string, { provider: string; modelName?: string | null } | null> {
+  const chats = new Map<string, { provider: string; modelName?: string | null } | null>();
+  for (const w of writes) {
+    if (w.method !== REFUSAL_LEDGER_INCREMENT) continue;
+    const [chatId, , refusedBy] = w.args as [unknown, unknown, unknown];
+    if (typeof chatId !== 'string' || !chatId) continue;
+    const who = refusedBy && typeof refusedBy === 'object' && typeof (refusedBy as { provider?: unknown }).provider === 'string'
+      ? refusedBy as { provider: string; modelName?: string | null }
+      : null;
+    // Later increments overwrite earlier ones: the announcement names the last.
+    chats.set(chatId, who ?? chats.get(chatId) ?? null);
+  }
+  return chats;
+}
+
+/**
+ * Run the auto-switch check once per chat whose ledger a committed child batch
+ * changed. Best-effort: the writes are already committed, so a failure here is
+ * logged and never fails the job. The ledger module is imported dynamically to
+ * keep the Concierge's service graph out of the dispatcher's static imports.
+ */
+async function runRefusalLedgerChecks(writes: ChildWritePayload[], jobId: string): Promise<void> {
+  const chats = chatsWithRecordedRefusals(writes);
+  if (chats.size === 0) return;
+  log.debug('Child batch recorded moderation refusals; running the auto-switch check', {
+    jobId,
+    chatIds: [...chats.keys()],
+  });
+  try {
+    const { maybeAutoSwitchAfterRefusal } = await import(
+      '@/lib/services/dangerous-content/refusal-ledger'
+    );
+    for (const [chatId, lastRefusal] of chats) {
+      await maybeAutoSwitchAfterRefusal(chatId, lastRefusal);
+    }
+  } catch (err) {
+    log.error('Refusal-ledger auto-switch check failed after a committed batch', {
+      jobId,
+      error: getErrorMessage(err),
+    });
+  }
 }
 
 /**

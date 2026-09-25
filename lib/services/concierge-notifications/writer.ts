@@ -167,15 +167,62 @@ export function buildDangerOpaqueContent(details?: ConciergeDangerDetails): stri
  * Concierge state. They never include classifier details (because there was
  * no classification) and never honor an opaque audience — the operator is
  * announcing their own choice, in their own voice, through the Concierge.
+ *
+ * One kind is not the operator's: `auto-flagged-refusals`, posted when the
+ * refusal ledger's auto-switch moves a Monitored chat to Flagged. It shares
+ * this writer because it goes through the same transition chokepoint
+ * (`applyConciergeFlip` with `{ by: 'concierge' }`).
  */
 export type ConciergeManualKind =
   | 'manual-flagged'      // -> Flagged (the operator flipped the switch themselves)
   | 'manual-safe'         // Flagged -> Monitored (the operator says all clear)
   | 'manual-vouched'      // anything -> Vouched Safe (operator vouches; the Concierge stops watching)
   | 'manual-resumed'      // Vouched/Uncensored -> Monitored (operator calls the Concierge back)
-  | 'manual-uncensored';  // anything -> Uncensored (operator opens the uncensored door themselves)
+  | 'manual-uncensored'   // anything -> Uncensored (operator opens the uncensored door themselves)
+  | 'auto-flagged-refusals'; // Monitored -> Flagged by the Concierge, after N stated moderation refusals
 
-function buildManualContent(kind: ConciergeManualKind): string {
+/**
+ * What the Concierge says about the refusals that earned an auto-switch.
+ * `auto-flagged-refusals` only.
+ */
+export interface ConciergeAutoFlagDetails {
+  /** Refusals on the ledger when the switch fired. */
+  count: number;
+  /** Provider of the most recent refusal (e.g. 'GOOGLE'). */
+  lastProvider: string;
+  lastModel?: string | null;
+}
+
+const TIMES_WORDS = ['Never', 'Once', 'Twice', 'Three times', 'Four times', 'Five times', 'Six times',
+  'Seven times', 'Eight times', 'Nine times', 'Ten times'];
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+
+function refusalWho(details: ConciergeAutoFlagDetails | undefined): string | null {
+  if (!details?.lastProvider) return null;
+  return details.lastModel ? `${details.lastProvider} ${details.lastModel}` : details.lastProvider;
+}
+
+export function buildAutoFlagContent(details: ConciergeAutoFlagDetails | undefined): string {
+  const count = details?.count ?? 0;
+  const who = refusalWho(details);
+  // A threshold of one is permitted: a single refusal is stated plainly, with
+  // no tally and no "most recently".
+  const declined = count === 1
+    ? `The house's regular staff have declined this conversation on grounds of propriety${who ? ` — ${who}, to be precise` : ''}.`
+    : `${count >= 2 && count < TIMES_WORDS.length ? `${TIMES_WORDS[count]} now` : 'More than once now'} the house's regular staff have declined this conversation on grounds of propriety${who ? ` — most recently ${who}` : ''}.`;
+  return `${declined} The Concierge has taken the liberty of moving the whole affair to the uncensored desk; you may move it back from the sidebar whenever you wish.`;
+}
+
+export function buildAutoFlagOpaqueContent(details: ConciergeAutoFlagDetails | undefined): string {
+  const count = details?.count ?? 0;
+  const counted = count >= 1 && count < COUNT_WORDS.length ? COUNT_WORDS[count] : String(count);
+  const noun = count === 1 ? 'moderation refusal' : 'moderation refusals';
+  const who = refusalWho(details);
+  const last = who ? ` (last: ${who})` : '';
+  return `${counted} ${noun}${last}. The Concierge switched this chat to Flagged; change it in the sidebar.`;
+}
+
+function buildManualContent(kind: ConciergeManualKind, details?: ConciergeAutoFlagDetails): string {
   switch (kind) {
     case 'manual-flagged':
       return "By the operator's own hand, the Concierge has thrown the switch: the conversation is to be entrusted henceforth to a desk better appointed to subjects of its particular character. Pray continue at your leisure.";
@@ -187,10 +234,12 @@ function buildManualContent(kind: ConciergeManualKind): string {
       return "The Concierge returns to his post. Customary watch is resumed; the present arrangements are once again subject to his discreet attentions.";
     case 'manual-uncensored':
       return "By the operator's own hand, the Concierge has been sent away and the uncensored door stands open. Nothing is to be examined, nothing softened; the conversation and its errands go henceforth to the frank desk, entirely on the operator's own recognizance.";
+    case 'auto-flagged-refusals':
+      return buildAutoFlagContent(details);
   }
 }
 
-function buildManualOpaqueContent(kind: ConciergeManualKind): string {
+function buildManualOpaqueContent(kind: ConciergeManualKind, details?: ConciergeAutoFlagDetails): string {
   switch (kind) {
     case 'manual-flagged':
       return 'Operator advisory: this conversation has been manually marked for handling by an uncensored provider. Subsequent traffic may be routed accordingly.';
@@ -202,18 +251,22 @@ function buildManualOpaqueContent(kind: ConciergeManualKind): string {
       return 'Operator advisory: standard moderation is restored for this conversation.';
     case 'manual-uncensored':
       return 'Operator advisory: this conversation has been manually routed to the uncensored providers. No classification or scanning will run; prompts go out unaltered.';
+    case 'auto-flagged-refusals':
+      return buildAutoFlagOpaqueContent(details);
   }
 }
 
 export interface ConciergeManualAnnouncement {
   chatId: string;
   kind: ConciergeManualKind;
+  /** `auto-flagged-refusals` only. */
+  details?: ConciergeAutoFlagDetails;
 }
 
 export async function postConciergeManualAnnouncement(
   params: ConciergeManualAnnouncement,
 ): Promise<MessageEvent | null> {
-  const { chatId, kind } = params;
+  const { chatId, kind, details } = params;
   try {
     const repos = getRepositories();
 
@@ -224,8 +277,8 @@ export async function postConciergeManualAnnouncement(
 
     const messageId = randomUUID();
     const now = new Date().toISOString();
-    const content = buildManualContent(kind);
-    const opaqueContent = buildManualOpaqueContent(kind);
+    const content = buildManualContent(kind, details);
+    const opaqueContent = buildManualOpaqueContent(kind, details);
 
     const message: MessageEvent = {
       type: 'message',
@@ -370,7 +423,7 @@ export function buildRefusalContent(kind: ConciergeRefusalKind, details: Concier
   const house = details.purpose === 'text' ? "the house's usual correspondent" : "the house's usual painter";
   switch (kind) {
     case 'refusal-rerouted':
-      return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety; he has taken it across the street to ${details.answeringProfileName ?? 'a more obliging studio'}, who were happy to oblige. The result is attached above.`;
+      return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety; he has taken it across the street to ${details.answeringProfileName ?? 'a more obliging studio'}, who were happy to oblige.`;
     case 'refusal-no-understudy':
       return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety, and he knows of no more obliging establishment to take it to. Should you care to name one, tick "Uncensored-compatible" on a suitable profile, or choose one in the Concierge's settings.`;
     case 'refusal-not-permitted':

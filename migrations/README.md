@@ -259,6 +259,7 @@ Only v2.7.0+ migrations are included in the codebase. Legacy migrations (v2.0.0â
 | restructure-file-storage-cleanup-v1 | 3.3.0 | Cleanup pass for file storage restructure (category dirs, thumbnails, .DS_Store) | None |
 | fix-text-embeddings-after-update-v1 | 3.1.0 | Fix TEXT embeddings written by update path (should be Float32 BLOBs) | normalize-vector-storage-v1 |
 | rename-persona-columns-v1 | 4.2.0 | Rename personaLinks â†’ partnerLinks in characters, drop personaId from memories | sqlite-initial-schema-v1 |
+| add-chat-refusal-ledger-v1 | 4.10.0 | Add the Concierge refusal ledger (moderationRefusalCount, lastModerationRefusalAt) to chats | add-chat-concierge-override-v1 |
 
 **Notes**:
 - Minimum supported version for upgrades is v2.7.0

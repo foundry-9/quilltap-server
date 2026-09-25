@@ -14,12 +14,19 @@
  *
  * Every transition posts a brief Concierge bubble into the chat so the
  * history remains honest about which mode was in effect when.
+ *
+ * Not every transition is the operator's. The refusal ledger's auto-switch
+ * (`refusal-ledger.ts`) comes through here too, with `{ by: 'concierge' }`, so
+ * the Concierge's own decision is written and announced by the same rules.
  */
 
 import type { ChatMetadata } from '@/lib/schemas/types';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { postConciergeManualAnnouncement } from '@/lib/services/concierge-notifications/writer';
+import {
+  postConciergeManualAnnouncement,
+  type ConciergeAutoFlagDetails,
+} from '@/lib/services/concierge-notifications/writer';
 import { getConciergeState, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 const logger = createServiceLogger('ConciergeManualFlip');
@@ -33,6 +40,23 @@ export type ConciergeUIState = ConciergeState;
  * place; this writer module is allowed to also read the raw fields below.
  */
 export const currentConciergeState = getConciergeState;
+
+/**
+ * Who asked for a transition, and why. Omitted means the operator, which is
+ * what every caller but the refusal ledger is.
+ */
+export interface ApplyConciergeFlipOptions {
+  by?: 'operator' | 'concierge';
+  reason?: 'refusals' | 'classifier';
+  /**
+   * For `{ by: 'concierge', reason: 'refusals' }`: what the announcement says
+   * about the refusals that earned the switch.
+   */
+  refusals?: ConciergeAutoFlagDetails;
+}
+
+/** The dangerCategories stamp an auto-switch leaves, for the header pill's tooltip. */
+export const MODERATION_REFUSALS_CATEGORY = 'moderation-refusals';
 
 export interface ApplyConciergeFlipResult {
   /** The state requested by the caller, after normalization. */
@@ -56,7 +80,9 @@ export async function applyConciergeFlip(
   chatId: string,
   requested: ConciergeUIState,
   chat: ChatMetadata,
+  options: ApplyConciergeFlipOptions = {},
 ): Promise<ApplyConciergeFlipResult> {
+  const by = options.by ?? 'operator';
   const current = currentConciergeState(chat);
   if (current === requested) {
     return { newState: requested, changed: false };
@@ -67,18 +93,29 @@ export async function applyConciergeFlip(
 
   switch (requested) {
     case 'flagged': {
-      // The operator is manually marking this chat dangerous. Stamp the
-      // classification metadata so the sticky-true rule kicks in and the
-      // background scanner leaves it alone.
+      // The operator (or, after enough refusals, the Concierge himself) is
+      // marking this chat dangerous. Stamp the classification metadata so the
+      // sticky-true rule kicks in and the background scanner leaves it alone.
+      // The Concierge's own switch leaves a category so the header pill's
+      // tooltip has something to say about why.
+      const autoByRefusals = by === 'concierge' && options.reason === 'refusals';
       await repos.chats.update(chatId, {
         conciergeOverride: null,
         isDangerousChat: true,
         dangerScore: null,
-        dangerCategories: [],
+        dangerCategories: by === 'concierge' ? [MODERATION_REFUSALS_CATEGORY] : [],
         dangerClassifiedAt: now,
         dangerClassifiedAtMessageCount: chat.messageCount ?? 0,
       });
-      await postConciergeManualAnnouncement({ chatId, kind: 'manual-flagged' });
+      if (autoByRefusals) {
+        await postConciergeManualAnnouncement({
+          chatId,
+          kind: 'auto-flagged-refusals',
+          details: options.refusals,
+        });
+      } else {
+        await postConciergeManualAnnouncement({ chatId, kind: 'manual-flagged' });
+      }
       break;
     }
     case 'monitored': {
@@ -94,6 +131,9 @@ export async function applyConciergeFlip(
         dangerClassifiedAt: null,
         dangerClassifiedAtMessageCount: null,
       });
+      // A fresh start: stale refusals must not immediately undo the
+      // operator's return to Monitored.
+      await repos.chats.resetModerationRefusalLedger(chatId);
       const kind = current === 'vouched' || current === 'uncensored'
         ? 'manual-resumed'
         : 'manual-safe';
@@ -120,10 +160,12 @@ export async function applyConciergeFlip(
     }
   }
 
-  logger.info('Concierge state flipped manually', {
+  logger.info(by === 'concierge' ? 'Concierge state flipped by the Concierge' : 'Concierge state flipped manually', {
     chatId,
     from: current,
     to: requested,
+    by,
+    reason: options.reason,
   });
 
   return { newState: requested, changed: true };

@@ -540,6 +540,95 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
   }
 
   // ============================================================================
+  // CONCIERGE REFUSAL LEDGER
+  // ============================================================================
+  //
+  // `moderationRefusalCount` / `lastModerationRefusalAt` are deliberately NOT
+  // declared in `ChatMetadataSchema`, for the reason `transcriptVersion` is not:
+  // every `update` rewrites the whole validated row from a snapshot read a
+  // moment earlier, so a counter inside the schema could be rewound by any
+  // concurrent chat-row write. Zod strips what it does not declare, so these
+  // three methods are the only things that touch the columns. The ledger's
+  // one writer above them is `recordModerationRefusal`
+  // (`lib/services/dangerous-content/refusal-ledger.ts`).
+
+  /**
+   * Record one stated moderation refusal on a chat: an atomic
+   * `moderationRefusalCount + 1` and a fresh `lastModerationRefusalAt`.
+   * Returns the new count (0 when the chat does not exist).
+   *
+   * In the forked job child this is a buffered write (`increment*` prefix)
+   * and returns nothing there; the parent replays it, and its commit hook
+   * runs the auto-switch check for the chat.
+   *
+   * @param refusedBy Who refused, for the log line and for the parent's
+   *   commit hook, which names them in the Concierge's announcement. Not stored.
+   */
+  async incrementModerationRefusalCount(
+    chatId: string,
+    at: string,
+    refusedBy?: { provider: string; modelName?: string | null } | null,
+  ): Promise<number> {
+    const updated = await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const result = await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $inc: { moderationRefusalCount: 1 }, $set: { lastModerationRefusalAt: at } } as never,
+      );
+      return result.matchedCount > 0;
+    }, 'Failed to record a moderation refusal', { chatId }, false);
+
+    if (!updated) {
+      logger.warn('Moderation refusal not recorded: chat not found', { chatId });
+      return 0;
+    }
+
+    const { count } = await this.getModerationRefusalLedger(chatId);
+    logger.debug('Moderation refusal recorded on the chat ledger', {
+      chatId,
+      count,
+      at,
+      provider: refusedBy?.provider,
+      modelName: refusedBy?.modelName ?? undefined,
+    });
+    return count;
+  }
+
+  /**
+   * The chat's refusal ledger, read straight off the row (the columns are not
+   * part of the entity schema — see above). A missing chat reads as empty.
+   */
+  async getModerationRefusalLedger(
+    chatId: string,
+  ): Promise<{ count: number; lastAt: string | null }> {
+    return this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      const row = await collection.findOne({ id: chatId } as QueryFilter) as
+        { moderationRefusalCount?: unknown; lastModerationRefusalAt?: unknown } | null;
+      const count = typeof row?.moderationRefusalCount === 'number' ? row.moderationRefusalCount : 0;
+      const lastAt = typeof row?.lastModerationRefusalAt === 'string' ? row.lastModerationRefusalAt : null;
+      return { count, lastAt };
+    }, 'Failed to read the moderation refusal ledger', { chatId }, { count: 0, lastAt: null });
+  }
+
+  /**
+   * Empty the chat's refusal ledger. Called by `applyConciergeFlip` when the
+   * operator returns a chat to Monitored — a fresh start, so stale refusals
+   * cannot immediately undo the operator's decision.
+   */
+  async resetModerationRefusalLedger(chatId: string): Promise<void> {
+    await this.safeQuery(async () => {
+      const collection = await this.getCollection();
+      await collection.updateOne(
+        { id: chatId } as QueryFilter,
+        { $set: { moderationRefusalCount: 0, lastModerationRefusalAt: null } } as never,
+      );
+      return true;
+    }, 'Failed to reset the moderation refusal ledger', { chatId }, false);
+    logger.debug('Moderation refusal ledger reset', { chatId });
+  }
+
+  // ============================================================================
   // SEARCH AND REPLACE OPERATIONS (delegated to ChatSearchReplaceOps)
   // ============================================================================
 

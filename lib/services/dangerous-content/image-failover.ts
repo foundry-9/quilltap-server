@@ -12,7 +12,9 @@
  *   1. ask the primary;
  *   2. on a throw, `classifyRefusal`. Not a refusal → rethrow untouched (a rate
  *      limit is not the Concierge's business);
- *   3. a refusal → record it on the trail;
+ *   3. a refusal → record it on the trail, and on the chat's refusal ledger
+ *      (`recordModerationRefusal`) once the outcome is known — whether or not
+ *      the reroute later succeeds;
  *   4. mode is not `AUTO_ROUTE` → announce `refusal-not-permitted`, rethrow;
  *   5. ask the understudy resolver (excluding the primary). Nobody →
  *      announce `refusal-no-understudy`, rethrow;
@@ -37,7 +39,8 @@ import {
   postConciergeRefusalAnnouncement,
   type ConciergeRefusalKind,
 } from '@/lib/services/concierge-notifications/writer'
-import { classifyRefusal } from './refusal'
+import { classifyRefusal, type RefusalVerdict } from './refusal'
+import { recordModerationRefusal } from './refusal-ledger'
 import { resolveUncensoredImageUnderstudy } from './understudy'
 
 const logger = createServiceLogger('ConciergeImageFailover')
@@ -162,6 +165,31 @@ async function announce(
 }
 
 /**
+ * Put the primary's refusal on the chat's ledger. The ledger decides whether
+ * the evidence counts and whether it earns the auto-switch; a chatless call
+ * (the legacy dialog) records nothing. Never throws.
+ */
+async function ledger(
+  ctx: ImageFailoverContext<FailoverProfile>,
+  refusing: FailoverProfile,
+  verdict: RefusalVerdict,
+  rerouted: boolean,
+): Promise<void> {
+  if (!ctx.chatId) return
+  await recordModerationRefusal({
+    chatId: ctx.chatId,
+    kind: 'image',
+    purpose: ctx.purpose,
+    refusedProfileId: refusing.id,
+    refusedProfileName: refusing.name,
+    provider: refusing.provider,
+    modelName: refusing.modelName,
+    evidence: verdict.evidence,
+    rerouted,
+  })
+}
+
+/**
  * Run an image call, failing over once to an uncensored understudy when the
  * provider refuses on content grounds.
  */
@@ -223,6 +251,7 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
       mode: ctx.settings.mode,
     })
     await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-not-permitted', primary.profile)
+    await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)
     throw attachTrail(primaryError, trail)
   }
 
@@ -239,6 +268,7 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
   if (!understudy) {
     logger.warn('Refusal not rerouted: no uncensored understudy is available', logContext)
     await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-no-understudy', primary.profile)
+    await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)
     throw attachTrail(primaryError, trail)
   }
 
@@ -264,6 +294,7 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
       primary.profile,
       understudy.profile.name,
     )
+    await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, true)
     return { result, profile: understudy.profile, apiKey: understudy.apiKey, rerouted: true, trail }
   } catch (understudyError) {
     const understudyVerdict = classifyRefusal({ error: understudyError })
@@ -286,6 +317,7 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
       understudyRefused: understudyVerdict.refused,
       error: getErrorMessage(understudyError),
     })
+    await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)
     throw attachTrail(understudyError, trail)
   }
 }

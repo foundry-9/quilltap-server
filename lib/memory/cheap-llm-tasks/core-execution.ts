@@ -17,12 +17,16 @@ import { classifyFallbackTrigger } from '@/lib/llm/fallback'
 import { buildCheapFallbackSelections } from './fallback'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import type { ActivityKind } from '@/lib/background-jobs/activity-kinds'
+import { classifyRefusal, type RefusalVerdict } from '@/lib/services/dangerous-content/refusal'
+import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
 
 /**
  * Internal type for provider response
  */
 interface ProviderResponse {
   content: string
+  /** The provider's stated stop reason, when it gave one. */
+  finishReason?: string | null
   usage?: {
     promptTokens: number
     completionTokens: number
@@ -372,7 +376,7 @@ async function sendToProvider(
     const startedAt = Date.now()
     const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
     logCall(response, undefined, Date.now() - startedAt)
-    return { content: response.content, usage: response.usage }
+    return { content: response.content, usage: response.usage, finishReason: response.finishReason }
   }
 
   // Try with lower temperature for more consistent outputs
@@ -380,7 +384,7 @@ async function sendToProvider(
   try {
     const response: LLMResponse = await provider.sendMessage({ ...baseParams, temperature: 0.3 }, apiKey)
     logCall(response, 0.3, Date.now() - firstAttemptStartedAt)
-    return { content: response.content, usage: response.usage }
+    return { content: response.content, usage: response.usage, finishReason: response.finishReason }
   } catch (error) {
     // If temperature is not supported, cache it and retry with default temperature
     const errorMessage = getErrorMessage(error, '')
@@ -390,7 +394,7 @@ async function sendToProvider(
       const retryStartedAt = Date.now()
       const response: LLMResponse = await provider.sendMessage(baseParams, apiKey)
       logCall(response, undefined, Date.now() - retryStartedAt)
-      return { content: response.content, usage: response.usage }
+      return { content: response.content, usage: response.usage, finishReason: response.finishReason }
     }
     throw error
   }
@@ -570,6 +574,30 @@ async function runCheapLLMTask<T>(
       response = await attempt(selection)
     }
 
+    // An empty body the provider *said* was a moderation stop goes on the
+    // chat's refusal ledger. Only a stated finish reason qualifies — an empty
+    // cheap-LLM body with no reason given is not evidence of a refusal.
+    const emptyVerdict: RefusalVerdict | null = response.content.trim() === ''
+      ? classifyRefusal({ finishReason: response.finishReason, emptyBody: true })
+      : null
+    const recordCheapRefusal = async (rerouted: boolean): Promise<void> => {
+      if (!chatId || !emptyVerdict?.refused) return
+      const profile = selection.connectionProfileId
+        ? uncensoredFallback?.availableProfiles.find(p => p.id === selection.connectionProfileId)
+        : undefined
+      await recordModerationRefusal({
+        chatId,
+        kind: 'text',
+        purpose: 'cheap',
+        refusedProfileId: selection.connectionProfileId ?? '',
+        refusedProfileName: profile?.name ?? `${selection.provider} ${selection.modelName}`,
+        provider: selection.provider,
+        modelName: selection.modelName,
+        evidence: emptyVerdict.evidence,
+        rerouted,
+      })
+    }
+
     // Check if we should retry with an uncensored provider
     const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
     if (uncensoredSelection) {
@@ -582,9 +610,16 @@ async function runCheapLLMTask<T>(
         uncensoredModel: uncensoredSelection.modelName,
       })
 
-      const retryResponse = await attempt(uncensoredSelection)
+      let retryResponse: ProviderResponse
+      try {
+        retryResponse = await attempt(uncensoredSelection)
+      } catch (retryError) {
+        await recordCheapRefusal(false)
+        throw retryError
+      }
 
       if (retryResponse.content.trim() === '') {
+        await recordCheapRefusal(false)
         throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)
       }
 
@@ -596,7 +631,10 @@ async function runCheapLLMTask<T>(
         responseLength: retryResponse.content.length,
       })
 
+      await recordCheapRefusal(true)
       response = retryResponse
+    } else {
+      await recordCheapRefusal(false)
     }
 
     const result = parseResponse(response.content)
