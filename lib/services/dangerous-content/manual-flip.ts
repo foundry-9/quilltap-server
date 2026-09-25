@@ -1,171 +1,204 @@
 /**
- * Manual Concierge state transitions.
+ * Concierge state transitions.
  *
- * The Salon sidebar exposes a four-state per-chat Concierge control. This
- * module is the single chokepoint that translates the requested UI state
- * into the right combination of database writes and synthetic Concierge
- * announcements, so the PUT handler doesn't have to know the rules.
+ * The single chokepoint that translates a requested Concierge state into the
+ * right database writes and the Concierge's announcement, so no caller has to
+ * know the rules. The operator's control (the Salon sidebar, the New Chat
+ * form), the refusal ledger's auto-switch and the classifier's verdict all
+ * come through here.
  *
- * State mapping (UI → storage):
- *   - 'monitored'  → conciergeOverride = NULL, isDangerousChat = false
- *   - 'flagged'    → conciergeOverride = NULL, isDangerousChat = true
- *   - 'vouched'    → conciergeOverride = 'OFF', isDangerousChat preserved
- *   - 'uncensored' → conciergeOverride = 'UNCENSORED', isDangerousChat preserved
+ * State mapping (requested → storage):
+ *   - 'moderated'   → conciergeMode 'moderated', setBy/reason NULL; the
+ *                     classifier's telemetry and the refusal ledger cleared
+ *   - 'unmoderated' → conciergeMode 'unmoderated', setBy = by, reason = reason
+ *   - 'locked'      → conciergeMode 'locked', setBy 'operator', reason 'manual'
  *
- * Every transition posts a brief Concierge bubble into the chat so the
- * history remains honest about which mode was in effect when.
- *
- * Not every transition is the operator's. The refusal ledger's auto-switch
- * (`refusal-ledger.ts`) comes through here too, with `{ by: 'concierge' }`, so
- * the Concierge's own decision is written and announced by the same rules.
+ * `conciergeOverride` is never written: it is legacy, kept only so an old row
+ * can be derived. Every transition posts a brief Concierge bubble so the
+ * history stays honest about which state was in effect when; a change of
+ * provenance alone (the operator confirming the Concierge's switch) is
+ * written silently.
  */
 
 import type { ChatMetadata } from '@/lib/schemas/types';
+import type { ConciergeModeReason, ConciergeModeSetBy } from '@/lib/schemas/chat.types';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
+  postConciergeDangerAnnouncement,
   postConciergeManualAnnouncement,
   type ConciergeAutoFlagDetails,
+  type ConciergeDangerDetails,
 } from '@/lib/services/concierge-notifications/writer';
-import { getConciergeState, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import {
+  getConciergeProvenance,
+  getConciergeReason,
+  getConciergeState,
+  type ConciergeState,
+} from '@/lib/services/dangerous-content/chat-override';
 
 const logger = createServiceLogger('ConciergeManualFlip');
 
-/** @deprecated alias kept for callers; the canonical type is `ConciergeState`. */
-export type ConciergeUIState = ConciergeState;
-
 /**
- * Compute the current UI state from the stored fields. Thin alias over the
- * canonical {@link getConciergeState} so the derivation lives in exactly one
- * place; this writer module is allowed to also read the raw fields below.
- */
-export const currentConciergeState = getConciergeState;
-
-/**
- * Who asked for a transition, and why. Omitted means the operator, which is
- * what every caller but the refusal ledger is.
+ * Who asked for a transition, and why. Omitted means the operator, by hand,
+ * which is what every caller but the refusal ledger and the classifier is.
  */
 export interface ApplyConciergeFlipOptions {
-  by?: 'operator' | 'concierge';
-  reason?: 'refusals' | 'classifier';
+  by?: ConciergeModeSetBy;
+  reason?: Exclude<ConciergeModeReason, 'migration'>;
   /**
    * For `{ by: 'concierge', reason: 'refusals' }`: what the announcement says
    * about the refusals that earned the switch.
    */
   refusals?: ConciergeAutoFlagDetails;
+  /**
+   * For `{ by: 'concierge', reason: 'classifier' }`: the verdict the
+   * announcement reports.
+   */
+  classification?: ConciergeDangerDetails;
 }
 
-/** The dangerCategories stamp an auto-switch leaves, for the header pill's tooltip. */
-export const MODERATION_REFUSALS_CATEGORY = 'moderation-refusals';
-
 export interface ApplyConciergeFlipResult {
-  /** The state requested by the caller, after normalization. */
-  newState: ConciergeUIState;
-  /** Whether anything actually changed (false on no-op requests). */
+  /** The state requested by the caller. */
+  newState: ConciergeState;
+  /** Whether anything was written (false on no-op requests). */
   changed: boolean;
 }
 
 /**
- * Apply a manual state change for a chat.
+ * Move a chat to the requested Concierge state.
  *
- * - Persists the new combination of `conciergeOverride` and `isDangerousChat`.
- * - Resets classifier metadata when returning to Monitored so the scheduled
- *   scanner can re-evaluate on the next user message.
- * - Posts a synthetic Concierge announcement that reflects the actual
- *   transition (returning to Monitored from an operator state announces the
- *   Concierge's return; a plain Flagged → Monitored announces the all-clear).
- * - Is a no-op when the requested state already matches the stored one.
+ * A no-op when the state already matches and the provenance would not change.
+ * When only the provenance changes — the operator choosing Unmoderated on a
+ * chat the Concierge already moved there — the provenance is updated without
+ * an announcement.
  */
 export async function applyConciergeFlip(
   chatId: string,
-  requested: ConciergeUIState,
-  chat: ChatMetadata,
+  requested: ConciergeState,
+  chat: Pick<ChatMetadata, 'conciergeMode' | 'conciergeModeSetBy' | 'conciergeModeReason'>,
   options: ApplyConciergeFlipOptions = {},
 ): Promise<ApplyConciergeFlipResult> {
-  const by = options.by ?? 'operator';
-  const current = currentConciergeState(chat);
+  const by: ConciergeModeSetBy = options.by ?? 'operator';
+  const reason = options.reason ?? 'manual';
+  const current = getConciergeState(chat);
+  const currentBy = getConciergeProvenance(chat);
+  const currentReason = getConciergeReason(chat);
+
+  // The provenance the requested state would carry.
+  const nextBy: ConciergeModeSetBy | null = requested === 'moderated'
+    ? null
+    : requested === 'locked' ? 'operator' : by;
+  const nextReason: ConciergeModeReason | null = requested === 'moderated'
+    ? null
+    : requested === 'locked' ? 'manual' : reason;
+
   if (current === requested) {
-    return { newState: requested, changed: false };
+    if (currentBy === nextBy && (currentReason === nextReason || requested === 'moderated')) {
+      logger.debug('Concierge flip is a no-op: state and provenance already match', {
+        chatId,
+        state: current,
+        by: currentBy,
+        reason: currentReason,
+      });
+      return { newState: requested, changed: false };
+    }
+    // Same state, new provenance. The Concierge never overwrites the
+    // operator's own choice; the operator may adopt the Concierge's.
+    if (by === 'concierge') {
+      logger.debug('Concierge flip skipped: the Concierge does not re-attribute a state the operator chose', {
+        chatId,
+        state: current,
+        by: currentBy,
+      });
+      return { newState: requested, changed: false };
+    }
+    const repos = getRepositories();
+    await repos.chats.update(chatId, {
+      conciergeModeSetBy: nextBy,
+      conciergeModeReason: nextReason,
+    });
+    logger.info('Concierge state provenance updated', {
+      chatId,
+      state: current,
+      fromBy: currentBy,
+      toBy: nextBy,
+      fromReason: currentReason,
+      toReason: nextReason,
+    });
+    return { newState: requested, changed: true };
+  }
+
+  // The Concierge moves only a Moderated chat, and only to Unmoderated. Locked
+  // is the operator's to keep, and returning a chat is the operator's call.
+  if (by === 'concierge' && (current !== 'moderated' || requested !== 'unmoderated')) {
+    logger.warn('Concierge flip refused: the Concierge may only move a Moderated chat to Unmoderated', {
+      chatId,
+      from: current,
+      to: requested,
+      reason,
+    });
+    return { newState: current, changed: false };
   }
 
   const repos = getRepositories();
-  const now = new Date().toISOString();
 
   switch (requested) {
-    case 'flagged': {
-      // The operator (or, after enough refusals, the Concierge himself) is
-      // marking this chat dangerous. Stamp the classification metadata so the
-      // sticky-true rule kicks in and the background scanner leaves it alone.
-      // The Concierge's own switch leaves a category so the header pill's
-      // tooltip has something to say about why.
-      const autoByRefusals = by === 'concierge' && options.reason === 'refusals';
+    case 'moderated': {
+      // Clearing the classifier's telemetry lets the scheduled scan
+      // re-evaluate on the next user message, and emptying the ledger stops
+      // stale refusals from immediately undoing the operator's choice — future
+      // moderation behaves as if the question had never been settled.
       await repos.chats.update(chatId, {
-        conciergeOverride: null,
-        isDangerousChat: true,
-        dangerScore: null,
-        dangerCategories: by === 'concierge' ? [MODERATION_REFUSALS_CATEGORY] : [],
-        dangerClassifiedAt: now,
-        dangerClassifiedAtMessageCount: chat.messageCount ?? 0,
-      });
-      if (autoByRefusals) {
-        await postConciergeManualAnnouncement({
-          chatId,
-          kind: 'auto-flagged-refusals',
-          details: options.refusals,
-        });
-      } else {
-        await postConciergeManualAnnouncement({ chatId, kind: 'manual-flagged' });
-      }
-      break;
-    }
-    case 'monitored': {
-      // Returning to Monitored from Flagged or from an operator state.
-      // Clearing the classification metadata lets the scheduled scan
-      // re-evaluate on the next user message — the user wants future
-      // moderation to behave as if we'd never settled the question.
-      await repos.chats.update(chatId, {
-        conciergeOverride: null,
+        conciergeMode: 'moderated',
+        conciergeModeSetBy: null,
+        conciergeModeReason: null,
         isDangerousChat: false,
         dangerScore: null,
         dangerCategories: [],
         dangerClassifiedAt: null,
         dangerClassifiedAtMessageCount: null,
       });
-      // A fresh start: stale refusals must not immediately undo the
-      // operator's return to Monitored.
       await repos.chats.resetModerationRefusalLedger(chatId);
-      const kind = current === 'vouched' || current === 'uncensored'
-        ? 'manual-resumed'
-        : 'manual-safe';
-      await postConciergeManualAnnouncement({ chatId, kind });
+      await postConciergeManualAnnouncement({ chatId, kind: 'set-moderated' });
       break;
     }
-    case 'vouched': {
-      // Vouched Safe preserves the prior isDangerousChat so the operator can
-      // return to Monitored or Flagged later and pick up where they were.
+    case 'unmoderated': {
       await repos.chats.update(chatId, {
-        conciergeOverride: 'OFF',
+        conciergeMode: 'unmoderated',
+        conciergeModeSetBy: nextBy,
+        conciergeModeReason: nextReason,
       });
-      await postConciergeManualAnnouncement({ chatId, kind: 'manual-vouched' });
+      if (by === 'operator') {
+        await postConciergeManualAnnouncement({ chatId, kind: 'set-unmoderated' });
+      } else if (reason === 'classifier') {
+        await postConciergeDangerAnnouncement({ chatId, details: options.classification });
+      } else {
+        await postConciergeManualAnnouncement({
+          chatId,
+          kind: 'auto-unmoderated',
+          details: options.refusals,
+        });
+      }
       break;
     }
-    case 'uncensored': {
-      // Uncensored likewise preserves isDangerousChat, so returning to
-      // Monitored re-enters the classifier cleanly.
+    case 'locked': {
       await repos.chats.update(chatId, {
-        conciergeOverride: 'UNCENSORED',
+        conciergeMode: 'locked',
+        conciergeModeSetBy: 'operator',
+        conciergeModeReason: 'manual',
       });
-      await postConciergeManualAnnouncement({ chatId, kind: 'manual-uncensored' });
+      await postConciergeManualAnnouncement({ chatId, kind: 'set-locked' });
       break;
     }
   }
 
-  logger.info(by === 'concierge' ? 'Concierge state flipped by the Concierge' : 'Concierge state flipped manually', {
+  logger.info(by === 'concierge' ? 'Concierge state switched by the Concierge' : 'Concierge state switched by the operator', {
     chatId,
     from: current,
     to: requested,
     by,
-    reason: options.reason,
+    reason: nextReason,
   });
 
   return { newState: requested, changed: true };

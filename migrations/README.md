@@ -260,6 +260,7 @@ Only v2.7.0+ migrations are included in the codebase. Legacy migrations (v2.0.0â
 | fix-text-embeddings-after-update-v1 | 3.1.0 | Fix TEXT embeddings written by update path (should be Float32 BLOBs) | normalize-vector-storage-v1 |
 | rename-persona-columns-v1 | 4.2.0 | Rename personaLinks â†’ partnerLinks in characters, drop personaId from memories | sqlite-initial-schema-v1 |
 | add-chat-refusal-ledger-v1 | 4.10.0 | Add the Concierge refusal ledger (moderationRefusalCount, lastModerationRefusalAt) to chats | add-chat-concierge-override-v1 |
+| add-chat-concierge-mode-v1 | 4.10.0 | Add conciergeMode / conciergeModeSetBy / conciergeModeReason to chats and backfill them from the legacy Concierge pair (Moderated / Unmoderated / Locked) | add-chat-refusal-ledger-v1 |
 
 **Notes**:
 - Minimum supported version for upgrades is v2.7.0

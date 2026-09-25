@@ -1,4 +1,5 @@
-import type { RouteAttempt } from '@/lib/schemas/chat.types'
+import type { ConciergeModeReason, RouteAttempt } from '@/lib/schemas/chat.types'
+import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 export interface MessageAttachment {
   id: string
@@ -297,8 +298,14 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
-  /** Per-chat Concierge override: NULL = follow global, 'OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored. */
-  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
+  /** The chat's Concierge state, derived server-side (`getConciergeState`). */
+  conciergeState?: ConciergeState
+  /** Who put the chat in its state; `null` for Moderated. */
+  conciergeSetBy?: ConciergeProvenance
+  /** Why the chat is in its state (`'manual'`, `'refusals'`, `'classifier'`, `'migration'`); `null` for Moderated. */
+  conciergeReason?: ConciergeModeReason | null
+  /** Moderation refusals on the Concierge's ledger since the chat was last Moderated. */
+  conciergeRefusalCount?: number
   /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
   offSceneCharacters?: Array<{
     id: string

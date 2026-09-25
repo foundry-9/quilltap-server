@@ -8,11 +8,11 @@
  *
  * Also locks the moderation-reroute path. Since the Concierge overhaul (phase
  * 1) a refused background is retried once on an uncensored understudy under
- * Auto-Route in ANY chat state — the old bug-133 gate that barred a Monitored
- * chat is gone — but the prompt is never re-crafted: a moderated chat's
- * concealed prompt is resent concealed, and a flagged chat's candid prompt is
+ * Auto-Route in any chat state but Locked — the old bug-133 gate that barred a
+ * Moderated chat is gone — but the prompt is never re-crafted: a moderated chat's
+ * concealed prompt is resent concealed, and an Unmoderated chat's candid prompt is
  * resent as-is. Under Detect Only nothing reroutes and the prompt stays
- * concealed even for a flagged chat, and the Concierge says why.
+ * concealed even for an Unmoderated chat, and the Concierge says why.
  *
  * Scaffolding mirrors story-background-sha256.test.ts: subject import first,
  * bare jest.mock() factories, behaviour wired in beforeEach.
@@ -56,6 +56,9 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
   // The real derivation, for tests that wire the real resolver through.
   getConciergeState: jest.requireActual('@/lib/services/dangerous-content/chat-override').getConciergeState,
+  // The real failover gate (anything but Locked may fail over), read by the
+  // image failover chokepoint the handler calls through.
+  mayFailOver: jest.requireActual('@/lib/services/dangerous-content/chat-override').mayFailOver,
 }))
 jest.mock('@/lib/services/dangerous-content/understudy', () => ({
   resolveUncensoredImageUnderstudy: jest.fn(),
@@ -265,8 +268,8 @@ describe('story-background handler — uncensoredImageTarget', () => {
     expect(craftTargetFlag()).toBe(true)
   })
 
-  it('crafts candidly for an operator-Uncensored chat even under a global OFF (real predicate + resolver)', async () => {
-    // The regression that motivated the four-state control: the operator
+  it('crafts candidly for an operator-Unmoderated chat even under a global OFF (real predicate + resolver)', async () => {
+    // The regression that motivated the operator's own state control: the operator
     // asserts the chat spicy, the global Concierge mode is OFF, and the
     // prompt must still go out candid and bound for the uncensored profile —
     // with every scan disabled (nothing left to classify).
@@ -282,7 +285,7 @@ describe('story-background handler — uncensoredImageTarget', () => {
     repos.chats.findById.mockResolvedValue({
       id: CHAT_ID, projectId: null, title: 'The Morning After',
       sceneState: null, messageCount: 0, contextSummary: null,
-      conciergeOverride: 'UNCENSORED', isDangerousChat: false,
+      conciergeMode: 'unmoderated', conciergeModeSetBy: 'operator', isDangerousChat: false,
     })
     repos.chatSettings.findByUserId.mockResolvedValue({
       dangerousContentSettings: {
@@ -306,7 +309,7 @@ describe('story-background handler — uncensoredImageTarget', () => {
       settings: { mode: string; scanImagePrompts: boolean }
       source: string
     }
-    expect(resolved.source).toBe('chat-uncensored')
+    expect(resolved.source).toBe('chat-unmoderated')
     expect(resolved.settings.mode).toBe('AUTO_ROUTE')
     expect(resolved.settings.scanImagePrompts).toBe(false)
   })
@@ -340,7 +343,7 @@ describe('story-background handler — appearance sanitization gate', () => {
     expect(sanitizeRoutesFlag()).toBe(false)
   })
 
-  it('leaves a flagged chat bound for the uncensored provider accurate', async () => {
+  it('leaves an Unmoderated chat bound for the uncensored provider accurate', async () => {
     markDangerous(true)
     withCharacter()
 
@@ -378,7 +381,7 @@ describe('story-background handler — moderation reroute', () => {
     return (first.generateImage.mock.calls[0][0] as { prompt: string }).prompt
   }
 
-  it('reroutes a Monitored chat under Auto-Route, resending the concealed prompt unchanged', async () => {
+  it('reroutes a Moderated chat under Auto-Route, resending the concealed prompt unchanged', async () => {
     mockResolveDanger.mockReturnValue({
       settings: { mode: 'AUTO_ROUTE', scanImagePrompts: false, uncensoredImageProfileId: null },
     } as never)
@@ -408,7 +411,7 @@ describe('story-background handler — moderation reroute', () => {
     expect(repos.files.create.mock.calls[0][0]).toMatchObject({ generationModel: 'uncensored-model' })
   })
 
-  it('does not reroute under Detect Only, keeps even a flagged chat\'s prompt concealed, and says why', async () => {
+  it('does not reroute under Detect Only, keeps even an Unmoderated chat\'s prompt concealed, and says why', async () => {
     mockShouldUseUncensoredRoute.mockReturnValue(true)
     mockResolveDanger.mockReturnValue({
       settings: { mode: 'DETECT_ONLY', scanImagePrompts: true, uncensoredImageProfileId: 'uncensored-image-profile' },
@@ -433,7 +436,7 @@ describe('story-background handler — moderation reroute', () => {
     expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-no-understudy' }))
   })
 
-  it('resends the already-candid prompt for a flagged chat, without re-crafting', async () => {
+  it('resends the already-candid prompt for an Unmoderated chat, without re-crafting', async () => {
     markDangerous(true)
     rejectThenReroute()
     mockCraftPrompt.mockResolvedValue({ success: true, result: CANDID_PROMPT } as never)

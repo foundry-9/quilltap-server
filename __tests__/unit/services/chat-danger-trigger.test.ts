@@ -137,14 +137,14 @@ describe('triggerChatDangerClassification', () => {
   });
 
   it.each([
-    ['OFF' as const, 'vouched safe'],
-    ['UNCENSORED' as const, 'uncensored'],
-  ])('skips without enqueueing when the operator decided (%s / %s)', async (conciergeOverride) => {
-    // Both operator states take the classifier off the case, and the handler
+    ['locked' as const, 'operator'],
+    ['unmoderated' as const, 'operator'],
+  ])('skips without enqueueing when the chat is off the Moderated desk (%s / set by %s)', async (conciergeMode, conciergeModeSetBy) => {
+    // Only a Moderated chat keeps the classifier on duty, and the handler
     // discards the job at its own guard — so the trigger must never enqueue
     // one. The label underneath is `false`: the chat was scanned and found
     // safe before the operator spoke, so no other guard would catch this.
-    const repos = buildRepos({ conciergeOverride, isDangerousChat: false });
+    const repos = buildRepos({ conciergeMode, conciergeModeSetBy, isDangerousChat: false });
     await triggerChatDangerClassification(repos as any, baseOptions);
 
     expect(mockEnqueue).not.toHaveBeenCalled();

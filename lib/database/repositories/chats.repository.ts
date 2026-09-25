@@ -613,7 +613,7 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
 
   /**
    * Empty the chat's refusal ledger. Called by `applyConciergeFlip` when the
-   * operator returns a chat to Monitored — a fresh start, so stale refusals
+   * operator returns a chat to Moderated — a fresh start, so stale refusals
    * cannot immediately undo the operator's decision.
    */
   async resetModerationRefusalLedger(chatId: string): Promise<void> {

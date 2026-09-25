@@ -658,7 +658,20 @@
         },
         "conciergeOverride": {
           "enum": ["OFF", "UNCENSORED", null],
-          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = Vouched Safe (the operator vouches for the chat — no moderation, ordinary providers); 'UNCENSORED' = the operator asserts the chat spicy (uncensored routing with no classification or scanning)."
+          "deprecated": true,
+          "description": "DEPRECATED (4.10): no longer written; superseded by conciergeMode. Kept so a bundle from before the three Concierge states can be imported: when a chat carries no conciergeMode, the importer derives it from this and isDangerousChat — 'UNCENSORED' → unmoderated (operator), 'OFF' → locked (operator), NULL with isDangerousChat true → unmoderated (concierge, classifier), otherwise moderated."
+        },
+        "conciergeMode": {
+          "enum": ["moderated", "unmoderated", "locked", null],
+          "description": "The chat's Concierge state (4.10). NULL reads as 'moderated'. 'moderated' = ordinary providers first, uncensored on refusal, the Concierge may switch the chat; 'unmoderated' = the uncensored desk only; 'locked' = ordinary providers only, a refusal stands."
+        },
+        "conciergeModeSetBy": {
+          "enum": ["operator", "concierge", null],
+          "description": "Who put the chat in its conciergeMode. NULL when Moderated."
+        },
+        "conciergeModeReason": {
+          "enum": ["manual", "refusals", "classifier", "migration", null],
+          "description": "Why the chat is in its conciergeMode. NULL when Moderated."
         },
         "answerConfirmationOverride": {
           "enum": ["ON", "OFF", null],

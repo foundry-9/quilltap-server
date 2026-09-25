@@ -19,6 +19,10 @@ import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
 import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { classifyRefusal, type RefusalEvidence } from '@/lib/services/dangerous-content/refusal'
 import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
+import {
+  conciergeStateMayFailOver,
+  type ConciergeState,
+} from '@/lib/services/dangerous-content/chat-override'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
@@ -86,6 +90,11 @@ export interface AttemptEmptyResponseRecoveryOptions {
   toolMessagesLength: number
   contentWasFlaggedDangerous: boolean
   dangerSettings: DangerousContentSettings
+  /**
+   * The chat's Concierge state. A Locked chat never reroutes a refusal to the
+   * uncensored desk, whatever the mode says. Absent reads as Moderated.
+   */
+  conciergeState?: ConciergeState
   connectionProfile: ConnectionProfile
   formattedMessages: Array<{
     role: string
@@ -138,6 +147,7 @@ export async function attemptEmptyResponseRecovery({
   toolMessagesLength,
   contentWasFlaggedDangerous,
   dangerSettings,
+  conciergeState,
   formattedMessages,
   modelParams,
   actualTools,
@@ -261,7 +271,28 @@ export async function attemptEmptyResponseRecovery({
     }
   }
 
-  if (state.fullResponse.trim().length === 0 && dangerSettings.mode === 'AUTO_ROUTE') {
+  const lockedOut = !conciergeStateMayFailOver(conciergeState ?? 'moderated')
+  if (state.fullResponse.trim().length === 0 && lockedOut && turnRefusal) {
+    // A Locked chat's refusal stands. Say so, once, and let the ordinary
+    // chain below have its turn.
+    logger.info('[EmptyResponse] Refusal not rerouted: the chat is Locked', {
+      chatId,
+      provider: turnRefusal.profile.provider,
+      model: turnRefusal.profile.modelName,
+    })
+    await postConciergeRefusalAnnouncement({
+      chatId,
+      kind: 'refusal-not-permitted',
+      details: {
+        refusingProvider: turnRefusal.profile.provider,
+        refusingModel: turnRefusal.profile.modelName,
+        purpose: 'text',
+        reason: 'locked',
+      },
+    })
+  }
+
+  if (state.fullResponse.trim().length === 0 && !lockedOut && dangerSettings.mode === 'AUTO_ROUTE') {
     const uncensored = await attemptUncensoredRetry({
       state,
       dangerSettings,
@@ -884,6 +915,11 @@ export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOption
    * chain. Absent means no uncensored retry.
    */
   dangerSettings?: DangerousContentSettings
+  /**
+   * The chat's Concierge state. A Locked chat never reroutes a refusal to the
+   * uncensored desk, whatever the mode says. Absent reads as Moderated.
+   */
+  conciergeState?: ConciergeState
 }
 
 /**
@@ -956,7 +992,23 @@ export async function attemptHardErrorFailover(
     const refusingProfile = state.effectiveProfile
 
     const alreadyTried = [...context.alreadyTried]
-    // The caller's gate, stated here: the Concierge reroutes under Auto-Route only.
+    // The caller's gate, stated here: a Locked chat's refusal stands, and
+    // otherwise the Concierge reroutes under Auto-Route only.
+    if (!conciergeStateMayFailOver(opts.conciergeState ?? 'moderated')) {
+      logger.info('[Failover] Refusal not rerouted to an uncensored profile: the chat is Locked', { chatId })
+      await postConciergeRefusalAnnouncement({
+        chatId,
+        kind: 'refusal-not-permitted',
+        details: {
+          refusingProvider: refusingProfile.provider,
+          refusingModel: refusingProfile.modelName,
+          purpose: 'text',
+          reason: 'locked',
+        },
+      })
+      await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
+      return walkFallbackChain(opts, openingAttempt)
+    }
     if (opts.dangerSettings?.mode === 'AUTO_ROUTE') {
       const uncensored = await attemptUncensoredRetry({
         state,

@@ -118,7 +118,7 @@ A per-room override is also offered at room creation and lives on the chat itsel
 
 ## The Concierge in an autonomous room
 
-The Concierge continues to do its work — classification, rerouting, refusal — exactly as in an ordinary chat. The one adjustment is that, in the absence of a householder to address, the Concierge's "ask the operator to confirm" path is treated as a refusal. The character's turn ends with the refusal recorded; the loop advances to the next speaker. Sustained refusals on the same speaker will trip the loop-detection rule and bring the run to an error stop, exactly as designed.
+The Concierge continues to do its work — classification, rerouting, refusal — exactly as in an ordinary chat, and the room's own posture (Moderated, Unmoderated or Locked) applies to every speaker in it. The one adjustment is that, in the absence of a householder to address, the Concierge's "ask the operator to confirm" path is treated as a refusal. The character's turn ends with the refusal recorded; the loop advances to the next speaker. Sustained refusals on the same speaker will trip the loop-detection rule and bring the run to an error stop, exactly as designed.
 
 ## Memories — provenance kept honest
 

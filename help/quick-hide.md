@@ -146,10 +146,9 @@ In addition to tag-based hiding, the quick-hide menu includes a **Content Filter
 
 The "Dangerous Chats" toggle hides every conversation that takes the uncensored route, from your sidebar, your projects, and your all-chats page. It asks about the *road the chat is on*, not about anyone's opinion of it:
 
-- A chat the Concierge has **Flagged** himself goes behind the curtain — red mark, uncensored road.
-- A chat you have marked **Uncensored** goes with it — blue mark, same road, your own hand on the door.
-- A chat you have **Vouched Safe** stays put, whatever ancient and colourful classification it may still be carrying in its pocket. You gave your word, and the toggle takes it.
-- A merely **Monitored** chat stays put as well, being the ordinary case.
+- An **Unmoderated** chat goes behind the curtain — red mark, uncensored road — whether the Concierge moved it there himself or you opened the door with your own hand.
+- A **Locked** chat stays put, whatever ancient and colourful classification it may still be carrying in its pocket. You gave your word, and the toggle takes it.
+- A merely **Moderated** chat stays put as well, being the ordinary case.
 
 Further particulars:
 

@@ -377,6 +377,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         chatId: payload.chatId,
         purpose: 'avatar',
         settings: dangerSettings,
+        chat,
         primaryVia: effectiveImageProfile.id !== imageProfile.id ? 'concierge' : 'primary',
       },
     );

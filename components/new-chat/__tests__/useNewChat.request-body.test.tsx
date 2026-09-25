@@ -1,10 +1,10 @@
 /**
  * useNewChat — what the create request actually carries.
  *
- * The New Chat form gained a Concierge picker whose default (Monitored) is
+ * The New Chat form gained a Concierge picker whose default (Moderated) is
  * deliberately *omitted* from `POST /api/v1/chats`, so a plain create stays
  * byte-identical to what it has always been. This suite pins that: absent on
- * Monitored, present verbatim on the other three.
+ * Moderated, present verbatim on the other two.
  *
  * `jest.setup.ts` leaves `global.fetch` as a bare stub with no `ok`, so this
  * suite installs its own reference-data responder.
@@ -102,20 +102,20 @@ describe('useNewChat create request — Concierge state', () => {
     fetchStub = installFetchStub()
   })
 
-  it('defaults to Monitored on the form', async () => {
+  it('defaults to Moderated on the form', async () => {
     const { result } = renderHook(() => useNewChat())
     await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.state.conciergeState).toBe('monitored')
+    expect(result.current.state.conciergeState).toBe('moderated')
   })
 
-  it('omits conciergeState entirely when Monitored', async () => {
-    const body = await createWith('monitored')
+  it('omits conciergeState entirely when Moderated', async () => {
+    const body = await createWith('moderated')
     expect(body).not.toHaveProperty('conciergeState')
     // The rest of the request is unchanged — the participant still rides along.
     expect(body.participants).toHaveLength(1)
   })
 
-  it.each(['flagged', 'vouched', 'uncensored'] as const)(
+  it.each(['unmoderated', 'locked'] as const)(
     'sends conciergeState verbatim when %s',
     async (state) => {
       const body = await createWith(state)

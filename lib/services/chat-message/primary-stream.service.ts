@@ -43,6 +43,7 @@ import { buildRouteTrail } from './route-trail'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { attemptHardErrorFailover } from './provider-failover.service'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import { summarizeFallbackAttempts } from '@/lib/llm/fallback'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -396,6 +397,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       state: streaming,
       error: streamingError,
       dangerSettings,
+      conciergeState: getConciergeState(chat),
       repos,
       context: {
         userId,

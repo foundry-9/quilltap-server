@@ -29,7 +29,7 @@ jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/manual-flip', () => ({
-  applyConciergeFlip: jest.fn().mockResolvedValue({ newState: 'monitored', changed: false }),
+  applyConciergeFlip: jest.fn().mockResolvedValue({ newState: 'moderated', changed: false }),
 }))
 
 jest.mock('@/lib/chat/first-message-context', () => ({
@@ -177,7 +177,7 @@ function makeConnectionProfile() {
   }
 }
 
-function makeCreatedChat(conciergeOverride: string | null = null) {
+function makeCreatedChat(conciergeMode: 'moderated' | 'unmoderated' | 'locked' | null = null) {
   return {
     id: NEW_CHAT_ID,
     userId: USER_ID,
@@ -187,7 +187,8 @@ function makeCreatedChat(conciergeOverride: string | null = null) {
       { id: 'np-a', type: 'CHARACTER', characterId: CHAR_ID, controlledBy: 'llm', isActive: true, displayOrder: 0 },
     ],
     messageCount: 0,
-    conciergeOverride,
+    conciergeMode,
+    conciergeModeSetBy: conciergeMode === 'unmoderated' || conciergeMode === 'locked' ? 'operator' : null,
     isDangerousChat: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -327,10 +328,10 @@ describe('POST /api/v1/chats — a greeting the provider never delivers', () => 
   })
 
   it('does not let a silence at the uncensored desk condemn the character\u2019s own profile', async () => {
-    // A Flagged/Uncensored chat opens at the frank desk, which is a different
+    // An Unmoderated chat opens at the frank desk, which is a different
     // profile on a different provider. Its going quiet says nothing about
     // whether this character's own profile will.
-    const uncensoredChat = makeCreatedChat('UNCENSORED')
+    const uncensoredChat = makeCreatedChat('unmoderated')
     mockRepos.chats.findById.mockImplementation(async (id: string) =>
       id === NEW_CHAT_ID ? (uncensoredChat as any) : null
     )

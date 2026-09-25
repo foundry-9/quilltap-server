@@ -76,7 +76,7 @@ describe('danger-orchestrator.service', () => {
     expect(gatekeeperService.classifyContent).not.toHaveBeenCalled()
   })
 
-  it('synthesizes flags for permanently dangerous chats and reroutes in AUTO_ROUTE mode', async () => {
+  it('synthesizes flags for Unmoderated chats and reroutes in AUTO_ROUTE mode', async () => {
     const uncensoredProfile = {
       id: 'profile-2',
       name: 'Uncensored',
@@ -100,7 +100,7 @@ describe('danger-orchestrator.service', () => {
       repos: { chats: { addMessage: jest.fn() } } as any,
       chatId: 'chat-1',
       userId: 'user-1',
-      chat: { isDangerousChat: true, dangerCategories: ['nsfw'] } as any,
+      chat: { conciergeMode: 'unmoderated', isDangerousChat: true, dangerCategories: ['nsfw'] } as any,
       chatSettings: {} as any,
       character: { id: 'char-1', name: 'Alice' } as any,
       isContinueMode: false,

@@ -192,4 +192,18 @@ describe('attemptHardErrorFailover — thrown refusals', () => {
     expect(mockResolveUnderstudy).not.toHaveBeenCalled()
     expect(state.routeFailures[0]).toMatchObject({ outcome: 'refused', trigger: 'moderation-refusal' })
   })
+
+  it('never asks the uncensored desk on a Locked chat, even under Auto-Route, and says why', async () => {
+    const primary = makeProfile()
+    const state = makeState(primary)
+
+    await attemptHardErrorFailover({ ...opts(state, [primary], policyError(), autoRoute), conciergeState: 'locked' })
+
+    expect(mockResolveUnderstudy).not.toHaveBeenCalled()
+    expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'refusal-not-permitted',
+      details: expect.objectContaining({ purpose: 'text', reason: 'locked' }),
+    }))
+    expect(state.routeFailures[0]).toMatchObject({ outcome: 'refused', trigger: 'moderation-refusal' })
+  })
 })

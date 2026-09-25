@@ -314,6 +314,7 @@ import { createChatMessageFtsMigration } from './create-chat-message-fts';
 import { compressChatMessageTextMigration } from './compress-chat-message-text';
 // Concierge refusal ledger: moderationRefusalCount / lastModerationRefusalAt on chats
 import { addChatRefusalLedgerMigration } from './add-chat-refusal-ledger';
+import { addChatConciergeModeMigration } from './add-chat-concierge-mode';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -822,6 +823,8 @@ export const migrations: Migration[] = [
   compressChatMessageTextMigration,
   // Concierge refusal ledger: moderationRefusalCount / lastModerationRefusalAt on chats
   addChatRefusalLedgerMigration,
+  // Concierge three states: conciergeMode / conciergeModeSetBy / conciergeModeReason on chats
+  addChatConciergeModeMigration,
 ];
 
 export {
@@ -1218,5 +1221,7 @@ export {
   compressChatMessageTextMigration,
   // Concierge refusal ledger: moderationRefusalCount / lastModerationRefusalAt on chats
   addChatRefusalLedgerMigration,
+  // Concierge three states: conciergeMode / conciergeModeSetBy / conciergeModeReason on chats
+  addChatConciergeModeMigration,
 };
 

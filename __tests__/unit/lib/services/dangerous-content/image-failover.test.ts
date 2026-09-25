@@ -87,6 +87,38 @@ describe('generateImageWithConciergeFailover', () => {
     expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-not-permitted', chatId: 'chat-1' }))
   })
 
+  it('refused on a Locked chat → refusal-not-permitted (reason locked), never resolves an understudy', async () => {
+    const err = refusal()
+    const attempt = jest.fn(async () => { throw err })
+    // Even with Auto-Route in the settings, Locked wins.
+    await expect(generateImageWithConciergeFailover(
+      { profile: PRIMARY, apiKey: 'k' },
+      attempt,
+      { ...ctx('AUTO_ROUTE'), chat: { conciergeMode: 'locked' } },
+    )).rejects.toBe(err)
+    expect(attempt).toHaveBeenCalledTimes(1)
+    expect(mockResolve).not.toHaveBeenCalled()
+    expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'refusal-not-permitted',
+      chatId: 'chat-1',
+      details: expect.objectContaining({ reason: 'locked' }),
+    }))
+    expect(getConciergeTrail(err)).toHaveLength(1)
+  })
+
+  it('refused on an Unmoderated chat still asks another uncensored understudy', async () => {
+    const attempt = jest.fn(async (profile: ImageProfile) => {
+      if (profile.id === PRIMARY.id) throw refusal()
+      return 'picture'
+    })
+    const outcome = await generateImageWithConciergeFailover(
+      { profile: PRIMARY, apiKey: 'k' },
+      attempt,
+      { ...ctx('AUTO_ROUTE'), chat: { conciergeMode: 'unmoderated' } },
+    )
+    expect(outcome.rerouted).toBe(true)
+  })
+
   it('refused with no understudy → refusal-no-understudy, rethrow', async () => {
     mockResolve.mockResolvedValue(null as never)
     const attempt = jest.fn(async () => { throw refusal() })

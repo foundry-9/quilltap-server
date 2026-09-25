@@ -145,7 +145,7 @@ function flattenGroupScenarios(data: {
 
 const INITIAL_STATE: NewChatFormState = {
   imageProfileId: '',
-  conciergeState: 'monitored',
+  conciergeState: 'moderated',
   roleplayTemplateId: null,
   roleplayTemplateTouched: false,
   scenario: '',
@@ -790,10 +790,10 @@ export function useNewChat({
         requestBody.imageProfileId = state.imageProfileId
       }
 
-      // Omitted when Monitored so a plain create stays byte-identical to what it
-      // has always been; the server treats absence and 'monitored' the same way
+      // Omitted when Moderated so a plain create stays byte-identical to what it
+      // has always been; the server treats absence and 'moderated' the same way
       // (no write, no Concierge bubble).
-      if (state.conciergeState !== 'monitored') {
+      if (state.conciergeState !== 'moderated') {
         requestBody.conciergeState = state.conciergeState
       }
 

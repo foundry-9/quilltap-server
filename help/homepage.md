@@ -33,11 +33,11 @@ This section displays your most recently active conversations, showing:
 - **Message count** — How many messages are in the conversation
 - **The Concierge's mark** — A small asterisk beside the message count, worn
   only by a conversation on which the Concierge's default arrangement no longer
-  stands. It comes in three shades: **red**, and the Concierge has taken the
-  measure of the conversation himself and found it dangerous; **grey**, and you
-  have vouched for it, sending him politely away; **blue**, and you have opened
-  the uncensored door with your own hand. A conversation he is merely keeping a
-  companionable eye on wears no mark at all. Rest the pointer on any asterisk
+  stands. It comes in two shades: **red**, and the conversation is
+  **Unmoderated** — sent to the uncensored desk, whether the Concierge took its
+  measure and moved it there himself or you opened the door with your own hand;
+  **grey**, and it is **Locked** to the usual desks by your word. A
+  **Moderated** conversation, the ordinary case, wears no mark at all. Rest the pointer on any asterisk
   and he will explain himself at length, and tell you where the switch is kept.
 
 You can click any recent chat to jump back into the conversation, or hover over a chat to hide it if you want to keep your list cleaner.

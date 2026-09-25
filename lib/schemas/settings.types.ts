@@ -412,7 +412,7 @@ export const DangerousContentSettingsSchema = z.object({
   showWarningBadges: z.boolean().default(true),
   /** Custom classification prompt to append to the default classification system prompt */
   customClassificationPrompt: z.string().nullable().optional(),
-  /** After this many stated moderation refusals on a Monitored chat, the Concierge flips it to Flagged. 0 = never. */
+  /** After this many stated moderation refusals on a Moderated chat, the Concierge switches it to Unmoderated. 0 = never. */
   autoSwitchAfterRefusals: z.number().int().min(0).max(10).default(2),
 });
 

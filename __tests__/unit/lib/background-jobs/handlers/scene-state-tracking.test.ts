@@ -506,15 +506,15 @@ describe('handleSceneStateTracking', () => {
     )
   })
 
-  // ─── Additional: uses resolveUncensoredCheapLLMSelection for dangerous chats ─
+  // ─── Additional: uses resolveUncensoredCheapLLMSelection for Unmoderated chats
 
-  it('calls resolveUncensoredCheapLLMSelection for dangerous chats', async () => {
+  it('calls resolveUncensoredCheapLLMSelection for Unmoderated chats', async () => {
     repos.chats.findById.mockResolvedValue({
       id: 'chat-1',
       userId: 'user-1',
       messageCount: 5,
       sceneState: null,
-      isDangerousChat: true,
+      conciergeMode: 'unmoderated',
       participants: [{ id: 'p1', characterId: 'char-1', controlledBy: 'llm', isActive: true, status: 'active' }],
       contextSummary: null,
     })

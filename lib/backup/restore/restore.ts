@@ -15,6 +15,7 @@ import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
+import { withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
@@ -201,7 +202,9 @@ export async function restore(
         // exactly would restore the defect with it, and the migration that
         // cleared those rows will not run again — so it is corrected on the way
         // in. The scenario itself is untouched.
-        const createdChat = await repos.chats.create(stripScenarioSeededSummary(chatData), { id: chat.id });
+        // A backup from before the three Concierge states carries only the
+        // legacy pair; derive the state so the restored chat keeps its behaviour.
+        const createdChat = await repos.chats.create(withConciergeModeFromLegacy(stripScenarioSeededSummary(chatData)), { id: chat.id });
 
         // Add messages to the chat
         for (const message of messages) {
