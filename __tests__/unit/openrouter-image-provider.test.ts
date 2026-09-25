@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals'
+import { afterEach, beforeEach, describe, expect, it } from '@jest/globals'
 
 // jest.config.ts maps '@openrouter/sdk' to __mocks__/@openrouter/sdk.ts. An
 // inline jest.mock factory here registers against the raw specifier, while the
@@ -166,6 +166,10 @@ describe('OpenRouterImageProvider', () => {
     await expect(provider.generateImage({ prompt: 'Forbidden portrait' }, apiKey)).rejects.toThrow(
       'Model declined to generate an image: I cannot create that image because it violates the policy.',
     )
+    // ...and says so in the code the host's Concierge reads.
+    await expect(provider.generateImage({ prompt: 'Forbidden portrait' }, apiKey)).rejects.toMatchObject({
+      code: 'MODERATION_REJECTED',
+    })
   })
 
   it('advertises the updated fallback image-capable model list', () => {

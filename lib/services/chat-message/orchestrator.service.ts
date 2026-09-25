@@ -1485,6 +1485,7 @@ async function processMessage(
     // straight back to the moderation that refused it.
     isDangerousRouted:
       (dangerFlags?.length ?? 0) > 0 || streamingState.effectiveProfile.id !== connectionProfile.id,
+    dangerSettings,
     streaming: streamingState,
     controller,
     encoder,

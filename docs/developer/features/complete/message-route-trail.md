@@ -350,3 +350,39 @@ was built without one. Everything it checks has automated coverage except the
 two visual items: the three-row layout in the desktop avatar column (light,
 dark, and Madman's Box) and the `.qtap` export → fresh-instance import round
 trip end to end.
+
+## Image trails (Concierge overhaul, phase 1)
+
+Added by [concierge-overhaul-phase-1-refusal-failover.md](../concierge-overhaul-phase-1-refusal-failover.md).
+
+- **`profileKind`.** `RouteAttemptSchema` gained `profileKind: 'connection' | 'image'`,
+  optional; absent means `'connection'`, so every trail written before this reads
+  unchanged. (The spec asked for `.default('connection')`; an optional field keeps
+  every existing `RouteAttempt` literal valid and means the same thing.) The
+  collapse labels an `'image'` row by its profile name rather than its model —
+  two image profiles on one model differ by their LoRAs and styles, not the model.
+- **More evidence.** `evidence` gained `typed-error`, `provider-code` and
+  `message-pattern`, the three `classifyRefusal` evidence kinds a thrown error can
+  carry. `recordRouteFailure` / `classifyEmptyBody` take `RefusalEvidence`.
+- **A second writer.** `generateImageWithConciergeFailover`
+  (`lib/services/dangerous-content/image-failover.ts`) composes an image trail —
+  empty when the primary answered, else every refusal/failure followed by the
+  answering row — and attaches it to a rethrown error as `conciergeTrail`
+  (`getConciergeTrail(error)`). `route-trail.ts` stays the only writer of the
+  per-turn *text* trail on `StreamingState`.
+- **Where image trails land.** The `generate_image` tool returns it as
+  `routeTrail`; `ToolResult.metadata.routeTrail` carries it to
+  `saveToolMessages`, which writes it on the TOOL row, and `ToolMessage` renders
+  it beside the Success/Failed chip. `postLanternImageNotification` accepts
+  `routeTrail` and writes it on the Lantern / Aurora bubble, where the ordinary
+  assistant-avatar badge renders it. The transcript projection already carried
+  `routeTrail` for every role.
+- **Text.** A thrown refusal is now `moderation-refusal` (was `null`), recorded
+  as `outcome: 'refused'` with its evidence; the uncensored retry
+  (`attemptUncensoredRetry`) records its own row as `via: 'concierge'`.
+
+Tests: `__tests__/unit/lib/services/dangerous-content/image-failover.test.ts`,
+`__tests__/unit/lib/tools/image-generation-concierge-failover.test.ts`,
+`__tests__/unit/lib/services/chat-message/provider-failover-refusal.test.ts`, the
+TOOL-row cases in `tool-execution.service.test.ts`, and the image-label cases in
+`lib/chat/__tests__/route-trail-display.test.ts`.

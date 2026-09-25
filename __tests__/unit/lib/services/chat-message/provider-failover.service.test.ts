@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
 const mockStreamMessage = jest.fn()
-const mockResolveProviderForDangerousContent = jest.fn()
+const mockResolveUncensoredTextUnderstudy = jest.fn()
 const mockEncodeStatusEvent = jest.fn((_encoder: TextEncoder, payload: unknown) => payload)
 const mockSafeEnqueue = jest.fn((controller: { enqueue: (chunk: unknown) => void }, chunk: unknown) => {
   controller.enqueue(chunk)
@@ -32,8 +32,13 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   },
 }))
 
-jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
-  resolveProviderForDangerousContent: (...args: any[]) => mockResolveProviderForDangerousContent(...args),
+jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  resolveUncensoredTextUnderstudy: (...args: any[]) => mockResolveUncensoredTextUnderstudy(...args),
+}))
+
+const mockPostConciergeRefusalAnnouncement = jest.fn(async (_params: unknown) => null)
+jest.mock('@/lib/services/concierge-notifications/writer', () => ({
+  postConciergeRefusalAnnouncement: (params: unknown) => mockPostConciergeRefusalAnnouncement(params),
 }))
 
 const mockIsModerationFinishReason = jest.fn((_r?: string | null) => false)
@@ -146,12 +151,10 @@ describe('provider-failover.service', () => {
         { done: true, usage: { totalTokens: 9 }, rawResponse: { retry: 'uncensored' } },
       ]))
 
-    ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-      rerouted: true,
-      connectionProfile: uncensoredProfile,
-      apiKey: 'sk-uncensored',
-      reason: 'rerouted to uncensored profile',
-    })
+    ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: uncensoredProfile,
+        apiKey: 'sk-uncensored',
+      })
 
     const state = {
       fullResponse: '',
@@ -297,11 +300,9 @@ describe('provider-failover.service', () => {
           { done: true },
         ]))
 
-      ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-        rerouted: true,
-        connectionProfile: textOnlyUncensored,
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: textOnlyUncensored,
         apiKey: 'sk-unc',
-        reason: 'configured uncensored profile',
       })
 
       const state = freshState()
@@ -341,12 +342,7 @@ describe('provider-failover.service', () => {
 
     it('tells the router what the turn is carrying', async () => {
       mockStreamMessage.mockReturnValue(makeStream([{ done: true }]))
-      ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-        rerouted: false,
-        connectionProfile: visionPrimary,
-        apiKey: 'sk-vision',
-        reason: 'no uncensored provider available',
-      })
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue(null)
 
       await attemptEmptyResponseRecovery({
         state: freshState(),
@@ -366,8 +362,8 @@ describe('provider-failover.service', () => {
         repos,
       })
 
-      expect(mockResolveProviderForDangerousContent).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), 'user-1', ['image/png'],
+      expect(mockResolveUncensoredTextUnderstudy).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', turnAttachmentMimeTypes: ['image/png'] }),
       )
     })
 
@@ -386,11 +382,9 @@ describe('provider-failover.service', () => {
         .mockReturnValueOnce(makeStream([{ done: true }]))
         .mockReturnValueOnce(makeStream([{ content: 'Lovely.' }, { done: true }]))
 
-      ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-        rerouted: true,
-        connectionProfile: visionUncensored,
+      ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: visionUncensored,
         apiKey: 'sk-unc',
-        reason: 'configured uncensored profile',
       })
 
       await attemptEmptyResponseRecovery({
@@ -526,12 +520,10 @@ describe('provider-failover.service — the route trail', () => {
       { content: 'Uncensored reply' },
       { done: true, rawResponse: { retry: 'uncensored' } },
     ]))
-    ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-      rerouted: true,
-      connectionProfile: uncensoredProfile,
-      apiKey: 'sk-uncensored',
-      reason: 'rerouted to uncensored profile',
-    })
+    ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: uncensoredProfile,
+        apiKey: 'sk-uncensored',
+      })
     const state = freshState()
 
     await recover(state, {
@@ -556,12 +548,10 @@ describe('provider-failover.service — the route trail', () => {
     mockStreamMessage
       .mockReturnValueOnce(makeStream([{ done: true, rawResponse: { retry: 'same' } }]))
       .mockReturnValueOnce(makeStream([{ done: true, rawResponse: { retry: 'uncensored' } }]))
-    ;(mockResolveProviderForDangerousContent as jest.Mock).mockResolvedValue({
-      rerouted: true,
-      connectionProfile: uncensoredProfile,
-      apiKey: 'sk-uncensored',
-      reason: 'rerouted to uncensored profile',
-    })
+    ;(mockResolveUncensoredTextUnderstudy as jest.Mock).mockResolvedValue({
+        profile: uncensoredProfile,
+        apiKey: 'sk-uncensored',
+      })
     const state = freshState()
 
     await recover(state, {

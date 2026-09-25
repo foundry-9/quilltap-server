@@ -87,7 +87,7 @@ To use Auto-Route mode, you need at least one connection profile marked as uncen
 3. Check the **"Uncensored-compatible"** checkbox
 4. Save the profile
 
-The same applies to image profiles if you want image generation routing.
+The same applies to image profiles if you want image generation routing. **The tick alone is enough**: an image profile marked "Uncensored-compatible" is a candidate for every reroute, whether or not you have named it in the Concierge's picker. (Formerly a picture refused *after* it was requested could only be carried to a profile named outright in the picker, and a merely ticked profile stood idle while the refusal went unanswered.)
 
 Common uncensored-compatible setups:
 - Local Ollama models (many models have uncensored variants)
@@ -141,11 +141,11 @@ The Lantern's story backgrounds hold a second, separate courtesy. By default the
 
 That courtesy is now conditional. When a chat is marked dangerous **and** you have an uncensored image profile configured, the picture is already headed for a door that does not moderate, so the crafter describes the scene plainly instead. Previously the concealment applied regardless, and an uncensored provider received a scene needlessly draped for a provider it was never going to see.
 
-The same holds on a reroute — but only for a chat already marked. If a standard provider rejects a finished image for moderation and the chat is Flagged or Uncensored, the Concierge sends the picture on to your uncensored profile with the prompt exactly as drafted; it was drafted candidly to begin with, and there is nothing left to un-drape.
+A refused backdrop is rerouted too, and now for any chat under **Auto-Route**, Safe or Flagged alike. If a standard provider declines the picture on grounds of propriety, the Concierge carries the very same prompt across the street to an uncensored image profile — the one named in his settings, or failing that any profile ticked "Uncensored-compatible" — and says so in the chat.
 
-**A moderated chat is never carried through that door.** Where the chat is Safe, a moderation refusal ends the matter: the backdrop is simply not made, and the log records the refusal. This is deliberate. A story background is a courtesy nobody requested, and a provider's refusal is testimony that a scene was *too* frank — poor grounds on which to go and find a franker provider. For a season the Concierge reasoned the other way about, treating a refusal as evidence that the draft had been needlessly coy, and redrafted it plainly for the uncensored profile: a chat you had deliberately left moderated received, on that account alone, the boldest picture the house could produce. He has been spoken to.
+What he never does is *redraft* it. A Safe chat's backdrop was drafted with its customary concealment, and it is the concealed draft that goes across the street; a Flagged chat's was drafted candidly to begin with, and goes as it stands. A provider's refusal therefore buys a second painter, never a franker commission. (For a season the Concierge took a refusal as licence to redraft a moderated chat's scene plainly for the uncensored profile, which promoted a chat you had deliberately left moderated on the say-so of a safety filter; he has been spoken to, and the redrafting is gone for good. For a further season he would not carry a Safe chat's backdrop across the street at all, which left the picture unmade for want of a second opinion. That, too, is mended.)
 
-If a moderated chat's backdrop is refused and you would rather have had the picture, the remedy is to say so — set the chat **Flagged** or **Uncensored** with the per-chat switch below — rather than to leave the decision with a provider's safety filter.
+Under **Detect Only** or **Off**, nothing is rerouted, and the candid draft is not attempted either — a franker prompt is written only for a picture that can actually reach the uncensored door. The Concierge posts a note when a backdrop is refused under those modes, so you know what Auto-Route would have done.
 
 Concealment applies as before to every chat that is not headed for the uncensored profile, and the character appearance descriptions are sanitized alongside it. Note the distinction: what matters is whether *this* picture is going through the uncensored door, not whether such a door exists somewhere in your settings. A configured uncensored profile does nothing for a Safe chat's backdrop, and used to be mistaken for a licence to leave its appearance descriptions unsanitized.
 
@@ -208,6 +208,8 @@ What does work:
 - **Reroute the chat to an uncensored provider.** This is precisely what the Concierge's Auto-Route mode exists for; see *Modes* above.
 - **Change what is being asked for.** Occasionally the refusal is about a single phrase or a single image rather than the whole scene.
 
+The same holds when a provider refuses by *raising an error* rather than by returning nothing — the shape OpenAI, for one, prefers ("rejected as a result of our safety system"). Such a refusal was once mistaken for a malformed request of Quilltap's own and simply reported; it is now read for what it is, and under Auto-Route the Concierge sends the turn to the uncensored desk before trying any other understudy. The profile you named as uncensored is asked first, then any profile ticked "Uncensored-compatible", and only then the declining profile's own fallback chain — restricted, as ever, to stand-ins cleared for the content.
+
 Note that a refusal may concern an *image* you have attached quite as readily as anything written. If a vision model has been declining a picture, its reason will now say so rather than leaving you to guess at a blank reply.
 
 A refusal also leaves its mark on the reply that eventually arrived. Where the Concierge sent the
@@ -217,6 +219,20 @@ the marked line and it will tell you whether the provider *stated* the refusal �
 `finish_reason` — or whether it merely returned nothing on a turn the Concierge had already
 flagged, in which case the refusal is inferred rather than testified to. See
 [Chats Overview](chats.md) for the whole of that little placard.
+
+### When a Picture Is Refused
+
+Every picture Quilltap asks for — a character's `generate_image` call, the Lantern's backdrops, Aurora's portraits, and the image dialog — now follows the same rule: if the provider declines on content grounds, the Concierge tries the uncensored image desk once (under Auto-Route), and whatever happens, he tells you. His note arrives as a small announcement in the chat, of one of three kinds:
+
+- **Rerouted.** The usual painter declined; he took the commission to your uncensored profile, who obliged. The picture is attached as usual.
+- **Nobody to ask.** The usual painter declined, and no uncensored image profile is available. Tick "Uncensored-compatible" on a suitable image profile, or name one in the Concierge's settings, and the next refusal will be answered.
+- **Not permitted.** The usual painter declined, and the Concierge's mode (Detect Only or Off, or a chat you have vouched for) forbids him to go elsewhere.
+
+A text turn that is refused with nobody uncensored to ask earns the second note as well; a text turn that *is* rerouted needs none, because the placard under the avatar already says so.
+
+The picture's own announcement, and the tool block for a character's `generate_image` call, carry the same short list the text placard does: the profile that declined, struck through and marked 🚫, above the one that drew it. Image profiles are listed by the name you gave them. The tool's report to the character names the model that actually drew the picture, not the one first asked.
+
+A provider must *say* it refused for any of this to happen. A picture quietly softened — a sanitized image, a "revised" prompt — counts as a success to the provider and to the Concierge alike. NanoGPT answers a filtered prompt with the same generic complaint it uses for a dozen other faults, so its refusals are not recognised at all.
 
 ### When the Turn Is Carrying a Picture
 

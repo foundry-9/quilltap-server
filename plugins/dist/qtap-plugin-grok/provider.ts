@@ -307,7 +307,9 @@ export class GrokProvider implements TextProvider {
           content: this.extractTextFromResponse(response),
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
         },
-        finish_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+        // The real reason, so the host can tell a moderation stop
+        // (`content_filter`, `refusal`) from an empty body on both paths.
+        finish_reason: this.getFinishReason(response),
       }],
       usage: {
         prompt_tokens: response.usage?.input_tokens ?? 0,
@@ -315,6 +317,21 @@ export class GrokProvider implements TextProvider {
         total_tokens: response.usage?.total_tokens ?? 0,
       },
     };
+  }
+
+  /**
+   * Whether the model refused: a `refusal` output item, or a `refusal` content
+   * part inside a message item.
+   */
+  private hasRefusal(response: ResponsesResponse): boolean {
+    for (const item of response.output as unknown as Array<{ type?: string; content?: Array<{ type?: string }> }>) {
+      if (item.type === 'refusal') return true;
+      if (item.type === 'message' && Array.isArray(item.content)
+        && item.content.some((part) => part?.type === 'refusal')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -326,6 +343,8 @@ export class GrokProvider implements TextProvider {
         return 'tool_calls';
       }
     }
+
+    if (this.hasRefusal(response)) return 'refusal';
 
     if (response.status === 'completed') return 'stop';
     if (response.status === 'incomplete') return response.incomplete_details?.reason || 'length';
@@ -509,7 +528,8 @@ export class GrokProvider implements TextProvider {
         // DISPLAY ONLY — never re-fed to the model.
         streamReasoning += (event as { delta?: string }).delta ?? '';
         yield { content: '', done: false, reasoningContent: streamReasoning };
-      } else if (event.type === 'response.completed') {
+      } else if (event.type === 'response.completed' || event.type === 'response.incomplete') {
+        // An incomplete response ends the stream too, and carries the reason.
         finalResponse = event.response;
       }
     }

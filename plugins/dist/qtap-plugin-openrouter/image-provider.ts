@@ -19,8 +19,34 @@ import type {
   ImageGenResponse,
 } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { ModerationRejectionError } from '@quilltap/plugin-types';
 
 const logger = createPluginLogger('qtap-plugin-openrouter');
+
+/**
+ * Refusal wording OpenRouter passes through from the routed model's own
+ * moderation. Mirrors the host's refusal patterns, deliberately narrow: a
+ * bare 400 or "try a different prompt" stays an ordinary error.
+ */
+const REFUSAL_PATTERNS = [
+  'content moderation',
+  'content_policy',
+  'content policy',
+  'safety system',
+  'rejected by content',
+  'moderation_blocked',
+  'responsible ai',
+  'declined to generate',
+  'blocked by safety',
+  'prompt_blocked',
+  'image_safety',
+];
+
+/** Whether an HTTP error body from OpenRouter states a content refusal. */
+export function isOpenRouterRefusalBody(body: string): boolean {
+  const lowered = body.toLowerCase();
+  return REFUSAL_PATTERNS.some((p) => lowered.includes(p));
+}
 
 /**
  * Static fallback list of known image-capable models.
@@ -106,6 +132,14 @@ export class OpenRouterImageProvider implements ImageProvider {
           error: errorText,
           model,
         });
+        if (isOpenRouterRefusalBody(errorText)) {
+          throw new ModerationRejectionError(
+            `OpenRouter API error: ${response.status} - ${errorText}`,
+            response.status,
+            'content refusal',
+            'qtap-plugin-openrouter',
+          );
+        }
         throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
       }
 
@@ -197,12 +231,20 @@ export class OpenRouterImageProvider implements ImageProvider {
         choiceCount: choices.length,
         messageKeys: choices[0]?.message ? Object.keys(choices[0].message) : [],
       });
-      // Provide a concise error message; the model's full text goes to the log
+      // Provide a concise error message; the model's full text goes to the log.
+      // An image model that answers in words instead of a picture — an explicit
+      // `refusal`, or prose with no image — has declined the commission: that
+      // is a moderation refusal the host can reroute, not a transport failure.
       if (textContent) {
         const summary = textContent.length > 200
           ? textContent.slice(0, 200) + '...'
           : textContent;
-        throw new Error(`Model declined to generate an image: ${summary}`);
+        throw new ModerationRejectionError(
+          `Model declined to generate an image: ${summary}`,
+          undefined,
+          summary,
+          'qtap-plugin-openrouter',
+        );
       }
       throw new Error('No images returned from OpenRouter API');
     }

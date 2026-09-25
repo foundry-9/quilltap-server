@@ -26,6 +26,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
+import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { isLanternImageAlertEnabled } from './resolver';
 
 export type LanternNotificationKind =
@@ -41,6 +42,12 @@ interface PostParams {
   // because the file row is typically a still-buffered write in the
   // background-job child and not yet readable from the DB.
   prompt?: string | null;
+  /**
+   * The Concierge's call sheet when the picture was refused on the way and
+   * rerouted (`generateImageWithConciergeFailover`). Rendered under the
+   * bubble's avatar. Omitted or empty when the first profile answered.
+   */
+  routeTrail?: RouteAttempt[] | null;
 }
 
 function buildContent(kind: LanternNotificationKind, prompt: string | null, fileId: string): string {
@@ -86,7 +93,7 @@ function senderForKind(kind: LanternNotificationKind): 'lantern' | 'aurora' {
 }
 
 export async function postLanternImageNotification(params: PostParams): Promise<void> {
-  const { chatId, fileId, kind, prompt = null } = params;
+  const { chatId, fileId, kind, prompt = null, routeTrail = null } = params;
 
   try {
     const repos = getRepositories();
@@ -118,6 +125,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       participantId: null,
       systemSender: senderForKind(kind),
       systemKind: kind.kind,
+      ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
     };
 
     await repos.chats.addMessage(chatId, message);
@@ -140,6 +148,7 @@ export async function postLanternImageNotification(params: PostParams): Promise<
       fileId,
       messageId,
       kind: kind.kind,
+      routeTrailLength: routeTrail?.length ?? 0,
     });
   } catch (error) {
     logger.error('[LanternNotification] Failed to post announcement', {

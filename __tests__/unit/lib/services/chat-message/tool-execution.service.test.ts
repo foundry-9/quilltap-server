@@ -517,6 +517,44 @@ describe('tool-execution.service', () => {
       expect(JSON.parse(persisted.content).anchorOffset).toBe(42)
     })
 
+    it('writes a generate_image call sheet onto the TOOL message (Concierge overhaul)', async () => {
+      const { repos, addMessage } = buildRepos()
+      const routeTrail = [
+        { profileId: '11111111-1111-4111-8111-111111111111', profileName: 'House Painter', provider: 'GOOGLE',
+          modelName: 'gemini', via: 'primary' as const, outcome: 'refused' as const,
+          trigger: 'moderation-refusal' as const, evidence: 'typed-error' as const, profileKind: 'image' as const },
+        { profileId: '22222222-2222-4222-8222-222222222222', profileName: 'Kestrel Studio', provider: 'GROK',
+          modelName: 'grok-2-image', via: 'concierge' as const, outcome: 'answered' as const, profileKind: 'image' as const },
+      ]
+      await saveToolMessages(
+        repos,
+        chatId,
+        'user-uuid',
+        [{ ...buildToolMessage('generate_image'), metadata: { provider: 'GROK', model: 'grok-2-image', routeTrail } }],
+        noImages,
+        callerCharacterId,
+        callerParticipantId,
+        baseWhisper,
+      )
+      const persisted = addMessage.mock.calls[0][1] as { routeTrail?: unknown }
+      expect(persisted.routeTrail).toEqual(routeTrail)
+    })
+
+    it('writes no trail when the first profile answered', async () => {
+      const { repos, addMessage } = buildRepos()
+      await saveToolMessages(
+        repos,
+        chatId,
+        'user-uuid',
+        [{ ...buildToolMessage('generate_image'), metadata: { provider: 'GROK', model: 'x' } }],
+        noImages,
+        callerCharacterId,
+        callerParticipantId,
+        baseWhisper,
+      )
+      expect((addMessage.mock.calls[0][1] as Record<string, unknown>).routeTrail).toBeUndefined()
+    })
+
     it('omits anchorOffset entirely when not set (legacy / end-anchored rows)', async () => {
       const { repos, addMessage } = buildRepos()
       await saveToolMessages(

@@ -52,6 +52,7 @@ const KIND_DISPLAY_OVERRIDES: Record<string, string> = {
   'turn-pass': 'nothing to add',
   nudge: 'invited to speak',
   timestamp: 'time',
+  refusal: 'provider refusal',
 }
 
 export function getSystemSenderDisplayName(sender: Message['systemSender']): string {
@@ -94,6 +95,7 @@ function inferKindFromContent(sender: NonNullable<Message['systemSender']>, cont
       if (c.includes('pronounces upon their attire')) return 'opening-outfit'
       return 'wardrobe'
     case 'concierge':
+      if (c.includes('on grounds of propriety')) return 'refusal'
       return 'danger'
     case 'prospero':
       if (c.startsWith('Prospero notes that')) return 'connection-profile-change'
@@ -286,7 +288,7 @@ const IMPORTANCE_TABLE: Record<NonNullable<Message['systemSender']>, Record<stri
     nudge: 'medium',
     '*': 'medium',
   },
-  concierge: { danger: 'high', '*': 'high' },
+  concierge: { danger: 'high', refusal: 'high', '*': 'high' },
   lantern: { background: 'medium', 'character-image': 'medium', image: 'medium', '*': 'medium' },
   aurora: { avatar: 'medium', 'outfit-change': 'medium', 'opening-outfit': 'medium', wardrobe: 'medium', '*': 'medium' },
   ariel: { 'session-opened': 'medium', 'session-closed': 'medium', terminal: 'medium', '*': 'medium' },

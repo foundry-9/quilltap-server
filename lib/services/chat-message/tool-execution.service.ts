@@ -235,6 +235,19 @@ export async function saveToolMessages(
       }),
       createdAt: new Date().toISOString(),
       attachments: toolAttachments,
+      // An image refused on the way carries the Concierge's call sheet — the
+      // image profiles tried, in order (`generateImageWithConciergeFailover`).
+      ...(toolMsg.metadata?.routeTrail && toolMsg.metadata.routeTrail.length > 0
+        ? { routeTrail: toolMsg.metadata.routeTrail }
+        : {}),
+    }
+    if (toolMsg.metadata?.routeTrail && toolMsg.metadata.routeTrail.length > 0) {
+      logger.debug('Writing a Concierge route trail on a TOOL message', {
+        chatId,
+        toolMessageId,
+        toolName: toolMsg.toolName,
+        trailLength: toolMsg.metadata.routeTrail.length,
+      })
     }
     await repos.chats.addMessage(chatId, toolMessage)
 

@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-openai",
-  "version": "1.0.64",
+  "version": "1.0.65",
   "description": "OpenAI provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,7 +12,7 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.7.0",
+    "@quilltap/plugin-types": "^2.8.0",
     "@quilltap/plugin-utils": "^2.6.1",
     "openai": "^7.20.0"
   },

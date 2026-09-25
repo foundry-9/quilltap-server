@@ -11,8 +11,35 @@ import type { Images } from 'openai/resources';
 import type { ImageProvider as ImageProviderBase, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
 import { IMAGE_GEN_MODEL_PATTERN } from './models';
+import { ModerationRejectionError } from '@quilltap/plugin-types';
 
 const logger = createPluginLogger('qtap-plugin-z-ai');
+
+/** Z.AI's "sensitive content" business code, as a string or a number. */
+const ZAI_SENSITIVE_CONTENT_CODE = '1301';
+
+/**
+ * Turn a Z.AI Images error into `ModerationRejectionError` when it is the
+ * provider's sensitive-content refusal (business code 1301, or its wording),
+ * and leave every other error exactly as thrown.
+ */
+export function toZaiImageModerationError(error: unknown): unknown {
+  if (!error || typeof error !== 'object') return error;
+  const err = error as { code?: unknown; status?: unknown; message?: unknown; error?: { code?: unknown } };
+  const rawCode = err.code ?? err.error?.code;
+  const code = typeof rawCode === 'number' || typeof rawCode === 'string' ? String(rawCode) : undefined;
+  const message = typeof err.message === 'string' ? err.message : '';
+  const lowered = message.toLowerCase();
+  if (code === ZAI_SENSITIVE_CONTENT_CODE || lowered.includes('sensitive content') || lowered.includes('unsafe or sensitive')) {
+    return new ModerationRejectionError(
+      message || 'Z.AI refused this image request as sensitive content',
+      typeof err.status === 'number' ? err.status : undefined,
+      code ?? ZAI_SENSITIVE_CONTENT_CODE,
+      'qtap-plugin-z-ai',
+    );
+  }
+  return error;
+}
 
 const SUPPORTED_MODELS = ['cogview-4-250304', 'glm-image'];
 
@@ -53,7 +80,19 @@ export class ZAIImageProvider implements ImageProviderBase {
       requestParams.quality = params.quality as Images.ImageGenerateParams['quality'];
     }
 
-    const response = await client.images.generate(requestParams);
+    let response: Awaited<ReturnType<typeof client.images.generate>>;
+    try {
+      response = await client.images.generate(requestParams);
+    } catch (error) {
+      const mapped = toZaiImageModerationError(error);
+      if (mapped !== error) {
+        logger.info('Z.AI Images API refused the request as sensitive content', {
+          context: 'ZAIImageProvider.generateImage',
+          model,
+        });
+      }
+      throw mapped;
+    }
 
     if (!('data' in response) || !response.data || !Array.isArray(response.data)) {
       logger.error('Invalid response from Z.AI Images API', {

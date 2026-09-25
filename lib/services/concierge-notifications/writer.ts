@@ -314,3 +314,134 @@ export async function postConciergeDangerAnnouncement(
     return null;
   }
 }
+
+/**
+ * Refusal announcements — the Concierge says so whenever a provider refused a
+ * picture (or, with nobody to ask, a text turn). Posted by
+ * `generateImageWithConciergeFailover` and the text failover service. No
+ * dedupe: a refusal is rare, and every one is actionable.
+ *
+ * - `refusal-rerouted`      — refused, and the uncensored understudy answered.
+ * - `refusal-no-understudy` — refused under Auto-Route, and nobody to ask.
+ * - `refusal-not-permitted` — refused, and the mode (Off / Detect Only) bars a reroute.
+ */
+export type ConciergeRefusalKind =
+  | 'refusal-rerouted'
+  | 'refusal-no-understudy'
+  | 'refusal-not-permitted';
+
+/** What was being made when the refusal happened. */
+export type ConciergeRefusalPurpose = 'tool' | 'lantern' | 'avatar' | 'dialog' | 'text';
+
+export interface ConciergeRefusalDetails {
+  /** Provider of the profile that refused (e.g. 'OPENAI'). */
+  refusingProvider: string;
+  /** Model of the profile that refused. */
+  refusingModel: string;
+  /** Name the user gave the answering profile — `refusal-rerouted` only. */
+  answeringProfileName?: string;
+  purpose: ConciergeRefusalPurpose;
+}
+
+export interface ConciergeRefusalAnnouncement {
+  chatId: string;
+  kind: ConciergeRefusalKind;
+  details: ConciergeRefusalDetails;
+}
+
+function refusalCommission(purpose: ConciergeRefusalPurpose): { voiced: string; plain: string } {
+  switch (purpose) {
+    case 'tool':
+      return { voiced: 'the commission for a picture', plain: 'an image request' };
+    case 'lantern':
+      return { voiced: 'the commission for a new backdrop', plain: 'a story background' };
+    case 'avatar':
+      return { voiced: 'the commission for a new portrait', plain: 'a character portrait' };
+    case 'dialog':
+      return { voiced: 'the commission for a picture', plain: 'an image request' };
+    case 'text':
+      return { voiced: 'the request for a reply', plain: 'this turn' };
+  }
+}
+
+export function buildRefusalContent(kind: ConciergeRefusalKind, details: ConciergeRefusalDetails): string {
+  const painter = `${details.refusingProvider} ${details.refusingModel}`;
+  const { voiced } = refusalCommission(details.purpose);
+  const house = details.purpose === 'text' ? "the house's usual correspondent" : "the house's usual painter";
+  switch (kind) {
+    case 'refusal-rerouted':
+      return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety; he has taken it across the street to ${details.answeringProfileName ?? 'a more obliging studio'}, who were happy to oblige. The result is attached above.`;
+    case 'refusal-no-understudy':
+      return `The Concierge regrets to report that ${house} (${painter}) declined ${voiced} on grounds of propriety, and he knows of no more obliging establishment to take it to. Should you care to name one, tick "Uncensored-compatible" on a suitable profile, or choose one in the Concierge's settings.`;
+    case 'refusal-not-permitted':
+      return `The Concierge observes that ${house} (${painter}) declined ${voiced} on grounds of propriety. His present instructions forbid him from taking it elsewhere; were he set to Auto-Route, he would have done so.`;
+  }
+}
+
+export function buildRefusalOpaqueContent(kind: ConciergeRefusalKind, details: ConciergeRefusalDetails): string {
+  const who = `${details.refusingProvider} ${details.refusingModel}`;
+  const { plain } = refusalCommission(details.purpose);
+  switch (kind) {
+    case 'refusal-rerouted':
+      return `Provider ${who} refused ${plain} on content grounds. The Concierge rerouted it to ${details.answeringProfileName ?? 'an uncensored profile'}.`;
+    case 'refusal-no-understudy':
+      return `Provider ${who} refused ${plain} on content grounds. No uncensored profile is available to retry it; mark a profile "Uncensored-compatible" or choose one in the Concierge settings.`;
+    case 'refusal-not-permitted':
+      return `Provider ${who} refused ${plain} on content grounds. The Concierge mode does not permit rerouting; Auto-Route would have retried it on an uncensored profile.`;
+  }
+}
+
+export async function postConciergeRefusalAnnouncement(
+  params: ConciergeRefusalAnnouncement,
+): Promise<MessageEvent | null> {
+  const { chatId, kind, details } = params;
+  try {
+    const repos = getRepositories();
+
+    const chat = await repos.chats.findById(chatId);
+    if (!chat) {
+      logger.debug('[ConciergeNotification] Refusal announcement skipped: chat not found', {
+        context: 'concierge-notifications',
+        chatId,
+        kind,
+      });
+      return null;
+    }
+
+    const message: MessageEvent = {
+      type: 'message',
+      id: randomUUID(),
+      role: 'ASSISTANT',
+      content: buildRefusalContent(kind, details),
+      opaqueContent: buildRefusalOpaqueContent(kind, details),
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      participantId: null,
+      systemSender: 'concierge',
+      systemKind: 'refusal',
+    };
+
+    await repos.chats.addMessage(chatId, message);
+
+    logger.info('[ConciergeNotification] Refusal announced', {
+      context: 'concierge-notifications',
+      chatId,
+      messageId: message.id,
+      kind,
+      purpose: details.purpose,
+      refusingProvider: details.refusingProvider,
+      refusingModel: details.refusingModel,
+      answeringProfileName: details.answeringProfileName,
+    });
+
+    return message;
+  } catch (error) {
+    logger.error('[ConciergeNotification] Failed to post refusal announcement', {
+      context: 'concierge-notifications',
+      chatId,
+      kind,
+      error: getErrorMessage(error),
+    }, error as Error);
+    return null;
+  }
+}

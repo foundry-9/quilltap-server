@@ -13,6 +13,7 @@
 import OpenAI from 'openai';
 import type { ImageProvider, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { ModerationRejectionError } from '@quilltap/plugin-types';
 import {
   ARBITRARY_SIZE_RULES,
   OPENAI_IMAGE_MODEL_IDS,
@@ -27,6 +28,37 @@ import {
 } from './image-models';
 
 const logger = createPluginLogger('qtap-plugin-openai');
+
+/** OpenAI Images API codes that mean the safety system refused the request. */
+const MODERATION_CODES = new Set(['moderation_blocked', 'content_policy_violation']);
+
+/**
+ * Turn an Images API error into `ModerationRejectionError` when it is a
+ * content refusal, and leave every other error (rate limits, auth, bad
+ * parameters) exactly as thrown. The host reroutes the former to the user's
+ * uncensored profile and must never reroute the latter.
+ *
+ * The SDK's `APIError` carries the code both top-level and in the parsed body
+ * (`error.code`); the message is checked too, because DALL-E and gpt-image both
+ * word their refusals around "safety system".
+ */
+export function toOpenAIImageModerationError(error: unknown): unknown {
+  if (!error || typeof error !== 'object') return error;
+  const err = error as { code?: unknown; status?: unknown; message?: unknown; error?: { code?: unknown } };
+  const code = typeof err.code === 'string' ? err.code
+    : typeof err.error?.code === 'string' ? err.error.code
+    : undefined;
+  const message = typeof err.message === 'string' ? err.message : '';
+  if ((code && MODERATION_CODES.has(code)) || message.toLowerCase().includes('safety system')) {
+    return new ModerationRejectionError(
+      message || 'OpenAI refused this image request on content grounds',
+      typeof err.status === 'number' ? err.status : undefined,
+      code,
+      'qtap-plugin-openai',
+    );
+  }
+  return error;
+}
 
 const OUTPUT_FORMATS: readonly OpenAIImageOutputFormat[] = ['png', 'jpeg', 'webp'];
 const BACKGROUNDS: readonly OpenAIImageBackground[] = ['auto', 'transparent', 'opaque'];
@@ -307,9 +339,22 @@ export class OpenAIImageProvider implements ImageProvider {
     // The request is assembled as a loose bag because which keys are legal
     // depends on the model family; pin the cast to the non-streaming params so
     // the response type is the image list rather than the streaming union.
-    const response = await client.images.generate(
-      requestParams as unknown as OpenAI.Images.ImageGenerateParamsNonStreaming,
-    );
+    let response: OpenAI.Images.ImagesResponse;
+    try {
+      response = await client.images.generate(
+        requestParams as unknown as OpenAI.Images.ImageGenerateParamsNonStreaming,
+      );
+    } catch (error) {
+      const mapped = toOpenAIImageModerationError(error);
+      if (mapped !== error) {
+        logger.info('OpenAI Images API refused the request on content grounds', {
+          context: 'OpenAIImageProvider.generateImage',
+          model: modelName,
+          providerReason: (mapped as ModerationRejectionError).providerReason,
+        });
+      }
+      throw mapped;
+    }
 
     if (!response.data || !Array.isArray(response.data)) {
       logger.error('Invalid response from OpenAI Images API', { context: 'OpenAIImageProvider.generateImage' });

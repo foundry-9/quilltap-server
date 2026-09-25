@@ -10,6 +10,9 @@
 #                                        or Uncensored)
 #   CT-3  State chosen at creation       (New Chat form's Concierge picker →
 #                                        POST /api/v1/chats conciergeState)
+#   CT-4  A refused picture is rerouted  (Concierge overhaul phase 1; opt-in —
+#                                        needs a profile + prompt that a real
+#                                        provider actually refuses)
 #
 # How it works (and why):
 #   * State changes go through the HTTP PUT API — the exact code path the
@@ -45,6 +48,11 @@
 #   --no-jest          Skip the CT-2 jest guard suites
 #   --no-ct3           Skip CT-3 (which creates and then deletes throwaway chats)
 #   --keep             Don't restore the chat's original state at the end
+#   --ct4-profile <id> CT-4: an image-capable CONNECTION profile whose provider
+#                      refuses --ct4-prompt (the legacy image route draws from
+#                      connection profiles). Needs Auto-Route and an
+#                      "Uncensored-compatible" image-capable profile to reroute to.
+#   --ct4-prompt <txt> CT-4: a prompt that profile's provider refuses
 #   -h, --help         This help
 # ---------------------------------------------------------------------------
 
@@ -59,6 +67,8 @@ CHAT="${CHAT:-}"
 MODE="run"          # run | dry | arm | recheck
 RUN_JEST=1
 RUN_CT3=1
+CT4_PROFILE=""
+CT4_PROMPT=""
 RESTORE=1
 DELAY="0.3"         # small settle after each PUT before reading via the CLI connection
 
@@ -74,7 +84,9 @@ while [ $# -gt 0 ]; do
     --no-jest)   RUN_JEST=0; shift ;;
     --no-ct3)    RUN_CT3=0; shift ;;
     --keep)      RESTORE=0; shift ;;
-    -h|--help)   sed -n '2,53p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --ct4-profile) CT4_PROFILE="$2"; shift 2 ;;
+    --ct4-prompt)  CT4_PROMPT="$2"; shift 2 ;;
+    -h|--help)   sed -n '2,57p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          echo "Unknown option: $1" >&2; exit 2 ;;
     *)           CHAT="$1"; shift ;;
   esac
@@ -323,6 +335,37 @@ run_ct3() {
   ct3_case uncensored "$charId" "$profId"
 }
 
+# ----- CT-4: a refused picture on a Monitored chat is rerouted -------------
+# Drives the legacy image route (POST /api/v1/images?action=generate), which
+# now runs through generateImageWithConciergeFailover. Opt-in, because it needs
+# a real provider that actually refuses the prompt — there is no way to force a
+# refusal from outside. The deterministic half is the jest suites below.
+run_ct4() {
+  section "CT-4: a refused picture on a Monitored chat is rerouted (live)"
+  api_set_state monitored >/dev/null 2>&1 || true
+  local m code n
+  m="$(qv "SELECT COALESCE(MAX(createdAt),'') AS v FROM chat_messages WHERE chatId='$CHAT'")"
+  code="$(curl -s -o /tmp/ct4_resp.json -w '%{http_code}' \
+            -X POST "$BASE_URL/api/v1/images?action=generate" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg p "$CT4_PROMPT" --arg id "$CT4_PROFILE" --arg c "$CHAT" '{prompt:$p, profileId:$id, chatId:$c}')")"
+  sleep "$DELAY"
+  n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge' AND systemKind='refusal' AND createdAt > '$m'")"
+  [ "$n" = "null" ] && n=0
+  if [ "$n" -ge 1 ] 2>/dev/null; then
+    ok "CT-4: the Concierge posted a refusal note (HTTP $code)"
+  else
+    bad "CT-4: no Concierge refusal note (HTTP $code) — did the provider actually refuse? see /tmp/ct4_resp.json"
+    return
+  fi
+  n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge' AND systemKind='refusal' AND content LIKE '%across the street%' AND createdAt > '$m'")"
+  if [ "$code" = "200" ] && [ "$n" -ge 1 ] 2>/dev/null; then
+    ok "CT-4: rerouted — the picture was drawn by the uncensored understudy"
+  else
+    bad "CT-4: refused but not rerouted (HTTP $code) — check Auto-Route and an \"Uncensored-compatible\" image-capable profile"
+  fi
+}
+
 # ----- jest guard suites (CT-2 bail + derivation) --------------------------
 run_jest() {
   section "CT-2 guard suites (read-only, deterministic)"
@@ -331,10 +374,14 @@ run_jest() {
     "__tests__/unit/lib/services/dangerous-content/chat-override.test.ts"
     "__tests__/unit/lib/services/dangerous-content/resolver.test.ts"
     "__tests__/unit/background-jobs/chat-danger-classification.test.ts"
+    "__tests__/unit/lib/services/dangerous-content/refusal.test.ts"
+    "__tests__/unit/lib/services/dangerous-content/understudy.test.ts"
+    "__tests__/unit/lib/services/dangerous-content/image-failover.test.ts"
+    "__tests__/unit/lib/tools/image-generation-concierge-failover.test.ts"
   )
   if (cd "$ROOT" && npx jest "${suites[@]}" --silent >/tmp/ct_jest.log 2>&1); then
-    ok "manual-flip + chat-override + resolver + chat-danger-classification suites passed"
-    info "covers: four-state → (override,flag) writes & announcements, predicates, resolver overrides, handler bail"
+    ok "manual-flip + chat-override + resolver + chat-danger-classification + refusal-failover suites passed"
+    info "covers: four-state → (override,flag) writes & announcements, predicates, resolver overrides, handler bail, refusal classification + image failover (the bikini case)"
   else
     bad "guard suites failed — see /tmp/ct_jest.log (if native ABI mismatch: npm rebuild better-sqlite3)"
   fi
@@ -389,6 +436,7 @@ check_pair "UNCENSORED" "1" "Uncensored is stable (override wins, flag preserved
 info "scan-skip over a live 10-min tick: run '$0 --chat $CHAT --arm' then '--recheck' later"
 
 [ "$RUN_CT3" -eq 1 ] && run_ct3
+if [ -n "$CT4_PROFILE" ] && [ -n "$CT4_PROMPT" ]; then run_ct4; else info "CT-4 skipped (pass --ct4-profile and --ct4-prompt to run it)"; fi
 [ "$RUN_JEST" -eq 1 ] && run_jest
 
 # restore

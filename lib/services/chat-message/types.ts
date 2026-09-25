@@ -204,6 +204,8 @@ export interface ToolMessage {
     provider?: string
     model?: string
     expandedPrompt?: string
+    /** generate_image: the Concierge's call sheet when a provider refused on the way. */
+    routeTrail?: RouteAttempt[]
   }
 }
 

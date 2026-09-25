@@ -403,10 +403,12 @@ describe('resolveProviderForDangerousContent', () => {
         userId
       )
 
+      // The understudy resolver swallows lookup failures (a failed read is
+      // "nobody to ask", never a crash on the prompt path).
       expect(result.rerouted).toBe(false)
       expect(result.connectionProfile).toEqual(originalProfile)
       expect(result.apiKey).toBe(originalApiKey)
-      expect(result.reason).toContain('Routing failed')
+      expect(result.reason).toContain('No uncensored provider available')
     })
 
     it('gracefully handles findAll errors during profile scan', async () => {
@@ -843,7 +845,7 @@ describe('resolveImageProviderForDangerousContent', () => {
 
       expect(result.rerouted).toBe(false)
       expect(result.imageProfile).toEqual(originalImageProfile)
-      expect(result.reason).toContain('Routing failed')
+      expect(result.reason).toContain('No uncensored image provider available')
     })
   })
 })

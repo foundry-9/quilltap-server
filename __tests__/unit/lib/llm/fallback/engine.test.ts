@@ -132,6 +132,29 @@ describe('classifyFallbackTrigger', () => {
       .toBe('network')
   })
 
+  describe('content-moderation refusals (Concierge overhaul, phase 1)', () => {
+    it('reads a thrown OpenAI content_policy_violation as a moderation refusal, not a malformed 4xx', () => {
+      const err = Object.assign(new Error('400 Your request was rejected as a result of our safety system.'), {
+        status: 400,
+        code: 'content_policy_violation',
+      })
+      expect(classifyFallbackTrigger(err)).toBe('moderation-refusal')
+    })
+
+    it('reads a plugin\'s typed moderation rejection', () => {
+      const err = Object.assign(new Error('blocked'), { code: 'MODERATION_REJECTED' })
+      expect(classifyFallbackTrigger(err)).toBe('moderation-refusal')
+    })
+
+    it('reads refusal wording without a status', () => {
+      expect(classifyFallbackTrigger(new Error('Generated image rejected by content moderation.'))).toBe('moderation-refusal')
+    })
+
+    it('leaves an ambiguous 400 alone', () => {
+      expect(classifyFallbackTrigger(new Error('400 Please try a different prompt'))).toBeNull()
+    })
+  })
+
   describe('non-triggers', () => {
     it('refuses token and content limits — they fail identically anywhere', () => {
       expect(classifyFallbackTrigger(new TokenLimitError('ANTHROPIC', 210311, 200000))).toBeNull()

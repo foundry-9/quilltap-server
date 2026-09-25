@@ -3,6 +3,7 @@
  * Detects and executes LLM tool calls during message processing
  */
 
+import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { logger } from '@/lib/logger'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { toolRegistry } from '@/lib/plugins/tool-registry'
@@ -162,6 +163,8 @@ export interface ToolResult {
     model?: string;
     /** For image generation, the expanded prompt with {{me}} etc. resolved */
     expandedPrompt?: string;
+    /** For image generation, the Concierge's call sheet when a provider refused on the way */
+    routeTrail?: RouteAttempt[];
   };
 }
 
@@ -442,6 +445,7 @@ export async function executeToolCallWithContext(
           provider: result.provider,
           model: result.model,
           expandedPrompt: result.expandedPrompt,
+          routeTrail: result.routeTrail,
         },
       };
     }

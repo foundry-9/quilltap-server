@@ -4,6 +4,7 @@
  * Supports OpenAI and Anthropic format conversions
  */
 
+import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 import { llmNumber } from './llm-number';
@@ -104,6 +105,12 @@ export interface ImageGenerationToolOutput {
   provider?: string;
   model?: string;
   expandedPrompt?: string;
+  /**
+   * The Concierge's call sheet when a provider refused on the way: every image
+   * profile tried, in order. Absent when the first profile answered. Written
+   * onto the TOOL message so the Salon can show it.
+   */
+  routeTrail?: RouteAttempt[];
 }
 
 /**

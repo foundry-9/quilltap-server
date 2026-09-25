@@ -40577,6 +40577,32 @@ function getApiKeyFromEnv() {
   return envGoogleApiKey || envGeminiApiKey || void 0;
 }
 
+// node_modules/@quilltap/plugin-types/dist/index.mjs
+var PluginError = class extends Error {
+  constructor(message, code, pluginName) {
+    super(message);
+    this.code = code;
+    this.pluginName = pluginName;
+    this.name = "PluginError";
+  }
+};
+var ProviderApiError = class extends PluginError {
+  constructor(message, statusCode, response, pluginName) {
+    super(message, "PROVIDER_API_ERROR", pluginName);
+    this.statusCode = statusCode;
+    this.response = response;
+    this.name = "ProviderApiError";
+  }
+};
+var ModerationRejectionError = class extends ProviderApiError {
+  constructor(message, statusCode, providerReason, pluginName) {
+    super(message, statusCode, void 0, pluginName);
+    this.providerReason = providerReason;
+    this.code = "MODERATION_REJECTED";
+    this.name = "ModerationRejectionError";
+  }
+};
+
 // ../../../node_modules/openai/internal/tslib.mjs
 function __classPrivateFieldSet(receiver, state2, value, kind, f3) {
   if (kind === "m")
@@ -61436,6 +61462,22 @@ var GoogleProvider = class {
     }
   }
   /**
+   * Fold a blocked prompt's `promptFeedback` into a streamed raw response, and
+   * surface its `blockReason` as the first candidate's `finishReason` when the
+   * provider made no candidate at all. Leaves an ordinary response untouched.
+   */
+  withBlockReason(raw, promptFeedback) {
+    const feedback = raw.promptFeedback ?? promptFeedback;
+    const blockReason = feedback?.blockReason;
+    if (!blockReason) return raw;
+    logger.warn("Google blocked the prompt (streaming)", {
+      context: "GoogleProvider.streamMessage",
+      blockReason
+    });
+    const candidates = Array.isArray(raw.candidates) && raw.candidates.length > 0 ? raw.candidates : [{ finishReason: blockReason }];
+    return { ...raw, promptFeedback: feedback, candidates };
+  }
+  /**
    * Extract text content from Gemini response
    * For thinking models, we need to filter out thought parts and get actual response text
    */
@@ -61703,7 +61745,15 @@ var GoogleProvider = class {
         config: config2
       });
       const text = this.extractTextFromResponse(response, params.model);
-      const finishReason = response.candidates?.[0]?.finishReason ?? "STOP";
+      const blockReason = response?.promptFeedback?.blockReason;
+      const finishReason = blockReason ?? response.candidates?.[0]?.finishReason ?? "STOP";
+      if (blockReason) {
+        logger.warn("Google blocked the prompt", {
+          context: "GoogleProvider.sendMessage",
+          model: params.model,
+          blockReason
+        });
+      }
       const usage = response.usageMetadata;
       const thoughtSignature = this.extractThoughtSignature(response);
       let sendReasoningContent = "";
@@ -61826,8 +61876,12 @@ var GoogleProvider = class {
       let thoughtPartsWithText = 0;
       let thoughtPartsNoText = 0;
       let textParts = 0;
+      let promptFeedback = null;
       for await (const chunk of response) {
         lastResponse = chunk;
+        if (chunk?.promptFeedback?.blockReason) {
+          promptFeedback = chunk.promptFeedback;
+        }
         const candidates = chunk.candidates;
         if (candidates && candidates.length > 0) {
           const parts = candidates[0]?.content?.parts || [];
@@ -61875,8 +61929,11 @@ var GoogleProvider = class {
           totalTokens: Math.max(0, (usage?.totalTokenCount ?? 0) - (cachedTokens ?? 0))
         },
         attachmentResults,
-        // Convert SDK response class to plain object for Zod validation
-        rawResponse: lastResponse ? JSON.parse(JSON.stringify(lastResponse)) : void 0,
+        // Convert SDK response class to plain object for Zod validation. A
+        // blocked prompt's `promptFeedback` is carried over, and its
+        // blockReason stands in as the candidate's finish reason when there
+        // is no candidate — the host reads `candidates[0].finishReason`.
+        rawResponse: lastResponse ? this.withBlockReason(JSON.parse(JSON.stringify(lastResponse)), promptFeedback) : void 0,
         // usage lives in usageMetadata on the Google SDK response — preserve the
         // full provider-shape sub-object (incl. cachedContentTokenCount) for
         // cache-instrumentation diagnostics.
@@ -62071,6 +62128,11 @@ var GoogleProvider = class {
 
 // image-provider.ts
 var logger2 = createPluginLogger("qtap-plugin-google");
+var GEMINI_IMAGE_SAFETY_FINISH_REASONS = /* @__PURE__ */ new Set(["IMAGE_SAFETY", "SAFETY", "PROHIBITED_CONTENT"]);
+function isGoogleSafetyMessage(message) {
+  const lowered = message.toLowerCase();
+  return lowered.includes("responsible ai") || /safety (filter|system|reasons?|policy)/.test(lowered) || /blocked\b.*\bsafety|\bsafety\b.*\bblocked/.test(lowered);
+}
 var GEMINI_IMAGE_MODELS = [
   "gemini-2.5-flash-image",
   "gemini-3-pro-image-preview"
@@ -62147,9 +62209,11 @@ var GoogleImagenProvider = class {
         status: response.status,
         errorMessage: error.error?.message
       });
-      throw new Error(
-        error.error?.message || `Gemini API error: ${response.status}`
-      );
+      const message = error.error?.message || `Gemini API error: ${response.status}`;
+      if (isGoogleSafetyMessage(message)) {
+        throw new ModerationRejectionError(message, response.status, error.error?.status, "qtap-plugin-google");
+      }
+      throw new Error(message);
     }
     const data = await response.json();
     const images = [];
@@ -62168,6 +62232,22 @@ var GoogleImagenProvider = class {
       }
     }
     if (images.length === 0) {
+      const finishReason = candidate?.finishReason;
+      const blockReason = data.promptFeedback?.blockReason;
+      if (finishReason && GEMINI_IMAGE_SAFETY_FINISH_REASONS.has(finishReason) || blockReason) {
+        const reason = blockReason || finishReason;
+        logger2.warn("Gemini withheld the image on safety grounds", {
+          context: "GoogleImagenProvider.generateWithGemini",
+          finishReason,
+          blockReason
+        });
+        throw new ModerationRejectionError(
+          `Gemini declined to generate this image (${reason})${textResponse ? `: ${textResponse}` : ""}`,
+          void 0,
+          reason,
+          "qtap-plugin-google"
+        );
+      }
       throw new Error(
         textResponse || "No images returned from Gemini API"
       );
@@ -62217,9 +62297,11 @@ var GoogleImagenProvider = class {
         status: response.status,
         errorMessage: error.error?.message
       });
-      throw new Error(
-        error.error?.message || `Google Imagen API error: ${response.status}`
-      );
+      const message = error.error?.message || `Google Imagen API error: ${response.status}`;
+      if (isGoogleSafetyMessage(message)) {
+        throw new ModerationRejectionError(message, response.status, error.error?.status, "qtap-plugin-google");
+      }
+      throw new Error(message);
     }
     const data = await response.json();
     const predictions = data.predictions ?? [];
@@ -62233,8 +62315,11 @@ var GoogleImagenProvider = class {
         predictionCount: predictions.length,
         filterReason
       });
-      throw new Error(
-        `Google Imagen rejected prompt by content policy${filterReason ? `: ${filterReason}` : ""}`
+      throw new ModerationRejectionError(
+        `Google Imagen rejected prompt by content policy${filterReason ? `: ${filterReason}` : ""}`,
+        void 0,
+        filterReason ?? void 0,
+        "qtap-plugin-google"
       );
     }
     return {
