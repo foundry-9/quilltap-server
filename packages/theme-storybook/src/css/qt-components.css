@@ -1038,9 +1038,9 @@
 
 /**
  * Concierge badge for the Salon breadcrumb header. Parameterized over one
- * CSS var so the four-state family is a recolor, not four rules: the base
- * is the red Flagged pill; the modifiers below recolor it for the two
- * operator states (Monitored renders no badge at all).
+ * CSS var so the family is a recolor, not a rule per state: the base is the
+ * red Unmoderated pill; the modifier below recolors it grey for Locked
+ * (Moderated renders no badge at all).
  */
 .qt-danger-badge {
   --qt-concierge-badge-color: var(--color-destructive, #dc2626);
@@ -1057,20 +1057,16 @@
   border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
 }
 
-/* Vouched Safe — no colour: the Concierge isn't in the room. */
+/* Locked — no colour: the chat keeps to the ordinary desks. */
 .qt-danger-badge-muted {
   --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
 }
 
-/* Uncensored — the eye you closed yourself. */
-.qt-danger-badge-info {
-  --qt-concierge-badge-color: var(--color-info, #2563eb);
-}
 
 /**
  * Concierge mark — the list-view asterisk, on chat cards and the homepage's
- * Recent Chats. Same three tones as the badge above and the same colour
- * tokens, so a theme that retints one retints both. Monitored draws no mark,
+ * Recent Chats. Same two tones as the badge above and the same colour
+ * tokens, so a theme that retints one retints both. Moderated draws no mark,
  * so there is no third modifier.
  */
 .qt-concierge-mark {
@@ -1081,15 +1077,11 @@
   color: var(--qt-concierge-mark-color);
 }
 
-/* Vouched Safe — no colour: the Concierge isn't in the room. */
+/* Locked — no colour: the chat keeps to the ordinary desks. */
 .qt-concierge-mark-muted {
   --qt-concierge-mark-color: var(--color-muted-foreground, #6b7280);
 }
 
-/* Uncensored — the eye you closed yourself. */
-.qt-concierge-mark-info {
-  --qt-concierge-mark-color: var(--color-info, #2563eb);
-}
 
 /* ==========================================================================
    WARDROBE SLOT BADGES

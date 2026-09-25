@@ -20,11 +20,10 @@ import type { ConciergeProvenance, ConciergeState } from './chat-override';
 /**
  * The colour families the states speak in. `danger` is the red of the
  * uncensored desk, `muted` the grey of a chat locked to the ordinary desks,
- * `success` the green of a watch being kept. `info` has no state since phase
- * 3; it stays in the union (and its CSS rules stay in place) for themes that
- * hook it.
+ * `success` the green of a watch being kept. (`info`, the blue of the retired
+ * operator-asserted Uncensored state, was removed in phase 4 with its CSS.)
  */
-export type ConciergeTone = 'danger' | 'muted' | 'info' | 'success';
+export type ConciergeTone = 'danger' | 'muted' | 'success';
 
 export interface ConciergeStatePresentation {
   /** Short label — badge text, aria-label, tooltip title. */
@@ -96,9 +95,8 @@ function conciergeMovedDetail(reason: ConciergeModeReason | null | undefined, re
  * nothing; `success` has no modifier in either family (Moderated draws no badge
  * and no mark) and likewise falls through to the base.
  */
-export function conciergeToneSuffix(tone: ConciergeTone): '' | '-muted' | '-info' {
+export function conciergeToneSuffix(tone: ConciergeTone): '' | '-muted' {
   if (tone === 'muted') return '-muted';
-  if (tone === 'info') return '-info';
   return '';
 }
 
@@ -110,7 +108,6 @@ export function conciergeToneSuffix(tone: ConciergeTone): '' | '-muted' | '-info
 export function conciergeToneTextClass(tone: ConciergeTone): string {
   switch (tone) {
     case 'muted': return 'qt-text-muted';
-    case 'info': return 'qt-text-info';
     case 'success': return 'qt-text-success';
     default: return 'qt-text-danger';
   }

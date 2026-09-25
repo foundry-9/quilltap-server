@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 4: The Concierge's Own Tab
 
-**Status:** Implemented (4.10-dev, 2026-09-25) — the `-info` carry-over waits on its `@quilltap/theme-storybook` publish; see "As built"
+**Status:** Implemented (4.10-dev, 2026-09-25)
 **Scope:** quilltap-server. A new Settings tab (`/settings?tab=concierge`); a new `conciergeSettings` object replacing `dangerousContentSettings` and absorbing two settings that live elsewhere; the global mode retired; the summary classifier and scheduled scan made opt-in; every Concierge control removed from the Chat tab; help rewritten. One `chat_settings` migration. No plugin or package change.
 **Prerequisites:** [Phase 3](concierge-overhaul-phase-3-three-states.md) landed (three states, `mayFailOver`). Phases 1 and 2 are implied by phase 3. If phase 3 has not landed, the resolver in §4 cannot be written as specified; stop.
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 4 of 5).
@@ -56,7 +56,7 @@ weight that a later reader would otherwise take for live behaviour.
     old bundles still validate;
   - `add-chat-concierge-mode-v1` already tolerates the column being absent
     (`legacyRowFilter`), so the ordering between the two migrations is safe either way.
-- [ ] **Remove the orphaned `-info` tone.** (Checked: no bundled theme or `create-quilltap-theme` template hooks either class. The removal and its theme-storybook 1.0.73 mirror are ready and land once that package is published.) Since phase 3 no state uses `tone: 'info'`, so
+- [x] **Remove the orphaned `-info` tone.** (No bundled theme or `create-quilltap-theme` template hooks either class. Mirrored in theme-storybook 1.0.73.) Since phase 3 no state uses `tone: 'info'`, so
   `.qt-danger-badge-info` and `.qt-concierge-mark-info` (`app/styles/qt-components/_chat.css`) have
   no user in the app. Check the bundled themes (`themes/bundled/`) and `create-quilltap-theme` for
   hooks on them first; if none, remove both rules, the `'info'` member of `ConciergeTone`, and its

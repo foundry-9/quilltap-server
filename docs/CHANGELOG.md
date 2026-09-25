@@ -46,6 +46,9 @@
 - Phase 3 carry-overs: migration `drop-chat-concierge-override-v1` drops `chats.conciergeOverride`
   and the field leaves `ChatMetadataSchema`; `.qtap` import and backup restore still derive
   `conciergeMode` from it (tested), and the export schema keeps it as deprecated.
+- Phase 3 carry-over: the unused `-info` Concierge tone is removed (`.qt-danger-badge-info`,
+  `.qt-concierge-mark-info`, the `'info'` member of `ConciergeTone`), mirrored in
+  `@quilltap/theme-storybook` 1.0.73. No bundled theme or theme template hooked either class.
 
 #### Fixed: Concierge state races (PR #75 review)
 

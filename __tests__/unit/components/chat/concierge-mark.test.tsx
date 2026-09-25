@@ -205,7 +205,6 @@ describe('ChatCard — the Concierge mark', () => {
       expect(mark).toHaveClass(modifier)
     } else {
       expect(container.querySelector('.qt-concierge-mark-muted')).toBeNull()
-      expect(container.querySelector('.qt-concierge-mark-info')).toBeNull()
     }
   })
 
