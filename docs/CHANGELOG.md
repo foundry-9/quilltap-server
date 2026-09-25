@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Docs: phase 2 spec carries two deferred phase-1 review fixes
+
+- `concierge-overhaul-phase-2-refusal-ledger.md` gains a "Carried over from phase 1 review"
+  checklist: reword the `refusal-rerouted` bubble so it no longer says the picture is "attached
+  above", and decode `chat_messages.content` with `qt_text()` in `check_ann` and CT-4 of
+  `scripts/concierge-four-state-test.sh`.
+
 #### Changed: the Concierge reroutes every content refusal (Concierge overhaul, phase 1)
 
 - One refusal classifier: `classifyRefusal` (`lib/services/dangerous-content/refusal.ts`).

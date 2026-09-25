@@ -133,8 +133,37 @@ The switch is idempotent: `applyConciergeFlip` is a no-op when the state already
 - **Reset on manual Monitored, and only then.** The classifier's own re-check on new messages already exists; the ledger has no equivalent because a refusal is a fact, not an estimate.
 - **The parent decides.** The child cannot read its own buffered write, and two jobs can race; the rule runs where the count is real.
 
+## Carried over from phase 1 review
+
+Two low-severity findings from the Copilot review of phase 1
+([foundry-9/quilltap-server#73](https://github.com/foundry-9/quilltap-server/pull/73))
+were acknowledged there and deferred to the next code push. Do them first in
+this phase — both touch files this phase also edits — and tick them here when
+done.
+
+- [ ] **The `refusal-rerouted` bubble claims a location it cannot know.**
+  `buildRefusalContent` in `lib/services/concierge-notifications/writer.ts`
+  ends the rerouted copy with "The result is attached above." The chokepoint
+  (`generateImageWithConciergeFailover`, `image-failover.ts`) posts the note
+  *before* the caller saves the picture and posts its own Lantern / Aurora
+  bubble or TOOL row, so the picture follows the note; and the legacy image
+  dialog posts no picture message at all. Reword to say nothing about where the
+  picture is. Update the matching `refusal-rerouted` example in
+  `help/dangerous-content.md` if its wording changes, and the phase-1 spec's
+  §8 example sentence, which has the same claim.
+- [ ] **`scripts/concierge-four-state-test.sh` matches compressed text raw.**
+  `chat_messages.content` is a compressed column (CLAUDE.md: raw SQL that
+  reads one wraps it in `qt_text()`). Two queries break the rule and would
+  report false failures: `check_ann` (`… AND content LIKE '%$1%' …`) and
+  CT-4's reroute check (`… AND content LIKE '%across the street%' …`). Change
+  both to `qt_text(content) LIKE …`, and confirm the CLI's `db` command
+  registers `qt_text` before relying on it. If the rerouted wording above
+  changes, CT-4's phrase must change with it — prefer matching on
+  `systemKind='refusal'` plus a phrase that survives the rewording.
+
 ## Implementation order
 
+0. The two carried-over fixes above.
 1. Migration, schemas, DDL, export schema, `incrementModerationRefusalCount`.
 2. `refusal-ledger.ts` and the `applyConciergeFlip` fourth argument, announcement kind, `'monitored'` reset.
 3. Parent-side commit hook and the four call-site lines.
