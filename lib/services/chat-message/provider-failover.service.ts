@@ -17,7 +17,8 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
 import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy'
-import { classifyRefusal } from '@/lib/services/dangerous-content/refusal'
+import { classifyRefusal, type RefusalEvidence } from '@/lib/services/dangerous-content/refusal'
+import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
@@ -55,6 +56,30 @@ import type { StreamingState } from './types'
 import { recordRouteFailure, setRouteVia, classifyEmptyBody, viaOf } from './route-trail'
 
 const logger = createServiceLogger('ProviderFailover')
+
+/**
+ * Put a refused text turn on the chat's refusal ledger once its recovery has
+ * run its course. The ledger drops anything but a stated refusal (an
+ * `inferred` one never counts) and decides on the auto-switch. Never throws.
+ */
+async function recordTextRefusal(
+  chatId: string,
+  refusing: Pick<ConnectionProfile, 'id' | 'name' | 'provider' | 'modelName'>,
+  evidence: RefusalEvidence | undefined,
+  rerouted: boolean,
+): Promise<void> {
+  await recordModerationRefusal({
+    chatId,
+    kind: 'text',
+    purpose: 'chat',
+    refusedProfileId: refusing.id,
+    refusedProfileName: refusing.name,
+    provider: refusing.provider,
+    modelName: refusing.modelName,
+    evidence,
+    rerouted,
+  })
+}
 
 export interface AttemptEmptyResponseRecoveryOptions {
   state: StreamingState
@@ -156,6 +181,14 @@ export async function attemptEmptyResponseRecovery({
   const openingVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
   recordRouteFailure(state, state.effectiveProfile, state.routeVia, openingVerdict.outcome,
     openingVerdict.trigger, openingVerdict.detail, openingVerdict.evidence)
+  const openingProfile = state.effectiveProfile
+  let uncensoredRecovered = false
+  // The refusal that opened this recovery, on the chat's ledger — recorded on
+  // the way out so the log can say whether the Concierge's reroute answered.
+  const recordOpeningRefusal = async (): Promise<void> => {
+    if (openingVerdict.outcome !== 'refused') return
+    await recordTextRefusal(chatId, openingProfile, openingVerdict.evidence, uncensoredRecovered)
+  }
 
   if (!contentWasFlaggedDangerous) {
     sameProviderRetryAttempted = true
@@ -242,6 +275,7 @@ export async function attemptEmptyResponseRecovery({
       substitute: false,
     })
     uncensoredRetryAttempted = uncensored.attempted
+    uncensoredRecovered = uncensored.recovered
     if (uncensored.understudyId) triedProfileIds.push(uncensored.understudyId)
   }
 
@@ -282,6 +316,7 @@ export async function attemptEmptyResponseRecovery({
       stop,
     })
 
+    await recordOpeningRefusal()
     return {
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
@@ -290,6 +325,7 @@ export async function attemptEmptyResponseRecovery({
     }
   }
 
+  await recordOpeningRefusal()
   return flags()
 }
 
@@ -910,6 +946,7 @@ export async function attemptHardErrorFailover(
     const refusal = classifyRefusal({ error })
     recordRouteFailure(state, state.effectiveProfile, state.routeVia, 'refused', trigger,
       refusal.detail ?? failureMessage, refusal.evidence)
+    const refusingProfile = state.effectiveProfile
 
     const alreadyTried = [...context.alreadyTried]
     // The caller's gate, stated here: the Concierge reroutes under Auto-Route only.
@@ -935,9 +972,11 @@ export async function attemptHardErrorFailover(
         stop: opts.stop,
       })
       if (uncensored.recovered) {
+        await recordTextRefusal(chatId, refusingProfile, refusal.evidence, true)
         return { recovered: true, attempts: [openingAttempt], tierPickWasOffered: false }
       }
       if (uncensored.understudyId) alreadyTried.push(uncensored.understudyId)
+      await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
 
       // `state.effectiveProfile` is still the profile that refused (the swap
       // only happens on success), so this is the refusing profile's own
@@ -958,6 +997,7 @@ export async function attemptHardErrorFailover(
       chatId,
       mode: opts.dangerSettings?.mode,
     })
+    await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
     return walkFallbackChain(opts, openingAttempt)
   }
 

@@ -540,4 +540,5 @@ export const DEFAULT_DANGEROUS_CONTENT_SETTINGS: DangerousContentSettings = {
   scanImageGeneration: false,
   displayMode: 'SHOW',
   showWarningBadges: true,
+  autoSwitchAfterRefusals: 2,
 }

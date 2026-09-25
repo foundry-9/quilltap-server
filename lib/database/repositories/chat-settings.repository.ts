@@ -226,6 +226,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               scanImageGeneration: false,
               displayMode: 'SHOW',
               showWarningBadges: true,
+              autoSwitchAfterRefusals: 2,
             },
             autoLockSettings: {
               enabled: false,

@@ -3,7 +3,8 @@
  *
  * Covers all 12 ordered transitions of the four-state control (stored pair +
  * announcement kind) and the no-op behavior when the requested state already
- * matches the stored one.
+ * matches the stored one; the refusal-ledger reset on a return to Monitored;
+ * and the Concierge's own `{ by: 'concierge' }` switch.
  */
 
 import {
@@ -32,12 +33,14 @@ jest.mock('@/lib/services/concierge-notifications/writer', () => ({
 }))
 
 const chatsUpdate = jest.fn().mockResolvedValue(null)
+const resetLedger = jest.fn().mockResolvedValue(undefined)
 ;(getRepositories as jest.Mock).mockReturnValue({
-  chats: { update: chatsUpdate },
+  chats: { update: chatsUpdate, resetModerationRefusalLedger: resetLedger },
 })
 
 beforeEach(() => {
   chatsUpdate.mockClear()
+  resetLedger.mockClear()
   ;(postConciergeManualAnnouncement as jest.Mock).mockClear()
 })
 
@@ -174,5 +177,51 @@ describe('applyConciergeFlip', () => {
       const [, update] = chatsUpdate.mock.calls[0]
       expect(update).not.toHaveProperty('isDangerousChat')
     }
+  })
+
+  it.each(['flagged', 'vouched', 'uncensored'] as const)(
+    '%s -> monitored resets the refusal ledger', async (from) => {
+      await applyConciergeFlip('chat-1', 'monitored', makeChat(FROM[from]))
+      expect(resetLedger).toHaveBeenCalledWith('chat-1')
+    })
+
+  it.each([
+    ['monitored', 'flagged'], ['monitored', 'vouched'], ['monitored', 'uncensored'],
+    ['flagged', 'vouched'], ['vouched', 'flagged'], ['uncensored', 'flagged'],
+  ] as const)('%s -> %s leaves the refusal ledger alone', async (from, to) => {
+    await applyConciergeFlip('chat-1', to, makeChat(FROM[from]))
+    expect(resetLedger).not.toHaveBeenCalled()
+  })
+
+  it('a no-op Monitored request does not reset the ledger', async () => {
+    await applyConciergeFlip('chat-1', 'monitored', makeChat(FROM.monitored))
+    expect(resetLedger).not.toHaveBeenCalled()
+  })
+
+  it('the default options keep the operator flag byte-identical', async () => {
+    await applyConciergeFlip('chat-1', 'flagged', makeChat(FROM.monitored))
+    const [, update] = chatsUpdate.mock.calls[0]
+    expect(update.dangerCategories).toEqual([])
+    expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({ chatId: 'chat-1', kind: 'manual-flagged' })
+  })
+
+  it("the Concierge's refusal switch stamps its category and posts the auto kind", async () => {
+    const refusals = { count: 2, lastProvider: 'GOOGLE', lastModel: 'gemini-2.5-flash' }
+    const result = await applyConciergeFlip('chat-1', 'flagged', makeChat(FROM.monitored), {
+      by: 'concierge',
+      reason: 'refusals',
+      refusals,
+    })
+    expect(result).toEqual({ newState: 'flagged', changed: true })
+    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', expect.objectContaining({
+      conciergeOverride: null,
+      isDangerousChat: true,
+      dangerCategories: ['moderation-refusals'],
+    }))
+    expect(postConciergeManualAnnouncement).toHaveBeenCalledWith({
+      chatId: 'chat-1',
+      kind: 'auto-flagged-refusals',
+      details: refusals,
+    })
   })
 })

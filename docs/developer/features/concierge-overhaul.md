@@ -1,6 +1,6 @@
 # The Concierge Overhaul — Overview and Phase Index
 
-**Status:** Proposed (4.10-dev, 2026-09-25)
+**Status:** In progress (4.10-dev, 2026-09-25) — phases 1 and 2 implemented; 3–5 proposed
 **Scope:** quilltap-server. Text turns, every cheap-LLM task, every image call site, the per-chat Concierge control, the global Concierge settings, a new Settings tab. Touches `@quilltap/plugin-types` and every provider plugin (publish gates called out per phase). No shell impact.
 **Supersedes, when complete:** [concierge-four-state.md](complete/concierge-four-state.md), [concierge-list-marks.md](complete/concierge-list-marks.md), [concierge-default-at-creation.md](complete/concierge-default-at-creation.md), and the routing half of [dangerous.md](complete/dangerous.md). The display half of `dangerous.md` (badges, blur, collapse) survives unchanged.
 
@@ -55,7 +55,7 @@ Each phase is a self-contained spec: it restates the code it starts from (verifi
 | Phase | Spec | Delivers | Publish gate |
 |---|---|---|---|
 | 1 | [concierge-overhaul-phase-1-refusal-failover.md](concierge-overhaul-phase-1-refusal-failover.md) | One refusal classifier, one understudy resolver, one image failover chokepoint used by all four image paths, text refusals on thrown errors, image route trails, a Concierge bubble on every image refusal. **Fixes the bikini case.** | `@quilltap/plugin-types` minor + every image plugin patch (host side works before the publish) |
-| 2 | [concierge-overhaul-phase-2-refusal-ledger.md](concierge-overhaul-phase-2-refusal-ledger.md) | A per-chat refusal ledger and the auto-switch after N refusals. | none |
+| 2 | [concierge-overhaul-phase-2-refusal-ledger.md](concierge-overhaul-phase-2-refusal-ledger.md) | A per-chat refusal ledger and the auto-switch after N refusals. **Implemented.** | none |
 | 3 | [concierge-overhaul-phase-3-three-states.md](concierge-overhaul-phase-3-three-states.md) | Moderated / Unmoderated / Locked with provenance; the four-state control, wire values, list marks, quick-hide and export all migrate. | none |
 | 4 | [concierge-overhaul-phase-4-concierge-tab.md](concierge-overhaul-phase-4-concierge-tab.md) | The Concierge's own Settings tab; every scattered Concierge control moves there; the global mode is retired; the classifier becomes an opt-in pre-screen; help rewritten. | none |
 | 5 | [concierge-overhaul-phase-5-salon-polish.md](concierge-overhaul-phase-5-salon-polish.md) | "Try uncensored" on refused turns and pictures, "Not Dangerous" actually clears blur, the Lantern's refusals appear in the chat, badge noise on Unmoderated chats stops. | none |
