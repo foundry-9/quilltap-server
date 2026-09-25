@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Changed: dependency update across the app, packages and plugins
+
+`npm update -S` was run on the root project, every package under `packages/`, and all 15 distributed
+plugins. No behavior changes are intended and no code changed.
+
+- Root: Next and `eslint-config-next` 16.3.5 to 16.3.6, `openai` 7.20 to 7.23, `@openrouter/sdk`
+  1.3.11 to 1.3.28, `katex` 0.18.7 to 0.18.9, `@quilltap/plugin-utils` ^2.6.2,
+  `create-quilltap-theme` ^2.0.20.
+- Packages published: `@quilltap/plugin-utils` 2.6.3 (`@quilltap/plugin-types` ^2.8.0, `openai`
+  ^7.23.0). `plugin-types` and `theme-storybook` changed only their lockfiles and were not bumped.
+- All 15 plugins took a patch bump in both `package.json` and `manifest.json`, mostly for
+  `@quilltap/plugin-types` ^2.8.0 and `@quilltap/plugin-utils` ^2.6.2 (plus `openai`,
+  `@openrouter/sdk` and `@modelcontextprotocol/sdk` 1.30.1 where used), and were rebuilt with
+  `npm run build:plugins`.
+
 #### Added: Salon polish for the Concierge (Concierge overhaul, phase 5)
 
 - **Try uncensored, text.** New action `POST /api/v1/chats/[id]/messages/[messageId]?action=retry-uncensored`

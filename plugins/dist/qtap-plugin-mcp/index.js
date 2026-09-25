@@ -8737,7 +8737,7 @@ function addRequestID(value, response) {
 }
 
 // ../../../node_modules/openai/version.mjs
-var VERSION = "7.20.0";
+var VERSION = "7.23.0";
 
 // ../../../node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -11239,6 +11239,9 @@ ${underline}`);
 var path = /* @__PURE__ */ createPathTagFunction(encodeURIPath);
 
 // ../../../node_modules/openai/resources/chat/completions/messages.mjs
+function resolveResourceRequestOptions(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -11288,7 +11291,11 @@ var Messages = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/chat/completions/${completionID}/messages`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
+    return this._client.getAPIList(path`/chat/completions/${completionID}/messages`, CursorPage, resolveResourceRequestOptions(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
 };
 
@@ -15187,6 +15194,9 @@ var ChatCompletionStreamingRunner = class _ChatCompletionStreamingRunner extends
 };
 
 // ../../../node_modules/openai/resources/chat/completions/completions.mjs
+function resolveResourceRequestOptions2(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys2 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -15234,12 +15244,12 @@ var Completions = class extends APIResource {
     this.messages = new Messages(this._client);
   }
   create(body, options) {
-    return this._client.post("/chat/completions", {
+    return this._client.post("/chat/completions", resolveResourceRequestOptions2(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       stream: body.stream ?? false,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Get a stored chat completion. Only Chat Completions that have been created with
@@ -15252,10 +15262,7 @@ var Completions = class extends APIResource {
    * ```
    */
   retrieve(completionID, options) {
-    return this._client.get(path`/chat/completions/${completionID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.get(path`/chat/completions/${completionID}`, resolveResourceRequestOptions2(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Modify a stored chat completion. Only Chat Completions that have been created
@@ -15271,11 +15278,11 @@ var Completions = class extends APIResource {
    * ```
    */
   update(completionID, body, options) {
-    return this._client.post(path`/chat/completions/${completionID}`, {
+    return this._client.post(path`/chat/completions/${completionID}`, resolveResourceRequestOptions2(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery2(query, ["after", "limit", "metadata", "model", "order"], options);
@@ -15284,11 +15291,11 @@ var Completions = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/chat/completions", CursorPage, {
+    return this._client.getAPIList("/chat/completions", CursorPage, resolveResourceRequestOptions2(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Delete a stored chat completion. Only Chat Completions that have been created
@@ -15301,10 +15308,7 @@ var Completions = class extends APIResource {
    * ```
    */
   delete(completionID, options) {
-    return this._client.delete(path`/chat/completions/${completionID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.delete(path`/chat/completions/${completionID}`, resolveResourceRequestOptions2(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   parse(body, options) {
     validateInputTools(body.tools);
@@ -15338,6 +15342,9 @@ var Chat = class extends APIResource {
 Chat.Completions = Completions;
 
 // ../../../node_modules/openai/resources/admin/organization/admin-api-keys.mjs
+function resolveResourceRequestOptions3(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys3 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -15392,11 +15399,11 @@ var AdminAPIKeys = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/admin_api_keys", {
+    return this._client.post("/organization/admin_api_keys", resolveResourceRequestOptions3(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieve a single organization API key
@@ -15410,10 +15417,10 @@ var AdminAPIKeys = class extends APIResource {
    * ```
    */
   retrieve(keyID, options) {
-    return this._client.get(path`/organization/admin_api_keys/${keyID}`, {
-      ...options,
+    return this._client.get(path`/organization/admin_api_keys/${keyID}`, resolveResourceRequestOptions3(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery3(query, ["after", "limit", "order"], options);
@@ -15422,11 +15429,11 @@ var AdminAPIKeys = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/admin_api_keys", CursorPage, {
+    return this._client.getAPIList("/organization/admin_api_keys", CursorPage, resolveResourceRequestOptions3(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Delete an organization admin API key
@@ -15440,14 +15447,17 @@ var AdminAPIKeys = class extends APIResource {
    * ```
    */
   delete(keyID, options) {
-    return this._client.delete(path`/organization/admin_api_keys/${keyID}`, {
-      ...options,
+    return this._client.delete(path`/organization/admin_api_keys/${keyID}`, resolveResourceRequestOptions3(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/audit-logs.mjs
+function resolveResourceRequestOptions4(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys4 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -15508,15 +15518,18 @@ var AuditLogs = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/audit_logs", ConversationCursorPage, {
+    return this._client.getAPIList("/organization/audit_logs", ConversationCursorPage, resolveResourceRequestOptions4(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/certificates.mjs
+function resolveResourceRequestOptions5(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys5 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -15574,11 +15587,11 @@ var Certificates = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/certificates", {
+    return this._client.post("/organization/certificates", resolveResourceRequestOptions5(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   retrieve(certificateID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery5(query, ["include"], options);
@@ -15587,11 +15600,11 @@ var Certificates = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.get(path`/organization/certificates/${certificateID}`, {
+    return this._client.get(path`/organization/certificates/${certificateID}`, resolveResourceRequestOptions5(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Modify a certificate. Note that only the name can be modified.
@@ -15605,11 +15618,11 @@ var Certificates = class extends APIResource {
    * ```
    */
   update(certificateID, body, options) {
-    return this._client.post(path`/organization/certificates/${certificateID}`, {
+    return this._client.post(path`/organization/certificates/${certificateID}`, resolveResourceRequestOptions5(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery5(query, ["after", "limit", "order"], options);
@@ -15618,7 +15631,11 @@ var Certificates = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/certificates", ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList("/organization/certificates", ConversationCursorPage, resolveResourceRequestOptions5(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Delete a certificate from the organization.
@@ -15634,10 +15651,10 @@ var Certificates = class extends APIResource {
    * ```
    */
   delete(certificateID, options) {
-    return this._client.delete(path`/organization/certificates/${certificateID}`, {
-      ...options,
+    return this._client.delete(path`/organization/certificates/${certificateID}`, resolveResourceRequestOptions5(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Activate certificates at the organization level.
@@ -15655,12 +15672,12 @@ var Certificates = class extends APIResource {
    * ```
    */
   activate(body, options) {
-    return this._client.getAPIList("/organization/certificates/activate", Page, {
+    return this._client.getAPIList("/organization/certificates/activate", Page, resolveResourceRequestOptions5(options, (options2) => ({
       body,
       method: "post",
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Deactivate certificates at the organization level.
@@ -15678,11 +15695,19 @@ var Certificates = class extends APIResource {
    * ```
    */
   deactivate(body, options) {
-    return this._client.getAPIList("/organization/certificates/deactivate", Page, { body, method: "post", ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList("/organization/certificates/deactivate", Page, resolveResourceRequestOptions5(options, (options2) => ({
+      body,
+      method: "post",
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/data-retention.mjs
+function resolveResourceRequestOptions6(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var DataRetention = class extends APIResource {
   /**
    * Retrieves organization data retention controls.
@@ -15694,10 +15719,10 @@ var DataRetention = class extends APIResource {
    * ```
    */
   retrieve(options) {
-    return this._client.get("/organization/data_retention", {
-      ...options,
+    return this._client.get("/organization/data_retention", resolveResourceRequestOptions6(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates organization data retention controls.
@@ -15711,15 +15736,18 @@ var DataRetention = class extends APIResource {
    * ```
    */
   update(body, options) {
-    return this._client.post("/organization/data_retention", {
+    return this._client.post("/organization/data_retention", resolveResourceRequestOptions6(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/external-storage.mjs
+function resolveResourceRequestOptions7(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys6 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -15779,11 +15807,11 @@ var ExternalStorage = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/external_storage", {
+    return this._client.post("/organization/external_storage", resolveResourceRequestOptions7(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get one customer-managed external storage configuration.
@@ -15797,10 +15825,10 @@ var ExternalStorage = class extends APIResource {
    * ```
    */
   retrieve(externalStorageID, options) {
-    return this._client.get(path`/organization/external_storage/${externalStorageID}`, {
-      ...options,
+    return this._client.get(path`/organization/external_storage/${externalStorageID}`, resolveResourceRequestOptions7(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery6(query, ["after", "limit", "order", "project_id"], options);
@@ -15809,10 +15837,17 @@ var ExternalStorage = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/external_storage", CursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList("/organization/external_storage", CursorPage, resolveResourceRequestOptions7(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
-   * Soft-delete one customer-managed external storage configuration.
+   * Disconnect a customer-managed external storage configuration. Removing the
+   * project's last configuration restores organization-default retention if
+   * customer-managed retention was active. Repeating a deletion also completes any
+   * interrupted retention update. Cloud storage is unchanged.
    *
    * @example
    * ```ts
@@ -15823,10 +15858,10 @@ var ExternalStorage = class extends APIResource {
    * ```
    */
   delete(externalStorageID, options) {
-    return this._client.delete(path`/organization/external_storage/${externalStorageID}`, {
-      ...options,
+    return this._client.delete(path`/organization/external_storage/${externalStorageID}`, resolveResourceRequestOptions7(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Validate one customer-managed external storage configuration.
@@ -15840,14 +15875,17 @@ var ExternalStorage = class extends APIResource {
    * ```
    */
   validate(externalStorageID, options) {
-    return this._client.post(path`/organization/external_storage/${externalStorageID}/validate`, {
-      ...options,
+    return this._client.post(path`/organization/external_storage/${externalStorageID}/validate`, resolveResourceRequestOptions7(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/invites.mjs
+function resolveResourceRequestOptions8(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys7 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -15904,11 +15942,11 @@ var Invites = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/invites", {
+    return this._client.post("/organization/invites", resolveResourceRequestOptions8(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves an invite.
@@ -15922,10 +15960,10 @@ var Invites = class extends APIResource {
    * ```
    */
   retrieve(inviteID, options) {
-    return this._client.get(path`/organization/invites/${inviteID}`, {
-      ...options,
+    return this._client.get(path`/organization/invites/${inviteID}`, resolveResourceRequestOptions8(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery7(query, ["after", "limit"], options);
@@ -15934,11 +15972,11 @@ var Invites = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/invites", ConversationCursorPage, {
+    return this._client.getAPIList("/organization/invites", ConversationCursorPage, resolveResourceRequestOptions8(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Delete an invite. If the invite has already been accepted, it cannot be deleted.
@@ -15952,14 +15990,17 @@ var Invites = class extends APIResource {
    * ```
    */
   delete(inviteID, options) {
-    return this._client.delete(path`/organization/invites/${inviteID}`, {
-      ...options,
+    return this._client.delete(path`/organization/invites/${inviteID}`, resolveResourceRequestOptions8(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/roles.mjs
+function resolveResourceRequestOptions9(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys8 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16014,11 +16055,11 @@ var Roles = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/roles", {
+    return this._client.post("/organization/roles", resolveResourceRequestOptions9(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves an organization role.
@@ -16031,10 +16072,10 @@ var Roles = class extends APIResource {
    * ```
    */
   retrieve(roleID, options) {
-    return this._client.get(path`/organization/roles/${roleID}`, {
-      ...options,
+    return this._client.get(path`/organization/roles/${roleID}`, resolveResourceRequestOptions9(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates an existing organization role.
@@ -16047,11 +16088,11 @@ var Roles = class extends APIResource {
    * ```
    */
   update(roleID, body, options) {
-    return this._client.post(path`/organization/roles/${roleID}`, {
+    return this._client.post(path`/organization/roles/${roleID}`, resolveResourceRequestOptions9(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery8(query, ["after", "limit", "order"], options);
@@ -16060,11 +16101,11 @@ var Roles = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/roles", NextCursorPage, {
+    return this._client.getAPIList("/organization/roles", NextCursorPage, resolveResourceRequestOptions9(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a custom role from the organization.
@@ -16077,14 +16118,17 @@ var Roles = class extends APIResource {
    * ```
    */
   delete(roleID, options) {
-    return this._client.delete(path`/organization/roles/${roleID}`, {
-      ...options,
+    return this._client.delete(path`/organization/roles/${roleID}`, resolveResourceRequestOptions9(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/spend-alerts.mjs
+function resolveResourceRequestOptions10(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys9 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16145,11 +16189,11 @@ var SpendAlerts = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/spend_alerts", {
+    return this._client.post("/organization/spend_alerts", resolveResourceRequestOptions10(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves an organization spend alert.
@@ -16163,10 +16207,10 @@ var SpendAlerts = class extends APIResource {
    * ```
    */
   retrieve(alertID, options) {
-    return this._client.get(path`/organization/spend_alerts/${alertID}`, {
-      ...options,
+    return this._client.get(path`/organization/spend_alerts/${alertID}`, resolveResourceRequestOptions10(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates an organization spend alert.
@@ -16189,11 +16233,11 @@ var SpendAlerts = class extends APIResource {
    * ```
    */
   update(alertID, body, options) {
-    return this._client.post(path`/organization/spend_alerts/${alertID}`, {
+    return this._client.post(path`/organization/spend_alerts/${alertID}`, resolveResourceRequestOptions10(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery9(query, ["after", "before", "limit", "order"], options);
@@ -16202,7 +16246,11 @@ var SpendAlerts = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/spend_alerts", ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList("/organization/spend_alerts", ConversationCursorPage, resolveResourceRequestOptions10(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Deletes an organization spend alert.
@@ -16216,14 +16264,17 @@ var SpendAlerts = class extends APIResource {
    * ```
    */
   delete(alertID, options) {
-    return this._client.delete(path`/organization/spend_alerts/${alertID}`, {
-      ...options,
+    return this._client.delete(path`/organization/spend_alerts/${alertID}`, resolveResourceRequestOptions10(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/spend-limit.mjs
+function resolveResourceRequestOptions11(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var SpendLimit = class extends APIResource {
   /**
    * Get the organization's hard spend limit.
@@ -16235,10 +16286,10 @@ var SpendLimit = class extends APIResource {
    * ```
    */
   retrieve(options) {
-    return this._client.get("/organization/spend_limit", {
-      ...options,
+    return this._client.get("/organization/spend_limit", resolveResourceRequestOptions11(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Create or replace the organization's hard spend limit.
@@ -16254,11 +16305,11 @@ var SpendLimit = class extends APIResource {
    * ```
    */
   update(body, options) {
-    return this._client.post("/organization/spend_limit", {
+    return this._client.post("/organization/spend_limit", resolveResourceRequestOptions11(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Delete the organization's hard spend limit.
@@ -16270,14 +16321,17 @@ var SpendLimit = class extends APIResource {
    * ```
    */
   delete(options) {
-    return this._client.delete("/organization/spend_limit", {
-      ...options,
+    return this._client.delete("/organization/spend_limit", resolveResourceRequestOptions11(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/usage.mjs
+function resolveResourceRequestOptions12(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Usage = class extends APIResource {
   /**
    * Get audio speeches usage details for the organization.
@@ -16291,11 +16345,11 @@ var Usage = class extends APIResource {
    * ```
    */
   audioSpeeches(query, options) {
-    return this._client.get("/organization/usage/audio_speeches", {
+    return this._client.get("/organization/usage/audio_speeches", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get audio transcriptions usage details for the organization.
@@ -16309,11 +16363,11 @@ var Usage = class extends APIResource {
    * ```
    */
   audioTranscriptions(query, options) {
-    return this._client.get("/organization/usage/audio_transcriptions", {
+    return this._client.get("/organization/usage/audio_transcriptions", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get code interpreter sessions usage details for the organization.
@@ -16327,11 +16381,11 @@ var Usage = class extends APIResource {
    * ```
    */
   codeInterpreterSessions(query, options) {
-    return this._client.get("/organization/usage/code_interpreter_sessions", {
+    return this._client.get("/organization/usage/code_interpreter_sessions", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get completions usage details for the organization.
@@ -16345,11 +16399,11 @@ var Usage = class extends APIResource {
    * ```
    */
   completions(query, options) {
-    return this._client.get("/organization/usage/completions", {
+    return this._client.get("/organization/usage/completions", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get costs details for the organization.
@@ -16363,11 +16417,11 @@ var Usage = class extends APIResource {
    * ```
    */
   costs(query, options) {
-    return this._client.get("/organization/costs", {
+    return this._client.get("/organization/costs", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get embeddings usage details for the organization.
@@ -16381,11 +16435,11 @@ var Usage = class extends APIResource {
    * ```
    */
   embeddings(query, options) {
-    return this._client.get("/organization/usage/embeddings", {
+    return this._client.get("/organization/usage/embeddings", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get file search calls usage details for the organization.
@@ -16399,11 +16453,11 @@ var Usage = class extends APIResource {
    * ```
    */
   fileSearchCalls(query, options) {
-    return this._client.get("/organization/usage/file_search_calls", {
+    return this._client.get("/organization/usage/file_search_calls", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get images usage details for the organization.
@@ -16417,11 +16471,11 @@ var Usage = class extends APIResource {
    * ```
    */
   images(query, options) {
-    return this._client.get("/organization/usage/images", {
+    return this._client.get("/organization/usage/images", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get moderations usage details for the organization.
@@ -16435,11 +16489,11 @@ var Usage = class extends APIResource {
    * ```
    */
   moderations(query, options) {
-    return this._client.get("/organization/usage/moderations", {
+    return this._client.get("/organization/usage/moderations", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get vector stores usage details for the organization.
@@ -16453,11 +16507,11 @@ var Usage = class extends APIResource {
    * ```
    */
   vectorStores(query, options) {
-    return this._client.get("/organization/usage/vector_stores", {
+    return this._client.get("/organization/usage/vector_stores", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Get web search calls usage details for the organization.
@@ -16471,15 +16525,18 @@ var Usage = class extends APIResource {
    * ```
    */
   webSearchCalls(query, options) {
-    return this._client.get("/organization/usage/web_search_calls", {
+    return this._client.get("/organization/usage/web_search_calls", resolveResourceRequestOptions12(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/roles.mjs
+function resolveResourceRequestOptions13(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys10 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16535,11 +16592,11 @@ var Roles2 = class extends APIResource {
    * ```
    */
   create(groupID, body, options) {
-    return this._client.post(path`/organization/groups/${groupID}/roles`, {
+    return this._client.post(path`/organization/groups/${groupID}/roles`, resolveResourceRequestOptions13(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves an organization role assigned to a group.
@@ -16555,10 +16612,10 @@ var Roles2 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { group_id } = params;
-    return this._client.get(path`/organization/groups/${group_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.get(path`/organization/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions13(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(groupID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery10(query, ["after", "limit", "order"], options);
@@ -16567,7 +16624,11 @@ var Roles2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/groups/${groupID}/roles`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/groups/${groupID}/roles`, NextCursorPage, resolveResourceRequestOptions13(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Unassigns an organization role from a group within the organization.
@@ -16583,14 +16644,17 @@ var Roles2 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { group_id } = params;
-    return this._client.delete(path`/organization/groups/${group_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.delete(path`/organization/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions13(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/users.mjs
+function resolveResourceRequestOptions14(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys11 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16646,11 +16710,11 @@ var Users = class extends APIResource {
    * ```
    */
   create(groupID, body, options) {
-    return this._client.post(path`/organization/groups/${groupID}/users`, {
+    return this._client.post(path`/organization/groups/${groupID}/users`, resolveResourceRequestOptions14(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a user in a group.
@@ -16666,10 +16730,10 @@ var Users = class extends APIResource {
    */
   retrieve(userID, params, options) {
     const { group_id } = params;
-    return this._client.get(path`/organization/groups/${group_id}/users/${userID}`, {
-      ...options,
+    return this._client.get(path`/organization/groups/${group_id}/users/${userID}`, resolveResourceRequestOptions14(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(groupID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery11(query, ["after", "limit", "order"], options);
@@ -16678,7 +16742,11 @@ var Users = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/groups/${groupID}/users`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/groups/${groupID}/users`, NextCursorPage, resolveResourceRequestOptions14(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Removes a user from a group.
@@ -16694,14 +16762,17 @@ var Users = class extends APIResource {
    */
   delete(userID, params, options) {
     const { group_id } = params;
-    return this._client.delete(path`/organization/groups/${group_id}/users/${userID}`, {
-      ...options,
+    return this._client.delete(path`/organization/groups/${group_id}/users/${userID}`, resolveResourceRequestOptions14(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/groups/groups.mjs
+function resolveResourceRequestOptions15(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys12 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16760,11 +16831,11 @@ var Groups = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/groups", {
+    return this._client.post("/organization/groups", resolveResourceRequestOptions15(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a group.
@@ -16778,10 +16849,10 @@ var Groups = class extends APIResource {
    * ```
    */
   retrieve(groupID, options) {
-    return this._client.get(path`/organization/groups/${groupID}`, {
-      ...options,
+    return this._client.get(path`/organization/groups/${groupID}`, resolveResourceRequestOptions15(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates a group's information.
@@ -16795,11 +16866,11 @@ var Groups = class extends APIResource {
    * ```
    */
   update(groupID, body, options) {
-    return this._client.post(path`/organization/groups/${groupID}`, {
+    return this._client.post(path`/organization/groups/${groupID}`, resolveResourceRequestOptions15(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery12(query, ["after", "limit", "order"], options);
@@ -16808,11 +16879,11 @@ var Groups = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/groups", NextCursorPage, {
+    return this._client.getAPIList("/organization/groups", NextCursorPage, resolveResourceRequestOptions15(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a group from the organization.
@@ -16825,16 +16896,19 @@ var Groups = class extends APIResource {
    * ```
    */
   delete(groupID, options) {
-    return this._client.delete(path`/organization/groups/${groupID}`, {
-      ...options,
+    return this._client.delete(path`/organization/groups/${groupID}`, resolveResourceRequestOptions15(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 Groups.Users = Users;
 Groups.Roles = Roles2;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/api-keys.mjs
+function resolveResourceRequestOptions16(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys13 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16891,10 +16965,10 @@ var APIKeys = class extends APIResource {
    */
   retrieve(apiKeyID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/api_keys/${apiKeyID}`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${project_id}/api_keys/${apiKeyID}`, resolveResourceRequestOptions16(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(projectID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery13(query, ["after", "limit", "owner_project_access"], options);
@@ -16903,7 +16977,11 @@ var APIKeys = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/api_keys`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/api_keys`, ConversationCursorPage, resolveResourceRequestOptions16(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Deletes an API key from the project.
@@ -16922,14 +17000,17 @@ var APIKeys = class extends APIResource {
    */
   delete(apiKeyID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/api_keys/${apiKeyID}`, {
-      ...options,
+    return this._client.delete(path`/organization/projects/${project_id}/api_keys/${apiKeyID}`, resolveResourceRequestOptions16(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/certificates.mjs
+function resolveResourceRequestOptions17(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys14 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -16979,7 +17060,11 @@ var Certificates2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/certificates`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/certificates`, ConversationCursorPage, resolveResourceRequestOptions17(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Activate certificates at the project level.
@@ -16998,7 +17083,12 @@ var Certificates2 = class extends APIResource {
    * ```
    */
   activate(projectID, body, options) {
-    return this._client.getAPIList(path`/organization/projects/${projectID}/certificates/activate`, Page, { body, method: "post", ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/certificates/activate`, Page, resolveResourceRequestOptions17(options, (options2) => ({
+      body,
+      method: "post",
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Deactivate certificates at the project level. You can atomically and
@@ -17016,11 +17106,19 @@ var Certificates2 = class extends APIResource {
    * ```
    */
   deactivate(projectID, body, options) {
-    return this._client.getAPIList(path`/organization/projects/${projectID}/certificates/deactivate`, Page, { body, method: "post", ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/certificates/deactivate`, Page, resolveResourceRequestOptions17(options, (options2) => ({
+      body,
+      method: "post",
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/data-retention.mjs
+function resolveResourceRequestOptions18(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var DataRetention2 = class extends APIResource {
   /**
    * Retrieves project data retention controls.
@@ -17034,10 +17132,10 @@ var DataRetention2 = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}/data_retention`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${projectID}/data_retention`, resolveResourceRequestOptions18(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates project data retention controls.
@@ -17052,15 +17150,18 @@ var DataRetention2 = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/data_retention`, {
+    return this._client.post(path`/organization/projects/${projectID}/data_retention`, resolveResourceRequestOptions18(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/hosted-tool-permissions.mjs
+function resolveResourceRequestOptions19(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var HostedToolPermissions = class extends APIResource {
   /**
    * Returns hosted tool permissions for a project.
@@ -17074,10 +17175,10 @@ var HostedToolPermissions = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}/hosted_tool_permissions`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${projectID}/hosted_tool_permissions`, resolveResourceRequestOptions19(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates hosted tool permissions for a project.
@@ -17091,15 +17192,18 @@ var HostedToolPermissions = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/hosted_tool_permissions`, {
+    return this._client.post(path`/organization/projects/${projectID}/hosted_tool_permissions`, resolveResourceRequestOptions19(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/model-permissions.mjs
+function resolveResourceRequestOptions20(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var ModelPermissions = class extends APIResource {
   /**
    * Returns model permissions for a project.
@@ -17113,10 +17217,10 @@ var ModelPermissions = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}/model_permissions`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${projectID}/model_permissions`, resolveResourceRequestOptions20(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates model permissions for a project.
@@ -17131,11 +17235,11 @@ var ModelPermissions = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/model_permissions`, {
+    return this._client.post(path`/organization/projects/${projectID}/model_permissions`, resolveResourceRequestOptions20(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Deletes model permissions for a project.
@@ -17149,14 +17253,17 @@ var ModelPermissions = class extends APIResource {
    * ```
    */
   delete(projectID, options) {
-    return this._client.delete(path`/organization/projects/${projectID}/model_permissions`, {
-      ...options,
+    return this._client.delete(path`/organization/projects/${projectID}/model_permissions`, resolveResourceRequestOptions20(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/rate-limits.mjs
+function resolveResourceRequestOptions21(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys15 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -17206,7 +17313,11 @@ var RateLimits = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/rate_limits`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/rate_limits`, ConversationCursorPage, resolveResourceRequestOptions21(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Updates a project rate limit.
@@ -17222,15 +17333,18 @@ var RateLimits = class extends APIResource {
    */
   updateRateLimit(rateLimitID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/rate_limits/${rateLimitID}`, {
+    return this._client.post(path`/organization/projects/${project_id}/rate_limits/${rateLimitID}`, resolveResourceRequestOptions21(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/roles.mjs
+function resolveResourceRequestOptions22(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys16 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -17286,11 +17400,11 @@ var Roles3 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/projects/${projectID}/roles`, {
+    return this._client.post(path`/projects/${projectID}/roles`, resolveResourceRequestOptions22(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a project role.
@@ -17306,10 +17420,10 @@ var Roles3 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/projects/${project_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.get(path`/projects/${project_id}/roles/${roleID}`, resolveResourceRequestOptions22(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates an existing project role.
@@ -17325,11 +17439,11 @@ var Roles3 = class extends APIResource {
    */
   update(roleID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/projects/${project_id}/roles/${roleID}`, {
+    return this._client.post(path`/projects/${project_id}/roles/${roleID}`, resolveResourceRequestOptions22(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(projectID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery16(query, ["after", "limit", "order"], options);
@@ -17338,11 +17452,11 @@ var Roles3 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/projects/${projectID}/roles`, NextCursorPage, {
+    return this._client.getAPIList(path`/projects/${projectID}/roles`, NextCursorPage, resolveResourceRequestOptions22(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a custom role from a project.
@@ -17358,14 +17472,17 @@ var Roles3 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/projects/${project_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.delete(path`/projects/${project_id}/roles/${roleID}`, resolveResourceRequestOptions22(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/spend-alerts.mjs
+function resolveResourceRequestOptions23(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys17 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -17429,11 +17546,11 @@ var SpendAlerts2 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/spend_alerts`, {
+    return this._client.post(path`/organization/projects/${projectID}/spend_alerts`, resolveResourceRequestOptions23(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a project spend alert.
@@ -17449,10 +17566,10 @@ var SpendAlerts2 = class extends APIResource {
    */
   retrieve(alertID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions23(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates a project spend alert.
@@ -17477,11 +17594,11 @@ var SpendAlerts2 = class extends APIResource {
    */
   update(alertID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
+    return this._client.post(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions23(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(projectID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery17(query, ["after", "before", "limit", "order"], options);
@@ -17490,7 +17607,11 @@ var SpendAlerts2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/spend_alerts`, ConversationCursorPage, resolveResourceRequestOptions23(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Deletes a project spend alert.
@@ -17506,14 +17627,17 @@ var SpendAlerts2 = class extends APIResource {
    */
   delete(alertID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, {
-      ...options,
+    return this._client.delete(path`/organization/projects/${project_id}/spend_alerts/${alertID}`, resolveResourceRequestOptions23(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/spend-limit.mjs
+function resolveResourceRequestOptions24(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var SpendLimit2 = class extends APIResource {
   /**
    * Get a project's hard spend limit.
@@ -17527,10 +17651,10 @@ var SpendLimit2 = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}/spend_limit`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions24(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Create or replace a project's hard spend limit.
@@ -17549,11 +17673,11 @@ var SpendLimit2 = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/spend_limit`, {
+    return this._client.post(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions24(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Delete a project's hard spend limit.
@@ -17567,14 +17691,17 @@ var SpendLimit2 = class extends APIResource {
    * ```
    */
   delete(projectID, options) {
-    return this._client.delete(path`/organization/projects/${projectID}/spend_limit`, {
-      ...options,
+    return this._client.delete(path`/organization/projects/${projectID}/spend_limit`, resolveResourceRequestOptions24(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/roles.mjs
+function resolveResourceRequestOptions25(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Roles4 = class extends APIResource {
   /**
    * Assigns a project role to a group within a project.
@@ -17590,11 +17717,11 @@ var Roles4 = class extends APIResource {
    */
   create(groupID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/projects/${project_id}/groups/${groupID}/roles`, {
+    return this._client.post(path`/projects/${project_id}/groups/${groupID}/roles`, resolveResourceRequestOptions25(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a project role assigned to a group.
@@ -17610,10 +17737,10 @@ var Roles4 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { project_id, group_id } = params;
-    return this._client.get(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.get(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions25(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Lists the project roles assigned to a group within a project.
@@ -17631,7 +17758,11 @@ var Roles4 = class extends APIResource {
    */
   list(groupID, params, options) {
     const { project_id, ...query } = params;
-    return this._client.getAPIList(path`/projects/${project_id}/groups/${groupID}/roles`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/projects/${project_id}/groups/${groupID}/roles`, NextCursorPage, resolveResourceRequestOptions25(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Unassigns a project role from a group within a project.
@@ -17647,14 +17778,17 @@ var Roles4 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { project_id, group_id } = params;
-    return this._client.delete(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.delete(path`/projects/${project_id}/groups/${group_id}/roles/${roleID}`, resolveResourceRequestOptions25(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/groups/groups.mjs
+function resolveResourceRequestOptions26(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys18 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -17714,11 +17848,11 @@ var Groups2 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/groups`, {
+    return this._client.post(path`/organization/projects/${projectID}/groups`, resolveResourceRequestOptions26(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a project's group.
@@ -17734,11 +17868,11 @@ var Groups2 = class extends APIResource {
    */
   retrieve(groupID, params, options) {
     const { project_id, ...query } = params;
-    return this._client.get(path`/organization/projects/${project_id}/groups/${groupID}`, {
+    return this._client.get(path`/organization/projects/${project_id}/groups/${groupID}`, resolveResourceRequestOptions26(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(projectID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery18(query, ["after", "limit", "order"], options);
@@ -17747,7 +17881,11 @@ var Groups2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/groups`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/groups`, NextCursorPage, resolveResourceRequestOptions26(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Revokes a group's access to a project.
@@ -17763,15 +17901,18 @@ var Groups2 = class extends APIResource {
    */
   delete(groupID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/groups/${groupID}`, {
-      ...options,
+    return this._client.delete(path`/organization/projects/${project_id}/groups/${groupID}`, resolveResourceRequestOptions26(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 Groups2.Roles = Roles4;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/api-keys.mjs
+function resolveResourceRequestOptions27(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var APIKeys2 = class extends APIResource {
   /**
    * Creates an API key for a service account in the project.
@@ -17787,11 +17928,18 @@ var APIKeys2 = class extends APIResource {
    */
   create(serviceAccountID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}/api_keys`, { body, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}/api_keys`, resolveResourceRequestOptions27(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/service-accounts/service-accounts.mjs
+function resolveResourceRequestOptions28(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys19 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -17852,11 +18000,11 @@ var ServiceAccounts = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/service_accounts`, {
+    return this._client.post(path`/organization/projects/${projectID}/service_accounts`, resolveResourceRequestOptions28(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a service account in the project.
@@ -17872,10 +18020,10 @@ var ServiceAccounts = class extends APIResource {
    */
   retrieve(serviceAccountID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions28(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Updates a service account in the project.
@@ -17891,7 +18039,11 @@ var ServiceAccounts = class extends APIResource {
    */
   update(serviceAccountID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { body, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.post(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions28(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   list(projectID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery19(query, ["after", "limit"], options);
@@ -17900,7 +18052,11 @@ var ServiceAccounts = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/service_accounts`, ConversationCursorPage, resolveResourceRequestOptions28(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Deletes a service account from the project.
@@ -17919,12 +18075,18 @@ var ServiceAccounts = class extends APIResource {
    */
   delete(serviceAccountID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, { ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.delete(path`/organization/projects/${project_id}/service_accounts/${serviceAccountID}`, resolveResourceRequestOptions28(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
 };
 ServiceAccounts.APIKeys = APIKeys2;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/users/roles.mjs
+function resolveResourceRequestOptions29(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Roles5 = class extends APIResource {
   /**
    * Assigns a project role to a user within a project.
@@ -17940,11 +18102,11 @@ var Roles5 = class extends APIResource {
    */
   create(userID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/projects/${project_id}/users/${userID}/roles`, {
+    return this._client.post(path`/projects/${project_id}/users/${userID}/roles`, resolveResourceRequestOptions29(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a project role assigned to a user.
@@ -17960,10 +18122,10 @@ var Roles5 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { project_id, user_id } = params;
-    return this._client.get(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.get(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions29(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Lists the project roles assigned to a user within a project.
@@ -17981,7 +18143,11 @@ var Roles5 = class extends APIResource {
    */
   list(userID, params, options) {
     const { project_id, ...query } = params;
-    return this._client.getAPIList(path`/projects/${project_id}/users/${userID}/roles`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/projects/${project_id}/users/${userID}/roles`, NextCursorPage, resolveResourceRequestOptions29(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Unassigns a project role from a user within a project.
@@ -17997,14 +18163,17 @@ var Roles5 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { project_id, user_id } = params;
-    return this._client.delete(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.delete(path`/projects/${project_id}/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions29(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/projects/users/users.mjs
+function resolveResourceRequestOptions30(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys20 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18065,11 +18234,11 @@ var Users2 = class extends APIResource {
    * ```
    */
   create(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}/users`, {
+    return this._client.post(path`/organization/projects/${projectID}/users`, resolveResourceRequestOptions30(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a user in the project.
@@ -18085,10 +18254,10 @@ var Users2 = class extends APIResource {
    */
   retrieve(userID, params, options) {
     const { project_id } = params;
-    return this._client.get(path`/organization/projects/${project_id}/users/${userID}`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions30(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Modifies a user's role in the project.
@@ -18104,11 +18273,11 @@ var Users2 = class extends APIResource {
    */
   update(userID, params, options) {
     const { project_id, ...body } = params;
-    return this._client.post(path`/organization/projects/${project_id}/users/${userID}`, {
+    return this._client.post(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions30(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(projectID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery20(query, ["after", "limit"], options);
@@ -18117,7 +18286,11 @@ var Users2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/projects/${projectID}/users`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/projects/${projectID}/users`, ConversationCursorPage, resolveResourceRequestOptions30(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Deletes a user from the project.
@@ -18136,15 +18309,18 @@ var Users2 = class extends APIResource {
    */
   delete(userID, params, options) {
     const { project_id } = params;
-    return this._client.delete(path`/organization/projects/${project_id}/users/${userID}`, {
-      ...options,
+    return this._client.delete(path`/organization/projects/${project_id}/users/${userID}`, resolveResourceRequestOptions30(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 Users2.Roles = Roles5;
 
 // ../../../node_modules/openai/resources/admin/organization/projects/projects.mjs
+function resolveResourceRequestOptions31(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys21 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18215,11 +18391,11 @@ var Projects = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/organization/projects", {
+    return this._client.post("/organization/projects", resolveResourceRequestOptions31(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a project.
@@ -18233,10 +18409,10 @@ var Projects = class extends APIResource {
    * ```
    */
   retrieve(projectID, options) {
-    return this._client.get(path`/organization/projects/${projectID}`, {
-      ...options,
+    return this._client.get(path`/organization/projects/${projectID}`, resolveResourceRequestOptions31(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Modifies a project in the organization.
@@ -18250,11 +18426,11 @@ var Projects = class extends APIResource {
    * ```
    */
   update(projectID, body, options) {
-    return this._client.post(path`/organization/projects/${projectID}`, {
+    return this._client.post(path`/organization/projects/${projectID}`, resolveResourceRequestOptions31(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery21(query, ["after", "include_archived", "limit"], options);
@@ -18263,11 +18439,11 @@ var Projects = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/projects", ConversationCursorPage, {
+    return this._client.getAPIList("/organization/projects", ConversationCursorPage, resolveResourceRequestOptions31(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Archives a project in the organization. Archived projects cannot be used or
@@ -18282,10 +18458,10 @@ var Projects = class extends APIResource {
    * ```
    */
   archive(projectID, options) {
-    return this._client.post(path`/organization/projects/${projectID}/archive`, {
-      ...options,
+    return this._client.post(path`/organization/projects/${projectID}/archive`, resolveResourceRequestOptions31(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 Projects.Users = Users2;
@@ -18302,6 +18478,9 @@ Projects.SpendAlerts = SpendAlerts2;
 Projects.Certificates = Certificates2;
 
 // ../../../node_modules/openai/resources/admin/organization/users/roles.mjs
+function resolveResourceRequestOptions32(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys22 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18357,11 +18536,11 @@ var Roles6 = class extends APIResource {
    * ```
    */
   create(userID, body, options) {
-    return this._client.post(path`/organization/users/${userID}/roles`, {
+    return this._client.post(path`/organization/users/${userID}/roles`, resolveResourceRequestOptions32(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves an organization role assigned to a user.
@@ -18377,10 +18556,10 @@ var Roles6 = class extends APIResource {
    */
   retrieve(roleID, params, options) {
     const { user_id } = params;
-    return this._client.get(path`/organization/users/${user_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.get(path`/organization/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions32(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(userID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery22(query, ["after", "limit", "order"], options);
@@ -18389,7 +18568,11 @@ var Roles6 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/organization/users/${userID}/roles`, NextCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
+    return this._client.getAPIList(path`/organization/users/${userID}/roles`, NextCursorPage, resolveResourceRequestOptions32(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
   }
   /**
    * Unassigns an organization role from a user within the organization.
@@ -18405,14 +18588,17 @@ var Roles6 = class extends APIResource {
    */
   delete(roleID, params, options) {
     const { user_id } = params;
-    return this._client.delete(path`/organization/users/${user_id}/roles/${roleID}`, {
-      ...options,
+    return this._client.delete(path`/organization/users/${user_id}/roles/${roleID}`, resolveResourceRequestOptions32(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/admin/organization/users/users.mjs
+function resolveResourceRequestOptions33(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys23 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18469,10 +18655,10 @@ var Users3 = class extends APIResource {
    * ```
    */
   retrieve(userID, options) {
-    return this._client.get(path`/organization/users/${userID}`, {
-      ...options,
+    return this._client.get(path`/organization/users/${userID}`, resolveResourceRequestOptions33(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Modifies a user's role in the organization.
@@ -18484,11 +18670,11 @@ var Users3 = class extends APIResource {
    * ```
    */
   update(userID, body, options) {
-    return this._client.post(path`/organization/users/${userID}`, {
+    return this._client.post(path`/organization/users/${userID}`, resolveResourceRequestOptions33(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery23(query, ["after", "emails", "limit"], options);
@@ -18497,11 +18683,11 @@ var Users3 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/organization/users", ConversationCursorPage, {
+    return this._client.getAPIList("/organization/users", ConversationCursorPage, resolveResourceRequestOptions33(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a user from the organization.
@@ -18514,10 +18700,10 @@ var Users3 = class extends APIResource {
    * ```
    */
   delete(userID, options) {
-    return this._client.delete(path`/organization/users/${userID}`, {
-      ...options,
+    return this._client.delete(path`/organization/users/${userID}`, resolveResourceRequestOptions33(options, (options2) => ({
+      ...options2,
       __security: { adminAPIKeyAuth: true }
-    });
+    })));
   }
 };
 Users3.Roles = Roles6;
@@ -18526,7 +18712,6 @@ Users3.Roles = Roles6;
 var Organization = class extends APIResource {
   constructor() {
     super(...arguments);
-    this.externalStorage = new ExternalStorage(this._client);
     this.auditLogs = new AuditLogs(this._client);
     this.adminAPIKeys = new AdminAPIKeys(this._client);
     this.usage = new Usage(this._client);
@@ -18535,13 +18720,13 @@ var Organization = class extends APIResource {
     this.groups = new Groups(this._client);
     this.roles = new Roles(this._client);
     this.dataRetention = new DataRetention(this._client);
+    this.externalStorage = new ExternalStorage(this._client);
     this.spendLimit = new SpendLimit(this._client);
     this.spendAlerts = new SpendAlerts(this._client);
     this.certificates = new Certificates(this._client);
     this.projects = new Projects(this._client);
   }
 };
-Organization.ExternalStorage = ExternalStorage;
 Organization.AuditLogs = AuditLogs;
 Organization.AdminAPIKeys = AdminAPIKeys;
 Organization.Usage = Usage;
@@ -18550,6 +18735,7 @@ Organization.Users = Users3;
 Organization.Groups = Groups;
 Organization.Roles = Roles;
 Organization.DataRetention = DataRetention;
+Organization.ExternalStorage = ExternalStorage;
 Organization.SpendLimit = SpendLimit;
 Organization.SpendAlerts = SpendAlerts;
 Organization.Certificates = Certificates;
@@ -18565,6 +18751,9 @@ var Admin = class extends APIResource {
 Admin.Organization = Organization;
 
 // ../../../node_modules/openai/resources/audio/speech.mjs
+function resolveResourceRequestOptions34(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Speech = class extends APIResource {
   /**
    * Generates audio from the input text.
@@ -18584,33 +18773,39 @@ var Speech = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/audio/speech", {
+    return this._client.post("/audio/speech", resolveResourceRequestOptions34(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "application/octet-stream" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/octet-stream" }, options2?.headers]),
       __security: { bearerAuth: true },
       __binaryResponse: true
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/audio/transcriptions.mjs
+function resolveResourceRequestOptions35(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Transcriptions = class extends APIResource {
   create(body, options) {
-    return this._client.post("/audio/transcriptions", multipartFormRequestOptions({
+    return this._client.post("/audio/transcriptions", resolveResourceRequestOptions35(options, (options2) => multipartFormRequestOptions({
       body,
-      ...options,
+      ...options2,
       stream: body.stream ?? false,
       __metadata: { model: body.model },
       __security: { bearerAuth: true }
-    }, this._client));
+    }, this._client)));
   }
 };
 
 // ../../../node_modules/openai/resources/audio/translations.mjs
+function resolveResourceRequestOptions36(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Translations = class extends APIResource {
   create(body, options) {
-    return this._client.post("/audio/translations", multipartFormRequestOptions({ body, ...options, __metadata: { model: body.model }, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/audio/translations", resolveResourceRequestOptions36(options, (options2) => multipartFormRequestOptions({ body, ...options2, __metadata: { model: body.model }, __security: { bearerAuth: true } }, this._client)));
   }
 };
 
@@ -18628,6 +18823,9 @@ Audio.Translations = Translations;
 Audio.Speech = Speech;
 
 // ../../../node_modules/openai/resources/batches.mjs
+function resolveResourceRequestOptions37(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys24 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18674,13 +18872,17 @@ var Batches = class extends APIResource {
    * Creates and executes a batch from an uploaded file of requests
    */
   create(body, options) {
-    return this._client.post("/batches", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/batches", resolveResourceRequestOptions37(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Retrieves a batch.
    */
   retrieve(batchID, options) {
-    return this._client.get(path`/batches/${batchID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.get(path`/batches/${batchID}`, resolveResourceRequestOptions37(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery24(query, ["after", "limit"], options);
@@ -18689,11 +18891,11 @@ var Batches = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/batches", CursorPage, {
+    return this._client.getAPIList("/batches", CursorPage, resolveResourceRequestOptions37(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Cancels an in-progress batch. The batch will be in status `cancelling` for up to
@@ -18701,14 +18903,14 @@ var Batches = class extends APIResource {
    * (if any) available in the output file.
    */
   cancel(batchID, options) {
-    return this._client.post(path`/batches/${batchID}/cancel`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.post(path`/batches/${batchID}/cancel`, resolveResourceRequestOptions37(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/assistants.mjs
+function resolveResourceRequestOptions38(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys25 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18757,12 +18959,12 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   create(body, options) {
-    return this._client.post("/assistants", {
+    return this._client.post("/assistants", resolveResourceRequestOptions38(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves an assistant.
@@ -18770,11 +18972,11 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   retrieve(assistantID, options) {
-    return this._client.get(path`/assistants/${assistantID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+    return this._client.get(path`/assistants/${assistantID}`, resolveResourceRequestOptions38(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Modifies an assistant.
@@ -18782,12 +18984,12 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   update(assistantID, body, options) {
-    return this._client.post(path`/assistants/${assistantID}`, {
+    return this._client.post(path`/assistants/${assistantID}`, resolveResourceRequestOptions38(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery25(query, ["after", "before", "limit", "order"], options);
@@ -18796,12 +18998,12 @@ var Assistants = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/assistants", CursorPage, {
+    return this._client.getAPIList("/assistants", CursorPage, resolveResourceRequestOptions38(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Delete an assistant.
@@ -18809,11 +19011,11 @@ var Assistants = class extends APIResource {
    * @deprecated
    */
   delete(assistantID, options) {
-    return this._client.delete(path`/assistants/${assistantID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+    return this._client.delete(path`/assistants/${assistantID}`, resolveResourceRequestOptions38(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
@@ -18883,6 +19085,9 @@ Realtime.Sessions = Sessions;
 Realtime.TranscriptionSessions = TranscriptionSessions;
 
 // ../../../node_modules/openai/resources/beta/agents/environments/files.mjs
+function resolveResourceRequestOptions39(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Files = class extends APIResource {
   /**
    * Copies inline bytes or a Files API file into a connected execution environment.
@@ -18903,12 +19108,12 @@ var Files = class extends APIResource {
    * ```
    */
   create(environmentID, body, options) {
-    return this._client.post(path`/agents/environments/${environmentID}/files`, {
+    return this._client.post(path`/agents/environments/${environmentID}/files`, resolveResourceRequestOptions39(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Lists live files on a connected execution environment with optional directory
@@ -18926,16 +19131,19 @@ var Files = class extends APIResource {
    * ```
    */
   list(environmentID, query = {}, options) {
-    return this._client.getAPIList(path`/agents/environments/${environmentID}/files`, TokenPage, {
+    return this._client.getAPIList(path`/agents/environments/${environmentID}/files`, TokenPage, resolveResourceRequestOptions39(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/environments/templates.mjs
+function resolveResourceRequestOptions40(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys26 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -18990,12 +19198,12 @@ var Templates = class extends APIResource {
    * ```
    */
   create(body = {}, options) {
-    return this._client.post("/agents/environments/templates", {
+    return this._client.post("/agents/environments/templates", resolveResourceRequestOptions40(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves reusable environment configuration without returning confidential
@@ -19011,11 +19219,11 @@ var Templates = class extends APIResource {
    * ```
    */
   retrieve(environmentTemplateID, options) {
-    return this._client.get(path`/agents/environments/templates/${environmentTemplateID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions40(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Updates reusable environment configuration without returning confidential
@@ -19031,12 +19239,12 @@ var Templates = class extends APIResource {
    * ```
    */
   update(environmentTemplateID, body = {}, options) {
-    return this._client.post(path`/agents/environments/templates/${environmentTemplateID}`, {
+    return this._client.post(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions40(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery26(query, ["after", "limit", "order"], options);
@@ -19045,12 +19253,12 @@ var Templates = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents/environments/templates", CursorPage, {
+    return this._client.getAPIList("/agents/environments/templates", CursorPage, resolveResourceRequestOptions40(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes reusable environment configuration and all confidential template inputs.
@@ -19066,15 +19274,18 @@ var Templates = class extends APIResource {
    * ```
    */
   delete(environmentTemplateID, options) {
-    return this._client.delete(path`/agents/environments/templates/${environmentTemplateID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.delete(path`/agents/environments/templates/${environmentTemplateID}`, resolveResourceRequestOptions40(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/environments/environments.mjs
+function resolveResourceRequestOptions41(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Environments = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -19095,11 +19306,11 @@ var Environments = class extends APIResource {
    * ```
    */
   retrieve(environmentID, options) {
-    return this._client.get(path`/agents/environments/${environmentID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/environments/${environmentID}`, resolveResourceRequestOptions41(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Environments.Files = Files;
@@ -19398,6 +19609,9 @@ _AgentSessionStream_iterate = async function* _AgentSessionStream_iterate2() {
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/artifacts.mjs
+function resolveResourceRequestOptions42(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys27 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -19455,11 +19669,11 @@ var Artifacts = class extends APIResource {
    */
   retrieve(artifactID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, resolveResourceRequestOptions42(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(sessionID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery27(query, ["after", "environment_id", "limit", "order"], options);
@@ -19468,12 +19682,12 @@ var Artifacts = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/artifacts`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/artifacts`, CursorPage, resolveResourceRequestOptions42(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes an immutable session artifact without deleting its live environment file
@@ -19491,11 +19705,11 @@ var Artifacts = class extends APIResource {
    */
   delete(artifactID, params, options) {
     const { session_id } = params;
-    return this._client.delete(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.delete(path`/agents/sessions/${session_id}/artifacts/${artifactID}`, resolveResourceRequestOptions42(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Downloads immutable session artifact bytes after the execution environment
@@ -19516,19 +19730,22 @@ var Artifacts = class extends APIResource {
    */
   content(artifactID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}/content`, {
-      ...options,
+    return this._client.get(path`/agents/sessions/${session_id}/artifacts/${artifactID}/content`, resolveResourceRequestOptions42(options, (options2) => ({
+      ...options2,
       headers: buildHeaders([
         { "OpenAI-Beta": "agents=v1", Accept: "application/octet-stream" },
-        options?.headers
+        options2?.headers
       ]),
       __security: { bearerAuth: true },
       __binaryResponse: true
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/events.mjs
+function resolveResourceRequestOptions43(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Events = class extends APIResource {
   /**
    * Submits message, cancellation, or tool-result events to a managed agent session.
@@ -19560,19 +19777,19 @@ var Events = class extends APIResource {
    */
   create(sessionID, params, options) {
     const { "Idempotency-Key": idempotencyKey, ...body } = params;
-    return this._client.post(path`/agents/sessions/${sessionID}/events`, {
+    return this._client.post(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions43(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       headers: buildHeaders([
         {
           "OpenAI-Beta": "agents=v1",
           Accept: "*/*",
           ...idempotencyKey != null ? { "Idempotency-Key": idempotencyKey } : void 0
         },
-        options?.headers
+        options2?.headers
       ]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Streams live events for an agent session. See
@@ -19587,16 +19804,22 @@ var Events = class extends APIResource {
    * ```
    */
   stream(sessionID, options) {
-    return this._client.get(path`/agents/sessions/${sessionID}/events`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" }, options?.headers]),
+    return this._client.get(path`/agents/sessions/${sessionID}/events`, resolveResourceRequestOptions43(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([
+        { "OpenAI-Beta": "agents=v1", Accept: "text/event-stream" },
+        options2?.headers
+      ]),
       stream: true,
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/items.mjs
+function resolveResourceRequestOptions44(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys28 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -19646,16 +19869,19 @@ var Items = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/items`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/items`, CursorPage, resolveResourceRequestOptions44(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/turns.mjs
+function resolveResourceRequestOptions45(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys29 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -19714,11 +19940,11 @@ var Turns = class extends APIResource {
    */
   retrieve(turnID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/turns/${turnID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/sessions/${session_id}/turns/${turnID}`, resolveResourceRequestOptions45(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(sessionID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery29(query, ["after", "limit", "order"], options);
@@ -19727,16 +19953,19 @@ var Turns = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/turns`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/turns`, CursorPage, resolveResourceRequestOptions45(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/items.mjs
+function resolveResourceRequestOptions46(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Items2 = class extends APIResource {
   /**
    * Lists this subagent's own items across all of its turns. See
@@ -19755,16 +19984,19 @@ var Items2 = class extends APIResource {
    */
   list(subagentID, params, options) {
     const { session_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/items`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/items`, CursorPage, resolveResourceRequestOptions46(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/turns/items.mjs
+function resolveResourceRequestOptions47(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Items3 = class extends APIResource {
   /**
    * Lists items belonging to one turn of this subagent. See
@@ -19783,16 +20015,19 @@ var Items3 = class extends APIResource {
    */
   list(turnID, params, options) {
     const { session_id, subagent_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}/items`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}/items`, CursorPage, resolveResourceRequestOptions47(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/turns/turns.mjs
+function resolveResourceRequestOptions48(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Turns2 = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -19816,11 +20051,11 @@ var Turns2 = class extends APIResource {
    */
   retrieve(turnID, params, options) {
     const { session_id, subagent_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagent_id}/turns/${turnID}`, resolveResourceRequestOptions48(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Lists all turns of this subagent, including turns after a resume. See
@@ -19839,17 +20074,20 @@ var Turns2 = class extends APIResource {
    */
   list(subagentID, params, options) {
     const { session_id, ...query } = params;
-    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/turns`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${session_id}/subagents/${subagentID}/turns`, CursorPage, resolveResourceRequestOptions48(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Turns2.Items = Items3;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/subagents/subagents.mjs
+function resolveResourceRequestOptions49(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys30 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -19912,11 +20150,11 @@ var Subagents = class extends APIResource {
    */
   retrieve(subagentID, params, options) {
     const { session_id } = params;
-    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagentID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/sessions/${session_id}/subagents/${subagentID}`, resolveResourceRequestOptions49(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(sessionID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery30(query, ["after", "limit", "order"], options);
@@ -19925,18 +20163,21 @@ var Subagents = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/agents/sessions/${sessionID}/subagents`, CursorPage, {
+    return this._client.getAPIList(path`/agents/sessions/${sessionID}/subagents`, CursorPage, resolveResourceRequestOptions49(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Subagents.Items = Items2;
 Subagents.Turns = Turns2;
 
 // ../../../node_modules/openai/resources/beta/agents/sessions/sessions.mjs
+function resolveResourceRequestOptions50(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys31 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -19992,13 +20233,13 @@ var Sessions2 = class extends APIResource {
     return new AgentSessionStream(this, sessionID, params, options);
   }
   create(body, options) {
-    return this._client.post("/agents/sessions", {
+    return this._client.post("/agents/sessions", resolveResourceRequestOptions50(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       stream: body.stream ?? false,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves the current state of a managed agent session. See
@@ -20011,11 +20252,11 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   retrieve(sessionID, options) {
-    return this._client.get(path`/agents/sessions/${sessionID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions50(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Updates session metadata, model, reasoning effort, or service tier. Model
@@ -20029,12 +20270,12 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   update(sessionID, body = {}, options) {
-    return this._client.post(path`/agents/sessions/${sessionID}`, {
+    return this._client.post(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions50(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery31(query, ["after", "agent_id", "limit", "order"], options);
@@ -20043,12 +20284,12 @@ var Sessions2 = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents/sessions", CursorPage, {
+    return this._client.getAPIList("/agents/sessions", CursorPage, resolveResourceRequestOptions50(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Removes a managed agent session from the public API and returns a deletion
@@ -20064,11 +20305,11 @@ var Sessions2 = class extends APIResource {
    * ```
    */
   delete(sessionID, options) {
-    return this._client.delete(path`/agents/sessions/${sessionID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.delete(path`/agents/sessions/${sessionID}`, resolveResourceRequestOptions50(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Sessions2.Subagents = Subagents;
@@ -20078,6 +20319,9 @@ Sessions2.Events = Events;
 Sessions2.Turns = Turns;
 
 // ../../../node_modules/openai/resources/beta/agents/vaults/credentials.mjs
+function resolveResourceRequestOptions51(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys32 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -20142,12 +20386,12 @@ var Credentials = class extends APIResource {
    * ```
    */
   create(vaultID, body, options) {
-    return this._client.post(path`/vaults/${vaultID}/credentials`, {
+    return this._client.post(path`/vaults/${vaultID}/credentials`, resolveResourceRequestOptions51(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves vault credential metadata without returning secret values. See
@@ -20164,11 +20408,11 @@ var Credentials = class extends APIResource {
    */
   retrieve(credentialID, params, options) {
     const { vault_id } = params;
-    return this._client.get(path`/vaults/${vault_id}/credentials/${credentialID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions51(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Rotates a vault credential's write-only secret and returns only credential
@@ -20189,12 +20433,12 @@ var Credentials = class extends APIResource {
    */
   update(credentialID, params, options) {
     const { vault_id, ...body } = params;
-    return this._client.post(path`/vaults/${vault_id}/credentials/${credentialID}`, {
+    return this._client.post(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions51(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(vaultID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery32(query, ["after", "limit", "order", "status"], options);
@@ -20203,12 +20447,12 @@ var Credentials = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/vaults/${vaultID}/credentials`, CursorPage, {
+    return this._client.getAPIList(path`/vaults/${vaultID}/credentials`, CursorPage, resolveResourceRequestOptions51(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a vault credential. See
@@ -20225,15 +20469,18 @@ var Credentials = class extends APIResource {
    */
   delete(credentialID, params, options) {
     const { vault_id } = params;
-    return this._client.delete(path`/vaults/${vault_id}/credentials/${credentialID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.delete(path`/vaults/${vault_id}/credentials/${credentialID}`, resolveResourceRequestOptions51(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/agents/vaults/vaults.mjs
+function resolveResourceRequestOptions52(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys33 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -20290,12 +20537,12 @@ var Vaults = class extends APIResource {
    * ```
    */
   create(body = {}, options) {
-    return this._client.post("/vaults", {
+    return this._client.post("/vaults", resolveResourceRequestOptions52(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a vault by its ID. See
@@ -20309,11 +20556,11 @@ var Vaults = class extends APIResource {
    * ```
    */
   retrieve(vaultID, options) {
-    return this._client.get(path`/vaults/${vaultID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/vaults/${vaultID}`, resolveResourceRequestOptions52(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery33(query, ["after", "limit", "order", "status"], options);
@@ -20322,12 +20569,12 @@ var Vaults = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/vaults", CursorPage, {
+    return this._client.getAPIList("/vaults", CursorPage, resolveResourceRequestOptions52(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a vault and all its credentials. See
@@ -20341,16 +20588,19 @@ var Vaults = class extends APIResource {
    * ```
    */
   delete(vaultID, options) {
-    return this._client.delete(path`/vaults/${vaultID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.delete(path`/vaults/${vaultID}`, resolveResourceRequestOptions52(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Vaults.Credentials = Credentials;
 
 // ../../../node_modules/openai/resources/beta/agents/agents.mjs
+function resolveResourceRequestOptions53(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys34 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -20411,12 +20661,12 @@ var Agents = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/agents", {
+    return this._client.post("/agents", resolveResourceRequestOptions53(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a reusable agent by ID. See
@@ -20428,11 +20678,11 @@ var Agents = class extends APIResource {
    * ```
    */
   retrieve(agentID, options) {
-    return this._client.get(path`/agents/${agentID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.get(path`/agents/${agentID}`, resolveResourceRequestOptions53(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Updates a reusable agent. See
@@ -20444,12 +20694,12 @@ var Agents = class extends APIResource {
    * ```
    */
   update(agentID, body = {}, options) {
-    return this._client.post(path`/agents/${agentID}`, {
+    return this._client.post(path`/agents/${agentID}`, resolveResourceRequestOptions53(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery34(query, ["after", "limit", "order"], options);
@@ -20458,12 +20708,12 @@ var Agents = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/agents", CursorPage, {
+    return this._client.getAPIList("/agents", CursorPage, resolveResourceRequestOptions53(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a reusable agent. See
@@ -20477,11 +20727,11 @@ var Agents = class extends APIResource {
    * ```
    */
   delete(agentID, options) {
-    return this._client.delete(path`/agents/${agentID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options?.headers]),
+    return this._client.delete(path`/agents/${agentID}`, resolveResourceRequestOptions53(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "agents=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Agents.Environments = Environments;
@@ -20489,6 +20739,9 @@ Agents.Vaults = Vaults;
 Agents.Sessions = Sessions2;
 
 // ../../../node_modules/openai/resources/beta/chatkit/sessions.mjs
+function resolveResourceRequestOptions54(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Sessions3 = class extends APIResource {
   /**
    * Create a ChatKit session.
@@ -20503,12 +20756,12 @@ var Sessions3 = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/chatkit/sessions", {
+    return this._client.post("/chatkit/sessions", resolveResourceRequestOptions54(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Cancel an active ChatKit session and return its most recent metadata.
@@ -20522,15 +20775,18 @@ var Sessions3 = class extends APIResource {
    * ```
    */
   cancel(sessionID, options) {
-    return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]),
+    return this._client.post(path`/chatkit/sessions/${sessionID}/cancel`, resolveResourceRequestOptions54(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/chatkit/threads.mjs
+function resolveResourceRequestOptions55(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys35 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -20583,11 +20839,11 @@ var Threads = class extends APIResource {
    * ```
    */
   retrieve(threadID, options) {
-    return this._client.get(path`/chatkit/threads/${threadID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]),
+    return this._client.get(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions55(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "before", "limit", "order", "user"], options);
@@ -20596,12 +20852,12 @@ var Threads = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, {
+    return this._client.getAPIList("/chatkit/threads", ConversationCursorPage, resolveResourceRequestOptions55(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Delete a ChatKit thread along with its items and stored attachments.
@@ -20614,11 +20870,11 @@ var Threads = class extends APIResource {
    * ```
    */
   delete(threadID, options) {
-    return this._client.delete(path`/chatkit/threads/${threadID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]),
+    return this._client.delete(path`/chatkit/threads/${threadID}`, resolveResourceRequestOptions55(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   listItems(threadID, query = {}, options) {
     const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery35(query, ["after", "before", "limit", "order"], options);
@@ -20627,12 +20883,12 @@ var Threads = class extends APIResource {
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, {
+    return this._client.getAPIList(path`/chatkit/threads/${threadID}/items`, ConversationCursorPage, resolveResourceRequestOptions55(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "chatkit_beta=v1" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
@@ -20648,172 +20904,9 @@ ChatKit.Sessions = Sessions3;
 ChatKit.Threads = Threads;
 
 // ../../../node_modules/openai/resources/beta/responses/input-items.mjs
-var InputItems = class extends APIResource {
-  /**
-   * Returns a list of input items for a given response.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const betaResponseItem of client.beta.responses.inputItems.list(
-   *   'response_id',
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  list(responseID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/responses/input-tokens.mjs
-var InputTokens = class extends APIResource {
-  /**
-   * Returns input token counts of the request.
-   *
-   * Returns an object with `object` set to `response.input_tokens` and an
-   * `input_tokens` count.
-   *
-   * @example
-   * ```ts
-   * const response =
-   *   await client.beta.responses.inputTokens.count();
-   * ```
-   */
-  count(params = {}, options) {
-    const { betas, ...body } = params ?? {};
-    return this._client.post("/responses/input_tokens?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/beta/responses/responses.mjs
-var Responses = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.inputItems = new InputItems(this._client);
-    this.inputTokens = new InputTokens(this._client);
-  }
-  create(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/responses?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      stream: params.stream ?? false,
-      __security: { bearerAuth: true }
-    });
-  }
-  retrieve(responseID, params = {}, options) {
-    const { betas, ...query } = params ?? {};
-    return this._client.get(path`/responses/${responseID}?beta=true`, {
-      query,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      stream: params?.stream ?? false,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Deletes a model response with the given ID.
-   *
-   * @example
-   * ```ts
-   * await client.beta.responses.delete(
-   *   'resp_677efb5139a88190b512bc3fef8e535d',
-   * );
-   * ```
-   */
-  delete(responseID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.delete(path`/responses/${responseID}?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { Accept: "*/*", ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Cancels a model response with the given ID. Only responses created with the
-   * `background` parameter set to `true` can be cancelled.
-   * [Learn more](https://developers.openai.com/api/docs/guides/background).
-   *
-   * @example
-   * ```ts
-   * const betaResponse = await client.beta.responses.cancel(
-   *   'resp_677efb5139a88190b512bc3fef8e535d',
-   * );
-   * ```
-   */
-  cancel(responseID, params = {}, options) {
-    const { betas } = params ?? {};
-    return this._client.post(path`/responses/${responseID}/cancel?beta=true`, {
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Compact a conversation. Returns a compacted response object.
-   *
-   * Learn when and how to compact long-running conversations in the
-   * [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state#managing-the-context-window).
-   * For ZDR-compatible compaction details, see
-   * [Compaction (advanced)](https://developers.openai.com/api/docs/guides/conversation-state#compaction-advanced).
-   *
-   * @example
-   * ```ts
-   * const betaCompactedResponse =
-   *   await client.beta.responses.compact({
-   *     model: 'gpt-6-astra',
-   *   });
-   * ```
-   */
-  compact(params, options) {
-    const { betas, ...body } = params;
-    return this._client.post("/responses/compact?beta=true", {
-      body,
-      ...options,
-      headers: buildHeaders([
-        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
-        options?.headers
-      ]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-Responses.InputItems = InputItems;
-Responses.InputTokens = InputTokens;
-
-// ../../../node_modules/openai/resources/beta/threads/messages.mjs
+function resolveResourceRequestOptions56(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys36 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -20855,6 +20948,265 @@ function normalizeRequestOptionsForQuery36(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var InputItems = class extends APIResource {
+  list(responseID, params = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(params, ["after", "betas", "include", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      params = {};
+    }
+    params = params;
+    const { betas, ...query } = params ?? {};
+    return this._client.getAPIList(path`/responses/${responseID}/input_items?beta=true`, CursorPage, resolveResourceRequestOptions56(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/responses/input-tokens.mjs
+function resolveResourceRequestOptions57(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var InputTokens = class extends APIResource {
+  /**
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
+   *
+   * @example
+   * ```ts
+   * const response =
+   *   await client.beta.responses.inputTokens.count();
+   * ```
+   */
+  count(params = {}, options) {
+    const { betas, ...body } = params ?? {};
+    return this._client.post("/responses/input_tokens?beta=true", resolveResourceRequestOptions57(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/beta/responses/responses.mjs
+function resolveResourceRequestOptions58(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery37(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Responses = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.inputItems = new InputItems(this._client);
+    this.inputTokens = new InputTokens(this._client);
+  }
+  create(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/responses?beta=true", resolveResourceRequestOptions58(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      stream: params.stream ?? false,
+      __security: { bearerAuth: true }
+    })));
+  }
+  retrieve(responseID, params = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(params, ["betas", "include", "include_obfuscation", "starting_after", "stream"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      params = {};
+    }
+    params = params;
+    const { betas, ...query } = params ?? {};
+    return this._client.get(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions58(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      stream: params?.stream ?? false,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Deletes a model response with the given ID.
+   *
+   * @example
+   * ```ts
+   * await client.beta.responses.delete(
+   *   'resp_677efb5139a88190b512bc3fef8e535d',
+   * );
+   * ```
+   */
+  delete(responseID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.delete(path`/responses/${responseID}?beta=true`, resolveResourceRequestOptions58(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([
+        {
+          Accept: "*/*",
+          ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0
+        },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Cancels a model response with the given ID. Only responses created with the
+   * `background` parameter set to `true` can be cancelled.
+   * [Learn more](https://developers.openai.com/api/docs/guides/background).
+   *
+   * @example
+   * ```ts
+   * const betaResponse = await client.beta.responses.cancel(
+   *   'resp_677efb5139a88190b512bc3fef8e535d',
+   * );
+   * ```
+   */
+  cancel(responseID, params = {}, options) {
+    const { betas } = params ?? {};
+    return this._client.post(path`/responses/${responseID}/cancel?beta=true`, resolveResourceRequestOptions58(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://developers.openai.com/api/docs/guides/conversation-state#compaction-advanced).
+   *
+   * @example
+   * ```ts
+   * const betaCompactedResponse =
+   *   await client.beta.responses.compact({
+   *     model: 'gpt-6-astra',
+   *   });
+   * ```
+   */
+  compact(params, options) {
+    const { betas, ...body } = params;
+    return this._client.post("/responses/compact?beta=true", resolveResourceRequestOptions58(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([
+        { ...betas?.toString() != null ? { "openai-beta": betas?.toString() } : void 0 },
+        options2?.headers
+      ]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+Responses.InputItems = InputItems;
+Responses.InputTokens = InputTokens;
+
+// ../../../node_modules/openai/resources/beta/threads/messages.mjs
+function resolveResourceRequestOptions59(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery38(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Messages2 = class extends APIResource {
   /**
    * Create a message.
@@ -20862,12 +21214,12 @@ var Messages2 = class extends APIResource {
    * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
   create(threadID, body, options) {
-    return this._client.post(path`/threads/${threadID}/messages`, {
+    return this._client.post(path`/threads/${threadID}/messages`, resolveResourceRequestOptions59(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieve a message.
@@ -20876,11 +21228,11 @@ var Messages2 = class extends APIResource {
    */
   retrieve(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+    return this._client.get(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions59(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Modifies a message.
@@ -20889,26 +21241,26 @@ var Messages2 = class extends APIResource {
    */
   update(messageID, params, options) {
     const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, {
+    return this._client.post(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions59(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(threadID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery36(query, ["after", "before", "limit", "order", "run_id"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(query, ["after", "before", "limit", "order", "run_id"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, {
+    return this._client.getAPIList(path`/threads/${threadID}/messages`, CursorPage, resolveResourceRequestOptions59(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a message.
@@ -20917,15 +21269,18 @@ var Messages2 = class extends APIResource {
    */
   delete(messageID, params, options) {
     const { thread_id } = params;
-    return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+    return this._client.delete(path`/threads/${thread_id}/messages/${messageID}`, resolveResourceRequestOptions59(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/beta/threads/runs/steps.mjs
+function resolveResourceRequestOptions60(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Steps = class extends APIResource {
   /**
    * Retrieves a run step.
@@ -20934,12 +21289,12 @@ var Steps = class extends APIResource {
    */
   retrieve(stepID, params, options) {
     const { thread_id, run_id, ...query } = params;
-    return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, {
+    return this._client.get(path`/threads/${thread_id}/runs/${run_id}/steps/${stepID}`, resolveResourceRequestOptions60(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Returns a list of run steps belonging to a run.
@@ -20948,12 +21303,12 @@ var Steps = class extends APIResource {
    */
   list(runID, params, options) {
     const { thread_id, ...query } = params;
-    return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, {
+    return this._client.getAPIList(path`/threads/${thread_id}/runs/${runID}/steps`, CursorPage, resolveResourceRequestOptions60(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
@@ -22097,407 +22452,9 @@ function pollAssistantRun(resource, runID, params, options) {
 }
 
 // ../../../node_modules/openai/resources/beta/threads/runs/runs.mjs
-var normalizeRequestOptionsForQueryKeys37 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery37(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys37.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys37.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
+function resolveResourceRequestOptions61(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
 }
-var Runs = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.steps = new Steps(this._client);
-  }
-  create(threadID, params, options) {
-    const { include, ...body } = params;
-    return this._client.post(path`/threads/${threadID}/runs`, {
-      query: { include },
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false,
-      __synthesizeEventData: true,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Retrieves a run.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  retrieve(runID, params, options) {
-    const { thread_id } = params;
-    return this._client.get(path`/threads/${thread_id}/runs/${runID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Modifies a run.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  update(runID, params, options) {
-    const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}`, {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  list(threadID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery37(query, ["after", "before", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, {
-      query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Cancels a run that is `in_progress`.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  cancel(runID, params, options) {
-    const { thread_id } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * A helper to create a run an poll for a terminal state. More information on Run
-   * lifecycles can be found here:
-   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
-   */
-  async createAndPoll(threadId, body, options) {
-    const run = await this.create(threadId, body, options);
-    return await this.poll(run.id, { thread_id: threadId }, options);
-  }
-  /**
-   * Create a Run stream
-   *
-   * @deprecated use `stream` instead
-   */
-  createAndStream(threadId, body, options) {
-    return AssistantStream.createAssistantStream(threadId, this._client.beta.threads.runs, body, options);
-  }
-  /**
-   * A helper to poll a run status until it reaches a terminal state. More
-   * information on Run lifecycles can be found here:
-   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
-   */
-  async poll(runId, params, options) {
-    return await pollAssistantRun(this, runId, params, options);
-  }
-  /**
-   * Create a Run stream
-   */
-  stream(threadId, body, options) {
-    return AssistantStream.createAssistantStream(threadId, this._client.beta.threads.runs, body, options);
-  }
-  submitToolOutputs(runID, params, options) {
-    const { thread_id, ...body } = params;
-    return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: params.stream ?? false,
-      __synthesizeEventData: true,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * A helper to submit a tool output to a run and poll for a terminal run state.
-   * More information on Run lifecycles can be found here:
-   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
-   */
-  async submitToolOutputsAndPoll(runId, params, options) {
-    const run = await this.submitToolOutputs(runId, params, options);
-    return await this.poll(run.id, params, options);
-  }
-  /**
-   * Submit the tool outputs from a previous run and stream the run to a terminal
-   * state. More information on Run lifecycles can be found here:
-   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
-   */
-  submitToolOutputsStream(runId, params, options) {
-    return AssistantStream.createToolAssistantStream(runId, this._client.beta.threads.runs, params, options);
-  }
-};
-Runs.Steps = Steps;
-
-// ../../../node_modules/openai/resources/beta/threads/threads.mjs
-var Threads2 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.runs = new Runs(this._client);
-    this.messages = new Messages2(this._client);
-  }
-  /**
-   * Create a thread.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  create(body = {}, options) {
-    return this._client.post("/threads", {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Retrieves a thread.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  retrieve(threadID, options) {
-    return this._client.get(path`/threads/${threadID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Modifies a thread.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  update(threadID, body, options) {
-    return this._client.post(path`/threads/${threadID}`, {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete a thread.
-   *
-   * @deprecated The Assistants API is deprecated in favor of the Responses API
-   */
-  delete(threadID, options) {
-    return this._client.delete(path`/threads/${threadID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  createAndRun(body, options) {
-    return this._client.post("/threads/runs", {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      stream: body.stream ?? false,
-      __synthesizeEventData: true,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * A helper to create a thread, start a run and then poll for a terminal state.
-   * More information on Run lifecycles can be found here:
-   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
-   */
-  async createAndRunPoll(body, options) {
-    const run = await this.createAndRun(body, options);
-    return await this.runs.poll(run.id, { thread_id: run.thread_id }, options);
-  }
-  /**
-   * Create a thread and stream the run back
-   */
-  createAndRunStream(body, options) {
-    return AssistantStream.createThreadAssistantStream(body, this._client.beta.threads, options);
-  }
-};
-Threads2.Runs = Runs;
-Threads2.Messages = Messages2;
-
-// ../../../node_modules/openai/resources/beta/beta.mjs
-var Beta = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.realtime = new Realtime(this._client);
-    this.agents = new Agents(this._client);
-    this.responses = new Responses(this._client);
-    this.chatkit = new ChatKit(this._client);
-    this.assistants = new Assistants(this._client);
-    this.threads = new Threads2(this._client);
-  }
-};
-Beta.Realtime = Realtime;
-Beta.Agents = Agents;
-Beta.Responses = Responses;
-Beta.ChatKit = ChatKit;
-Beta.Assistants = Assistants;
-Beta.Threads = Threads2;
-
-// ../../../node_modules/openai/resources/completions.mjs
-var Completions2 = class extends APIResource {
-  create(body, options) {
-    return this._client.post("/completions", {
-      body,
-      ...options,
-      stream: body.stream ?? false,
-      __security: { bearerAuth: true }
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/containers/files/content.mjs
-var Content = class extends APIResource {
-  /**
-   * Retrieve Container File Content
-   */
-  retrieve(fileID, params, options) {
-    const { container_id } = params;
-    return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
-      __security: { bearerAuth: true },
-      __binaryResponse: true
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/containers/files/files.mjs
-var normalizeRequestOptionsForQueryKeys38 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery38(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys38.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys38.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Files2 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.content = new Content(this._client);
-  }
-  /**
-   * Create a Container File
-   *
-   * You can send either a multipart/form-data request with the raw file content, or
-   * a JSON request with a file ID.
-   */
-  create(containerID, body, options) {
-    return this._client.post(path`/containers/${containerID}/files`, maybeMultipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
-  }
-  /**
-   * Retrieve Container File
-   */
-  retrieve(fileID, params, options) {
-    const { container_id } = params;
-    return this._client.get(path`/containers/${container_id}/files/${fileID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  list(containerID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery38(query, ["after", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, {
-      query,
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete Container File
-   */
-  delete(fileID, params, options) {
-    const { container_id } = params;
-    return this._client.delete(path`/containers/${container_id}/files/${fileID}`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-Files2.Content = Content;
-
-// ../../../node_modules/openai/resources/containers/containers.mjs
 var normalizeRequestOptionsForQueryKeys39 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -22539,71 +22496,285 @@ function normalizeRequestOptionsForQuery39(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Containers = class extends APIResource {
+var Runs = class extends APIResource {
   constructor() {
     super(...arguments);
-    this.files = new Files2(this._client);
+    this.steps = new Steps(this._client);
   }
-  /**
-   * Create Container
-   */
-  create(body, options) {
-    return this._client.post("/containers", { body, ...options, __security: { bearerAuth: true } });
-  }
-  /**
-   * Retrieve Container
-   */
-  retrieve(containerID, options) {
-    return this._client.get(path`/containers/${containerID}`, {
-      ...options,
+  create(threadID, params, options) {
+    const { include, ...body } = params;
+    return this._client.post(path`/threads/${threadID}/runs`, resolveResourceRequestOptions61(options, (options2) => ({
+      query: { include },
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      stream: params.stream ?? false,
+      __synthesizeEventData: true,
       __security: { bearerAuth: true }
-    });
+    })));
   }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query, ["after", "limit", "name", "order"], options);
+  /**
+   * Retrieves a run.
+   *
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
+   */
+  retrieve(runID, params, options) {
+    const { thread_id } = params;
+    return this._client.get(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions61(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Modifies a run.
+   *
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
+   */
+  update(runID, params, options) {
+    const { thread_id, ...body } = params;
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}`, resolveResourceRequestOptions61(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  list(threadID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery39(query, ["after", "before", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/containers", CursorPage, {
+    return this._client.getAPIList(path`/threads/${threadID}/runs`, CursorPage, resolveResourceRequestOptions61(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
-   * Delete Container
-   */
-  delete(containerID, options) {
-    return this._client.delete(path`/containers/${containerID}`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-Containers.Files = Files2;
-
-// ../../../node_modules/openai/resources/content-provenance-checks.mjs
-var ContentProvenanceChecks = class extends APIResource {
-  /**
-   * Check whether an image or audio file contains known OpenAI provenance signals.
-   * [Learn more about content provenance](https://developers.openai.com/api/docs/guides/content-provenance).
+   * Cancels a run that is `in_progress`.
    *
-   * If `not_detected`, it means the tool did not find supported signals in the
-   * uploaded file. The content could still have been generated by OpenAI if the
-   * metadata was stripped or has evidence of tampering, the watermark was degraded,
-   * it comes from a legacy generation model, or it was created before provenance
-   * signals were available. Content could also still be AI-generated by another
-   * company's model, which the tool currently does not detect.
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
    */
+  cancel(runID, params, options) {
+    const { thread_id } = params;
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}/cancel`, resolveResourceRequestOptions61(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * A helper to create a run an poll for a terminal state. More information on Run
+   * lifecycles can be found here:
+   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
+   */
+  async createAndPoll(threadId, body, options) {
+    const run = await this.create(threadId, body, options);
+    return await this.poll(run.id, { thread_id: threadId }, options);
+  }
+  /**
+   * Create a Run stream
+   *
+   * @deprecated use `stream` instead
+   */
+  createAndStream(threadId, body, options) {
+    return AssistantStream.createAssistantStream(threadId, this._client.beta.threads.runs, body, options);
+  }
+  /**
+   * A helper to poll a run status until it reaches a terminal state. More
+   * information on Run lifecycles can be found here:
+   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
+   */
+  async poll(runId, params, options) {
+    return await pollAssistantRun(this, runId, params, options);
+  }
+  /**
+   * Create a Run stream
+   */
+  stream(threadId, body, options) {
+    return AssistantStream.createAssistantStream(threadId, this._client.beta.threads.runs, body, options);
+  }
+  submitToolOutputs(runID, params, options) {
+    const { thread_id, ...body } = params;
+    return this._client.post(path`/threads/${thread_id}/runs/${runID}/submit_tool_outputs`, resolveResourceRequestOptions61(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      stream: params.stream ?? false,
+      __synthesizeEventData: true,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * A helper to submit a tool output to a run and poll for a terminal run state.
+   * More information on Run lifecycles can be found here:
+   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
+   */
+  async submitToolOutputsAndPoll(runId, params, options) {
+    const run = await this.submitToolOutputs(runId, params, options);
+    return await this.poll(run.id, params, options);
+  }
+  /**
+   * Submit the tool outputs from a previous run and stream the run to a terminal
+   * state. More information on Run lifecycles can be found here:
+   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
+   */
+  submitToolOutputsStream(runId, params, options) {
+    return AssistantStream.createToolAssistantStream(runId, this._client.beta.threads.runs, params, options);
+  }
+};
+Runs.Steps = Steps;
+
+// ../../../node_modules/openai/resources/beta/threads/threads.mjs
+function resolveResourceRequestOptions62(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Threads2 = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.runs = new Runs(this._client);
+    this.messages = new Messages2(this._client);
+  }
+  /**
+   * Create a thread.
+   *
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
+   */
+  create(body = {}, options) {
+    return this._client.post("/threads", resolveResourceRequestOptions62(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieves a thread.
+   *
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
+   */
+  retrieve(threadID, options) {
+    return this._client.get(path`/threads/${threadID}`, resolveResourceRequestOptions62(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Modifies a thread.
+   *
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
+   */
+  update(threadID, body, options) {
+    return this._client.post(path`/threads/${threadID}`, resolveResourceRequestOptions62(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete a thread.
+   *
+   * @deprecated The Assistants API is deprecated in favor of the Responses API
+   */
+  delete(threadID, options) {
+    return this._client.delete(path`/threads/${threadID}`, resolveResourceRequestOptions62(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  createAndRun(body, options) {
+    return this._client.post("/threads/runs", resolveResourceRequestOptions62(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      stream: body.stream ?? false,
+      __synthesizeEventData: true,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * A helper to create a thread, start a run and then poll for a terminal state.
+   * More information on Run lifecycles can be found here:
+   * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
+   */
+  async createAndRunPoll(body, options) {
+    const run = await this.createAndRun(body, options);
+    return await this.runs.poll(run.id, { thread_id: run.thread_id }, options);
+  }
+  /**
+   * Create a thread and stream the run back
+   */
+  createAndRunStream(body, options) {
+    return AssistantStream.createThreadAssistantStream(body, this._client.beta.threads, options);
+  }
+};
+Threads2.Runs = Runs;
+Threads2.Messages = Messages2;
+
+// ../../../node_modules/openai/resources/beta/beta.mjs
+var Beta = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.realtime = new Realtime(this._client);
+    this.agents = new Agents(this._client);
+    this.responses = new Responses(this._client);
+    this.chatkit = new ChatKit(this._client);
+    this.assistants = new Assistants(this._client);
+    this.threads = new Threads2(this._client);
+  }
+};
+Beta.Realtime = Realtime;
+Beta.Agents = Agents;
+Beta.Responses = Responses;
+Beta.ChatKit = ChatKit;
+Beta.Assistants = Assistants;
+Beta.Threads = Threads2;
+
+// ../../../node_modules/openai/resources/completions.mjs
+function resolveResourceRequestOptions63(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Completions2 = class extends APIResource {
   create(body, options) {
-    return this._client.post("/content_provenance_checks", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/completions", resolveResourceRequestOptions63(options, (options2) => ({
+      body,
+      ...options2,
+      stream: body.stream ?? false,
+      __security: { bearerAuth: true }
+    })));
   }
 };
 
-// ../../../node_modules/openai/resources/conversations/items.mjs
+// ../../../node_modules/openai/resources/containers/files/content.mjs
+function resolveResourceRequestOptions64(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Content = class extends APIResource {
+  /**
+   * Retrieve Container File Content
+   */
+  retrieve(fileID, params, options) {
+    const { container_id } = params;
+    return this._client.get(path`/containers/${container_id}/files/${fileID}/content`, resolveResourceRequestOptions64(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
+      __security: { bearerAuth: true },
+      __binaryResponse: true
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/containers/files/files.mjs
+function resolveResourceRequestOptions65(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys40 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -22645,52 +22816,262 @@ function normalizeRequestOptionsForQuery40(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var Files2 = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.content = new Content(this._client);
+  }
+  /**
+   * Create a Container File
+   *
+   * You can send either a multipart/form-data request with the raw file content, or
+   * a JSON request with a file ID.
+   */
+  create(containerID, body, options) {
+    return this._client.post(path`/containers/${containerID}/files`, resolveResourceRequestOptions65(options, (options2) => maybeMultipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+  }
+  /**
+   * Retrieve Container File
+   */
+  retrieve(fileID, params, options) {
+    const { container_id } = params;
+    return this._client.get(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions65(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(containerID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/containers/${containerID}/files`, CursorPage, resolveResourceRequestOptions65(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete Container File
+   */
+  delete(fileID, params, options) {
+    const { container_id } = params;
+    return this._client.delete(path`/containers/${container_id}/files/${fileID}`, resolveResourceRequestOptions65(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+Files2.Content = Content;
+
+// ../../../node_modules/openai/resources/containers/containers.mjs
+function resolveResourceRequestOptions66(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery41(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Containers = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.files = new Files2(this._client);
+  }
+  /**
+   * Create Container
+   */
+  create(body, options) {
+    return this._client.post("/containers", resolveResourceRequestOptions66(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieve Container
+   */
+  retrieve(containerID, options) {
+    return this._client.get(path`/containers/${containerID}`, resolveResourceRequestOptions66(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query, ["after", "limit", "name", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/containers", CursorPage, resolveResourceRequestOptions66(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete Container
+   */
+  delete(containerID, options) {
+    return this._client.delete(path`/containers/${containerID}`, resolveResourceRequestOptions66(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+Containers.Files = Files2;
+
+// ../../../node_modules/openai/resources/content-provenance-checks.mjs
+function resolveResourceRequestOptions67(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var ContentProvenanceChecks = class extends APIResource {
+  /**
+   * Check whether an image or audio file contains known OpenAI provenance signals.
+   * [Learn more about content provenance](https://developers.openai.com/api/docs/guides/content-provenance).
+   *
+   * If `not_detected`, it means the tool did not find supported signals in the
+   * uploaded file. The content could still have been generated by OpenAI if the
+   * metadata was stripped or has evidence of tampering, the watermark was degraded,
+   * it comes from a legacy generation model, or it was created before provenance
+   * signals were available. Content could also still be AI-generated by another
+   * company's model, which the tool currently does not detect.
+   */
+  create(body, options) {
+    return this._client.post("/content_provenance_checks", resolveResourceRequestOptions67(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
+  }
+};
+
+// ../../../node_modules/openai/resources/conversations/items.mjs
+function resolveResourceRequestOptions68(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery42(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Items4 = class extends APIResource {
   /**
    * Create items in a conversation with the given ID.
    */
   create(conversationID, params, options) {
     const { include, ...body } = params;
-    return this._client.post(path`/conversations/${conversationID}/items`, {
+    return this._client.post(path`/conversations/${conversationID}/items`, resolveResourceRequestOptions68(options, (options2) => ({
       query: { include },
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Get a single item from a conversation with the given IDs.
    */
   retrieve(itemID, params, options) {
     const { conversation_id, ...query } = params;
-    return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, {
+    return this._client.get(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions68(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(conversationID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery40(query, ["after", "include", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(query, ["after", "include", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, { query, ...options, __security: { bearerAuth: true } });
+    return this._client.getAPIList(path`/conversations/${conversationID}/items`, ConversationCursorPage, resolveResourceRequestOptions68(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Delete an item from a conversation with the given IDs.
    */
   delete(itemID, params, options) {
     const { conversation_id } = params;
-    return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.delete(path`/conversations/${conversation_id}/items/${itemID}`, resolveResourceRequestOptions68(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/conversations/conversations.mjs
+function resolveResourceRequestOptions69(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Conversations = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -22700,35 +23081,33 @@ var Conversations = class extends APIResource {
    * Create a conversation.
    */
   create(body = {}, options) {
-    return this._client.post("/conversations", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/conversations", resolveResourceRequestOptions69(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Get a conversation
    */
   retrieve(conversationID, options) {
-    return this._client.get(path`/conversations/${conversationID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.get(path`/conversations/${conversationID}`, resolveResourceRequestOptions69(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Update a conversation
    */
   update(conversationID, body, options) {
-    return this._client.post(path`/conversations/${conversationID}`, {
+    return this._client.post(path`/conversations/${conversationID}`, resolveResourceRequestOptions69(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Delete a conversation. Items in the conversation will not be deleted.
    */
   delete(conversationID, options) {
-    return this._client.delete(path`/conversations/${conversationID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.delete(path`/conversations/${conversationID}`, resolveResourceRequestOptions69(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Conversations.Items = Items4;
@@ -22781,241 +23160,34 @@ var Embeddings = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/evals/runs/output-items.mjs
+function resolveResourceRequestOptions70(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var OutputItems = class extends APIResource {
   /**
    * Get an evaluation run output item by ID.
    */
   retrieve(outputItemID, params, options) {
     const { eval_id, run_id } = params;
-    return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.get(path`/evals/${eval_id}/runs/${run_id}/output_items/${outputItemID}`, resolveResourceRequestOptions70(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Get a list of output items for an evaluation run.
    */
   list(runID, params, options) {
     const { eval_id, ...query } = params;
-    return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
+    return this._client.getAPIList(path`/evals/${eval_id}/runs/${runID}/output_items`, CursorPage, resolveResourceRequestOptions70(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/evals/runs/runs.mjs
-var normalizeRequestOptionsForQueryKeys41 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery41(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys41.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys41.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
+function resolveResourceRequestOptions71(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
 }
-var Runs2 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.outputItems = new OutputItems(this._client);
-  }
-  /**
-   * Kicks off a new run for a given evaluation, specifying the data source, and what
-   * model configuration to use to test. The datasource will be validated against the
-   * schema specified in the config of the evaluation.
-   */
-  create(evalID, body, options) {
-    return this._client.post(path`/evals/${evalID}/runs`, {
-      body,
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Get an evaluation run by ID.
-   */
-  retrieve(runID, params, options) {
-    const { eval_id } = params;
-    return this._client.get(path`/evals/${eval_id}/runs/${runID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  list(evalID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery41(query, ["after", "limit", "order", "status"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, {
-      query,
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete an eval run.
-   */
-  delete(runID, params, options) {
-    const { eval_id } = params;
-    return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Cancel an ongoing evaluation run.
-   */
-  cancel(runID, params, options) {
-    const { eval_id } = params;
-    return this._client.post(path`/evals/${eval_id}/runs/${runID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-};
-Runs2.OutputItems = OutputItems;
-
-// ../../../node_modules/openai/resources/evals/evals.mjs
-var normalizeRequestOptionsForQueryKeys42 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery42(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys42.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys42.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Evals = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.runs = new Runs2(this._client);
-  }
-  /**
-   * Create the structure of an evaluation that can be used to test a model's
-   * performance. An evaluation is a set of testing criteria and the config for a
-   * data source, which dictates the schema of the data used in the evaluation. After
-   * creating an evaluation, you can run it on different models and model parameters.
-   * We support several types of graders and datasources. For more information, see
-   * the [Evals guide](https://developers.openai.com/api/docs/guides/evals).
-   */
-  create(body, options) {
-    return this._client.post("/evals", { body, ...options, __security: { bearerAuth: true } });
-  }
-  /**
-   * Get an evaluation by ID.
-   */
-  retrieve(evalID, options) {
-    return this._client.get(path`/evals/${evalID}`, { ...options, __security: { bearerAuth: true } });
-  }
-  /**
-   * Update certain properties of an evaluation.
-   */
-  update(evalID, body, options) {
-    return this._client.post(path`/evals/${evalID}`, { body, ...options, __security: { bearerAuth: true } });
-  }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery42(query, ["after", "limit", "order", "order_by"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList("/evals", CursorPage, {
-      query,
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete an evaluation.
-   */
-  delete(evalID, options) {
-    return this._client.delete(path`/evals/${evalID}`, { ...options, __security: { bearerAuth: true } });
-  }
-};
-Evals.Runs = Runs2;
-
-// ../../../node_modules/openai/lib/file-processing.mjs
-async function waitForFileProcessing(resource, id, pollInterval, maxWait) {
-  const terminalStates = /* @__PURE__ */ new Set(["processed", "error", "deleted"]);
-  const start = performance.now();
-  let file = await resource.retrieve(id);
-  while (!file.status || !terminalStates.has(file.status)) {
-    await sleep(pollInterval);
-    file = await resource.retrieve(id);
-    if (performance.now() - start > maxWait) {
-      throw new APIConnectionTimeoutError({
-        message: `Giving up on waiting for file ${id} to finish processing after ${maxWait} milliseconds.`
-      });
-    }
-  }
-  return file;
-}
-
-// ../../../node_modules/openai/resources/files.mjs
 var normalizeRequestOptionsForQueryKeys43 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -23046,6 +23218,225 @@ function normalizeRequestOptionsForQuery43(value, queryKeys, options) {
   if (!requestOnly)
     return void 0;
   if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys43.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Runs2 = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.outputItems = new OutputItems(this._client);
+  }
+  /**
+   * Kicks off a new run for a given evaluation, specifying the data source, and what
+   * model configuration to use to test. The datasource will be validated against the
+   * schema specified in the config of the evaluation.
+   */
+  create(evalID, body, options) {
+    return this._client.post(path`/evals/${evalID}/runs`, resolveResourceRequestOptions71(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Get an evaluation run by ID.
+   */
+  retrieve(runID, params, options) {
+    const { eval_id } = params;
+    return this._client.get(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions71(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(evalID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query, ["after", "limit", "order", "status"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/evals/${evalID}/runs`, CursorPage, resolveResourceRequestOptions71(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete an eval run.
+   */
+  delete(runID, params, options) {
+    const { eval_id } = params;
+    return this._client.delete(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions71(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  /**
+   * Cancel an ongoing evaluation run.
+   */
+  cancel(runID, params, options) {
+    const { eval_id } = params;
+    return this._client.post(path`/evals/${eval_id}/runs/${runID}`, resolveResourceRequestOptions71(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+};
+Runs2.OutputItems = OutputItems;
+
+// ../../../node_modules/openai/resources/evals/evals.mjs
+function resolveResourceRequestOptions72(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery44(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Evals = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.runs = new Runs2(this._client);
+  }
+  /**
+   * Create the structure of an evaluation that can be used to test a model's
+   * performance. An evaluation is a set of testing criteria and the config for a
+   * data source, which dictates the schema of the data used in the evaluation. After
+   * creating an evaluation, you can run it on different models and model parameters.
+   * We support several types of graders and datasources. For more information, see
+   * the [Evals guide](https://developers.openai.com/api/docs/guides/evals).
+   */
+  create(body, options) {
+    return this._client.post("/evals", resolveResourceRequestOptions72(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Get an evaluation by ID.
+   */
+  retrieve(evalID, options) {
+    return this._client.get(path`/evals/${evalID}`, resolveResourceRequestOptions72(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  /**
+   * Update certain properties of an evaluation.
+   */
+  update(evalID, body, options) {
+    return this._client.post(path`/evals/${evalID}`, resolveResourceRequestOptions72(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query, ["after", "limit", "order", "order_by"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/evals", CursorPage, resolveResourceRequestOptions72(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete an evaluation.
+   */
+  delete(evalID, options) {
+    return this._client.delete(path`/evals/${evalID}`, resolveResourceRequestOptions72(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+};
+Evals.Runs = Runs2;
+
+// ../../../node_modules/openai/lib/file-processing.mjs
+async function waitForFileProcessing(resource, id, pollInterval, maxWait) {
+  const terminalStates = /* @__PURE__ */ new Set(["processed", "error", "deleted"]);
+  const start = performance.now();
+  let file = await resource.retrieve(id);
+  while (!file.status || !terminalStates.has(file.status)) {
+    await sleep(pollInterval);
+    file = await resource.retrieve(id);
+    if (performance.now() - start > maxWait) {
+      throw new APIConnectionTimeoutError({
+        message: `Giving up on waiting for file ${id} to finish processing after ${maxWait} milliseconds.`
+      });
+    }
+  }
+  return file;
+}
+
+// ../../../node_modules/openai/resources/files.mjs
+function resolveResourceRequestOptions73(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery45(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -23088,43 +23479,43 @@ var Files3 = class extends APIResource {
    * storage limits.
    */
   create(body, options) {
-    return this._client.post("/files", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/files", resolveResourceRequestOptions73(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Returns information about a specific file.
    */
   retrieve(fileID, options) {
-    return this._client.get(path`/files/${fileID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.get(path`/files/${fileID}`, resolveResourceRequestOptions73(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery43(query, ["after", "limit", "order", "purpose"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(query, ["after", "limit", "order", "purpose"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/files", CursorPage, {
+    return this._client.getAPIList("/files", CursorPage, resolveResourceRequestOptions73(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Delete a file and remove it from all vector stores.
    */
   delete(fileID, options) {
-    return this._client.delete(path`/files/${fileID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.delete(path`/files/${fileID}`, resolveResourceRequestOptions73(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Returns a response containing the contents of the specified file.
    */
   content(fileID, options) {
-    return this._client.get(path`/files/${fileID}/content`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
+    return this._client.get(path`/files/${fileID}/content`, resolveResourceRequestOptions73(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
       __binaryResponse: true
-    });
+    })));
   }
   /**
    * Waits for the given file to be processed, default timeout is 30 mins.
@@ -23139,6 +23530,9 @@ var Methods = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/fine-tuning/alpha/graders.mjs
+function resolveResourceRequestOptions74(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Graders = class extends APIResource {
   /**
    * Run a grader.
@@ -23158,11 +23552,11 @@ var Graders = class extends APIResource {
    * ```
    */
   run(body, options) {
-    return this._client.post("/fine_tuning/alpha/graders/run", {
+    return this._client.post("/fine_tuning/alpha/graders/run", resolveResourceRequestOptions74(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Validate a grader.
@@ -23182,11 +23576,11 @@ var Graders = class extends APIResource {
    * ```
    */
   validate(body, options) {
-    return this._client.post("/fine_tuning/alpha/graders/validate", {
+    return this._client.post("/fine_tuning/alpha/graders/validate", resolveResourceRequestOptions74(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
@@ -23200,180 +23594,9 @@ var Alpha = class extends APIResource {
 Alpha.Graders = Graders;
 
 // ../../../node_modules/openai/resources/fine-tuning/checkpoints/permissions.mjs
-var normalizeRequestOptionsForQueryKeys44 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery44(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys44.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys44.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
+function resolveResourceRequestOptions75(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
 }
-var Permissions = class extends APIResource {
-  /**
-   * **NOTE:** Calling this endpoint requires an
-   * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
-   *
-   * This enables organization owners to share fine-tuned models with other projects
-   * in their organization.
-   *
-   * @example
-   * ```ts
-   * // Automatically fetches more pages as needed.
-   * for await (const permissionCreateResponse of client.fineTuning.checkpoints.permissions.create(
-   *   'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
-   *   { project_ids: ['string'] },
-   * )) {
-   *   // ...
-   * }
-   * ```
-   */
-  create(fineTunedModelCheckpoint, body, options) {
-    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, { body, method: "post", ...options, __security: { adminAPIKeyAuth: true } });
-  }
-  retrieve(fineTunedModelCheckpoint, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query, ["after", "limit", "order", "project_id"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, {
-      query,
-      ...options,
-      __security: { adminAPIKeyAuth: true }
-    });
-  }
-  list(fineTunedModelCheckpoint, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery44(query, ["after", "limit", "order", "project_id"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, { query, ...options, __security: { adminAPIKeyAuth: true } });
-  }
-  /**
-   * **NOTE:** This endpoint requires an
-   * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
-   *
-   * Organization owners can use this endpoint to delete a permission for a
-   * fine-tuned model checkpoint.
-   *
-   * @example
-   * ```ts
-   * const permission =
-   *   await client.fineTuning.checkpoints.permissions.delete(
-   *     'cp_zc4Q7MP6XxulcVzj4MZdwsAB',
-   *     {
-   *       fine_tuned_model_checkpoint:
-   *         'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
-   *     },
-   *   );
-   * ```
-   */
-  delete(permissionID, params, options) {
-    const { fine_tuned_model_checkpoint } = params;
-    return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, { ...options, __security: { adminAPIKeyAuth: true } });
-  }
-};
-
-// ../../../node_modules/openai/resources/fine-tuning/checkpoints/checkpoints.mjs
-var Checkpoints = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.permissions = new Permissions(this._client);
-  }
-};
-Checkpoints.Permissions = Permissions;
-
-// ../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
-var normalizeRequestOptionsForQueryKeys45 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery45(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys45.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys45.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Checkpoints2 = class extends APIResource {
-  list(fineTuningJobID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery45(query, ["after", "limit"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
-  }
-};
-
-// ../../../node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
 var normalizeRequestOptionsForQueryKeys46 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -23415,6 +23638,202 @@ function normalizeRequestOptionsForQuery46(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var Permissions = class extends APIResource {
+  /**
+   * **NOTE:** Calling this endpoint requires an
+   * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
+   *
+   * This enables organization owners to share fine-tuned models with other projects
+   * in their organization.
+   *
+   * @example
+   * ```ts
+   * // Automatically fetches more pages as needed.
+   * for await (const permissionCreateResponse of client.fineTuning.checkpoints.permissions.create(
+   *   'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *   { project_ids: ['string'] },
+   * )) {
+   *   // ...
+   * }
+   * ```
+   */
+  create(fineTunedModelCheckpoint, body, options) {
+    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, Page, resolveResourceRequestOptions75(options, (options2) => ({
+      body,
+      method: "post",
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  retrieve(fineTunedModelCheckpoint, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit", "order", "project_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.get(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, resolveResourceRequestOptions75(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  list(fineTunedModelCheckpoint, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit", "order", "project_id"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/fine_tuning/checkpoints/${fineTunedModelCheckpoint}/permissions`, ConversationCursorPage, resolveResourceRequestOptions75(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+  /**
+   * **NOTE:** This endpoint requires an
+   * [admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys).
+   *
+   * Organization owners can use this endpoint to delete a permission for a
+   * fine-tuned model checkpoint.
+   *
+   * @example
+   * ```ts
+   * const permission =
+   *   await client.fineTuning.checkpoints.permissions.delete(
+   *     'cp_zc4Q7MP6XxulcVzj4MZdwsAB',
+   *     {
+   *       fine_tuned_model_checkpoint:
+   *         'ft:gpt-4o-mini-2024-07-18:org:weather:B7R9VjQd',
+   *     },
+   *   );
+   * ```
+   */
+  delete(permissionID, params, options) {
+    const { fine_tuned_model_checkpoint } = params;
+    return this._client.delete(path`/fine_tuning/checkpoints/${fine_tuned_model_checkpoint}/permissions/${permissionID}`, resolveResourceRequestOptions75(options, (options2) => ({
+      ...options2,
+      __security: { adminAPIKeyAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/fine-tuning/checkpoints/checkpoints.mjs
+var Checkpoints = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.permissions = new Permissions(this._client);
+  }
+};
+Checkpoints.Permissions = Permissions;
+
+// ../../../node_modules/openai/resources/fine-tuning/jobs/checkpoints.mjs
+function resolveResourceRequestOptions76(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery47(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Checkpoints2 = class extends APIResource {
+  list(fineTuningJobID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query, ["after", "limit"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/checkpoints`, CursorPage, resolveResourceRequestOptions76(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/fine-tuning/jobs/jobs.mjs
+function resolveResourceRequestOptions77(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery48(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys48.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys48.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Jobs = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -23438,7 +23857,11 @@ var Jobs = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/fine_tuning/jobs", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/fine_tuning/jobs", resolveResourceRequestOptions77(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Get info about a fine-tuning job.
@@ -23453,23 +23876,20 @@ var Jobs = class extends APIResource {
    * ```
    */
   retrieve(fineTuningJobID, options) {
-    return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.get(path`/fine_tuning/jobs/${fineTuningJobID}`, resolveResourceRequestOptions77(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit", "metadata"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query, ["after", "limit", "metadata"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/fine_tuning/jobs", CursorPage, {
+    return this._client.getAPIList("/fine_tuning/jobs", CursorPage, resolveResourceRequestOptions77(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Immediately cancel a fine-tune job.
@@ -23482,19 +23902,20 @@ var Jobs = class extends APIResource {
    * ```
    */
   cancel(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/cancel`, resolveResourceRequestOptions77(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   listEvents(fineTuningJobID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery46(query, ["after", "limit"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query, ["after", "limit"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
+    return this._client.getAPIList(path`/fine_tuning/jobs/${fineTuningJobID}/events`, CursorPage, resolveResourceRequestOptions77(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Pause a fine-tune job.
@@ -23507,10 +23928,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   pause(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/pause`, resolveResourceRequestOptions77(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Resume a fine-tune job.
@@ -23523,10 +23941,7 @@ var Jobs = class extends APIResource {
    * ```
    */
   resume(fineTuningJobID, options) {
-    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.post(path`/fine_tuning/jobs/${fineTuningJobID}/resume`, resolveResourceRequestOptions77(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Jobs.Checkpoints = Checkpoints2;
@@ -23560,6 +23975,9 @@ var Graders2 = class extends APIResource {
 Graders2.GraderModels = GraderModels;
 
 // ../../../node_modules/openai/resources/images.mjs
+function resolveResourceRequestOptions78(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Images = class extends APIResource {
   /**
    * Creates a variation of a given image. This endpoint only supports `dall-e-2`.
@@ -23572,28 +23990,31 @@ var Images = class extends APIResource {
    * ```
    */
   createVariation(body, options) {
-    return this._client.post("/images/variations", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/images/variations", resolveResourceRequestOptions78(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   edit(body, options) {
-    return this._client.post("/images/edits", multipartFormRequestOptions({
+    return this._client.post("/images/edits", resolveResourceRequestOptions78(options, (options2) => multipartFormRequestOptions({
       body,
-      ...options,
+      ...options2,
       stream: body.stream ?? false,
-      __metadata: { ...options?.__metadata, ...body.model == null ? {} : { model: body.model } },
+      __metadata: { ...options2?.__metadata, ...body.model == null ? {} : { model: body.model } },
       __security: { bearerAuth: true }
-    }, this._client));
+    }, this._client)));
   }
   generate(body, options) {
-    return this._client.post("/images/generations", {
+    return this._client.post("/images/generations", resolveResourceRequestOptions78(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       stream: body.stream ?? false,
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/live/sessions.mjs
+function resolveResourceRequestOptions79(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Sessions4 = class extends APIResource {
   /**
    * Accept an incoming SIP call. Supply session with type live, the model, and
@@ -23610,12 +24031,12 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   accept(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/accept`, {
+    return this._client.post(path`/live/sessions/${sessionID}/accept`, resolveResourceRequestOptions79(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Get Live session content
@@ -23630,12 +24051,12 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   downloadRecording(sessionID, options) {
-    return this._client.get(path`/live/sessions/${sessionID}/content`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
+    return this._client.get(path`/live/sessions/${sessionID}/content`, resolveResourceRequestOptions79(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
       __binaryResponse: true
-    });
+    })));
   }
   /**
    * Fork a stored Live session onto a new WebRTC connection.
@@ -23649,11 +24070,11 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   fork(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/fork`, {
+    return this._client.post(path`/live/sessions/${sessionID}/fork`, resolveResourceRequestOptions79(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * End a SIP call identified by session_id.
@@ -23664,11 +24085,11 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   hangup(sessionID, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/hangup`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+    return this._client.post(path`/live/sessions/${sessionID}/hangup`, resolveResourceRequestOptions79(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Transfer a SIP call to another destination. Supply a nonblank target_uri for the
@@ -23682,12 +24103,12 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   refer(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/refer`, {
+    return this._client.post(path`/live/sessions/${sessionID}/refer`, resolveResourceRequestOptions79(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Reject an incoming SIP call. Send a required SIP rejection status_code between
@@ -23701,12 +24122,12 @@ var Sessions4 = class extends APIResource {
    * ```
    */
   reject(sessionID, body, options) {
-    return this._client.post(path`/live/sessions/${sessionID}/reject`, {
+    return this._client.post(path`/live/sessions/${sessionID}/reject`, resolveResourceRequestOptions79(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
@@ -23719,6 +24140,9 @@ var Sideband = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/live/live.mjs
+function resolveResourceRequestOptions80(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Live = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -23739,7 +24163,11 @@ var Live = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/live/sessions", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/live/sessions", resolveResourceRequestOptions80(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
 };
 Live.Sideband = Sideband;
@@ -23747,31 +24175,37 @@ Live.Forks = Forks;
 Live.Sessions = Sessions4;
 
 // ../../../node_modules/openai/resources/models.mjs
+function resolveResourceRequestOptions81(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Models = class extends APIResource {
   /**
    * Retrieves a model instance, providing basic information about the model such as
    * the owner and permissioning.
    */
   retrieve(model, options) {
-    return this._client.get(path`/models/${model}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.get(path`/models/${model}`, resolveResourceRequestOptions81(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Lists the currently available models, and provides basic information about each
    * one such as the owner and availability.
    */
   list(options) {
-    return this._client.getAPIList("/models", Page, { ...options, __security: { bearerAuth: true } });
+    return this._client.getAPIList("/models", Page, resolveResourceRequestOptions81(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Delete a fine-tuned model. You must have the Owner role in your organization to
    * delete a model.
    */
   delete(model, options) {
-    return this._client.delete(path`/models/${model}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.delete(path`/models/${model}`, resolveResourceRequestOptions81(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
 // ../../../node_modules/openai/resources/moderations.mjs
+function resolveResourceRequestOptions82(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Moderations = class extends APIResource {
   /**
    * Classifies if text and/or image inputs are potentially harmful. Learn more in
@@ -23779,7 +24213,11 @@ var Moderations = class extends APIResource {
    * [moderation guide](https://developers.openai.com/api/docs/guides/moderation).
    */
   create(body, options) {
-    return this._client.post("/moderations", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/moderations", resolveResourceRequestOptions82(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
 };
 
@@ -23826,6 +24264,9 @@ async function encodedMultipartFormRequestOptions(options, client, encodings, ra
 }
 
 // ../../../node_modules/openai/resources/realtime/calls.mjs
+function resolveResourceRequestOptions83(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Calls = class extends APIResource {
   /**
    * Create a new Realtime API call over WebRTC and receive the SDP answer needed to
@@ -23839,16 +24280,16 @@ var Calls = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/realtime/calls", encodedMultipartFormRequestOptions({
+    return this._client.post("/realtime/calls", resolveResourceRequestOptions83(options, (options2) => encodedMultipartFormRequestOptions({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "application/sdp" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/sdp" }, options2?.headers]),
       __security: { bearerAuth: true },
       __binaryResponse: true
     }, this._client, {
       sdp: { content_type: "application/sdp", json: false },
       session: { content_type: "application/json", json: true }
-    }, "sdp"));
+    }, "sdp")));
   }
   /**
    * Accept an incoming SIP call and configure the realtime session that will handle
@@ -23862,12 +24303,12 @@ var Calls = class extends APIResource {
    * ```
    */
   accept(callID, body, options) {
-    return this._client.post(path`/realtime/calls/${callID}/accept`, {
+    return this._client.post(path`/realtime/calls/${callID}/accept`, resolveResourceRequestOptions83(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * End an active Realtime API call, whether it was initiated over SIP or WebRTC.
@@ -23878,11 +24319,11 @@ var Calls = class extends APIResource {
    * ```
    */
   hangup(callID, options) {
-    return this._client.post(path`/realtime/calls/${callID}/hangup`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+    return this._client.post(path`/realtime/calls/${callID}/hangup`, resolveResourceRequestOptions83(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Transfer an active SIP call to a new destination using the SIP REFER verb.
@@ -23895,12 +24336,12 @@ var Calls = class extends APIResource {
    * ```
    */
   refer(callID, body, options) {
-    return this._client.post(path`/realtime/calls/${callID}/refer`, {
+    return this._client.post(path`/realtime/calls/${callID}/refer`, resolveResourceRequestOptions83(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Decline an incoming SIP call by returning a SIP status code to the caller.
@@ -23911,16 +24352,19 @@ var Calls = class extends APIResource {
    * ```
    */
   reject(callID, body = {}, options) {
-    return this._client.post(path`/realtime/calls/${callID}/reject`, {
+    return this._client.post(path`/realtime/calls/${callID}/reject`, resolveResourceRequestOptions83(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
 // ../../../node_modules/openai/resources/realtime/client-secrets.mjs
+function resolveResourceRequestOptions84(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var ClientSecrets = class extends APIResource {
   /**
    * Create a Realtime client secret with an associated session configuration.
@@ -23946,11 +24390,11 @@ var ClientSecrets = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/realtime/client_secrets", {
+    return this._client.post("/realtime/client_secrets", resolveResourceRequestOptions84(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 
@@ -25344,290 +25788,9 @@ function finalizeResponse(snapshot, params) {
 }
 
 // ../../../node_modules/openai/resources/responses/input-items.mjs
-var normalizeRequestOptionsForQueryKeys47 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery47(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys47.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys47.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
+function resolveResourceRequestOptions85(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
 }
-var InputItems2 = class extends APIResource {
-  list(responseID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery47(query, ["after", "include", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, { query, ...options, __security: { bearerAuth: true } });
-  }
-};
-
-// ../../../node_modules/openai/resources/responses/input-tokens.mjs
-var InputTokens2 = class extends APIResource {
-  /**
-   * Returns input token counts of the request.
-   *
-   * Returns an object with `object` set to `response.input_tokens` and an
-   * `input_tokens` count.
-   *
-   * @example
-   * ```ts
-   * const response = await client.responses.inputTokens.count();
-   * ```
-   */
-  count(body = {}, options) {
-    return this._client.post("/responses/input_tokens", {
-      body,
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/responses/responses.mjs
-var normalizeRequestOptionsForQueryKeys48 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery48(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys48.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys48.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var Responses2 = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.inputItems = new InputItems2(this._client);
-    this.inputTokens = new InputTokens2(this._client);
-  }
-  create(body, options) {
-    return this._client.post("/responses", {
-      body,
-      ...options,
-      stream: body.stream ?? false,
-      __security: { bearerAuth: true }
-    })._thenUnwrap((rsp) => {
-      if ("object" in rsp && rsp.object === "response") {
-        addOutputText(rsp);
-      }
-      return rsp;
-    });
-  }
-  retrieve(responseID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery48(query, ["include", "include_obfuscation", "starting_after", "stream"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.get(path`/responses/${responseID}`, {
-      query,
-      ...options,
-      stream: query?.stream ?? false,
-      __security: { bearerAuth: true }
-    })._thenUnwrap((rsp) => {
-      if ("object" in rsp && rsp.object === "response") {
-        addOutputText(rsp);
-      }
-      return rsp;
-    });
-  }
-  /**
-   * Deletes a model response with the given ID.
-   *
-   * @example
-   * ```ts
-   * await client.responses.delete(
-   *   'resp_677efb5139a88190b512bc3fef8e535d',
-   * );
-   * ```
-   */
-  delete(responseID, options) {
-    return this._client.delete(path`/responses/${responseID}`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "*/*" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  parse(body, options) {
-    return this._client.responses.create(body, options)._thenUnwrap((response) => parseResponse(response, body));
-  }
-  /**
-   * Creates a model response stream
-   */
-  stream(body, options) {
-    return ResponseStream.createResponse(this._client, body, options);
-  }
-  /**
-   * Cancels a model response with the given ID. Only responses created with the
-   * `background` parameter set to `true` can be cancelled.
-   * [Learn more](https://developers.openai.com/api/docs/guides/background).
-   *
-   * @example
-   * ```ts
-   * const response = await client.responses.cancel(
-   *   'resp_677efb5139a88190b512bc3fef8e535d',
-   * );
-   * ```
-   */
-  cancel(responseID, options) {
-    return this._client.post(path`/responses/${responseID}/cancel`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Compact a conversation. Returns a compacted response object.
-   *
-   * Learn when and how to compact long-running conversations in the
-   * [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state#managing-the-context-window).
-   * For ZDR-compatible compaction details, see
-   * [Compaction (advanced)](https://developers.openai.com/api/docs/guides/conversation-state#compaction-advanced).
-   *
-   * @example
-   * ```ts
-   * const compactedResponse = await client.responses.compact({
-   *   model: 'gpt-6-astra',
-   * });
-   * ```
-   */
-  compact(body, options) {
-    return this._client.post("/responses/compact", { body, ...options, __security: { bearerAuth: true } });
-  }
-};
-Responses2.InputItems = InputItems2;
-Responses2.InputTokens = InputTokens2;
-
-// ../../../node_modules/openai/resources/safety/alerts.mjs
-var Alerts = class extends APIResource {
-  /**
-   * Get a safety alert belonging to the authenticated API project.
-   */
-  retrieve(id, options) {
-    return this._client.get(path`/safety/alerts/${id}`, { ...options, __security: { bearerAuth: true } });
-  }
-};
-
-// ../../../node_modules/openai/resources/safety/cases.mjs
-var Cases = class extends APIResource {
-  /**
-   * Get a safety case by ID.
-   */
-  retrieve(id, options) {
-    return this._client.get(path`/safety/cases/${id}`, { ...options, __security: { bearerAuth: true } });
-  }
-};
-
-// ../../../node_modules/openai/resources/safety/safety.mjs
-var Safety = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.alerts = new Alerts(this._client);
-    this.cases = new Cases(this._client);
-  }
-};
-Safety.Alerts = Alerts;
-Safety.Cases = Cases;
-
-// ../../../node_modules/openai/resources/skills/content.mjs
-var Content2 = class extends APIResource {
-  /**
-   * Download a skill zip bundle by its ID.
-   */
-  retrieve(skillID, options) {
-    return this._client.get(path`/skills/${skillID}/content`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
-      __security: { bearerAuth: true },
-      __binaryResponse: true
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/skills/versions/content.mjs
-var Content3 = class extends APIResource {
-  /**
-   * Download a skill version zip bundle.
-   */
-  retrieve(version, params, options) {
-    const { skill_id } = params;
-    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, {
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
-      __security: { bearerAuth: true },
-      __binaryResponse: true
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/skills/versions/versions.mjs
 var normalizeRequestOptionsForQueryKeys49 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -25669,56 +25832,51 @@ function normalizeRequestOptionsForQuery49(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
-var Versions = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.content = new Content3(this._client);
-  }
-  /**
-   * Create a new immutable skill version.
-   */
-  create(skillID, body = {}, options) {
-    return this._client.post(path`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client, {
-      stripFilenames: false
-    }));
-  }
-  /**
-   * Get a specific skill version.
-   */
-  retrieve(version, params, options) {
-    const { skill_id } = params;
-    return this._client.get(path`/skills/${skill_id}/versions/${version}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
-  }
-  list(skillID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query, ["after", "limit", "order"], options);
+var InputItems2 = class extends APIResource {
+  list(responseID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery49(query, ["after", "include", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, {
+    return this._client.getAPIList(path`/responses/${responseID}/input_items`, CursorPage, resolveResourceRequestOptions85(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete a skill version.
-   */
-  delete(version, params, options) {
-    const { skill_id } = params;
-    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    })));
   }
 };
-Versions.Content = Content3;
 
-// ../../../node_modules/openai/resources/skills/skills.mjs
+// ../../../node_modules/openai/resources/responses/input-tokens.mjs
+function resolveResourceRequestOptions86(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var InputTokens2 = class extends APIResource {
+  /**
+   * Returns input token counts of the request.
+   *
+   * Returns an object with `object` set to `response.input_tokens` and an
+   * `input_tokens` count.
+   *
+   * @example
+   * ```ts
+   * const response = await client.responses.inputTokens.count();
+   * ```
+   */
+  count(body = {}, options) {
+    return this._client.post("/responses/input_tokens", resolveResourceRequestOptions86(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/responses/responses.mjs
+function resolveResourceRequestOptions87(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var normalizeRequestOptionsForQueryKeys50 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -25760,6 +25918,318 @@ function normalizeRequestOptionsForQuery50(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var Responses2 = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.inputItems = new InputItems2(this._client);
+    this.inputTokens = new InputTokens2(this._client);
+  }
+  create(body, options) {
+    return this._client.post("/responses", resolveResourceRequestOptions87(options, (options2) => ({
+      body,
+      ...options2,
+      stream: body.stream ?? false,
+      __security: { bearerAuth: true }
+    })))._thenUnwrap((rsp) => {
+      if ("object" in rsp && rsp.object === "response") {
+        addOutputText(rsp);
+      }
+      return rsp;
+    });
+  }
+  retrieve(responseID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query, ["include", "include_obfuscation", "starting_after", "stream"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.get(path`/responses/${responseID}`, resolveResourceRequestOptions87(options, (options2) => ({
+      query,
+      ...options2,
+      stream: query?.stream ?? false,
+      __security: { bearerAuth: true }
+    })))._thenUnwrap((rsp) => {
+      if ("object" in rsp && rsp.object === "response") {
+        addOutputText(rsp);
+      }
+      return rsp;
+    });
+  }
+  /**
+   * Deletes a model response with the given ID.
+   *
+   * @example
+   * ```ts
+   * await client.responses.delete(
+   *   'resp_677efb5139a88190b512bc3fef8e535d',
+   * );
+   * ```
+   */
+  delete(responseID, options) {
+    return this._client.delete(path`/responses/${responseID}`, resolveResourceRequestOptions87(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "*/*" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  parse(body, options) {
+    return this._client.responses.create(body, options)._thenUnwrap((response) => parseResponse(response, body));
+  }
+  /**
+   * Creates a model response stream
+   */
+  stream(body, options) {
+    return ResponseStream.createResponse(this._client, body, options);
+  }
+  /**
+   * Cancels a model response with the given ID. Only responses created with the
+   * `background` parameter set to `true` can be cancelled.
+   * [Learn more](https://developers.openai.com/api/docs/guides/background).
+   *
+   * @example
+   * ```ts
+   * const response = await client.responses.cancel(
+   *   'resp_677efb5139a88190b512bc3fef8e535d',
+   * );
+   * ```
+   */
+  cancel(responseID, options) {
+    return this._client.post(path`/responses/${responseID}/cancel`, resolveResourceRequestOptions87(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  /**
+   * Compact a conversation. Returns a compacted response object.
+   *
+   * Learn when and how to compact long-running conversations in the
+   * [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state#managing-the-context-window).
+   * For ZDR-compatible compaction details, see
+   * [Compaction (advanced)](https://developers.openai.com/api/docs/guides/conversation-state#compaction-advanced).
+   *
+   * @example
+   * ```ts
+   * const compactedResponse = await client.responses.compact({
+   *   model: 'gpt-6-astra',
+   * });
+   * ```
+   */
+  compact(body, options) {
+    return this._client.post("/responses/compact", resolveResourceRequestOptions87(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+Responses2.InputItems = InputItems2;
+Responses2.InputTokens = InputTokens2;
+
+// ../../../node_modules/openai/resources/safety/alerts.mjs
+function resolveResourceRequestOptions88(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Alerts = class extends APIResource {
+  /**
+   * Get a safety alert belonging to the authenticated API project.
+   */
+  retrieve(id, options) {
+    return this._client.get(path`/safety/alerts/${id}`, resolveResourceRequestOptions88(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+};
+
+// ../../../node_modules/openai/resources/safety/cases.mjs
+function resolveResourceRequestOptions89(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Cases = class extends APIResource {
+  /**
+   * Get a safety case by ID.
+   */
+  retrieve(id, options) {
+    return this._client.get(path`/safety/cases/${id}`, resolveResourceRequestOptions89(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+};
+
+// ../../../node_modules/openai/resources/safety/safety.mjs
+var Safety = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.cases = new Cases(this._client);
+    this.alerts = new Alerts(this._client);
+  }
+};
+Safety.Cases = Cases;
+Safety.Alerts = Alerts;
+
+// ../../../node_modules/openai/resources/skills/content.mjs
+function resolveResourceRequestOptions90(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Content2 = class extends APIResource {
+  /**
+   * Download a skill zip bundle by its ID.
+   */
+  retrieve(skillID, options) {
+    return this._client.get(path`/skills/${skillID}/content`, resolveResourceRequestOptions90(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
+      __security: { bearerAuth: true },
+      __binaryResponse: true
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/skills/versions/content.mjs
+function resolveResourceRequestOptions91(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var Content3 = class extends APIResource {
+  /**
+   * Download a skill version zip bundle.
+   */
+  retrieve(version, params, options) {
+    const { skill_id } = params;
+    return this._client.get(path`/skills/${skill_id}/versions/${version}/content`, resolveResourceRequestOptions91(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
+      __security: { bearerAuth: true },
+      __binaryResponse: true
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/skills/versions/versions.mjs
+function resolveResourceRequestOptions92(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery51(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var Versions = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.content = new Content3(this._client);
+  }
+  /**
+   * Create a new immutable skill version.
+   */
+  create(skillID, body = {}, options) {
+    return this._client.post(path`/skills/${skillID}/versions`, maybeMultipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client, {
+      stripFilenames: false
+    }));
+  }
+  /**
+   * Get a specific skill version.
+   */
+  retrieve(version, params, options) {
+    const { skill_id } = params;
+    return this._client.get(path`/skills/${skill_id}/versions/${version}`, resolveResourceRequestOptions92(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+  list(skillID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query, ["after", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/skills/${skillID}/versions`, CursorPage, resolveResourceRequestOptions92(options, (options2) => ({
+      query,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete a skill version.
+   */
+  delete(version, params, options) {
+    const { skill_id } = params;
+    return this._client.delete(path`/skills/${skill_id}/versions/${version}`, resolveResourceRequestOptions92(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
+  }
+};
+Versions.Content = Content3;
+
+// ../../../node_modules/openai/resources/skills/skills.mjs
+function resolveResourceRequestOptions93(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery52(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Skills = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -25778,42 +26248,45 @@ var Skills = class extends APIResource {
    * Get a skill by its ID.
    */
   retrieve(skillID, options) {
-    return this._client.get(path`/skills/${skillID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.get(path`/skills/${skillID}`, resolveResourceRequestOptions93(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Update the default version pointer for a skill.
    */
   update(skillID, body, options) {
-    return this._client.post(path`/skills/${skillID}`, {
+    return this._client.post(path`/skills/${skillID}`, resolveResourceRequestOptions93(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery50(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/skills", CursorPage, {
+    return this._client.getAPIList("/skills", CursorPage, resolveResourceRequestOptions93(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Delete a skill by its ID.
    */
   delete(skillID, options) {
-    return this._client.delete(path`/skills/${skillID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.delete(path`/skills/${skillID}`, resolveResourceRequestOptions93(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 Skills.Content = Content2;
 Skills.Versions = Versions;
 
 // ../../../node_modules/openai/resources/uploads/parts.mjs
+function resolveResourceRequestOptions94(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Parts = class extends APIResource {
   /**
    * Adds a
@@ -25830,11 +26303,14 @@ var Parts = class extends APIResource {
    * [complete the Upload](https://developers.openai.com/api/reference/resources/uploads/methods/complete).
    */
   create(uploadID, body, options) {
-    return this._client.post(path`/uploads/${uploadID}/parts`, multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post(path`/uploads/${uploadID}/parts`, resolveResourceRequestOptions94(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
 };
 
 // ../../../node_modules/openai/resources/uploads/uploads.mjs
+function resolveResourceRequestOptions95(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var Uploads = class extends APIResource {
   constructor() {
     super(...arguments);
@@ -25864,7 +26340,11 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `pending`.
    */
   create(body, options) {
-    return this._client.post("/uploads", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/uploads", resolveResourceRequestOptions95(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Cancels the Upload. No Parts may be added after an Upload is cancelled.
@@ -25872,10 +26352,7 @@ var Uploads = class extends APIResource {
    * Returns the Upload object with status `cancelled`.
    */
   cancel(uploadID, options) {
-    return this._client.post(path`/uploads/${uploadID}/cancel`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.post(path`/uploads/${uploadID}/cancel`, resolveResourceRequestOptions95(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Completes the
@@ -25895,11 +26372,11 @@ var Uploads = class extends APIResource {
    * object.
    */
   complete(uploadID, body, options) {
-    return this._client.post(path`/uploads/${uploadID}/complete`, {
+    return this._client.post(path`/uploads/${uploadID}/complete`, resolveResourceRequestOptions95(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
 };
 Uploads.Parts = Parts;
@@ -25960,28 +26437,31 @@ async function uploadAndPollVectorStoreFileBatch(resource, client, vectorStoreId
 }
 
 // ../../../node_modules/openai/resources/vector-stores/file-batches.mjs
+function resolveResourceRequestOptions96(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var FileBatches = class extends APIResource {
   /**
    * Create a vector store file batch.
    */
   create(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, {
+    return this._client.post(path`/vector_stores/${vectorStoreID}/file_batches`, resolveResourceRequestOptions96(options, (options2) => ({
       body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Retrieves a vector store file batch.
    */
   retrieve(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+    return this._client.get(path`/vector_stores/${vector_store_id}/file_batches/${batchID}`, resolveResourceRequestOptions96(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Cancel a vector store file batch. This attempts to cancel the processing of
@@ -25989,11 +26469,11 @@ var FileBatches = class extends APIResource {
    */
   cancel(batchID, params, options) {
     const { vector_store_id } = params;
-    return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+    return this._client.post(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/cancel`, resolveResourceRequestOptions96(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Create a vector store batch and poll until all files have been processed.
@@ -26007,12 +26487,12 @@ var FileBatches = class extends APIResource {
    */
   listFiles(batchID, params, options) {
     const { vector_store_id, ...query } = params;
-    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, {
+    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/file_batches/${batchID}/files`, CursorPage, resolveResourceRequestOptions96(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Wait for the given file batch to be processed.
@@ -26034,280 +26514,9 @@ var FileBatches = class extends APIResource {
 };
 
 // ../../../node_modules/openai/resources/vector-stores/files.mjs
-var normalizeRequestOptionsForQueryKeys51 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery51(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys51.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys51.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
+function resolveResourceRequestOptions97(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
 }
-var Files4 = class extends APIResource {
-  /**
-   * Create a vector store file by attaching a
-   * [File](https://developers.openai.com/api/reference/resources/files) to a
-   * [vector store](https://developers.openai.com/api/reference/resources/vector_stores).
-   */
-  create(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}/files`, {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Retrieves a vector store file.
-   */
-  retrieve(fileID, params, options) {
-    const { vector_store_id } = params;
-    return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Update attributes on a vector store file.
-   */
-  update(fileID, params, options) {
-    const { vector_store_id, ...body } = params;
-    return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  list(vectorStoreID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery51(query, ["after", "before", "filter", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, {
-      query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete a vector store file. This will remove the file from the vector store but
-   * the file itself will not be deleted. To delete the file, use the
-   * [delete file](https://developers.openai.com/api/reference/resources/files/methods/delete)
-   * endpoint.
-   */
-  delete(fileID, params, options) {
-    const { vector_store_id } = params;
-    return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Attach a file to the given vector store and wait for it to be processed.
-   */
-  async createAndPoll(vectorStoreId, body, options) {
-    const file = await this.create(vectorStoreId, body, options);
-    return await this.poll(vectorStoreId, file.id, options);
-  }
-  /**
-   * Wait for the vector store file to finish processing.
-   *
-   * Note: this will return even if the file failed to process, you need to check
-   * file.last_error and file.status to handle these cases
-   */
-  async poll(vectorStoreID, fileID, options) {
-    return await pollVectorStoreFile(this, vectorStoreID, fileID, options);
-  }
-  /**
-   * Upload a file to the `files` API and then attach it to the given vector store.
-   *
-   * Note the file will be asynchronously processed (you can use the alternative
-   * polling helper method to wait for processing to complete).
-   */
-  async upload(vectorStoreId, file, options) {
-    const fileInfo = await this._client.files.create({ file, purpose: "assistants" }, options);
-    return this.create(vectorStoreId, { file_id: fileInfo.id }, options);
-  }
-  /**
-   * Add a file to a vector store and poll until processing is complete.
-   */
-  async uploadAndPoll(vectorStoreId, file, options) {
-    const fileInfo = await this.upload(vectorStoreId, file, options);
-    return await this.poll(vectorStoreId, fileInfo.id, options);
-  }
-  /**
-   * Retrieve the parsed contents of a vector store file.
-   */
-  content(fileID, params, options) {
-    const { vector_store_id } = params;
-    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-
-// ../../../node_modules/openai/resources/vector-stores/vector-stores.mjs
-var normalizeRequestOptionsForQueryKeys52 = /* @__PURE__ */ new Set([
-  "method",
-  "path",
-  "query",
-  "body",
-  "headers",
-  "maxRetries",
-  "stream",
-  "timeout",
-  "httpAgent",
-  "fetchOptions",
-  "signal",
-  "idempotencyKey",
-  "defaultBaseURL",
-  "__metadata",
-  "__binaryRequest",
-  "__binaryResponse",
-  "__streamClass",
-  "__security",
-  "__synthesizeEventData"
-]);
-function normalizeRequestOptionsForQuery52(value, queryKeys, options) {
-  if (typeof value !== "object" || value === null)
-    return void 0;
-  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
-  const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys52.has(key) && !queryKeys.includes(key));
-  if (!requestOnly)
-    return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys52.has(key) || queryKeys.includes(key))) {
-    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
-  }
-  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
-    throw new TypeError("Pass transport overrides in the explicit request options argument.");
-  }
-  return Object.fromEntries(entries.map(([key, descriptor]) => {
-    if ("value" in descriptor)
-      return [key, descriptor.value];
-    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
-  }));
-}
-var VectorStores = class extends APIResource {
-  constructor() {
-    super(...arguments);
-    this.files = new Files4(this._client);
-    this.fileBatches = new FileBatches(this._client);
-  }
-  /**
-   * Create a vector store.
-   */
-  create(body, options) {
-    return this._client.post("/vector_stores", {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Retrieves a vector store.
-   */
-  retrieve(vectorStoreID, options) {
-    return this._client.get(path`/vector_stores/${vectorStoreID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Modifies a vector store.
-   */
-  update(vectorStoreID, body, options) {
-    return this._client.post(path`/vector_stores/${vectorStoreID}`, {
-      body,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery52(query, ["after", "before", "limit", "order"], options);
-    if (normalizeRequestOptionsForQueryOptions !== void 0) {
-      options = normalizeRequestOptionsForQueryOptions;
-      query = {};
-    }
-    query = query;
-    return this._client.getAPIList("/vector_stores", CursorPage, {
-      query,
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Delete a vector store.
-   */
-  delete(vectorStoreID, options) {
-    return this._client.delete(path`/vector_stores/${vectorStoreID}`, {
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-  /**
-   * Search a vector store for relevant chunks based on a query and file attributes
-   * filter.
-   */
-  search(vectorStoreID, body, options) {
-    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, {
-      body,
-      method: "post",
-      ...options,
-      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options?.headers]),
-      __security: { bearerAuth: true }
-    });
-  }
-};
-VectorStores.Files = Files4;
-VectorStores.FileBatches = FileBatches;
-
-// ../../../node_modules/openai/resources/videos.mjs
 var normalizeRequestOptionsForQueryKeys53 = /* @__PURE__ */ new Set([
   "method",
   "path",
@@ -26349,6 +26558,286 @@ function normalizeRequestOptionsForQuery53(value, queryKeys, options) {
     return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
   }));
 }
+var Files4 = class extends APIResource {
+  /**
+   * Create a vector store file by attaching a
+   * [File](https://developers.openai.com/api/reference/resources/files) to a
+   * [vector store](https://developers.openai.com/api/reference/resources/vector_stores).
+   */
+  create(vectorStoreID, body, options) {
+    return this._client.post(path`/vector_stores/${vectorStoreID}/files`, resolveResourceRequestOptions97(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieves a vector store file.
+   */
+  retrieve(fileID, params, options) {
+    const { vector_store_id } = params;
+    return this._client.get(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions97(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Update attributes on a vector store file.
+   */
+  update(fileID, params, options) {
+    const { vector_store_id, ...body } = params;
+    return this._client.post(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions97(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  list(vectorStoreID, query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["after", "before", "filter", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/files`, CursorPage, resolveResourceRequestOptions97(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete a vector store file. This will remove the file from the vector store but
+   * the file itself will not be deleted. To delete the file, use the
+   * [delete file](https://developers.openai.com/api/reference/resources/files/methods/delete)
+   * endpoint.
+   */
+  delete(fileID, params, options) {
+    const { vector_store_id } = params;
+    return this._client.delete(path`/vector_stores/${vector_store_id}/files/${fileID}`, resolveResourceRequestOptions97(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Attach a file to the given vector store and wait for it to be processed.
+   */
+  async createAndPoll(vectorStoreId, body, options) {
+    const file = await this.create(vectorStoreId, body, options);
+    return await this.poll(vectorStoreId, file.id, options);
+  }
+  /**
+   * Wait for the vector store file to finish processing.
+   *
+   * Note: this will return even if the file failed to process, you need to check
+   * file.last_error and file.status to handle these cases
+   */
+  async poll(vectorStoreID, fileID, options) {
+    return await pollVectorStoreFile(this, vectorStoreID, fileID, options);
+  }
+  /**
+   * Upload a file to the `files` API and then attach it to the given vector store.
+   *
+   * Note the file will be asynchronously processed (you can use the alternative
+   * polling helper method to wait for processing to complete).
+   */
+  async upload(vectorStoreId, file, options) {
+    const fileInfo = await this._client.files.create({ file, purpose: "assistants" }, options);
+    return this.create(vectorStoreId, { file_id: fileInfo.id }, options);
+  }
+  /**
+   * Add a file to a vector store and poll until processing is complete.
+   */
+  async uploadAndPoll(vectorStoreId, file, options) {
+    const fileInfo = await this.upload(vectorStoreId, file, options);
+    return await this.poll(vectorStoreId, fileInfo.id, options);
+  }
+  /**
+   * Retrieve the parsed contents of a vector store file.
+   */
+  content(fileID, params, options) {
+    const { vector_store_id } = params;
+    return this._client.getAPIList(path`/vector_stores/${vector_store_id}/files/${fileID}/content`, Page, resolveResourceRequestOptions97(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+
+// ../../../node_modules/openai/resources/vector-stores/vector-stores.mjs
+function resolveResourceRequestOptions98(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery54(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
+var VectorStores = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.files = new Files4(this._client);
+    this.fileBatches = new FileBatches(this._client);
+  }
+  /**
+   * Create a vector store.
+   */
+  create(body, options) {
+    return this._client.post("/vector_stores", resolveResourceRequestOptions98(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Retrieves a vector store.
+   */
+  retrieve(vectorStoreID, options) {
+    return this._client.get(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions98(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Modifies a vector store.
+   */
+  update(vectorStoreID, body, options) {
+    return this._client.post(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions98(options, (options2) => ({
+      body,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  list(query = {}, options) {
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "before", "limit", "order"], options);
+    if (normalizeRequestOptionsForQueryOptions !== void 0) {
+      options = normalizeRequestOptionsForQueryOptions;
+      query = {};
+    }
+    query = query;
+    return this._client.getAPIList("/vector_stores", CursorPage, resolveResourceRequestOptions98(options, (options2) => ({
+      query,
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Delete a vector store.
+   */
+  delete(vectorStoreID, options) {
+    return this._client.delete(path`/vector_stores/${vectorStoreID}`, resolveResourceRequestOptions98(options, (options2) => ({
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+  /**
+   * Search a vector store for relevant chunks based on a query and file attributes
+   * filter.
+   */
+  search(vectorStoreID, body, options) {
+    return this._client.getAPIList(path`/vector_stores/${vectorStoreID}/search`, Page, resolveResourceRequestOptions98(options, (options2) => ({
+      body,
+      method: "post",
+      ...options2,
+      headers: buildHeaders([{ "OpenAI-Beta": "assistants=v2" }, options2?.headers]),
+      __security: { bearerAuth: true }
+    })));
+  }
+};
+VectorStores.Files = Files4;
+VectorStores.FileBatches = FileBatches;
+
+// ../../../node_modules/openai/resources/videos.mjs
+function resolveResourceRequestOptions99(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys55 = /* @__PURE__ */ new Set([
+  "method",
+  "path",
+  "query",
+  "body",
+  "headers",
+  "maxRetries",
+  "stream",
+  "timeout",
+  "httpAgent",
+  "fetchOptions",
+  "signal",
+  "idempotencyKey",
+  "defaultBaseURL",
+  "__metadata",
+  "__binaryRequest",
+  "__binaryResponse",
+  "__streamClass",
+  "__security",
+  "__synthesizeEventData"
+]);
+function normalizeRequestOptionsForQuery55(value, queryKeys, options) {
+  if (typeof value !== "object" || value === null)
+    return void 0;
+  const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
+  const keys = entries.map(([key]) => key);
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys55.has(key) && !queryKeys.includes(key));
+  if (!requestOnly)
+    return void 0;
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys55.has(key) || queryKeys.includes(key))) {
+    throw new TypeError("Query parameters and request options must be passed as separate arguments.");
+  }
+  if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
+    throw new TypeError("Pass transport overrides in the explicit request options argument.");
+  }
+  return Object.fromEntries(entries.map(([key, descriptor]) => {
+    if ("value" in descriptor)
+      return [key, descriptor.value];
+    return [key, descriptor.get ? Reflect.apply(descriptor.get, value, []) : void 0];
+  }));
+}
 var Videos = class extends APIResource {
   /**
    * Create a new video generation job from a prompt and optional reference assets.
@@ -26356,7 +26845,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   create(body, options) {
-    return this._client.post("/videos", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/videos", resolveResourceRequestOptions99(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Fetch the latest metadata for a generated video.
@@ -26364,20 +26853,20 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   retrieve(videoID, options) {
-    return this._client.get(path`/videos/${videoID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.get(path`/videos/${videoID}`, resolveResourceRequestOptions99(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["after", "limit", "order"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query, ["after", "limit", "order"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/videos", ConversationCursorPage, {
+    return this._client.getAPIList("/videos", ConversationCursorPage, resolveResourceRequestOptions99(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Permanently delete a completed or failed video and its stored assets.
@@ -26385,7 +26874,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   delete(videoID, options) {
-    return this._client.delete(path`/videos/${videoID}`, { ...options, __security: { bearerAuth: true } });
+    return this._client.delete(path`/videos/${videoID}`, resolveResourceRequestOptions99(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Create a character from an uploaded video.
@@ -26393,22 +26882,22 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   createCharacter(body, options) {
-    return this._client.post("/videos/characters", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/videos/characters", resolveResourceRequestOptions99(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   downloadContent(videoID, query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery53(query, ["variant"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery55(query, ["variant"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.get(path`/videos/${videoID}/content`, {
+    return this._client.get(path`/videos/${videoID}/content`, resolveResourceRequestOptions99(options, (options2) => ({
       query,
-      ...options,
-      headers: buildHeaders([{ Accept: "application/binary" }, options?.headers]),
+      ...options2,
+      headers: buildHeaders([{ Accept: "application/binary" }, options2?.headers]),
       __security: { bearerAuth: true },
       __binaryResponse: true
-    });
+    })));
   }
   /**
    * Create a new video generation job by editing a source video or existing
@@ -26417,7 +26906,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   edit(body, options) {
-    return this._client.post("/videos/edits", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/videos/edits", resolveResourceRequestOptions99(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Create an extension of a completed video.
@@ -26425,7 +26914,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   extend(body, options) {
-    return this._client.post("/videos/extensions", multipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post("/videos/extensions", resolveResourceRequestOptions99(options, (options2) => multipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
   /**
    * Fetch a character.
@@ -26433,10 +26922,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   getCharacter(characterID, options) {
-    return this._client.get(path`/videos/characters/${characterID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.get(path`/videos/characters/${characterID}`, resolveResourceRequestOptions99(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Create a remix of a completed video using a refreshed prompt.
@@ -26444,7 +26930,7 @@ var Videos = class extends APIResource {
    * @deprecated The Sora API is scheduled to permanently shut down on September 24, 2026.
    */
   remix(videoID, body, options) {
-    return this._client.post(path`/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options, __security: { bearerAuth: true } }, this._client));
+    return this._client.post(path`/videos/${videoID}/remix`, resolveResourceRequestOptions99(options, (options2) => maybeMultipartFormRequestOptions({ body, ...options2, __security: { bearerAuth: true } }, this._client)));
   }
 };
 
@@ -26546,6 +27032,9 @@ async function verifyWebhookSignature(payload, signatureHeader, timestamp, webho
 }
 
 // ../../../node_modules/openai/resources/webhooks/event-types.mjs
+function resolveResourceRequestOptions100(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
 var EventTypes = class extends APIResource {
   /**
    * Returns webhook event types visible to the authenticated project.
@@ -26557,7 +27046,7 @@ var EventTypes = class extends APIResource {
    * ```
    */
   list(options) {
-    return this._client.get("/webhook_event_types", { ...options, __security: { bearerAuth: true } });
+    return this._client.get("/webhook_event_types", resolveResourceRequestOptions100(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
 };
 
@@ -26565,7 +27054,10 @@ var EventTypes = class extends APIResource {
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
 var _Webhooks_getRequiredHeader;
-var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
+function resolveResourceRequestOptions101(options, buildOptions) {
+  return Promise.resolve(options).then(buildOptions);
+}
+var normalizeRequestOptionsForQueryKeys56 = /* @__PURE__ */ new Set([
   "method",
   "path",
   "query",
@@ -26586,15 +27078,15 @@ var normalizeRequestOptionsForQueryKeys54 = /* @__PURE__ */ new Set([
   "__security",
   "__synthesizeEventData"
 ]);
-function normalizeRequestOptionsForQuery54(value, queryKeys, options) {
+function normalizeRequestOptionsForQuery56(value, queryKeys, options) {
   if (typeof value !== "object" || value === null)
     return void 0;
   const entries = Object.entries(Object.getOwnPropertyDescriptors(value)).filter(([, descriptor]) => descriptor.enumerable && (!("value" in descriptor) || descriptor.value !== void 0));
   const keys = entries.map(([key]) => key);
-  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys54.has(key) && !queryKeys.includes(key));
+  const requestOnly = keys.some((key) => normalizeRequestOptionsForQueryKeys56.has(key) && !queryKeys.includes(key));
   if (!requestOnly)
     return void 0;
-  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys54.has(key) || queryKeys.includes(key))) {
+  if (options !== void 0 || keys.some((key) => !normalizeRequestOptionsForQueryKeys56.has(key) || queryKeys.includes(key))) {
     throw new TypeError("Query parameters and request options must be passed as separate arguments.");
   }
   if (keys.some((key) => !["headers", "maxRetries", "timeout", "signal", "idempotencyKey", "query"].includes(key))) {
@@ -26626,7 +27118,11 @@ var Webhooks = class extends APIResource {
    * ```
    */
   create(body, options) {
-    return this._client.post("/webhook_endpoints", { body, ...options, __security: { bearerAuth: true } });
+    return this._client.post("/webhook_endpoints", resolveResourceRequestOptions101(options, (options2) => ({
+      body,
+      ...options2,
+      __security: { bearerAuth: true }
+    })));
   }
   /**
    * Retrieves a webhook endpoint for the authenticated project.
@@ -26639,10 +27135,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   retrieve(webhookEndpointID, options) {
-    return this._client.get(path`/webhook_endpoints/${webhookEndpointID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.get(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions101(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Updates a webhook endpoint for the authenticated project.
@@ -26653,24 +27146,24 @@ var Webhooks = class extends APIResource {
    * ```
    */
   update(webhookEndpointID, body = {}, options) {
-    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}`, {
+    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions101(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   list(query = {}, options) {
-    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery54(query, ["after", "limit"], options);
+    const normalizeRequestOptionsForQueryOptions = normalizeRequestOptionsForQuery56(query, ["after", "limit"], options);
     if (normalizeRequestOptionsForQueryOptions !== void 0) {
       options = normalizeRequestOptionsForQueryOptions;
       query = {};
     }
     query = query;
-    return this._client.getAPIList("/webhook_endpoints", CursorPage, {
+    return this._client.getAPIList("/webhook_endpoints", CursorPage, resolveResourceRequestOptions101(options, (options2) => ({
       query,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Deletes a webhook endpoint for the authenticated project.
@@ -26683,10 +27176,7 @@ var Webhooks = class extends APIResource {
    * ```
    */
   delete(webhookEndpointID, options) {
-    return this._client.delete(path`/webhook_endpoints/${webhookEndpointID}`, {
-      ...options,
-      __security: { bearerAuth: true }
-    });
+    return this._client.delete(path`/webhook_endpoints/${webhookEndpointID}`, resolveResourceRequestOptions101(options, (options2) => ({ ...options2, __security: { bearerAuth: true } })));
   }
   /**
    * Rotates the signing secret for a webhook endpoint in the authenticated project.
@@ -26698,11 +27188,11 @@ var Webhooks = class extends APIResource {
    * ```
    */
   rotateSecret(webhookEndpointID, body = {}, options) {
-    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, {
+    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/rotate_secret`, resolveResourceRequestOptions101(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Sends a sample event to a webhook endpoint for the authenticated project.
@@ -26716,11 +27206,11 @@ var Webhooks = class extends APIResource {
    * ```
    */
   test(webhookEndpointID, body, options) {
-    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/test`, {
+    return this._client.post(path`/webhook_endpoints/${webhookEndpointID}/test`, resolveResourceRequestOptions101(options, (options2) => ({
       body,
-      ...options,
+      ...options2,
       __security: { bearerAuth: true }
-    });
+    })));
   }
   /**
    * Validates that the given payload was sent by OpenAI and parses the payload.
@@ -26804,7 +27294,12 @@ var _OpenAI_x509Credential;
 var _OpenAI_x509Fetch;
 var _OpenAI_explicitDataResidency;
 var _OpenAI_responseAttempts;
+var _OpenAI_sanitizedLoggers;
 var _OpenAI_baseURLOverridden;
+var _OpenAI_normalizeRetries;
+var _OpenAI_isSensitiveLogKey;
+var _OpenAI_sanitizeLogValue;
+var _OpenAI_sanitizeLogger;
 function isRunningInBrowserOrBrowserWorker() {
   if (isRunningInBrowser())
     return true;
@@ -26921,12 +27416,12 @@ var OpenAI = class {
     this.baseURL = options.baseURL;
     __classPrivateFieldSet(this, _OpenAI_explicitDataResidency, residencyBaseURL !== void 0 || inheritedResidencySelection, "f");
     this.timeout = options.timeout ?? _a3.DEFAULT_TIMEOUT;
-    this.logger = options.logger ?? console;
+    this.logger = __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogger).call(this, options.logger ?? console);
     const defaultLogLevel = "warn";
     this.logLevel = defaultLogLevel;
     this.logLevel = parseLogLevel(options.logLevel, "ClientOptions.logLevel", this) ?? parseLogLevel(readEnv("OPENAI_LOG"), "process.env['OPENAI_LOG']", this) ?? defaultLogLevel;
     this.fetchOptions = options.fetchOptions;
-    this.maxRetries = options.maxRetries ?? 2;
+    this.maxRetries = __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_normalizeRetries).call(this, options.maxRetries);
     this.fetch = options.fetch ?? getDefaultFetch();
     __classPrivateFieldSet(this, _OpenAI_encoder, FallbackEncoder, "f");
     const customHeadersEnv = provider || credential ? void 0 : readEnv("OPENAI_CUSTOM_HEADERS");
@@ -27324,9 +27819,11 @@ var OpenAI = class {
   }
   async makeRequest(optionsInput, retriesRemaining, retryOfRequestLogID) {
     const options = await optionsInput;
-    const maxRetries = options.maxRetries ?? this.maxRetries;
+    const maxRetries = __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_normalizeRetries).call(this, options.maxRetries ?? this.maxRetries);
     if (retriesRemaining == null) {
       retriesRemaining = maxRetries;
+    } else {
+      retriesRemaining = Math.min(__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_normalizeRetries).call(this, retriesRemaining), maxRetries);
     }
     const x509Authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
     x509Authentication?.beginRequestPreparation();
@@ -27640,7 +28137,7 @@ var OpenAI = class {
       }
     }
     if (timeoutMillis === void 0 || !Number.isFinite(timeoutMillis) || timeoutMillis < 0 || timeoutMillis > 60 * 1e3) {
-      const maxRetries = options.maxRetries ?? this.maxRetries;
+      const maxRetries = __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_normalizeRetries).call(this, options.maxRetries ?? this.maxRetries);
       timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
     }
     const x509Authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
@@ -27827,7 +28324,269 @@ var OpenAI = class {
 };
 _a3 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authentication = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Credential = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Fetch = /* @__PURE__ */ new WeakMap(), _OpenAI_explicitDataResidency = /* @__PURE__ */ new WeakMap(), _OpenAI_responseAttempts = /* @__PURE__ */ new WeakMap(), _OpenAI_instances = /* @__PURE__ */ new WeakSet(), _OpenAI_baseURLOverridden = function _OpenAI_baseURLOverridden2() {
   return __classPrivateFieldGet(this, _OpenAI_explicitDataResidency, "f") || this._provider !== void 0 || this.baseURL !== "https://api.openai.com/v1";
+}, _OpenAI_normalizeRetries = function _OpenAI_normalizeRetries2(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 2;
+}, _OpenAI_isSensitiveLogKey = function _OpenAI_isSensitiveLogKey2(key) {
+  const normalized = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return /authorization|authentication|cookie|session|signature|assertion|connectionstring|devicecode|codeverifier|accountkey|mtlskey|proxyauth|(?:api|access|secret|private|security|refresh|id|bearer|aws|azure|openai|admin|client|proxy|auth)[a-z0-9]*(?:key|token|secret|password|passwd|pwd|credential|auth)|^(?:auth|key|sig|sas|jwt|bearer|pfx|p12)$|(?:sid|token|secret|password|passwd|pwd|credential|passphrase|apikey|accesskey|privatekey|username)s?$/.test(normalized);
+}, _OpenAI_sanitizeLogValue = function _OpenAI_sanitizeLogValue2(value, seen) {
+  const maxDepth = 64;
+  const maxValues = 4096;
+  const redactString = (entry) => entry.replace(/((?:[a-z][a-z0-9+.-]*:)?\/\/)([^/\s?#]*@)(?=[^/\s?#]+)/gi, "$1[REDACTED]@").replace(/(^|[\s(=])([^/\s]+:[^/\s]*@)(?=[^/\s@]+)/gi, "$1[REDACTED]@").replace(/(^|[\s,;])([a-z][a-z0-9_-]*)(\s*:\s*)([^\r\n,;]+)/gi, (match, prefix, key, separator) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_isSensitiveLogKey).call(this, key) ? `${prefix}${key}${separator}[REDACTED]` : match).replace(/(^|[?&#;])([^=&;\s?#/]+)=([^&;\s#]+)/g, (match, separator, key) => {
+    let decoded = key;
+    try {
+      decoded = globalThis.decodeURIComponent(key);
+    } catch {
+    }
+    return __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_isSensitiveLogKey).call(this, decoded) ? `${separator}${key}=[REDACTED]` : match;
+  });
+  const getLogString = (entry) => {
+    try {
+      return globalThis.String.prototype.valueOf.call(entry);
+    } catch {
+      return void 0;
+    }
+  };
+  const isSensitiveLogLabel = (entry) => {
+    const label = getLogString(entry);
+    if (label !== void 0)
+      return __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_isSensitiveLogKey).call(this, label);
+    try {
+      return entry instanceof globalThis.String;
+    } catch {
+      return true;
+    }
+  };
+  const pending = [];
+  const pendingMaps = [];
+  let sanitizedValue;
+  const getOwnLogDescriptor = (entry, key) => {
+    try {
+      return {
+        descriptor: globalThis.Object.getOwnPropertyDescriptor(entry, key),
+        failed: false
+      };
+    } catch {
+      return { descriptor: void 0, failed: true };
+    }
+  };
+  const enqueue = (entry, depth, assign) => {
+    if (depth > maxDepth || pending.length >= maxValues) {
+      assign("[REDACTED]");
+      return;
+    }
+    pending.push({ value: entry, depth, assign });
+  };
+  enqueue(value, 0, (entry) => {
+    sanitizedValue = entry;
+  });
+  for (let cursor = 0; cursor < pending.length; cursor += 1) {
+    const { value: current, depth, assign } = pending[cursor];
+    if (typeof current === "string") {
+      assign(redactString(current));
+      continue;
+    }
+    if (typeof current === "function" || typeof current === "symbol") {
+      assign("[REDACTED]");
+      continue;
+    }
+    if (typeof current !== "object" || current === null) {
+      assign(current);
+      continue;
+    }
+    const previous = seen.get(current);
+    if (previous !== void 0) {
+      assign(previous);
+      continue;
+    }
+    try {
+      const boxedString = getLogString(current);
+      if (boxedString !== void 0) {
+        const sanitized2 = new globalThis.String(redactString(boxedString));
+        seen.set(current, sanitized2);
+        assign(sanitized2);
+        continue;
+      }
+      if (current instanceof globalThis.String) {
+        seen.set(current, "[REDACTED]");
+        assign("[REDACTED]");
+        continue;
+      }
+      const RuntimeHeaders = globalThis.Headers;
+      if (typeof RuntimeHeaders === "function" && current instanceof RuntimeHeaders) {
+        const sanitized2 = new RuntimeHeaders();
+        seen.set(current, sanitized2);
+        assign(sanitized2);
+        RuntimeHeaders.prototype.forEach.call(current, (entry, key) => {
+          sanitized2.set(key, __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_isSensitiveLogKey).call(this, key) ? "[REDACTED]" : redactString(entry));
+        });
+        continue;
+      }
+      if (current instanceof URL) {
+        const sanitized2 = new URL(URL.prototype.toString.call(current));
+        seen.set(current, sanitized2);
+        assign(sanitized2);
+        if (sanitized2.username)
+          sanitized2.username = "[REDACTED]";
+        if (sanitized2.password)
+          sanitized2.password = "[REDACTED]";
+        for (const [key] of sanitized2.searchParams) {
+          if (__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_isSensitiveLogKey).call(this, key))
+            sanitized2.searchParams.set(key, "[REDACTED]");
+        }
+        if (sanitized2.hash)
+          sanitized2.hash = redactString(sanitized2.hash);
+        continue;
+      }
+      if (Array.isArray(current)) {
+        const lengthDescriptor = getOwnLogDescriptor(current, "length");
+        if (lengthDescriptor.failed || !lengthDescriptor.descriptor || !("value" in lengthDescriptor.descriptor) || typeof lengthDescriptor.descriptor.value !== "number") {
+          seen.set(current, "[REDACTED]");
+          assign("[REDACTED]");
+          continue;
+        }
+        const sanitized2 = [];
+        seen.set(current, sanitized2);
+        assign(sanitized2);
+        const limit2 = Math.min(lengthDescriptor.descriptor.value, maxValues);
+        const firstDescriptor = getOwnLogDescriptor(current, "0");
+        const firstKey = !firstDescriptor.failed && firstDescriptor.descriptor && "value" in firstDescriptor.descriptor ? firstDescriptor.descriptor.value : void 0;
+        for (let index = 0; index < limit2; index += 1) {
+          const property = index === 0 ? firstDescriptor : getOwnLogDescriptor(current, `${index}`);
+          if (property.failed) {
+            sanitized2[index] = "[REDACTED]";
+            continue;
+          }
+          const descriptor = property.descriptor;
+          if (!descriptor?.enumerable)
+            continue;
+          if (index === 1 && (firstDescriptor.failed || firstDescriptor.descriptor && !("value" in firstDescriptor.descriptor) || isSensitiveLogLabel(firstKey))) {
+            sanitized2[index] = "[REDACTED]";
+            continue;
+          }
+          if (!("value" in descriptor)) {
+            sanitized2[index] = "[REDACTED]";
+            continue;
+          }
+          enqueue(descriptor.value, depth + 1, (entry) => {
+            sanitized2[index] = entry;
+          });
+        }
+        sanitized2.length = limit2;
+        if (lengthDescriptor.descriptor.value > limit2)
+          sanitized2[limit2] = "[REDACTED]";
+        continue;
+      }
+      if (current instanceof globalThis.Map) {
+        const sanitized2 = new globalThis.Map();
+        const entries = [];
+        pendingMaps.push({ map: sanitized2, entries });
+        seen.set(current, sanitized2);
+        assign(sanitized2);
+        globalThis.Map.prototype.forEach.call(current, (entry, key) => {
+          const pair = ["[REDACTED]", "[REDACTED]"];
+          entries.push(pair);
+          enqueue(key, depth + 1, (safeKey) => {
+            if (typeof safeKey !== "function" && typeof safeKey !== "symbol" && !(typeof key === "object" && key !== null && safeKey === key)) {
+              pair[0] = safeKey;
+            }
+          });
+          if (isSensitiveLogLabel(key)) {
+            return;
+          }
+          enqueue(entry, depth + 1, (safeEntry) => {
+            pair[1] = safeEntry;
+          });
+        });
+        continue;
+      }
+      if (current instanceof globalThis.Set) {
+        const sanitized2 = new globalThis.Set();
+        seen.set(current, sanitized2);
+        assign(sanitized2);
+        globalThis.Set.prototype.forEach.call(current, (entry) => {
+          enqueue(entry, depth + 1, (safeEntry) => {
+            sanitized2.add(safeEntry);
+          });
+        });
+        continue;
+      }
+      if (current instanceof globalThis.Date) {
+        assign(new globalThis.Date(globalThis.Date.prototype.getTime.call(current)));
+        continue;
+      }
+      const RuntimeReadableStream = globalThis.ReadableStream;
+      if (typeof RuntimeReadableStream === "function" && current instanceof RuntimeReadableStream || current instanceof globalThis.ArrayBuffer || globalThis.ArrayBuffer.isView(current)) {
+        seen.set(current, "[REDACTED]");
+        assign("[REDACTED]");
+        continue;
+      }
+      let keys;
+      try {
+        keys = globalThis.Reflect.ownKeys(current);
+      } catch {
+        seen.set(current, "[REDACTED]");
+        assign("[REDACTED]");
+        continue;
+      }
+      const sanitized = {};
+      seen.set(current, sanitized);
+      assign(sanitized);
+      for (const key of keys) {
+        if (typeof key !== "string")
+          continue;
+        const property = getOwnLogDescriptor(current, key);
+        if (property.failed) {
+          sanitized[key] = "[REDACTED]";
+          continue;
+        }
+        const descriptor = property.descriptor;
+        if (!descriptor?.enumerable)
+          continue;
+        if (__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_isSensitiveLogKey).call(this, key)) {
+          sanitized[key] = "[REDACTED]";
+          continue;
+        }
+        if (!("value" in descriptor)) {
+          sanitized[key] = "[REDACTED]";
+          continue;
+        }
+        enqueue(descriptor.value, depth + 1, (safeEntry) => {
+          sanitized[key] = safeEntry;
+        });
+      }
+    } catch {
+      seen.set(current, "[REDACTED]");
+      assign("[REDACTED]");
+    }
+  }
+  for (const { map, entries } of pendingMaps) {
+    for (const [key, entry] of entries)
+      map.set(key, entry);
+  }
+  return sanitizedValue;
+}, _OpenAI_sanitizeLogger = function _OpenAI_sanitizeLogger2(logger) {
+  if (__classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).has(logger))
+    return logger;
+  const sanitized = new globalThis.Proxy(/* @__PURE__ */ Object.create(null), {
+    get: (_facade, property) => {
+      const value = globalThis.Reflect.get(logger, property, logger);
+      if (typeof value !== "function")
+        return value;
+      if (typeof property !== "string" || !["debug", "info", "warn", "error", "trace", "log"].includes(property)) {
+        return value.bind(logger);
+      }
+      return (...args) => {
+        const seen = /* @__PURE__ */ new WeakMap();
+        return globalThis.Reflect.apply(value, logger, args.map((entry) => __classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_sanitizeLogValue).call(this, entry, seen)));
+      };
+    },
+    set: (_facade, property, value) => globalThis.Reflect.set(logger, property, value, logger)
+  });
+  __classPrivateFieldGet(_a3, _a3, "f", _OpenAI_sanitizedLoggers).add(sanitized);
+  return sanitized;
 };
+_OpenAI_sanitizedLoggers = { value: new globalThis.WeakSet() };
 OpenAI.OpenAI = _a3;
 OpenAI.DEFAULT_TIMEOUT = 6e5;
 OpenAI.OpenAIError = OpenAIError;
@@ -31903,7 +32662,8 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
       authorizationServerMetadata: metadata2
     });
   }
-  const resource = await selectResourceURL(serverUrl, provider, resourceMetadata);
+  const selectedResource = await selectResourceURL(serverUrl, provider, resourceMetadata);
+  const resource = selectedResource && resourceMetadata && !provider.validateResourceURL ? resourceMetadata.resource : selectedResource;
   const resolvedScope = scope || resourceMetadata?.scopes_supported?.join(" ") || provider.clientMetadata.scope;
   let clientInformation = await Promise.resolve(provider.clientInformation());
   if (!clientInformation) {
@@ -32180,6 +32940,9 @@ async function discoverOAuthServerInfo(serverUrl, opts) {
     resourceMetadata
   };
 }
+function resourceIndicatorToString(resource) {
+  return typeof resource === "string" ? resource : resource.href;
+}
 async function startAuthorization(authorizationServerUrl, { metadata: metadata2, clientInformation, redirectUrl, scope, state: state2, resource }) {
   let authorizationUrl;
   if (metadata2) {
@@ -32211,7 +32974,7 @@ async function startAuthorization(authorizationServerUrl, { metadata: metadata2,
     authorizationUrl.searchParams.append("prompt", "consent");
   }
   if (resource) {
-    authorizationUrl.searchParams.set("resource", resource.href);
+    authorizationUrl.searchParams.set("resource", resourceIndicatorToString(resource));
   }
   return { authorizationUrl, codeVerifier };
 }
@@ -32230,7 +32993,7 @@ async function executeTokenRequest(authorizationServerUrl, { metadata: metadata2
     Accept: "application/json"
   });
   if (resource) {
-    tokenRequestParams.set("resource", resource.href);
+    tokenRequestParams.set("resource", resourceIndicatorToString(resource));
   }
   if (addClientAuthentication) {
     await addClientAuthentication(headers, tokenRequestParams, tokenUrl, metadata2);

@@ -1,6 +1,6 @@
 {
   "name": "@foundry-9/quilltap",
-  "version": "4.10.0-dev.90",
+  "version": "4.10.0-dev.91",
   "private": true,
   "author": {
     "name": "Charles Sebold",
@@ -68,7 +68,7 @@
     "@lexical/table": "^0.43.0",
     "@msgpack/msgpack": "^3.1.3",
     "@quilltap/plugin-types": "^2.8.0",
-    "@quilltap/plugin-utils": "^2.6.1",
+    "@quilltap/plugin-utils": "^2.6.2",
     "@svar-ui/react-filemanager": "2.6.0",
     "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-query-devtools": "^5.103.2",
@@ -82,17 +82,17 @@
     "ajv-formats": "^3.0.1",
     "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^12.11.1",
     "chokidar": "^5.0.0",
-    "create-quilltap-theme": "^2.0.19",
+    "create-quilltap-theme": "^2.0.20",
     "croner": "^10.0.1",
     "jest-fetch-mock": "^3.2.0",
     "jsonrepair": "^3.15.0",
-    "katex": "^0.18.7",
+    "katex": "^0.18.9",
     "lexical": "^0.43.0",
     "mammoth": "^1.12.3",
-    "next": "^16.3.5",
+    "next": "^16.3.6",
     "node-fetch": "^3.3.2",
     "node-pty": "^1.1.0",
-    "openai": "^7.20.0",
+    "openai": "^7.23.0",
     "pdf-parse": "^2.4.5",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.3.0",
@@ -119,7 +119,7 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.3.0",
-    "@openrouter/sdk": "^1.3.11",
+    "@openrouter/sdk": "^1.3.28",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/eslint-plugin-query": "^5.103.2",
@@ -142,7 +142,7 @@
     "emojibase-data": "^17.0.0",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.5",
+    "eslint-config-next": "^16.3.6",
     "jest": "^30.5.2",
     "jest-environment-jsdom": "^30.5.2",
     "js-tiktoken": "^1.0.21",
@@ -168,7 +168,7 @@
     "node-pty@1.1.0": true,
     "unrs-resolver@1.12.2": true,
     "esbuild@0.28.2": true,
-    "@openrouter/sdk@1.3.11": true,
-    "@parcel/watcher@2.6.0": true
+    "@parcel/watcher@2.6.0": true,
+    "@openrouter/sdk@1.3.28": true
   }
 }
