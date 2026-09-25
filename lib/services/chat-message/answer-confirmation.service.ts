@@ -26,7 +26,7 @@ import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution
 import type { UncensoredFallbackOptions, CheapLLMTaskResult } from '@/lib/memory/cheap-llm-tasks/types'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { ConnectionProfile, MessageEvent, ChatMetadataBase, Character, ChatParticipantBase } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import { getParticipantName } from '@/lib/chat/context/message-attribution'
 import { isUserDrivenSeat } from '@/lib/chat/turn-manager/utils'
@@ -332,7 +332,7 @@ export async function runAnswerConfirmation(
   const selection = resolveUncensoredCheapLLMSelection(
     cheapLLMSelection,
     isDangerousChat,
-    uncensoredFallback?.dangerSettings,
+    uncensoredFallback?.conciergePolicy,
     uncensoredFallback?.availableProfiles ?? [],
   )
 
@@ -480,7 +480,7 @@ export interface MaybeConfirmAnswerOptions {
   globalEnabled: boolean
   cheapLLMSelection: CheapLLMSelection | null
   connectionProfile: ConnectionProfile
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   allProfiles: ConnectionProfile[]
   /** Emitted once the check is actually going to run. */
   onConfirming?: () => void
@@ -509,7 +509,7 @@ export type MaybeConfirmAnswerResult =
 export async function maybeConfirmAnswer(opts: MaybeConfirmAnswerOptions): Promise<MaybeConfirmAnswerResult> {
   const {
     repos, chatId, userId, chat, character, characterParticipant, reply, messageId, toolMessages,
-    participantCharacters, globalEnabled, cheapLLMSelection, connectionProfile, dangerSettings,
+    participantCharacters, globalEnabled, cheapLLMSelection, connectionProfile, conciergePolicy,
     allProfiles, onConfirming, onAffirming,
   } = opts
 
@@ -562,7 +562,7 @@ export async function maybeConfirmAnswer(opts: MaybeConfirmAnswerOptions): Promi
     connectionProfile,
     isDangerousChat,
     uncensoredFallback: {
-      dangerSettings,
+      conciergePolicy,
       availableProfiles: allProfiles,
       isDangerousChat,
     },

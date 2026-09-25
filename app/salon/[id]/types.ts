@@ -324,7 +324,7 @@ export type {
   MemoryCascadePreferences,
   TokenDisplaySettings,
   StoryBackgroundsSettings,
-  DangerousContentSettings,
+  ConciergeSettings,
 } from '@/components/settings/chat-settings/types'
 
 /**

@@ -54,6 +54,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 
 // =============================================================================
 // Validation Schemas
@@ -1095,7 +1096,7 @@ async function handleRegenerateAll(
   }
 
   const uncensoredTextProfileId =
-    settings?.dangerousContentSettings?.uncensoredTextProfileId ?? null;
+    readConciergeSettings(settings).uncensoredTextProfileId ?? null;
   const uncensoredCheap = uncensoredTextProfileId
     ? profiles.find(
         (p: { id: string; isCheap?: boolean }) =>

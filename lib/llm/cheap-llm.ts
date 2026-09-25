@@ -16,7 +16,8 @@
  */
 
 import { ConnectionProfile, Provider } from '@/lib/schemas/types'
-import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { CheapLLMSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import { logger } from '@/lib/logger'
 import {
   getAverageCostPer1M,
@@ -286,32 +287,38 @@ export function getCheapLLMProvider(
 }
 
 /**
- * Resolves an uncensored-compatible cheap LLM selection for dangerous chats.
- * When a chat is flagged as dangerous, background tasks (memory extraction,
- * title generation, context summaries, etc.) should use an uncensored provider
- * to avoid content refusals.
+ * Resolves an uncensored-compatible cheap LLM selection for Unmoderated chats.
+ * When the Concierge policy routes a chat direct to the uncensored desk,
+ * background tasks (memory extraction, title generation, context summaries,
+ * etc.) should use an uncensored provider to avoid content refusals.
  *
  * @param standardSelection - The standard cheap LLM selection
  * @param isDangerousChat - Whether the chat is flagged as dangerous
- * @param dangerSettings - The resolved dangerous content settings
+ * @param conciergePolicy - The chat's resolved Concierge policy
  * @param availableProfiles - All available connection profiles for the user
  * @returns An uncensored CheapLLMSelection if applicable, otherwise the standard selection
  */
 export function resolveUncensoredCheapLLMSelection(
   standardSelection: CheapLLMSelection,
   isDangerousChat: boolean,
-  dangerSettings: DangerousContentSettings | undefined,
+  conciergePolicy: ResolvedConciergePolicy | undefined,
   availableProfiles: ConnectionProfile[]
 ): CheapLLMSelection {
-  // Not a dangerous chat or no danger settings — use standard selection
-  if (!isDangerousChat || !dangerSettings || dangerSettings.mode === 'OFF') {
+  // Not a dangerous chat, or the policy does not route direct — use standard selection
+  if (!isDangerousChat || !conciergePolicy || !conciergePolicy.routeDirect) {
+    logger.debug('[CheapLLM] Uncensored cheap LLM selection not applicable; using standard selection', {
+      isDangerousChat,
+      conciergeSource: conciergePolicy?.source,
+      routeDirect: conciergePolicy?.routeDirect ?? false,
+    })
     return standardSelection
   }
 
   // Try the configured uncensored text profile first
-  if (dangerSettings.uncensoredTextProfileId) {
-    const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
+  if (conciergePolicy.desk.textProfileId) {
+    const uncensoredProfile = availableProfiles.find(p => p.id === conciergePolicy.desk.textProfileId)
     if (uncensoredProfile) {
+      logger.debug('[CheapLLM] Using configured uncensored text profile for cheap LLM', { profileId: uncensoredProfile.id })
       return selectionFromProfile(uncensoredProfile, { localBaseUrlFallback: true })
     }
   }

@@ -2,7 +2,7 @@
  * Shared types for cheap LLM task modules.
  */
 
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 
 /**
@@ -92,10 +92,10 @@ export interface CheapLLMTaskResult<T> {
 
 /**
  * Options for uncensored provider fallback when empty responses are detected
- * Only used when the Concierge is in AUTO_ROUTE mode with an uncensored text profile configured
+ * Only used when the Concierge policy allows failover and an uncensored text profile is configured
  */
 export interface UncensoredFallbackOptions {
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   availableProfiles: ConnectionProfile[]
   isDangerousChat?: boolean
 }

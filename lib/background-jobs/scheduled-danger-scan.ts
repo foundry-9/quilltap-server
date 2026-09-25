@@ -5,6 +5,11 @@
  * enqueue danger classification jobs for them. Ensures every chat eventually
  * gets classified, including legacy chats created before the feature existed.
  *
+ * Opt-in: the sweep runs only for users whose Concierge is on duty with the
+ * summary classifier switched on (`conciergeSettings.enabled` and
+ * `preScreen.summaryClassification`), and the scheduler does not start at all
+ * when no user has asked for it.
+ *
  * Decision tree per unclassified chat:
  * - Has contextSummary or scenarioText → enqueue CHAT_DANGER_CLASSIFICATION directly
  * - Neither, messageCount > 50 → enqueue CONTEXT_SUMMARY (chaining handles classification)
@@ -14,7 +19,8 @@
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isModerationExemptChatType } from '@/lib/schemas/chat.types';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
+import type { ChatSettings } from '@/lib/schemas/types';
 import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override';
 import { enqueueChatDangerClassification, enqueueContextSummary } from './queue-service';
 
@@ -28,9 +34,19 @@ let dangerScanSchedulerRunning = false;
 const DEFAULT_SCAN_INTERVAL_MS = 10 * 60 * 1000;
 
 /**
+ * Whether a user has asked for the summary classifier and its sweep: the
+ * Concierge on duty, and the summary classifier opted in. Per-chat state
+ * (Moderated only) is checked chat by chat below.
+ */
+function wantsSummaryClassification(settings: Pick<ChatSettings, 'conciergeSettings'>): boolean {
+  const concierge = readConciergeSettings(settings);
+  return concierge.enabled && concierge.preScreen.summaryClassification;
+}
+
+/**
  * Schedule automatic danger classification scan to run periodically.
- * Checks if any user has danger mode enabled before starting — if all users
- * have mode OFF, the scheduler is not started.
+ * Checks whether any user has the summary classifier on before starting — if
+ * none has, the scheduler is not started.
  * @param intervalMs - How often to run the scan (default: 10 minutes)
  */
 export async function scheduleDangerScan(intervalMs: number = DEFAULT_SCAN_INTERVAL_MS): Promise<void> {
@@ -38,21 +54,22 @@ export async function scheduleDangerScan(intervalMs: number = DEFAULT_SCAN_INTER
     return;
   }
 
-  // Pre-check: skip if no user has danger mode enabled
+  // Pre-check: skip unless some user has the summary classifier on
   try {
     const repos = getRepositories();
     const allChatSettings = await repos.chatSettings.findAll();
-    const anyEnabled = allChatSettings.some((settings) => {
-      const { settings: dangerSettings } = resolveDangerousContentSettings(settings);
-      return dangerSettings.mode !== 'OFF';
+    const optedIn = allChatSettings.filter(wantsSummaryClassification).length;
+    logger.debug('Danger scan scheduler pre-check', {
+      users: allChatSettings.length,
+      summaryClassificationUsers: optedIn,
     });
 
-    if (!anyEnabled) {
-      logger.info('Danger scan scheduler not started — danger mode is OFF for all users');
+    if (optedIn === 0) {
+      logger.info('Danger scan scheduler not started — no user has the Concierge\'s summary classification on');
       return;
     }
   } catch (error) {
-    logger.warn('Could not check danger settings, skipping danger scan scheduler', {
+    logger.warn('Could not check Concierge settings, skipping danger scan scheduler', {
       error: error instanceof Error ? error.message : String(error),
     });
     return;
@@ -114,9 +131,9 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
     let totalChats = 0;
 
     for (const settings of allChatSettings) {
-      // Check if danger mode is enabled for this user
-      const { settings: dangerSettings } = resolveDangerousContentSettings(settings);
-      if (dangerSettings.mode === 'OFF') {
+      // Only users who opted in to the summary classifier are swept
+      if (!wantsSummaryClassification(settings)) {
+        logger.debug('Skipping user without summary classification', { userId: settings.userId });
         continue;
       }
 

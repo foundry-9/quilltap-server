@@ -16,7 +16,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override'
 import {
   enqueueChatDangerClassification,
@@ -27,13 +27,13 @@ import {
 import { findTurnOpenerMessageId } from './turn-transcript'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent, CheapLLMSettings } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger = createServiceLogger('MemoryTriggerService')
 
 export interface MemoryChatSettings {
   cheapLLMSettings?: CheapLLMSettings
-  dangerSettings?: DangerousContentSettings
+  conciergePolicy?: ResolvedConciergePolicy
   isDangerousChat?: boolean
 }
 
@@ -170,12 +170,18 @@ export async function triggerChatDangerClassification(
       return
     }
 
-    // Resolve danger settings — bail if mode is OFF. Passing `chat` collapses
-    // to OFF for a moderation-exempt chat type (Help Chat, Brahma Console),
-    // so those surfaces are never enqueued either.
+    // Resolve the Concierge policy — bail unless the summary classifier is
+    // on duty for this chat (Concierge enabled, chat Moderated, operator opted
+    // in). Passing `chat` rules out a moderation-exempt chat type (Help Chat,
+    // Brahma Console), so those surfaces are never enqueued either.
     const chatSettings = await repos.chatSettings.findByUserId(options.userId)
-    const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat)
-    if (dangerSettings.mode === 'OFF') {
+    const conciergePolicy = resolveConciergeSettings(chatSettings, chat)
+    if (!conciergePolicy.summaryClassification) {
+      logger.debug('[DangerClassification] Summary classifier not on duty; skipping enqueue', {
+        chatId: options.chatId,
+        conciergeSource: conciergePolicy.source,
+        conciergeState: conciergePolicy.state,
+      })
       return
     }
 

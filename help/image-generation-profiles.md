@@ -360,7 +360,7 @@ Should you set a dial the chosen model has never heard of — an Extra High qual
 
 ### The provider declined the picture
 
-Most image providers keep a safety filter of their own, and a commission it dislikes comes back refused rather than painted. When the Concierge is on **Auto-Route**, he tries once more on an uncensored image profile — the one named in his settings, or failing that any image profile with **Uncensored-compatible** ticked — and posts a short note in the chat saying who declined and who obliged. That tick is all an image profile needs to be a candidate; naming it in the Concierge's picker merely makes it the first choice. The same applies to the Lantern's backdrops and Aurora's portraits, in any chat that is not **Locked**. Under Detect Only, on a Locked chat, or with nobody to ask, the Concierge's note says so instead. See [Dangerous Content Handling](dangerous-content.md).
+Most image providers keep a safety filter of their own, and a commission it dislikes comes back refused rather than painted. When the Concierge is on duty, he tries once more on an uncensored image profile — the one named on his desk (`/settings?tab=concierge&section=uncensored-desk`), or failing that any image profile with **Uncensored-compatible** ticked — and posts a short note in the chat saying who declined and who obliged. That tick is all an image profile needs to be a candidate; naming it on the Concierge's desk merely makes it the first choice. The same applies to the Lantern's backdrops and Aurora's portraits, in any chat that is not **Locked**. On a Locked chat, or with nobody to ask, the Concierge's note says so instead. See [The Concierge](the-concierge.md).
 
 ### API key validation failed
 
@@ -425,7 +425,7 @@ The most expensive failure a LoRA can suffer is the one that wears the costume o
 
 **The magic word was never said.** Most adapters answer to a trigger, and their page names it — sometimes as a single phrase, sometimes as a short list of words, in which case a phrase containing all of them will do. **Query** will often produce it for you, where the author troubled to declare it. Write it into the row's **Trigger Phrase** and Quilltap weaves it into every prompt this profile paints. Leave it blank and the adapter may attend the sitting without ever once picking up the pen.
 
-**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [Dangerous Content Handling](dangerous-content.md).
+**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [The Concierge](the-concierge.md).
 
 ### Generation is very slow
 
@@ -470,7 +470,7 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for image providers
-- [Dangerous Content Handling](dangerous-content.md) — Governs whether story-background prompts are drafted candidly, and reroutes a refused picture to an uncensored image profile under Auto-Route
+- [The Concierge](the-concierge.md) — His tab (`/settings?tab=concierge`) holds the uncensored image profile and the image-prompt crafter; governs whether story-background prompts are drafted candidly, and reroutes a refused picture to an uncensored image profile
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

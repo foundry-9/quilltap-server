@@ -19,7 +19,12 @@ import {
   resolveUncensoredImageUnderstudy,
   resolveUncensoredTextUnderstudy,
 } from '@/lib/services/dangerous-content/understudy'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import {
+  DEFAULT_CONCIERGE_SETTINGS,
+  resolveConciergeSettings,
+  type ResolvedConciergePolicy,
+} from '@/lib/services/dangerous-content/resolver.service'
+import type { ConciergeSettings } from '@/lib/schemas/settings.types'
 
 const USER = 'user-1'
 
@@ -75,16 +80,14 @@ function wire(opts: {
   return repos
 }
 
-const settings = (extra: Partial<DangerousContentSettings> = {}): DangerousContentSettings => ({
-  mode: 'OFF',
-  threshold: 0.7,
-  scanTextChat: true,
-  scanImagePrompts: true,
-  scanImageGeneration: false,
-  displayMode: 'SHOW',
-  showWarningBadges: true,
-  ...extra,
-})
+const settings = (
+  extra: Partial<ConciergeSettings> = {},
+  conciergeMode: 'moderated' | 'unmoderated' | 'locked' = 'moderated',
+): ResolvedConciergePolicy =>
+  resolveConciergeSettings(
+    { conciergeSettings: { ...DEFAULT_CONCIERGE_SETTINGS, ...extra } },
+    { conciergeMode },
+  )
 
 beforeEach(() => {
   jest.clearAllMocks()
@@ -95,7 +98,7 @@ describe('resolveUncensoredImageUnderstudy', () => {
     wire({ images: [img('scan', { isDangerousCompatible: true }), img('explicit')] })
     const result = await resolveUncensoredImageUnderstudy({
       userId: USER,
-      settings: settings({ uncensoredImageProfileId: 'explicit' }),
+      conciergePolicy: settings({ uncensoredImageProfileId: 'explicit' }),
     })
     expect(result?.profile.id).toBe('explicit')
     expect(result?.apiKey).toBe('sk-key-explicit')
@@ -103,7 +106,7 @@ describe('resolveUncensoredImageUnderstudy', () => {
 
   it('scans for a compatible profile when nothing is configured', async () => {
     wire({ images: [img('plain'), img('compatible', { isDangerousCompatible: true })] })
-    const result = await resolveUncensoredImageUnderstudy({ userId: USER, settings: settings() })
+    const result = await resolveUncensoredImageUnderstudy({ userId: USER, conciergePolicy: settings() })
     expect(result?.profile.id).toBe('compatible')
   })
 
@@ -111,7 +114,7 @@ describe('resolveUncensoredImageUnderstudy', () => {
     wire({ images: [img('explicit', { isDangerousCompatible: true }), img('other', { isDangerousCompatible: true })] })
     const result = await resolveUncensoredImageUnderstudy({
       userId: USER,
-      settings: settings({ uncensoredImageProfileId: 'explicit' }),
+      conciergePolicy: settings({ uncensoredImageProfileId: 'explicit' }),
       exclude: ['explicit'],
     })
     expect(result?.profile.id).toBe('other')
@@ -126,19 +129,25 @@ describe('resolveUncensoredImageUnderstudy', () => {
       ],
       keyless: ['key-keyless'],
     })
-    const result = await resolveUncensoredImageUnderstudy({ userId: USER, settings: settings() })
+    const result = await resolveUncensoredImageUnderstudy({ userId: USER, conciergePolicy: settings() })
     expect(result?.profile.id).toBe('good')
   })
 
   it('returns null when nothing qualifies', async () => {
     wire({ images: [img('plain')] })
-    expect(await resolveUncensoredImageUnderstudy({ userId: USER, settings: settings() })).toBeNull()
+    expect(await resolveUncensoredImageUnderstudy({ userId: USER, conciergePolicy: settings() })).toBeNull()
   })
 
-  it('never reads the mode: the same answer under OFF, DETECT_ONLY and AUTO_ROUTE', async () => {
+  it('never reads the policy gates: the same answer off duty, Moderated, Unmoderated and Locked', async () => {
     wire({ images: [img('compatible', { isDangerousCompatible: true })] })
-    for (const mode of ['OFF', 'DETECT_ONLY', 'AUTO_ROUTE'] as const) {
-      const result = await resolveUncensoredImageUnderstudy({ userId: USER, settings: settings({ mode }) })
+    const policies = [
+      settings({ enabled: false }),
+      settings({}, 'moderated'),
+      settings({}, 'unmoderated'),
+      settings({}, 'locked'),
+    ]
+    for (const conciergePolicy of policies) {
+      const result = await resolveUncensoredImageUnderstudy({ userId: USER, conciergePolicy })
       expect(result?.profile.id).toBe('compatible')
     }
   })
@@ -146,7 +155,7 @@ describe('resolveUncensoredImageUnderstudy', () => {
   it('swallows a failed read as "nobody to ask"', async () => {
     const repos = wire({})
     repos.imageProfiles.findAll.mockRejectedValue(new Error('db down') as never)
-    expect(await resolveUncensoredImageUnderstudy({ userId: USER, settings: settings() })).toBeNull()
+    expect(await resolveUncensoredImageUnderstudy({ userId: USER, conciergePolicy: settings() })).toBeNull()
   })
 })
 
@@ -155,7 +164,7 @@ describe('resolveUncensoredTextUnderstudy', () => {
     wire({ connections: [conn('scan', { isDangerousCompatible: true }), conn('explicit')] })
     const result = await resolveUncensoredTextUnderstudy({
       userId: USER,
-      settings: settings({ uncensoredTextProfileId: 'explicit' }),
+      conciergePolicy: settings({ uncensoredTextProfileId: 'explicit' }),
     })
     expect(result?.profile.id).toBe('explicit')
   })
@@ -169,7 +178,7 @@ describe('resolveUncensoredTextUnderstudy', () => {
     })
     const result = await resolveUncensoredTextUnderstudy({
       userId: USER,
-      settings: settings({ uncensoredTextProfileId: 'courier' }),
+      conciergePolicy: settings({ uncensoredTextProfileId: 'courier' }),
     })
     expect(result?.profile.id).toBe('api')
   })
@@ -183,11 +192,11 @@ describe('resolveUncensoredTextUnderstudy', () => {
     })
     const withImages = await resolveUncensoredTextUnderstudy({
       userId: USER,
-      settings: settings(),
+      conciergePolicy: settings(),
       turnAttachmentMimeTypes: ['image/png'],
     })
     expect(withImages?.profile.id).toBe('vision')
-    const plain = await resolveUncensoredTextUnderstudy({ userId: USER, settings: settings() })
+    const plain = await resolveUncensoredTextUnderstudy({ userId: USER, conciergePolicy: settings() })
     expect(plain?.profile.id).toBe('text-only')
   })
 
@@ -200,7 +209,7 @@ describe('resolveUncensoredTextUnderstudy', () => {
     })
     const result = await resolveUncensoredTextUnderstudy({
       userId: USER,
-      settings: settings({ uncensoredTextProfileId: 'explicit' }),
+      conciergePolicy: settings({ uncensoredTextProfileId: 'explicit' }),
       filter: (p) => p.provider === 'GROK',
     })
     expect(result?.profile.id).toBe('drawer')
@@ -210,7 +219,7 @@ describe('resolveUncensoredTextUnderstudy', () => {
     wire({ connections: [conn('only', { isDangerousCompatible: true })] })
     expect(await resolveUncensoredTextUnderstudy({
       userId: USER,
-      settings: settings(),
+      conciergePolicy: settings(),
       exclude: ['only'],
     })).toBeNull()
   })

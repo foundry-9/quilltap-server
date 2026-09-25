@@ -10,6 +10,7 @@ import * as tokenTracking from '@/lib/services/token-tracking.service'
 import * as costEstimation from '@/lib/services/cost-estimation.service'
 import * as rngDetector from '@/lib/services/chat-message/rng-pattern-detector.service'
 import * as rngHandler from '@/lib/tools/handlers/rng-handler'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 
 jest.mock('@/lib/logging/create-logger', () => ({
   createServiceLogger: jest.fn(() => ({
@@ -200,7 +201,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -304,7 +305,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -389,7 +390,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -477,7 +478,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: false,
@@ -555,7 +556,7 @@ describe('message-finalizer.service', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: {
           cheapLLMSettings: { strategy: 'USER_DEFINED' },
           autoDetectRng: true,
@@ -640,7 +641,7 @@ describe('message-finalizer.service — the route trail', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' }, autoDetectRng: false } as any,
         participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
         resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },
@@ -782,7 +783,7 @@ describe('message-finalizer.service — inform consumption', () => {
         allProfiles: [],
       },
       triggers: {
-        dangerSettings: { mode: 'OFF' } as any,
+        conciergePolicy: resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any),
         chatSettings: { cheapLLMSettings: { strategy: 'USER_DEFINED' }, autoDetectRng: false } as any,
         participantCharacters: new Map([['char-1', { id: 'char-1', name: 'Alice', pronouns: null }]]),
         resolvedIdentity: { name: 'Narrator', description: 'desc', characterId: null },

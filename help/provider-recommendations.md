@@ -19,7 +19,8 @@ Quilltap uses AI models for several different jobs, and no single provider is th
 | **Background Tasks** | Memory extraction, summarisation, scene tracking, titles | [Chat Settings > Cheap LLM](/settings?tab=chat&section=cheap-llm) |
 | **Image Generation** | Character portraits, scene illustrations, story backgrounds | [Image Profiles](/settings?tab=images) |
 | **Embeddings** | Semantic search for the Commonplace Book memory system | [Embedding Profiles](/settings?tab=providers&section=embedding-profiles) |
-| **Moderation** | Content classification for the Concierge | [Chat Settings > Cheap LLM](/settings?tab=chat&section=cheap-llm) |
+| **Moderation** | Optional content pre-screening for the Concierge | [The Concierge > Pre-screening](/settings?tab=concierge&section=pre-screening) |
+| **Uncensored Desk** | Taking over when an ordinary provider refuses on content grounds | [The Concierge > The Uncensored Desk](/settings?tab=concierge&section=uncensored-desk) |
 
 ## Our Recommendations
 
@@ -40,7 +41,9 @@ This is where quality matters most. Your characters' personalities, emotional de
 - **OpenRouter** --- Try any of these (and many more) through one key to find what clicks with your style.
 
 **Best for uncensored content (via the Concierge):**
-- **xAI Grok** --- The easiest option for mature or unrestricted content. When the Concierge detects that a safety-filtered model might refuse a response, it can reroute to Grok automatically.
+- **For a hosted service, we recommend xAI Grok** --- the simplest route to mature or unrestricted content, for text and pictures alike. **For something you run yourself, use Ollama with an uncensored model, OpenRouter with an uncensored model selection, or any self-hosted model without content filtering.**
+
+Tick **Uncensored-compatible** on the profile and the Concierge will turn to it whenever an ordinary provider refuses on content grounds. See [The Concierge](the-concierge.md).
 
 ### Background Tasks (The Cheap LLM)
 
@@ -51,7 +54,7 @@ These run constantly behind the scenes --- extracting memories, generating chat 
 - **OpenAI gpt-5-nano** or **gpt-4.1-nano** --- Purpose-built for this kind of work. Fast, cheap, and capable. Quilltap automatically optimises its requests for these models.
 - **OpenRouter** --- Also gives you access to cheap models from multiple providers, including OpenAI's nano models. A good option if you're already using OpenRouter for chat.
 
-If you use the Concierge's uncensored routing, you can also set up a Grok profile as your uncensored fallback. The Concierge will use it automatically when the primary cheap LLM declines a request.
+If you use the Concierge's uncensored desk, the same uncensored profile also covers background tasks: the Concierge sends a refused errand there automatically, and every errand in an Unmoderated chat goes there from the start.
 
 ### Image Generation
 
@@ -71,7 +74,7 @@ All three are solid. We recommend trying each to see which style you prefer.
 
 **We strongly recommend: OpenAI**
 
-OpenAI's moderation endpoint is what the Concierge uses to classify content. It's free, fast, and just requires an OpenAI API key. No other provider offers a comparable service.
+Pre-screening is optional and off by default --- the Concierge works from providers' actual refusals without it. If you do switch it on, OpenAI's moderation endpoint is what the Concierge uses to classify content. It's free, fast, and just requires an OpenAI API key. No other provider offers a comparable service.
 
 ## The Simplest Setup
 
@@ -82,7 +85,7 @@ If you want to keep things straightforward, here's the minimum that covers every
 
 That's two API keys for the full Quilltap experience. If you choose **OpenRouter** for chat, it can also handle your background tasks --- giving you access to hundreds of models while only needing OpenAI for embeddings and moderation.
 
-Add a Grok key if you want uncensored routing through the Concierge.
+Add a Grok key (hosted), or an Ollama, OpenRouter or self-hosted uncensored model (local), if you want the Concierge's uncensored desk.
 
 ## About OpenRouter
 
@@ -105,4 +108,4 @@ help_navigate(url: "/settings?tab=providers")
 - [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) --- Configuring the cheap LLM and other options
 - [Image Generation Profiles](image-generation-profiles.md) --- Setting up image generation
 - [Embedding Profiles](embedding-profiles.md) --- Configuring semantic memory search
-- [The Concierge](dangerous-content.md) --- Content routing and uncensored fallback
+- [The Concierge](the-concierge.md) --- Refusal failover and the uncensored desk

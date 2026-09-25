@@ -1,5 +1,13 @@
 # Feature Specification: Dangerous Content Handling in Quilltap
 
+> **Superseded in part (4.10, Concierge overhaul).** The *routing* half of this spec — the
+> `OFF` / `DETECT_ONLY` / `AUTO_ROUTE` mode, the classifier as the backbone, `dangerousContentSettings`
+> — was retired by [concierge-overhaul.md](../concierge-overhaul.md): refusals now drive failover,
+> the classifier is an opt-in pre-screen, and the settings live in `conciergeSettings` on the
+> Concierge's own tab (`/settings?tab=concierge`; see
+> [phase 4](../concierge-overhaul-phase-4-concierge-tab.md)). The *display* half (badges, blur,
+> collapse) survives unchanged. Kept as a historical record.
+
 ## Overview
 
 Quilltap needs a robust system to detect, route, and manage "dangerous" content—defined as NSFW, uncensored, or user-specified sensitive topics (e.g., politics, violence). This ensures compliance with provider policies (most LLMs like Claude or GPT censor heavily), user privacy, and customizable controls. The system will use a gatekeeper to classify content, route to appropriate LLM paths, flag it, and apply user/provider-based display rules. This is critical for roleplay-heavy users who need fallbacks when safe providers balk.

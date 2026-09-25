@@ -21,7 +21,7 @@ import {
   buildTurnTranscript,
   resolveUserCharacterParticipant,
 } from '@/lib/services/chat-message/turn-transcript';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -232,11 +232,11 @@ export async function handleExtractMemoriesDryRun(
   }
 
   const availableProfiles = await repos.connections.findByUserId(user.id);
-  // Pass the chat so an Off-duty override collapses dangerSettings to OFF, and
-  // derive the dangerous flag through the canonical accessor — otherwise an
-  // off-duty flagged chat would still reroute memory extraction to the
-  // uncensored provider, ignoring the operator's opt-out.
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
+  // Pass the chat so its Concierge state shapes the policy (only an
+  // Unmoderated chat routes direct), and derive the dangerous flag through the
+  // canonical accessor — otherwise a flagged Moderated or Locked chat would
+  // still reroute memory extraction to the uncensored provider.
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
   const isDangerousChat = shouldUseUncensoredRoute(chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
@@ -318,7 +318,7 @@ export async function handleExtractMemoriesDryRun(
               connectionProfile,
               cheapLLMSettings: chatSettings.cheapLLMSettings,
               availableProfiles,
-              dangerSettings,
+              conciergePolicy,
               isDangerousChat,
               memoryExtractionLimits,
               timelineMode: chat.timelineMode ?? 'realtime',

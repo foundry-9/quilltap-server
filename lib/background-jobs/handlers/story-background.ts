@@ -35,7 +35,7 @@ import {
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
 import {
-  resolveDangerousContentSettings,
+  resolveConciergeSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import {
   generateImageWithConciergeFailover,
@@ -185,8 +185,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
 
   // 6. Get cheap LLM selection for prompt crafting. The standard cheap LLM
-  // makes the initial attempt at story backgrounds (imagePromptProfileId is
-  // used as a retry fallback if the safe provider returns empty).
+  // makes the initial attempt at story backgrounds (the Concierge desk's
+  // imagePromptProfileId is used as a retry fallback if the safe provider returns empty).
   const resolvedCheapLLM = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);
 
   if (!resolvedCheapLLM) {
@@ -200,29 +200,36 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   const { allProfiles } = resolvedCheapLLM;
   let cheapLLMSelection: CheapLLMSelection | null = resolvedCheapLLM.selection;
 
-  // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
-  const dangerSettings = dangerousContentResolved.settings;
+  // Resolve the Concierge policy early (needed for uncensored routing and appearance sanitization)
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
   const isDangerousChat = shouldUseUncensoredRoute(chat);
-  const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
+  const hasUncensoredImageProvider = Boolean(conciergePolicy.desk.imageProfileId);
   // A dangerous-marked chat with an uncensored image profile configured is
   // already headed for a provider that accepts adult content — appearance
   // sanitization steps aside for exactly this case (see
   // `sanitizeAppearancesIfNeeded`), so the prompt crafter should too rather
   // than draping a sheet over a scene nobody asked to have covered.
   //
-  // Only under Auto-Route: a candid prompt is never crafted for a route that
-  // cannot reroute, or an uncensored-route chat under Detect Only would send its franker
-  // prompt straight to the moderated provider.
+  // Only when the policy routes direct (on duty and Unmoderated): a candid
+  // prompt is never crafted for a chat the Concierge will not send to the
+  // uncensored desk, or its franker prompt would go straight to the moderated
+  // provider.
   const uncensoredImageTarget =
-    isDangerousChat && hasUncensoredImageProvider && dangerSettings.mode === 'AUTO_ROUTE';
+    isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect;
+  logger.debug('[StoryBackground] Concierge policy resolved', {
+    context: 'background-jobs.story-background',
+    jobId: job.id,
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    uncensoredImageTarget,
+  });
 
   // For dangerous chats, use uncensored provider for all cheap LLM tasks
   if (isDangerousChat) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection!,
       true,
-      dangerSettings,
+      conciergePolicy,
       allProfiles
     );
   }
@@ -269,7 +276,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   // Build uncensored LLM selection once (used for appearance resolution and prompt crafting)
   let uncensoredLLMSelection: CheapLLMSelection | null = null;
-  const uncensoredProfileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
+  const uncensoredProfileId = conciergePolicy.desk.imagePromptProfileId;
   if (uncensoredProfileId) {
     const uncensoredProfile = allProfiles.find(p => p.id === uncensoredProfileId);
     if (uncensoredProfile) {
@@ -407,7 +414,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     try {
       resolvedAppearances = await sanitizeAppearancesIfNeeded(
         resolvedAppearances,
-        dangerSettings,
+        conciergePolicy,
         isDangerousChat,
         // Story backgrounds never route up front — only `uncensoredImageTarget`
         // scenes actually reach the uncensored provider (bug 133).
@@ -613,8 +620,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   // 10. Generate the image — through the Concierge's failover chokepoint.
   //
-  // A refusal is retried once on an uncensored understudy under Auto-Route,
-  // in any chat that is not Locked (the chokepoint asks `mayFailOver`). The
+  // A refusal is retried once on an uncensored understudy while the Concierge
+  // is on duty, in any chat that is not Locked (the chokepoint asks
+  // `failoverAllowed` against the current state). The
   // old gate (bug 133) barred that for a chat still Monitored (now Moderated), on the ground that a refusal should not "promote" the chat.
   // That concern belongs to the chat *switch*, not to a retry that resends the
   // same prompt to a provider that will take it: the prompt is never
@@ -687,7 +695,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     failover = await generateImageWithConciergeFailover(
       { profile: imageProfile, apiKey: apiKey.key_value },
       attemptBackground,
-      { userId: job.userId, chatId: payload.chatId, purpose: 'lantern', settings: dangerSettings, chat },
+      { userId: job.userId, chatId: payload.chatId, purpose: 'lantern', conciergePolicy, chat },
     );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
@@ -698,7 +706,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       error: errorMessage,
       isDangerousChat,
       hasUncensoredImageProvider,
-      dangerMode: dangerSettings.mode,
+      conciergeSource: conciergePolicy.source,
       conciergeTrail: trail?.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
     }, error as Error);
     throw new Error(

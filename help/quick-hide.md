@@ -156,7 +156,7 @@ Further particulars:
 - Works independently of tag-based hiding
 - Your preference is saved across sessions
 
-See [Dangerous Content Handling](dangerous-content.md) for more information about how chats are classified.
+See [The Concierge](the-concierge.md) for more information about how a chat comes to be Unmoderated.
 
 ### Salon Images
 

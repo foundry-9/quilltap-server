@@ -4,8 +4,8 @@
  * Two kinds of failover, both landing in the same `StreamingState`:
  *
  *  - **Empty response** — the call succeeded and produced nothing. Retry the
- *    same provider once (usually transient), then, in Concierge Auto-Route
- *    territory, the uncensored profile, then the profile's own fallback chain.
+ *    same provider once (usually transient), then, when the Concierge policy
+ *    allows failover, the uncensored profile, then the profile's own fallback chain.
  *  - **Hard error** — the call did not succeed at all (auth, rate limit,
  *    network, missing model, 5xx). Walk the profile's fallback chain.
  *
@@ -39,7 +39,7 @@ import {
   type FallbackRepos,
 } from '@/lib/llm/fallback'
 import type { ConnectionProfile, Character } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 
 /**
  * Reads only. `findApiKeyById` is needed on top of the engine's own surface
@@ -90,10 +90,10 @@ export interface AttemptEmptyResponseRecoveryOptions {
   state: StreamingState
   toolMessagesLength: number
   contentWasFlaggedDangerous: boolean
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   /**
    * The chat's Concierge state when the turn began. A Locked chat never
-   * reroutes a refusal to the uncensored desk, whatever the mode says. The
+   * reroutes a refusal to the uncensored desk, whatever the policy says. The
    * chat is re-read at refusal time; this is used only if that read fails.
    * Absent reads as Moderated.
    */
@@ -149,7 +149,7 @@ export async function attemptEmptyResponseRecovery({
   state,
   toolMessagesLength,
   contentWasFlaggedDangerous,
-  dangerSettings,
+  conciergePolicy,
   conciergeState,
   formattedMessages,
   modelParams,
@@ -298,10 +298,10 @@ export async function attemptEmptyResponseRecovery({
     })
   }
 
-  if (state.fullResponse.trim().length === 0 && !lockedOut && dangerSettings.mode === 'AUTO_ROUTE') {
+  if (state.fullResponse.trim().length === 0 && !lockedOut && conciergePolicy.failoverAllowed) {
     const uncensored = await attemptUncensoredRetry({
       state,
-      dangerSettings,
+      conciergePolicy,
       formattedMessages,
       modelParams,
       actualTools,
@@ -375,7 +375,7 @@ export async function attemptEmptyResponseRecovery({
 
 export interface AttemptUncensoredRetryOptions {
   state: StreamingState
-  dangerSettings: DangerousContentSettings
+  conciergePolicy: ResolvedConciergePolicy
   formattedMessages: AttemptEmptyResponseRecoveryOptions['formattedMessages']
   modelParams: Record<string, unknown>
   actualTools: unknown[]
@@ -420,7 +420,8 @@ export interface UncensoredRetryResult {
  * Ask the Concierge's uncensored understudy to take a turn the effective
  * profile refused or left empty.
  *
- * The *policy* — Auto-Route only — is the caller's, stated at its call site.
+ * The *policy* — `conciergePolicy.failoverAllowed` only — is the caller's,
+ * stated at its call site.
  * This function asks `resolveUncensoredTextUnderstudy` (the configured
  * uncensored profile, else any `isDangerousCompatible` one), excluding every
  * profile already tried, streams one attempt, and records the outcome on the
@@ -431,14 +432,14 @@ export async function attemptUncensoredRetry(
   opts: AttemptUncensoredRetryOptions
 ): Promise<UncensoredRetryResult> {
   const {
-    state, dangerSettings, formattedMessages, modelParams, actualTools, useNativeWebSearch,
+    state, conciergePolicy, formattedMessages, modelParams, actualTools, useNativeWebSearch,
     userId, chatId, character, controller, encoder, preGeneratedAssistantMessageId, repos,
     alreadyTried, contentWasFlaggedDangerous, refusalWasStated, substitute, stop,
   } = opts
 
   const understudy = await resolveUncensoredTextUnderstudy({
     userId,
-    settings: dangerSettings,
+    conciergePolicy,
     exclude: [...alreadyTried, state.effectiveProfile.id],
     // What the array is actually carrying, so the scan does not offer a
     // substitute the payload rules out (bug 106).
@@ -609,7 +610,7 @@ export function getEmptyResponseReason({
   }
 
   if (contentWasFlaggedDangerous) {
-    return `The AI model returned an empty response, likely because the Concierge flagged this content as dangerous and the provider refused to generate a response. Consider enabling Auto-Route mode in the Concierge settings to automatically reroute dangerous content to an uncensored provider.${understudyRoll}`
+    return `The AI model returned an empty response, likely because the Concierge flagged this content as dangerous and the provider refused to generate a response. Consider configuring an uncensored text profile in the Concierge settings so refused content can be rerouted to an uncensored provider.${understudyRoll}`
   }
 
   if (sameProviderRetryAttempted) {
@@ -916,14 +917,14 @@ export interface AttemptHardErrorFailoverOptions extends WalkFallbackChainOption
   /** The error that ended the primary attempt. */
   error: unknown
   /**
-   * The Concierge settings for this chat. When the error is a content refusal
-   * and the mode is Auto-Route, the uncensored understudy is tried before the
-   * chain. Absent means no uncensored retry.
+   * The Concierge policy for this chat. When the error is a content refusal
+   * and the policy allows failover, the uncensored understudy is tried before
+   * the chain. Absent means no uncensored retry.
    */
-  dangerSettings?: DangerousContentSettings
+  conciergePolicy?: ResolvedConciergePolicy
   /**
    * The chat's Concierge state when the turn began. A Locked chat never
-   * reroutes a refusal to the uncensored desk, whatever the mode says. The
+   * reroutes a refusal to the uncensored desk, whatever the policy says. The
    * chat is re-read at refusal time; this is used only if that read fails.
    * Absent reads as Moderated.
    */
@@ -1001,7 +1002,7 @@ export async function attemptHardErrorFailover(
 
     const alreadyTried = [...context.alreadyTried]
     // The caller's gate, stated here: a Locked chat's refusal stands, and
-    // otherwise the Concierge reroutes under Auto-Route only.
+    // otherwise the Concierge reroutes only when his policy allows failover.
     // Read at refusal time, not when the turn began.
     if (!conciergeStateMayFailOver(await readCurrentConciergeState(chatId, opts.conciergeState))) {
       logger.info('[Failover] Refusal not rerouted to an uncensored profile: the chat is Locked', { chatId })
@@ -1018,10 +1019,10 @@ export async function attemptHardErrorFailover(
       await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
       return walkFallbackChain(opts, openingAttempt)
     }
-    if (opts.dangerSettings?.mode === 'AUTO_ROUTE') {
+    if (opts.conciergePolicy?.failoverAllowed) {
       const uncensored = await attemptUncensoredRetry({
         state,
-        dangerSettings: opts.dangerSettings,
+        conciergePolicy: opts.conciergePolicy,
         formattedMessages: opts.formattedMessages,
         modelParams: opts.modelParams,
         actualTools: opts.actualTools,
@@ -1061,9 +1062,10 @@ export async function attemptHardErrorFailover(
       )
     }
 
-    logger.info('[Failover] Refusal not rerouted to an uncensored profile: the Concierge mode does not permit it', {
+    logger.info('[Failover] Refusal not rerouted to an uncensored profile: the Concierge policy does not permit it', {
       chatId,
-      mode: opts.dangerSettings?.mode,
+      conciergeSource: opts.conciergePolicy?.source,
+      conciergeState: opts.conciergePolicy?.state,
     })
     await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
     return walkFallbackChain(opts, openingAttempt)
@@ -1082,7 +1084,7 @@ export async function attemptHardErrorFailover(
  * Walk the effective profile's fallback chain after an *empty* response.
  *
  * Runs last in the empty-response order — after the same-profile retry and,
- * in Auto-Route territory, after the uncensored reroute. Those two come first
+ * when the Concierge allows failover, after the uncensored reroute. Those two come first
  * on purpose: an empty body is usually transient, and when it isn't it is
  * usually a refusal, which is a content problem the uncensored profile exists
  * to answer. Only once both have come back empty is it worth concluding the

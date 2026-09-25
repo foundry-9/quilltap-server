@@ -16,7 +16,7 @@ import {
   type CheapLLMSelection,
 } from '@/lib/llm/cheap-llm'
 import type { ConnectionProfile, Provider } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 
 // Helper to create a mock connection profile
 function createMockProfile(
@@ -444,35 +444,28 @@ describe('Cheap LLM Provider Selection', () => {
     // Add isDangerousCompatible to the uncensored profile
     ;(uncensoredProfile as any).isDangerousCompatible = true
 
-    const dangerSettingsAutoRoute: DangerousContentSettings = {
-      mode: 'AUTO_ROUTE',
-      scanTextChat: true,
-      scanImagePrompts: false,
-      scanImageGeneration: false,
-      uncensoredTextProfileId: 'uncensored-profile',
-      uncensoredImageProfileId: null,
-    } as DangerousContentSettings
-
-    const dangerSettingsOff: DangerousContentSettings = {
-      mode: 'OFF',
-      scanTextChat: false,
-      scanImagePrompts: false,
-      scanImageGeneration: false,
-      uncensoredTextProfileId: null,
-      uncensoredImageProfileId: null,
-    } as DangerousContentSettings
+    const unmoderatedPolicy = (uncensoredTextProfileId: string | null) =>
+      resolveConciergeSettings(
+        { conciergeSettings: { enabled: true, uncensoredTextProfileId } } as any,
+        { conciergeMode: 'unmoderated' },
+      )
+    const unmoderatedWithProfile = unmoderatedPolicy('uncensored-profile')
+    const offDutyPolicy = resolveConciergeSettings(
+      { conciergeSettings: { enabled: false, uncensoredTextProfileId: 'uncensored-profile' } } as any,
+      { conciergeMode: 'unmoderated' },
+    )
 
     it('should return standard selection when chat is not dangerous', () => {
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
         false,
-        dangerSettingsAutoRoute,
+        unmoderatedWithProfile,
         [uncensoredProfile]
       )
       expect(result).toBe(standardSelection)
     })
 
-    it('should return standard selection when danger settings are undefined', () => {
+    it('should return standard selection when the Concierge policy is undefined', () => {
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
         true,
@@ -482,11 +475,11 @@ describe('Cheap LLM Provider Selection', () => {
       expect(result).toBe(standardSelection)
     })
 
-    it('should return standard selection when mode is OFF', () => {
+    it('should return standard selection when the Concierge is off duty', () => {
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
         true,
-        dangerSettingsOff,
+        offDutyPolicy,
         [uncensoredProfile]
       )
       expect(result).toBe(standardSelection)
@@ -496,7 +489,7 @@ describe('Cheap LLM Provider Selection', () => {
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
         true,
-        dangerSettingsAutoRoute,
+        unmoderatedWithProfile,
         [uncensoredProfile]
       )
       expect(result.provider).toBe('DEEPSEEK')
@@ -505,10 +498,7 @@ describe('Cheap LLM Provider Selection', () => {
     })
 
     it('should find any isDangerousCompatible profile when no uncensored text profile is configured', () => {
-      const settingsWithoutProfile = {
-        ...dangerSettingsAutoRoute,
-        uncensoredTextProfileId: null,
-      } as DangerousContentSettings
+      const settingsWithoutProfile = unmoderatedPolicy(null)
 
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
@@ -521,10 +511,7 @@ describe('Cheap LLM Provider Selection', () => {
     })
 
     it('should return standard selection when no uncensored profiles exist (fail-open)', () => {
-      const settingsWithoutProfile = {
-        ...dangerSettingsAutoRoute,
-        uncensoredTextProfileId: null,
-      } as DangerousContentSettings
+      const settingsWithoutProfile = unmoderatedPolicy(null)
 
       const standardProfile = createMockProfile('standard-profile', 'OPENAI', 'gpt-4o-mini')
 
@@ -543,27 +530,27 @@ describe('Cheap LLM Provider Selection', () => {
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
         true,
-        dangerSettingsAutoRoute,
+        unmoderatedWithProfile,
         [standardProfile] // uncensored-profile not in list
       )
       // Falls through to isDangerousCompatible scan, but standardProfile doesn't have it
       expect(result).toBe(standardSelection)
     })
 
-    it('should work with WARN mode (not just AUTO_ROUTE)', () => {
-      const warnSettings = {
-        ...dangerSettingsAutoRoute,
-        mode: 'WARN' as const,
-      } as DangerousContentSettings
+    it('should return standard selection for a Moderated chat (the policy does not route direct)', () => {
+      const moderated = resolveConciergeSettings(
+        { conciergeSettings: { enabled: true, uncensoredTextProfileId: 'uncensored-profile' } } as any,
+        { conciergeMode: 'moderated' },
+      )
 
       const result = resolveUncensoredCheapLLMSelection(
         standardSelection,
         true,
-        warnSettings,
+        moderated,
         [uncensoredProfile]
       )
-      // WARN mode is not OFF, so it should still route to uncensored
-      expect(result.provider).toBe('DEEPSEEK')
+      expect(moderated.routeDirect).toBe(false)
+      expect(result).toBe(standardSelection)
     })
   })
 })

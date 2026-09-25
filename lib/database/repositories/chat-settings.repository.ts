@@ -7,6 +7,7 @@
 
 import { logger } from '@/lib/logger';
 import { ChatSettings, ChatSettingsSchema } from '@/lib/schemas/types';
+import { DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
 
@@ -218,16 +219,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
               enabled: false,
               defaultImageProfileId: null,
             },
-            dangerousContentSettings: {
-              mode: 'OFF',
-              threshold: 0.7,
-              scanTextChat: true,
-              scanImagePrompts: true,
-              scanImageGeneration: false,
-              displayMode: 'SHOW',
-              showWarningBadges: true,
-              autoSwitchAfterRefusals: 2,
-            },
+            conciergeSettings: DEFAULT_CONCIERGE_SETTINGS,
             autoLockSettings: {
               enabled: false,
               idleMinutes: 15,

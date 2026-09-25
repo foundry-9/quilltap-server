@@ -40,7 +40,7 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({ settings: { mode: 'OFF' } })),
+  resolveConciergeSettings: jest.fn(() => ({ routeDirect: false, source: 'off-duty' })),
 }))
 
 jest.mock('@/lib/services/system-events.service', () => ({

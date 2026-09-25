@@ -1,6 +1,6 @@
 /**
  * generateImageWithConciergeFailover — the one image failover chokepoint.
- * Detection, the Auto-Route gate, understudy resolution, the trail and the
+ * Detection, the Concierge-policy gate, understudy resolution, the trail and the
  * Concierge's announcement; the call itself is the caller's closure.
  */
 
@@ -29,7 +29,10 @@ import {
   generateImageWithConciergeFailover,
   getConciergeTrail,
 } from '@/lib/services/dangerous-content/image-failover'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import {
+  DEFAULT_CONCIERGE_SETTINGS,
+  resolveConciergeSettings,
+} from '@/lib/services/dangerous-content/resolver.service'
 import type { ImageProfile } from '@/lib/schemas/types'
 
 const mockResolve = jest.mocked(resolveUncensoredImageUnderstudy)
@@ -49,12 +52,17 @@ const UNDERSTUDY = {
   modelName: 'grok-2-image',
 } as unknown as ImageProfile
 
-const settings = (mode: DangerousContentSettings['mode']) => ({ mode } as DangerousContentSettings)
-const ctx = (mode: DangerousContentSettings['mode'] = 'AUTO_ROUTE') => ({
+type Duty = 'on-duty' | 'off-duty' | 'locked-snapshot'
+const policy = (duty: Duty) =>
+  resolveConciergeSettings(
+    { conciergeSettings: { ...DEFAULT_CONCIERGE_SETTINGS, enabled: duty !== 'off-duty' } },
+    duty === 'locked-snapshot' ? { conciergeMode: 'locked' } : undefined,
+  )
+const ctx = (duty: Duty = 'on-duty') => ({
   userId: 'user-1',
   chatId: 'chat-1',
   purpose: 'tool' as const,
-  settings: settings(mode),
+  conciergePolicy: policy(duty),
 })
 
 const refusal = () => Object.assign(new Error('Gemini image blocked'), {
@@ -77,10 +85,10 @@ describe('generateImageWithConciergeFailover', () => {
     expect(mockAnnounce).not.toHaveBeenCalled()
   })
 
-  it('refused under DETECT_ONLY → refusal-not-permitted, rethrow with trail', async () => {
+  it('refused while the Concierge is off duty → no announcement, rethrow with trail', async () => {
     const err = refusal()
     const attempt = jest.fn(async () => { throw err })
-    await expect(generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, ctx('DETECT_ONLY')))
+    await expect(generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, ctx('off-duty')))
       .rejects.toBe(err)
     expect(getConciergeTrail(err)).toEqual([
       expect.objectContaining({
@@ -89,17 +97,18 @@ describe('generateImageWithConciergeFailover', () => {
       }),
     ])
     expect(mockResolve).not.toHaveBeenCalled()
-    expect(mockAnnounce).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-not-permitted', chatId: 'chat-1' }))
+    // Off duty means the Concierge does nothing at all, announcements included.
+    expect(mockAnnounce).not.toHaveBeenCalled()
   })
 
   it('refused on a Locked chat → refusal-not-permitted (reason locked), never resolves an understudy', async () => {
     const err = refusal()
     const attempt = jest.fn(async () => { throw err })
-    // Even with Auto-Route in the settings, Locked wins.
+    // Even with the Concierge on duty, Locked wins.
     await expect(generateImageWithConciergeFailover(
       { profile: PRIMARY, apiKey: 'k' },
       attempt,
-      { ...ctx('AUTO_ROUTE'), chat: { conciergeMode: 'locked' } },
+      { ...ctx(), chat: { conciergeMode: 'locked' } },
     )).rejects.toBe(err)
     expect(attempt).toHaveBeenCalledTimes(1)
     expect(mockResolve).not.toHaveBeenCalled()
@@ -117,7 +126,7 @@ describe('generateImageWithConciergeFailover', () => {
     await expect(generateImageWithConciergeFailover(
       { profile: PRIMARY, apiKey: 'k' },
       jest.fn(async () => { throw err }),
-      { ...ctx('AUTO_ROUTE'), chat: { conciergeMode: 'moderated' } },
+      { ...ctx(), chat: { conciergeMode: 'moderated' } },
     )).rejects.toBe(err)
     expect(readCurrentConciergeState).toHaveBeenCalledWith('chat-1', 'moderated')
     expect(mockResolve).not.toHaveBeenCalled()
@@ -125,6 +134,20 @@ describe('generateImageWithConciergeFailover', () => {
       kind: 'refusal-not-permitted',
       details: expect.objectContaining({ reason: 'locked' }),
     }))
+  })
+
+  it('a chat unlocked while the provider was thinking fails over, though its snapshot policy was Locked', async () => {
+    jest.mocked(readCurrentConciergeState).mockResolvedValueOnce('moderated')
+    const attempt = jest.fn(async (profile: ImageProfile) => {
+      if (profile.id === PRIMARY.id) throw refusal()
+      return 'picture'
+    })
+    const outcome = await generateImageWithConciergeFailover(
+      { profile: PRIMARY, apiKey: 'k' },
+      attempt,
+      { ...ctx('locked-snapshot'), chat: { conciergeMode: 'locked' } },
+    )
+    expect(outcome.rerouted).toBe(true)
   })
 
   it('refused on an Unmoderated chat still asks another uncensored understudy', async () => {
@@ -135,7 +158,7 @@ describe('generateImageWithConciergeFailover', () => {
     const outcome = await generateImageWithConciergeFailover(
       { profile: PRIMARY, apiKey: 'k' },
       attempt,
-      { ...ctx('AUTO_ROUTE'), chat: { conciergeMode: 'unmoderated' } },
+      { ...ctx(), chat: { conciergeMode: 'unmoderated' } },
     )
     expect(outcome.rerouted).toBe(true)
   })
@@ -266,7 +289,7 @@ describe('generateImageWithConciergeFailover', () => {
     })
 
     it.each([
-      ['not permitted', () => ctx('DETECT_ONLY'), () => undefined],
+      ['not permitted', () => ctx('off-duty'), () => undefined],
       ['no understudy', () => ctx(), () => mockResolve.mockResolvedValue(null as never)],
     ])('records the refusal when %s', async (_label, makeCtx, arrange) => {
       arrange()

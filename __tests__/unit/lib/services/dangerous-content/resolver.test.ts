@@ -1,313 +1,299 @@
 /**
  * Tests for lib/services/dangerous-content/resolver.service.ts
+ *
+ * `resolveConciergeSettings` turns the global `conciergeSettings` and one
+ * chat's Concierge state into the effective policy (Concierge overhaul
+ * phase 4, §4).
  */
 
 import {
-  DEFAULT_DANGEROUS_CONTENT_SETTINGS,
-  LOCKED_DANGEROUS_CONTENT_SETTINGS,
-  resolveDangerousContentSettings,
+  DEFAULT_AUTO_SWITCH_AFTER_REFUSALS,
+  DEFAULT_CONCIERGE_SETTINGS,
+  readConciergeSettings,
+  resolveConciergeSettings,
+  type ResolvedConciergePolicy,
 } from '@/lib/services/dangerous-content/resolver.service'
 import type { ChatSettings } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ConciergeSettings } from '@/lib/schemas/settings.types'
 
-describe('DEFAULT_DANGEROUS_CONTENT_SETTINGS', () => {
-  it('has mode OFF', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.mode).toBe('OFF')
+const TEXT_ID = '11111111-1111-4111-8111-111111111111'
+const IMAGE_ID = '22222222-2222-4222-8222-222222222222'
+const VISION_ID = '33333333-3333-4333-8333-333333333333'
+const PROMPT_ID = '44444444-4444-4444-8444-444444444444'
+
+function concierge(overrides: Partial<ConciergeSettings> = {}): ConciergeSettings {
+  return {
+    ...DEFAULT_CONCIERGE_SETTINGS,
+    uncensoredTextProfileId: TEXT_ID,
+    uncensoredImageProfileId: IMAGE_ID,
+    uncensoredVisionProfileId: VISION_ID,
+    imagePromptProfileId: PROMPT_ID,
+    autoSwitchAfterRefusals: 3,
+    ...overrides,
+    display: { ...DEFAULT_CONCIERGE_SETTINGS.display, ...(overrides.display ?? {}) },
+    preScreen: {
+      ...DEFAULT_CONCIERGE_SETTINGS.preScreen,
+      enabled: true,
+      threshold: 0.55,
+      scanTextChat: true,
+      scanImagePrompts: false,
+      scanImageGeneration: true,
+      customClassificationPrompt: 'Be strict about gore.',
+      summaryClassification: true,
+      ...(overrides.preScreen ?? {}),
+    },
+  }
+}
+
+function global(settings: ConciergeSettings | undefined): Pick<ChatSettings, 'conciergeSettings'> {
+  return { conciergeSettings: settings } as Pick<ChatSettings, 'conciergeSettings'>
+}
+
+const moderated = { conciergeMode: 'moderated' as const, chatType: 'salon' }
+const unmoderated = { conciergeMode: 'unmoderated' as const, chatType: 'salon' }
+const locked = { conciergeMode: 'locked' as const, chatType: 'salon' }
+
+function expectNothingAllowed(policy: ResolvedConciergePolicy): void {
+  expect(policy.onDuty).toBe(false)
+  expect(policy.failoverAllowed).toBe(false)
+  expect(policy.routeDirect).toBe(false)
+  expect(policy.preScreen.enabled).toBe(false)
+  expect(policy.preScreen.scanTextChat).toBe(false)
+  expect(policy.preScreen.scanImagePrompts).toBe(false)
+  expect(policy.preScreen.scanImageGeneration).toBe(false)
+  expect(policy.summaryClassification).toBe(false)
+  expect(policy.autoSwitchAfterRefusals).toBe(0)
+  expect(policy.desk).toEqual({
+    textProfileId: null,
+    imageProfileId: null,
+    visionProfileId: null,
+    imagePromptProfileId: null,
+  })
+  expect(policy.display.showWarningBadges).toBe(false)
+}
+
+describe('DEFAULT_CONCIERGE_SETTINGS', () => {
+  it('is on duty with the pre-screen and summary classifier off', () => {
+    expect(DEFAULT_CONCIERGE_SETTINGS.enabled).toBe(true)
+    expect(DEFAULT_CONCIERGE_SETTINGS.preScreen.enabled).toBe(false)
+    expect(DEFAULT_CONCIERGE_SETTINGS.preScreen.summaryClassification).toBe(false)
+    expect(DEFAULT_CONCIERGE_SETTINGS.preScreen.threshold).toBe(0.7)
   })
 
-  it('has threshold 0.7', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.threshold).toBe(0.7)
+  it('switches after the default number of refusals and starts chats Moderated', () => {
+    expect(DEFAULT_CONCIERGE_SETTINGS.autoSwitchAfterRefusals).toBe(DEFAULT_AUTO_SWITCH_AFTER_REFUSALS)
+    expect(DEFAULT_AUTO_SWITCH_AFTER_REFUSALS).toBe(2)
+    expect(DEFAULT_CONCIERGE_SETTINGS.newChatsStartAs).toBe('moderated')
   })
 
-  it('has scanTextChat true', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.scanTextChat).toBe(true)
-  })
-
-  it('has scanImagePrompts true', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.scanImagePrompts).toBe(true)
-  })
-
-  it('has scanImageGeneration false', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.scanImageGeneration).toBe(false)
-  })
-
-  it('has displayMode SHOW', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.displayMode).toBe('SHOW')
-  })
-
-  it('has showWarningBadges true', () => {
-    expect(DEFAULT_DANGEROUS_CONTENT_SETTINGS.showWarningBadges).toBe(true)
+  it('shows content with warning badges', () => {
+    expect(DEFAULT_CONCIERGE_SETTINGS.display).toEqual({ mode: 'SHOW', showWarningBadges: true })
   })
 })
 
-describe('resolveDangerousContentSettings', () => {
-  describe('null globalSettings', () => {
-    it('returns defaults when globalSettings is null', () => {
-      const result = resolveDangerousContentSettings(null)
-      expect(result.settings).toEqual(DEFAULT_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('default')
+describe('readConciergeSettings', () => {
+  it('returns the defaults when there is no settings row', () => {
+    expect(readConciergeSettings(null)).toEqual(DEFAULT_CONCIERGE_SETTINGS)
+    expect(readConciergeSettings(undefined)).toEqual(DEFAULT_CONCIERGE_SETTINGS)
+  })
+
+  it('returns the defaults when conciergeSettings is missing', () => {
+    expect(readConciergeSettings(global(undefined))).toEqual(DEFAULT_CONCIERGE_SETTINGS)
+  })
+
+  it('fills gaps in nested objects from the defaults', () => {
+    const partial = {
+      enabled: false,
+      preScreen: { enabled: true },
+      display: { mode: 'BLUR' },
+    } as unknown as ConciergeSettings
+    const read = readConciergeSettings(global(partial))
+    expect(read.enabled).toBe(false)
+    expect(read.preScreen.enabled).toBe(true)
+    expect(read.preScreen.threshold).toBe(0.7)
+    expect(read.preScreen.scanTextChat).toBe(true)
+    expect(read.display.mode).toBe('BLUR')
+    expect(read.display.showWarningBadges).toBe(true)
+    expect(read.autoSwitchAfterRefusals).toBe(2)
+  })
+})
+
+describe('resolveConciergeSettings', () => {
+  describe('enabled: false (off duty)', () => {
+    it('allows nothing anywhere, with or without a chat', () => {
+      const settings = global(concierge({ enabled: false }))
+      for (const chat of [undefined, moderated, unmoderated, locked]) {
+        const policy = resolveConciergeSettings(settings, chat)
+        expectNothingAllowed(policy)
+        expect(policy.source).toBe('off-duty')
+      }
+    })
+
+    it('still reports the state and newChatsStartAs', () => {
+      const policy = resolveConciergeSettings(
+        global(concierge({ enabled: false, newChatsStartAs: 'unmoderated' })),
+        unmoderated,
+      )
+      expect(policy.state).toBe('unmoderated')
+      expect(policy.newChatsStartAs).toBe('unmoderated')
     })
   })
 
-  describe('missing dangerousContentSettings', () => {
-    it('returns defaults when globalSettings has no dangerousContentSettings', () => {
-      const globalSettings: ChatSettings = {
-        id: 'test',
-        tokenDisplay: 'minimal',
-        contextCompression: false,
-        memoryCascade: false,
-        showTimestamps: false,
-        agentMode: false,
-      }
-      const result = resolveDangerousContentSettings(globalSettings)
-      expect(result.settings).toEqual(DEFAULT_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('default')
+  describe('Locked', () => {
+    it('allows no failover, no pre-screen, no auto-switch, and empties the desk', () => {
+      const policy = resolveConciergeSettings(global(concierge()), locked)
+      expect(policy.onDuty).toBe(true)
+      expect(policy.state).toBe('locked')
+      expect(policy.failoverAllowed).toBe(false)
+      expect(policy.routeDirect).toBe(false)
+      expect(policy.preScreen.enabled).toBe(false)
+      expect(policy.summaryClassification).toBe(false)
+      expect(policy.autoSwitchAfterRefusals).toBe(0)
+      expect(policy.desk).toEqual({
+        textProfileId: null,
+        imageProfileId: null,
+        visionProfileId: null,
+        imagePromptProfileId: null,
+      })
+      expect(policy.source).toBe('chat-locked')
     })
 
-    it('returns defaults when globalSettings is empty object (cast)', () => {
-      const globalSettings = {} as ChatSettings
-      const result = resolveDangerousContentSettings(globalSettings)
-      expect(result.settings).toEqual(DEFAULT_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('default')
+    it('keeps the global display settings', () => {
+      const policy = resolveConciergeSettings(
+        global(concierge({ display: { mode: 'COLLAPSE', showWarningBadges: true } })),
+        locked,
+      )
+      expect(policy.display).toEqual({ mode: 'COLLAPSE', showWarningBadges: true })
     })
   })
 
-  describe('global settings present', () => {
-    it('returns global settings when present, source is "global"', () => {
-      const customSettings: DangerousContentSettings = {
-        mode: 'BLOCK',
-        threshold: 0.5,
-        scanTextChat: false,
-        scanImagePrompts: false,
-        scanImageGeneration: true,
-        displayMode: 'HIDE',
-        showWarningBadges: false,
-      }
-      const globalSettings: ChatSettings = {
-        id: 'test',
-        tokenDisplay: 'minimal',
-        contextCompression: false,
-        memoryCascade: false,
-        showTimestamps: false,
-        agentMode: false,
-        dangerousContentSettings: customSettings,
-      }
-      const result = resolveDangerousContentSettings(globalSettings)
-      expect(result.settings).toEqual(customSettings)
-      expect(result.source).toBe('global')
+  describe('Unmoderated', () => {
+    it('routes direct, keeps failover as a safety net, and never pre-screens or auto-switches', () => {
+      const policy = resolveConciergeSettings(global(concierge()), unmoderated)
+      expect(policy.onDuty).toBe(true)
+      expect(policy.state).toBe('unmoderated')
+      expect(policy.routeDirect).toBe(true)
+      expect(policy.failoverAllowed).toBe(true)
+      expect(policy.preScreen.enabled).toBe(false)
+      expect(policy.preScreen.scanTextChat).toBe(false)
+      expect(policy.summaryClassification).toBe(false)
+      expect(policy.autoSwitchAfterRefusals).toBe(0)
+      expect(policy.source).toBe('chat-unmoderated')
     })
 
-    it('returns global settings with different values', () => {
-      const customSettings: DangerousContentSettings = {
-        mode: 'WARN',
-        threshold: 0.9,
+    it('stands the configured desk behind the chat', () => {
+      const policy = resolveConciergeSettings(global(concierge()), unmoderated)
+      expect(policy.desk).toEqual({
+        textProfileId: TEXT_ID,
+        imageProfileId: IMAGE_ID,
+        visionProfileId: VISION_ID,
+        imagePromptProfileId: PROMPT_ID,
+      })
+    })
+
+    it('hides warning badges', () => {
+      const policy = resolveConciergeSettings(global(concierge()), unmoderated)
+      expect(policy.display.showWarningBadges).toBe(false)
+    })
+  })
+
+  describe('Moderated', () => {
+    it('uses the global values', () => {
+      const policy = resolveConciergeSettings(global(concierge()), moderated)
+      expect(policy.onDuty).toBe(true)
+      expect(policy.state).toBe('moderated')
+      expect(policy.failoverAllowed).toBe(true)
+      expect(policy.routeDirect).toBe(false)
+      expect(policy.preScreen).toEqual({
+        enabled: true,
+        threshold: 0.55,
         scanTextChat: true,
         scanImagePrompts: false,
         scanImageGeneration: true,
-        displayMode: 'BLUR',
-        showWarningBadges: false,
-      }
-      const globalSettings: ChatSettings = {
-        id: 'test',
-        tokenDisplay: 'full',
-        contextCompression: true,
-        memoryCascade: true,
-        showTimestamps: true,
-        agentMode: true,
-        dangerousContentSettings: customSettings,
-      }
-      const result = resolveDangerousContentSettings(globalSettings)
-      expect(result.settings).toEqual(customSettings)
-      expect(result.source).toBe('global')
-    })
-  })
-
-  describe('return structure', () => {
-    it('always returns object with settings and source properties', () => {
-      const result = resolveDangerousContentSettings(null)
-      expect(result).toHaveProperty('settings')
-      expect(result).toHaveProperty('source')
-      expect(Object.keys(result).length).toBe(2)
-    })
-  })
-
-  describe('per-chat Locked state', () => {
-    const customSettings: DangerousContentSettings = {
-      mode: 'AUTO_ROUTE',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: true,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    }
-    const globalSettings: ChatSettings = {
-      id: 'test',
-      tokenDisplay: 'minimal',
-      contextCompression: false,
-      memoryCascade: false,
-      showTimestamps: false,
-      agentMode: false,
-      dangerousContentSettings: customSettings,
-    }
-
-    it('returns LOCKED settings and source="chat-locked" for a Locked chat', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { conciergeMode: 'locked' })
-      expect(result.settings).toEqual(LOCKED_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('chat-locked')
+        customClassificationPrompt: 'Be strict about gore.',
+      })
+      expect(policy.summaryClassification).toBe(true)
+      expect(policy.autoSwitchAfterRefusals).toBe(3)
+      expect(policy.desk.textProfileId).toBe(TEXT_ID)
+      expect(policy.display).toEqual({ mode: 'SHOW', showWarningBadges: true })
+      expect(policy.source).toBe('global')
     })
 
-    it('respects global settings for a Moderated chat', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { conciergeMode: 'moderated' })
-      expect(result.settings).toEqual(customSettings)
-      expect(result.source).toBe('global')
+    it('treats a missing chat as the global Moderated default', () => {
+      const policy = resolveConciergeSettings(global(concierge()))
+      expect(policy.state).toBe('moderated')
+      expect(policy.failoverAllowed).toBe(true)
+      expect(policy.preScreen.enabled).toBe(true)
     })
 
-    it('respects global settings when chat is undefined', () => {
-      const result = resolveDangerousContentSettings(globalSettings, undefined)
-      expect(result.settings).toEqual(customSettings)
-      expect(result.source).toBe('global')
+    it('treats a chat with no conciergeMode as Moderated', () => {
+      const policy = resolveConciergeSettings(global(concierge()), { chatType: 'salon' })
+      expect(policy.state).toBe('moderated')
+      expect(policy.failoverAllowed).toBe(true)
     })
 
-    it('still returns Locked even if no global settings were configured', () => {
-      const result = resolveDangerousContentSettings(null, { conciergeMode: 'locked' })
-      expect(result.settings).toEqual(LOCKED_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('chat-locked')
-    })
-
-    it('LOCKED settings have mode OFF, all scans disabled and the auto-switch off', () => {
-      expect(LOCKED_DANGEROUS_CONTENT_SETTINGS.mode).toBe('OFF')
-      expect(LOCKED_DANGEROUS_CONTENT_SETTINGS.scanTextChat).toBe(false)
-      expect(LOCKED_DANGEROUS_CONTENT_SETTINGS.scanImagePrompts).toBe(false)
-      expect(LOCKED_DANGEROUS_CONTENT_SETTINGS.scanImageGeneration).toBe(false)
-      expect(LOCKED_DANGEROUS_CONTENT_SETTINGS.autoSwitchAfterRefusals).toBe(0)
-    })
-
-    it('Locked wins over a global AUTO_ROUTE', () => {
-      const result = resolveDangerousContentSettings(
-        { ...globalSettings, dangerousContentSettings: { ...customSettings, mode: 'AUTO_ROUTE' } },
-        { conciergeMode: 'locked' },
+    it('does not pre-screen unless the pre-screen is enabled, but keeps threshold and prompt', () => {
+      const policy = resolveConciergeSettings(
+        global(concierge({ preScreen: { enabled: false } as ConciergeSettings['preScreen'] })),
+        moderated,
       )
-      expect(result.settings.mode).toBe('OFF')
-      expect(result.settings.uncensoredTextProfileId).toBeUndefined()
+      expect(policy.preScreen.enabled).toBe(false)
+      expect(policy.preScreen.scanTextChat).toBe(false)
+      expect(policy.preScreen.scanImagePrompts).toBe(false)
+      expect(policy.preScreen.scanImageGeneration).toBe(false)
+      // The summary classifier still reads these
+      expect(policy.preScreen.threshold).toBe(0.55)
+      expect(policy.preScreen.customClassificationPrompt).toBe('Be strict about gore.')
+      // Summary classification is its own opt-in
+      expect(policy.summaryClassification).toBe(true)
+      expect(policy.failoverAllowed).toBe(true)
     })
 
-    it('ignores the legacy conciergeOverride column', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: 'OFF' } as never)
-      expect(result.source).toBe('global')
-    })
-  })
-
-  describe('per-chat Unmoderated state', () => {
-    const customSettings: DangerousContentSettings = {
-      mode: 'OFF',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: true,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-      uncensoredTextProfileId: '11111111-1111-4111-8111-111111111111',
-      uncensoredImageProfileId: '22222222-2222-4222-8222-222222222222',
-    }
-    const globalSettings: ChatSettings = {
-      id: 'test',
-      tokenDisplay: 'minimal',
-      contextCompression: false,
-      memoryCascade: false,
-      showTimestamps: false,
-      agentMode: false,
-      dangerousContentSettings: customSettings,
-    }
-
-    it('carries the uncensored profile IDs through from global', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { conciergeMode: 'unmoderated' })
-      expect(result.source).toBe('chat-unmoderated')
-      expect(result.settings.uncensoredTextProfileId).toBe('11111111-1111-4111-8111-111111111111')
-      expect(result.settings.uncensoredImageProfileId).toBe('22222222-2222-4222-8222-222222222222')
+    it('reads summaryClassification off the global opt-in', () => {
+      const policy = resolveConciergeSettings(
+        global(concierge({ preScreen: { summaryClassification: false } as ConciergeSettings['preScreen'] })),
+        moderated,
+      )
+      expect(policy.summaryClassification).toBe(false)
+      expect(policy.preScreen.enabled).toBe(true)
     })
 
-    it('forces AUTO_ROUTE even under a global OFF', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { conciergeMode: 'unmoderated' })
-      expect(result.settings.mode).toBe('AUTO_ROUTE')
-    })
-
-    it('leaves all scans false with nothing left to classify', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { conciergeMode: 'unmoderated' })
-      expect(result.settings.threshold).toBe(1.0)
-      expect(result.settings.scanTextChat).toBe(false)
-      expect(result.settings.scanImagePrompts).toBe(false)
-      expect(result.settings.scanImageGeneration).toBe(false)
-      expect(result.settings.showWarningBadges).toBe(false)
-    })
-
-    it('spreads the defaults when no global settings were configured', () => {
-      const result = resolveDangerousContentSettings(null, { conciergeMode: 'unmoderated' })
-      expect(result.source).toBe('chat-unmoderated')
-      expect(result.settings.mode).toBe('AUTO_ROUTE')
-      expect(result.settings.scanTextChat).toBe(false)
-    })
-
-    it('moderation-exempt chat types win over the Unmoderated state', () => {
-      const result = resolveDangerousContentSettings(globalSettings, {
-        chatType: 'brahma',
-        conciergeMode: 'unmoderated',
-      })
-      expect(result.source).toBe('chat-type-exempt')
-      expect(result.settings).toEqual(LOCKED_DANGEROUS_CONTENT_SETTINGS)
+    it('honours autoSwitchAfterRefusals: 0 (never)', () => {
+      const policy = resolveConciergeSettings(global(concierge({ autoSwitchAfterRefusals: 0 })), moderated)
+      expect(policy.autoSwitchAfterRefusals).toBe(0)
     })
   })
 
-  describe('moderation-exempt chat types (Help Chat, Brahma Console)', () => {
-    const customSettings: DangerousContentSettings = {
-      mode: 'AUTO_ROUTE',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: true,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    }
-    const globalSettings: ChatSettings = {
-      id: 'test',
-      tokenDisplay: 'minimal',
-      contextCompression: false,
-      memoryCascade: false,
-      showTimestamps: false,
-      agentMode: false,
-      dangerousContentSettings: customSettings,
-    }
-
-    it('forces OFF for help chats regardless of global AUTO_ROUTE', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'help' })
-      expect(result.settings).toEqual(LOCKED_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('chat-type-exempt')
+  describe('exempt chat types', () => {
+    it.each(['help', 'brahma'])('%s chats get nothing, whatever the settings and state', (chatType) => {
+      for (const conciergeMode of ['moderated', 'unmoderated', 'locked'] as const) {
+        const policy = resolveConciergeSettings(global(concierge()), { conciergeMode, chatType })
+        expectNothingAllowed(policy)
+        expect(policy.source).toBe('chat-type-exempt')
+      }
     })
+  })
 
-    it('forces OFF for brahma chats regardless of global AUTO_ROUTE', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'brahma' })
-      expect(result.settings).toEqual(LOCKED_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('chat-type-exempt')
-    })
-
-    it('exemption wins even when the chat is not off-duty', () => {
-      const result = resolveDangerousContentSettings(globalSettings, {
-        chatType: 'brahma',
-        conciergeMode: 'moderated',
-      })
-      expect(result.source).toBe('chat-type-exempt')
-    })
-
-    it('does NOT exempt salon chats', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'salon' })
-      expect(result.settings).toEqual(customSettings)
-      expect(result.source).toBe('global')
-    })
-
-    it('does NOT exempt autonomous rooms', () => {
-      const result = resolveDangerousContentSettings(globalSettings, { chatType: 'autonomous' })
-      expect(result.settings).toEqual(customSettings)
-      expect(result.source).toBe('global')
+  describe('missing conciergeSettings', () => {
+    it('resolves the defaults with source "default"', () => {
+      for (const settings of [null, undefined, global(undefined)]) {
+        const policy = resolveConciergeSettings(settings, moderated)
+        expect(policy.source).toBe('default')
+        expect(policy.onDuty).toBe(true)
+        expect(policy.failoverAllowed).toBe(true)
+        expect(policy.routeDirect).toBe(false)
+        expect(policy.preScreen.enabled).toBe(false)
+        expect(policy.preScreen.threshold).toBe(0.7)
+        expect(policy.summaryClassification).toBe(false)
+        expect(policy.autoSwitchAfterRefusals).toBe(DEFAULT_AUTO_SWITCH_AFTER_REFUSALS)
+        expect(policy.desk).toEqual({
+          textProfileId: null,
+          imageProfileId: null,
+          visionProfileId: null,
+          imagePromptProfileId: null,
+        })
+        expect(policy.newChatsStartAs).toBe('moderated')
+      }
     })
   })
 })

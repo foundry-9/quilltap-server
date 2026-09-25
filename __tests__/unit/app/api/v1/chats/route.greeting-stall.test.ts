@@ -277,7 +277,7 @@ describe('POST /api/v1/chats — a greeting the provider never delivers', () => 
     mockRepos.chats.create.mockImplementation(async () => makeCreatedChat() as any)
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       userId: USER_ID,
-      dangerousContentSettings: { mode: 'OFF', threshold: 0.7 },
+      conciergeSettings: { enabled: true },
     } as any)
     ;(resolveProviderForDangerousContent as unknown as jest.Mock).mockResolvedValue({ rerouted: false })
   })

@@ -16,6 +16,7 @@ import {
   HelpSettingsCategory,
   validateHelpSettingsInput,
 } from '../help-settings-tool'
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 
 const logger_ = logger.child({ module: 'help-settings-handler' })
 
@@ -107,13 +108,21 @@ async function fetchCategorySettings(
         memoryCascadePreferences: settings.memoryCascadePreferences,
         defaultTimestampConfig: settings.defaultTimestampConfig,
         agentModeSettings: settings.agentModeSettings,
-        dangerousContentSettings: settings.dangerousContentSettings,
         autoDetectRng: settings.autoDetectRng,
         customTools: settings.customTools,
         llmLoggingSettings: settings.llmLoggingSettings,
         avatarDisplayMode: settings.avatarDisplayMode,
         avatarDisplayStyle: settings.avatarDisplayStyle,
         timezone: settings.timezone,
+      }
+    }
+
+    case 'concierge': {
+      const settings = await repos.chatSettings.findByUserId(userId)
+      if (!settings) return { message: 'No chat settings configured yet' }
+
+      return {
+        conciergeSettings: readConciergeSettings(settings),
       }
     }
 
@@ -205,6 +214,7 @@ async function fetchCategorySettings(
         theme: settings?.themePreference || 'default',
         agentMode: settings?.agentModeSettings || null,
         contextCompression: settings?.contextCompressionSettings || null,
+        conciergeOnDuty: readConciergeSettings(settings).enabled,
       }
     }
 
@@ -230,7 +240,7 @@ export async function executeHelpSettingsTool(
       return {
         success: false,
         category: 'overview',
-        error: 'Invalid input: category is required and must be one of: overview, chat, connections, embeddings, images, appearance, templates, system',
+        error: 'Invalid input: category is required and must be one of: overview, chat, concierge, connections, embeddings, images, appearance, templates, system',
       }
     }
 

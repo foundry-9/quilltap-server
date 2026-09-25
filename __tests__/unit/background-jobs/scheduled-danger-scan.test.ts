@@ -1,6 +1,10 @@
-import { runScheduledDangerScan } from '@/lib/background-jobs/scheduled-danger-scan';
+import {
+  runScheduledDangerScan,
+  scheduleDangerScan,
+  isDangerScanSchedulerRunning,
+  stopDangerScanScheduler,
+} from '@/lib/background-jobs/scheduled-danger-scan';
 import { getRepositories } from '@/lib/repositories/factory';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { enqueueChatDangerClassification, enqueueContextSummary } from '@/lib/background-jobs/queue-service';
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -16,19 +20,33 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }));
 
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
-}));
-
 jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueChatDangerClassification: jest.fn(),
   enqueueContextSummary: jest.fn(),
 }));
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
-const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>;
 const mockEnqueueDangerClassification = enqueueChatDangerClassification as jest.MockedFunction<typeof enqueueChatDangerClassification>;
 const mockEnqueueContextSummary = enqueueContextSummary as jest.MockedFunction<typeof enqueueContextSummary>;
+
+/** A settings row with the Concierge on duty and the summary classifier opted in (or not). */
+const settingsRow = (userId: string, opts: { enabled?: boolean; summaryClassification?: boolean } = {}) => ({
+  userId,
+  conciergeSettings: {
+    enabled: opts.enabled ?? true,
+    autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: opts.summaryClassification ?? true,
+    },
+  },
+});
 
 const buildChat = (overrides: Record<string, unknown> = {}) => ({
   id: 'chat-1',
@@ -60,12 +78,7 @@ beforeEach(() => {
 
   repositories = {
     chatSettings: {
-      findAll: jest.fn().mockResolvedValue([
-        {
-          userId: 'user-1',
-          dangerousContentSettings: { mode: 'DETECT_ONLY' },
-        },
-      ]),
+      findAll: jest.fn().mockResolvedValue([settingsRow('user-1')]),
     },
     chats: {
       findByUserId: jest.fn().mockResolvedValue([]),
@@ -79,19 +92,6 @@ beforeEach(() => {
 
   mockGetRepositories.mockReturnValue(repositories);
 
-  mockResolveDangerousContentSettings.mockReturnValue({
-    settings: {
-      mode: 'DETECT_ONLY',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    },
-    source: 'global',
-  });
-
   mockEnqueueDangerClassification.mockResolvedValue({
     jobId: 'job-1',
     isNew: true,
@@ -100,25 +100,60 @@ beforeEach(() => {
 });
 
 describe('runScheduledDangerScan', () => {
-  it('skips users with danger mode OFF', async () => {
-    mockResolveDangerousContentSettings.mockReturnValue({
-      settings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
-      },
-      source: 'default',
-    });
+  it('skips users without summary classification', async () => {
+    repositories.chatSettings.findAll.mockResolvedValue([
+      settingsRow('user-1', { summaryClassification: false }),
+    ]);
 
     const result = await runScheduledDangerScan();
 
     expect(repositories.chats.findByUserId).not.toHaveBeenCalled();
     expect(mockEnqueueDangerClassification).not.toHaveBeenCalled();
     expect(result.chatsEnqueued).toBe(0);
+  });
+
+  it('skips users whose Concierge is off duty, even with summary classification ticked', async () => {
+    repositories.chatSettings.findAll.mockResolvedValue([
+      settingsRow('user-1', { enabled: false, summaryClassification: true }),
+    ]);
+
+    const result = await runScheduledDangerScan();
+
+    expect(repositories.chats.findByUserId).not.toHaveBeenCalled();
+    expect(result.chatsEnqueued).toBe(0);
+  });
+
+  it('skips users with no conciergeSettings (summary classification defaults off)', async () => {
+    repositories.chatSettings.findAll.mockResolvedValue([{ userId: 'user-1' }]);
+
+    const result = await runScheduledDangerScan();
+
+    expect(repositories.chats.findByUserId).not.toHaveBeenCalled();
+    expect(result.chatsEnqueued).toBe(0);
+  });
+
+  it('sweeps only the users who opted in', async () => {
+    repositories.chatSettings.findAll.mockResolvedValue([
+      settingsRow('user-1', { summaryClassification: false }),
+      settingsRow('user-2'),
+    ]);
+
+    await runScheduledDangerScan();
+
+    expect(repositories.chats.findByUserId).toHaveBeenCalledTimes(1);
+    expect(repositories.chats.findByUserId).toHaveBeenCalledWith('user-2');
+  });
+
+  it('skips Unmoderated and Locked chats', async () => {
+    repositories.chats.findByUserId.mockResolvedValue([
+      buildChat({ id: 'unmod', contextSummary: 'x', conciergeMode: 'unmoderated' }),
+      buildChat({ id: 'locked', contextSummary: 'x', conciergeMode: 'locked' }),
+    ]);
+
+    await runScheduledDangerScan();
+
+    expect(mockEnqueueDangerClassification).not.toHaveBeenCalled();
+    expect(mockEnqueueContextSummary).not.toHaveBeenCalled();
   });
 
   it('enqueues classification for chats with context summary', async () => {
@@ -252,5 +287,43 @@ describe('runScheduledDangerScan', () => {
     repositories.chatSettings.findAll.mockRejectedValue(new Error('Database error'));
 
     await expect(runScheduledDangerScan()).rejects.toThrow('Database error');
+  });
+});
+
+describe('scheduleDangerScan', () => {
+  afterEach(() => {
+    stopDangerScanScheduler();
+  });
+
+  it('does not start when no user has summary classification on', async () => {
+    repositories.chatSettings.findAll.mockResolvedValue([
+      settingsRow('user-1', { summaryClassification: false }),
+      settingsRow('user-2', { enabled: false, summaryClassification: true }),
+      { userId: 'user-3' },
+    ]);
+
+    await scheduleDangerScan(60_000);
+
+    expect(isDangerScanSchedulerRunning()).toBe(false);
+    expect(repositories.chats.findByUserId).not.toHaveBeenCalled();
+  });
+
+  it('starts when some user has summary classification on', async () => {
+    repositories.chatSettings.findAll.mockResolvedValue([
+      settingsRow('user-1', { summaryClassification: false }),
+      settingsRow('user-2'),
+    ]);
+
+    await scheduleDangerScan(60_000);
+
+    expect(isDangerScanSchedulerRunning()).toBe(true);
+  });
+
+  it('does not start when the settings cannot be read', async () => {
+    repositories.chatSettings.findAll.mockRejectedValue(new Error('Database error'));
+
+    await scheduleDangerScan(60_000);
+
+    expect(isDangerScanSchedulerRunning()).toBe(false);
   });
 });

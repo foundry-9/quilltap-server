@@ -1,7 +1,7 @@
 /**
  * Regression: the bikini case (Concierge overhaul, phase 1).
  *
- * A Monitored chat under Auto-Route; the classifier does not flag the prompt;
+ * A Moderated chat with the Concierge on duty; the classifier does not flag the prompt;
  * the ordinary image provider refuses it (a Gemini IMAGE_SAFETY rejection);
  * one image profile is merely ticked "Uncensored-compatible" with no explicit
  * Concierge pick. Before the overhaul the post-hoc reroute required the
@@ -83,7 +83,10 @@ const KESTREL = {
   isDangerousCompatible: true, parameters: {},
 }
 
-function wire(mode: 'AUTO_ROUTE' | 'DETECT_ONLY' = 'AUTO_ROUTE') {
+function wire(
+  duty: 'on-duty' | 'off-duty' = 'on-duty',
+  conciergeMode: 'moderated' | 'unmoderated' | null = null,
+) {
   const files = { create: jest.fn(async (entry: Record<string, unknown>, opts: { id: string }) => ({ ...entry, id: opts.id })) }
   ;(getRepositories as jest.Mock).mockReturnValue({
     imageProfiles: {
@@ -96,16 +99,22 @@ function wire(mode: 'AUTO_ROUTE' | 'DETECT_ONLY' = 'AUTO_ROUTE') {
     },
     chatSettings: {
       findByUserId: jest.fn(async () => ({
-        dangerousContentSettings: {
-          mode, threshold: 0.7, scanTextChat: true, scanImagePrompts: true,
-          scanImageGeneration: false, displayMode: 'SHOW', showWarningBadges: true,
+        conciergeSettings: {
+          enabled: duty === 'on-duty',
           uncensoredImageProfileId: null, // "Auto-detect": no explicit pick
+          autoSwitchAfterRefusals: 2,
+          newChatsStartAs: 'moderated',
+          display: { mode: 'SHOW', showWarningBadges: true },
+          preScreen: {
+            enabled: true, threshold: 0.7, scanTextChat: true, scanImagePrompts: true,
+            scanImageGeneration: false, summaryClassification: false,
+          },
         },
       })),
     },
     chats: {
-      // Monitored: no override, not flagged.
-      findById: jest.fn(async () => ({ id: CHAT, participants: [], conciergeOverride: null, isDangerousChat: false })),
+      // Moderated unless told otherwise, not flagged.
+      findById: jest.fn(async () => ({ id: CHAT, participants: [], conciergeMode, isDangerousChat: false })),
       getMessages: jest.fn(async () => []),
     },
     characters: { findById: jest.fn(async () => null) },
@@ -170,8 +179,8 @@ describe('generate_image — the bikini case', () => {
     expect((postLanternImageNotification as jest.Mock).mock.calls[0][0].routeTrail).toHaveLength(2)
   })
 
-  it('under Detect Only, fails with the trail and the Concierge explains why', async () => {
-    const { kestrel } = wire('DETECT_ONLY')
+  it('with the Concierge off duty, fails with the trail and announces nothing', async () => {
+    const { kestrel } = wire('off-duty')
 
     const result = await executeImageGenerationTool(
       { prompt: 'head-and-shoulders portrait of a woman in a bikini' },
@@ -183,8 +192,21 @@ describe('generate_image — the bikini case', () => {
     expect(result.routeTrail).toEqual([
       expect.objectContaining({ profileName: 'House Painter', outcome: 'refused' }),
     ])
-    expect(postConciergeRefusalAnnouncement).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'refusal-not-permitted',
-    }))
+    expect(postConciergeRefusalAnnouncement).not.toHaveBeenCalled()
+  })
+
+  it('routes an Unmoderated chat straight to the uncensored desk, with no refusal to announce', async () => {
+    const { house, kestrel } = wire('on-duty', 'unmoderated')
+
+    const result = await executeImageGenerationTool(
+      { prompt: 'head-and-shoulders portrait of a woman in a bikini' },
+      { userId: USER, profileId: HOUSE.id, chatId: CHAT },
+    )
+
+    expect(result.success).toBe(true)
+    expect(house.generateImage).not.toHaveBeenCalled()
+    expect(kestrel.generateImage).toHaveBeenCalledTimes(1)
+    expect(result.model).toBe('grok-2-image')
+    expect(postConciergeRefusalAnnouncement).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 4: The Concierge's Own Tab
 
-**Status:** Proposed (4.10-dev, 2026-09-25)
+**Status:** Implemented (4.10-dev, 2026-09-25) — the `-info` carry-over waits on its `@quilltap/theme-storybook` publish; see "As built"
 **Scope:** quilltap-server. A new Settings tab (`/settings?tab=concierge`); a new `conciergeSettings` object replacing `dangerousContentSettings` and absorbing two settings that live elsewhere; the global mode retired; the summary classifier and scheduled scan made opt-in; every Concierge control removed from the Chat tab; help rewritten. One `chat_settings` migration. No plugin or package change.
 **Prerequisites:** [Phase 3](concierge-overhaul-phase-3-three-states.md) landed (three states, `mayFailOver`). Phases 1 and 2 are implied by phase 3. If phase 3 has not landed, the resolver in §4 cannot be written as specified; stop.
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 4 of 5).
@@ -39,7 +39,7 @@ that stopped using it. Do them in this phase — this phase already ships a migr
 rewrites the Concierge's docs — and tick them here when done. Neither may be skipped: each is dead
 weight that a later reader would otherwise take for live behaviour.
 
-- [ ] **Drop `chats.conciergeOverride`.** Phase 3 stopped writing it; nothing reads it but the
+- [x] **Drop `chats.conciergeOverride`.** Phase 3 stopped writing it; nothing reads it but the
   legacy derivation. Remove it in a new `chats` migration (`drop-chat-concierge-override-v1`,
   `dependsOn: ['add-chat-concierge-mode-v1']`, with its `PRETTY_LABELS` entry). SQLite's
   `ALTER TABLE chats DROP COLUMN "conciergeOverride"` is enough — no index or trigger names it —
@@ -56,7 +56,7 @@ weight that a later reader would otherwise take for live behaviour.
     old bundles still validate;
   - `add-chat-concierge-mode-v1` already tolerates the column being absent
     (`legacyRowFilter`), so the ordering between the two migrations is safe either way.
-- [ ] **Remove the orphaned `-info` tone.** Since phase 3 no state uses `tone: 'info'`, so
+- [ ] **Remove the orphaned `-info` tone.** (Checked: no bundled theme or `create-quilltap-theme` template hooks either class. The removal and its theme-storybook 1.0.73 mirror are ready and land once that package is published.) Since phase 3 no state uses `tone: 'info'`, so
   `.qt-danger-badge-info` and `.qt-concierge-mark-info` (`app/styles/qt-components/_chat.css`) have
   no user in the app. Check the bundled themes (`themes/bundled/`) and `create-quilltap-theme` for
   hooks on them first; if none, remove both rules, the `'info'` member of `ConciergeTone`, and its
@@ -242,3 +242,18 @@ Every `mode` read is replaced by the question it was asking:
 - `components/settings/chat-settings/README.md:27,183-198`: the card moved.
 - `.claude/commands/update-documentation.md`: this spec, the renamed help file, the rewritten `dangerous.md` note.
 - `CLAUDE.md` glossary row for The Concierge → `/settings?tab=concierge`; the chokepoint bullet names `resolveConciergeSettings`.
+
+## As built (2026-09-25)
+
+Where the shipped code departs from, or settles a question left open by, the plan above:
+
+- **`failoverAllowed` is "on duty and not Locked"**, not "on duty and Moderated". An Unmoderated chat already routes direct, but some calls still reach an ordinary provider (a continue turn, a cheap-LLM task on a profile that was not swapped); keeping failover open there preserves phase 3's behaviour, which forced `AUTO_ROUTE` on Unmoderated chats. It matches `mayFailOver`.
+- **The desk is empty on Locked, exempt and off-duty chats.** That includes the image-prompt crafter and the vision fallback, which before this phase were used on every chat regardless of state. The vision fallback (`file-attachment-fallback.ts`) has no chat in hand, so it only asks whether the Concierge is on duty; it still never auto-detects — the user must name a vision profile.
+- **The pre-screen's threshold and custom prompt ride through when only `summaryClassification` is on**, since the summary classifier reads them; the scan flags stay off.
+- **Migration refinement: global `OFF` with an Unmoderated chat stays on duty.** The old resolver routed an Unmoderated chat to the uncensored desk even under `OFF`; translating `OFF` to `enabled: false` would have silently sent those chats back to the ordinary providers. Such a user gets `enabled: true` with the pre-screen off. A row with no `dangerousContentSettings` reads as the retired default, `OFF`.
+- **One translation, two callers.** `mapLegacyConciergeSettings` / `withConciergeSettingsFromLegacy` live in `lib/services/dangerous-content/legacy-concierge-settings.ts` and serve both `add-concierge-settings-v1` and backup restore (both modes), so a pre-4.10 backup keeps its desk and display.
+- **`newChatsStartAs` applies only while the Concierge is on duty**, so an off-duty Concierge never announces a state on a new chat. The New Chat form sends its state unless both the pick and the default are Moderated, so choosing Moderated under an Unmoderated default is honoured.
+- **`help_settings` `overview`** reports `conciergeOnDuty`; the full object is under the `concierge` category.
+- **Salon display** reads `conciergeSettings.display` and shows plainly (no blur, no badges) when the Concierge is off duty. Phase 5's `resolvedDisplay` is still to come.
+- **The help bundle** is synced from disk at runtime (`lib/help/help-doc-sync.ts`); `scripts/build-help-index.ts` is deprecated and was not run.
+

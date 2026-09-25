@@ -41,7 +41,7 @@ jest.mock('@/lib/services/cost-estimation.service', () => ({
 }));
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({ settings: { mode: 'OFF' } })),
+  resolveConciergeSettings: jest.fn(() => ({ onDuty: false, routeDirect: false, failoverAllowed: false, source: 'off-duty' })),
 }));
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;

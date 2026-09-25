@@ -25,13 +25,13 @@ jest.mock('@/lib/chat/initial-greeting', () => ({
 }))
 
 // The resolver keeps its real semantics — the whole point of §5 is that a
-// Locked chat resolves to `mode: 'OFF'` and an Unmoderated one to
-// `AUTO_ROUTE` — but is wrapped in a spy so the tests can see what it was asked.
+// Locked chat never fails over and an Unmoderated one routes direct — but is
+// wrapped in a spy so the tests can see what it was asked.
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => {
   const actual = jest.requireActual('@/lib/services/dangerous-content/resolver.service')
   return {
     ...actual,
-    resolveDangerousContentSettings: jest.fn(actual.resolveDangerousContentSettings),
+    resolveConciergeSettings: jest.fn(actual.resolveConciergeSettings),
   }
 })
 
@@ -130,7 +130,7 @@ import { buildChatContext } from '@/lib/chat/initialize'
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting'
 import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip'
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
 import { postProsperoContextAnnouncement } from '@/lib/services/prospero-notifications/writer'
 import {
@@ -154,7 +154,7 @@ const mockedBuildChatContext = buildChatContext as unknown as jest.Mock
 const mockedGenerateGreeting = generateGreetingMessage as unknown as jest.Mock
 const mockedApplyConciergeFlip = applyConciergeFlip as unknown as jest.Mock
 const mockedApplyContinuation = applyChatContinuation as unknown as jest.Mock
-const mockedResolveSettings = resolveDangerousContentSettings as unknown as jest.Mock
+const mockedResolveSettings = resolveConciergeSettings as unknown as jest.Mock
 const mockedResolveProvider = resolveProviderForDangerousContent as unknown as jest.Mock
 const mockedProsperoAnnouncement = postProsperoContextAnnouncement as unknown as jest.Mock
 
@@ -308,7 +308,7 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     mockRepos.chats.create.mockImplementation(async () => chatRow as any)
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       userId: USER_ID,
-      dangerousContentSettings: { mode: 'OFF', threshold: 0.7 },
+      conciergeSettings: { enabled: true },
     } as any)
   })
 
@@ -328,6 +328,61 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
 
     expect(res.status).toBe(201)
     expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+  })
+
+  describe('newChatsStartAs', () => {
+    const withDefault = (newChatsStartAs: 'moderated' | 'unmoderated', enabled = true) =>
+      mockRepos.chatSettings.findByUserId.mockResolvedValue({
+        userId: USER_ID,
+        conciergeSettings: { enabled, newChatsStartAs },
+      } as any)
+
+    it('applies the operator default when the request names no state', async () => {
+      withDefault('unmoderated')
+
+      const res = await POST(createMockRequest(baseBody()))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledTimes(1)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledWith(NEW_CHAT_ID, 'unmoderated', chatRow)
+    })
+
+    it('lets an explicit Moderated request beat an Unmoderated default', async () => {
+      withDefault('unmoderated')
+
+      const res = await POST(createMockRequest(baseBody({ conciergeState: 'moderated' })))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    })
+
+    it('lets an explicit Locked request beat an Unmoderated default', async () => {
+      withDefault('unmoderated')
+
+      const res = await POST(createMockRequest(baseBody({ conciergeState: 'locked' })))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledTimes(1)
+      expect(mockedApplyConciergeFlip).toHaveBeenCalledWith(NEW_CHAT_ID, 'locked', chatRow)
+    })
+
+    it('does nothing with a Moderated default', async () => {
+      withDefault('moderated')
+
+      const res = await POST(createMockRequest(baseBody()))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    })
+
+    it('ignores the default while the Concierge is off duty', async () => {
+      withDefault('unmoderated', false)
+
+      const res = await POST(createMockRequest(baseBody()))
+
+      expect(res.status).toBe(201)
+      expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+    })
   })
 
   it.each(['unmoderated', 'locked'])(
@@ -439,7 +494,7 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
       })
     })
 
-    it('sends an Unmoderated chat to the frank desk first, even under a global OFF', async () => {
+    it('sends an Unmoderated chat to the frank desk first', async () => {
       chatRow = makeCreatedChat({
         conciergeMode: 'unmoderated',
         conciergeModeSetBy: 'operator',
@@ -477,10 +532,6 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
         conciergeModeSetBy: 'operator',
         conciergeModeReason: 'manual',
       })
-      mockRepos.chatSettings.findByUserId.mockResolvedValue({
-        userId: USER_ID,
-        dangerousContentSettings: { mode: 'AUTO_ROUTE', threshold: 0.7 },
-      } as any)
       mockedGenerateGreeting
         .mockResolvedValueOnce({ content: '', reasoningContent: '', contentFilterDetected: true })
         .mockResolvedValue({ content: 'Good evening.', reasoningContent: '' })
@@ -494,7 +545,12 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
       expect(mockedGenerateGreeting.mock.calls[0][0]).toEqual(
         expect.objectContaining({ provider: 'ANTHROPIC', modelName: 'claude-test' })
       )
-      expect(mockedResolveSettings).not.toHaveBeenCalled()
+      // The policy was read for the Locked chat, and it neither routes direct
+      // nor fails over.
+      const lockedPolicy = mockedResolveSettings.mock.results
+        .map((r) => r.value)
+        .find((p: { state?: string }) => p?.state === 'locked')
+      expect(lockedPolicy).toMatchObject({ routeDirect: false, failoverAllowed: false })
       expect(mockedResolveProvider).not.toHaveBeenCalled()
       for (const [params] of mockedGenerateGreeting.mock.calls) {
         expect(params).not.toEqual(expect.objectContaining({ provider: 'OPENROUTER' }))
@@ -503,11 +559,7 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
 
     it('does try the uncensored desk for a Moderated chat whose greeting hits a content filter', async () => {
       // The control for the Locked case above: the same content filter, the
-      // same Auto-Route globe, and a Moderated chat does fail over.
-      mockRepos.chatSettings.findByUserId.mockResolvedValue({
-        userId: USER_ID,
-        dangerousContentSettings: { mode: 'AUTO_ROUTE', threshold: 0.7 },
-      } as any)
+      // same on-duty Concierge, and a Moderated chat does fail over.
       mockedResolveProvider.mockResolvedValue({
         rerouted: true,
         connectionProfile: makeUncensoredProfile(),

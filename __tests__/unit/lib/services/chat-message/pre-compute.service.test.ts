@@ -46,13 +46,15 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   resolveUncensoredCheapLLMSelection: (...args: any[]) => mockResolveUncensoredCheapLLMSelection(...args),
 }))
 
+const { resolveConciergeSettings } = jest.requireActual('@/lib/services/dangerous-content/resolver.service') as typeof import('@/lib/services/dangerous-content/resolver.service')
+
 const {
   runPreContextPreCompute,
 } = require('@/lib/services/chat-message/pre-compute.service') as typeof import('@/lib/services/chat-message/pre-compute.service')
 
 const baseChat = { id: 'chat-1', isDangerousChat: false } as any
 const baseCharacter = { id: 'char-1', name: 'Alice' } as any
-const baseDangerSettings = { mode: 'OFF' } as any
+const baseConciergePolicy = resolveConciergeSettings({ conciergeSettings: { enabled: false } } as any)
 const baseCheapLLM = { provider: 'OPENAI', modelName: 'gpt-4.1-mini' } as any
 
 function baseOptions(overrides: Partial<Parameters<typeof runPreContextPreCompute>[0]> = {}) {
@@ -69,7 +71,7 @@ function baseOptions(overrides: Partial<Parameters<typeof runPreContextPreComput
     compressionEnabled: false,
     bypassCompression: false,
     cheapLLMSelection: null,
-    dangerSettings: baseDangerSettings,
+    conciergePolicy: baseConciergePolicy,
     allProfiles: [],
     controller: { enqueue: jest.fn() } as any,
     encoder: new TextEncoder(),
@@ -330,7 +332,7 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(mockResolveUncensoredCheapLLMSelection).toHaveBeenCalledWith(baseCheapLLM, true, baseDangerSettings, [])
+      expect(mockResolveUncensoredCheapLLMSelection).toHaveBeenCalledWith(baseCheapLLM, true, baseConciergePolicy, [])
       const callArgs = mockExtractMemorySearchKeywords.mock.calls[0] as unknown[]
       expect(callArgs[2]).toBe(uncensored)
     })

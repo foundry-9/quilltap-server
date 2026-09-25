@@ -17,6 +17,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { withTimeout } from '@/lib/promise-timeout'
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
+import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import type { FileAttachment, LLMResponse } from '@/lib/llm/base'
@@ -172,17 +173,24 @@ async function getImageDescriptionProfile(
 }
 
 /**
- * Resolve the configured uncensored vision fallback profile, if any. Returns
- * null when no `uncensoredImageDescriptionProfileId` is configured or the
- * referenced profile no longer exists. Distinct from the primary getter: we
- * never auto-pick a fallback — the user must explicitly opt in by picking one.
+ * Resolve the configured uncensored vision fallback profile, if any — the
+ * Concierge desk's `conciergeSettings.uncensoredVisionProfileId`. Returns null
+ * when the Concierge is off duty, when no vision profile is configured, or
+ * when the referenced profile no longer exists. Distinct from the primary
+ * getter: we never auto-pick a fallback — the user must explicitly opt in by
+ * picking one.
  */
 async function getUncensoredImageDescriptionProfile(
   repos: any,
   userId: string
 ): Promise<ConnectionProfile | null> {
   const chatSettings = await repos.chatSettings.findByUserId(userId)
-  const id = chatSettings?.uncensoredImageDescriptionProfileId
+  const concierge = readConciergeSettings(chatSettings)
+  if (!concierge.enabled) {
+    logger.debug('Uncensored vision fallback unavailable: the Concierge is off duty', { userId })
+    return null
+  }
+  const id = concierge.uncensoredVisionProfileId
   if (!id) return null
   const profile = await repos.connections.findById(id)
   return profile ?? null
@@ -635,7 +643,7 @@ async function describeImageWithProfile(
 
 /**
  * Generate image description using the configured vision profile, with an
- * automatic fallback to `uncensoredImageDescriptionProfileId` when the primary
+ * automatic fallback to the Concierge's `uncensoredVisionProfileId` when the primary
  * refuses or returns an unusable response. The fallback only runs when the
  * user has explicitly configured one — there's no auto-pick at the fallback
  * layer.

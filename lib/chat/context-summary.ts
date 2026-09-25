@@ -10,7 +10,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent, isHelpLikeChatType } from '@/lib/schemas/types'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
@@ -356,12 +356,17 @@ export async function generateContextSummary(
     }
 
     if (shouldUseUncensoredRoute(chat)) {
-      const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
-      const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger, chat)
+      const chatSettingsForConcierge = await repos.chatSettings.findByUserId(userId)
+      const conciergePolicy = resolveConciergeSettings(chatSettingsForConcierge, chat)
+      logger.debug('[Context Summary] Unmoderated chat; resolving uncensored cheap LLM', {
+        chatId,
+        conciergeSource: conciergePolicy.source,
+        routeDirect: conciergePolicy.routeDirect,
+      })
       cheapLLM = resolveUncensoredCheapLLMSelection(
         cheapLLM,
         true,
-        dangerSettings,
+        conciergePolicy,
         availableProfiles
       )
     }

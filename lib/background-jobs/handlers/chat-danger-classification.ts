@@ -13,7 +13,8 @@
  *   the classifier only runs on Moderated chats, so it never re-checks one it
  *   has moved
  * - Once classified as safe, stays safe (sticky) unless new messages are added
- * - Bails if mode is OFF or no content available (no summary AND no messages)
+ * - Bails unless the chat's Concierge policy has `summaryClassification` on
+ *   (on duty, Moderated, opted in), or when no content is available
  */
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
@@ -21,7 +22,7 @@ import { isModerationExemptChatType } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override';
 import { maybeSwitchAfterClassification } from '@/lib/services/dangerous-content/classifier-switch';
 import { createSystemEvent } from '@/lib/services/system-events.service';
@@ -130,12 +131,19 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     inputSource = 'messages';
   }
 
-  // Get user's chat settings for danger mode check
+  // Get user's chat settings for the Concierge policy
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
 
-  // Resolve danger settings — bail if mode is OFF
-  const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings);
-  if (dangerSettings.mode === 'OFF') {
+  // Resolve the Concierge policy for this chat — the summary classifier runs
+  // only when he is on duty, the chat is Moderated, and the user opted in.
+  const conciergePolicy = resolveConciergeSettings(chatSettings, chat);
+  if (!conciergePolicy.summaryClassification) {
+    logger.debug('[ChatDangerClassification] Summary classification is off for this chat, skipping', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      conciergeSource: conciergePolicy.source,
+      conciergeState: conciergePolicy.state,
+    });
     return;
   }
 
@@ -182,7 +190,7 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     classificationInput,
     cheapLLMSelection,
     job.userId,
-    dangerSettings,
+    conciergePolicy,
     payload.chatId
   );
 
@@ -216,7 +224,7 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
   const verdict = result.isDangerous
     ? {
         score: result.score,
-        threshold: dangerSettings.threshold,
+        threshold: conciergePolicy.preScreen.threshold,
         categories: result.categories,
         source: result.source,
         providerName: result.providerName,

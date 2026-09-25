@@ -57,8 +57,6 @@ export const CheapLLMSettingsSchema = z.object({
   fallbackToLocal: z.boolean().default(true),
   /** Provider for generating embeddings */
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
-  /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
-  imagePromptProfileId: UUIDSchema.nullable().optional(),
   /**
    * Whether a cheap-LLM route with no connection profile behind it — a
    * pure-local Ollama pick, or a provider-cheapest synthesis — may have a
@@ -382,41 +380,84 @@ export const LLMLoggingSettingsSchema = z.object({
 export type LLMLoggingSettings = z.infer<typeof LLMLoggingSettingsSchema>;
 
 // ============================================================================
-// DANGEROUS CONTENT SETTINGS
+// CONCIERGE SETTINGS
 // ============================================================================
-
-export const DangerousContentModeEnum = z.enum(['OFF', 'DETECT_ONLY', 'AUTO_ROUTE']);
-export type DangerousContentMode = z.infer<typeof DangerousContentModeEnum>;
 
 export const DangerousContentDisplayModeEnum = z.enum(['SHOW', 'BLUR', 'COLLAPSE']);
 export type DangerousContentDisplayMode = z.infer<typeof DangerousContentDisplayModeEnum>;
 
-export const DangerousContentSettingsSchema = z.object({
-  /** Operating mode: OFF disables all scanning, DETECT_ONLY flags but doesn't reroute, AUTO_ROUTE flags and reroutes to uncensored provider */
-  mode: DangerousContentModeEnum.default('OFF'),
+/** What a new chat's Concierge state is when the request names none. */
+export const ConciergeNewChatStateEnum = z.enum(['moderated', 'unmoderated']);
+export type ConciergeNewChatState = z.infer<typeof ConciergeNewChatStateEnum>;
+
+export const ConciergeDisplaySettingsSchema = z.object({
+  /** How flagged or Unmoderated content is shown in the Salon */
+  mode: DangerousContentDisplayModeEnum.default('SHOW'),
+  /** Whether to show warning badges on flagged messages */
+  showWarningBadges: z.boolean().default(true),
+});
+
+export type ConciergeDisplaySettings = z.infer<typeof ConciergeDisplaySettingsSchema>;
+
+export const ConciergePreScreenSettingsSchema = z.object({
+  /** Run the classifier on messages and image prompts before sending. */
+  enabled: z.boolean().default(false),
   /** Classification threshold (0-1): content scoring above this is flagged as dangerous */
   threshold: z.number().min(0).max(1).default(0.7),
-  /** Whether to scan user text messages for dangerous content */
+  /** Whether to scan user text messages */
   scanTextChat: z.boolean().default(true),
-  /** Whether to scan user image prompts for dangerous content */
+  /** Whether to scan user image prompts */
   scanImagePrompts: z.boolean().default(true),
   /** Whether to scan expanded prompts before image generation */
   scanImageGeneration: z.boolean().default(false),
-  /** Connection profile ID for uncensored text LLM (must have isDangerousCompatible=true) */
-  uncensoredTextProfileId: UUIDSchema.nullable().optional(),
-  /** Image profile ID for uncensored image generation (must have isDangerousCompatible=true) */
-  uncensoredImageProfileId: UUIDSchema.nullable().optional(),
-  /** How flagged messages are displayed in the UI */
-  displayMode: DangerousContentDisplayModeEnum.default('SHOW'),
-  /** Whether to show warning badges on flagged messages */
-  showWarningBadges: z.boolean().default(true),
-  /** Custom classification prompt to append to the default classification system prompt */
+  /** Custom classification prompt appended to the default classification system prompt */
   customClassificationPrompt: z.string().nullable().optional(),
-  /** After this many stated moderation refusals on a Moderated chat, the Concierge switches it to Unmoderated. 0 = never. */
-  autoSwitchAfterRefusals: z.number().int().min(0).max(10).default(2),
+  /** Read each chat's summary in the background and switch it when it reads as dangerous (the 10-minute sweep). */
+  summaryClassification: z.boolean().default(false),
 });
 
-export type DangerousContentSettings = z.infer<typeof DangerousContentSettingsSchema>;
+export type ConciergePreScreenSettings = z.infer<typeof ConciergePreScreenSettingsSchema>;
+
+/**
+ * The Concierge's settings (Concierge overhaul phase 4), replacing the retired
+ * `dangerousContentSettings` and absorbing the uncensored vision fallback and
+ * the image-prompt crafter. Read the *effective* policy through
+ * `resolveConciergeSettings` (`lib/services/dangerous-content/resolver.service.ts`),
+ * never these raw fields.
+ */
+export const ConciergeSettingsSchema = z.object({
+  /** Master switch. Off: no failover, no announcements, no auto-switch, no pre-screen. */
+  enabled: z.boolean().default(true),
+
+  /** The uncensored desk. Null = auto-detect (first isDangerousCompatible profile). */
+  uncensoredTextProfileId: UUIDSchema.nullable().optional(),
+  uncensoredImageProfileId: UUIDSchema.nullable().optional(),
+  /** Candid vision fallback when the image-description profile refuses. Was ChatSettings.uncensoredImageDescriptionProfileId. */
+  uncensoredVisionProfileId: UUIDSchema.nullable().optional(),
+  /** Any connection profile; crafts image prompts for the uncensored desk. Was cheapLLMSettings.imagePromptProfileId. */
+  imagePromptProfileId: UUIDSchema.nullable().optional(),
+
+  /** After this many stated refusals on a Moderated chat the Concierge switches it. 0 = never. */
+  autoSwitchAfterRefusals: z.number().int().min(0).max(10).default(2),
+  /** The state a new chat starts in when the request names none. */
+  newChatsStartAs: ConciergeNewChatStateEnum.default('moderated'),
+
+  display: ConciergeDisplaySettingsSchema.default({
+    mode: 'SHOW',
+    showWarningBadges: true,
+  }),
+
+  preScreen: ConciergePreScreenSettingsSchema.default({
+    enabled: false,
+    threshold: 0.7,
+    scanTextChat: true,
+    scanImagePrompts: true,
+    scanImageGeneration: false,
+    summaryClassification: false,
+  }),
+});
+
+export type ConciergeSettings = z.infer<typeof ConciergeSettingsSchema>;
 
 // ============================================================================
 // AUTO-LOCK SETTINGS
@@ -560,12 +601,6 @@ export const ChatSettingsSchema = z.object({
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */
   imageDescriptionProfileId: UUIDSchema.nullable().optional(),
-  /**
-   * Profile ID to use as a candid fallback when `imageDescriptionProfileId`
-   * refuses or returns an unusable response. Typically an uncensored
-   * vision-capable model that can describe images the primary refuses to.
-   */
-  uncensoredImageDescriptionProfileId: UUIDSchema.nullable().optional(),
   /** Default roleplay template ID for all new chats */
   defaultRoleplayTemplateId: UUIDSchema.nullable().optional(),
   /** Theme preference settings */
@@ -683,16 +718,20 @@ export const ChatSettingsSchema = z.object({
     enabled: false,
     defaultImageProfileId: null,
   }),
-  /** Dangerous content detection and routing settings */
-  dangerousContentSettings: DangerousContentSettingsSchema.default({
-    mode: 'OFF',
-    threshold: 0.7,
-    scanTextChat: true,
-    scanImagePrompts: true,
-    scanImageGeneration: false,
-    displayMode: 'SHOW',
-    showWarningBadges: true,
+  /** The Concierge: failover to the uncensored desk, display of flagged content, the optional pre-screen */
+  conciergeSettings: ConciergeSettingsSchema.default({
+    enabled: true,
     autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: false,
+    },
   }),
   /** Auto-lock settings for automatic idle timeout locking */
   autoLockSettings: AutoLockSettingsSchema.default({

@@ -18,9 +18,9 @@ import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { LLMStreamStalledError } from '@/lib/llm/stream-watchdog';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveSamplingParams } from '@/lib/llm/sampling-params';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
-import { mayFailOver, shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { mayFailOver, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
 import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
@@ -138,8 +138,9 @@ const createChatSchema = z.object({
   /**
    * Per-chat Concierge state to set at creation, using the same enum as the
    * sidebar's PUT `conciergeState` ('moderated' | 'unmoderated' | 'locked').
-   * Omitted or 'moderated' → the chat is created Moderated (no write, no
-   * announcement). The retired four-state values are rejected with 400. Any other value is
+   * Omitted → the operator's `conciergeSettings.newChatsStartAs` default
+   * (when the Concierge is on duty). 'moderated' → the chat is created
+   * Moderated (no write, no announcement). The retired four-state values are rejected with 400. Any other value is
    * applied through `applyConciergeFlip` after the system-prompt message and
    * before any staff announcement or greeting, so the Concierge's bubble sits
    * where the history says the state was set and the opening greeting is
@@ -405,6 +406,30 @@ async function applyRequestedConciergeState(
         conciergeModeReason: fresh.conciergeModeReason ?? null,
       }
     : asCreated;
+}
+
+/**
+ * The Concierge state a new chat should start in. The request's own
+ * `conciergeState` wins; absent, the operator's `newChatsStartAs` default
+ * applies — but only where the Concierge is on duty for this chat (enabled
+ * globally and not a moderation-exempt chat type), so an off-duty Concierge
+ * never posts an announcement on a brand-new chat.
+ */
+function requestedConciergeStateAtCreation(
+  requested: ConciergeState | undefined,
+  chatSettings: Parameters<typeof resolveConciergeSettings>[0],
+  chat: ChatMetadata,
+): ConciergeState | undefined {
+  if (requested) return requested;
+  const policy = resolveConciergeSettings(chatSettings, chat);
+  const fallback = policy.onDuty ? policy.newChatsStartAs : undefined;
+  logger.debug('[Chats v1] No Concierge state requested at creation; using the default', {
+    chatId: chat.id,
+    newChatsStartAs: policy.newChatsStartAs,
+    conciergeSource: policy.source,
+    applied: fallback ?? 'none',
+  });
+  return fallback;
 }
 
 /** The chat's stored Concierge columns, as the create response carries them. */
@@ -744,30 +769,47 @@ async function autoGenerateFirstMessage(
   // asks the frank desk first instead of discovering it after a refusal.
   const chatRow = await repos.chats.findById(chatId);
 
+  // The resolver is asked WITH the chat: an Unmoderated chat routes direct,
+  // a Locked chat never fails over, and an off-duty Concierge does neither.
+  const conciergePolicy = resolveConciergeSettings(
+    await repos.chatSettings.findByUserId(userId),
+    chatRow,
+  );
+  logger.debug('[Chats v1] Resolved Concierge policy for greeting', {
+    chatId,
+    conciergeSource: conciergePolicy.source,
+    conciergeState: conciergePolicy.state,
+    routeDirect: conciergePolicy.routeDirect,
+    failoverAllowed: conciergePolicy.failoverAllowed,
+  });
+
   /**
    * Generate the greeting on the Concierge's uncensored desk. Returns null when
-   * there is nothing to reroute to (the resolved mode isn't `AUTO_ROUTE`, no
-   * uncensored profile is configured, its key is unusable) or the attempt came
-   * back empty, so the caller falls through to the participant's own profile.
-   *
-   * The resolver is asked WITH the chat: a Locked chat collapses to
-   * `mode: 'OFF'` and never reroutes, and an Unmoderated chat reroutes even
-   * when the global mode is `OFF`.
+   * there is nothing to reroute to (the policy does not permit this trigger —
+   * `routeDirect` for the chat's own state, `failoverAllowed` for a content
+   * filter — no uncensored profile is configured, its key is unusable) or the
+   * attempt came back empty, so the caller falls through to the participant's
+   * own profile.
    */
   const generateViaUncensoredDesk = async (
     trigger: 'chat-state' | 'content-filter',
   ): Promise<GeneratedGreeting | null> => {
-    const chatSettings = await repos.chatSettings.findByUserId(userId);
-    const resolved = resolveDangerousContentSettings(chatSettings, chatRow);
-
-    if (resolved.settings.mode !== 'AUTO_ROUTE') {
+    const permitted = trigger === 'chat-state'
+      ? conciergePolicy.routeDirect
+      : conciergePolicy.failoverAllowed;
+    if (!permitted) {
+      logger.debug('[Chats v1] Concierge policy does not permit the uncensored desk for this greeting', {
+        chatId,
+        trigger,
+        conciergeSource: conciergePolicy.source,
+      });
       return null;
     }
 
     const routeResult = await resolveProviderForDangerousContent(
       connectionProfile,
       apiKey,
-      resolved.settings,
+      conciergePolicy,
       userId
     );
 
@@ -778,7 +820,7 @@ async function autoGenerateFirstMessage(
     logger.info('[Chats v1] Generating greeting on the Concierge uncensored provider', {
       characterId: context.character.id,
       trigger,
-      settingsSource: resolved.source,
+      conciergeSource: conciergePolicy.source,
       uncensoredProfile: routeResult.connectionProfile.name,
       uncensoredProvider: routeResult.connectionProfile.provider,
       uncensoredModel: routeResult.connectionProfile.modelName,
@@ -849,7 +891,7 @@ async function autoGenerateFirstMessage(
   // three-attempt ladder below (with memories → without → uncensored on a
   // content filter) stays the path for Moderated and Locked chats.
   let uncensoredDeskTried = false;
-  if (shouldUseUncensoredRoute(chatRow)) {
+  if (conciergePolicy.routeDirect) {
     uncensoredDeskTried = true;
     try {
       const rerouted = await generateViaUncensoredDesk('chat-state');
@@ -1395,7 +1437,12 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     progress.status('Setting the opening scene…');
   }
   await writeSystemPromptMessage(chat.id, chatContext, repos);
-  const conciergeColumns = await applyRequestedConciergeState(chat, validatedData.conciergeState, progress, repos);
+  const conciergeColumns = await applyRequestedConciergeState(
+    chat,
+    requestedConciergeStateAtCreation(validatedData.conciergeState, chatSettings, chat),
+    progress,
+    repos,
+  );
   if (validatedData.continuationFromChatId) {
     try {
       await applyChatContinuation({

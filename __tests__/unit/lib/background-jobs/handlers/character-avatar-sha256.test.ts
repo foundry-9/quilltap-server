@@ -26,7 +26,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge'
 
 jest.mock('@/lib/logger', () => {
@@ -42,7 +42,7 @@ jest.mock('@/lib/wardrobe/avatar-prompt', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
+  resolveConciergeSettings: jest.fn(),
 }))
 
 jest.mock('@/lib/llm/plugin-factory', () => ({
@@ -72,7 +72,7 @@ const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
 const mockBuildPrompt = jest.mocked(buildCharacterAvatarPrompt)
-const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
+const mockResolveDanger = jest.mocked(resolveConciergeSettings)
 const mockWriteVault = jest.mocked(writeCharacterAvatarToVault)
 
 function makeJob() {
@@ -145,7 +145,7 @@ beforeEach(() => {
   } as any)
 
   // Dangerous-content scanning OFF → the entire classifier block is skipped.
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as any)
+  mockResolveDanger.mockReturnValue({ onDuty: false, state: 'moderated', failoverAllowed: false, routeDirect: false, preScreen: { enabled: false, threshold: 0.7, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null }, summaryClassification: false, autoSwitchAfterRefusals: 0, desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null }, display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'off-duty' } as any)
 
   mockCreateImageProvider.mockReturnValue({
     generateImage: jest.fn().mockResolvedValue({

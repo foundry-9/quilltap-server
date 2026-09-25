@@ -9,7 +9,8 @@
  */
 
 import { Provider, ConnectionProfile } from '@/lib/schemas/types'
-import { ContextCompressionSettings, DangerousContentSettings } from '@/lib/schemas/settings.types'
+import { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
 import { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
   compressConversationHistory,
@@ -43,8 +44,8 @@ export interface ContextCompressionOptions {
   characterName: string
   /** User character name for compression prompt */
   userName: string
-  /** Dangerous content settings for uncensored fallback */
-  dangerSettings?: DangerousContentSettings
+  /** The chat's Concierge policy, for uncensored fallback */
+  conciergePolicy?: ResolvedConciergePolicy
   /** Available connection profiles for uncensored fallback */
   availableProfiles?: ConnectionProfile[]
   /**
@@ -235,10 +236,10 @@ export async function applyContextCompression(
     content: m.content,
   }))
 
-  // Build uncensored fallback options if danger settings are provided
+  // Build uncensored fallback options if a Concierge policy is provided
   const uncensoredFallback: UncensoredFallbackOptions | undefined =
-    options.dangerSettings && options.availableProfiles
-      ? { dangerSettings: options.dangerSettings, availableProfiles: options.availableProfiles }
+    options.conciergePolicy && options.availableProfiles
+      ? { conciergePolicy: options.conciergePolicy, availableProfiles: options.availableProfiles }
       : undefined
 
   let compressedHistory: string | undefined

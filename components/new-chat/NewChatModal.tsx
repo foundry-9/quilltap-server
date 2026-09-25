@@ -119,6 +119,8 @@ export function NewChatModal({
     state,
     setState,
     handleCreateChat,
+    conciergeOnDuty,
+    conciergeDefaultState,
   } = useNewChat({
     initialCharacterId: isOpen && !isContinuation ? characterId : undefined,
     projectId: isOpen ? projectId : undefined,
@@ -257,7 +259,9 @@ export function NewChatModal({
               continuationFromChatId={continuationFromChatId ?? null}
               previousOutfitSummary={previousOutfitSummary}
               autonomousSettingsHint={autonomousHint}
-            onScenarioTiersChanged={refetchScenarioTiers}
+              onScenarioTiersChanged={refetchScenarioTiers}
+              conciergeOnDuty={conciergeOnDuty}
+              conciergeDefaultState={conciergeDefaultState}
             />
           </div>
         )}

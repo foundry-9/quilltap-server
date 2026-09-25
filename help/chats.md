@@ -117,13 +117,15 @@ Some conversations announce their character before the first syllable is spoken,
 
 The new-chat form therefore carries **The Concierge** directly above **Starting Scenario**, offering the same three postures as the chat's own sidebar:
 
-- *Moderated* — the default, and the state of every chat that has ever been created without a word on the subject. The usual providers first; the uncensored desk only when one of them refuses.
+- *Moderated* — the default, and the state of every chat created without a word on the subject (unless you have told the Concierge that **New chats start as** Unmoderated, on his tab at `/settings?tab=concierge&section=refusals`). The usual providers first; the uncensored desk only when one of them refuses.
 - *Unmoderated* — the uncensored desk and nowhere else.
 - *Locked* — the usual providers only, and a refusal stands.
 
 Beneath the dropdown, the Concierge states plainly what the posture you have selected commits him to. Choose one other than Moderated and he posts a brief note at the top of the new conversation saying so, immediately after the system prompt and before the scene is set — the history is thereby honest about which arrangement was in force from the very first word. The opening greeting is then composed under that arrangement: a chat opened *Unmoderated* goes to the frank desk on the first attempt rather than after a refusal, and a chat opened *Locked* is never rerouted at all.
 
 Two consequences worth knowing before you choose. A chat created *Unmoderated* wears its mark in every list from its first appearance, and vanishes the moment you pull the **Quick-hide** cord with *Dangerous Chats* selected — which is generally the point. And when you take a conversation elsewhere by way of **Continue Elsewhere**, the new venue inherits the old one's posture, so a spirited conversation does not quietly become a decorous one on changing rooms; the dropdown is right there should you wish otherwise.
+
+Should the Concierge be off duty altogether (see [The Concierge](the-concierge.md)), the dropdown is shown but disabled, with a note directing you to the switch.
 
 None of this is a life sentence. The **The Concierge** control in the chat's own sidebar remains exactly where it was, ready to reconsider the matter at any hour.
 

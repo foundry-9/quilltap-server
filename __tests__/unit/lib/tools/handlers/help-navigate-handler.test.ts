@@ -28,7 +28,7 @@ describe('validateHelpNavigateInput', () => {
   it('accepts supported internal routes with query parameters', () => {
     expect(
       validateHelpNavigateInput({
-        url: '/settings?tab=chat&section=dangerous-content',
+        url: '/settings?tab=concierge&section=uncensored-desk',
       })
     ).not.toBeNull()
 

@@ -31,9 +31,9 @@ The scene state feeds into several systems:
 - A configured **Cheap LLM** (the scene tracker uses the same lightweight model as memory extraction, title generation, and other background tasks)
 - Characters in your chat (the tracker needs someone to track)
 
-## Dangerous Content Handling
+## Unmoderated Chats
 
-For **Unmoderated** chats (whether the Concierge or you set them so), the scene tracker automatically uses the uncensored LLM provider (if configured) to ensure accurate scene descriptions aren't refused by content filters.
+For **Unmoderated** chats (whether the Concierge or you set them so), the scene tracker automatically uses the uncensored text profile from the Concierge's desk (if one is available) to ensure accurate scene descriptions aren't refused by content filters. See [The Concierge](the-concierge.md).
 
 ## Performance
 

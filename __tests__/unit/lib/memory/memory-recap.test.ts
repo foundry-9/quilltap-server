@@ -421,9 +421,9 @@ describe('Memory Recap Service', () => {
       })
 
       const uncensoredFallback = {
-        dangerSettings: {
-          mode: 'AUTO_ROUTE' as const,
-          uncensoredTextProfileId: 'uncensored-profile-id',
+        conciergePolicy: {
+          failoverAllowed: true,
+          desk: { textProfileId: 'uncensored-profile-id' },
         },
         availableProfiles: [
           { id: 'uncensored-profile-id', name: 'Uncensored Provider' },

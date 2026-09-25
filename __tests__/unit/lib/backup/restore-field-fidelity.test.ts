@@ -23,6 +23,7 @@ import { parseBackupZip } from '@/lib/backup/restore/archive';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
 import { rawQuery } from '@/lib/database/manager';
+import { ChatMetadataBaseSchema } from '@/lib/schemas/chat.types';
 
 jest.mock('@/lib/backup/restore/archive', () => ({
   parseBackupZip: jest.fn(),
@@ -147,7 +148,11 @@ const NEW_EQUIPPED_OUTFIT = {
  * some restored row happens to carry the new value.
  */
 
-/** `chats.conciergeOverride` grew a fourth state in 4.9; the column did not change. */
+/**
+ * `chats.conciergeOverride` grew a fourth state in 4.9, was superseded by
+ * `conciergeMode` in 4.10, and its column was dropped in 4.10 too. Old
+ * archives still carry it.
+ */
 const WIDENED_CONCIERGE_OVERRIDE = 'UNCENSORED'
 
 /** `chat_settings.cheapLLMSettings` (a JSON column) grew `allowCheapFallback` in 4.10. */
@@ -375,7 +380,7 @@ describe('restore field fidelity — 4.9 data-model additions', () => {
     expect(chatsCreate.mock.calls[0][0]).toMatchObject({ equippedOutfit: NEW_EQUIPPED_OUTFIT })
   })
 
-  it("carries the widened conciergeOverride domain ('UNCENSORED') through restore", async () => {
+  it("derives conciergeMode from a legacy conciergeOverride ('UNCENSORED') before the schema strips it", async () => {
     const { chatsCreate } = buildRepoMocks()
     primeArchive(
       makeBackupData({
@@ -397,12 +402,81 @@ describe('restore field fidelity — 4.9 data-model additions', () => {
 
     await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
 
-    // The fourth state is a *value*, not a column: a restore that narrowed it
-    // back to 'OFF' or dropped it would silently re-arm the classifier on a
-    // chat whose operator had already ruled on it.
-    expect(chatsCreate.mock.calls[0][0]).toMatchObject({
-      conciergeOverride: WIDENED_CONCIERGE_OVERRIDE,
+    // The operator's ruling is a *value* the dropped column carried: the
+    // restore must turn it into conciergeMode before the row reaches the
+    // repository, whose schema no longer knows conciergeOverride.
+    const payload = chatsCreate.mock.calls[0][0]
+    expect(payload).toMatchObject({
+      conciergeMode: 'unmoderated',
+      conciergeModeSetBy: 'operator',
+      conciergeModeReason: 'migration',
     })
+    const stored = ChatMetadataBaseSchema
+      .pick({ conciergeMode: true, conciergeModeSetBy: true, conciergeModeReason: true })
+      .parse(payload) as Record<string, unknown>
+    expect(stored.conciergeMode).toBe('unmoderated')
+    // The schema no longer declares the legacy field, so it would be stripped.
+    expect('conciergeOverride' in ChatMetadataBaseSchema.shape).toBe(false)
+  })
+
+  it('translates pre-4.10 Concierge settings into conciergeSettings through restore', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chatSettings: [
+          {
+            id: 'settings-1',
+            userId: 'old-user',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            dangerousContentSettings: {
+              mode: 'AUTO_ROUTE',
+              threshold: 0.6,
+              uncensoredTextProfileId: '11111111-1111-4111-8111-111111111111',
+              displayMode: 'BLUR',
+            },
+            uncensoredImageDescriptionProfileId: '33333333-3333-4333-8333-333333333333',
+            cheapLLMSettings: { ...NEW_CHEAP_LLM_SETTINGS, imagePromptProfileId: '44444444-4444-4444-8444-444444444444' },
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0]).toMatchObject({
+      conciergeSettings: {
+        enabled: true,
+        uncensoredTextProfileId: '11111111-1111-4111-8111-111111111111',
+        uncensoredVisionProfileId: '33333333-3333-4333-8333-333333333333',
+        imagePromptProfileId: '44444444-4444-4444-8444-444444444444',
+        display: { mode: 'BLUR' },
+        preScreen: { enabled: true, threshold: 0.6, summaryClassification: true },
+      },
+    })
+  })
+
+  it('leaves a 4.10 archive\'s conciergeSettings exactly as stored', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    const conciergeSettings = { enabled: false, autoSwitchAfterRefusals: 0 }
+    primeArchive(
+      makeBackupData({
+        chatSettings: [
+          {
+            id: 'settings-1',
+            userId: 'old-user',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            conciergeSettings,
+            dangerousContentSettings: { mode: 'AUTO_ROUTE' },
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatSettingsCreate.mock.calls[0][0].conciergeSettings).toEqual(conciergeSettings)
   })
 
   it('carries the cheap-LLM fallback opt-in inside cheapLLMSettings through restore', async () => {

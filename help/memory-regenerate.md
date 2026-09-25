@@ -24,7 +24,7 @@ Memories whose chat has already been deleted (orphans) are also wiped, since not
 
 ## What About Dangerous Chats?
 
-If a chat has been classified as containing dangerous content and you have configured a **dangerous-compatible cheap LLM** in the Chat tab — either via the explicit *Uncensored Text Profile* setting or by marking a connection profile as both *Cheap* and *Dangerous-Compatible* — that profile will be used to extract memories from that chat. Other chats use your standard cheap LLM as usual. This routing happens automatically; you don't need to do anything special beyond having the dangerous profile configured.
+If a chat is **Unmoderated** and an uncensored text profile is available — either named as the *Uncensored text profile* on the Concierge's desk (`/settings?tab=concierge&section=uncensored-desk`) or found by marking a connection profile as both *Cheap* and *Uncensored-compatible* — that profile will be used to extract memories from that chat. Other chats use your standard cheap LLM as usual. This routing happens automatically; you don't need to do anything special beyond having the dangerous profile configured.
 
 ## How Fast the Sweep Runs
 

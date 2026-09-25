@@ -16,7 +16,7 @@ import { handleStoryBackgroundGeneration } from '@/lib/background-jobs/handlers/
 import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
@@ -43,7 +43,7 @@ jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 jest.mock('@/lib/llm/plugin-factory', () => ({ createImageProvider: jest.fn() }))
 jest.mock('@/lib/files/webp-conversion', () => ({ convertToWebP: jest.fn() }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
+  resolveConciergeSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
@@ -90,7 +90,7 @@ const CRAFTED_PROMPT =
 const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
-const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
+const mockResolveDanger = jest.mocked(resolveConciergeSettings)
 const mockShouldUseUncensoredRoute = jest.mocked(shouldUseUncensoredRoute)
 const mockGetCheapLLM = jest.mocked(getCheapLLMProvider)
 const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelection)
@@ -177,7 +177,7 @@ beforeEach(() => {
     files: { create: jest.fn().mockResolvedValue({ id: 'file-1' }) },
   } as never)
 
-  mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as never)
+  mockResolveDanger.mockReturnValue({ onDuty: false, state: 'moderated', failoverAllowed: false, routeDirect: false, preScreen: { enabled: false, threshold: 0.7, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null }, summaryClassification: false, autoSwitchAfterRefusals: 0, desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null }, display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'off-duty' } as never)
   mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockGetCheapLLM.mockReturnValue(SELECTION)
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)

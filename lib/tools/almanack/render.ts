@@ -662,12 +662,28 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
 function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('### Feature Configuration', '');
   const fc = data.featureConfig;
-  push('#### The Concierge (Dangerous Content)', '');
-  push(`- **Mode**: ${fc.dangerousContent.mode}`);
-  push(`- **Threshold**: ${fc.dangerousContent.threshold}`);
-  push(`- **Scan Text Chat**: ${yesNo(fc.dangerousContent.scanTextChat)}`);
-  push(`- **Scan Image Prompts**: ${yesNo(fc.dangerousContent.scanImagePrompts)}`);
-  push(`- **Scan Image Generation**: ${yesNo(fc.dangerousContent.scanImageGeneration)}`, '');
+  const cg = fc.concierge;
+  const pinned = (set: boolean) => (set ? 'pinned' : 'auto-detect');
+  push('#### The Concierge', '');
+  push(`- **On Duty**: ${yesNo(cg.enabled)}`);
+  push(`- **New Chats Start As**: ${cg.newChatsStartAs}`);
+  push(
+    `- **Auto-Switch After Refusals**: ${cg.autoSwitchAfterRefusals === 0 ? 'never' : cg.autoSwitchAfterRefusals}`,
+  );
+  push(`- **Display**: ${cg.display.mode} (warning badges: ${yesNo(cg.display.showWarningBadges)})`);
+  push(
+    `- **Uncensored Desk**: text ${pinned(cg.desk.textProfileSet)}, ` +
+      `image ${pinned(cg.desk.imageProfileSet)}, ` +
+      `vision ${cg.desk.visionProfileSet ? 'pinned' : 'none'}, ` +
+      `image-prompt crafter ${cg.desk.imagePromptProfileSet ? 'pinned' : 'none'}`,
+  );
+  push(`- **Pre-Screen**: ${yesNo(cg.preScreen.enabled)}`);
+  push(`- **Pre-Screen Threshold**: ${cg.preScreen.threshold}`);
+  push(`- **Scan Text Chat**: ${yesNo(cg.preScreen.scanTextChat)}`);
+  push(`- **Scan Image Prompts**: ${yesNo(cg.preScreen.scanImagePrompts)}`);
+  push(`- **Scan Image Generation**: ${yesNo(cg.preScreen.scanImageGeneration)}`);
+  push(`- **Custom Classification Prompt**: ${yesNo(cg.preScreen.customClassificationPrompt)}`);
+  push(`- **Summary Classification**: ${yesNo(cg.summaryClassification)}`, '');
 
   push('#### Context Compression', '');
   push(`- **Enabled**: ${yesNo(fc.contextCompression.enabled)}`);
@@ -731,7 +747,7 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('#### Image Description', '');
   push(`- **Primary profile configured**: ${yesNo(fc.imageDescriptionProfileConfigured)}`);
   push(
-    `- **Uncensored fallback configured**: ${yesNo(fc.uncensoredImageDescriptionProfileConfigured)}`,
+    `- **Uncensored fallback configured**: ${yesNo(fc.uncensoredVisionProfileConfigured)}`,
     '',
   );
 }

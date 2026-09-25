@@ -3,7 +3,7 @@
  *
  * Pre-flight rerouting of content the Concierge flagged. Thin wrappers over
  * `understudy.ts`, which owns *who* could stand in; these own *whether* to
- * ask (`AUTO_ROUTE`). Post-hoc refusals go through `image-failover.ts` and the
+ * ask (the policy's `routeDirect` or `failoverAllowed`). Post-hoc refusals go through `image-failover.ts` and the
  * text failover service, which ask the same resolver.
  *
  * If no uncensored provider is available, returns the original profile (never blocks).
@@ -16,7 +16,7 @@ import {
   resolveUncensoredTextUnderstudy,
 } from './understudy'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { ResolvedConciergePolicy } from './resolver.service'
 
 const logger = createServiceLogger('DangerousContentProviderRouting')
 
@@ -52,7 +52,7 @@ export interface DangerousImageProviderRouteResult {
  * Resolve the appropriate text LLM provider for dangerous content
  *
  * Logic:
- * 1. If mode !== AUTO_ROUTE, return original profile
+ * 1. Unless the policy routes direct or allows failover, return original profile
  * 2. Otherwise ask `resolveUncensoredTextUnderstudy` (the configured
  *    uncensored profile, then any `isDangerousCompatible` one, preferring one
  *    that can carry this turn's attachments), excluding the original
@@ -60,7 +60,7 @@ export interface DangerousImageProviderRouteResult {
  *
  * @param originalProfile - The original connection profile
  * @param originalApiKey - The decrypted API key for the original profile
- * @param settings - The dangerous content settings
+ * @param conciergePolicy - The chat's resolved Concierge policy
  * @param userId - The user ID
  * @param turnAttachmentMimeTypes - MIME types riding along in this turn's
  *   message array, if any (bug 106). A preference, not a filter — see
@@ -70,30 +70,34 @@ export interface DangerousImageProviderRouteResult {
 export async function resolveProviderForDangerousContent(
   originalProfile: ConnectionProfile,
   originalApiKey: string,
-  settings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   userId: string,
   turnAttachmentMimeTypes: string[] = []
 ): Promise<DangerousProviderRouteResult> {
-  // The policy lives here, in the wrapper; the resolver never reads the mode.
-  if (settings.mode !== 'AUTO_ROUTE') {
+  // The policy lives here, in the wrapper; the understudy resolver never reads it.
+  if (!conciergePolicy.routeDirect && !conciergePolicy.failoverAllowed) {
+    logger.debug('[DangerousContent] Rerouting not permitted by Concierge policy', {
+      conciergeSource: conciergePolicy.source,
+      conciergeState: conciergePolicy.state,
+    })
     return {
       rerouted: false,
       connectionProfile: originalProfile,
       apiKey: originalApiKey,
-      reason: `Mode is ${settings.mode}, no rerouting`,
+      reason: `Concierge policy (${conciergePolicy.source}) does not permit rerouting`,
     }
   }
 
   try {
     const understudy = await resolveUncensoredTextUnderstudy({
       userId,
-      settings,
+      conciergePolicy,
       exclude: [originalProfile.id],
       turnAttachmentMimeTypes,
     })
 
     if (understudy) {
-      const configured = understudy.profile.id === settings.uncensoredTextProfileId
+      const configured = understudy.profile.id === conciergePolicy.desk.textProfileId
       logger.info('[DangerousContent] Rerouting to uncensored text profile', {
         profileId: understudy.profile.id,
         profileName: understudy.profile.name,
@@ -138,38 +142,42 @@ export async function resolveProviderForDangerousContent(
  * Resolve the appropriate image provider for dangerous content (pre-flight).
  *
  * Same order as the post-hoc failover, because both ask
- * `resolveUncensoredImageUnderstudy`; the `AUTO_ROUTE` gate stays here.
+ * `resolveUncensoredImageUnderstudy`; the policy gate stays here.
  *
  * @param originalProfile - The original image profile
  * @param originalApiKey - The decrypted API key for the original profile
- * @param settings - The dangerous content settings
+ * @param conciergePolicy - The chat's resolved Concierge policy
  * @param userId - The user ID
  * @returns Route result with effective image profile and API key
  */
 export async function resolveImageProviderForDangerousContent(
   originalProfile: ImageProfile,
   originalApiKey: string,
-  settings: DangerousContentSettings,
+  conciergePolicy: ResolvedConciergePolicy,
   userId: string
 ): Promise<DangerousImageProviderRouteResult> {
-  if (settings.mode !== 'AUTO_ROUTE') {
+  if (!conciergePolicy.routeDirect && !conciergePolicy.failoverAllowed) {
+    logger.debug('[DangerousContent] Image rerouting not permitted by Concierge policy', {
+      conciergeSource: conciergePolicy.source,
+      conciergeState: conciergePolicy.state,
+    })
     return {
       rerouted: false,
       imageProfile: originalProfile,
       apiKey: originalApiKey,
-      reason: `Mode is ${settings.mode}, no rerouting`,
+      reason: `Concierge policy (${conciergePolicy.source}) does not permit rerouting`,
     }
   }
 
   try {
     const understudy = await resolveUncensoredImageUnderstudy({
       userId,
-      settings,
+      conciergePolicy,
       exclude: [originalProfile.id],
     })
 
     if (understudy) {
-      const configured = understudy.profile.id === settings.uncensoredImageProfileId
+      const configured = understudy.profile.id === conciergePolicy.desk.imageProfileId
       logger.info('[DangerousContent] Rerouting to uncensored image profile', {
         profileId: understudy.profile.id,
         profileName: understudy.profile.name,

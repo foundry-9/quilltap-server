@@ -259,12 +259,26 @@ export function makeAlmanackFixture(
       coreWhisperOverrides: 5,
     },
     featureConfig: {
-      dangerousContent: {
-        mode: 'AUTO_ROUTE',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
+      concierge: {
+        enabled: true,
+        newChatsStartAs: 'moderated',
+        autoSwitchAfterRefusals: 2,
+        display: { mode: 'SHOW', showWarningBadges: true },
+        desk: {
+          textProfileSet: true,
+          imageProfileSet: false,
+          visionProfileSet: false,
+          imagePromptProfileSet: true,
+        },
+        preScreen: {
+          enabled: true,
+          threshold: 0.7,
+          scanTextChat: true,
+          scanImagePrompts: true,
+          scanImageGeneration: false,
+          customClassificationPrompt: false,
+        },
+        summaryClassification: true,
       },
       contextCompression: { enabled: true, windowSize: 5, compressionTargetTokens: 800 },
       agentMode: { maxTurns: 10, defaultEnabled: false },
@@ -298,7 +312,7 @@ export function makeAlmanackFixture(
       composerSpellcheck: true,
       autoScrollOnResponseComplete: false,
       imageDescriptionProfileConfigured: true,
-      uncensoredImageDescriptionProfileConfigured: false,
+      uncensoredVisionProfileConfigured: false,
     },
     instanceSettings: {
       staleChatDays: 30,

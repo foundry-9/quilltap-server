@@ -18,6 +18,12 @@ import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { RegenerationState } from '../hooks/useRegeneration'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
+/** Off duty, the Concierge flags nothing visibly: everything is shown plainly. */
+const OFF_DUTY_CONCIERGE_DISPLAY: NonNullable<ChatSettings['conciergeSettings']>['display'] = {
+  mode: 'SHOW',
+  showWarningBadges: false,
+}
+
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
    *  backward participant-walk and the near-end forceRender heuristic. */
@@ -319,7 +325,9 @@ export function VirtualizedMessageList({
                   waitingForResponse={waitingForResponse}
                   userParticipantId={userParticipantId}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
-                  dangerousContentSettings={chatSettings?.dangerousContentSettings}
+                  conciergeDisplay={chatSettings?.conciergeSettings?.enabled === false
+                    ? OFF_DUTY_CONCIERGE_DISPLAY
+                    : chatSettings?.conciergeSettings?.display}
                   onOverrideDangerFlag={onOverrideDangerFlag}
                   character={getCharacterForMessage(message)}
                   chatId={chatId}

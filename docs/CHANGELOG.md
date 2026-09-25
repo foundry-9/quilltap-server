@@ -4,6 +4,49 @@
 
 ### 4.10-dev
 
+#### Changed: the Concierge's own Settings tab (Concierge overhaul, phase 4)
+
+- New Settings tab **The Concierge** (`/settings?tab=concierge`) with five cards: On duty
+  (`on-duty`), The uncensored desk (`uncensored-desk`), When a provider refuses (`refusals`),
+  Display (`display`), and Pre-screening (`pre-screening`, collapsed). `/foundry/concierge` and the
+  Foundry card point at it.
+- New `chat_settings.conciergeSettings` (`ConciergeSettingsSchema`): `enabled`, the four desk
+  profiles (`uncensoredTextProfileId`, `uncensoredImageProfileId`, `uncensoredVisionProfileId`,
+  `imagePromptProfileId`), `autoSwitchAfterRefusals`, `newChatsStartAs`, `display { mode,
+  showWarningBadges }`, `preScreen { enabled, threshold, three scans, customClassificationPrompt,
+  summaryClassification }`. It replaces `dangerousContentSettings`, the top-level
+  `uncensoredImageDescriptionProfileId`, and `cheapLLMSettings.imagePromptProfileId`, which are no
+  longer read (columns kept; a later migration drops them).
+- The global mode (`OFF` / `DETECT_ONLY` / `AUTO_ROUTE`) is retired. Migration
+  `add-concierge-settings-v1`: `OFF` → off duty; `DETECT_ONLY` and `AUTO_ROUTE` → on duty with the
+  pre-screen and summary classification on. **Behaviour change:** a `DETECT_ONLY` user now gets
+  refusal failover. An `OFF` user with any Unmoderated chat is kept on duty (pre-screen off) so
+  those chats keep the uncensored desk. The same translation runs on restore of a pre-4.10 backup.
+- New installs: the Concierge is on duty with failover and no classifier. The per-message
+  pre-screen, the summary classifier and the 10-minute sweep run only when opted in; the sweep
+  does not start unless some user has `summaryClassification` on.
+- `resolveConciergeSettings(global, chat)` replaces `resolveDangerousContentSettings` and returns a
+  policy (`onDuty`, `failoverAllowed`, `routeDirect`, `preScreen`, `summaryClassification`,
+  `autoSwitchAfterRefusals`, `desk`, `display`, `source`). Every `mode` check now asks the named
+  question. Locked, exempt and off-duty chats get an empty desk, including the image-prompt crafter
+  and the vision fallback.
+- Off duty: no failover, no announcements, no auto-switch, no pre-screen; the per-chat Concierge
+  select in the Salon sidebar and New Chat form is disabled with a pointer to the tab, and the
+  Salon shows flagged content plainly.
+- `newChatsStartAs` sets a new chat's state when the request names none (only while on duty); the
+  New Chat form preselects it.
+- `PUT /api/v1/settings/chat` validates `conciergeSettings` and returns `400` for
+  `dangerousContentSettings`, `uncensoredImageDescriptionProfileId` or
+  `cheapLLMSettings.imagePromptProfileId`.
+- `help_settings` gains a `concierge` category; `chat` no longer returns Concierge settings.
+- Removed from the Chat tab: the Dangerous Content card, the uncensored vision fallback in Image
+  Description, and the Image Prompt Expansion LLM picker (all now on the desk card).
+- Help: `help/dangerous-content.md` renamed `help/the-concierge.md` and rewritten; every link
+  repointed; `help/settings.md` now lists eight tabs.
+- Phase 3 carry-overs: migration `drop-chat-concierge-override-v1` drops `chats.conciergeOverride`
+  and the field leaves `ChatMetadataSchema`; `.qtap` import and backup restore still derive
+  `conciergeMode` from it (tested), and the export schema keeps it as deprecated.
+
 #### Fixed: Concierge state races (PR #75 review)
 
 - `conciergeMode` / `conciergeModeSetBy` / `conciergeModeReason` are patch-only on `chats`: a

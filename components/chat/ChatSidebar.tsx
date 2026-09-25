@@ -17,6 +17,8 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { patchChat } from '@/lib/chat/patch-chat'
 import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { ConciergeOffDutyHint } from './ConciergeOffDutyHint'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { CopyChatIdButton } from './CopyChatIdButton'
@@ -957,6 +959,11 @@ function ChatSection({
   const [alertImagesSaving, setAlertImagesSaving] = useState(false)
   const [avatarGenSaving, setAvatarGenSaving] = useState(false)
   const [conciergeSaving, setConciergeSaving] = useState(false)
+  // Off duty globally, the per-chat state does nothing; the select is
+  // disabled (not hidden) and points at the switch.
+  const { data: conciergeOnDuty = true } = useChatSettingsQuery(
+    (settings) => settings.conciergeSettings?.enabled !== false,
+  )
   const [timelineModeSaving, setTimelineModeSaving] = useState(false)
 
   // Sync from props when chat record changes upstream
@@ -1164,14 +1171,18 @@ function ChatSection({
         <select
           value={conciergeState}
           onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
-          disabled={conciergeSaving}
+          disabled={conciergeSaving || !conciergeOnDuty}
           className="qt-select text-sm"
         >
           {CONCIERGE_STATES.map((value) => (
             <option key={value} value={value}>{CONCIERGE_STATE_PRESENTATION[value].label}</option>
           ))}
         </select>
-        <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
+        {conciergeOnDuty ? (
+          <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
+        ) : (
+          <ConciergeOffDutyHint className="block mt-1 qt-text-secondary text-xs" />
+        )}
       </label>
 
       {/* Agent Mode */}

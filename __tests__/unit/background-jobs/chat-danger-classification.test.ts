@@ -1,7 +1,6 @@
 import { handleChatDangerClassification } from '@/lib/background-jobs/handlers/chat-danger-classification';
 import { getRepositories } from '@/lib/repositories/factory';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
-import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { maybeSwitchAfterClassification } from '@/lib/services/dangerous-content/classifier-switch';
@@ -23,9 +22,6 @@ jest.mock('@/lib/services/dangerous-content/gatekeeper.service', () => ({
   classifyContent: jest.fn(),
 }));
 
-jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(),
-}));
 
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -41,7 +37,6 @@ jest.mock('@/lib/services/dangerous-content/classifier-switch', () => ({
 
 const mockGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>;
 const mockClassifyContent = classifyContent as jest.MockedFunction<typeof classifyContent>;
-const mockResolveDangerousContentSettings = resolveDangerousContentSettings as jest.MockedFunction<typeof resolveDangerousContentSettings>;
 const mockGetCheapLLMProvider = getCheapLLMProvider as jest.MockedFunction<typeof getCheapLLMProvider>;
 const mockCreateSystemEvent = createSystemEvent as jest.MockedFunction<typeof createSystemEvent>;
 
@@ -97,6 +92,24 @@ const baseChatMetadata = {
   dangerClassifiedAtMessageCount: null,
 };
 
+/** Global Concierge settings: on duty, summary classifier opted in. */
+function conciergeSettings(overrides: { enabled?: boolean; summaryClassification?: boolean } = {}) {
+  return {
+    enabled: overrides.enabled ?? true,
+    autoSwitchAfterRefusals: 2,
+    newChatsStartAs: 'moderated',
+    display: { mode: 'SHOW', showWarningBadges: true },
+    preScreen: {
+      enabled: false,
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: false,
+      summaryClassification: overrides.summaryClassification ?? true,
+    },
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
 
@@ -112,15 +125,7 @@ beforeEach(() => {
           strategy: 'PROVIDER_CHEAPEST',
           fallbackToLocal: true,
         },
-        dangerousContentSettings: {
-          mode: 'DETECT_ONLY',
-          threshold: 0.7,
-          scanTextChat: true,
-          scanImagePrompts: true,
-          scanImageGeneration: false,
-          displayMode: 'SHOW',
-          showWarningBadges: true,
-        },
+        conciergeSettings: conciergeSettings(),
       }),
     },
     connections: {
@@ -138,19 +143,6 @@ beforeEach(() => {
   };
 
   mockGetRepositories.mockReturnValue(repositories as any);
-
-  mockResolveDangerousContentSettings.mockReturnValue({
-    settings: {
-      mode: 'DETECT_ONLY',
-      threshold: 0.7,
-      scanTextChat: true,
-      scanImagePrompts: true,
-      scanImageGeneration: false,
-      displayMode: 'SHOW',
-      showWarningBadges: true,
-    },
-    source: 'global',
-  });
 
   mockGetCheapLLMProvider.mockReturnValue({
     provider: 'OPENAI',
@@ -417,24 +409,49 @@ describe('handleChatDangerClassification', () => {
     expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
   });
 
-  it('skips if dangerous content mode is OFF', async () => {
-    mockResolveDangerousContentSettings.mockReturnValue({
-      settings: {
-        mode: 'OFF',
-        threshold: 0.7,
-        scanTextChat: true,
-        scanImagePrompts: true,
-        scanImageGeneration: false,
-        displayMode: 'SHOW',
-        showWarningBadges: true,
-      },
-      source: 'default',
+  it('skips if summary classification is off', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: conciergeSettings({ summaryClassification: false }),
     });
 
     await handleChatDangerClassification(buildJob());
 
     expect(mockClassifyContent).not.toHaveBeenCalled();
     expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
+  });
+
+  it('skips if the Concierge is off duty', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({
+      conciergeSettings: conciergeSettings({ enabled: false }),
+    });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
+    expect(repositories.chats.setDangerClassification).not.toHaveBeenCalled();
+  });
+
+  it('skips when there are no stored Concierge settings (summary classification defaults off)', async () => {
+    repositories.chatSettings.findByUserId.mockResolvedValue({});
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).not.toHaveBeenCalled();
+  });
+
+  it('hands the classifier the policy resolved for this chat', async () => {
+    mockClassifyContent.mockResolvedValue({ isDangerous: false, score: 0.1, categories: [] });
+    repositories.chats.findById.mockResolvedValue({ ...baseChatMetadata, contextSummary: 'A summary' });
+
+    await handleChatDangerClassification(buildJob());
+
+    expect(mockClassifyContent).toHaveBeenCalledWith(
+      'A summary',
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ summaryClassification: true, state: 'moderated' }),
+      'chat-1',
+    );
   });
 
   it('falls back to available profile when connection profile not found', async () => {

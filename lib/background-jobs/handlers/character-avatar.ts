@@ -23,7 +23,7 @@ import type { FileCategory, FileSource, ImageProfile } from '@/lib/schemas/types
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
-  resolveDangerousContentSettings,
+  resolveConciergeSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
 import {
   classifyContent as classifyDangerousContent,
@@ -220,15 +220,22 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     }
   }
 
-  // 6. Concierge check — classify the prompt for dangerous content (Off-duty chats skip everything)
+  // 6. Concierge check — classify the prompt for dangerous content when the
+  // chat's pre-screen is on (off duty, Locked and Unmoderated chats skip it)
   const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
-  const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
-  const dangerSettings = dangerousContentResolved.settings;
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
+  logger.debug('[CharacterAvatar] Concierge policy resolved', {
+    context: 'background-jobs.character-avatar',
+    jobId: job.id,
+    conciergeSource: conciergePolicy.source,
+    preScreen: conciergePolicy.preScreen.enabled,
+    scanImagePrompts: conciergePolicy.preScreen.scanImagePrompts,
+  });
 
   let effectiveImageProfile = imageProfile;
   let effectiveApiKey: string = apiKey.key_value;
 
-  if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
+  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts) {
     let cheapLLMSelection: CheapLLMSelection | null = null;
     try {
       const resolved = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);
@@ -247,7 +254,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
           prompt,
           cheapLLMSelection,
           job.userId,
-          dangerSettings,
+          conciergePolicy,
           payload.chatId
         );
 
@@ -257,14 +264,14 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
             jobId: job.id,
             score: classification.score,
             categories: classification.categories.map(c => c.category),
-            mode: dangerSettings.mode,
+            conciergeSource: conciergePolicy.source,
           });
 
-          if (dangerSettings.mode === 'AUTO_ROUTE') {
+          if (conciergePolicy.failoverAllowed) {
             const routeResult = await resolveImageProviderForDangerousContent(
               imageProfile,
               apiKey.key_value,
-              dangerSettings,
+              conciergePolicy,
               job.userId
             );
 
@@ -376,7 +383,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
         userId: job.userId,
         chatId: payload.chatId,
         purpose: 'avatar',
-        settings: dangerSettings,
+        conciergePolicy,
         chat,
         primaryVia: effectiveImageProfile.id !== imageProfile.id ? 'concierge' : 'primary',
       },

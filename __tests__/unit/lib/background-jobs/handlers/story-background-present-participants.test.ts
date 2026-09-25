@@ -31,9 +31,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   resolveUncensoredCheapLLMSelection: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveDangerousContentSettings: jest.fn(() => ({
-    settings: { mode: 'OFF', threshold: 0.7 }, source: 'default',
-  })),
+  resolveConciergeSettings: jest.fn(() => ({ onDuty: false, state: 'moderated', failoverAllowed: false, routeDirect: false, preScreen: { enabled: false, threshold: 0.7, scanTextChat: false, scanImagePrompts: false, scanImageGeneration: false, customClassificationPrompt: null }, summaryClassification: false, autoSwitchAfterRefusals: 0, desk: { textProfileId: null, imageProfileId: null, visionProfileId: null, imagePromptProfileId: null }, display: { mode: 'SHOW', showWarningBadges: false }, newChatsStartAs: 'moderated', source: 'off-duty' })),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: () => false,
