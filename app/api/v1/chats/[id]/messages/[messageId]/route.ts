@@ -10,6 +10,10 @@
  *   - Cancel a Courier placeholder turn: delete the message and unpause
  * POST /api/v1/chats/[id]/messages/[messageId]?action=save-image
  *   - Save an attached image to a chosen photo album
+ * POST /api/v1/chats/[id]/messages/[messageId]?action=retry-uncensored
+ *   - Regenerate an assistant message on the Concierge's uncensored desk, as a
+ *     new swipe (add &stream=1 for the regeneration's SSE narration). 409
+ *     `locked` / `no-understudy` when it cannot be done.
  */
 
 import { NextRequest } from 'next/server';
@@ -17,7 +21,13 @@ import { z } from 'zod';
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware';
 import { withActionDispatch } from '@/lib/api/middleware/actions';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, successResponse, serverError } from '@/lib/api/responses';
+import { badRequest, conflict, created, notFound, successResponse, serverError } from '@/lib/api/responses';
+import { regenerateMessageAsSwipe, streamSwipeRegeneration } from '@/lib/services/chat-message';
+import {
+  composeRetryRouteTrail,
+  resolveTextRetryUnderstudy,
+} from '@/lib/services/dangerous-content/retry-uncensored';
+import type { MessageEvent } from '@/lib/schemas/types';
 import {
   triggerTurnMemoryExtraction,
   triggerChatDangerClassification,
@@ -364,11 +374,97 @@ async function handleSaveImage(
   }
 }
 
+/**
+ * "Try uncensored" on a text turn.
+ *
+ * A regenerate of the target assistant message — the same swipe the refresh
+ * icon makes, with the same inform semantics (re-applied, never consumed) —
+ * except that the Concierge's uncensored understudy takes it instead of the
+ * responder's own profile. The chat's Concierge state is not touched.
+ */
+async function handleRetryUncensored(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id, messageId }: { id: string; messageId: string }
+) {
+  const chat = await repos.chats.findById(id);
+  if (!chat) {
+    return notFound('Chat');
+  }
+
+  const allMessages = (await repos.chats.getMessages(id)).filter(
+    (m): m is MessageEvent => m.type === 'message'
+  );
+  const targetMessage = allMessages.find((m) => m.id === messageId);
+  if (!targetMessage) {
+    return notFound('Message');
+  }
+  if (targetMessage.role !== 'ASSISTANT') {
+    return badRequest('Only assistant messages can be retried');
+  }
+  if (targetMessage.systemSender) {
+    return badRequest('Staff and system messages cannot be regenerated');
+  }
+
+  const chatSettings = await repos.chatSettings.findByUserId(user.id);
+  const gate = await resolveTextRetryUnderstudy({
+    repos,
+    userId: user.id,
+    chat,
+    chatSettings,
+    targetMessage,
+  });
+  if (!gate.ok) {
+    logger.info('[DangerousContent] Uncensored retry refused', {
+      chatId: id,
+      messageId,
+      reason: gate.reason,
+    });
+    return conflict(gate.reason);
+  }
+
+  const { understudy } = gate;
+  const options = {
+    repos,
+    userId: user.id,
+    chat,
+    targetMessage,
+    allMessages,
+    activeUserParticipantId: chat.activeTypingParticipantId ?? null,
+    profileOverride: understudy,
+    routeTrail: composeRetryRouteTrail(targetMessage.routeTrail, understudy.profile, 'connection'),
+  };
+
+  logger.info('[DangerousContent] Retrying a turn on the uncensored desk', {
+    chatId: id,
+    messageId,
+    understudyProfileId: understudy.profile.id,
+    understudyName: understudy.profile.name,
+  });
+
+  if (req.nextUrl?.searchParams.get('stream') === '1') {
+    return streamSwipeRegeneration(options, '[DangerousContent] Uncensored retry:');
+  }
+
+  try {
+    const newSwipe = await regenerateMessageAsSwipe(options);
+    return created({ message: newSwipe });
+  } catch (error) {
+    logger.error('[DangerousContent] Uncensored retry failed', {
+      chatId: id,
+      messageId,
+      error: error instanceof Error ? error.message : String(error),
+    }, error instanceof Error ? error : undefined);
+    return serverError(error instanceof Error ? error.message : 'Failed to retry uncensored');
+  }
+}
+
 export const POST = createContextParamsHandler<{ id: string; messageId: string }>(
   withActionDispatch({
     'override-danger-flag': handleOverrideDangerFlag,
     'resolve-external-turn': handleResolveExternalTurn,
     'cancel-external-turn': handleCancelExternalTurn,
     'save-image': handleSaveImage,
+    'retry-uncensored': handleRetryUncensored,
   })
 );

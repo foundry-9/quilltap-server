@@ -94,6 +94,10 @@ When a project is open beside a conversation in a split workspace, the conversat
 - Ensure characters have detailed physical descriptions
 - Use more descriptive chat titles
 
+**The painter refused the scene:**
+- Some image providers decline a backdrop on grounds of propriety. When that happens and the Concierge cannot carry it to an uncensored image profile, the Lantern leaves a note in the chat saying so, and the previous backdrop stays up. Nothing is marked as failed in the Tasks Queue: a refusal is an answer, not a breakdown
+- Press **Try uncensored** on the Lantern's note to commission the backdrop from the uncensored image profile instead (not offered on a Locked chat). See [The Concierge](the-concierge.md)
+
 **Generation failing:**
 - Check your image provider API key is valid and has credits
 - Review the Tasks Queue for error messages

@@ -47,7 +47,15 @@ import { convertToWebP } from '@/lib/files/webp-conversion';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
-import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
+import {
+  postLanternImageNotification,
+  postLanternRefusalNotification,
+} from '@/lib/services/lantern-notifications/writer';
+import {
+  composeRetryRouteTrail,
+  resolveImageRetryUnderstudy,
+} from '@/lib/services/dangerous-content/retry-uncensored';
+import type { ImageUnderstudy } from '@/lib/services/dangerous-content/understudy';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character, ImageProfile } from '@/lib/schemas/types';
@@ -215,8 +223,34 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // prompt is never crafted for a chat the Concierge will not send to the
   // uncensored desk, or its franker prompt would go straight to the moderated
   // provider.
+  //
+  // "Try uncensored" (`payload.forceUncensored`) puts the Concierge's
+  // uncensored understudy in the painter's chair for this one job, whatever
+  // the chat's state, so its prompt is crafted candidly too. The lookup is
+  // repeated here rather than trusted from the request: the chat may have
+  // been Locked, or the understudy removed, while the job waited.
+  let forcedUnderstudy: ImageUnderstudy | null = null;
+  if (payload.forceUncensored) {
+    const gate = await resolveImageRetryUnderstudy({
+      userId: job.userId,
+      chat,
+      chatSettings: chatSettings ?? null,
+      excludeProfileIds: [imageProfile.id],
+    });
+    if (!gate.ok) {
+      logger.info('[StoryBackground] Uncensored retry abandoned at run time', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        reason: gate.reason,
+      });
+      return;
+    }
+    forcedUnderstudy = gate.understudy;
+  }
   const uncensoredImageTarget =
-    isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect;
+    forcedUnderstudy !== null
+    || (isDangerousChat && hasUncensoredImageProvider && conciergePolicy.routeDirect);
   logger.debug('[StoryBackground] Concierge policy resolved', {
     context: 'background-jobs.story-background',
     jobId: job.id,
@@ -476,7 +510,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // never be sent to the ordinary painter first.
   let primaryImageProfile: ImageProfile = imageProfile;
   let primaryImageKey: string = apiKey.key_value;
-  if (uncensoredImageTarget) {
+  if (forcedUnderstudy) {
+    primaryImageProfile = forcedUnderstudy.profile;
+    primaryImageKey = forcedUnderstudy.apiKey;
+    logger.info('[StoryBackground] "Try uncensored": painting on the uncensored understudy', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      profileId: primaryImageProfile.id,
+      profileName: primaryImageProfile.name,
+    });
+  } else if (uncensoredImageTarget) {
     const route = await resolveImageProviderForDangerousContent(
       imageProfile,
       apiKey.key_value,
@@ -720,11 +763,39 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     failover = await generateImageWithConciergeFailover(
       { profile: primaryImageProfile, apiKey: primaryImageKey },
       attemptBackground,
-      { userId: job.userId, chatId: payload.chatId, purpose: 'lantern', conciergePolicy, chat },
+      {
+        userId: job.userId,
+        chatId: payload.chatId,
+        purpose: 'lantern',
+        conciergePolicy,
+        chat,
+        primaryVia: forcedUnderstudy ? 'concierge' : 'primary',
+        // The Lantern reports a refusal nobody got past in its own bubble.
+        announceUnresolvedRefusal: false,
+      },
     );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const trail = getConciergeTrail(error);
+    const refused = trail?.find((a) => a.outcome === 'refused');
+    if (refused && !trail!.some((a) => a.outcome === 'answered')) {
+      // A refusal is an outcome, not a failure: the operator is told (with a
+      // retry to hand) and the job completes, leaving the backdrop as it was.
+      logger.info('[StoryBackground] Painter refused the scene; posting the Lantern\'s refusal', {
+        context: 'background-jobs.story-background',
+        jobId: job.id,
+        chatId: payload.chatId,
+        refusingProvider: refused.provider,
+        refusingModel: refused.modelName,
+        conciergeTrail: trail!.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+      });
+      await postLanternRefusalNotification({
+        chatId: payload.chatId,
+        refusal: { kind: 'background-refused', provider: refused.provider, modelName: refused.modelName },
+        routeTrail: trail,
+      });
+      return;
+    }
     logger.error('[StoryBackground] Image generation failed', {
       context: 'background-jobs.story-background',
       jobId: job.id,
@@ -925,6 +996,9 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     fileId,
     kind: { kind: 'background' },
     prompt: finalPrompt,
-    routeTrail: failover.trail,
+    // A "Try uncensored" backdrop answered first time still says who sent it.
+    routeTrail: forcedUnderstudy && failover.trail.length === 0
+      ? composeRetryRouteTrail(null, activeImageProfile, 'image')
+      : failover.trail,
   });
 }

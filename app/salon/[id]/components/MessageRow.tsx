@@ -26,6 +26,7 @@ import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images
 import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, ConciergeSettings, CharacterData } from '../types'
 import type { RegenerationState } from '../hooks/useRegeneration'
+import { isLanternBackgroundRefusal, type ConciergeRetryHandlers } from '../concierge-retry'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { RenderingPattern, DialogueDetection } from '@/lib/schemas/template.types'
@@ -69,6 +70,11 @@ interface MessageRowProps {
   conciergeDisplay?: ConciergeSettings['display']
   /** Callback to override danger flags on a message */
   onOverrideDangerFlag?: (messageId: string) => void
+  /**
+   * The Concierge's "Try uncensored" handlers. Absent on a Locked chat, which
+   * hides every such button.
+   */
+  conciergeRetry?: ConciergeRetryHandlers
   /** Whether this message has LLM logs available */
   hasLLMLogs?: boolean
   /** Callback to view LLM logs */
@@ -156,6 +162,7 @@ function MessageRowInner({
   tokenDisplaySettings,
   conciergeDisplay,
   onOverrideDangerFlag,
+  conciergeRetry,
   hasLLMLogs,
   onViewLLMLogs,
   character,
@@ -206,8 +213,12 @@ function MessageRowInner({
     messageRowClasses.push('qt-chat-message-row-assistant')
   }
 
-  const hasDangerFlags = message.dangerFlags && message.dangerFlags.length > 0
-  const dangerDisplayMode = hasDangerFlags && conciergeDisplay?.mode
+  // "Not Dangerous" overrides a flag; only flags still standing blur or
+  // collapse the message. The chips themselves stay (struck through) as the
+  // record that the message was once flagged.
+  const hasDangerFlags = !!message.dangerFlags && message.dangerFlags.length > 0
+  const hasStandingDangerFlags = !!message.dangerFlags?.some(f => !f.userOverridden)
+  const dangerDisplayMode = hasStandingDangerFlags && conciergeDisplay?.mode
     ? conciergeDisplay.mode
     : 'SHOW'
   const showDangerBadges = hasDangerFlags && conciergeDisplay?.showWarningBadges !== false
@@ -448,6 +459,7 @@ function MessageRowInner({
                             message={toolMessage}
                             character={character}
                             onImageClick={onImageClick}
+                            onTryUncensored={conciergeRetry?.onRetryPicture}
                           />
                         ))}
                       </div>
@@ -463,6 +475,19 @@ function MessageRowInner({
                 const terminalSessionId = extractTerminalSessionId(message.content)
                 return terminalSessionId ? <div className="mt-2"><TerminalEmbed sessionId={terminalSessionId} chatId={chatId} /></div> : null
               })()}
+              {/* The Lantern's painter refused the backdrop: offer the
+                  uncensored desk (hidden on a Locked chat). */}
+              {conciergeRetry && isLanternBackgroundRefusal(message) && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => conciergeRetry.onRetryBackground()}
+                    className="qt-button qt-button-secondary qt-button-sm"
+                  >
+                    Try uncensored
+                  </button>
+                </div>
+              )}
               {/* Danger flag badges */}
               {showDangerBadges && message.dangerFlags && (
                 <DangerFlagBadge
@@ -517,6 +542,7 @@ function MessageRowInner({
                       message={toolMessage}
                       character={character}
                       onImageClick={onImageClick}
+                      onTryUncensored={conciergeRetry?.onRetryPicture}
                     />
                   ))}
                 </div>
@@ -539,6 +565,7 @@ function MessageRowInner({
                 onEditStart={onEditStart}
                 onDelete={onDelete}
                 onGenerateSwipe={onGenerateSwipe}
+                onTryUncensored={conciergeRetry?.onRetryTurn}
                 onReattribute={onReattribute}
                 onViewLLMLogs={onViewLLMLogs}
                 onResend={onResend}
@@ -644,6 +671,9 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
   const prevDangerFlags = prev.message.dangerFlags || []
   const nextDangerFlags = next.message.dangerFlags || []
   if (prevDangerFlags.length !== nextDangerFlags.length) return false
+  // "Not Dangerous" flips `userOverridden` without changing the count; the
+  // blur must lift when it does.
+  if (prevDangerFlags.some(f => !f.userOverridden) !== nextDangerFlags.some(f => !f.userOverridden)) return false
   if (prev.conciergeDisplay?.mode !== next.conciergeDisplay?.mode) return false
   if (prev.conciergeDisplay?.showWarningBadges !== next.conciergeDisplay?.showWarningBadges) return false
 
@@ -654,6 +684,8 @@ export const MessageRow = memo(MessageRowInner, (prev, next) => {
 
   // Danger state
   if (prev.isDangerousChat !== next.isDangerousChat) return false
+  // "Try uncensored" appears and disappears with the chat's Locked state
+  if (prev.conciergeRetry !== next.conciergeRetry) return false
 
   // System-message collapse state
   if (prev.isSystemMessageCollapsed !== next.isSystemMessageCollapsed) return false

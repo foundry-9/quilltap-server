@@ -178,6 +178,19 @@ function preScreenFrom(preScreen: ConciergePreScreenSettings): ResolvedPreScreen
 }
 
 /**
+ * The uncensored desk as configured, whatever the Concierge's duty or the
+ * chat's state. Only for the operator's own explicit "Try uncensored"
+ * (`retry-uncensored.ts`), which is gated by the chat's state alone — every
+ * automatic path reads `resolveConciergeSettings(...).desk`, which is empty
+ * off duty and on Locked or exempt chats.
+ */
+export function resolveConfiguredConciergeDesk(
+  globalSettings: ConciergeSettingsCarrier | null | undefined,
+): ResolvedConciergeDesk {
+  return deskFrom(readConciergeSettings(globalSettings))
+}
+
+/**
  * Resolve the Concierge's effective policy.
  *
  *   - exempt chat type (help, brahma) → nothing: the Concierge has no standing

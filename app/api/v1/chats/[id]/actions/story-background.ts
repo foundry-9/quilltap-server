@@ -71,9 +71,17 @@ export async function handleGetStoryBackground(
 export async function handleRegenerateBackground(
   chatId: string,
   chat: ChatMetadata,
-  ctx: RequestContext
+  ctx: RequestContext,
+  options: {
+    /**
+     * "Try uncensored": the job paints on the Concierge's uncensored
+     * understudy. The caller has already checked there is one.
+     */
+    forceUncensored?: boolean;
+  } = {}
 ): Promise<NextResponse> {
   const { user, repos } = ctx;
+  const forceUncensored = options.forceUncensored === true;
 
   try {
     // Get chat settings to check if story backgrounds are enabled
@@ -108,6 +116,7 @@ export async function handleRegenerateBackground(
       characterIds,
       sceneContext: chat.title,
       projectId: chat.projectId ?? null,
+      ...(forceUncensored ? { forceUncensored: true } : {}),
     });
 
     if (isNew) {
@@ -116,12 +125,14 @@ export async function handleRegenerateBackground(
         jobId,
         imageProfileId,
         characterCount: characterIds.length,
+        forceUncensored,
       });
     } else {
       logger.info('[Chats v1] Story background generation already in progress', {
         chatId,
         jobId,
         imageProfileId,
+        forceUncensoredRequested: forceUncensored,
       });
     }
 

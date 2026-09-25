@@ -21,6 +21,9 @@
  *      current state) → announce `refusal-not-permitted`, rethrow;
  *   5. ask the understudy resolver (excluding the primary). Nobody →
  *      announce `refusal-no-understudy`, rethrow;
+ *      (a caller that reports unresolved refusals itself — the Lantern —
+ *      passes `announceUnresolvedRefusal: false` and the chokepoint stays
+ *      silent in steps 4 and 5);
  *   6. ask the understudy once. It answers → announce `refusal-rerouted` and
  *      return; it fails → record its own verdict and rethrow.
  *
@@ -85,6 +88,13 @@ export interface ImageFailoverContext<P extends FailoverProfile = ImageProfile> 
    * classifier reroute already swapped it in; default `'primary'`.
    */
   primaryVia?: RouteAttemptVia
+  /**
+   * Whether the Concierge announces a refusal he could not get past
+   * (`refusal-no-understudy`, `refusal-not-permitted`). Default true. The
+   * Lantern passes false: its own `background-refused` bubble reports the
+   * refusal and carries the retry — one bubble per refusal.
+   */
+  announceUnresolvedRefusal?: boolean
 }
 
 export interface ImageFailoverOutcome<T, P extends FailoverProfile = ImageProfile> {
@@ -269,7 +279,9 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
       ...logContext,
       conciergeState,
     })
-    await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-not-permitted', primary.profile, undefined, 'locked')
+    if (ctx.announceUnresolvedRefusal !== false) {
+      await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-not-permitted', primary.profile, undefined, 'locked')
+    }
     await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)
     throw attachTrail(primaryError, trail)
   }
@@ -304,7 +316,9 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
 
   if (!understudy) {
     logger.warn('Refusal not rerouted: no uncensored understudy is available', logContext)
-    await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-no-understudy', primary.profile)
+    if (ctx.announceUnresolvedRefusal !== false) {
+      await announce(ctx as ImageFailoverContext<FailoverProfile>, 'refusal-no-understudy', primary.profile)
+    }
     await ledger(ctx as ImageFailoverContext<FailoverProfile>, primary.profile, verdict, false)
     throw attachTrail(primaryError, trail)
   }

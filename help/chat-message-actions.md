@@ -128,6 +128,10 @@ Get an alternative response:
 - The newest version is shown in place; the original is kept one swipe away in the same group
 - Token usage counts for each generation
 
+#### Try Uncensored
+
+Beside the refresh icon, on a character's line, sits a small **shield** labelled *Try uncensored*. It re-rolls the line exactly as the refresh icon does — a new swipe, narrated as it arrives — except that the Concierge hands it to the uncensored desk rather than the character's usual provider. It is the remedy for a line the provider declined politely, or softened past usefulness. The chat's own posture is not changed. The shield is absent on a **Locked** chat. See [The Concierge](the-concierge.md).
+
 #### Watching a Regeneration Happen
 
 A re-roll no longer asks you to take it on faith. From the moment you press the

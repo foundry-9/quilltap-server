@@ -58,6 +58,7 @@ import {
   useTurnManagement,
   useMessageActions,
   useRegeneration,
+  useConciergeRetry,
   useFileAttachments,
   useAutoScroll,
   useModalState,
@@ -74,6 +75,7 @@ import {
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge-retry'
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { buildRenderItems } from './announcement-render-items'
@@ -773,6 +775,36 @@ export function SalonView({ chatId }: SalonViewProps) {
   const handleRegenerate = useCallback((messageId: string) => {
     void regenerationController.regenerate(messageId, fetchChat, selectSwipeVariant)
   }, [regenerationController, fetchChat, selectSwipeVariant])
+
+  // --- The Concierge's "Try uncensored" ---
+  // One click sends the same request straight to the uncensored desk without
+  // touching the chat's state: a text line re-rolls as a swipe on the ordinary
+  // regeneration transport, a picture is redrawn beside the original, a
+  // refused backdrop is queued again. Never offered on a Locked chat.
+  //
+  // Every dependency here is stable across ordinary renders (and `chat` is
+  // reduced to two booleans), because each transcript row compares these
+  // handlers by identity: a fresh object per render would redraw them all.
+  const { retryPicture, retryBackground } = useConciergeRetry(id, fetchChat, startBackgroundPolling)
+  const regenerate = regenerationController.regenerate
+  const hasChat = !!chat
+  const chatIsLocked = getConciergeState(chat) === 'locked'
+  const conciergeRetry = useMemo<ConciergeRetryHandlers | undefined>(() => {
+    if (!hasChat || chatIsLocked) return undefined
+    return {
+      onRetryTurn: (messageId: string) => {
+        void regenerate(messageId, fetchChat, selectSwipeVariant, {
+          url: retryUncensoredTurnUrl(id, messageId),
+        })
+      },
+      onRetryPicture: (toolMessageId: string) => {
+        void retryPicture(toolMessageId)
+      },
+      onRetryBackground: () => {
+        void retryBackground()
+      },
+    }
+  }, [hasChat, chatIsLocked, id, regenerate, fetchChat, selectSwipeVariant, retryPicture, retryBackground])
 
   // Stable callback wrapper using ref. `nudge` must be forwarded: it is what
   // withholds the "nothing to add" skip option, and a summons that lets the
@@ -1530,6 +1562,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           turnManagement={turnManagement}
           setEditContent={setEditContent}
           onOverrideDangerFlag={chatControls.handleOverrideDangerFlag}
+          conciergeRetry={conciergeRetry}
           onRemoveCharacter={chatControls.handleRemoveCharacter}
           onReattribute={handleReattribute}
           onImageClick={(filepath, filename, fileId) => {

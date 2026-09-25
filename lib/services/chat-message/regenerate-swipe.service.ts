@@ -36,7 +36,8 @@ import {
 import { buildMessageContext } from './context-builder.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
 import type { getRepositories } from '@/lib/repositories/factory'
-import type { ChatMetadataBase, MessageEvent } from '@/lib/schemas/types'
+import type { ChatMetadataBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 import type { MemoryCascadeAction } from '@/lib/schemas/settings.types'
 
 const logger = createServiceLogger('RegenerateSwipeService')
@@ -71,6 +72,16 @@ export interface RegenerateSwipeOptions {
    * Optional: with no callback the generation is identical, just silent.
    */
   onProgress?: (event: RegenerateSwipeProgress) => void
+  /**
+   * Generate on this profile instead of the responder's own. "Try uncensored"
+   * passes the Concierge's uncensored understudy here — resolved by the caller
+   * (`resolveTextRetryUnderstudy`) so a missing one can be refused before any
+   * stream opens. The context is formatted for this profile, not the
+   * responder's.
+   */
+  profileOverride?: { profile: ConnectionProfile; apiKey: string }
+  /** Route trail to persist on the new swipe (NULL / absent for a plain re-roll). */
+  routeTrail?: RouteAttempt[] | null
 }
 
 /**
@@ -85,6 +96,8 @@ export async function regenerateMessageAsSwipe({
   allMessages,
   activeUserParticipantId,
   onProgress,
+  profileOverride,
+  routeTrail,
 }: RegenerateSwipeOptions): Promise<MessageEvent> {
   if (targetMessage.role !== 'ASSISTANT') {
     throw new Error('Only assistant messages can be regenerated')
@@ -109,10 +122,19 @@ export async function regenerateMessageAsSwipe({
   const {
     characterParticipant,
     character,
-    connectionProfile,
-    apiKey,
     isMultiCharacter,
   } = participantResult
+  const connectionProfile = profileOverride?.profile ?? participantResult.connectionProfile
+  const apiKey = profileOverride?.apiKey ?? participantResult.apiKey
+  if (profileOverride) {
+    logger.info('[RegenerateSwipe] Regenerating on an override profile', {
+      chatId: chat.id,
+      targetMessageId: targetMessage.id,
+      responderProfileId: participantResult.connectionProfile.id,
+      overrideProfileId: profileOverride.profile.id,
+      overrideProfileName: profileOverride.profile.name,
+    })
+  }
 
   // User identity (honors "Speaking As") + per-character map + template + settings.
   const speakingAsId = activeUserParticipantId ?? chat.activeTypingParticipantId ?? null
@@ -309,6 +331,7 @@ export async function regenerateMessageAsSwipe({
     attachments: [],
     // Keep the original's timestamp so the group stays in place in the transcript.
     createdAt: targetMessage.createdAt,
+    ...(routeTrail && routeTrail.length > 0 ? { routeTrail } : {}),
   } as MessageEvent
 
   await repos.chats.addMessage(chat.id, newSwipe)

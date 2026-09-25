@@ -57,10 +57,12 @@ jest.mock('@/lib/api/responses', () => ({
   created: (data: any) => ({ body: data, status: 201 }),
 }))
 
-jest.mock('@/lib/services/chat-message', () => ({
+jest.mock('@/lib/services/chat-message/regenerate-swipe.service', () => ({
   regenerateMessageAsSwipe: jest.fn(),
-  // The SSE encoders are thin `TextEncoder` wrappers in the real module; the
-  // fakes keep the frame shape so a test can read the stream back as JSON.
+}))
+// The SSE encoders are thin `TextEncoder` wrappers in the real module; the
+// fakes keep the frame shape so a test can read the stream back as JSON.
+jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   encodeContentChunk: (enc: TextEncoder, content: string) => enc.encode(`data: ${JSON.stringify({ content })}\n\n`),
   encodeReasoningChunk: (enc: TextEncoder, reasoning: string) => enc.encode(`data: ${JSON.stringify({ reasoning })}\n\n`),
   encodeStatusEvent: (enc: TextEncoder, status: any) => enc.encode(`data: ${JSON.stringify({ status })}\n\n`),
@@ -68,7 +70,14 @@ jest.mock('@/lib/services/chat-message', () => ({
     enc.encode(`data: ${JSON.stringify({ error, errorType, details })}\n\n`),
   safeEnqueue: (controller: any, data: any) => { controller.enqueue(data); return true },
   safeClose: (controller: any) => { controller.close() },
+}))
+jest.mock('@/lib/services/chat-message/request-helpers', () => ({
   sseStreamResponse: (stream: any) => ({ __kind: 'sse', stream }),
+}))
+// The real stream helper runs over the fakes above.
+jest.mock('@/lib/services/chat-message', () => ({
+  regenerateMessageAsSwipe: jest.requireMock('@/lib/services/chat-message/regenerate-swipe.service').regenerateMessageAsSwipe,
+  streamSwipeRegeneration: jest.requireActual('@/lib/services/chat-message/regenerate-swipe-stream').streamSwipeRegeneration,
 }))
 
 jest.mock('@/lib/memory/memory-service', () => ({

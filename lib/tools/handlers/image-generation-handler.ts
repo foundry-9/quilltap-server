@@ -74,6 +74,13 @@ export interface ImageToolExecutionContext {
   chatId?: string;
   /** ID of the participant calling the tool (for resolving {{me}}) */
   callingParticipantId?: string;
+  /**
+   * How `profileId` came to be asked. `'concierge'` when the operator's "Try
+   * uncensored" already put the Concierge's uncensored understudy in the chair
+   * (`retry-image-uncensored`); absent for an ordinary call, where the trail
+   * says `'concierge'` only if a pre-flight reroute swapped the profile.
+   */
+  primaryVia?: RouteAttemptVia;
 }
 
 /**
@@ -1279,7 +1286,7 @@ async function runImageGenerationTool(
       conciergePolicy,
       context.chatId,
       context.callingParticipantId,
-      finalProfile.id !== imageProfile.id ? 'concierge' : 'primary',
+      context.primaryVia ?? (finalProfile.id !== imageProfile.id ? 'concierge' : 'primary'),
       chatForOverride
     );
 

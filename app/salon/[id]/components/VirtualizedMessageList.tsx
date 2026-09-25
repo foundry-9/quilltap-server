@@ -16,6 +16,7 @@ import { resolveToolRowAttributionMessage } from '../group-tool-messages'
 import { StreamingMessage } from './StreamingMessage'
 import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { RegenerationState } from '../hooks/useRegeneration'
+import type { ConciergeRetryHandlers } from '../concierge-retry'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
 interface VirtualizedMessageListProps {
@@ -80,6 +81,11 @@ interface VirtualizedMessageListProps {
   // Handlers
   setEditContent: (content: string) => void
   onOverrideDangerFlag: (messageId: string) => void
+  /**
+   * The Concierge's "Try uncensored" handlers for text lines, pictures and the
+   * Lantern's refused backdrop. Absent on a Locked chat, which hides the buttons.
+   */
+  conciergeRetry?: ConciergeRetryHandlers
   onRemoveCharacter: (participantId: string) => void
   onReattribute: (messageId: string) => void
   onImageClick: (filepath: string, filename: string, fileId?: string) => void
@@ -158,6 +164,7 @@ export function VirtualizedMessageList({
   turnManagement,
   setEditContent,
   onOverrideDangerFlag,
+  conciergeRetry,
   onRemoveCharacter,
   onReattribute,
   onImageClick,
@@ -278,6 +285,7 @@ export function VirtualizedMessageList({
                     onImageClick={(filepath, filename, fileId) => {
                       onImageClick(filepath, filename, fileId)
                     }}
+                    onTryUncensored={conciergeRetry?.onRetryPicture}
                   />
                 </div>
               )
@@ -328,6 +336,7 @@ export function VirtualizedMessageList({
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
                   conciergeDisplay={conciergeDisplay}
                   onOverrideDangerFlag={onOverrideDangerFlag}
+                  conciergeRetry={conciergeRetry}
                   character={getCharacterForMessage(message)}
                   chatId={chatId}
                   onEditStart={messageActions.startEdit}

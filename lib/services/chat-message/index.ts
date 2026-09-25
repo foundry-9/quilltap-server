@@ -62,6 +62,7 @@ export {
   type RegenerateSwipeOptions,
   type RegenerateSwipeProgress,
 } from './regenerate-swipe.service'
+export { streamSwipeRegeneration } from './regenerate-swipe-stream'
 
 // Tool Execution
 export {
