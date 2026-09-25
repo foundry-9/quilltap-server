@@ -58,6 +58,7 @@ This document tracks planned features and improvements for Quilltap.
   - [X] Some way of flagging such content needs to be surfaced in the system
   - [X] Based on flags, things are either not allowed, not displayed, or allowed and displayed
   - [X] Implies a new quick-hide just for dangerous content
+  - [ ] Concierge overhaul: refusal-driven failover, refusal ledger, three states, own Settings tab — see [concierge-overhaul.md](concierge-overhaul.md)
   - [ ] Further: user-determined danger paths (e.g., this talks about politics, I don't want to talk about politics) in addition to the general "most providers won't handle this" rails
   - [X] Testing
 - [X] Better selectable saved scenarios and prompts per chat
