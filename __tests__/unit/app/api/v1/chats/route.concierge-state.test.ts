@@ -383,6 +383,18 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
       expect(res.status).toBe(201)
       expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
     })
+
+    it.each(['unmoderated', 'locked'])(
+      'ignores an explicit %s request while the Concierge is off duty (a stale form)',
+      async (state) => {
+        withDefault('moderated', false)
+
+        const res = await POST(createMockRequest(baseBody({ conciergeState: state })))
+
+        expect(res.status).toBe(201)
+        expect(mockedApplyConciergeFlip).not.toHaveBeenCalled()
+      }
+    )
   })
 
   it.each(['unmoderated', 'locked'])(

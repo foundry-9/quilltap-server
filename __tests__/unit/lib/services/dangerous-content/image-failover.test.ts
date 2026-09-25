@@ -16,6 +16,7 @@ jest.mock('@/lib/services/concierge-notifications/writer', () => ({
 // The refusal-time state read; by default it agrees with the snapshot.
 jest.mock('@/lib/services/dangerous-content/current-state', () => ({
   readCurrentConciergeState: jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated'),
+  readCurrentConciergeOnDuty: jest.fn(async (_userId: unknown, snapshot: boolean) => snapshot),
 }))
 jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
   recordModerationRefusal: jest.fn(async () => ({ count: 1, switched: false })),
@@ -24,7 +25,7 @@ jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
 import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { recordModerationRefusal } from '@/lib/services/dangerous-content/refusal-ledger'
-import { readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
+import { readCurrentConciergeOnDuty, readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import {
   generateImageWithConciergeFailover,
   getConciergeTrail,
@@ -98,6 +99,18 @@ describe('generateImageWithConciergeFailover', () => {
     ])
     expect(mockResolve).not.toHaveBeenCalled()
     // Off duty means the Concierge does nothing at all, announcements included.
+    expect(mockAnnounce).not.toHaveBeenCalled()
+  })
+
+  it('refused after the Concierge was sent off duty mid-call → no understudy, no announcement', async () => {
+    jest.mocked(readCurrentConciergeOnDuty).mockResolvedValueOnce(false)
+    const err = refusal()
+    const attempt = jest.fn(async () => { throw err })
+    await expect(generateImageWithConciergeFailover({ profile: PRIMARY, apiKey: 'k' }, attempt, ctx()))
+      .rejects.toBe(err)
+    expect(readCurrentConciergeOnDuty).toHaveBeenCalledWith('user-1', true)
+    expect(attempt).toHaveBeenCalledTimes(1)
+    expect(mockResolve).not.toHaveBeenCalled()
     expect(mockAnnounce).not.toHaveBeenCalled()
   })
 

@@ -16,6 +16,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getConciergeState, type ConciergeState } from './chat-override'
+import { readConciergeSettings } from './resolver.service'
 
 const logger = createServiceLogger('ConciergeCurrentState')
 
@@ -48,5 +49,34 @@ export async function readCurrentConciergeState(
       error: getErrorMessage(error),
     })
     return fallback
+  }
+}
+
+/**
+ * Whether the Concierge is on duty *now* — the global half of the refusal-time
+ * check. A policy resolved when the turn began says `failoverAllowed`; if the
+ * operator switched the Concierge off while the provider was thinking, the
+ * refusal must not reach the uncensored desk. Falls back to `snapshot` when
+ * there is no user or the read fails, and never throws.
+ */
+export async function readCurrentConciergeOnDuty(
+  userId: string | null | undefined,
+  snapshot: boolean,
+): Promise<boolean> {
+  if (!userId) return snapshot
+  try {
+    const settings = await getRepositories().chatSettings.findByUserId(userId)
+    const onDuty = readConciergeSettings(settings).enabled
+    if (onDuty !== snapshot) {
+      logger.info('Concierge on-duty switch changed since the request began', { userId, snapshot, current: onDuty })
+    }
+    return onDuty
+  } catch (error) {
+    logger.warn('Could not re-read the Concierge on-duty switch; using the snapshot', {
+      userId,
+      snapshot,
+      error: getErrorMessage(error),
+    })
+    return snapshot
   }
 }

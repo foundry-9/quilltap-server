@@ -31,8 +31,10 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 }))
 
 const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+const mockReadCurrentConciergeOnDuty = jest.fn(async (_userId: unknown, snapshot: boolean) => snapshot)
 jest.mock('@/lib/services/dangerous-content/current-state', () => ({
   readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+  readCurrentConciergeOnDuty: (userId: unknown, snapshot: boolean) => mockReadCurrentConciergeOnDuty(userId, snapshot),
 }))
 
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({
@@ -189,6 +191,17 @@ describe('attemptHardErrorFailover — thrown refusals', () => {
       kind: 'refusal-no-understudy',
       details: expect.objectContaining({ purpose: 'text', refusingProvider: 'OPENAI' }),
     }))
+  })
+
+  it('does not ask the uncensored desk when the Concierge was sent off duty mid-turn', async () => {
+    const primary = makeProfile()
+    const state = makeState(primary)
+    mockReadCurrentConciergeOnDuty.mockResolvedValueOnce(false)
+
+    await attemptHardErrorFailover(opts(state, [primary], policyError(), autoRoute))
+
+    expect(mockReadCurrentConciergeOnDuty).toHaveBeenCalledWith('u1', true)
+    expect(mockResolveUnderstudy).not.toHaveBeenCalled()
   })
 
   it('does not ask the uncensored desk when the policy does not allow failover', async () => {

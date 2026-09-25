@@ -420,8 +420,21 @@ function requestedConciergeStateAtCreation(
   chatSettings: Parameters<typeof resolveConciergeSettings>[0],
   chat: ChatMetadata,
 ): ConciergeState | undefined {
-  if (requested) return requested;
   const policy = resolveConciergeSettings(chatSettings, chat);
+  if (requested) {
+    // Off duty, the per-chat select is disabled; a request that still names a
+    // state (a form opened before the switch was thrown) is not honoured, so
+    // an off-duty Concierge never stamps a new chat.
+    if (!policy.onDuty && requested !== 'moderated') {
+      logger.warn('[Chats v1] Ignoring a requested Concierge state: the Concierge is off duty', {
+        chatId: chat.id,
+        requested,
+        conciergeSource: policy.source,
+      });
+      return undefined;
+    }
+    return requested;
+  }
   const fallback = policy.onDuty ? policy.newChatsStartAs : undefined;
   logger.debug('[Chats v1] No Concierge state requested at creation; using the default', {
     chatId: chat.id,

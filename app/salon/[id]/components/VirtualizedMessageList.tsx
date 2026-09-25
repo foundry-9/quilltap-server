@@ -18,12 +18,6 @@ import type { StreamingToolBatch } from '../hooks/useSSEStreaming'
 import type { RegenerationState } from '../hooks/useRegeneration'
 import { useDeferredMeasureRef } from '../hooks/useDeferredMeasureRef'
 
-/** Off duty, the Concierge flags nothing visibly: everything is shown plainly. */
-const OFF_DUTY_CONCIERGE_DISPLAY: NonNullable<ChatSettings['conciergeSettings']>['display'] = {
-  mode: 'SHOW',
-  showWarningBadges: false,
-}
-
 interface VirtualizedMessageListProps {
   /** Flat (post-tool-grouping) message list. Still needed for the TOOL-row
    *  backward participant-walk and the near-end forceRender heuristic. */
@@ -115,6 +109,12 @@ interface VirtualizedMessageListProps {
   userParticipantIdSet?: Set<string>
   /** Whether the Concierge has flagged this chat as dangerous */
   isDangerousChat?: boolean
+  /**
+   * How flagged content looks in this chat — `resolveConciergeSettings(...).display`,
+   * resolved per chat by the caller (plain when off duty, no badges on an
+   * Unmoderated chat).
+   */
+  conciergeDisplay?: NonNullable<ChatSettings['conciergeSettings']>['display']
   /** Resolved per-chat thinking visibility (chat.showThinking ?? global default). DISPLAY ONLY. */
   showThinking?: boolean
   /** Whether thinking blocks start collapsed (global default). */
@@ -174,6 +174,7 @@ export function VirtualizedMessageList({
   currentUserId,
   userParticipantIdSet,
   isDangerousChat = false,
+  conciergeDisplay,
   showThinking = false,
   thinkingCollapsedByDefault = true,
   streamingReasoning = '',
@@ -325,9 +326,7 @@ export function VirtualizedMessageList({
                   waitingForResponse={waitingForResponse}
                   userParticipantId={userParticipantId}
                   tokenDisplaySettings={chatSettings?.tokenDisplaySettings}
-                  conciergeDisplay={chatSettings?.conciergeSettings?.enabled === false
-                    ? OFF_DUTY_CONCIERGE_DISPLAY
-                    : chatSettings?.conciergeSettings?.display}
+                  conciergeDisplay={conciergeDisplay}
                   onOverrideDangerFlag={onOverrideDangerFlag}
                   character={getCharacterForMessage(message)}
                   chatId={chatId}

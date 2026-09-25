@@ -584,6 +584,7 @@ export async function handleDescribeImage(
     fileEntryId: entry.id,
     userId: context.userId,
     repos,
+    chatId: context.chatId ?? null,
   });
 
   if (result.description) return respond(result.description, 'vision-call');

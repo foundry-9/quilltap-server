@@ -34,7 +34,16 @@
   select in the Salon sidebar and New Chat form is disabled with a pointer to the tab, and the
   Salon shows flagged content plainly.
 - `newChatsStartAs` sets a new chat's state when the request names none (only while on duty); the
-  New Chat form preselects it.
+  New Chat form preselects it. Off duty, a requested non-Moderated state is ignored and the form's
+  default reads Moderated.
+- Refusal-time checks re-read the global on-duty switch as well as the chat's state
+  (`readCurrentConciergeOnDuty`), so turning the Concierge off mid-call stops the failover.
+- Unmoderated chats route Aurora avatars and Lantern backgrounds straight to the uncensored image
+  profile before the call, like the `generate_image` tool.
+- The uncensored vision fallback follows the chat's policy (not used in Locked or exempt chats);
+  callers pass the `chatId`.
+- The Salon's badge and blur settings come from the chat's resolved policy (no badges on an
+  Unmoderated chat, plain display off duty).
 - `PUT /api/v1/settings/chat` validates `conciergeSettings` and returns `400` for
   `dangerousContentSettings`, `uncensoredImageDescriptionProfileId` or
   `cheapLLMSettings.imagePromptProfileId`.

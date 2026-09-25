@@ -235,7 +235,26 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   let effectiveImageProfile = imageProfile;
   let effectiveApiKey: string = apiKey.key_value;
 
-  if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts) {
+  if (conciergePolicy.routeDirect) {
+    // An Unmoderated chat goes straight to the uncensored desk: the verdict is
+    // already in, so there is no pre-screen to wait on.
+    const routeResult = await resolveImageProviderForDangerousContent(
+      imageProfile,
+      apiKey.key_value,
+      conciergePolicy,
+      job.userId
+    );
+    if (routeResult.rerouted) {
+      effectiveImageProfile = routeResult.imageProfile;
+      effectiveApiKey = routeResult.apiKey;
+    }
+    logger.info('[CharacterAvatar] Unmoderated chat: routed direct to the uncensored desk', {
+      context: 'background-jobs.character-avatar',
+      jobId: job.id,
+      rerouted: routeResult.rerouted,
+      profile: effectiveImageProfile.name,
+    });
+  } else if (conciergePolicy.preScreen.enabled && conciergePolicy.preScreen.scanImagePrompts) {
     let cheapLLMSelection: CheapLLMSelection | null = null;
     try {
       const resolved = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);

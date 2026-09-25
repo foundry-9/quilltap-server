@@ -23,7 +23,7 @@ import {
   conciergeStateMayFailOver,
   type ConciergeState,
 } from '@/lib/services/dangerous-content/chat-override'
-import { readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
+import { readCurrentConciergeOnDuty, readCurrentConciergeState } from '@/lib/services/dangerous-content/current-state'
 import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
@@ -298,7 +298,12 @@ export async function attemptEmptyResponseRecovery({
     })
   }
 
-  if (state.fullResponse.trim().length === 0 && !lockedOut && conciergePolicy.failoverAllowed) {
+  // The policy was resolved when the turn began; the Concierge may have been
+  // sent off duty since. Only asked when there is a refusal to act on.
+  if (
+    state.fullResponse.trim().length === 0 && !lockedOut && conciergePolicy.failoverAllowed
+    && await readCurrentConciergeOnDuty(userId, conciergePolicy.onDuty)
+  ) {
     const uncensored = await attemptUncensoredRetry({
       state,
       conciergePolicy,
@@ -492,7 +497,7 @@ export async function attemptUncensoredRetry(
     // still be one that cannot read this turn's images — re-decide before
     // spending the attempt, or the gateway 400s (bug 106).
     const reroutedMessages = repos
-      ? await adaptMessagesForProfile(formattedMessages, reroute, repos, userId, { chatId })
+      ? await adaptMessagesForProfile(formattedMessages, reroute, repos, userId, { chatId }, { chatId })
       : formattedMessages
 
     if (substitute) resetStreamingBuffersForSwap(state)
@@ -1019,7 +1024,11 @@ export async function attemptHardErrorFailover(
       await recordTextRefusal(chatId, refusingProfile, refusal.evidence, false)
       return walkFallbackChain(opts, openingAttempt)
     }
-    if (opts.conciergePolicy?.failoverAllowed) {
+    // Re-asked at refusal time: the Concierge may have gone off duty mid-call.
+    if (
+      opts.conciergePolicy?.failoverAllowed
+      && await readCurrentConciergeOnDuty(context.userId, opts.conciergePolicy.onDuty)
+    ) {
       const uncensored = await attemptUncensoredRetry({
         state,
         conciergePolicy: opts.conciergePolicy,

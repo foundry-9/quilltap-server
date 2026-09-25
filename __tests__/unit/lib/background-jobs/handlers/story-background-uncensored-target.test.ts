@@ -482,6 +482,22 @@ describe('story-background handler — moderation reroute', () => {
     expect(sent.prompt).toContain(CANDID_PROMPT)
   })
 
+  it('sends an Unmoderated chat straight to the uncensored desk: the ordinary painter never sees the candid prompt', async () => {
+    markDangerous(true)
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
+    mockCraftPrompt.mockResolvedValue({ success: true, result: CANDID_PROMPT } as never)
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    // One provider built, and it is the desk's — no refusal needed to get there.
+    expect(mockCreateImageProvider).toHaveBeenCalledTimes(1)
+    const first = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    const [params, key] = first.generateImage.mock.calls[0] as [{ prompt: string; model?: string }, string]
+    expect(key).toBe('sk-uncensored')
+    expect(params.prompt).toContain(CANDID_PROMPT)
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
+  })
+
   it('leaves a non-moderation failure alone: no reroute, no announcement', async () => {
     mockResolveDanger.mockReturnValue(policyFor('moderated'))
     mockCreateImageProvider.mockImplementation(() => ({

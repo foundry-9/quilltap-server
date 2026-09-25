@@ -72,6 +72,9 @@ const mockRepos = {
   files: {
     findById: jest.fn(),
   },
+  chats: {
+    findById: jest.fn(),
+  },
 }
 
 /**
@@ -504,6 +507,41 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(result.type).toBe('image_description')
     expect(result.imageDescription).toContain('FLYING DUTCHMAN')
     expect(result.processingMetadata?.usedUncensoredFallback).toBe(true)
+  })
+
+  it.each([
+    ['Locked', { conciergeMode: 'locked' }],
+    ['exempt (help)', { chatType: 'help' }],
+  ])('never asks the uncensored vision fallback in a %s chat', async (_label, chatRow) => {
+    const fallbackProfile: ConnectionProfile = {
+      ...baseProfile,
+      id: '77777777-7777-7777-7777-777777777777',
+      name: 'Honest describer',
+      provider: 'OPENROUTER',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      conciergeSettings: { enabled: true, uncensoredVisionProfileId: fallbackProfile.id },
+    })
+    mockRepos.chats.findById.mockResolvedValue({ id: 'chat-1', ...chatRow })
+    mockRepos.connections.findById.mockImplementation(async (id: string) =>
+      id === baseProfile.id ? baseProfile : fallbackProfile
+    )
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'A small fluffy kitten with large amber eyes, framed vertically.',
+      finishReason: 'stop',
+      usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId, { chatId: 'chat-1' })
+
+    expect(mockRepos.chats.findById).toHaveBeenCalledWith('chat-1')
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+    expect(result.processingMetadata?.usedUncensoredFallback).not.toBe(true)
   })
 
   it('rejects a description when the plugin reported the attachment as dropped', async () => {

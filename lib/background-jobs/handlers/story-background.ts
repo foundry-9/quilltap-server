@@ -42,6 +42,7 @@ import {
   getConciergeTrail,
 } from '@/lib/services/dangerous-content/image-failover';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
@@ -470,13 +471,37 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   ]);
   const depictionGuidelines = await resolveDepictionGuidelines(validCharacters);
 
+  // An Unmoderated chat with an uncensored image profile goes straight to the
+  // uncensored desk (`routeDirect`): the candid prompt crafted below must
+  // never be sent to the ordinary painter first.
+  let primaryImageProfile: ImageProfile = imageProfile;
+  let primaryImageKey: string = apiKey.key_value;
+  if (uncensoredImageTarget) {
+    const route = await resolveImageProviderForDangerousContent(
+      imageProfile,
+      apiKey.key_value,
+      conciergePolicy,
+      job.userId,
+    );
+    if (route.rerouted) {
+      primaryImageProfile = route.imageProfile;
+      primaryImageKey = route.apiKey;
+    }
+    logger.info('[StoryBackground] Unmoderated chat: routed direct to the uncensored desk', {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      rerouted: route.rerouted,
+      profileId: primaryImageProfile.id,
+    });
+  }
+
   // 10. Craft the background prompt using cheap LLM
 
   const craftResult = await craftStoryBackgroundPrompt(
     {
       sceneContext,
       characters: characterDescriptions,
-      provider: imageProfile.provider,
+      provider: primaryImageProfile.provider,
       sceneAesthetic,
       characterAesthetic,
       depictionGuidelines,
@@ -522,7 +547,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         {
           sceneContext,
           characters: characterDescriptions,
-          provider: imageProfile.provider,
+          provider: primaryImageProfile.provider,
           sceneAesthetic,
           characterAesthetic,
           depictionGuidelines,
@@ -693,7 +718,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   let failover;
   try {
     failover = await generateImageWithConciergeFailover(
-      { profile: imageProfile, apiKey: apiKey.key_value },
+      { profile: primaryImageProfile, apiKey: primaryImageKey },
       attemptBackground,
       { userId: job.userId, chatId: payload.chatId, purpose: 'lantern', conciergePolicy, chat },
     );

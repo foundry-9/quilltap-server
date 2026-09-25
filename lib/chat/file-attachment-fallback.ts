@@ -17,7 +17,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { withTimeout } from '@/lib/promise-timeout'
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
-import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
 import type { FileAttachment, LLMResponse } from '@/lib/llm/base'
@@ -174,26 +174,40 @@ async function getImageDescriptionProfile(
 
 /**
  * Resolve the configured uncensored vision fallback profile, if any — the
- * Concierge desk's `conciergeSettings.uncensoredVisionProfileId`. Returns null
- * when the Concierge is off duty, when no vision profile is configured, or
- * when the referenced profile no longer exists. Distinct from the primary
+ * Concierge desk's `conciergeSettings.uncensoredVisionProfileId`, as the chat's
+ * resolved policy allows it. Returns null when the Concierge is off duty, when
+ * the chat is Locked or exempt, when no vision profile is configured, or when
+ * the referenced profile no longer exists. Distinct from the primary
  * getter: we never auto-pick a fallback — the user must explicitly opt in by
  * picking one.
  */
 async function getUncensoredImageDescriptionProfile(
   repos: any,
-  userId: string
+  userId: string,
+  chatId?: string | null
 ): Promise<ConnectionProfile | null> {
   const chatSettings = await repos.chatSettings.findByUserId(userId)
-  const concierge = readConciergeSettings(chatSettings)
-  if (!concierge.enabled) {
-    logger.debug('Uncensored vision fallback unavailable: the Concierge is off duty', { userId })
+  // With a chat in hand its state decides (Locked and exempt chats have an
+  // empty desk); without one — a file described outside any chat — only the
+  // global on-duty switch does.
+  const chat = chatId ? await repos.chats.findById(chatId).catch(() => null) : null
+  const policy = resolveConciergeSettings(chatSettings, chat)
+  const id = policy.desk.visionProfileId
+  if (!id) {
+    logger.debug('Uncensored vision fallback unavailable for this chat', {
+      userId,
+      chatId: chatId ?? null,
+      conciergeSource: policy.source,
+    })
     return null
   }
-  const id = concierge.uncensoredVisionProfileId
-  if (!id) return null
   const profile = await repos.connections.findById(id)
   return profile ?? null
+}
+
+/** Where an image is being described — the chat decides whether the uncensored vision fallback may stand in. */
+export interface ImageDescriptionOptions {
+  chatId?: string | null
 }
 
 /**
@@ -651,18 +665,20 @@ async function describeImageWithProfile(
 export async function generateImageDescription(
   file: FileAttachment,
   repos: any,
-  userId: string
+  userId: string,
+  options: ImageDescriptionOptions = {}
 ): Promise<FallbackResult> {
   // Reading an image with a vision model is image work — it lights "Img" for
   // as long as the call takes, the same as generating one. The persisted-
   // description shortcut below returns fast enough not to register as a blip.
-  return trackActivity('image', () => runGenerateImageDescription(file, repos, userId))
+  return trackActivity('image', () => runGenerateImageDescription(file, repos, userId, options))
 }
 
 async function runGenerateImageDescription(
   file: FileAttachment,
   repos: any,
-  userId: string
+  userId: string,
+  options: ImageDescriptionOptions
 ): Promise<FallbackResult> {
   // Reuse a persisted description before spending a (slow, uncensored) vision
   // call. Images Quilltap generated already carry the exact prompt that made
@@ -746,7 +762,7 @@ async function runGenerateImageDescription(
 
   // Primary and its understudies failed/refused. If an uncensored fallback is
   // configured and it's a *different* profile, give it a shot.
-  const fallbackProfile = await getUncensoredImageDescriptionProfile(repos, userId)
+  const fallbackProfile = await getUncensoredImageDescriptionProfile(repos, userId, options.chatId)
   if (!fallbackProfile || fallbackProfile.id === imageDescProfile.id) {
     return withAttemptTrail(primaryResult, attemptTrail)
   }
@@ -888,7 +904,8 @@ export async function processFileAttachmentFallback(
   fileAttachment: FileAttachment,
   profile: ConnectionProfile,
   repos: any,
-  userId: string
+  userId: string,
+  options: ImageDescriptionOptions = {}
 ): Promise<FallbackResult> {
   // Check if file needs fallback processing
   if (!needsFallbackProcessing(profile, file.mimeType)) {
@@ -920,7 +937,7 @@ export async function processFileAttachmentFallback(
 
   // Handle images
   if (isImageFile(file.mimeType)) {
-    return await generateImageDescription(fileAttachment, repos, userId)
+    return await generateImageDescription(fileAttachment, repos, userId, options)
   }
 
   // Unsupported file type

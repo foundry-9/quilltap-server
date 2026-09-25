@@ -13,7 +13,6 @@
  * Pure — safe in the forked job child and on the client.
  */
 
-import type { ChatSettings } from '@/lib/schemas/types'
 import type {
   ConciergeSettings,
   ConciergeDisplaySettings,
@@ -114,6 +113,9 @@ export interface ResolvedConciergePolicy {
   source: ConciergePolicySource
 }
 
+/** Anything carrying the global settings — the server row, or the client's settings payload. */
+export type ConciergeSettingsCarrier = { conciergeSettings?: ConciergeSettings | null }
+
 const NO_PRE_SCREEN: ResolvedPreScreen = {
   enabled: false,
   threshold: 1.0,
@@ -135,7 +137,7 @@ const NO_DESK: ResolvedConciergeDesk = {
  * before a field existed) from {@link DEFAULT_CONCIERGE_SETTINGS}.
  */
 export function readConciergeSettings(
-  globalSettings: Pick<ChatSettings, 'conciergeSettings'> | null | undefined,
+  globalSettings: ConciergeSettingsCarrier | null | undefined,
 ): ConciergeSettings {
   const stored = globalSettings?.conciergeSettings
   if (!stored) return DEFAULT_CONCIERGE_SETTINGS
@@ -189,8 +191,8 @@ function preScreenFrom(preScreen: ConciergePreScreenSettings): ResolvedPreScreen
  * @param chat - Optional chat whose Concierge state applies
  */
 export function resolveConciergeSettings(
-  globalSettings: Pick<ChatSettings, 'conciergeSettings'> | null | undefined,
-  chat?: { conciergeMode?: ConciergeState | null; chatType?: string | null } | null,
+  globalSettings: ConciergeSettingsCarrier | null | undefined,
+  chat?: (Parameters<typeof getConciergeState>[0] & { chatType?: string | null }) | null,
 ): ResolvedConciergePolicy {
   const settings = readConciergeSettings(globalSettings)
   const state: ConciergeState = chat ? getConciergeState(chat) : 'moderated'

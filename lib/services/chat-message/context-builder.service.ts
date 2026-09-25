@@ -201,7 +201,8 @@ export async function loadAndProcessFiles(
       fileAttachment,
       connectionProfile,
       repos,
-      userId
+      userId,
+      { chatId }
     )
 
     fallbackResults.push(fallbackResult)
@@ -424,6 +425,7 @@ async function rehydrateUserAttachments(args: {
   connectionProfile: ConnectionProfile
   repos: ReturnType<typeof getRepositories>
   userId: string
+  chatId: string
 }): Promise<{ rehydratedContentByMessageId: Map<string, string>; rehydratedAttachmentsToKeep: unknown[] }> {
   const rehydratedContentByMessageId = new Map<string, string>()
   const rehydratedAttachmentsToKeep: unknown[] = []
@@ -461,6 +463,7 @@ async function rehydrateUserAttachments(args: {
           args.connectionProfile,
           repos,
           args.userId,
+          { chatId: args.chatId },
         )
 
         // Mirror the `loadAndProcessFiles` filter: keep the raw bytes only
@@ -1026,6 +1029,7 @@ export async function buildMessageContext(
       connectionProfile,
       repos: options.repos,
       userId,
+      chatId: chat.id,
     })
 
   const messagesForConversation = rehydratedContentByMessageId.size > 0
@@ -1208,6 +1212,7 @@ export async function buildMessageContext(
             connectionProfile,
             options.repos,
             userId,
+            { chatId: chat.id },
           )
           const prefix = formatFallbackAsMessagePrefix(fallbackResult)
           if (prefix) {

@@ -46,8 +46,10 @@ jest.mock('@/lib/services/dangerous-content/understudy', () => ({
 
 const mockPostConciergeRefusalAnnouncement = jest.fn(async (_params: unknown) => null)
 const mockReadCurrentConciergeState = jest.fn(async (_chatId: unknown, snapshot?: string | null) => snapshot ?? 'moderated')
+const mockReadCurrentConciergeOnDuty = jest.fn(async (_userId: unknown, snapshot: boolean) => snapshot)
 jest.mock('@/lib/services/dangerous-content/current-state', () => ({
   readCurrentConciergeState: (chatId: unknown, snapshot?: string | null) => mockReadCurrentConciergeState(chatId, snapshot),
+  readCurrentConciergeOnDuty: (userId: unknown, snapshot: boolean) => mockReadCurrentConciergeOnDuty(userId, snapshot),
 }))
 
 jest.mock('@/lib/services/concierge-notifications/writer', () => ({

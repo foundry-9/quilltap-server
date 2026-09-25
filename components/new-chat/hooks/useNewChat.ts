@@ -433,10 +433,13 @@ export function useNewChat({
           try {
             const settings = await chatSettingsRes.json()
             userDefaultRoleplayTemplateId = settings?.defaultRoleplayTemplateId ?? null
+            const onDuty = settings?.conciergeSettings?.enabled !== false
+            // Off duty the server ignores `newChatsStartAs` and every chat is
+            // created Moderated, so that is the default the form shows too.
             conciergeNewChatsStartAs =
-              settings?.conciergeSettings?.newChatsStartAs === 'unmoderated' ? 'unmoderated' : 'moderated'
+              onDuty && settings?.conciergeSettings?.newChatsStartAs === 'unmoderated' ? 'unmoderated' : 'moderated'
             setConciergeServerDefault(conciergeNewChatsStartAs)
-            setConciergeOnDuty(settings?.conciergeSettings?.enabled !== false)
+            setConciergeOnDuty(onDuty)
             const hint = toAutonomousSettingsHint(settings)
             autonomousSeedFreshnessHours = hint?.defaultFreshnessHours ?? null
             autonomousSeedDestructivePolicyAlwaysRefuse = hint?.destructiveToolPolicy === 'always_refuse'

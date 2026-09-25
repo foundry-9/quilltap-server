@@ -43,7 +43,7 @@ import {
   type ConciergeRefusalKind,
 } from '@/lib/services/concierge-notifications/writer'
 import { conciergeStateMayFailOver, getConciergeState, type ConciergeState } from './chat-override'
-import { readCurrentConciergeState } from './current-state'
+import { readCurrentConciergeOnDuty, readCurrentConciergeState } from './current-state'
 import { classifyRefusal, type RefusalVerdict } from './refusal'
 import { recordModerationRefusal } from './refusal-ledger'
 import { resolveUncensoredImageUnderstudy } from './understudy'
@@ -277,7 +277,10 @@ export async function generateImageWithConciergeFailover<T, P extends FailoverPr
   // current state, so what remains of it is "is the Concierge on duty?" — a
   // chat unlocked mid-call may fail over even though its snapshot policy,
   // resolved while Locked, said no.
-  const failoverAllowed = ctx.conciergePolicy.failoverAllowed || ctx.conciergePolicy.onDuty
+  // The global switch is re-asked too: the operator may have sent the
+  // Concierge off duty while the provider was thinking.
+  const failoverAllowed = (ctx.conciergePolicy.failoverAllowed || ctx.conciergePolicy.onDuty)
+    && await readCurrentConciergeOnDuty(ctx.userId, ctx.conciergePolicy.onDuty)
   if (!failoverAllowed) {
     // Off duty (or an exempt chat type): the Concierge does nothing at all,
     // announcements included.
