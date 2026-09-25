@@ -8,7 +8,9 @@
  *   1. Post a Host bubble in the new chat linking back to the source chat.
  *   2. Replay the carryover window — the most recent Librarian summary plus
  *      every later message — into the new chat, with participant IDs remapped
- *      by characterId.
+ *      by characterId. Then name anyone seated in the source chat who did not
+ *      come along (bug 171): their own lines are dropped from the replay, but
+ *      the rest of the cast's lines to them are not.
  *   3. Replicate turn state (isPaused, turnQueue, cycle rotation, lastTurnParticipantId,
  *      activeTypingParticipantId, impersonatingParticipantIds,
  *      allLLMPauseTurnCount), again with participant ID remapping.
@@ -33,7 +35,13 @@ import type { ChatEvent, ChatMetadata, MessageEvent } from '@/lib/schemas/types'
 import {
   postHostContinuationFromAnnouncement,
   postHostContinuationToAnnouncement,
+  postHostOffSceneCharactersAnnouncement,
+  type OffSceneCharacterCard,
 } from '@/lib/services/host-notifications/writer';
+import {
+  isUserPersonaInRoom,
+  resolveUserIdentity,
+} from '@/lib/services/chat-message/user-identity-resolver.service';
 
 type Repos = RepositoryContainer;
 
@@ -51,6 +59,8 @@ export interface ApplyChatContinuationResult {
   hadLibrarianSummary: boolean;
   /** Whether the source-chat tail bubble was posted. */
   postedSourceTailBubble: boolean;
+  /** Character IDs the Host named as left behind in the source chat. */
+  leftBehindCharacterIds: string[];
 }
 
 /**
@@ -77,6 +87,69 @@ function buildParticipantIdMap(
     }
   }
   return map;
+}
+
+/**
+ * The characters seated in the source chat (any status but `removed`) who
+ * are not seated in the new one — the people the carried-over transcript is
+ * still talking to. The operator's persona is excluded when it is in the new
+ * room anyway, as the unseated voice of the operator's messages; in an
+ * autonomous room it is not, and is named like anyone else (bug 172).
+ * A character whose vault cannot be read is skipped with a warning: the
+ * notice is a courtesy and must never break the continuation.
+ */
+async function findLeftBehindCharacters(
+  sourceChat: ChatMetadata,
+  newChat: ChatMetadata,
+  userId: string,
+  repos: Repos,
+): Promise<OffSceneCharacterCard[]> {
+  const seatedInNewChat = new Set<string>();
+  for (const p of newChat.participants) {
+    if (p.characterId) seatedInNewChat.add(p.characterId);
+  }
+
+  const leftBehindIds: string[] = [];
+  for (const p of sourceChat.participants) {
+    if (p.type !== 'CHARACTER' || !p.characterId) continue;
+    if (p.status === 'removed') continue;
+    if (seatedInNewChat.has(p.characterId)) continue;
+    if (!leftBehindIds.includes(p.characterId)) leftBehindIds.push(p.characterId);
+  }
+  if (leftBehindIds.length === 0) return [];
+
+  const identity = await resolveUserIdentity(repos, userId, newChat);
+  const personaId = isUserPersonaInRoom(newChat, identity) ? identity.characterId : undefined;
+
+  const cards: OffSceneCharacterCard[] = [];
+  for (const characterId of leftBehindIds) {
+    if (characterId === personaId) {
+      logger.debug('[ChatContinuation] Persona stays in the room unseated; not named as left behind', {
+        newChatId: newChat.id,
+        characterId,
+      });
+      continue;
+    }
+    try {
+      const c = await repos.characters.findById(characterId);
+      if (!c) continue;
+      cards.push({
+        id: c.id,
+        name: c.name,
+        aliases: c.aliases ?? undefined,
+        pronouns: c.pronouns ?? undefined,
+        identity: c.identity ?? undefined,
+        description: c.description ?? undefined,
+      });
+    } catch (err) {
+      logger.warn('[ChatContinuation] Could not load a left-behind character; not naming them', {
+        newChatId: newChat.id,
+        characterId,
+        error: getErrorMessage(err),
+      });
+    }
+  }
+  return cards;
 }
 
 /**
@@ -253,7 +326,12 @@ export async function applyChatContinuation(
       newChatId,
       sourceChatId,
     });
-    return { replayedMessageCount: 0, hadLibrarianSummary: false, postedSourceTailBubble: false };
+    return {
+      replayedMessageCount: 0,
+      hadLibrarianSummary: false,
+      postedSourceTailBubble: false,
+      leftBehindCharacterIds: [],
+    };
   }
 
   const newChat = await repos.chats.findById(newChatId);
@@ -262,7 +340,12 @@ export async function applyChatContinuation(
       newChatId,
       sourceChatId,
     });
-    return { replayedMessageCount: 0, hadLibrarianSummary: false, postedSourceTailBubble: false };
+    return {
+      replayedMessageCount: 0,
+      hadLibrarianSummary: false,
+      postedSourceTailBubble: false,
+      leftBehindCharacterIds: [],
+    };
   }
 
   const participantMap = buildParticipantIdMap(sourceChat.participants, newChat.participants);
@@ -297,6 +380,33 @@ export async function applyChatContinuation(
         error: getErrorMessage(err),
       });
     }
+  }
+
+  // 2b. Name whoever stayed behind, at the tail of the carryover — the last
+  //     word before the new scene, and stamped so the per-turn off-scene scan
+  //     does not introduce them again.
+  let leftBehindCharacterIds: string[] = [];
+  try {
+    const leftBehind = await findLeftBehindCharacters(sourceChat, newChat, params.userId, repos);
+    if (leftBehind.length > 0) {
+      const notice = await postHostOffSceneCharactersAnnouncement({
+        chatId: newChatId,
+        characters: leftBehind,
+        reason: 'left-behind',
+      });
+      if (notice) leftBehindCharacterIds = leftBehind.map((c) => c.id);
+    }
+    logger.debug('[ChatContinuation] Left-behind check complete', {
+      newChatId,
+      sourceChatId,
+      leftBehindCharacterIds,
+    });
+  } catch (err) {
+    logger.error('[ChatContinuation] Failed to name left-behind characters', {
+      newChatId,
+      sourceChatId,
+      error: getErrorMessage(err),
+    });
   }
 
   // 3. Replicate turn state.
@@ -334,7 +444,8 @@ export async function applyChatContinuation(
     replayedMessageCount,
     hadLibrarianSummary,
     postedSourceTailBubble,
+    leftBehindCharacterIds,
   });
 
-  return { replayedMessageCount, hadLibrarianSummary, postedSourceTailBubble };
+  return { replayedMessageCount, hadLibrarianSummary, postedSourceTailBubble, leftBehindCharacterIds };
 }

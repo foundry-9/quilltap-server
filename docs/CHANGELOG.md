@@ -4,6 +4,29 @@
 
 ### 4.10-dev
 
+#### Fixed: Continue Elsewhere left the cast talking to people who stayed behind (bug 171)
+
+- The carryover drops the lines of anyone not seated in the new chat but keeps everyone else's
+  lines to them, so the new cast read an absent character as present and silent. Found on
+  `Friday`: an autonomous room continued from a chat Charlie was in spent 16 turns addressing him.
+- `applyChatContinuation` now names every source-chat participant (any status but `removed`) who
+  is not seated in the new chat. It posts the notice after the replayed messages, through
+  `postHostOffSceneCharactersAnnouncement` with the new `reason: 'left-behind'`. The IDs are stamped
+  in `introducedCharacterIds`, so the per-turn off-scene scan does not introduce them again. The
+  operator's unseated persona is skipped where it is still in the room (see bug 172).
+- A character whose vault cannot be read is skipped with a warning; the continuation still
+  completes. The result gains `leftBehindCharacterIds`.
+
+#### Fixed: autonomous rooms never introduced the operator's persona as absent (bug 172)
+
+- The off-scene introduction excluded the user persona by name. In an autonomous room, that name
+  is the system-wide sole user-controlled character, the `resolveUserIdentity` step-2 fallback.
+  Nobody types as that character there, so it was the one absent person the Host could never flag.
+- New `operatorSpeaksWithoutSeat(chatType)` in `lib/schemas/chat.types.ts` (false only for
+  `'autonomous'`) gates that exclusion in `buildContext`. New `isUserPersonaInRoom(chat, identity)`
+  in `user-identity-resolver.service.ts` answers the same question for a resolved identity.
+- `{{user}}` still resolves to the fallback persona in autonomous rooms; templates are unchanged.
+
 #### Added: Scenario Builder on the scenario shelves
 
 - The **Ask the Host to set the scene** button now also appears on the General Scenarios page,

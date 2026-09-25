@@ -11,7 +11,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ChatMetadataBase } from '@/lib/schemas/types'
-import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { isParticipantPresent, operatorSpeaksWithoutSeat } from '@/lib/schemas/chat.types'
 import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 
 const logger = createServiceLogger('UserIdentityResolver')
@@ -91,4 +91,31 @@ export async function resolveUserIdentity(
     description: '',
     source: 'default',
   }
+}
+
+/**
+ * Whether the persona `resolveUserIdentity` returned is in the room — seated,
+ * or the unseated voice of the operator's messages. A persona reached through
+ * the system-wide fallback (step 2) in an autonomous room is neither: nobody
+ * types as them there, so they are as off the scene as any other absent
+ * character, even though `{{user}}` still names them (bug 172).
+ *
+ * Callers holding a resolved identity ask this rather than reading `source`
+ * (the continuation's left-behind notice). The per-turn off-scene scan holds
+ * only the persona's name, excludes seated characters by id, and so asks the
+ * underlying `operatorSpeaksWithoutSeat` directly.
+ */
+export function isUserPersonaInRoom(
+  chat: Pick<ChatMetadataBase, 'chatType'>,
+  identity: ResolvedUserIdentity
+): boolean {
+  if (!identity.characterId) return false
+  if (identity.source === 'chat-participant') return true
+  const inRoom = operatorSpeaksWithoutSeat(chat.chatType)
+  logger.debug('Unseated persona presence resolved', {
+    characterId: identity.characterId,
+    chatType: chat.chatType,
+    inRoom,
+  })
+  return inRoom
 }

@@ -1088,6 +1088,102 @@ describe('Context Manager', () => {
       expect(result.messages.some(m => m.role === 'assistant' && m.content.includes('Off-Scene Character Mentioned'))).toBe(false)
     })
 
+    // Bug 172: the unseated persona (the system-wide sole user-controlled
+    // character, which `{{user}}` resolves to) is the voice of USER messages in
+    // a Salon chat, so it is never "off scene" there. In an autonomous room
+    // nobody types as them, and the cast addressing them must get the Host's
+    // not-present introduction like anyone else.
+    describe('unseated persona (bug 172)', () => {
+      const persona: Character = { ...characterUser, id: 'char-charlie', name: 'Charlie' }
+      const seatedWithoutPersona = [participantA, participantB]
+
+      const buildReposFor = () => ({
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+        characters: {
+          findByUserId: jest.fn().mockResolvedValue([characterA, characterB, persona]),
+          findById: jest.fn().mockResolvedValue(null),
+        },
+        chats: {
+          findById: jest.fn().mockResolvedValue({ id: 'chat-1', participants: seatedWithoutPersona }),
+          getMessages: jest.fn().mockResolvedValue([
+            {
+              type: 'message',
+              role: 'ASSISTANT',
+              participantId: 'participant-b',
+              content: 'Charlie, you have not answered anything for an hour.',
+              createdAt: timestamp,
+            },
+          ]),
+          addMessage: jest.fn(),
+        },
+        memories: {
+          findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+        },
+      })
+
+      const runFor = (chatType: 'salon' | 'autonomous') =>
+        buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Charlie', description: 'The proprietor' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            chatType,
+            participants: seatedWithoutPersona,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 1,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'ASSISTANT', content: 'Charlie, you have not answered anything for an hour.', id: 'm1' },
+          ],
+          embeddingProfileId: null,
+          skipMemories: true,
+          maxMemories: 1,
+          minMemoryImportance: 0.3,
+          respondingParticipant: participantA,
+          allParticipants: seatedWithoutPersona,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'ASSISTANT', content: 'Charlie, you have not answered anything for an hour.', participantId: 'participant-b', createdAt: timestamp },
+          ],
+        })
+
+      it('introduces the persona as off scene in an autonomous room', async () => {
+        const repoMock = buildReposFor()
+        mockedGetRepositories.mockReturnValue(repoMock as any)
+
+        await runFor('autonomous')
+
+        expect(repoMock.chats.addMessage).toHaveBeenCalledTimes(1)
+        const [, posted] = repoMock.chats.addMessage.mock.calls[0]
+        expect(posted.systemKind).toBe('off-scene-characters')
+        expect(posted.hostEvent).toEqual({ introducedCharacterIds: ['char-charlie'] })
+        expect(posted.content).toContain('### Charlie')
+      })
+
+      it('still treats the persona as present in a Salon chat', async () => {
+        const repoMock = buildReposFor()
+        mockedGetRepositories.mockReturnValue(repoMock as any)
+
+        await runFor('salon')
+
+        expect(repoMock.chats.addMessage).not.toHaveBeenCalled()
+      })
+    })
+
     // ------------------------------------------------------------------
     // The inform block — the one sanctioned turn-variable system block.
     // ------------------------------------------------------------------

@@ -146,7 +146,7 @@ import {
   type DebugInterCharacterMemoryInfo,
   type SceneStateEmissionEntry,
 } from './context/memory-injector'
-import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
+import { SceneStateSchema, type SceneState, operatorSpeaksWithoutSeat } from '@/lib/schemas/chat.types'
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
 import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped'
 import {
@@ -835,8 +835,21 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       }
     }
 
-    // Also exclude the user's persona by name (no ID is exposed via options).
-    const userCharacterNameLower = userCharacter?.name?.trim().toLowerCase()
+    // Also exclude the user's persona by name (no ID is exposed via options) —
+    // but only where the operator speaks without a seat, so an unseated
+    // persona is the voice of the USER messages. In an autonomous room nobody
+    // types as them: `userCharacter` there is only the system-wide fallback
+    // that `{{user}}` resolves to, and excluding it hid the one absent person
+    // the cast most often talks to (bug 172). A seated persona is already
+    // excluded by characterId above.
+    const userCharacterNameLower = operatorSpeaksWithoutSeat(chat.chatType)
+      ? userCharacter?.name?.trim().toLowerCase()
+      : undefined
+    logger.debug('[ContextManager] Off-scene persona exclusion', {
+      chatId: chat.id,
+      chatType: chat.chatType,
+      excludesPersonaByName: Boolean(userCharacterNameLower),
+    })
 
     const candidates = allUserCharacters.filter(c => {
       if (excludedCharacterIds.has(c.id)) return false

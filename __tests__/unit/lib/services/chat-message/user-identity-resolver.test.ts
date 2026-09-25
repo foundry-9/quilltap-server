@@ -1,4 +1,4 @@
-import { resolveUserIdentity, ResolvedUserIdentity } from '@/lib/services/chat-message/user-identity-resolver.service';
+import { resolveUserIdentity, isUserPersonaInRoom, ResolvedUserIdentity } from '@/lib/services/chat-message/user-identity-resolver.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -356,6 +356,37 @@ describe('user-identity-resolver.service', () => {
         expect(result.characterId).toBe(participantCharacterId);
         expect(result.name).toBe('Participant Character');
       });
+    });
+  });
+
+  // Bug 172: the step-2 fallback persona is who `{{user}}` names, but in an
+  // autonomous room nobody types as them, so they are not in the room.
+  describe('isUserPersonaInRoom', () => {
+    const fallback: ResolvedUserIdentity = {
+      name: 'Charlie',
+      description: '',
+      characterId: 'char-charlie',
+      source: 'single-user-character',
+    };
+
+    it('is true for a seated persona, whatever the chat type', () => {
+      const seated: ResolvedUserIdentity = { ...fallback, source: 'chat-participant' };
+      expect(isUserPersonaInRoom({ chatType: 'autonomous' }, seated)).toBe(true);
+      expect(isUserPersonaInRoom({ chatType: 'salon' }, seated)).toBe(true);
+    });
+
+    it('is true for the unseated fallback persona in a Salon chat', () => {
+      expect(isUserPersonaInRoom({ chatType: 'salon' }, fallback)).toBe(true);
+    });
+
+    it('is false for the unseated fallback persona in an autonomous room', () => {
+      expect(isUserPersonaInRoom({ chatType: 'autonomous' }, fallback)).toBe(false);
+    });
+
+    it('is false when no persona character was resolved', () => {
+      expect(
+        isUserPersonaInRoom({ chatType: 'salon' }, { name: 'User', description: '', source: 'default' })
+      ).toBe(false);
     });
   });
 });

@@ -366,12 +366,13 @@ Quilltap thereupon does the heavy lifting:
 - A fresh chat is created with the chosen project and scenario.
 - The Host posts a brief notice at the top of the new chat linking back to the previous one.
 - The Librarian's most recent summary, together with every message that followed it, is replayed into the new chat — your characters carry on, mid-thought, as though the change of address were a passing remark.
+- Anyone from the old cast who did not come along is named by the Host at the end of the carried-over history, as having remained behind — not in the room, unable to hear, unable to answer — so the travelling party does not go on addressing an empty chair. (Only their own lines are left out of the carryover; everyone else's remarks to them come along.) See [The Host's Introductions](salon-host-introductions.md).
 - The turn order, who is up to speak, and whether the proceedings are paused are all preserved, so nothing in the conversational rhythm is lost.
 - The Host posts a closing notice in the original chat, linking forward to the new venue.
 
 The original chat is not deleted; you may always return to it. But henceforth the canonical thread continues at the new address.
 
-A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
+A particularly civilised variation: in the same dialog you may flip the chat over to an **autonomous room**, taking yourself out of the picture entirely and letting the LLMs carry the conversation forward without you. Remove your own character from the cast, enable the autonomous controls (cadence, budget, visibility), and press **Continue**. The carryover proceeds as above — Librarian summary, recent messages, turn order, Host bookends, and the Host's note that your own character stayed behind — and the new room then runs on its own schedule, with you free to attend to other matters. Autonomous rooms require at least two LLM-controlled characters and no user-controlled participant, which the dialog will enforce before letting you proceed.
 
 ### Merging a Conversation In
 

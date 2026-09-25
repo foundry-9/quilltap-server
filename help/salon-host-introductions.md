@@ -42,10 +42,18 @@ The introduction appears in the conversation feed with the Host's avatar (the sa
 
 When several absent characters are mentioned together for the first time in the same turn, the Host introduces them all in a single combined announcement, sorted alphabetically.
 
+### Those Left Behind
+
+When a conversation is carried off by **Continue Elsewhere** and someone from the old cast does not make the journey, the Host says so at once. At the end of the carried-over history — just before the new scene begins — she posts a notice in the same form:
+
+> *The Host observes that one member of the previous company did not make the journey. This person remained behind in the earlier scene: not in this room, unable to hear what is said here, and unable to answer.*
+
+It matters more than it might seem. The carried-over history keeps every remark the travelling party made *to* the absentee, but none of the absentee's own replies, so without the notice the company would take them for a guest in the room who has gone oddly quiet. The notice counts as their introduction, so the Host does not introduce them a second time when their name comes up later.
+
 ## What This Doesn't Do
 
 - **It doesn't add the character to the chat.** The character remains absent from the participant list. To bring them into the scene, open the **Chat Sidebar** on the right, expand the **Participants** drawer, and use **Add Character** at the bottom.
-- **It doesn't fire for the user-controlled character.** Your own persona is excluded.
+- **It doesn't fire for your own character — wherever you speak.** In an ordinary Salon, your persona is the voice of your messages even when it holds no seat, so it is never "absent". An **autonomous room** is another matter: you are not speaking there at all, so if the cast starts addressing your character, the Host introduces them like any other absent acquaintance, and the company stops waiting on a reply that cannot come.
 - **It doesn't re-introduce known characters.** A character introduced earlier in the chat — even thousands of messages ago — is not reintroduced when their name comes up again.
 - **It doesn't broadcast across chats.** The introduction is per-Salon. The same character may be introduced in another conversation if their name surfaces there too.
 

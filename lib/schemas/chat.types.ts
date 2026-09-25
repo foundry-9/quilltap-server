@@ -109,6 +109,19 @@ export function isModerationExemptChatType(chatType: string | null | undefined):
 }
 
 /**
+ * Whether the operator speaks in a chat of this type even without a seat of
+ * their own — in which case an unseated persona (the system-wide sole
+ * user-controlled character) is the voice of every USER message, and so is
+ * "in the room". False only for autonomous rooms: every seat there is a
+ * character, the operator watches, and an Inform is a record, never a voice.
+ * An unseated persona in an autonomous room is off the scene like anyone else
+ * (bug 172).
+ */
+export function operatorSpeaksWithoutSeat(chatType: string | null | undefined): boolean {
+  return chatType !== 'autonomous';
+}
+
+/**
  * The three Concierge postures a chat can be in (`chats.conciergeMode`):
  * `'moderated'` (ordinary providers first, uncensored on refusal),
  * `'unmoderated'` (the uncensored desk only) and `'locked'` (ordinary only,
