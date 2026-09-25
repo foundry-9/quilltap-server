@@ -30,6 +30,10 @@
   shown as a number field on the Dangerous Content card. Vouched Safe settings carry 0.
 - `applyConciergeFlip` gains an optional `{ by, reason, refusals }` argument (default: the
   operator; existing transitions unchanged). Its `'monitored'` case now also resets the ledger.
+- Review fixes: the auto-switch re-reads the chat right before flipping and abandons the switch if
+  it left Monitored during the check, so it cannot overwrite an operator's newer choice; a
+  threshold of 1 no longer announces "More than once now"; a moderation stop stated by the
+  same-provider retry after a plain empty opening is now recorded (once per turn).
 - Phase-1 review carry-overs: the `refusal-rerouted` bubble no longer says the picture is
   "attached above" (the note posts before the picture); `scripts/concierge-four-state-test.sh`
   wraps `content` in `qt_text()` in `check_ann` and CT-4.

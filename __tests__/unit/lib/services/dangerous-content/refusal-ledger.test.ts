@@ -214,6 +214,23 @@ describe('maybeAutoSwitchAfterRefusal', () => {
     expect(chatsUpdate).not.toHaveBeenCalled()
   })
 
+  it('does not overwrite an operator state set while the check was reading', async () => {
+    ledgerCount = 2
+    const repos = jest.mocked(getRepositories)() as unknown as {
+      chatSettings: { findByUserId: jest.Mock }
+    }
+    // The operator vouches for the chat while the check reads the settings.
+    repos.chatSettings.findByUserId.mockImplementationOnce(async () => {
+      chat = { ...chat, conciergeOverride: 'OFF' }
+      return { dangerousContentSettings: { mode: 'AUTO_ROUTE', autoSwitchAfterRefusals: 2 } }
+    })
+
+    expect(await maybeAutoSwitchAfterRefusal('chat-1', { provider: 'GOOGLE' })).toEqual({ switched: false })
+    expect(chatsUpdate).not.toHaveBeenCalled()
+    expect(chat.conciergeOverride).toBe('OFF')
+    expect(flagCalls()).toHaveLength(0)
+  })
+
   it('two checks landing together switch and announce once', async () => {
     ledgerCount = 2
     const results = await Promise.all([
@@ -237,5 +254,24 @@ describe('maybeAutoSwitchAfterRefusal', () => {
     chatsUpdate.mockClear()
     expect((await recordModerationRefusal(record())).switched).toBe(false)
     expect(chatsUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe('the auto-switch announcement', () => {
+  // Real writer, not the mock above.
+  const { buildAutoFlagContent, buildAutoFlagOpaqueContent } =
+    jest.requireActual('@/lib/services/concierge-notifications/writer') as
+      typeof import('@/lib/services/concierge-notifications/writer')
+
+  it('states a single refusal plainly when the threshold is one', () => {
+    const text = buildAutoFlagContent({ count: 1, lastProvider: 'GOOGLE', lastModel: 'imagen' })
+    expect(text).not.toMatch(/more than once|once now|most recently/i)
+    expect(text).toContain('GOOGLE imagen')
+    expect(buildAutoFlagOpaqueContent({ count: 1, lastProvider: 'GOOGLE' })).toMatch(/^One moderation refusal \(last: GOOGLE\)/)
+  })
+
+  it('counts two and more', () => {
+    expect(buildAutoFlagContent({ count: 2, lastProvider: 'GOOGLE' })).toMatch(/^Twice now .* most recently GOOGLE\./)
+    expect(buildAutoFlagContent({ count: 11, lastProvider: '' })).toMatch(/^More than once now [^—]*\./)
   })
 })

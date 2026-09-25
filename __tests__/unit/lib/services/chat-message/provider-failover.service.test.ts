@@ -41,6 +41,11 @@ jest.mock('@/lib/services/concierge-notifications/writer', () => ({
   postConciergeRefusalAnnouncement: (params: unknown) => mockPostConciergeRefusalAnnouncement(params),
 }))
 
+const mockRecordModerationRefusal = jest.fn(async (_rec: unknown) => ({ count: 1, switched: false }))
+jest.mock('@/lib/services/dangerous-content/refusal-ledger', () => ({
+  recordModerationRefusal: (rec: unknown) => mockRecordModerationRefusal(rec),
+}))
+
 const mockIsModerationFinishReason = jest.fn((_r?: string | null) => false)
 
 jest.mock('@/lib/llm/moderation-finish-reason', () => ({
@@ -592,5 +597,48 @@ describe('provider-failover.service — the route trail', () => {
     await recover(state)
 
     expect(state.routeFailures[0]).toMatchObject({ profileId: 'unc-1', via: 'concierge' })
+  })
+
+  describe('the refusal ledger', () => {
+    it('records a stated opening refusal once', async () => {
+      mockIsModerationFinishReason.mockReturnValue(true)
+      const state = freshState({ rawResponse: { choices: [{ finish_reason: 'content_filter' }] } })
+
+      await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+
+      expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
+      expect(mockRecordModerationRefusal).toHaveBeenCalledWith(expect.objectContaining({
+        chatId: 'chat-1', kind: 'text', purpose: 'chat',
+        refusedProfileId: 'safe-1', provider: 'OPENAI', evidence: 'finish-reason', rerouted: false,
+      }))
+    })
+
+    it('records a refusal the same-provider retry states after a plain empty opening', async () => {
+      mockIsModerationFinishReason.mockImplementation((r) => r === 'content_filter')
+      mockStreamMessage.mockReturnValueOnce(makeStream([
+        { done: true, rawResponse: { choices: [{ finish_reason: 'content_filter' }] } },
+      ]))
+      const state = freshState()
+
+      await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+
+      expect(state.routeFailures.map((a: any) => [a.via, a.outcome])).toEqual([
+        ['primary', 'failed'],
+        ['retry', 'refused'],
+      ])
+      expect(mockRecordModerationRefusal).toHaveBeenCalledTimes(1)
+      expect(mockRecordModerationRefusal).toHaveBeenCalledWith(expect.objectContaining({
+        refusedProfileId: 'safe-1', evidence: 'finish-reason',
+      }))
+    })
+
+    it('records nothing for a plain empty body that no one called a refusal', async () => {
+      mockStreamMessage.mockReturnValueOnce(makeStream([{ done: true, rawResponse: null }]))
+      const state = freshState()
+
+      await recover(state, { dangerSettings: { mode: 'OFF' } as any })
+
+      expect(mockRecordModerationRefusal).not.toHaveBeenCalled()
+    })
   })
 })

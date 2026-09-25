@@ -183,11 +183,15 @@ export async function attemptEmptyResponseRecovery({
     openingVerdict.trigger, openingVerdict.detail, openingVerdict.evidence)
   const openingProfile = state.effectiveProfile
   let uncensoredRecovered = false
-  // The refusal that opened this recovery, on the chat's ledger — recorded on
-  // the way out so the log can say whether the Concierge's reroute answered.
+  // The turn's refusal, for the chat's ledger: the opening verdict, or — when
+  // the opening was a plain empty body — a refusal the same-provider retry
+  // then stated. One per turn either way. Recorded on the way out so the log
+  // can say whether the Concierge's reroute answered.
+  let turnRefusal: { profile: typeof openingProfile; evidence: typeof openingVerdict.evidence } | null =
+    openingVerdict.outcome === 'refused' ? { profile: openingProfile, evidence: openingVerdict.evidence } : null
   const recordOpeningRefusal = async (): Promise<void> => {
-    if (openingVerdict.outcome !== 'refused') return
-    await recordTextRefusal(chatId, openingProfile, openingVerdict.evidence, uncensoredRecovered)
+    if (!turnRefusal) return
+    await recordTextRefusal(chatId, turnRefusal.profile, turnRefusal.evidence, uncensoredRecovered)
   }
 
   if (!contentWasFlaggedDangerous) {
@@ -237,6 +241,9 @@ export async function attemptEmptyResponseRecovery({
         const retryVerdict = classifyEmptyBody(state, contentWasFlaggedDangerous)
         recordRouteFailure(state, state.effectiveProfile, 'retry', retryVerdict.outcome,
           retryVerdict.trigger, retryVerdict.detail, retryVerdict.evidence)
+        if (!turnRefusal && retryVerdict.outcome === 'refused') {
+          turnRefusal = { profile: state.effectiveProfile, evidence: retryVerdict.evidence }
+        }
         logger.warn('[EmptyResponse] Same-provider retry also returned empty', {
           chatId,
           provider: state.effectiveProfile.provider,

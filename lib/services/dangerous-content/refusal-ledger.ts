@@ -210,7 +210,23 @@ async function runAutoSwitchCheck(
       return { switched: false }
     }
 
-    const result = await applyConciergeFlip(chatId, 'flagged', chat, {
+    // The settings and ledger reads above awaited; the operator may have moved
+    // the chat meanwhile. Re-read and re-check on the row the flip will
+    // actually compare against, so a newer operator choice (Vouched Safe,
+    // Uncensored) is never overwritten by a decision made on a stale snapshot.
+    // Nothing awaits between this read and `applyConciergeFlip`'s own write
+    // but the repository call itself.
+    const fresh = await repos.chats.findById(chatId)
+    const freshState = fresh ? getConciergeState(fresh) : null
+    if (!fresh || freshState !== 'monitored') {
+      logger.info('Auto-switch abandoned: the chat left Monitored during the check', {
+        ...decision,
+        state: freshState,
+      })
+      return { switched: false }
+    }
+
+    const result = await applyConciergeFlip(chatId, 'flagged', fresh, {
       by: 'concierge',
       reason: 'refusals',
       refusals: {

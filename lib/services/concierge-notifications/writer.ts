@@ -204,10 +204,13 @@ function refusalWho(details: ConciergeAutoFlagDetails | undefined): string | nul
 
 export function buildAutoFlagContent(details: ConciergeAutoFlagDetails | undefined): string {
   const count = details?.count ?? 0;
-  const times = count >= 2 && count < TIMES_WORDS.length ? `${TIMES_WORDS[count]} now` : 'More than once now';
   const who = refusalWho(details);
-  const recently = who ? ` — most recently ${who}` : '';
-  return `${times} the house's regular staff have declined this conversation on grounds of propriety${recently}. The Concierge has taken the liberty of moving the whole affair to the uncensored desk; you may move it back from the sidebar whenever you wish.`;
+  // A threshold of one is permitted: a single refusal is stated plainly, with
+  // no tally and no "most recently".
+  const declined = count === 1
+    ? `The house's regular staff have declined this conversation on grounds of propriety${who ? ` — ${who}, to be precise` : ''}.`
+    : `${count >= 2 && count < TIMES_WORDS.length ? `${TIMES_WORDS[count]} now` : 'More than once now'} the house's regular staff have declined this conversation on grounds of propriety${who ? ` — most recently ${who}` : ''}.`;
+  return `${declined} The Concierge has taken the liberty of moving the whole affair to the uncensored desk; you may move it back from the sidebar whenever you wish.`;
 }
 
 export function buildAutoFlagOpaqueContent(details: ConciergeAutoFlagDetails | undefined): string {
