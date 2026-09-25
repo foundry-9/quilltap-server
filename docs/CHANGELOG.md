@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Docs: Concierge overhaul specs
+
+- Added `docs/developer/features/concierge-overhaul.md` and five self-contained phase specs
+  (refusal-driven failover at every call site, a per-chat refusal ledger with auto-switch, three
+  chat states Moderated / Unmoderated / Locked, the Concierge's own Settings tab with the global
+  mode retired, and Salon polish including "Try uncensored"). Proposal only; no code change.
+
 #### Fixed: switching the Salon's "speaking as" seat raised "Unknown action" (bug 170)
 
 - `useImpersonation.handleSetActiveSpeaker` sent `?action=set-active-speaker` as PUT; the chat
