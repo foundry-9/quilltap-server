@@ -29,6 +29,10 @@ import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } fr
 import { getErrorMessage } from '@/lib/error-utils';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
+import { generateImageWithConciergeFailover } from '@/lib/services/dangerous-content/image-failover';
+import { resolveUncensoredTextUnderstudy } from '@/lib/services/dangerous-content/understudy';
+import { supportsImageGeneration } from '@/lib/llm/image-capable';
+import type { ConnectionProfile } from '@/lib/schemas/types';
 
 const importFromUrlSchema = z.object({
   url: z.url(),
@@ -197,11 +201,32 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     return badRequest('Connection profile not found');
   }
 
+  // Concierge settings, resolved WITH the chat when one asked, so a chat's own
+  // Concierge state (Vouched Safe, Uncensored) governs its pictures too.
+  // Fail safe, like the classification below: a settings read that fails
+  // leaves the Concierge at its defaults rather than failing the picture.
+  let chatSettings = null;
+  let chatForConcierge = null;
+  try {
+    chatSettings = await repos.chatSettings.findByUserId(user.id);
+    if (chatId) {
+      chatForConcierge = await repos.chats.findById(chatId);
+    }
+  } catch (error) {
+    logger.warn('[Images v1] Could not load Concierge settings; using defaults', {
+      chatId: chatId ?? null,
+      error: getErrorMessage(error),
+    });
+  }
+  const dangerSettings = resolveDangerousContentSettings(chatSettings ?? null, chatForConcierge).settings;
+  logger.debug('[Images v1] Generate: resolved Concierge settings', {
+    chatId: chatId ?? null,
+    mode: dangerSettings.mode,
+    withChat: !!chatForConcierge,
+  });
+
   // the Concierge integration: classify prompt and potentially reroute provider
   try {
-      const chatSettings = await repos.chatSettings.findByUserId(user.id);
-      const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null);
-      const dangerSettings = dangerousContentResolved.settings;
 
       if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
         // Build cheap LLM selection for classification
@@ -277,33 +302,69 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     }
   }
 
-  // Create image provider instance
-  let provider;
+  // Fail fast when the chosen profile cannot draw at all.
+  let primaryProvider;
   try {
-    provider = createImageProvider(profile.provider as any, profile.baseUrl ?? undefined);
+    primaryProvider = createImageProvider(profile.provider as any, profile.baseUrl ?? undefined);
   } catch {
     return badRequest(`${profile.provider} provider does not support image generation`);
   }
+  const primaryProfileId = profile.id;
 
-  // Build the image generation request through the shared builder, so this
-  // route sees the profile's stored defaults, LoRAs and residual options the
-  // same way the Salon's `generate_image` does. No orientation is resolved:
-  // this route's caller passes an explicit size and means it.
-  const { params: imageGenRequest } = buildImageGenParams({
-    profile,
-    prompt,
-    overrides: {
-      n: options.n,
-      size: options.size,
-      quality: options.quality,
-      style: options.style,
-      aspectRatio: options.aspectRatio,
+  // One call against one connection profile. The shared builder gives this
+  // route the profile's stored defaults, LoRAs and residual options the same
+  // way the Salon's `generate_image` does. No orientation is resolved: this
+  // route's caller passes an explicit size and means it.
+  const attempt = async (candidate: ConnectionProfile, key: string) => {
+    const provider = candidate.id === primaryProfileId
+      ? primaryProvider
+      : createImageProvider(candidate.provider as any, candidate.baseUrl ?? undefined);
+    const { params } = buildImageGenParams({
+      profile: candidate,
+      prompt,
+      overrides: {
+        n: options.n,
+        size: options.size,
+        quality: options.quality,
+        style: options.style,
+        aspectRatio: options.aspectRatio,
+      },
+      logContext: { context: 'api.v1.images.generate', profileId: candidate.id },
+    });
+    return provider.generateImage(params, key);
+  };
+
+  // Generate through the Concierge's failover chokepoint. This route still
+  // draws from CONNECTION profiles, so its understudy is an uncensored
+  // connection profile whose provider can generate images.
+  const failover = await generateImageWithConciergeFailover<Awaited<ReturnType<typeof attempt>>, ConnectionProfile>(
+    { profile, apiKey: decryptedKey },
+    attempt,
+    {
+      userId: user.id,
+      chatId: chatId ?? null,
+      purpose: 'dialog',
+      settings: dangerSettings,
+      profileKind: 'connection',
+      primaryVia: profile.id !== profileId ? 'concierge' : 'primary',
+      resolveUnderstudy: (exclude) => resolveUncensoredTextUnderstudy({
+        userId: user.id,
+        settings: dangerSettings,
+        exclude,
+        filter: (candidate) => supportsImageGeneration(candidate.provider),
+      }),
     },
-    logContext: { context: 'api.v1.images.generate', profileId: profile.id },
-  });
-
-  // Generate images
-  const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);
+  );
+  const imageGenResponse = failover.result;
+  if (failover.rerouted) {
+    logger.info('[Images v1] Concierge rerouted a refused image request', {
+      userId: user.id,
+      originalProfileId: profile.id,
+      answeringProfileId: failover.profile.id,
+      answeringProvider: failover.profile.provider,
+    });
+    profile = failover.profile;
+  }
 
   // Build linkedTo from the tags plus the chat that asked for the image.
   // Deduped: a caller passing both a CHAT tag and `chatId` must not link the

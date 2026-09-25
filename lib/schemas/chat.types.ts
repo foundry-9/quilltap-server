@@ -211,8 +211,20 @@ export const RouteAttemptSchema = z.object({
    * unions identical, so a new trigger cannot be added to one alone.
    */
   trigger: z.enum(['auth', 'rate-limit', 'network', 'model-missing', 'provider-error', 'empty-response', 'moderation-refusal']).optional(),
-  /** How a refusal was established: the provider said so, or it was inferred from an empty body on a Concierge-flagged turn. */
-  evidence: z.enum(['finish-reason', 'inferred']).optional(),
+  /**
+   * How a refusal was established, in the order of trust `classifyRefusal`
+   * (`lib/services/dangerous-content/refusal.ts`) ranks them: the plugin threw
+   * a typed moderation error, the provider's own error code, a stated finish
+   * reason, refusal wording in the error text, or an inference from an empty
+   * body on a Concierge-flagged turn.
+   */
+  evidence: z.enum(['typed-error', 'provider-code', 'finish-reason', 'message-pattern', 'inferred']).optional(),
+  /**
+   * What kind of profile was asked. Absent means `'connection'` — every trail
+   * written before image calls had trails. `'image'` rows name an image
+   * profile, whose `modelName` is the image model.
+   */
+  profileKind: z.enum(['connection', 'image']).optional(),
   /** Short human-readable reason, ≤ 200 chars (the error message truncated, or the finish reason). Never the full error body. */
   detail: z.string().max(200).optional(),
 });
@@ -279,8 +291,14 @@ export const MessageEventSchema = z.object({
    * are the largest table in the instance — so the common turn writes nothing
    * and the renderer treats NULL as "the badge, exactly as before".
    *
-   * `provider`/`modelName` stay authoritative for *who answered*; the trail's
-   * last entry always agrees with them. ASSISTANT rows only.
+   * `provider`/`modelName` stay authoritative for *who answered*; on an
+   * assistant turn the trail's last entry always agrees with them.
+   *
+   * Image-bearing rows carry an *image* trail (`profileKind: 'image'`) when a
+   * picture was refused on the way: the TOOL row of a `generate_image` call,
+   * and the Lantern / Aurora bubble that announces a picture. Written by
+   * `generateImageWithConciergeFailover`
+   * (`lib/services/dangerous-content/image-failover.ts`).
    */
   routeTrail: RouteAttemptSchema.array().nullable().optional(),
   /**

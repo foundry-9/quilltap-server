@@ -24,10 +24,7 @@ import {
   deriveSceneContext,
   extractVisibleConversation,
 } from '@/lib/memory/cheap-llm-tasks'
-import {
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service'
+import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
 import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
 import {
   resolveCharacterAppearances,
@@ -51,9 +48,12 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   shouldUseUncensoredRoute: jest.fn(),
 }))
-jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
-  isImageModerationError: jest.fn(),
-  resolveUncensoredImageProfileForReroute: jest.fn(),
+jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  resolveUncensoredImageUnderstudy: jest.fn(),
+  resolveUncensoredTextUnderstudy: jest.fn(),
+}))
+jest.mock('@/lib/services/concierge-notifications/writer', () => ({
+  postConciergeRefusalAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -97,8 +97,7 @@ const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelectio
 const mockCraftPrompt = jest.mocked(craftStoryBackgroundPrompt)
 const mockExtractConversation = jest.mocked(extractVisibleConversation)
 const mockDeriveScene = jest.mocked(deriveSceneContext)
-const mockIsModerationError = jest.mocked(isImageModerationError)
-const mockResolveReroute = jest.mocked(resolveUncensoredImageProfileForReroute)
+const mockResolveReroute = jest.mocked(resolveUncensoredImageUnderstudy)
 const mockWriteLantern = jest.mocked(writeLanternBackgroundToMountStore)
 const mockResolveAppearances = jest.mocked(resolveCharacterAppearances)
 const mockSanitizeAppearances = jest.mocked(sanitizeAppearancesIfNeeded)
@@ -185,7 +184,6 @@ beforeEach(() => {
   mockExtractConversation.mockReturnValue([])
   mockDeriveScene.mockResolvedValue(null as never)
   mockCraftPrompt.mockResolvedValue({ success: true, result: CRAFTED_PROMPT } as never)
-  mockIsModerationError.mockReturnValue(false)
   mockResolveReroute.mockResolvedValue(null as never)
 
   // Only the present participant is resolved — the payload carries just Alice.

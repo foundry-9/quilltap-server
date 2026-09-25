@@ -28,7 +28,7 @@ import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks
 import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser, selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
-import type { ChatSettings } from '@/lib/schemas/types';
+import type { ChatSettings, ImageProfile } from '@/lib/schemas/types';
 import {
   equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
@@ -47,11 +47,12 @@ import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import {
-  resolveImageProviderForDangerousContent,
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service';
+  generateImageWithConciergeFailover,
+  getConciergeTrail,
+} from '@/lib/services/dangerous-content/image-failover';
+import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
@@ -123,6 +124,8 @@ async function saveGeneratedImage(
     revisedPrompt?: string;
     model: string;
     provider: string;
+    /** The Concierge's call sheet, when the picture was refused on the way. */
+    routeTrail?: RouteAttempt[];
   }
 ): Promise<GeneratedImageResult> {
   try {
@@ -198,6 +201,7 @@ async function saveGeneratedImage(
         chatId,
         fileId: fileEntry.id,
         kind: { kind: 'character-image', requesterName },
+        routeTrail: metadata.routeTrail,
       });
     }
 
@@ -314,7 +318,23 @@ async function loadAndValidateProfile(
 }
 
 /**
+ * What a provider call produced, and who produced it.
+ */
+interface ProviderGenerationResult {
+  images: GeneratedImageResult[];
+  /** The profile that actually answered — the understudy after a Concierge reroute. */
+  answeringProfile: { provider: string; modelName: string; name: string; id: string };
+  /** The Concierge's call sheet; empty when the first profile answered. */
+  routeTrail: RouteAttempt[];
+}
+
+/**
  * Generate images using the provider
+ *
+ * The provider call runs through `generateImageWithConciergeFailover`: a
+ * content-moderation refusal is retried once on an uncensored understudy
+ * (under Auto-Route), and whatever happened is returned as a route trail for
+ * the TOOL message.
  */
 async function generateImagesWithProvider(
   toolInput: ImageGenerationToolInput,
@@ -322,200 +342,131 @@ async function generateImagesWithProvider(
   userId: string,
   dangerSettings: DangerousContentSettings,
   chatId?: string,
-  callingParticipantId?: string
-): Promise<GeneratedImageResult[]> {
-  const provider = createImageProvider(imageProfile.provider);
-
-  // Get the API key
-  const decryptedKey: string = imageProfile.apiKey.key_value;
-
-  // One builder for every image call site: merges the profile's defaults under
-  // the tool's input, resolves the orientation onto this provider/model's own
-  // mechanism, and attaches the profile's capped LoRA list plus its residual
-  // parameter bag. `toolInput.prompt` is already the expanded prompt, so
-  // whatever the builder appends lands in the intended final form.
-  const { params: mergedParams } = buildImageGenParams({
-    profile: imageProfile,
-    prompt: toolInput.prompt,
-    overrides: toolInputOverrides(toolInput),
-    orientation: requestedOrientation(toolInput),
-    logContext: { context: 'tools.generate_image', chatId, profileId: imageProfile.id },
-  });
-
-  // Generate images. Tracks the profile that actually produced the final
-  // response — updated if the Concierge swaps in the uncensored profile
-  // after a post-hoc moderation rejection. Drives the saved-file metadata.
-  let activeProvider = imageProfile.provider as string;
-  let activeModel = imageProfile.modelName as string;
-  let generationResponse;
-  const genStartTime = Date.now();
-  try {
-    generationResponse = await provider.generateImage(mergedParams, decryptedKey);
-
-    const genDurationMs = Date.now() - genStartTime;
-    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-    logLLMCall({
-      userId,
-      type: 'IMAGE_GENERATION',
-      chatId,
-      provider: imageProfile.provider,
-      modelName: imageProfile.modelName,
-      imageProfileId: imageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: toolInput.prompt }],
-      },
-      response: {
-        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
-      },
-      durationMs: genDurationMs,
-    }).catch(err => {
-      logger.warn('[Image Generation] Failed to log image generation to LLM Inspector', {
-        error: getErrorMessage(err),
-      });
-    });
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    const genDurationMs = Date.now() - genStartTime;
-
-    logLLMCall({
-      userId,
-      type: 'IMAGE_GENERATION',
-      chatId,
-      provider: imageProfile.provider,
-      modelName: imageProfile.modelName,
-      imageProfileId: imageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: toolInput.prompt }],
-      },
-      response: {
-        content: '',
-        error: errorMessage,
-      },
-      durationMs: genDurationMs,
-    }).catch(() => { /* never block on logging */ });
-
-    // Post-hoc Concierge reroute: if the provider rejected for content
-    // moderation and the user has AUTO_ROUTE on with a configured uncensored
-    // profile, take the second door. Pre-flight prompt expansion may already
-    // have routed us to the uncensored profile — the helper detects that and
-    // declines, so we won't loop.
-    const reroute = isImageModerationError(error)
-      ? await resolveUncensoredImageProfileForReroute(imageProfile.id, dangerSettings, userId)
-      : null;
-
-    if (!reroute) {
-      logger.error('Image generation failed:', {
-        errorMessage,
-        moderationRejection: isImageModerationError(error),
-      }, error as Error);
-      throw new ImageGenerationError(
-        'PROVIDER_ERROR',
-        `Image generation failed: ${errorMessage}`,
-        error
-      );
-    }
-
-    logger.info('[Image Generation] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
-      originalProfileId: imageProfile.id,
-      originalProvider: imageProfile.provider,
-      fallbackProfileId: reroute.profile.id,
-      fallbackProvider: reroute.profile.provider,
-      originalError: errorMessage,
-    });
-
-    const rerouteProvider = createImageProvider(reroute.profile.provider);
-    // Rebuild from scratch for the reroute target: its shape mechanism, its
-    // LoRA support, and its stored parameters are all its own. The prompt was
-    // crafted against the original profile, so any trigger phrases the
-    // fallback's adapters want get appended here.
-    const { params: rerouteMergedParams } = buildImageGenParams({
-      profile: reroute.profile,
+  callingParticipantId?: string,
+  primaryVia: RouteAttemptVia = 'primary'
+): Promise<ProviderGenerationResult> {
+  // One call against one profile. Owns everything profile-specific: the
+  // shared builder merges that profile's defaults under the tool's input,
+  // resolves the orientation onto its own mechanism and appends its LoRA
+  // trigger phrases; the LLM-log line names it. `toolInput.prompt` is already
+  // the expanded prompt, so whatever the builder appends lands in final form.
+  const attempt = async (profile: ImageProfile, apiKey: string) => {
+    const rerouted = profile.id !== imageProfile.id;
+    const provider = createImageProvider(profile.provider);
+    const { params } = buildImageGenParams({
+      profile,
       prompt: toolInput.prompt,
       overrides: toolInputOverrides(toolInput),
       orientation: requestedOrientation(toolInput),
       logContext: {
-        context: 'tools.generate_image.concierge-reroute',
+        context: rerouted ? 'tools.generate_image.concierge-reroute' : 'tools.generate_image',
         chatId,
-        profileId: reroute.profile.id,
+        profileId: profile.id,
       },
     });
-    const rerouteStartTime = Date.now();
+    const startTime = Date.now();
     try {
-      generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);
-
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
+      const response = await provider.generateImage(params, apiKey);
+      const revisedPrompt = response.images?.[0]?.revisedPrompt || '';
       logLLMCall({
         userId,
         type: 'IMAGE_GENERATION',
         chatId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
+        provider: profile.provider,
+        modelName: profile.modelName,
+        imageProfileId: profile.id,
         request: {
           messages: [{ role: 'user', content: toolInput.prompt }],
         },
         response: {
-          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
+          content: revisedPrompt
+            || `Generated ${response.images?.length ?? 0} image(s)${rerouted ? ' (Concierge reroute)' : ''}`,
         },
-        durationMs: rerouteDurationMs,
-      }).catch(() => { /* never block on logging */ });
-
-      activeProvider = reroute.profile.provider;
-      activeModel = reroute.profile.modelName;
-
-      logger.info('[Image Generation] Concierge uncensored reroute succeeded', {
-        fallbackProvider: reroute.profile.provider,
-        fallbackModel: reroute.profile.modelName,
-        rerouteDurationMs,
+        durationMs: Date.now() - startTime,
+      }).catch(err => {
+        logger.warn('[Image Generation] Failed to log image generation to LLM Inspector', {
+          error: getErrorMessage(err),
+        });
       });
-    } catch (rerouteError) {
-      const rerouteErrorMessage = getErrorMessage(rerouteError);
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-
+      return response;
+    } catch (error) {
       logLLMCall({
         userId,
         type: 'IMAGE_GENERATION',
         chatId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
+        provider: profile.provider,
+        modelName: profile.modelName,
+        imageProfileId: profile.id,
         request: {
           messages: [{ role: 'user', content: toolInput.prompt }],
         },
         response: {
           content: '',
-          error: rerouteErrorMessage,
+          error: getErrorMessage(error),
         },
-        durationMs: rerouteDurationMs,
+        durationMs: Date.now() - startTime,
       }).catch(() => { /* never block on logging */ });
-
-      logger.error('Image generation failed (Concierge reroute also failed):', {
-        originalError: errorMessage,
-        rerouteError: rerouteErrorMessage,
-      }, rerouteError as Error);
-      throw new ImageGenerationError(
-        'PROVIDER_ERROR',
-        `Image generation failed after Concierge reroute: ${rerouteErrorMessage}`,
-        rerouteError
-      );
+      throw error;
     }
+  };
+
+  let outcome;
+  try {
+    outcome = await generateImageWithConciergeFailover(
+      { profile: imageProfile as ImageProfile, apiKey: imageProfile.apiKey.key_value as string },
+      attempt,
+      { userId, chatId, purpose: 'tool', settings: dangerSettings, primaryVia },
+    );
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    const trail = getConciergeTrail(error);
+    logger.error('Image generation failed:', {
+      errorMessage,
+      conciergeTrail: trail?.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+    }, error as Error);
+    throw new ImageGenerationError(
+      'PROVIDER_ERROR',
+      trail && trail.length > 1
+        ? `Image generation failed after Concierge reroute: ${errorMessage}`
+        : `Image generation failed: ${errorMessage}`,
+      error
+    );
+  }
+
+  const generationResponse = outcome.result;
+  const activeProfile = outcome.profile;
+  if (outcome.rerouted) {
+    logger.info('[Image Generation] Concierge uncensored reroute succeeded', {
+      originalProfileId: imageProfile.id,
+      fallbackProfileId: activeProfile.id,
+      fallbackProvider: activeProfile.provider,
+      fallbackModel: activeProfile.modelName,
+    });
   }
 
   // Save images and create database records
   try {
-    return await Promise.all(
+    const images = await Promise.all(
       generationResponse.images.map((img) =>
         saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, callingParticipantId, {
           prompt: toolInput.prompt,
           revisedPrompt: img.revisedPrompt,
-          model: activeModel,
-          provider: activeProvider,
+          model: activeProfile.modelName,
+          provider: activeProfile.provider,
+          routeTrail: outcome.trail.length > 0 ? outcome.trail : undefined,
         })
       )
     );
+    return {
+      images,
+      answeringProfile: {
+        id: activeProfile.id,
+        name: activeProfile.name,
+        provider: activeProfile.provider,
+        modelName: activeProfile.modelName,
+      },
+      routeTrail: outcome.trail,
+    };
   } catch (error) {
     logger.error('Failed to save images:', {}, error as Error);
     if (error instanceof ImageGenerationError) {
@@ -1263,23 +1214,29 @@ async function runImageGenerationTool(
     };
 
     // 7. Generate images (using effective profile which may have been rerouted)
-    const savedImages = await generateImagesWithProvider(
+    // A pre-flight classifier reroute already swapped the profile: the trail
+    // says the Concierge sent it, not that it was first on the call sheet.
+    const { images: savedImages, answeringProfile, routeTrail } = await generateImagesWithProvider(
       finalInput,
       finalProfile,
       context.userId,
       dangerSettings,
       context.chatId,
-      context.callingParticipantId
+      context.callingParticipantId,
+      finalProfile.id !== imageProfile.id ? 'concierge' : 'primary'
     );
 
-    // 8. Return success response
+    // 8. Return success response. Names the profile that actually answered —
+    // after a post-hoc Concierge reroute that is the understudy, not the
+    // profile the model's call was addressed to.
     return {
       success: true,
       images: savedImages,
-      message: `Successfully generated ${savedImages.length} image(s) using ${finalProfile.modelName}`,
-      provider: finalProfile.provider,
-      model: finalProfile.modelName,
+      message: `Successfully generated ${savedImages.length} image(s) using ${answeringProfile.modelName}`,
+      provider: answeringProfile.provider,
+      model: answeringProfile.modelName,
       expandedPrompt: expandedPrompt,
+      ...(routeTrail.length > 0 ? { routeTrail } : {}),
     };
   } catch (error) {
     logger.error('Image generation tool error:', {}, error as Error);
@@ -1290,6 +1247,14 @@ async function runImageGenerationTool(
       error: 'UNKNOWN_ERROR',
       message: `An unexpected error occurred`,
     };
+
+    // A refusal the Concierge could not get past still leaves its call sheet.
+    const failedTrail = getConciergeTrail(
+      error instanceof ImageGenerationError ? error.details : error
+    );
+    if (failedTrail) {
+      errorResponse.routeTrail = failedTrail;
+    }
 
     if (imageProfile) {
       errorResponse.provider = imageProfile.provider;

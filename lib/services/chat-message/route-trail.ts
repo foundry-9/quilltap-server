@@ -20,7 +20,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
-import { isModerationFinishReason } from '@/lib/llm/moderation-finish-reason'
+import { classifyRefusal, type RefusalEvidence } from '@/lib/services/dangerous-content/refusal'
 import type { RouteAttempt, RouteAttemptVia } from '@/lib/schemas/chat.types'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { FallbackTrigger, FallbackCandidateKind } from '@/lib/llm/fallback'
@@ -68,7 +68,7 @@ export function recordRouteFailure(
   outcome: 'failed' | 'refused',
   trigger: FallbackTrigger,
   detail?: string,
-  evidence?: 'finish-reason' | 'inferred'
+  evidence?: RefusalEvidence
 ): void {
   const attempt: RouteAttempt = {
     profileId: profile.id,
@@ -109,7 +109,7 @@ export function setRouteVia(state: StreamingState, via: RouteAttemptVia): void {
 export interface EmptyBodyVerdict {
   outcome: 'failed' | 'refused'
   trigger: 'empty-response' | 'moderation-refusal'
-  evidence?: 'finish-reason' | 'inferred'
+  evidence?: RefusalEvidence
   detail?: string
 }
 
@@ -131,21 +131,19 @@ export function classifyEmptyBody(
 ): EmptyBodyVerdict {
   const finishReason = extractFinishReason(state.rawResponse)
 
-  if (isModerationFinishReason(finishReason)) {
+  // The two refusal readings — a stated moderation stop, and an empty body on
+  // flagged content — belong to the one classifier every call site shares.
+  const refusal = classifyRefusal({
+    finishReason,
+    emptyBody: true,
+    contentWasFlagged: contentWasFlaggedDangerous,
+  })
+  if (refusal.refused) {
     return {
       outcome: 'refused',
       trigger: 'moderation-refusal',
-      evidence: 'finish-reason',
-      detail: `finish_reason: ${finishReason}`,
-    }
-  }
-
-  if (contentWasFlaggedDangerous) {
-    return {
-      outcome: 'refused',
-      trigger: 'moderation-refusal',
-      evidence: 'inferred',
-      detail: 'empty response on content the Concierge had flagged',
+      evidence: refusal.evidence,
+      ...(refusal.detail ? { detail: refusal.detail } : {}),
     }
   }
 

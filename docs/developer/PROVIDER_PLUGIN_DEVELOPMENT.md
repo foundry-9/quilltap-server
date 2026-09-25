@@ -771,6 +771,44 @@ export class MyAIImageProvider implements ImageGenProvider {
 }
 ```
 
+### Content refusals: throw `ModerationRejectionError`
+
+When a provider declines a request on content-moderation grounds — a safety
+filter, a content policy, a "sensitive content" stop — the host's Concierge
+retries it once on the user's uncensored profile. It must **never** do that for
+a rate limit, an auth failure or a malformed request, so it needs to be told
+which is which. An image or chat provider that can tell a moderation rejection
+from any other failure **must** throw `ModerationRejectionError` from
+`@quilltap/plugin-types` (2.8.0+), or any error carrying
+`code: 'MODERATION_REJECTED'`:
+
+```typescript
+import { ModerationRejectionError } from '@quilltap/plugin-types';
+
+if (data.blocked) {
+  // (message, httpStatus?, providerReason?, pluginName?)
+  throw new ModerationRejectionError('MyAI declined this image', 400, data.blockReason, 'qtap-plugin-myai');
+}
+```
+
+- The host detects it by the **`code` string, never `instanceof`**. Plugins
+  bundle their own copy of `@quilltap/plugin-types`, so the class you throw is
+  not the class the host has; a check by class would always fail.
+- Map only what you can recognise. Everything else — rate limits, auth, network,
+  bad parameters — must propagate exactly as the SDK threw it.
+- `providerReason` is the provider's own word for it (`IMAGE_SAFETY`,
+  `moderation_blocked`, `1301`); it is shown to the user in the route trail.
+- A text provider that refuses by *returning* rather than throwing should carry
+  the real finish reason (`content_filter`, `refusal`, `SAFETY`, …) on the final
+  stream chunk's raw response, under `choices[0].finish_reason`,
+  `candidates[0].finishReason` or `stop_reason` — the host's
+  `extractFinishReason` reads those, and a hardcoded `'stop'` hides the refusal.
+- If you do not throw the typed error, the host still falls back to reading a
+  known provider code (`error.code` / `error.error.code`) and a narrow set of
+  refusal phrases in the message (`classifyRefusal` in
+  `lib/services/dangerous-content/refusal.ts`). A generic "400 Bad Request" is
+  never read as a refusal.
+
 ---
 
 ## Embedding Provider (Optional)

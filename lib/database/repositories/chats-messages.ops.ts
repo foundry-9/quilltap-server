@@ -179,10 +179,13 @@ export const ChatMessageRowSchema = z.object({
   // via = how the profile came to be asked; outcome = 'answered' | 'failed'
   // (fell over on its own) | 'refused' (declined on content grounds);
   // trigger = the engine's failure class; evidence = how a refusal was
-  // established ('finish-reason' stated by the provider, 'inferred' from an
-  // empty body on a Concierge-flagged turn); detail = a short reason, capped
-  // at 200 chars, never the full error body. The last entry always agrees with
-  // this row's provider/modelName. ASSISTANT rows only.
+  // established ('typed-error' / 'provider-code' / 'finish-reason' /
+  // 'message-pattern' stated by the provider, 'inferred' from an empty body on
+  // a Concierge-flagged turn); profileKind = 'connection' (absent) or 'image'
+  // for an image profile; detail = a short reason, capped at 200 chars, never
+  // the full error body. On ASSISTANT rows the last entry always agrees with
+  // this row's provider/modelName. Image-bearing rows (the TOOL row of a
+  // generate_image call, a Lantern/Aurora bubble) carry an image trail.
   routeTrail: z.array(z.object({
     profileId: UUIDSchema,
     profileName: z.string(),
@@ -191,7 +194,8 @@ export const ChatMessageRowSchema = z.object({
     via: z.enum(['primary', 'retry', 'concierge', 'understudy', 'tier-pick']),
     outcome: z.enum(['answered', 'failed', 'refused']),
     trigger: z.enum(['auth', 'rate-limit', 'network', 'model-missing', 'provider-error', 'empty-response', 'moderation-refusal']).optional(),
-    evidence: z.enum(['finish-reason', 'inferred']).optional(),
+    evidence: z.enum(['typed-error', 'provider-code', 'finish-reason', 'message-pattern', 'inferred']).optional(),
+    profileKind: z.enum(['connection', 'image']).optional(),
     detail: z.string().max(200).optional(),
   })).nullable().optional(),
   // The Courier: when non-null, this row is a placeholder for a manual /

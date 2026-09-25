@@ -230,6 +230,25 @@ export class GoogleProvider implements TextProvider {
   }
 
   /**
+   * Fold a blocked prompt's `promptFeedback` into a streamed raw response, and
+   * surface its `blockReason` as the first candidate's `finishReason` when the
+   * provider made no candidate at all. Leaves an ordinary response untouched.
+   */
+  private withBlockReason(raw: Record<string, any>, promptFeedback: any): Record<string, any> {
+    const feedback = raw.promptFeedback ?? promptFeedback;
+    const blockReason: string | undefined = feedback?.blockReason;
+    if (!blockReason) return raw;
+    logger.warn('Google blocked the prompt (streaming)', {
+      context: 'GoogleProvider.streamMessage',
+      blockReason,
+    });
+    const candidates = Array.isArray(raw.candidates) && raw.candidates.length > 0
+      ? raw.candidates
+      : [{ finishReason: blockReason }];
+    return { ...raw, promptFeedback: feedback, candidates };
+  }
+
+  /**
    * Extract text content from Gemini response
    * For thinking models, we need to filter out thought parts and get actual response text
    */
@@ -597,7 +616,18 @@ export class GoogleProvider implements TextProvider {
 
       // Extract text using our helper that handles thinking models correctly
       const text = this.extractTextFromResponse(response, params.model);
-      const finishReason = response.candidates?.[0]?.finishReason ?? 'STOP';
+      // A prompt blocked before any candidate was made reports why only in
+      // `promptFeedback.blockReason` (e.g. SAFETY). That IS the finish reason
+      // as far as the host is concerned — a moderation stop, not a STOP.
+      const blockReason: string | undefined = (response as any)?.promptFeedback?.blockReason;
+      const finishReason = blockReason ?? response.candidates?.[0]?.finishReason ?? 'STOP';
+      if (blockReason) {
+        logger.warn('Google blocked the prompt', {
+          context: 'GoogleProvider.sendMessage',
+          model: params.model,
+          blockReason,
+        });
+      }
       const usage = response.usageMetadata;
 
       // Extract thought signature for Gemini 3 thinking models
@@ -762,8 +792,16 @@ export class GoogleProvider implements TextProvider {
       let thoughtPartsNoText = 0;
       let textParts = 0;
 
+      // A blocked prompt's reason arrives in `promptFeedback`, which is not
+      // guaranteed to ride on the last chunk; keep it so the final raw
+      // response carries it for the host's finish-reason reader.
+      let promptFeedback: any = null;
+
       for await (const chunk of response) {
         lastResponse = chunk;
+        if ((chunk as any)?.promptFeedback?.blockReason) {
+          promptFeedback = (chunk as any).promptFeedback;
+        }
 
         // Extract text from chunk, routing thought parts to reasoning accumulator
         const candidates = chunk.candidates;
@@ -826,8 +864,13 @@ export class GoogleProvider implements TextProvider {
           totalTokens: Math.max(0, (usage?.totalTokenCount ?? 0) - (cachedTokens ?? 0)),
         },
         attachmentResults,
-        // Convert SDK response class to plain object for Zod validation
-        rawResponse: lastResponse ? JSON.parse(JSON.stringify(lastResponse)) : undefined,
+        // Convert SDK response class to plain object for Zod validation. A
+        // blocked prompt's `promptFeedback` is carried over, and its
+        // blockReason stands in as the candidate's finish reason when there
+        // is no candidate — the host reads `candidates[0].finishReason`.
+        rawResponse: lastResponse
+          ? this.withBlockReason(JSON.parse(JSON.stringify(lastResponse)), promptFeedback)
+          : undefined,
         // usage lives in usageMetadata on the Google SDK response — preserve the
         // full provider-shape sub-object (incl. cachedContentTokenCount) for
         // cache-instrumentation diagnostics.

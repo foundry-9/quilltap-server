@@ -391,7 +391,9 @@ describe('attemptHardErrorFailover — the route trail', () => {
       streamYielding([{ done: true, rawResponse: { choices: [{ finish_reason: 'content_filter' }] } }]) as never
     )
     // Only the understudy's empty body is classified here; the primary threw.
-    mockIsModerationFinishReason.mockReturnValue(true)
+    // A stated reason only — the refusal classifier also asks about the
+    // primary's thrown error, which carries no finish reason at all.
+    mockIsModerationFinishReason.mockImplementation((r?: string | null) => !!r)
 
     await attemptHardErrorFailover({
       ...baseOpts(state, makeRepos([primary, understudy])),

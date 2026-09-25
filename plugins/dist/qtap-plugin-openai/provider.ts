@@ -251,7 +251,11 @@ export class OpenAIProvider implements TextProvider {
           content: response.output_text,
           tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
         },
-        finish_reason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+        // The real reason, not a guess: `content_filter` on an incomplete
+        // response and `refusal` on a refused one are what tell the host a
+        // moderation stop from an empty body. Streaming and non-streaming
+        // both build their raw response here, so both carry it.
+        finish_reason: this.getFinishReason(response),
       }],
       usage: {
         prompt_tokens: response.usage?.input_tokens ?? 0,
@@ -259,6 +263,21 @@ export class OpenAIProvider implements TextProvider {
         total_tokens: response.usage?.total_tokens ?? 0,
       },
     };
+  }
+
+  /**
+   * Whether the model refused: a `refusal` output item, or a `refusal` content
+   * part inside a message item (the Responses API's two shapes for it).
+   */
+  private hasRefusal(response: ResponsesResponse): boolean {
+    for (const item of response.output as unknown as Array<{ type?: string; content?: Array<{ type?: string }> }>) {
+      if (item.type === 'refusal') return true;
+      if (item.type === 'message' && Array.isArray(item.content)
+        && item.content.some((part) => part?.type === 'refusal')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -270,6 +289,8 @@ export class OpenAIProvider implements TextProvider {
         return 'tool_calls';
       }
     }
+
+    if (this.hasRefusal(response)) return 'refusal';
 
     if (response.status === 'completed') return 'stop';
     if (response.status === 'incomplete') return response.incomplete_details?.reason || 'length';
@@ -568,7 +589,9 @@ export class OpenAIProvider implements TextProvider {
         // Cumulative: append delta to accumulator and emit the full string
         streamReasoning += (event as any).delta;
         yield { content: '', done: false, reasoningContent: streamReasoning };
-      } else if (event.type === 'response.completed') {
+      } else if (event.type === 'response.completed' || event.type === 'response.incomplete') {
+        // An incomplete response (`incomplete_details.reason: 'content_filter'`)
+        // ends the stream too, and its reason is the one the host needs.
         finalResponse = event.response;
       }
     }

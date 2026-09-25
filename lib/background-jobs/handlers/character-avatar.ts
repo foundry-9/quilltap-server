@@ -19,7 +19,7 @@ import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { CharacterAvatarGenerationPayload } from '../queue-service';
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
+import type { FileCategory, FileSource, ImageProfile } from '@/lib/schemas/types';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
@@ -28,11 +28,11 @@ import {
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import {
-  resolveImageProviderForDangerousContent,
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service';
+  generateImageWithConciergeFailover,
+  getConciergeTrail,
+} from '@/lib/services/dangerous-content/image-failover';
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
@@ -226,7 +226,7 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const dangerSettings = dangerousContentResolved.settings;
 
   let effectiveImageProfile = imageProfile;
-  let effectiveApiKey = apiKey.key_value;
+  let effectiveApiKey: string = apiKey.key_value;
 
   if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
     let cheapLLMSelection: CheapLLMSelection | null = null;
@@ -298,24 +298,22 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     }
   }
 
-  // 7. Generate portrait image
-  let generationResponse;
-  const genStartTime = Date.now();
-  try {
-    const provider = createImageProvider(effectiveImageProfile.provider);
-    // Avatars default to portrait; the shared builder maps that onto the
-    // provider's own size / aspect ratio / prompt wording and attaches the
-    // profile's LoRAs and residual options — the same params the Salon's
-    // `generate_image` gets, so a LoRA configured for a profile does not work
-    // in chat and quietly vanish here.
-    // Reuse the params the cache key was derived from. A pre-generation
-    // Concierge reroute swaps the profile, and the fallback provider's shape
-    // mechanism, LoRA support and stored options are its own — so that case,
-    // and only that case, rebuilds.
-    const effectiveParams = effectiveImageProfile.id === imageProfile.id
+  // 7. Generate portrait image — through the Concierge's failover chokepoint,
+  // which retries a content refusal once on an uncensored understudy.
+  //
+  // Avatars default to portrait; the shared builder maps that onto each
+  // provider's own size / aspect ratio / prompt wording and attaches the
+  // profile's LoRAs and residual options — the same params the Salon's
+  // `generate_image` gets. The params the cache key was derived from are
+  // reused for the requested profile; any other profile (a pre-generation
+  // Concierge reroute, or the post-hoc understudy) has a shape mechanism, LoRA
+  // support and stored options of its own, so that case rebuilds.
+  const attemptPortrait = async (profile: ImageProfile, key: string) => {
+    const provider = createImageProvider(profile.provider);
+    const params = profile.id === imageProfile.id
       ? avatarParams
       : buildImageGenParams({
-          profile: effectiveImageProfile,
+          profile,
           prompt,
           overrides: { n: 1, style: 'natural' },
           orientation: 'portrait',
@@ -324,155 +322,91 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
             jobId: job.id,
           },
         }).params;
-    generationResponse = await provider.generateImage(effectiveParams, effectiveApiKey);
-
-    const genDurationMs = Date.now() - genStartTime;
-    const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
-    await logLLMCall({
-      userId: job.userId,
-      type: 'IMAGE_GENERATION',
-      chatId: payload.chatId,
-      characterId: payload.characterId,
-      provider: effectiveImageProfile.provider,
-      modelName: effectiveImageProfile.modelName,
-      imageProfileId: effectiveImageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: prompt }],
-      },
-      response: {
-        content: revisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s)`,
-      },
-      durationMs: genDurationMs,
-    });
-  } catch (error) {
-    const errorMessage = getErrorMessage(error);
-    const genDurationMs = Date.now() - genStartTime;
-
-    await logLLMCall({
-      userId: job.userId,
-      type: 'IMAGE_GENERATION',
-      chatId: payload.chatId,
-      characterId: payload.characterId,
-      provider: effectiveImageProfile.provider,
-      modelName: effectiveImageProfile.modelName,
-      imageProfileId: effectiveImageProfile.id,
-      request: {
-        messages: [{ role: 'user', content: prompt }],
-      },
-      response: {
-        content: '',
-        error: errorMessage,
-      },
-      durationMs: genDurationMs,
-    });
-
-    // Post-hoc Concierge reroute: if the provider rejected for content
-    // moderation and the user has AUTO_ROUTE on with a configured uncensored
-    // profile, take the second door. Mirrors the story-background handler.
-    const reroute = isImageModerationError(error)
-      ? await resolveUncensoredImageProfileForReroute(effectiveImageProfile.id, dangerSettings, job.userId)
-      : null;
-
-    if (!reroute) {
-      logger.error('[CharacterAvatar] Image generation failed', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        error: errorMessage,
-        moderationRejection: isImageModerationError(error),
-      }, error as Error);
-      throw new Error(`Avatar image generation failed: ${errorMessage}`);
-    }
-
-    logger.info('[CharacterAvatar] Image provider rejected for content moderation, rerouting through Concierge uncensored profile', {
-      context: 'background-jobs.character-avatar',
-      jobId: job.id,
-      originalProfileId: effectiveImageProfile.id,
-      originalProvider: effectiveImageProfile.provider,
-      fallbackProfileId: reroute.profile.id,
-      fallbackProvider: reroute.profile.provider,
-      originalError: errorMessage,
-    });
-
-    const rerouteProvider = createImageProvider(reroute.profile.provider);
-    const rerouteStartTime = Date.now();
-    // Rebuild for the reroute provider/model — its shape mechanism, its LoRA
-    // support, and its stored options are all its own.
-    const { params: rerouteParams } = buildImageGenParams({
-      profile: reroute.profile,
-      prompt,
-      overrides: { n: 1, style: 'natural' },
-      orientation: 'portrait',
-      logContext: {
-        context: 'background-jobs.character-avatar.concierge-reroute',
-        jobId: job.id,
-      },
-    });
+    const rerouted = profile.id !== effectiveImageProfile.id;
+    const startTime = Date.now();
     try {
-      generationResponse = await rerouteProvider.generateImage(rerouteParams, reroute.apiKey);
-
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-      const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
-
+      const response = await provider.generateImage(params, key);
+      const revisedPrompt = response.images?.[0]?.revisedPrompt || '';
       await logLLMCall({
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
         characterId: payload.characterId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
+        provider: profile.provider,
+        modelName: profile.modelName,
+        imageProfileId: profile.id,
         request: {
           messages: [{ role: 'user', content: prompt }],
         },
         response: {
-          content: rerouteRevisedPrompt || `Generated ${generationResponse.images?.length ?? 0} image(s) (Concierge reroute)`,
+          content: revisedPrompt
+            || `Generated ${response.images?.length ?? 0} image(s)${rerouted ? ' (Concierge reroute)' : ''}`,
         },
-        durationMs: rerouteDurationMs,
+        durationMs: Date.now() - startTime,
       });
-
-      // Swap in the rerouted profile so downstream file metadata records
-      // the provider that actually produced the image.
-      effectiveImageProfile = reroute.profile;
-      effectiveApiKey = reroute.apiKey;
-
-      logger.info('[CharacterAvatar] Concierge uncensored reroute succeeded', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        fallbackProvider: reroute.profile.provider,
-        fallbackModel: reroute.profile.modelName,
-        rerouteDurationMs,
-      });
-    } catch (rerouteError) {
-      const rerouteErrorMessage = getErrorMessage(rerouteError);
-      const rerouteDurationMs = Date.now() - rerouteStartTime;
-
+      return response;
+    } catch (error) {
       await logLLMCall({
         userId: job.userId,
         type: 'IMAGE_GENERATION',
         chatId: payload.chatId,
         characterId: payload.characterId,
-        provider: reroute.profile.provider,
-        modelName: reroute.profile.modelName,
-        imageProfileId: reroute.profile.id,
+        provider: profile.provider,
+        modelName: profile.modelName,
+        imageProfileId: profile.id,
         request: {
           messages: [{ role: 'user', content: prompt }],
         },
         response: {
           content: '',
-          error: rerouteErrorMessage,
+          error: getErrorMessage(error),
         },
-        durationMs: rerouteDurationMs,
+        durationMs: Date.now() - startTime,
       });
-
-      logger.error('[CharacterAvatar] Image generation failed (Concierge reroute also failed)', {
-        context: 'background-jobs.character-avatar',
-        jobId: job.id,
-        originalError: errorMessage,
-        rerouteError: rerouteErrorMessage,
-      }, rerouteError as Error);
-      throw new Error(`Avatar image generation failed after Concierge reroute: ${rerouteErrorMessage}`);
+      throw error;
     }
+  };
+
+  let failover;
+  try {
+    failover = await generateImageWithConciergeFailover(
+      { profile: effectiveImageProfile, apiKey: effectiveApiKey },
+      attemptPortrait,
+      {
+        userId: job.userId,
+        chatId: payload.chatId,
+        purpose: 'avatar',
+        settings: dangerSettings,
+        primaryVia: effectiveImageProfile.id !== imageProfile.id ? 'concierge' : 'primary',
+      },
+    );
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    const trail = getConciergeTrail(error);
+    logger.error('[CharacterAvatar] Image generation failed', {
+      context: 'background-jobs.character-avatar',
+      jobId: job.id,
+      error: errorMessage,
+      conciergeTrail: trail?.map(a => ({ profileName: a.profileName, outcome: a.outcome })),
+    }, error as Error);
+    throw new Error(
+      trail && trail.length > 1
+        ? `Avatar image generation failed after Concierge reroute: ${errorMessage}`
+        : `Avatar image generation failed: ${errorMessage}`,
+    );
+  }
+
+  const generationResponse = failover.result;
+  // Downstream file metadata records the provider that actually produced the image.
+  effectiveImageProfile = failover.profile;
+  if (failover.rerouted) {
+    logger.info('[CharacterAvatar] Concierge uncensored reroute succeeded', {
+      context: 'background-jobs.character-avatar',
+      jobId: job.id,
+      fallbackProfileId: failover.profile.id,
+      fallbackProvider: failover.profile.provider,
+      fallbackModel: failover.profile.modelName,
+    });
   }
 
   if (!generationResponse.images || generationResponse.images.length === 0) {
@@ -614,5 +548,6 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     fileId,
     kind: { kind: 'avatar', characterName: character.name },
     prompt,
+    routeTrail: failover.trail,
   });
 }

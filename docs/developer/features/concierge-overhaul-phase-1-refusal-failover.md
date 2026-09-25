@@ -1,6 +1,6 @@
 # Concierge Overhaul — Phase 1: Refusal-Driven Failover Everywhere
 
-**Status:** Proposed (4.10-dev, 2026-09-25)
+**Status:** Implemented (4.10-dev, 2026-09-25). `@quilltap/plugin-types` 2.8.0 awaits `npm publish`; the five changed plugins are bumped but not rebuilt until it is installed. See [As built](#as-built).
 **Scope:** quilltap-server backend, six provider plugins, `@quilltap/plugin-types`. No settings UI change, no per-chat state change, no migration. One new optional field on the message route-trail schema.
 **Prerequisites:** none. This spec starts from the code as it stands on 2026-09-25 and is complete on its own.
 **Part of:** [concierge-overhaul.md](concierge-overhaul.md) (phase 1 of 5).
@@ -281,3 +281,65 @@ Steps 1–3 ship value before step 4: the host recognises OpenAI, Grok and Image
 - Move `app/api/v1/images/route.ts` onto image profiles, or retire it in favour of `/image-profiles/[id]?action=generate`.
 - NanoGPT: ask the provider for a distinguishing field on filtered prompts.
 - OpenAI can return a success with neither `b64_json` nor `url` (`openai/image-provider.ts:323`); guard it as a provider error, separately from this work.
+
+## As built
+
+Shipped in 4.10-dev. Where the code departs from the plan above:
+
+- **`profileKind` is optional, not `.default('connection')`.** Absent means
+  `'connection'`; a Zod default would have made the field required on every
+  existing `RouteAttempt` literal for no change in meaning. `evidence` also
+  gained `typed-error`, `provider-code` and `message-pattern` — the chokepoint's
+  trail rows carry `classifyRefusal`'s evidence, which the old two-value enum
+  could not hold.
+- **The resolver swallows lookup failures** (returns `null`, logged), so a failed
+  read is "nobody to ask" on both the pre-flight wrappers and the post-hoc paths.
+  The wrappers' "Routing failed" reason therefore no longer appears for a repo
+  error; it reads "No uncensored provider available".
+- **The chokepoint is generic over the profile type** and takes an optional
+  `resolveUnderstudy` / `profileKind` / `primaryVia`. The legacy dialog uses them
+  to stay on connection profiles: its understudy is
+  `resolveUncensoredTextUnderstudy` with a `filter` of
+  `supportsImageGeneration(provider)`, and its trail rows are connection rows.
+  `primaryVia: 'concierge'` marks a primary that a pre-flight classifier reroute
+  had already swapped in.
+- **Where the tool path's trail lands.** On the TOOL row, as specified, and also
+  on the Lantern's `character-image` bubble that `saveGeneratedImage` posts.
+  TOOL rows had no badge at all (the avatar column is for ASSISTANT rows), so
+  `ToolMessage` renders the trail beside its Success/Failed chip; staff bubbles
+  already render it through the ordinary avatar badge.
+- **A failed understudy posts nothing.** The three announcement kinds cover
+  refused-and-rerouted, nobody-to-ask and not-permitted; an understudy that also
+  fails leaves only the rethrown error (and its trail on the TOOL row). The
+  `refusal-not-permitted` bubble also fires for Vouched Safe chats, whose
+  resolved mode is `OFF`.
+- **Text: a non-Auto-Route refusal still walks the chain** with the context's
+  own `dangerous` flag, exactly as a thrown error did before; only under
+  Auto-Route is the uncensored understudy asked first and the chain then walked
+  with `dangerous: true`. `refusal-no-understudy` for text fires from both the
+  thrown and the empty-body paths when the opening verdict was a refusal.
+- **`extractFinishReason` reads more.** Beside the plugin fixes, the host now
+  reads Google's `promptFeedback.blockReason` and OpenRouter's camelCase
+  `choices[0].finishReason`, so older plugin builds are covered too.
+- **OpenAI / Grok streaming** also end on `response.incomplete`, not only
+  `response.completed`; otherwise an incomplete `content_filter` response left no
+  final raw response to read the reason from.
+- **Google's HTTP safety match is narrow** ("responsible ai", "safety
+  filter/system/reason/policy", "blocked … safety"), never a bare "safety": a
+  malformed `safety_settings` value is a 400 about our own request.
+- **OpenRouter image text-instead-of-picture is typed** as the spec's table
+  says; OpenRouter streamed raw responses write both `finish_reason` and the old
+  `finishReason`.
+- **NanoGPT** is unchanged, as allowed: its filtered-prompt 400 carries no
+  distinguishing field.
+- **Cheap-LLM chains** now walk on a refusal, because `classifyFallbackTrigger`
+  returns `'moderation-refusal'` instead of `null` for a thrown refusal.
+- **The live check is opt-in.** `scripts/concierge-four-state-test.sh` gained
+  CT-4 (`--ct4-profile <connectionProfileId> --ct4-prompt "<text>"`), which
+  drives the legacy image route on a Monitored chat and asserts a Concierge
+  `refusal` note and a reroute — it needs a real provider that actually refuses,
+  so it cannot run by default. The new jest suites join the script's guard run.
+  It has not been run against a live instance from this branch.
+- **Tests of the plugins** (`__tests__/unit/plugins/concierge-moderation-rejections.test.ts`)
+  resolve `@quilltap/plugin-types` from the workspace source, so they pass
+  before 2.8.0 is published.

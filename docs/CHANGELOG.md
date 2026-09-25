@@ -4,6 +4,60 @@
 
 ### 4.10-dev
 
+#### Changed: the Concierge reroutes every content refusal (Concierge overhaul, phase 1)
+
+- One refusal classifier: `classifyRefusal` (`lib/services/dangerous-content/refusal.ts`).
+  Evidence in order of trust: a typed plugin error (`code: 'MODERATION_REJECTED'`), a known
+  provider code (`moderation_blocked`, `content_policy_violation`, `content_filter`, `safety`,
+  Z.AI `1301`), a moderation finish reason, refusal wording in the error text (the old six image
+  substrings plus "responsible ai", "declined to generate", "blocked by safety", "prompt_blocked",
+  "image_safety"), and an empty body on content the Concierge had flagged. A bare 400, a rate
+  limit or an auth failure is never a refusal. `classifyEmptyBody` and `classifyFallbackTrigger`
+  delegate to it; `isImageModerationError` is removed.
+- One understudy resolver: `resolveUncensoredTextUnderstudy` / `resolveUncensoredImageUnderstudy`
+  (`understudy.ts`). The configured uncensored profile, then any profile ticked
+  "Uncensored-compatible", then nobody; courier profiles are skipped; the mode is never read.
+  Pre-flight and post-hoc now agree, so an image profile only needs the tick to be a candidate.
+  `resolveUncensoredImageProfileForReroute` is removed; the pre-flight
+  `resolve*ProviderForDangerousContent` functions are thin wrappers that keep the Auto-Route gate.
+- One image failover chokepoint: `generateImageWithConciergeFailover` (`image-failover.ts`), used
+  by the `generate_image` tool, the Lantern's story backgrounds, Aurora's avatar job and the
+  legacy image dialog (`POST /api/v1/images?action=generate`, which now also resolves Concierge
+  settings with the chat). It retries a refusal once on the understudy under Auto-Route, rethrows
+  anything that is not a refusal untouched, and attaches the route trail to a rethrown error.
+- The Lantern: the bug-133 gate that barred a reroute on a Monitored chat is removed; the prompt is
+  still never re-crafted on reroute. `uncensoredImageTarget` now also requires Auto-Route, so a
+  Flagged chat under Detect Only no longer gets a candid prompt sent to a moderated provider.
+- Text turns: a thrown content-policy error was classified as "not a fallback trigger" and nothing
+  happened. It is now `moderation-refusal`: recorded on the route trail as refused, retried on the
+  uncensored understudy under Auto-Route (new `attemptUncensoredRetry`, shared with the empty-body
+  path, which no longer requires an explicit `uncensoredTextProfileId`), then the profile's own
+  chain with `dangerous: true`. Cheap-LLM fallback chains also walk on a refusal now.
+- Route trails on image-bearing messages: `RouteAttempt` gains `profileKind: 'connection' | 'image'`
+  (absent = connection) and `evidence` gains `typed-error`, `provider-code`, `message-pattern`.
+  The TOOL message of a `generate_image` call and the Lantern / Aurora bubble carry the trail;
+  `ToolMessage` renders it; image rows are labelled by profile name. The tool result now names
+  the model that actually answered, not the one first asked.
+- The Concierge speaks: `postConciergeRefusalAnnouncement` posts `systemKind: 'refusal'` bubbles —
+  `refusal-rerouted`, `refusal-no-understudy`, `refusal-not-permitted` — for every image refusal,
+  and `refusal-no-understudy` for a text refusal with nobody to ask. Chip label "provider refusal".
+- `extractFinishReason` also reads Google's `promptFeedback.blockReason` and OpenRouter's camelCase
+  `finishReason`.
+- `@quilltap/plugin-types` 2.8.0: `ModerationRejectionError` (`code: 'MODERATION_REJECTED'`,
+  `providerReason`). Needs `npm publish` before the plugins below can be installed/built.
+- Plugins (all require plugin-types `^2.8.0`):
+  - `qtap-plugin-openai` 1.0.65: image `moderation_blocked` / `content_policy_violation` /
+    "safety system" → typed; streamed and non-streamed raw responses carry the real finish reason
+    (`incomplete_details.reason`, `refusal`); `response.incomplete` ends the stream.
+  - `qtap-plugin-grok` 1.0.57: image "content moderation" → typed; same finish-reason fix.
+  - `qtap-plugin-google` 1.1.54: Gemini `IMAGE_SAFETY` / `SAFETY` / `PROHIBITED_CONTENT` or
+    `promptFeedback.blockReason`, Imagen filtered predictions, and Responsible-AI HTTP errors →
+    typed; a blocked text prompt reports its block reason as the finish reason on both paths.
+  - `qtap-plugin-openrouter` 1.0.65: image `refusal` / text-instead-of-image and refusal-worded HTTP
+    errors → typed; streamed raw responses write `finish_reason` (snake_case) with the real reason.
+  - `qtap-plugin-z-ai` 1.1.30: image code `1301` → typed.
+  - NanoGPT unchanged: its filtered-prompt 400 is generic and is not treated as a refusal.
+
 #### Docs: Concierge overhaul specs
 
 - Added `docs/developer/features/concierge-overhaul.md` and five self-contained phase specs

@@ -9,8 +9,35 @@ import OpenAI from 'openai';
 import type { Images } from 'openai/resources';
 import type { ImageProvider as ImageProviderBase, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
+import { ModerationRejectionError } from '@quilltap/plugin-types';
 
 const logger = createPluginLogger('qtap-plugin-grok');
+
+/** xAI error codes (OpenAI-compatible) that mean the request was refused on content grounds. */
+const MODERATION_CODES = new Set(['moderation_blocked', 'content_policy_violation']);
+
+/**
+ * Turn an xAI Images error into `ModerationRejectionError` when it is a
+ * content refusal ("Generated image rejected by content moderation."), and
+ * leave every other error exactly as thrown.
+ */
+export function toGrokImageModerationError(error: unknown): unknown {
+  if (!error || typeof error !== 'object') return error;
+  const err = error as { code?: unknown; status?: unknown; message?: unknown; error?: { code?: unknown } };
+  const code = typeof err.code === 'string' ? err.code
+    : typeof err.error?.code === 'string' ? err.error.code
+    : undefined;
+  const message = typeof err.message === 'string' ? err.message : '';
+  if ((code && MODERATION_CODES.has(code)) || message.toLowerCase().includes('content moderation')) {
+    return new ModerationRejectionError(
+      message || 'xAI refused this image request on content grounds',
+      typeof err.status === 'number' ? err.status : undefined,
+      code ?? 'content_moderation',
+      'qtap-plugin-grok',
+    );
+  }
+  return error;
+}
 
 export class GrokImageProvider implements ImageProviderBase {
   readonly provider = 'GROK';
@@ -57,7 +84,19 @@ export class GrokImageProvider implements ImageProviderBase {
       requestParams.resolution = '2k';
     }
 
-    const response = await client.images.generate(requestParams);
+    let response: Awaited<ReturnType<typeof client.images.generate>>;
+    try {
+      response = await client.images.generate(requestParams);
+    } catch (error) {
+      const mapped = toGrokImageModerationError(error);
+      if (mapped !== error) {
+        logger.info('Grok Images API refused the request on content grounds', {
+          context: 'GrokImageProvider.generateImage',
+          model,
+        });
+      }
+      throw mapped;
+    }
 
     if (!('data' in response) || !response.data || !Array.isArray(response.data)) {
       logger.error('Invalid response from Grok Images API', { context: 'GrokImageProvider.generateImage' });

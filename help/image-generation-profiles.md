@@ -358,6 +358,10 @@ Should you set a dial the chosen model has never heard of — an Extra High qual
 
 ## Troubleshooting Image Generation
 
+### The provider declined the picture
+
+Most image providers keep a safety filter of their own, and a commission it dislikes comes back refused rather than painted. When the Concierge is on **Auto-Route**, he tries once more on an uncensored image profile — the one named in his settings, or failing that any image profile with **Uncensored-compatible** ticked — and posts a short note in the chat saying who declined and who obliged. That tick is all an image profile needs to be a candidate; naming it in the Concierge's picker merely makes it the first choice. The same applies to the Lantern's backdrops and Aurora's portraits, in any chat state. Under Detect Only, or with nobody to ask, the Concierge's note says so instead. See [Dangerous Content Handling](dangerous-content.md).
+
 ### API key validation failed
 
 **Solution:**
@@ -466,7 +470,7 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for image providers
-- [Dangerous Content Handling](dangerous-content.md) — Governs whether story-background prompts are drafted candidly
+- [Dangerous Content Handling](dangerous-content.md) — Governs whether story-background prompts are drafted candidly, and reroutes a refused picture to an uncensored image profile under Auto-Route
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

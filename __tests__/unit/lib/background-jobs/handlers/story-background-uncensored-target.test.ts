@@ -6,11 +6,13 @@
  * prompt crafter did not, so an uncensored provider still received a scene with
  * a sheet draped over it.
  *
- * Also locks the moderation-reroute path (bug 133): the post-hoc reroute is
- * available only to a chat already flagged dangerous. A moderated chat whose
- * background the provider rejects fails the job rather than being escalated to
- * an uncensored provider, and a flagged chat's prompt — candid already — is
- * resent as-is rather than re-crafted.
+ * Also locks the moderation-reroute path. Since the Concierge overhaul (phase
+ * 1) a refused background is retried once on an uncensored understudy under
+ * Auto-Route in ANY chat state — the old bug-133 gate that barred a Monitored
+ * chat is gone — but the prompt is never re-crafted: a moderated chat's
+ * concealed prompt is resent concealed, and a flagged chat's candid prompt is
+ * resent as-is. Under Detect Only nothing reroutes and the prompt stays
+ * concealed even for a flagged chat, and the Concierge says why.
  *
  * Scaffolding mirrors story-background-sha256.test.ts: subject import first,
  * bare jest.mock() factories, behaviour wired in beforeEach.
@@ -28,10 +30,9 @@ import {
   deriveSceneContext,
   extractVisibleConversation,
 } from '@/lib/memory/cheap-llm-tasks'
-import {
-  isImageModerationError,
-  resolveUncensoredImageProfileForReroute,
-} from '@/lib/services/dangerous-content/provider-routing.service'
+import { resolveUncensoredImageUnderstudy } from '@/lib/services/dangerous-content/understudy'
+import { postConciergeRefusalAnnouncement } from '@/lib/services/concierge-notifications/writer'
+import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer'
 import { writeLanternBackgroundToMountStore } from '@/lib/file-storage/lantern-store-bridge'
 import {
   resolveCharacterAppearances,
@@ -56,9 +57,12 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
   // The real derivation, for tests that wire the real resolver through.
   getConciergeState: jest.requireActual('@/lib/services/dangerous-content/chat-override').getConciergeState,
 }))
-jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
-  isImageModerationError: jest.fn(),
-  resolveUncensoredImageProfileForReroute: jest.fn(),
+jest.mock('@/lib/services/dangerous-content/understudy', () => ({
+  resolveUncensoredImageUnderstudy: jest.fn(),
+  resolveUncensoredTextUnderstudy: jest.fn(),
+}))
+jest.mock('@/lib/services/concierge-notifications/writer', () => ({
+  postConciergeRefusalAnnouncement: jest.fn().mockResolvedValue(null),
 }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -100,8 +104,9 @@ const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelectio
 const mockCraftPrompt = jest.mocked(craftStoryBackgroundPrompt)
 const mockExtractConversation = jest.mocked(extractVisibleConversation)
 const mockDeriveScene = jest.mocked(deriveSceneContext)
-const mockIsModerationError = jest.mocked(isImageModerationError)
-const mockResolveReroute = jest.mocked(resolveUncensoredImageProfileForReroute)
+const mockResolveReroute = jest.mocked(resolveUncensoredImageUnderstudy)
+const mockAnnounceRefusal = jest.mocked(postConciergeRefusalAnnouncement)
+const mockPostLantern = jest.mocked(postLanternImageNotification)
 const mockWriteLantern = jest.mocked(writeLanternBackgroundToMountStore)
 const mockResolveAppearances = jest.mocked(resolveCharacterAppearances)
 const mockSanitizeAppearances = jest.mocked(sanitizeAppearancesIfNeeded)
@@ -212,7 +217,6 @@ beforeEach(() => {
   mockExtractConversation.mockReturnValue([])
   mockDeriveScene.mockResolvedValue(null as never)
   mockCraftPrompt.mockResolvedValue({ success: true, result: CONCEALED_PROMPT } as never)
-  mockIsModerationError.mockReturnValue(false)
   mockResolveReroute.mockResolvedValue(null as never)
   mockResolveAppearances.mockResolvedValue({
     appearances: [APPEARANCE], llmResolved: true,
@@ -347,22 +351,20 @@ describe('story-background handler — appearance sanitization gate', () => {
 })
 
 describe('story-background handler — moderation reroute', () => {
+  const UNCENSORED = {
+    id: 'uncensored-image-profile', provider: 'openai', name: 'Kestrel Studio',
+    modelName: 'uncensored-model', parameters: {},
+  }
+
   /** First provider instance rejects for moderation; the reroute target accepts. */
   function rejectThenReroute() {
-    mockIsModerationError.mockReturnValue(true)
-    mockResolveReroute.mockResolvedValue({
-      profile: {
-        id: 'uncensored-image-profile', provider: 'openai',
-        modelName: 'uncensored-model', parameters: {},
-      },
-      apiKey: 'sk-uncensored',
-    } as never)
+    mockResolveReroute.mockResolvedValue({ profile: UNCENSORED, apiKey: 'sk-uncensored' } as never)
 
     let call = 0
     mockCreateImageProvider.mockImplementation(() => {
       call += 1
       return (call === 1
-        ? { generateImage: jest.fn().mockRejectedValue(new Error('content moderation')) }
+        ? { generateImage: jest.fn().mockRejectedValue(new Error('Generated image rejected by content moderation.')) }
         : {
             generateImage: jest.fn().mockResolvedValue({
               images: [{ b64Json: Buffer.from('png').toString('base64'), mimeType: 'image/png', revisedPrompt: null }],
@@ -371,22 +373,56 @@ describe('story-background handler — moderation reroute', () => {
     })
   }
 
-  // Bug 133. A moderated chat's rejected background used to be re-crafted
-  // candidly and resent to the uncensored provider, so the provider's refusal
-  // promoted a chat the user deliberately left moderated.
-  it('does not reroute a moderated chat, failing the job instead', async () => {
+  function firstSentPrompt(): string {
+    const first = mockCreateImageProvider.mock.results[0].value as { generateImage: jest.Mock }
+    return (first.generateImage.mock.calls[0][0] as { prompt: string }).prompt
+  }
+
+  it('reroutes a Monitored chat under Auto-Route, resending the concealed prompt unchanged', async () => {
+    mockResolveDanger.mockReturnValue({
+      settings: { mode: 'AUTO_ROUTE', scanImagePrompts: false, uncensoredImageProfileId: null },
+    } as never)
     rejectThenReroute()
 
-    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(
-      /Image generation failed/,
-    )
+    await handleStoryBackgroundGeneration(makeJob())
 
-    expect(mockResolveReroute).not.toHaveBeenCalled()
+    expect(mockResolveReroute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER, exclude: ['profile-1'] }),
+    )
     expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
     expect(craftTargetFlag(0)).toBe(false)
+    const second = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
+    expect(second.prompt).toContain(CONCEALED_PROMPT)
+
+    expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: CHAT_ID,
+      kind: 'refusal-rerouted',
+      details: expect.objectContaining({ purpose: 'lantern', answeringProfileName: 'Kestrel Studio' }),
+    }))
+    // The Lantern's bubble carries the call sheet: refused, then answered.
+    const lanternCall = mockPostLantern.mock.calls[0][0] as { routeTrail?: Array<{ outcome: string; profileKind?: string }> }
+    expect(lanternCall.routeTrail?.map(a => a.outcome)).toEqual(['refused', 'answered'])
+    expect(lanternCall.routeTrail?.every(a => a.profileKind === 'image')).toBe(true)
+    // The file records the model that actually drew it.
+    const repos = mockGetRepositories() as never as { files: { create: jest.Mock } }
+    expect(repos.files.create.mock.calls[0][0]).toMatchObject({ generationModel: 'uncensored-model' })
   })
 
-  it('does not reroute a dangerous chat with no uncensored image profile', async () => {
+  it('does not reroute under Detect Only, keeps even a flagged chat\'s prompt concealed, and says why', async () => {
+    mockShouldUseUncensoredRoute.mockReturnValue(true)
+    mockResolveDanger.mockReturnValue({
+      settings: { mode: 'DETECT_ONLY', scanImagePrompts: true, uncensoredImageProfileId: 'uncensored-image-profile' },
+    } as never)
+    rejectThenReroute()
+
+    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(/Image generation failed/)
+
+    expect(craftTargetFlag(0)).toBe(false)
+    expect(mockResolveReroute).not.toHaveBeenCalled()
+    expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-not-permitted' }))
+  })
+
+  it('fails the job, and says so, when there is no uncensored understudy', async () => {
     markDangerous(false)
     rejectThenReroute()
     mockResolveReroute.mockResolvedValue(null as never)
@@ -394,6 +430,7 @@ describe('story-background handler — moderation reroute', () => {
     await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(
       /Image generation failed/,
     )
+    expect(mockAnnounceRefusal).toHaveBeenCalledWith(expect.objectContaining({ kind: 'refusal-no-understudy' }))
   })
 
   it('resends the already-candid prompt for a flagged chat, without re-crafting', async () => {
@@ -406,8 +443,20 @@ describe('story-background handler — moderation reroute', () => {
     // One craft, made candidly up front — the reroute has nothing to un-drape.
     expect(mockCraftPrompt).toHaveBeenCalledTimes(1)
     expect(craftTargetFlag(0)).toBe(true)
+    expect(firstSentPrompt()).toContain(CANDID_PROMPT)
 
     const sent = imageProviderMock().generateImage.mock.calls[0][0] as { prompt: string }
     expect(sent.prompt).toContain(CANDID_PROMPT)
+  })
+
+  it('leaves a non-moderation failure alone: no reroute, no announcement', async () => {
+    mockResolveDanger.mockReturnValue({ settings: { mode: 'AUTO_ROUTE', scanImagePrompts: false } } as never)
+    mockCreateImageProvider.mockImplementation(() => ({
+      generateImage: jest.fn().mockRejectedValue(new Error('429 Too Many Requests')),
+    }) as never)
+
+    await expect(handleStoryBackgroundGeneration(makeJob())).rejects.toThrow(/429/)
+    expect(mockResolveReroute).not.toHaveBeenCalled()
+    expect(mockAnnounceRefusal).not.toHaveBeenCalled()
   })
 })

@@ -12,8 +12,25 @@ import type {
   ImageGenResponse,
 } from './types';
 import { createPluginLogger } from '@quilltap/plugin-utils';
+import { ModerationRejectionError } from '@quilltap/plugin-types';
 
 const logger = createPluginLogger('qtap-plugin-google');
+
+/** Gemini finish reasons that mean the image was withheld on safety grounds. */
+const GEMINI_IMAGE_SAFETY_FINISH_REASONS = new Set(['IMAGE_SAFETY', 'SAFETY', 'PROHIBITED_CONTENT']);
+
+/**
+ * Whether a non-2xx body from Google's image endpoints is a safety refusal
+ * (Responsible AI / safety filter) rather than any other failure.
+ */
+function isGoogleSafetyMessage(message: string): boolean {
+  const lowered = message.toLowerCase();
+  // Deliberately not a bare "safety": a malformed `safety_settings` value is a
+  // 400 about *our* request, and must not be read as a refusal.
+  return lowered.includes('responsible ai')
+    || /safety (filter|system|reasons?|policy)/.test(lowered)
+    || /blocked\b.*\bsafety|\bsafety\b.*\bblocked/.test(lowered);
+}
 
 /**
  * Models that use the Gemini generateContent API for image generation
@@ -129,9 +146,11 @@ export class GoogleImagenProvider implements ImageProvider {
         status: response.status,
         errorMessage: error.error?.message,
       });
-      throw new Error(
-        error.error?.message || `Gemini API error: ${response.status}`
-      );
+      const message = error.error?.message || `Gemini API error: ${response.status}`;
+      if (isGoogleSafetyMessage(message)) {
+        throw new ModerationRejectionError(message, response.status, error.error?.status, 'qtap-plugin-google');
+      }
+      throw new Error(message);
     }
 
     const data = await response.json();
@@ -155,6 +174,26 @@ export class GoogleImagenProvider implements ImageProvider {
       }
     }
     if (images.length === 0) {
+      // A safety stop: the candidate was withheld (`finishReason`), or the
+      // prompt itself was blocked before any candidate was made
+      // (`promptFeedback.blockReason`). Either is a moderation refusal the
+      // host can reroute, not an ordinary failure.
+      const finishReason: string | undefined = candidate?.finishReason;
+      const blockReason: string | undefined = data.promptFeedback?.blockReason;
+      if ((finishReason && GEMINI_IMAGE_SAFETY_FINISH_REASONS.has(finishReason)) || blockReason) {
+        const reason = blockReason || finishReason!;
+        logger.warn('Gemini withheld the image on safety grounds', {
+          context: 'GoogleImagenProvider.generateWithGemini',
+          finishReason,
+          blockReason,
+        });
+        throw new ModerationRejectionError(
+          `Gemini declined to generate this image (${reason})${textResponse ? `: ${textResponse}` : ''}`,
+          undefined,
+          reason,
+          'qtap-plugin-google',
+        );
+      }
       throw new Error(
         textResponse || 'No images returned from Gemini API'
       );
@@ -219,9 +258,11 @@ export class GoogleImagenProvider implements ImageProvider {
         status: response.status,
         errorMessage: error.error?.message,
       });
-      throw new Error(
-        error.error?.message || `Google Imagen API error: ${response.status}`
-      );
+      const message = error.error?.message || `Google Imagen API error: ${response.status}`;
+      if (isGoogleSafetyMessage(message)) {
+        throw new ModerationRejectionError(message, response.status, error.error?.status, 'qtap-plugin-google');
+      }
+      throw new Error(message);
     }
 
     const data = await response.json();
@@ -232,10 +273,9 @@ export class GoogleImagenProvider implements ImageProvider {
 
     // Imagen's :predict API returns HTTP 200 with an empty `predictions`
     // array (or predictions carrying `raiFilteredReason` and no image bytes)
-    // when the safety filter rejects the prompt. Surface that as a moderation
-    // error — phrased to match `isImageModerationError` in the
-    // story-background handler — so callers can fall back to an uncensored
-    // profile instead of bailing silently.
+    // when the safety filter rejects the prompt. Surface that as a typed
+    // moderation rejection so the host's Concierge can fall back to an
+    // uncensored profile instead of bailing silently.
     if (usable.length === 0) {
       const filterReason =
         predictions.find((p) => typeof p.raiFilteredReason === 'string')?.raiFilteredReason
@@ -247,8 +287,11 @@ export class GoogleImagenProvider implements ImageProvider {
         predictionCount: predictions.length,
         filterReason,
       });
-      throw new Error(
-        `Google Imagen rejected prompt by content policy${filterReason ? `: ${filterReason}` : ''}`
+      throw new ModerationRejectionError(
+        `Google Imagen rejected prompt by content policy${filterReason ? `: ${filterReason}` : ''}`,
+        undefined,
+        filterReason ?? undefined,
+        'qtap-plugin-google',
       );
     }
 

@@ -40,7 +40,7 @@ export function RouteTrailBadge({ routeTrail, size = 'xs' }: RouteTrailBadgeProp
         const badge = (
           <ProviderModelBadge
             provider={row.provider}
-            modelName={row.modelName}
+            modelName={row.label}
             size={size}
             title={title}
           />

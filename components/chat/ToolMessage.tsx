@@ -8,6 +8,8 @@ import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { getAvatarSrc } from '@/components/ui/Avatar'
 import { HiddenImageTile, useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import { Icon } from '@/components/ui/icon'
+import { RouteTrailBadge } from '@/components/ui/RouteTrailBadge'
+import type { RouteAttempt } from '@/lib/schemas/chat.types'
 
 interface ToolMessageProps {
   readonly message: {
@@ -22,6 +24,8 @@ interface ToolMessageProps {
     }>
     /** Whisper targets — present on user-initiated runs flagged Private. */
     targetParticipantIds?: string[] | null
+    /** The Concierge's call sheet: set on a generate_image run whose picture was refused on the way. */
+    routeTrail?: RouteAttempt[] | null
   }
   readonly character?: {
     id: string
@@ -473,6 +477,15 @@ export default function ToolMessage({ message, character, onImageClick, onAttach
               {toolData.success ? 'Success' : 'Failed'}
             </span>
           </div>
+
+          {/* The Concierge's call sheet — the image profiles tried when a
+              provider refused the picture on content grounds. */}
+          {message.routeTrail && message.routeTrail.length > 0 && (
+            <div className="mt-1 flex items-center gap-2 qt-text-label-xs" aria-label="Image profiles tried">
+              <span>Tried:</span>
+              <RouteTrailBadge routeTrail={message.routeTrail} size="xs" />
+            </div>
+          )}
 
           {/* Tool Request collapsible - shows arguments/prompt sent to the tool */}
           {(toolData.arguments || toolData.prompt) && (

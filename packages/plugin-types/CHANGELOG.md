@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-09-25
+
+### Added
+
+- `ModerationRejectionError` (extends `ProviderApiError`, `code: 'MODERATION_REJECTED'`, optional `providerReason`) — thrown by an image or chat provider when a request was declined on content-moderation grounds, as distinct from any other failure. The host's Concierge reroutes these to the user's uncensored profile. Detection is by the `code` string, never `instanceof`, because plugins bundle their own copy of this package; any error carrying `code: 'MODERATION_REJECTED'` qualifies.
+
+### Changed
+
+- `PLUGIN_TYPES_VERSION` re-synced to the package version.
+
 ## [2.7.0] - 2026-09-16
 
 ### Changed
