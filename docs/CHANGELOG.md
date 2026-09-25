@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Docs: phase 3 leftovers scheduled in phase 4
+
+- `concierge-overhaul-phase-4-concierge-tab.md` gains a "Carried over from phase 3" checklist:
+  drop `chats.conciergeOverride` (keeping the legacy derivation in import and restore, and the
+  deprecated export-schema field), and remove the unused `-info` Concierge tone CSS (with its
+  theme-storybook mirror and publish). Phase 3 spec and the overview index point to it.
+
 #### Changed: three Concierge states — Moderated, Unmoderated, Locked (Concierge overhaul, phase 3)
 
 - The four per-chat states (Monitored, Flagged, Vouched Safe, Uncensored) are now three:

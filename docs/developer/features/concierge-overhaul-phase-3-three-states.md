@@ -29,7 +29,7 @@ Who put the chat in Unmoderated — the Concierge (after refusals, or the classi
 
 - The global mode (retired in phase 4). In this phase Unmoderated forces `AUTO_ROUTE` exactly as the old Uncensored did; Moderated obeys the global mode.
 - Settings UI (phase 4).
-- Removing the old columns. They stop being written; removal is a later housekeeping migration.
+- Removing the old columns. They stop being written; removal is a later housekeeping migration, scheduled in [phase 4's carry-over checklist](concierge-overhaul-phase-4-concierge-tab.md#carried-over-from-phase-3).
 
 ## Known State (verified 2026-09-25)
 
@@ -137,7 +137,7 @@ The announcement kinds `manual-flagged` / `manual-safe` / `manual-resumed` / `ma
 
 `describeConciergeState(state, provenance, dangerCategories?, refusalCount?)` picks the helper variant. The New Chat select (`NewChatForm.tsx:688-717`) and sidebar select (`ChatSidebar.tsx:1142-1180`) drop the optgroups for a flat three-option list, Moderated marked "(default)" on the form. The header pill (`SalonView.tsx:1151-1177`) renders nothing for Moderated, the danger tone for Unmoderated with the provenance in the tooltip, muted for Locked. `ConciergeMark` and `shouldHideChat` follow `conciergeStateUsesUncensoredRoute`, which now means Unmoderated. `useNewChat.ts:148` default becomes `'moderated'`; continuation seeds the source chat's state as before.
 
-CSS: the `-info` variants of `.qt-danger-badge` and `.qt-concierge-mark` lose their only user. Leave the rules in place this phase (a theme may hook them) and note them for the dead-code sweep; the storybook mirror is untouched.
+CSS: the `-info` variants of `.qt-danger-badge` and `.qt-concierge-mark` lose their only user. Leave the rules in place this phase (a theme may hook them); their removal is scheduled in [phase 4's carry-over checklist](concierge-overhaul-phase-4-concierge-tab.md#carried-over-from-phase-3). The storybook mirror is untouched.
 
 ### 7. Greeting at creation
 
