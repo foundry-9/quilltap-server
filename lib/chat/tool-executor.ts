@@ -303,6 +303,7 @@ const BUILT_IN_TOOLS = new Set<string>([
   'send_mail',
   'list_mail',
   'read_mail',
+  'discard_mail',
 ]);
 
 export async function executeToolCallWithContext(
@@ -1241,6 +1242,22 @@ export async function executeToolCallWithContext(
         toolName: 'read_mail',
         success: out.success,
         result: { formattedText: formatReadMailResults(out), path: out.path },
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle discard_mail (Post Office — discard one letter from the caller's own mailbox)
+    if (toolCall.name === 'discard_mail') {
+      const { executeDiscardMailTool, formatDiscardMailResults } = await import('@/lib/tools/handlers/discard-mail-handler');
+      const out = await executeDiscardMailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+      });
+      return {
+        toolName: 'discard_mail',
+        success: out.success,
+        result: { formattedText: formatDiscardMailResults(out), path: out.path },
         error: out.success ? undefined : out.error,
       };
     }

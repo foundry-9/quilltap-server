@@ -24,6 +24,7 @@ import {
   markAlerted,
   resolveMailPath,
   letterFileName,
+  discardLetter,
   type MailFrontmatter,
 } from '../mailbox';
 
@@ -32,6 +33,7 @@ import {
   writeDatabaseDocument,
   readDatabaseDocument,
   listDatabaseFiles,
+  deleteDatabaseDocumentIfExists,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 
@@ -42,6 +44,7 @@ jest.mock('@/lib/mount-index/database-store', () => {
     writeDatabaseDocument: jest.fn(),
     readDatabaseDocument: jest.fn(),
     listDatabaseFiles: jest.fn(),
+    deleteDatabaseDocumentIfExists: jest.fn(),
   };
 });
 jest.mock('@/lib/mount-index/folder-paths', () => ({
@@ -259,5 +262,18 @@ describe('resolveMailPath / letterFileName', () => {
 
   it('strips the Mail/ folder back off for display', () => {
     expect(letterFileName('Mail/111-from-ariadne.md')).toBe('111-from-ariadne.md');
+  });
+});
+
+describe('discardLetter', () => {
+  it('deletes through the database-store GC chokepoint', async () => {
+    jest.mocked(deleteDatabaseDocumentIfExists).mockResolvedValue(true);
+    await expect(discardLetter('rv', 'Mail/111-from-ariadne.md')).resolves.toBe(true);
+    expect(deleteDatabaseDocumentIfExists).toHaveBeenCalledWith('rv', 'Mail/111-from-ariadne.md');
+  });
+
+  it('reports false when there was no such letter', async () => {
+    jest.mocked(deleteDatabaseDocumentIfExists).mockResolvedValue(false);
+    await expect(discardLetter('rv', 'Mail/gone.md')).resolves.toBe(false);
   });
 });

@@ -45,6 +45,7 @@ import { imageGenerationToolDefinition } from '../image-generation-tool'
 import { keepImageToolDefinition } from '../keep-image-tool'
 import { listMailToolDefinition } from '../list-mail-tool'
 import { readMailToolDefinition } from '../read-mail-tool'
+import { discardMailToolDefinition } from '../discard-mail-tool'
 import { listImagesToolDefinition } from '../list-images-tool'
 import { sendMailToolDefinition } from '../send-mail-tool'
 import { projectInfoToolDefinition } from '../project-info-tool'
@@ -109,6 +110,7 @@ const ALL_TOOLS = {
   keepImage: keepImageToolDefinition,
   listMail: listMailToolDefinition,
   readMail: readMailToolDefinition,
+  discardMail: discardMailToolDefinition,
   listImages: listImagesToolDefinition,
   sendMail: sendMailToolDefinition,
   projectInfo: projectInfoToolDefinition,

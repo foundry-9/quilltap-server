@@ -6,13 +6,11 @@
  * Suparṇā's mail whisper so they never drift. A letter is named to the Post
  * Office tools by its bare file name — `read_mail` and `send_mail` put the
  * `Mail/` folder on it themselves, and reach the caller's own mailbox whether
- * or not the character may otherwise see its own vault. Discarding still goes
- * through `doc_delete_file`, which needs the `qtap://self/…` URI.
+ * or not the character may otherwise see its own vault.
  *
  * @module post-office/instructions
  */
 
-import { formatSelfUri } from '@/lib/doc-edit/qtap-uri';
 import { formatDateTime } from '@/lib/format-time';
 import { letterFileName, type DeliveredLetterSummary } from './mailbox';
 
@@ -34,7 +32,7 @@ export function formatLetterActions(
   }
   lines.push(
     `   • Answer it: send_mail({ character: "${from}", message: "…your reply…", in_reply_to: "${name}" })`,
-    `   • Discard it: doc_delete_file({ uri: "${formatSelfUri(path)}" })`,
+    `   • Discard it: discard_mail({ letter: "${name}" })`,
   );
   return lines.join('\n');
 }

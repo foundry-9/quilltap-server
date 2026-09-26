@@ -2,7 +2,7 @@
  * Tests for the list_mail tool handler.
  *
  * The mailbox listing is mocked; the handler's formatting (the per-letter
- * read_mail / send_mail / doc_delete_file snippets, naming each letter by its
+ * read_mail / send_mail / discard_mail snippets, naming each letter by its
  * file name) runs for real. `getRepositories` is globally mocked by jest.setup.
  */
 
@@ -65,7 +65,8 @@ describe('executeListMailTool', () => {
     expect(out.listing).toContain('Letter: 200-from-bertie.md');
     expect(out.listing).toContain('read_mail({ letter: "200-from-bertie.md" })');
     expect(out.listing).toContain('in_reply_to: "200-from-bertie.md"');
-    expect(out.listing).toContain('doc_delete_file({ uri: "qtap://self/Mail/200-from-bertie.md" })');
+    expect(out.listing).toContain('discard_mail({ letter: "200-from-bertie.md" })');
+    expect(out.listing).not.toContain('doc_delete_file');
     expect(out.listing).not.toContain('doc_read_file');
   });
 
@@ -75,7 +76,8 @@ describe('executeListMailTool', () => {
       letter({ path: 'Mail/older.md', sentAt: '2026-06-10T00:00:00.000Z' }),
     ]);
     const out = await executeListMailTool({}, ctx);
-    expect(out.listing.indexOf('Mail/newer.md')).toBeLessThan(out.listing.indexOf('Mail/older.md'));
+    expect(out.listing.indexOf('Letter: newer.md')).toBeGreaterThan(-1);
+    expect(out.listing.indexOf('Letter: newer.md')).toBeLessThan(out.listing.indexOf('Letter: older.md'));
   });
 
   it('only ever lists the caller own mailbox (its resolved vault id)', async () => {

@@ -81,6 +81,23 @@ exports[`tool definitions: derived OpenAI parameters describeImage: parameters s
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters discardMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "letter": {
+      "description": "The letter's file name, exactly as list_mail or Suparṇā named it (e.g. "1718370000000-from-ariadne.md"). Just the name — no folder or path; the Post Office knows where your postbox is.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "letter",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

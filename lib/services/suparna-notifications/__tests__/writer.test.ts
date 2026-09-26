@@ -38,6 +38,7 @@ describe('buildSuparnaMailWhisper', () => {
     expect(out).toContain('> How do you do?');
     expect(out).toContain('read_mail({ letter: "100-from-bertie.md" })');
     expect(out).toContain('in_reply_to: "100-from-bertie.md"');
+    expect(out).toContain('discard_mail({ letter: "100-from-bertie.md" })');
     expect(out).not.toContain('doc_read_file');
   });
 
@@ -63,6 +64,7 @@ describe('buildSuparnaMailLLMContext', () => {
     expect(out).toContain('Bertie');
     expect(out).toContain('How do you do?');
     expect(out).toContain('read_mail({ letter: "<its file name>" })');
+    expect(out).toContain('discard_mail({ letter: "<its file name>" })');
     expect(out).toContain('letter: 100-from-bertie.md');
     expect(out).not.toContain('doc_read_file');
   });

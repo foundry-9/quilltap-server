@@ -75,7 +75,7 @@ export function buildSuparnaMailLLMContext(letters: DeliveredLetterSummary[]): s
   );
   const howto =
     `You can read any letter again with read_mail({ letter: "<its file name>" }), ` +
-    `answer it with send_mail (set in_reply_to to its file name), or discard it with doc_delete_file({ uri: "qtap://self/Mail/<its file name>" }).`;
+    `answer it with send_mail (set in_reply_to to its file name), or discard it with discard_mail({ letter: "<its file name>" }).`;
   return `${intro}\n\n${parts.join('\n\n')}\n\n${howto}`;
 }
 

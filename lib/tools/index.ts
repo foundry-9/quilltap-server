@@ -84,6 +84,20 @@ export {
   type ReadMailToolContext,
 } from './handlers/read-mail-handler';
 
+// Post Office — Discard Mail Tool
+export {
+  discardMailToolDefinition,
+  validateDiscardMailInput,
+  type DiscardMailToolInput,
+  type DiscardMailToolOutput,
+} from './discard-mail-tool';
+
+export {
+  executeDiscardMailTool,
+  formatDiscardMailResults,
+  type DiscardMailToolContext,
+} from './handlers/discard-mail-handler';
+
 // Web Search Tool
 export {
   webSearchToolDefinition,

@@ -63,7 +63,7 @@ export async function executeListMailTool(
 
     const header =
       `Your postbox holds ${letters.length} letter${letters.length === 1 ? '' : 's'}, newest first. ` +
-      `(Each letter is named by its file name — hand that to read_mail, or to send_mail's in_reply_to.)`;
+      `(Each letter is named by its file name — hand that to read_mail, discard_mail, or send_mail's in_reply_to.)`;
 
     const blocks = letters.map(
       (letter, i) => `${formatLetterHeading(letter, i + 1)}\n${formatLetterActions(letter)}`,

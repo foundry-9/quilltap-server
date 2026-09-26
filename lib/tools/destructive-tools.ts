@@ -25,5 +25,7 @@
 export const DESTRUCTIVE_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
   'doc_delete_file',
   'doc_delete_folder',
+  // Post Office — deletes a letter through the same GC chokepoint as doc_delete_file.
+  'discard_mail',
 ]);
 

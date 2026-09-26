@@ -103,6 +103,7 @@ import {
 import { sendMailToolDefinition } from '@/lib/tools/send-mail-tool';
 import { listMailToolDefinition } from '@/lib/tools/list-mail-tool';
 import { readMailToolDefinition } from '@/lib/tools/read-mail-tool';
+import { discardMailToolDefinition } from '@/lib/tools/discard-mail-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -461,11 +462,12 @@ export async function buildToolsForProvider(
     universalTools.push(selfInventoryToolDefinition as UniversalTool);
 
     // Post Office tools are always available — mail is ungated (any character may
-    // write to any character, and a character may always list and read its own
-    // postbox, whatever its systemTransparency).
+    // write to any character, and a character may always list, read and discard
+    // its own post, whatever its systemTransparency).
     universalTools.push(sendMailToolDefinition as UniversalTool);
     universalTools.push(listMailToolDefinition as UniversalTool);
     universalTools.push(readMailToolDefinition as UniversalTool);
+    universalTools.push(discardMailToolDefinition as UniversalTool);
 
     // Scriptorium conversation reading + annotations (always enabled for characters)
     universalTools.push(readConversationToolDefinition as UniversalTool);

@@ -43,6 +43,7 @@ import {
   sendMailToolDefinition,
   listMailToolDefinition,
   readMailToolDefinition,
+  discardMailToolDefinition,
 } from '@/lib/tools';
 import {
   searchScriptoriumToolDefinition,
@@ -73,6 +74,7 @@ const BUILT_IN_TOOL_SCHEMAS: Record<string, { function: { parameters: Record<str
   send_mail: sendMailToolDefinition,
   list_mail: listMailToolDefinition,
   read_mail: readMailToolDefinition,
+  discard_mail: discardMailToolDefinition,
   generate_image: imageGenerationToolDefinition,
   search: searchScriptoriumToolDefinition,
   search_web: webSearchToolDefinition,
@@ -138,6 +140,13 @@ const BUILT_IN_TOOLS = [
     id: 'read_mail',
     name: 'Read Mail',
     description: 'Read a letter from your own mailbox by its file name',
+    source: 'built-in' as const,
+    category: 'utility',
+  },
+  {
+    id: 'discard_mail',
+    name: 'Discard Mail',
+    description: 'Throw away a letter from your own mailbox by its file name',
     source: 'built-in' as const,
     category: 'utility',
   },

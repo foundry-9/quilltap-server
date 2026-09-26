@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Added: `discard_mail`
+
+- `discard_mail({ letter })` deletes a letter from the caller's own `Mail/` folder by file name,
+  regardless of `systemTransparency`. It deletes through `discardLetter` →
+  `deleteDatabaseDocumentIfExists`, the same `deleteWithGC` chokepoint as `doc_delete_file`: a
+  hard-linked letter loses only its link, a one-member link group is dissolved, and the file row
+  is collected when no link remains. In the job child the delete is buffered and replayed on the
+  parent.
+- Added to `DESTRUCTIVE_TOOL_NAMES`, so autonomous rooms drop it unless destructive tools are
+  allowed.
+- The letter actions in `list_mail`, `read_mail` and Suparṇā's notice now offer `discard_mail`
+  instead of `doc_delete_file`. No Librarian delete announcement is posted.
+
 #### Added: `read_mail`; `list_email` renamed to `list_mail`
 
 - Characters without `systemTransparency` could list and send mail but not read it: the
@@ -16,7 +29,6 @@
   `in_reply_to` accepts the file name as well as the `Mail/…` path and stores the path. The shared
   parser is `resolveMailPath` in `lib/post-office/mailbox.ts`; it also accepts the
   `qtap://self/Mail/…` form and rejects anything outside `Mail/`.
-- Discarding a letter still uses `doc_delete_file`, so opaque characters still cannot discard mail.
 
 #### Fixed: Continue Elsewhere left the cast talking to people who stayed behind (bug 171)
 

@@ -8,9 +8,12 @@
  *
  * These helpers call the service functions directly (not the `doc_*` tool
  * handlers) because both the `send_mail` handler and the Commonplace-time mail
- * check run server-side without the tool-dispatch context. Everything here is
- * a content read/write or a folder ensure — no link/folder GC — so it is safe
- * to run from the forked background-jobs child via the buffered-write path.
+ * check run server-side without the tool-dispatch context. Everything here but
+ * {@link discardLetter} is a content read/write or a folder ensure — no
+ * link/folder GC. `discardLetter` goes through `deleteDatabaseDocument`, the
+ * same chokepoint `doc_delete_file` uses, whose `deleteWithGC` is buffered
+ * whole in the forked child and replayed (hard-link group and file-row GC
+ * included) on the parent. All of it is safe to run from the child.
  *
  * @module post-office/mailbox
  */
@@ -23,6 +26,7 @@ import {
   listDatabaseFiles,
   readDatabaseDocument,
   writeDatabaseDocument,
+  deleteDatabaseDocumentIfExists,
   DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import {
@@ -279,6 +283,18 @@ export async function markAlerted(vaultId: string, path: string): Promise<void> 
     }
     throw err;
   }
+}
+
+/**
+ * Discard a letter from a vault. Deletes through `deleteDatabaseDocument` —
+ * never a raw link delete — so a hard-linked letter loses only this link, a
+ * group of one is dissolved, and the file row and its content are collected
+ * once no link remains. Returns false when there was no such letter.
+ */
+export async function discardLetter(vaultId: string, path: string): Promise<boolean> {
+  const deleted = await deleteDatabaseDocumentIfExists(vaultId, path);
+  logger.debug('discardLetter', { vaultId, path, deleted });
+  return deleted;
 }
 
 /** Sort summaries newest-first by `sentAt`, falling back to path order. */

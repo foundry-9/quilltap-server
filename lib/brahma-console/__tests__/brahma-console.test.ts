@@ -84,6 +84,7 @@ describe('buildToolsForProvider — Brahma surface flags', () => {
     expect(names).not.toContain('send_mail')
     expect(names).not.toContain('list_mail')
     expect(names).not.toContain('read_mail')
+    expect(names).not.toContain('discard_mail')
     expect(names).not.toContain('read_conversation')
     expect(names).not.toContain('upsert_annotation')
     expect(names).not.toContain('delete_annotation')
