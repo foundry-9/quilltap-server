@@ -1,13 +1,13 @@
 /**
- * Tests for the list_email tool handler.
+ * Tests for the list_mail tool handler.
  *
  * The mailbox listing is mocked; the handler's formatting (the per-letter
- * doc_read_file / send_mail / doc_delete_file snippets using mount_point
- * "self") runs for real. `getRepositories` is globally mocked by jest.setup.
+ * read_mail / send_mail / doc_delete_file snippets, naming each letter by its
+ * file name) runs for real. `getRepositories` is globally mocked by jest.setup.
  */
 
 // ── Subject ─────────────────────────────────────────────────────────────────
-import { executeListEmailTool } from '../list-email-handler';
+import { executeListMailTool } from '../list-mail-handler';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -45,28 +45,28 @@ beforeEach(() => {
   jest.mocked(ensureCharacterVault).mockResolvedValue({ mountPointId: 'mv', created: false });
 });
 
-describe('executeListEmailTool', () => {
+describe('executeListMailTool', () => {
   it('reports an empty postbox without error', async () => {
     jest.mocked(listMailbox).mockResolvedValue([]);
-    const out = await executeListEmailTool({}, ctx);
+    const out = await executeListMailTool({}, ctx);
     expect(out.success).toBe(true);
     expect(out.count).toBe(0);
     expect(out.listing).toBe('Your postbox stands empty.');
   });
 
-  it('lists letters with working read/reply/discard snippets using the self token', async () => {
+  it('lists letters with working read/reply/discard snippets by file name', async () => {
     jest.mocked(listMailbox).mockResolvedValue([
       letter({ path: 'Mail/200-from-bertie.md', from: 'Bertie', sentAt: '2026-06-12T00:00:00.000Z' }),
     ]);
-    const out = await executeListEmailTool({}, ctx);
+    const out = await executeListMailTool({}, ctx);
     expect(out.success).toBe(true);
     expect(out.count).toBe(1);
     expect(out.listing).toContain('Bertie');
-    expect(out.listing).toContain('Mail/200-from-bertie.md');
-    expect(out.listing).toContain('doc_read_file');
-    expect(out.listing).toContain('doc_read_file({ uri: "qtap://self/Mail/200-from-bertie.md" })');
-    expect(out.listing).toContain('doc_delete_file');
-    expect(out.listing).toContain('in_reply_to');
+    expect(out.listing).toContain('Letter: 200-from-bertie.md');
+    expect(out.listing).toContain('read_mail({ letter: "200-from-bertie.md" })');
+    expect(out.listing).toContain('in_reply_to: "200-from-bertie.md"');
+    expect(out.listing).toContain('doc_delete_file({ uri: "qtap://self/Mail/200-from-bertie.md" })');
+    expect(out.listing).not.toContain('doc_read_file');
   });
 
   it('preserves the listing order returned by the mailbox (newest-first)', async () => {
@@ -74,18 +74,18 @@ describe('executeListEmailTool', () => {
       letter({ path: 'Mail/newer.md', sentAt: '2026-06-12T00:00:00.000Z' }),
       letter({ path: 'Mail/older.md', sentAt: '2026-06-10T00:00:00.000Z' }),
     ]);
-    const out = await executeListEmailTool({}, ctx);
+    const out = await executeListMailTool({}, ctx);
     expect(out.listing.indexOf('Mail/newer.md')).toBeLessThan(out.listing.indexOf('Mail/older.md'));
   });
 
   it('only ever lists the caller own mailbox (its resolved vault id)', async () => {
     jest.mocked(listMailbox).mockResolvedValue([]);
-    await executeListEmailTool({}, ctx);
+    await executeListMailTool({}, ctx);
     expect(listMailbox).toHaveBeenCalledWith('mv');
   });
 
   it('fails when there is no acting character', async () => {
-    const out = await executeListEmailTool({}, { ...ctx, characterId: null });
+    const out = await executeListMailTool({}, { ...ctx, characterId: null });
     expect(out.success).toBe(false);
     expect(listMailbox).not.toHaveBeenCalled();
   });

@@ -1,5 +1,5 @@
 /**
- * List Email Tool Definition (The Post Office)
+ * List Mail Tool Definition (The Post Office)
  *
  * Lists the letters in the CALLER's own mailbox and spells out exactly how to
  * read, answer, or discard each one. Takes no parameters — it only ever lists
@@ -10,11 +10,11 @@
 import { z } from 'zod';
 import { zodToOpenAISchema } from './zod-to-openai-schema';
 
-export const listEmailToolInputSchema = z.object({});
+export const listMailToolInputSchema = z.object({});
 
-export type ListEmailToolInput = z.infer<typeof listEmailToolInputSchema>;
+export type ListMailToolInput = z.infer<typeof listMailToolInputSchema>;
 
-export interface ListEmailToolOutput {
+export interface ListMailToolOutput {
   success: boolean;
   /** Human-readable, in-voice listing for the calling LLM. */
   listing: string;
@@ -22,17 +22,17 @@ export interface ListEmailToolOutput {
   error?: string;
 }
 
-export const listEmailToolDefinition = {
+export const listMailToolDefinition = {
   type: 'function',
   function: {
-    name: 'list_email',
+    name: 'list_mail',
     description:
       'List the letters waiting in your own mailbox, newest first, with the exact way to read, answer, or discard each. Takes no arguments — it always lists your postbox and no one else’s.',
-    parameters: zodToOpenAISchema(listEmailToolInputSchema),
+    parameters: zodToOpenAISchema(listMailToolInputSchema),
   },
 };
 
-export function validateListEmailInput(input: unknown): ListEmailToolInput | null {
-  const parsed = listEmailToolInputSchema.safeParse(input);
+export function validateListMailInput(input: unknown): ListMailToolInput | null {
+  const parsed = listMailToolInputSchema.safeParse(input);
   return parsed.success ? parsed.data : null;
 }

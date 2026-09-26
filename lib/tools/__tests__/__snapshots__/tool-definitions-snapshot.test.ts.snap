@@ -1190,14 +1190,6 @@ exports[`tool definitions: derived OpenAI parameters keepImage: parameters snaps
 }
 `;
 
-exports[`tool definitions: derived OpenAI parameters listEmail: parameters snapshot 1`] = `
-{
-  "additionalProperties": false,
-  "properties": {},
-  "type": "object",
-}
-`;
-
 exports[`tool definitions: derived OpenAI parameters listImages: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1226,6 +1218,14 @@ exports[`tool definitions: derived OpenAI parameters listImages: parameters snap
       "type": "array",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters listMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {},
   "type": "object",
 }
 `;
@@ -1276,6 +1276,23 @@ exports[`tool definitions: derived OpenAI parameters readConversation: parameter
       "type": "integer",
     },
   },
+  "type": "object",
+}
+`;
+
+exports[`tool definitions: derived OpenAI parameters readMail: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "letter": {
+      "description": "The letter's file name, exactly as list_mail or Suparṇā named it (e.g. "1718370000000-from-ariadne.md"). Just the name — no folder or path; the Post Office knows where your postbox is.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "letter",
+  ],
   "type": "object",
 }
 `;
@@ -1624,7 +1641,7 @@ exports[`tool definitions: derived OpenAI parameters sendMail: parameters snapsh
       "type": "string",
     },
     "in_reply_to": {
-      "description": "Optional. The message id (the Mail/… path) of a letter in YOUR OWN postbox that you are answering. When supplied, your reply is prefaced with a quoted copy of that original letter.",
+      "description": "Optional. The file name of a letter in YOUR OWN postbox that you are answering (as list_mail or Suparṇā names it, e.g. "1718370000000-from-ariadne.md"). When supplied, your reply is prefaced with a quoted copy of that original letter.",
       "minLength": 1,
       "type": "string",
     },

@@ -2,29 +2,41 @@
  * The Post Office — agent-facing instruction snippets
  *
  * Single source for the literal tool calls we hand a character so it can read,
- * answer, or discard a letter. Reused by `list_email` and by Suparṇā's mail
- * whisper so the two never drift. Mail always lives in the recipient's own
- * vault, so we address it with the canonical `qtap://self/…` URI form.
+ * answer, or discard a letter. Reused by `list_mail`, `read_mail` and by
+ * Suparṇā's mail whisper so they never drift. A letter is named to the Post
+ * Office tools by its bare file name — `read_mail` and `send_mail` put the
+ * `Mail/` folder on it themselves, and reach the caller's own mailbox whether
+ * or not the character may otherwise see its own vault. Discarding still goes
+ * through `doc_delete_file`, which needs the `qtap://self/…` URI.
  *
  * @module post-office/instructions
  */
 
 import { formatSelfUri } from '@/lib/doc-edit/qtap-uri';
 import { formatDateTime } from '@/lib/format-time';
-import type { DeliveredLetterSummary } from './mailbox';
+import { letterFileName, type DeliveredLetterSummary } from './mailbox';
 
-/** A formatted, indented block of the three actions available on a letter.
- *  The read/discard actions lead with the letter's `qtap://self/…` URI; the
- *  send_mail `in_reply_to` stays the raw letter id (a letter handle, not a
- *  document reference). */
-export function formatLetterActions(letter: { path: string; from: string }): string {
+export interface LetterActionOptions {
+  /** Include the "Read it again" line (omitted when the letter was just read). */
+  includeRead?: boolean;
+}
+
+/** A formatted, indented block of the actions available on a letter. */
+export function formatLetterActions(
+  letter: { path: string; from: string },
+  options: LetterActionOptions = {},
+): string {
   const { path, from } = letter;
-  const uri = formatSelfUri(path);
-  return [
-    `   • Read it again: doc_read_file({ uri: "${uri}" })`,
-    `   • Answer it: send_mail({ character: "${from}", message: "…your reply…", in_reply_to: "${path}" })`,
-    `   • Discard it: doc_delete_file({ uri: "${uri}" })`,
-  ].join('\n');
+  const name = letterFileName(path);
+  const lines: string[] = [];
+  if (options.includeRead !== false) {
+    lines.push(`   • Read it again: read_mail({ letter: "${name}" })`);
+  }
+  lines.push(
+    `   • Answer it: send_mail({ character: "${from}", message: "…your reply…", in_reply_to: "${name}" })`,
+    `   • Discard it: doc_delete_file({ uri: "${formatSelfUri(path)}" })`,
+  );
+  return lines.join('\n');
 }
 
 /** A one-line human date for a letter, falling back gracefully. */
@@ -32,10 +44,9 @@ export function formatLetterDate(sentAt: string): string {
   return formatDateTime(sentAt, { monthStyle: 'long' }) || 'an unrecorded hour';
 }
 
-/** Heading line(s) for a letter in a numbered listing. The locator is the
- *  letter's `qtap://self/…` URI; the raw id (its path) lives in the action
- *  lines' `in_reply_to`. */
+/** Heading line(s) for a letter in a numbered listing, naming the letter by
+ *  its file name — the handle `read_mail` and `in_reply_to` take. */
 export function formatLetterHeading(letter: DeliveredLetterSummary, index: number): string {
   const announced = letter.alerted ? ' (already announced)' : ' (newly arrived)';
-  return `${index}. From ${letter.from} — ${formatLetterDate(letter.sentAt)}${announced}\n   ${formatSelfUri(letter.path)}`;
+  return `${index}. From ${letter.from} — ${formatLetterDate(letter.sentAt)}${announced}\n   Letter: ${letterFileName(letter.path)}`;
 }

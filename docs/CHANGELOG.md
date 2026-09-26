@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Added: `read_mail`; `list_email` renamed to `list_mail`
+
+- Characters without `systemTransparency` could list and send mail but not read it: the
+  instructions pointed at `doc_read_file({ uri: "qtap://self/Mail/…" })`, and the opacity covenant
+  refuses `self` for them. The new `read_mail({ letter })` tool takes a letter's bare file name,
+  confines it to the caller's own `Mail/` folder, and reads through `ensureCharacterVault` like
+  `list_mail` does, so transparency never applies. Reading an unannounced letter marks it announced.
+- `list_email` is now `list_mail`. The old name is not aliased.
+- `list_mail`, `read_mail` and Suparṇā's delivery notice name letters by file name. `send_mail`'s
+  `in_reply_to` accepts the file name as well as the `Mail/…` path and stores the path. The shared
+  parser is `resolveMailPath` in `lib/post-office/mailbox.ts`; it also accepts the
+  `qtap://self/Mail/…` form and rejects anything outside `Mail/`.
+- Discarding a letter still uses `doc_delete_file`, so opaque characters still cannot discard mail.
+
 #### Fixed: Continue Elsewhere left the cast talking to people who stayed behind (bug 171)
 
 - The carryover drops the lines of anyone not seated in the new chat but keeps everyone else's

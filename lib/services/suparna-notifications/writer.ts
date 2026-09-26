@@ -4,7 +4,8 @@
  * Suparṇā is the personified mail carrier. When a character is about to take a
  * turn, the Post Office checks that character's mailbox; any letters not yet
  * announced trigger this whisper, which reads each new letter aloud, names the
- * sender and date, and reminds the character how to read/answer/discard it.
+ * sender and date, and reminds the character how to read/answer/discard it —
+ * naming each letter by its file name, the handle `read_mail` takes.
  *
  * Unlike the Commonplace Book whisper (a per-turn snapshot that sweeps its own
  * prior whispers), this is EVENT-like: each new-mail announcement is a distinct
@@ -23,9 +24,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { MessageEvent } from '@/lib/schemas/types';
-import type { DeliveredLetterSummary } from '@/lib/post-office/mailbox';
+import { letterFileName, type DeliveredLetterSummary } from '@/lib/post-office/mailbox';
 import { formatLetterActions, formatLetterDate } from '@/lib/post-office/instructions';
-import { formatSelfUri } from '@/lib/doc-edit/qtap-uri';
 
 export type SuparnaWhisperKind = 'mail-delivery';
 
@@ -69,13 +69,13 @@ export function buildSuparnaMailLLMContext(letters: DeliveredLetterSummary[]): s
     `${letters.length === 1 ? '' : ` (${letters.length} letters)`}. Each letter is below.`;
   const parts = letters.map((letter) =>
     [
-      `Letter from ${letter.from}, delivered ${formatLetterDate(letter.sentAt)} (${formatSelfUri(letter.path)}):`,
+      `Letter from ${letter.from}, delivered ${formatLetterDate(letter.sentAt)} (letter: ${letterFileName(letter.path)}):`,
       letter.body.trim() || '(the letter is blank)',
     ].join('\n'),
   );
   const howto =
-    `You can read any letter again with doc_read_file({ uri: "qtap://self/<its path>" }), ` +
-    `answer it with send_mail (set in_reply_to to its id — its path), or discard it with doc_delete_file({ uri: "qtap://self/<its path>" }).`;
+    `You can read any letter again with read_mail({ letter: "<its file name>" }), ` +
+    `answer it with send_mail (set in_reply_to to its file name), or discard it with doc_delete_file({ uri: "qtap://self/Mail/<its file name>" }).`;
   return `${intro}\n\n${parts.join('\n\n')}\n\n${howto}`;
 }
 

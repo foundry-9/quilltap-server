@@ -101,7 +101,8 @@ import {
   askCarinaToolDefinition,
 } from '@/lib/tools/ask-carina-tool';
 import { sendMailToolDefinition } from '@/lib/tools/send-mail-tool';
-import { listEmailToolDefinition } from '@/lib/tools/list-email-tool';
+import { listMailToolDefinition } from '@/lib/tools/list-mail-tool';
+import { readMailToolDefinition } from '@/lib/tools/read-mail-tool';
 import type { UniversalTool, ImageProviderConstraints } from '@/lib/plugins/interfaces';
 
 /**
@@ -287,7 +288,7 @@ export interface BuildToolsOptions {
 
   /**
    * Whether to include the always-on "workspace" tool set: self-inventory,
-   * Post Office mail (send_mail/list_email), conversation reading, annotations,
+   * Post Office mail (send_mail/list_mail), conversation reading, annotations,
    * terminal inspection, and the RNG/state game tools. Defaults to `true`
    * (every character surface gets them). The **Brahma Console** sets this to
    * `false` — it is a character-less, stripped-down generic-LLM surface that
@@ -460,9 +461,11 @@ export async function buildToolsForProvider(
     universalTools.push(selfInventoryToolDefinition as UniversalTool);
 
     // Post Office tools are always available — mail is ungated (any character may
-    // write to any character, and a character may always list its own postbox).
+    // write to any character, and a character may always list and read its own
+    // postbox, whatever its systemTransparency).
     universalTools.push(sendMailToolDefinition as UniversalTool);
-    universalTools.push(listEmailToolDefinition as UniversalTool);
+    universalTools.push(listMailToolDefinition as UniversalTool);
+    universalTools.push(readMailToolDefinition as UniversalTool);
 
     // Scriptorium conversation reading + annotations (always enabled for characters)
     universalTools.push(readConversationToolDefinition as UniversalTool);

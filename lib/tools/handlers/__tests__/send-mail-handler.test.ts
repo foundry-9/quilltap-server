@@ -100,6 +100,28 @@ describe('executeSendMailTool', () => {
     expect(jest.mocked(deliverLetter).mock.calls[0][0].inReplyTo).toBe('Mail/old-from-bertie.md');
   });
 
+  it('accepts a bare letter file name for in_reply_to and stores the Mail/ path', async () => {
+    jest.mocked(readLetter).mockResolvedValue({
+      frontmatter: {
+        from: 'Bertie',
+        fromCharacterId: 'r1',
+        sentAt: '2026-06-01T12:00:00.000Z',
+        alerted: true,
+        inReplyTo: null,
+      },
+      body: 'The original words.',
+    });
+
+    const out = await executeSendMailTool(
+      { character: 'Bertie', message: 'My reply.', in_reply_to: 'old-from-bertie.md' },
+      ctx,
+    );
+
+    expect(out.success).toBe(true);
+    expect(readLetter).toHaveBeenCalledWith('sv', 'Mail/old-from-bertie.md');
+    expect(jest.mocked(deliverLetter).mock.calls[0][0].inReplyTo).toBe('Mail/old-from-bertie.md');
+  });
+
   it('fails gracefully when in_reply_to is not a Mail/ path in the sender mailbox', async () => {
     const out = await executeSendMailTool(
       { character: 'Bertie', message: 'hi', in_reply_to: 'Notes/secret.md' },

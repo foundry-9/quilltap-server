@@ -51,12 +51,14 @@ And what of a letter addressed to the very character *you* are playing? You neve
 
 ## Reading, answering, and discarding
 
-The Post Office adds no special tools for handling mail you already have — your character's ordinary document tools do the job, and **`list_email`** spells out the exact incantations for each letter.
+A character's post is its own, whatever else it may be forbidden. Even a character who has declined to see the Staff — and so cannot peer into its own vault with the ordinary document tools — may list its letters, read them, and answer them, for the Post Office keeps its own key to every postbox and hands it only to the postbox's owner. Letters are named by their **file name** alone (`1718370000000-from-ariadne.md`, say); the Post Office knows perfectly well which folder they live in and supplies it without being asked.
 
-- **List your mailbox** — call **`list_email`** (it takes no arguments and only ever shows your own postbox). For each letter it gives the sender, the date, whether it has been announced, and the precise calls below.
-- **Read a letter** — `doc_read_file({ uri: "qtap://self/Mail/…" })`, using the letter's `Mail/…` path. The reserved authority **`self`** always means *your own vault*, so you never need to know its proper name.
-- **Answer a letter** — `send_mail` again, with `in_reply_to` set to the letter's id (its `Mail/…` path). Your reply will quote the original beneath your new words.
-- **Discard a letter** — `doc_delete_file({ uri: "qtap://self/Mail/…" })`, using the letter's path.
+- **List your mailbox** — call **`list_mail`** (it takes no arguments and only ever shows your own postbox). For each letter it gives the sender, the date, whether it has been announced, its file name, and the precise calls below.
+- **Read a letter** — `read_mail({ letter: "1718370000000-from-ariadne.md" })`. Only your own postbox is ever consulted. Reading a letter Suparṇā has not yet got round to announcing spares her the trouble — she will not bring you what you have already read.
+- **Answer a letter** — `send_mail` again, with `in_reply_to` set to the letter's file name. Your reply will quote the original beneath your new words.
+- **Discard a letter** — `doc_delete_file({ uri: "qtap://self/Mail/…" })`. The reserved authority **`self`** always means *your own vault*. (Discarding, unlike reading, still goes through the ordinary document tools, so a character who keeps the Staff at arm's length must keep its letters as well.)
+
+Suparṇā's announcements name each letter by its file name too, so the incantation she recites is the very one that works.
 
 Because no copy is kept of letters you *send*, replying always means answering a letter you *received* — which is exactly where the `in_reply_to` id comes from: your own `Mail/` folder.
 

@@ -29,7 +29,7 @@ export const sendMailToolInputSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      'Optional. The message id (the Mail/… path) of a letter in YOUR OWN postbox that you are answering. When supplied, your reply is prefaced with a quoted copy of that original letter.'
+      'Optional. The file name of a letter in YOUR OWN postbox that you are answering (as list_mail or Suparṇā names it, e.g. "1718370000000-from-ariadne.md"). When supplied, your reply is prefaced with a quoted copy of that original letter.'
     ),
 });
 
@@ -49,7 +49,7 @@ export const sendMailToolDefinition = {
   function: {
     name: 'send_mail',
     description:
-      "Post a letter to another character. Suparṇā of the Post Office delivers it into the recipient's mailbox, where it will be announced to them the next time they take the floor. Write the body only — the envelope (sender, date, and such) is stamped for you. Any character may write to any other; reading and answering are done with doc_read_file and send_mail's in_reply_to.",
+      "Post a letter to another character. Suparṇā of the Post Office delivers it into the recipient's mailbox, where it will be announced to them the next time they take the floor. Write the body only — the envelope (sender, date, and such) is stamped for you. Any character may write to any other; read your own letters with read_mail and answer them with send_mail's in_reply_to.",
     parameters: zodToOpenAISchema(sendMailToolInputSchema),
   },
 };

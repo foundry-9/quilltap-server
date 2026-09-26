@@ -56,19 +56,33 @@ export {
   type SendMailToolContext,
 } from './handlers/send-mail-handler';
 
-// Post Office — List Email Tool
+// Post Office — List Mail Tool
 export {
-  listEmailToolDefinition,
-  validateListEmailInput,
-  type ListEmailToolInput,
-  type ListEmailToolOutput,
-} from './list-email-tool';
+  listMailToolDefinition,
+  validateListMailInput,
+  type ListMailToolInput,
+  type ListMailToolOutput,
+} from './list-mail-tool';
 
 export {
-  executeListEmailTool,
-  formatListEmailResults,
-  type ListEmailToolContext,
-} from './handlers/list-email-handler';
+  executeListMailTool,
+  formatListMailResults,
+  type ListMailToolContext,
+} from './handlers/list-mail-handler';
+
+// Post Office — Read Mail Tool
+export {
+  readMailToolDefinition,
+  validateReadMailInput,
+  type ReadMailToolInput,
+  type ReadMailToolOutput,
+} from './read-mail-tool';
+
+export {
+  executeReadMailTool,
+  formatReadMailResults,
+  type ReadMailToolContext,
+} from './handlers/read-mail-handler';
 
 // Web Search Tool
 export {

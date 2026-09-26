@@ -36,8 +36,9 @@ describe('buildSuparnaMailWhisper', () => {
     expect(out).toContain('Suparṇā');
     expect(out).toContain('Bertie');
     expect(out).toContain('> How do you do?');
-    expect(out).toContain('doc_read_file({ uri: "qtap://self/Mail/100-from-bertie.md" })');
-    expect(out).toContain('Mail/100-from-bertie.md');
+    expect(out).toContain('read_mail({ letter: "100-from-bertie.md" })');
+    expect(out).toContain('in_reply_to: "100-from-bertie.md"');
+    expect(out).not.toContain('doc_read_file');
   });
 
   it('handles multiple letters', () => {
@@ -46,8 +47,8 @@ describe('buildSuparnaMailWhisper', () => {
       letter({ path: 'Mail/b.md', from: 'Ariadne' }),
     ]);
     expect(out).toContain('2 letters');
-    expect(out).toContain('Mail/a.md');
-    expect(out).toContain('Mail/b.md');
+    expect(out).toContain('read_mail({ letter: "a.md" })');
+    expect(out).toContain('read_mail({ letter: "b.md" })');
   });
 
   it('returns empty string for no letters', () => {
@@ -61,8 +62,9 @@ describe('buildSuparnaMailLLMContext', () => {
     expect(out).toContain('Suparṇā');
     expect(out).toContain('Bertie');
     expect(out).toContain('How do you do?');
-    expect(out).toContain('doc_read_file({ uri: "qtap://self/<its path>" })');
-    expect(out).toContain('Mail/100-from-bertie.md');
+    expect(out).toContain('read_mail({ letter: "<its file name>" })');
+    expect(out).toContain('letter: 100-from-bertie.md');
+    expect(out).not.toContain('doc_read_file');
   });
   it('returns empty string for no letters', () => {
     expect(buildSuparnaMailLLMContext([])).toBe('');

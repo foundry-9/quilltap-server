@@ -85,6 +85,29 @@ export interface DeliverLetterParams {
   inReplyTo: string | null;
 }
 
+/** A letter's bare file name (`1718370000000-from-ariadne.md`) from its
+ *  vault-relative `Mail/…` path. This is the handle characters are given. */
+export function letterFileName(path: string): string {
+  const prefix = `${MAIL_FOLDER}/`;
+  return path.toLowerCase().startsWith(prefix.toLowerCase()) ? path.slice(prefix.length) : path;
+}
+
+/**
+ * Resolve a character-supplied letter reference to its vault-relative
+ * `Mail/…` path. Accepts the bare file name (the canonical handle), and — so a
+ * model echoing an older instruction still lands — the `Mail/…` path or its
+ * `qtap://self/Mail/…` URI. The `.md` extension is optional. Anything that
+ * would escape the `Mail/` folder (sub-paths, `..`) resolves to null.
+ */
+export function resolveMailPath(ref: string): string | null {
+  let name = ref.trim().replace(/^qtap:\/\/self\//i, '').replace(/^\/+/, '');
+  const prefix = `${MAIL_FOLDER}/`;
+  if (name.toLowerCase().startsWith(prefix.toLowerCase())) name = name.slice(prefix.length);
+  if (!name || name.includes('/') || name.includes('\\') || name === '.' || name === '..') return null;
+  if (!name.toLowerCase().endsWith('.md')) name = `${name}.md`;
+  return `${MAIL_FOLDER}/${name}`;
+}
+
 /**
  * Slugify a sender's name for the filename: lowercase, runs of
  * non-alphanumerics collapse to a single hyphen, no leading/trailing hyphen.

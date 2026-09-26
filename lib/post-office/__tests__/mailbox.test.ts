@@ -22,6 +22,8 @@ import {
   collectUnalertedMail,
   listMailbox,
   markAlerted,
+  resolveMailPath,
+  letterFileName,
   type MailFrontmatter,
 } from '../mailbox';
 
@@ -230,5 +232,32 @@ describe('collectUnalertedMail + markAlerted', () => {
 
   it('markAlerted is a no-op (no throw) when the letter was already deleted', async () => {
     await expect(markAlerted('rv', 'Mail/gone.md')).resolves.toBeUndefined();
+  });
+});
+
+describe('resolveMailPath / letterFileName', () => {
+  it('puts the Mail/ folder on a bare file name', () => {
+    expect(resolveMailPath('111-from-ariadne.md')).toBe('Mail/111-from-ariadne.md');
+  });
+
+  it('adds a missing .md extension', () => {
+    expect(resolveMailPath('111-from-ariadne')).toBe('Mail/111-from-ariadne.md');
+  });
+
+  it('accepts the Mail/ path and the qtap://self/ URI forms', () => {
+    expect(resolveMailPath('Mail/111-from-ariadne.md')).toBe('Mail/111-from-ariadne.md');
+    expect(resolveMailPath('qtap://self/Mail/111-from-ariadne.md')).toBe('Mail/111-from-ariadne.md');
+  });
+
+  it('refuses anything that would leave the Mail/ folder', () => {
+    expect(resolveMailPath('Notes/secret.md')).toBeNull();
+    expect(resolveMailPath('../secret.md')).toBeNull();
+    expect(resolveMailPath('Mail/../secret.md')).toBeNull();
+    expect(resolveMailPath('..')).toBeNull();
+    expect(resolveMailPath('   ')).toBeNull();
+  });
+
+  it('strips the Mail/ folder back off for display', () => {
+    expect(letterFileName('Mail/111-from-ariadne.md')).toBe('111-from-ariadne.md');
   });
 });

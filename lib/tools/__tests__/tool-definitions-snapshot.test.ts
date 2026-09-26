@@ -43,7 +43,8 @@ import { helpSearchToolDefinition } from '../help-search-tool'
 import { helpSettingsToolDefinition } from '../help-settings-tool'
 import { imageGenerationToolDefinition } from '../image-generation-tool'
 import { keepImageToolDefinition } from '../keep-image-tool'
-import { listEmailToolDefinition } from '../list-email-tool'
+import { listMailToolDefinition } from '../list-mail-tool'
+import { readMailToolDefinition } from '../read-mail-tool'
 import { listImagesToolDefinition } from '../list-images-tool'
 import { sendMailToolDefinition } from '../send-mail-tool'
 import { projectInfoToolDefinition } from '../project-info-tool'
@@ -106,7 +107,8 @@ const ALL_TOOLS = {
   helpSettings: helpSettingsToolDefinition,
   imageGeneration: imageGenerationToolDefinition,
   keepImage: keepImageToolDefinition,
-  listEmail: listEmailToolDefinition,
+  listMail: listMailToolDefinition,
+  readMail: readMailToolDefinition,
   listImages: listImagesToolDefinition,
   sendMail: sendMailToolDefinition,
   projectInfo: projectInfoToolDefinition,

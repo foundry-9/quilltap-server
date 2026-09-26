@@ -15,7 +15,7 @@ API reference for Quilltap v4.3 and later.
 > **Freshness note (v4.7-dev):** Additions since v4.3:
 >
 > - **Brahma Console** (`/api/v1/brahma-console`) — a character-less, memory-free generic-LLM surface with its own collection/item/messages endpoints (see [Brahma Console](#brahma-console)).
-> - **The Post Office** — inter-character mail. Two new chat actions: `POST /api/v1/chats/[id]?action=send-mail` (post a letter as a player-character) and `GET /api/v1/chats/[id]?action=mailbox&characterId=…` (list a player-character's mailbox). New LLM tools `send_mail` and `list_email`; deliveries are announced by the `suparna` Staff sender.
+> - **The Post Office** — inter-character mail. Two new chat actions: `POST /api/v1/chats/[id]?action=send-mail` (post a letter as a player-character) and `GET /api/v1/chats/[id]?action=mailbox&characterId=…` (list a player-character's mailbox). New LLM tools `send_mail` and `list_email` (renamed `list_mail` in 4.10, alongside the new `read_mail`); deliveries are announced by the `suparna` Staff sender.
 > - **Carina** — inline LLM queries via `@Name:` / `@Name?` markup and the `ask_carina` tool; answers post as `systemSender: 'carina'` rendered with the answerer's own avatar. `@Brahma` reaches the Brahma Console as a Carina answerer.
 > - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
 > - **Scriptorium per-document policy flags** — mounted markdown may carry `embed` / `character_read` / `character_write` frontmatter flags (stored on `doc_mount_file_links`), governing characters only.
@@ -3239,7 +3239,7 @@ Edit the room's schedule, budget caps, visibility, destructive-tool authorizatio
 
 ### The Post Office
 
-Inter-character mail. A player-character can post a letter to another character; delivered mail lands in the recipient's vault `Mail/` folder and is announced by the `suparna` Staff sender. Characters also reach this through the `send_mail` and `list_email` LLM tools.
+Inter-character mail. A player-character can post a letter to another character; delivered mail lands in the recipient's vault `Mail/` folder and is announced by the `suparna` Staff sender. Characters also reach this through the `send_mail`, `list_mail` and `read_mail` LLM tools.
 
 #### `POST /api/v1/chats/[id]?action=send-mail`
 

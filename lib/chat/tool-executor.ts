@@ -301,7 +301,8 @@ const BUILT_IN_TOOLS = new Set<string>([
   'ask_carina',
   // Post Office — inter-character mail
   'send_mail',
-  'list_email',
+  'list_mail',
+  'read_mail',
 ]);
 
 export async function executeToolCallWithContext(
@@ -1212,18 +1213,34 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle list_email (Post Office — list the caller's own mailbox)
-    if (toolCall.name === 'list_email') {
-      const { executeListEmailTool, formatListEmailResults } = await import('@/lib/tools/handlers/list-email-handler');
-      const out = await executeListEmailTool(toolCall.arguments, {
+    // Handle list_mail (Post Office — list the caller's own mailbox)
+    if (toolCall.name === 'list_mail') {
+      const { executeListMailTool, formatListMailResults } = await import('@/lib/tools/handlers/list-mail-handler');
+      const out = await executeListMailTool(toolCall.arguments, {
         userId,
         chatId,
         characterId,
       });
       return {
-        toolName: 'list_email',
+        toolName: 'list_mail',
         success: out.success,
-        result: { formattedText: formatListEmailResults(out), count: out.count },
+        result: { formattedText: formatListMailResults(out), count: out.count },
+        error: out.success ? undefined : out.error,
+      };
+    }
+
+    // Handle read_mail (Post Office — read one letter from the caller's own mailbox)
+    if (toolCall.name === 'read_mail') {
+      const { executeReadMailTool, formatReadMailResults } = await import('@/lib/tools/handlers/read-mail-handler');
+      const out = await executeReadMailTool(toolCall.arguments, {
+        userId,
+        chatId,
+        characterId,
+      });
+      return {
+        toolName: 'read_mail',
+        success: out.success,
+        result: { formattedText: formatReadMailResults(out), path: out.path },
         error: out.success ? undefined : out.error,
       };
     }
