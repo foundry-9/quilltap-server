@@ -128,7 +128,6 @@ const CLEAN_RECONCILE = {
   skippedReason: null,
   vectorEntriesDeleted: 0,
   vectorIndexMetaFixed: 0,
-  staleChunkEmbeddingsCleared: 0,
   mismatched: { memories: 0, conversationChunks: 0, helpDocs: 0, mountChunks: 0 },
   reindexEnqueued: false,
 }

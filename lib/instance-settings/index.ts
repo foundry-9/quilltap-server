@@ -230,9 +230,9 @@ export async function setMemoryRecallSettings(value: MemoryRecallSettings): Prom
 
 /**
  * Read the per-instance data-retention settings (the stale-chat window that
- * governs the daily maintenance sweep's cache collapse, image collapse, and
- * conversation-chunk cold-tiering). Returns the documented default (30 days)
- * when the setting hasn't been written yet.
+ * governs the daily maintenance sweep's cache collapse and image collapse).
+ * Returns the documented default (30 days) when the setting hasn't been
+ * written yet.
  */
 export async function getDataRetentionSettings(): Promise<DataRetentionSettings> {
   return readJsonSetting(KEY_DATA_RETENTION, DataRetentionSettingsSchema, DEFAULT_DATA_RETENTION_SETTINGS);

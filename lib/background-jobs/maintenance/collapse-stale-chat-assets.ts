@@ -87,12 +87,10 @@ export interface StaleChatCollapseSummary {
  * activity — never touch" safety: a null/NaN timestamp is never stale.
  *
  * Exported as THE staleness gate for every stale-gated maintenance sweep
- * (asset collapse, cache collapse, chunk cold-tiering) AND for the startup
- * render/embed reconcile, so they can never disagree on what "stale" means.
- * The reconcile MUST use this gate: cold-tiering deliberately leaves stale
- * chats with NULL `renderedMarkdown` and NULL chunk embeddings, and a
- * reconcile that can't tell "cold-tiered" from "broken" re-embeds the entire
- * cold tier on every boot just for the next sweep to clear it again.
+ * (asset collapse, cache collapse), so they can never disagree on what
+ * "stale" means. Note that conversation-chunk embeddings are NOT stale-gated
+ * any more — they are never cold-tiered, so the startup render/embed
+ * reconcile treats every chat, stale or not, the same way.
  *
  * Takes only the fields it reads (`id`, `updatedAt`) so callers that scan
  * with raw SQL don't have to hydrate full ChatMetadata rows.

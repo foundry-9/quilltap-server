@@ -253,10 +253,12 @@ async function handleGetChat(
       return notFound('Chat');
     }
 
-    // Cold-tier re-warm: if the maintenance sweep cold-tiered this chat's
-    // conversation-chunk embeddings, opening it re-enqueues them through the
-    // standard embedding pipeline. Fire-and-forget (debounced + deduped
-    // inside) — never allowed to slow or break the chat load.
+    // Un-embedded chunk re-warm: if this chat has conversation chunks with
+    // content but no embedding (an outage mid-render, a died render job, or
+    // a leftover from before chunk embeddings were kept warm
+    // unconditionally), opening it re-enqueues them through the standard
+    // embedding pipeline. Fire-and-forget (debounced + deduped inside) —
+    // never allowed to slow or break the chat load.
     maybeEnqueueColdChunkReembed(user.id, chatId).catch((error) => {
       logger.warn('[Chats v1] Cold-chunk re-embed check failed — continuing', {
         chatId,

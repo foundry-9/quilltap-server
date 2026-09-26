@@ -4,6 +4,27 @@
 
 ### 4.10-dev
 
+#### Changed: old conversations keep their embeddings; transcripts rendered on demand
+
+- The stale-chat sweep no longer clears `conversation_chunks.embedding`. On `Friday` it had
+  cleared 85% of all chunks (every chat idle more than 30 days), which removed those chats from
+  semantic search, to save about 14 MB. Keeping every chunk embedded costs about 16 MB there.
+- The startup render reconcile, the embedding reindex and the dimension reconcile no longer skip
+  stale chats. On the first boot after this change the reconcile enqueues a render (and so a
+  re-embed) for every chat that had been cold-tiered. On `Friday` that is about 13k chunks.
+- `chats.renderedMarkdown` is dropped (`drop-chat-rendered-markdown-v1`). Chat rows are always
+  read whole, so every chat list carried every stored transcript (about 160 KB each). The
+  transcript is now rendered from the messages when needed (`renderChatConversation`,
+  `lib/scriptorium/render-chat.ts`), used by the render job, `read_conversation` and
+  `upsert_annotation`. `read_conversation` previously failed on any chat the sweep had collapsed.
+- The render job resolves speaker names through `resolveSpeakerNames`. A character with a broken
+  vault now costs a label instead of failing the render.
+- The Scriptorium badge status is derived from chunks alone (`deriveScriptoriumStatus`,
+  `lib/scriptorium/status.ts`), used by both chat-list endpoints. Before this, a collapsed chat
+  showed red "Not yet rendered" even after its embeddings were restored.
+- Chat card badges and the delete/remove button use the in-app `Tooltip` instead of the native
+  `title` attribute, which was unreliable under Electron.
+
 #### Added: `discard_mail`
 
 - `discard_mail({ letter })` deletes a letter from the caller's own `Mail/` folder by file name,

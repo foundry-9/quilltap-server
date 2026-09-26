@@ -524,7 +524,7 @@ Update chat settings.
 
 #### `GET /api/v1/settings/data-retention`
 
-Read the instance-wide stale-chat retention window (`instance_settings['dataRetention']`, not a `chat_settings` column). Governs the daily maintenance sweep's cache collapse, generated-image collapse, and conversation-chunk cold-tiering.
+Read the instance-wide stale-chat retention window (`instance_settings['dataRetention']`, not a `chat_settings` column). Governs the daily maintenance sweep's cache collapse and generated-image collapse. (Conversation-chunk embeddings are no longer cold-tiered as of 4.10.)
 
 **Response:**
 

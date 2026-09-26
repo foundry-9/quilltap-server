@@ -40,7 +40,6 @@ const activeChat = { id: 'chat-active', lastMessageAt: isoDaysAgo(1), updatedAt:
 
 let lastPlayedByChat: Record<string, string | null>;
 let chats: { findAll: jest.Mock; getLastPlayedMessageAt: jest.Mock };
-let conversationChunks: { clearEmbeddingsForChat: jest.Mock };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -56,11 +55,8 @@ beforeEach(() => {
       id in lastPlayedByChat ? lastPlayedByChat[id] : null,
     ),
   };
-  conversationChunks = {
-    clearEmbeddingsForChat: jest.fn(async () => 4),
-  };
 
-  mockGetRepositories.mockReturnValue({ chats, conversationChunks } as any);
+  mockGetRepositories.mockReturnValue({ chats } as any);
   mockGetRetention.mockResolvedValue({ staleChatDays: 30 });
   // Default: every guarded UPDATE reports it cleared something.
   mockRawQuery.mockResolvedValue({ changes: 2 } as any);
@@ -72,7 +68,7 @@ function updatedChatIds(): string[] {
 }
 
 describe('collapseStaleChatCaches', () => {
-  it('collapses a stale chat: chats columns, message columns, chunk embeddings', async () => {
+  it('collapses a stale chat: chats columns and message columns, never chunk embeddings', async () => {
     const summary = await collapseStaleChatCaches(NOW);
 
     // Two raw UPDATEs (chats + chat_messages), both scoped to the stale chat.
@@ -81,8 +77,8 @@ describe('collapseStaleChatCaches', () => {
     const [chatsSql] = mockRawQuery.mock.calls[0];
     const [messagesSql] = mockRawQuery.mock.calls[1];
     expect(chatsSql).toContain('compressionCache = NULL');
-    expect(chatsSql).toContain('renderedMarkdown = NULL');
     expect(chatsSql).toContain('compiledIdentityStacks = NULL');
+    expect(chatsSql).not.toContain('renderedMarkdown');
     expect(messagesSql).toContain('rawResponse = NULL');
     expect(messagesSql).toContain('reasoningContent = NULL');
     expect(messagesSql).toContain('reasoningSegments = NULL');
@@ -94,12 +90,8 @@ describe('collapseStaleChatCaches', () => {
     expect(messagesSql).not.toContain('opaqueContent');
     expect(messagesSql).not.toContain('thoughtSignature');
 
-    // The staleness cutoff rides along so embeddings minted by a reopen
-    // re-embed inside the window survive the sweep (read-only warmth).
-    expect(conversationChunks.clearEmbeddingsForChat).toHaveBeenCalledWith(
-      'chat-stale',
-      isoDaysAgo(30),
-    );
+    // Conversation-chunk embeddings are never touched by this sweep any more.
+    expect(mockRawQuery.mock.calls.some(([sql]) => String(sql).includes('conversation_chunks'))).toBe(false);
     expect(mockDropInMemory).toHaveBeenCalledWith('chat-stale');
 
     expect(summary.chatsScanned).toBe(2);
@@ -107,13 +99,11 @@ describe('collapseStaleChatCaches', () => {
     expect(summary.chatsCollapsed).toBe(1);
     expect(summary.chatRowsCleared).toBe(2);
     expect(summary.messageRowsCleared).toBe(2);
-    expect(summary.chunkEmbeddingsCleared).toBe(4);
   });
 
   it('never touches an active (non-stale) chat', async () => {
     await collapseStaleChatCaches(NOW);
     expect(updatedChatIds()).not.toContain('chat-active');
-    expect(conversationChunks.clearEmbeddingsForChat).not.toHaveBeenCalledWith('chat-active');
   });
 
   it('collapses a chat kept "fresh" only by a feature whisper (played-message staleness)', async () => {
@@ -128,14 +118,12 @@ describe('collapseStaleChatCaches', () => {
 
   it('is idempotent — a second pass over an already-collapsed chat clears nothing', async () => {
     mockRawQuery.mockResolvedValue({ changes: 0 } as any);
-    conversationChunks.clearEmbeddingsForChat.mockResolvedValue(0);
 
     const summary = await collapseStaleChatCaches(NOW);
     expect(summary.staleChats).toBe(1);
     expect(summary.chatsCollapsed).toBe(0);
     expect(summary.chatRowsCleared).toBe(0);
     expect(summary.messageRowsCleared).toBe(0);
-    expect(summary.chunkEmbeddingsCleared).toBe(0);
   });
 
   it('honors a shortened retention window from the instance setting', async () => {

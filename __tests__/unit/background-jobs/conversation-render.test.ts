@@ -56,7 +56,7 @@ describe('conversation-render handler', () => {
         update: mockUpdateChat,
       },
       characters: {
-        findById: mockFindCharacterById,
+        findByIdRaw: mockFindCharacterById,
       },
       conversationChunks: {
         upsert: mockUpsertChunk,
@@ -95,7 +95,7 @@ describe('conversation-render handler', () => {
     expect(mockUpdateChat).not.toHaveBeenCalled()
   })
 
-  it('renders markdown, stores chunks, and only enqueues missing embeddings by default', async () => {
+  it('renders, stores chunks (not the Markdown), and only enqueues missing embeddings by default', async () => {
     mockFindChatById.mockResolvedValue({
       id: 'chat-1',
       title: 'Rendered conversation',
@@ -137,11 +137,11 @@ describe('conversation-render handler', () => {
     const renderArgs = mockRenderConversationMarkdown.mock.calls[0]
     const characterNames = renderArgs[2] as Map<string, string>
     expect(characterNames.get('participant-1')).toBe('Ada')
-    expect(characterNames.get('participant-2')).toBe('User')
+    // A seat with no character is left for the renderer's own 'User' label.
+    expect(characterNames.has('participant-2')).toBe(false)
 
-    expect(mockUpdateChat).toHaveBeenCalledWith('chat-1', {
-      renderedMarkdown: '# Conversation',
-    })
+    // The Markdown is rendered on demand now; only the chunks are stored.
+    expect(mockUpdateChat).not.toHaveBeenCalled()
     expect(mockUpsertChunk).toHaveBeenCalledTimes(2)
     expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledTimes(1)
     expect(mockEnqueueEmbeddingGenerate).toHaveBeenCalledWith('user-1', {

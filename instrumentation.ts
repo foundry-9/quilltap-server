@@ -926,8 +926,9 @@ export async function register() {
       // ================================================================
       // There is one embedding standard per instance — the default profile's
       // output. This pass deletes non-conforming vector-index entries, snaps
-      // index metadata, converges stale chats to the cold tier, and enqueues
-      // a mismatched-dim reindex for anything that needs re-embedding.
+      // index metadata, and enqueues a mismatched-dim reindex for anything
+      // that needs re-embedding (stale chats included — conversation-chunk
+      // embeddings are never cold-tiered).
       // Fire-and-forget: a large backlog must not delay readiness; a no-op
       // (COUNT-only) on a conforming corpus. Runs every boot because the gap
       // recurs (killed reindexes, restored backups, provider outages).

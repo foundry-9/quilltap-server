@@ -11,8 +11,9 @@ const MAX_DAYS = 3650
  * The instance-wide stale-chat retention window
  * (`instance_settings['dataRetention']`). Read daily by the maintenance sweep
  * to decide when a quiet conversation's regenerable working data (compression
- * caches, rendered markdown, model scratch-work, cold-tier chunk embeddings)
- * is tidied away. Global only — there is deliberately no per-chat control.
+ * caches, model scratch-work) is tidied away. Conversation-chunk embeddings
+ * are never cold-tiered and are unaffected by this window. Global only —
+ * there is deliberately no per-chat control.
  */
 export function DataRetentionSettings() {
   return (

@@ -23,8 +23,10 @@ import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
 import { ConciergeMark } from '@/components/chat/ConciergeMark'
+import { Tooltip } from '@/components/ui/Tooltip'
 import type { ConciergeProvenance, ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { ConciergeModeReason } from '@/lib/schemas/chat.types'
+import type { ScriptoriumStatus } from '@/lib/scriptorium/status'
 
 // ============================================================================
 // Types
@@ -87,10 +89,17 @@ export interface ChatCardData {
   conciergeReason?: ConciergeModeReason | null
   /** The classifier's categories, shown on the mark's tooltip */
   dangerCategories?: string[]
-  /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
-  scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
+  /** Scriptorium status: none = no chunks yet, rendered = chunks awaiting embeddings, embedded = fully indexed */
+  scriptoriumStatus?: ScriptoriumStatus
   /** Whether this chat is an autonomous character-to-character room (4.6) */
   isAutonomous?: boolean
+}
+
+/** The Scriptorium badge's tooltip for each status. */
+const SCRIPTORIUM_TOOLTIPS: Record<ScriptoriumStatus, string> = {
+  embedded: 'Scriptorium: transcribed and indexed, every word findable — click to re-render',
+  rendered: 'Scriptorium: transcribed, the indexing still under way — click to re-render',
+  none: 'Scriptorium: not yet transcribed — click to render and index',
 }
 
 export interface ChatCardProps {
@@ -249,50 +258,50 @@ export function ChatCard({
               <h3 className="qt-card-title truncate">
                 {displayTitle}
               </h3>
-              <span className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0" title="Messages">
-                <Icon name="chat" className="w-3 h-3" />
-                {chat.messageCount}
-              </span>
+              <Tooltip content="Messages">
+                <span className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0">
+                  <Icon name="chat" className="w-3 h-3" />
+                  {chat.messageCount}
+                </span>
+              </Tooltip>
               {chat.memoryCount !== undefined && (
-                <button
-                  type="button"
-                  className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0 hover:qt-bg-primary/20 transition-colors cursor-pointer"
-                  title="Memories — click to delete and re-extract"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onReextractMemories?.(chat.id)
-                  }}
-                >
-                  <Icon name="book" className="w-3 h-3" />
-                  {chat.memoryCount}
-                </button>
+                <Tooltip content="Memories — click to delete and re-extract">
+                  <button
+                    type="button"
+                    className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-primary/10 px-2.5 py-0.5 qt-body-sm font-semibold flex-shrink-0 hover:qt-bg-primary/20 transition-colors cursor-pointer"
+                    aria-label={`${chat.memoryCount} memories — delete and re-extract`}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onReextractMemories?.(chat.id)
+                    }}
+                  >
+                    <Icon name="book" className="w-3 h-3" />
+                    {chat.memoryCount}
+                  </button>
+                </Tooltip>
               )}
               {chat.scriptoriumStatus !== undefined && (
-                <button
-                  type="button"
-                  className={`chat-card__badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0 transition-colors cursor-pointer ${
-                    chat.scriptoriumStatus === 'embedded'
-                      ? 'qt-bg-success/10 qt-text-success hover:qt-bg-success/20'
-                      : chat.scriptoriumStatus === 'rendered'
-                      ? 'qt-bg-warning/10 qt-text-warning hover:qt-bg-warning/20'
-                      : 'qt-bg-destructive/10 qt-text-destructive hover:qt-bg-destructive/20'
-                  }`}
-                  title={
-                    chat.scriptoriumStatus === 'embedded'
-                      ? 'Scriptorium: Rendered and embedded — click to re-render'
-                      : chat.scriptoriumStatus === 'rendered'
-                      ? 'Scriptorium: Rendered but not fully embedded — click to re-render'
-                      : 'Scriptorium: Not yet rendered — click to render'
-                  }
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onRenderConversation?.(chat.id)
-                  }}
-                >
-                  <Icon name="file" className="w-3 h-3" />
-                </button>
+                <Tooltip content={SCRIPTORIUM_TOOLTIPS[chat.scriptoriumStatus]}>
+                  <button
+                    type="button"
+                    className={`chat-card__badge inline-flex items-center gap-1 rounded-full px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0 transition-colors cursor-pointer ${
+                      chat.scriptoriumStatus === 'embedded'
+                        ? 'qt-bg-success/10 qt-text-success hover:qt-bg-success/20'
+                        : chat.scriptoriumStatus === 'rendered'
+                        ? 'qt-bg-warning/10 qt-text-warning hover:qt-bg-warning/20'
+                        : 'qt-bg-destructive/10 qt-text-destructive hover:qt-bg-destructive/20'
+                    }`}
+                    aria-label={SCRIPTORIUM_TOOLTIPS[chat.scriptoriumStatus]}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onRenderConversation?.(chat.id)
+                    }}
+                  >
+                    <Icon name="file" className="w-3 h-3" />
+                  </button>
+                </Tooltip>
               )}
               {chat.conciergeState && (
                 <ConciergeMark
@@ -304,27 +313,27 @@ export function ChatCard({
                 />
               )}
               {chat.isAutonomous && (
-                <span
-                  className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-muted qt-text-secondary px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0"
-                  title="Autonomous character-to-character room"
-                >
-                  <Icon name="clock" className="w-3 h-3" />
-                  Autonomous
-                </span>
+                <Tooltip content="Autonomous character-to-character room">
+                  <span className="chat-card__badge inline-flex items-center gap-1 rounded-full qt-bg-muted qt-text-secondary px-2 py-0.5 qt-body-sm font-semibold flex-shrink-0">
+                    <Icon name="clock" className="w-3 h-3" />
+                    Autonomous
+                  </span>
+                </Tooltip>
               )}
-              <button
-                type="button"
-                className="chat-card__badge inline-flex items-center justify-center rounded-full qt-bg-muted qt-text-secondary w-6 h-6 flex-shrink-0 hover:qt-bg-surface-alt transition-colors cursor-pointer"
-                title="Copy link to this chat"
-                aria-label="Copy link to this chat"
-                onClick={handleCopyLink}
-              >
-                {copiedLink ? (
-                  <Icon name="check" className="w-3 h-3 qt-text-success" />
-                ) : (
-                  <Icon name="link" className="w-3 h-3" />
-                )}
-              </button>
+              <Tooltip content="Copy link to this chat">
+                <button
+                  type="button"
+                  className="chat-card__badge inline-flex items-center justify-center rounded-full qt-bg-muted qt-text-secondary w-6 h-6 flex-shrink-0 hover:qt-bg-surface-alt transition-colors cursor-pointer"
+                  aria-label="Copy link to this chat"
+                  onClick={handleCopyLink}
+                >
+                  {copiedLink ? (
+                    <Icon name="check" className="w-3 h-3 qt-text-success" />
+                  ) : (
+                    <Icon name="link" className="w-3 h-3" />
+                  )}
+                </button>
+              </Tooltip>
             </div>
 
             {/* Metadata row */}
@@ -372,21 +381,23 @@ export function ChatCard({
         {/* Action button */}
         {(onDelete || onRemove) && (
           <div className="flex items-center">
-            <button
-              onClick={handleAction}
-              className={
-                actionType === 'delete'
-                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-destructive qt-text-on-destructive shadow transition hover:qt-bg-destructive/90'
-                  : 'inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-muted qt-text-secondary shadow transition hover:qt-text-destructive hover:qt-bg-destructive/10'
-              }
-              title={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}
-            >
-              {actionType === 'delete' ? (
-                <Icon name="trash" className="w-5 h-5" />
-              ) : (
-                <Icon name="close" className="w-5 h-5" />
-              )}
-            </button>
+            <Tooltip content={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}>
+              <button
+                onClick={handleAction}
+                className={
+                  actionType === 'delete'
+                    ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-destructive qt-text-on-destructive shadow transition hover:qt-bg-destructive/90'
+                    : 'inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-muted qt-text-secondary shadow transition hover:qt-text-destructive hover:qt-bg-destructive/10'
+                }
+                aria-label={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}
+              >
+                {actionType === 'delete' ? (
+                  <Icon name="trash" className="w-5 h-5" />
+                ) : (
+                  <Icon name="close" className="w-5 h-5" />
+                )}
+              </button>
+            </Tooltip>
           </div>
         )}
       </div>

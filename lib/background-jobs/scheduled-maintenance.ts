@@ -7,9 +7,10 @@
  *     longer one);
  *  2. superseded generated story-backgrounds & wardrobe avatars of *stale*
  *     chats (collapse down to the currently-referenced ones);
- *  3. regenerable caches of stale chats (compression cache, rendered
- *     markdown/HTML, raw provider payloads, thinking traces, memory-gate
- *     debug logs) plus cold-tiering of their conversation-chunk embeddings;
+ *  3. regenerable caches of stale chats (compression cache, precompiled
+ *     identity stacks, raw provider payloads, thinking traces, memory-gate
+ *     debug logs) — conversation-chunk embeddings are deliberately left
+ *     alone (tiny, and cold-tiering them cost semantic recall);
  *  4. orphaned store children (links/folders/documents whose mount point
  *     vanished — a pre-Bug-9 non-atomic delete, or a hand-built index);
  *  5. orphaned mount-index files (belt-and-suspenders after the collapse);
@@ -72,7 +73,6 @@ export interface MaintenanceSweepSummary {
     chatsCollapsed: number;
     chatRowsCleared: number;
     messageRowsCleared: number;
-    chunkEmbeddingsCleared: number;
   };
   orphanedFilesSwept: number;
   orphanedStoreChildrenSwept: { links: number; folders: number; documents: number };
@@ -189,7 +189,6 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
       chatsCollapsed: 0,
       chatRowsCleared: 0,
       messageRowsCleared: 0,
-      chunkEmbeddingsCleared: 0,
     },
     orphanedFilesSwept: 0,
     orphanedStoreChildrenSwept: { links: 0, folders: 0, documents: 0 },
@@ -214,7 +213,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
       };
     });
 
-  // 3. Stale-chat cache collapse + conversation-chunk cold-tiering.
+  // 3. Stale-chat cache collapse.
   await runSweep(summary, 'caches', 'Stale-chat cache collapse failed — continuing',
     () => collapseStaleChatCaches(),
     (result) => {
@@ -223,7 +222,6 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
         chatsCollapsed: result.chatsCollapsed,
         chatRowsCleared: result.chatRowsCleared,
         messageRowsCleared: result.messageRowsCleared,
-        chunkEmbeddingsCleared: result.chunkEmbeddingsCleared,
       };
     });
 

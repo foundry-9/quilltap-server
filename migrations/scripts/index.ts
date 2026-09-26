@@ -318,6 +318,8 @@ import { addChatConciergeModeMigration } from './add-chat-concierge-mode';
 // Concierge phase 4: the Concierge's own settings object, and the legacy override column dropped
 import { addConciergeSettingsMigration } from './add-concierge-settings';
 import { dropChatConciergeOverrideMigration } from './drop-chat-concierge-override';
+// Scriptorium: transcripts rendered on demand; drop the stored copy
+import { dropChatRenderedMarkdownMigration } from './drop-chat-rendered-markdown';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -832,6 +834,8 @@ export const migrations: Migration[] = [
   addConciergeSettingsMigration,
   // Concierge: drop the legacy chats.conciergeOverride column
   dropChatConciergeOverrideMigration,
+  // Scriptorium: drop chats.renderedMarkdown (rendered on demand now)
+  dropChatRenderedMarkdownMigration,
 ];
 
 export {
@@ -1234,5 +1238,7 @@ export {
   addConciergeSettingsMigration,
   // Concierge: drop the legacy chats.conciergeOverride column
   dropChatConciergeOverrideMigration,
+  // Scriptorium: drop chats.renderedMarkdown (rendered on demand now)
+  dropChatRenderedMarkdownMigration,
 };
 

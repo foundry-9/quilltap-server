@@ -234,7 +234,8 @@ export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema
  * How long a chat must sit with no *played* message (participant character or
  * the human user — feature whispers don't count) before the daily maintenance
  * sweep treats it as stale. Governs every stale-gated sweep: generated-image
- * collapse, regenerable-cache collapse, and conversation-chunk cold-tiering.
+ * collapse and regenerable-cache collapse. Conversation-chunk embeddings are
+ * NOT stale-gated — they are never cold-tiered.
  *
  * Stored instance-wide in `instance_settings['dataRetention']` (single-user
  * model — same class as `memoryRecall`), NOT on the column-per-field
@@ -245,7 +246,7 @@ export type MemoryExtractionLimits = z.infer<typeof MemoryExtractionLimitsSchema
 export const DataRetentionSettingsSchema = z.object({
   /**
    * A chat is "stale" after this many days with no played message. Governs
-   * the maintenance sweep (image collapse + cache collapse + cold-tier).
+   * the maintenance sweep (image collapse + cache collapse).
    */
   staleChatDays: z.number().int().min(1).max(3650).default(30),
 });

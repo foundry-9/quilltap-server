@@ -2,13 +2,14 @@
  * Conversation Render Job Handler (Scriptorium)
  *
  * Handles CONVERSATION_RENDER background jobs by deterministically rendering
- * a chat conversation to Markdown and storing interchange chunks for embedding.
+ * a chat conversation to Markdown and storing its interchange chunks for
+ * embedding. The Markdown itself is not persisted; see render-chat.ts.
  * No LLM involvement - pure template-based rendering.
  */
 
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { renderConversationMarkdown } from '@/lib/scriptorium/markdown-renderer';
+import { renderChatConversation } from '@/lib/scriptorium/render-chat';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { enqueueEmbeddingGenerate } from '../queue-service';
 import type { ConversationRenderPayload } from '../queue-service';
@@ -30,42 +31,19 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
     return;
   }
 
-  // 2. Build participantId -> display name map
-  const characterNames = new Map<string, string>();
-  for (const participant of chat.participants) {
-    if (participant.characterId) {
-      const character = await repos.characters.findById(participant.characterId);
-      if (character) {
-        characterNames.set(participant.id, character.name);
-      }
-    }
-    // User-controlled participants without a character get "User"
-    if (participant.controlledBy === 'user' && !characterNames.has(participant.id)) {
-      characterNames.set(participant.id, 'User');
-    }
-  }
-
-  // 3. Load all messages
-  const allEvents = await repos.chats.getMessages(payload.chatId);
-
-  if (allEvents.length === 0) {
+  // 2. Render from the stored messages. The Markdown itself is not kept — it
+  //    is re-rendered on demand (lib/scriptorium/render-chat.ts); only the
+  //    interchange chunks are stored, for embedding and search.
+  const result = await renderChatConversation(chat);
+  if (!result) {
+    logger.debug('[ConversationRender] Chat has no events, nothing to render', {
+      jobId: job.id,
+      chatId: payload.chatId,
+    });
     return;
   }
 
-  // 4. Render conversation to Markdown
-  const result = renderConversationMarkdown(allEvents, chat.participants, characterNames, {
-    conversationId: payload.chatId,
-    title: chat.title,
-    createdAt: chat.createdAt,
-    lastUpdatedAt: chat.updatedAt,
-  });
-
-  // 5. Save renderedMarkdown to chat (do NOT set updatedAt - background job)
-  await repos.chats.update(payload.chatId, {
-    renderedMarkdown: result.markdown,
-  });
-
-  // 6. Upsert interchange chunks
+  // 3. Upsert interchange chunks
   const now = new Date().toISOString();
   for (const interchange of result.interchanges) {
     await repos.conversationChunks.upsert({
@@ -77,7 +55,7 @@ export async function handleConversationRender(job: BackgroundJob): Promise<void
     });
   }
 
-  // 7. Enqueue embedding for interchanges (if embedding profile configured)
+  // 4. Enqueue embedding for interchanges (if embedding profile configured)
   // When fullReembed is true, embed ALL chunks; otherwise only the newest
   if (result.interchanges.length > 0) {
     try {

@@ -4,7 +4,8 @@
  * Tests for the EMBEDDING_REINDEX_ALL handler's fan-out:
  *  - characters come from memories.findDistinctCharacterIds (NOT the
  *    characters repo, whose vault-failure semantics silently drop rows),
- *  - stale chats are skipped in the conversation-chunk phase,
+ *  - stale chats are re-embedded like any other (chunk embeddings are never
+ *    cold-tiered since 4.10),
  *  - FAILED-marked entities are skipped in mismatched-dim scope,
  *  - document mount chunks (enabled mounts) are included.
  */
@@ -35,15 +36,6 @@ jest.mock('@/lib/mount-index/mount-chunk-cache', () => ({
   invalidateAll: jest.fn(),
 }));
 
-jest.mock('@/lib/background-jobs/maintenance/collapse-stale-chat-assets', () => ({
-  isStale: jest.fn(),
-}));
-
-jest.mock('@/lib/background-jobs/maintenance/retention-constants', () => ({
-  resolveStaleChatDays: jest.fn(async () => 30),
-  retentionCutoff: jest.fn(() => new Date(0)),
-}));
-
 import { handleEmbeddingReindexAll } from '../embedding-reindex';
 import type { BackgroundJob } from '@/lib/schemas/types';
 
@@ -53,9 +45,6 @@ const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as {
 const { getVectorStoreManager } = jest.requireMock('@/lib/embedding/vector-store') as {
   getVectorStoreManager: jest.Mock;
 };
-const { isStale } = jest.requireMock(
-  '@/lib/background-jobs/maintenance/collapse-stale-chat-assets'
-) as { isStale: jest.Mock };
 
 const PROFILE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -174,10 +163,9 @@ function enqueuedEntities(createBatch: jest.Mock): Array<{ type: string; id: str
 describe('handleEmbeddingReindexAll', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    isStale.mockImplementation(async (chat: { id: string }) => chat.id.startsWith('stale'));
   });
 
-  it('mismatched-dim scope: re-embeds only non-conforming rows, skipping stale chats', async () => {
+  it('mismatched-dim scope: re-embeds only non-conforming rows, stale chats included', async () => {
     const { createBatch } = makeRepos();
 
     await handleEmbeddingReindexAll(makeJob('mismatched-dim'));
@@ -197,7 +185,7 @@ describe('handleEmbeddingReindexAll', () => {
     expect(ids).not.toContain('mem-good');
     expect(ids).not.toContain('cc-good');
     expect(ids).not.toContain('mc-good');
-    expect(ids).not.toContain('cc-stale-old'); // stale chat skipped
+    expect(ids).toContain('cc-stale-old'); // stale chats are not cold-tiered
   });
 
   it('mismatched-dim scope: excludes entities marked FAILED for the profile', async () => {
@@ -225,12 +213,12 @@ describe('handleEmbeddingReindexAll', () => {
     expect(deleteStore).toHaveBeenCalledWith('char-ok');
     expect(deleteStore).toHaveBeenCalledWith('char-vaultless');
     expect(repos.embeddingStatus.markAllPendingByProfileId).toHaveBeenCalledWith(PROFILE_ID);
-    // 'all' scope re-embeds conforming rows too — but still not stale chats.
+    // 'all' scope re-embeds conforming rows too, stale chats included.
     const ids = enqueuedEntities(createBatch).map((e) => e.id);
     expect(ids).toContain('mem-good');
     expect(ids).toContain('cc-good');
     expect(ids).toContain('mc-good');
-    expect(ids).not.toContain('cc-stale-old');
+    expect(ids).toContain('cc-stale-old');
     // FAILED lookups are a mismatched-dim concern only.
     expect(repos.embeddingStatus.listFailedEntityIds).not.toHaveBeenCalled();
   });

@@ -23,6 +23,7 @@ import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
 import { getConciergeProvenance, getConciergeReason, getConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { deriveScriptoriumStatus } from '@/lib/scriptorium/status';
 
 
 export async function handleGet(
@@ -157,6 +158,11 @@ export async function handleGet(
           }
         }
 
+        // Scriptorium status for the whole page in one grouped count.
+        const chunkCounts = await repos.conversationChunks.countByChatIds(
+          paginatedChats.map(({ chat }) => chat.id),
+        );
+
         const enrichedChats = await Promise.all(
           paginatedChats.map(async ({ chat, messages, lastMessageAt }) => {
             const tagData = await Promise.all(
@@ -168,16 +174,6 @@ export async function handleGet(
 
             const messageCount = messages.filter((msg) => msg.type === 'message' && msg.role !== 'SYSTEM' && msg.role !== 'TOOL').length;
             const memoryCount = await repos.memories.countByChatId(chat.id);
-
-            // Scriptorium status: check rendered markdown and embedded chunks
-            const hasRenderedMarkdown = !!chat.renderedMarkdown;
-            let embeddedChunkCount = 0;
-            let totalChunkCount = 0;
-            if (hasRenderedMarkdown) {
-              const chunks = await repos.conversationChunks.findByChatId(chat.id);
-              totalChunkCount = chunks.length;
-              embeddedChunkCount = chunks.filter(c => c.embedding !== null && c.embedding !== undefined).length;
-            }
 
             const recentMessages = messages
               .filter((msg) => msg.type === 'message')
@@ -225,9 +221,7 @@ export async function handleGet(
                 messages: messageCount,
                 memories: memoryCount,
               },
-              scriptoriumStatus: hasRenderedMarkdown
-                ? (embeddedChunkCount >= totalChunkCount && totalChunkCount > 0 ? 'embedded' : 'rendered')
-                : 'none',
+              scriptoriumStatus: deriveScriptoriumStatus(chunkCounts.get(chat.id)),
             };
           })
         );

@@ -4,9 +4,10 @@
  * Re-enqueues a CONVERSATION_RENDER job for every chat the Scriptorium pipeline
  * left half-finished:
  *
- *   (A) a chat with real USER/ASSISTANT messages but no rendered Markdown — the
- *       per-turn render trigger never fired or the render job died (e.g. an
- *       interrupted shutdown), so `renderedMarkdown` is still NULL; or
+ *   (A) a chat with real USER/ASSISTANT messages but NO conversation_chunks
+ *       rows at all — the per-turn render trigger never fired or the render
+ *       job died (e.g. an interrupted shutdown), so the chat was never
+ *       chunked in the first place; or
  *   (B) a chat whose interchange chunks were never embedded — the embedding
  *       provider was down when the turn fired (Ollama/cloud outage), or the
  *       render job died before enqueuing the embeds, leaving chunks with a NULL
@@ -33,15 +34,15 @@
  * interchanges await renderer-side sub-chunking. Counting them would keep their
  * chat perpetually "incomplete" and re-render it on every boot for nothing.
  *
- * STALE chats are EXCLUDED too, via the same shared `isStale` gate the
- * maintenance sweeps use. The stale-chat cache collapse deliberately
- * cold-tiers quiet chats into exactly the state this scan reads as damage —
- * NULL `renderedMarkdown`, NULL chunk embeddings — and expects the Salon
- * reopen path (`lib/scriptorium/cold-chunk-reembed.ts`) to re-embed on
- * demand. Before this exclusion the two subsystems fought: every boot
- * re-rendered and re-embedded the entire cold tier (thousands of paid
- * embedding calls), and the next sweep cleared it all again. A stale chat is
- * healed when it is actually reopened or played, not at startup.
+ * This reconcile now heals STALE chats too — conversation-chunk embeddings are
+ * no longer cold-tiered (the maintenance sweep leaves them alone; see
+ * `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts`), so a
+ * quiet chat with an incomplete render/embed state is exactly as fixable as a
+ * busy one. On the first boot after that change shipped, this scan will find
+ * every previously cold-tiered chat (NULL embeddings left over from the old
+ * sweep) and enqueue a one-time re-embed backfill for each of them;
+ * `enqueueConversationRender` dedupes so a slow drain across repeated boots
+ * can't stack duplicate jobs.
  *
  * Runs in the parent (the sole DB writer), like the other startup self-heals,
  * so the enqueue writes land directly rather than buffering through the job
@@ -55,11 +56,6 @@ import { enqueueConversationRender } from '@/lib/background-jobs/queue-service';
 import { EMBEDDING_MAX_CHARS } from '@/lib/embedding/embedding-service';
 import { CHUNK_CHAR_BUDGET } from '@/lib/scriptorium/markdown-renderer';
 import { getRepositories } from '@/lib/repositories/factory';
-import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
-import {
-  resolveStaleChatDays,
-  retentionCutoff,
-} from '@/lib/background-jobs/maintenance/retention-constants';
 
 const logger = createServiceLogger('Startup:ConversationRenderReconcile');
 
@@ -67,8 +63,7 @@ const logger = createServiceLogger('Startup:ConversationRenderReconcile');
  * Chats that are not fully rendered + embedded, excluding chunks that can never
  * embed. The first `?` binds {@link EMBEDDING_MAX_CHARS}; the second binds the
  * current default embedding profile's id (or a sentinel matching nothing when
- * no profile exists). `updatedAt` rides along for the staleness gate's
- * no-played-messages fallback.
+ * no profile exists).
  *
  * The length guard alone is not enough: a chunk can sit under the 131,072-char
  * transport cap yet exceed the embedding model's token context (e.g. >8,192
@@ -83,16 +78,16 @@ const logger = createServiceLogger('Startup:ConversationRenderReconcile');
  * per-chunk budget yet inside the transport cap predates interchange
  * sub-chunking; re-rendering splits it into in-context chunks that embed. This
  * is self-limiting (a re-rendered chat has no over-budget chunk left, so it
- * stops matching) and, like everything here, is gated by the stale-chat check
- * in the loop below — a cold-tiered chat is left for its reopen/next-played
- * heal, never resurrected at boot.
+ * stops matching).
  */
 const SELECT_INCOMPLETE_CHATS = `
   SELECT c."id" AS chatId, c."userId" AS userId, c."updatedAt" AS updatedAt
   FROM "chats" c
   WHERE (
-    -- (A) Real messages but never rendered to Markdown.
-    c."renderedMarkdown" IS NULL
+    -- (A) Real messages but no conversation_chunks rows at all — never chunked.
+    NOT EXISTS (
+      SELECT 1 FROM "conversation_chunks" cc0 WHERE cc0."chatId" = c."id"
+    )
     AND EXISTS (
       SELECT 1 FROM "chat_messages" m
       WHERE m."chatId" = c."id"
@@ -140,8 +135,6 @@ export interface ConversationRenderReconcileResult {
   reused: number;
   /** Chats whose enqueue threw (logged, sweep continues). */
   failed: number;
-  /** Incomplete-looking chats skipped because they are stale (cold-tiered). */
-  skippedStale: number;
 }
 
 interface IncompleteChatRow {
@@ -161,7 +154,6 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     enqueued: 0,
     reused: 0,
     failed: 0,
-    skippedStale: 0,
   };
 
   const db = getRawDatabase();
@@ -214,29 +206,7 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     count: rows.length,
   });
 
-  // Staleness gate — same shared predicate and window as the maintenance
-  // sweeps, so a chat the cache collapse cold-tiered is never "healed" here.
-  const repos = getRepositories();
-  const cutoffMs = retentionCutoff(await resolveStaleChatDays()).getTime();
-
   for (const row of rows) {
-    try {
-      if (await isStale({ id: row.chatId, updatedAt: row.updatedAt ?? '' }, cutoffMs, repos)) {
-        result.skippedStale++;
-        continue;
-      }
-    } catch (err) {
-      // Unknown staleness → skip, don't heal. Healing a chat that is actually
-      // cold-tiered re-enters the boot-time mass re-embed loop, while a
-      // skipped chat still has a recovery path: the Salon open path re-embeds
-      // any visited chat regardless of staleness.
-      result.skippedStale++;
-      logger.warn('Staleness check failed during reconciliation; skipping chat', {
-        chatId: row.chatId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      continue;
-    }
     try {
       const { isNew } = await enqueueConversationRender(row.userId, { chatId: row.chatId });
       if (isNew) {
@@ -262,7 +232,6 @@ export async function reconcileConversationRendering(): Promise<ConversationRend
     enqueued: result.enqueued,
     reused: result.reused,
     failed: result.failed,
-    skippedStale: result.skippedStale,
   });
 
   return result;

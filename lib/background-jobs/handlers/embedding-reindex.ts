@@ -14,11 +14,10 @@
  * - The startup dimension reconcile finding non-conforming vectors
  * - Manual reindex from the UI
  *
- * STALE (cold-tiered) chats are skipped in the conversation-chunk phase: the
- * stale-chat sweep deliberately clears their chunk embeddings, and the Salon
- * reopen path re-embeds on demand with the then-current profile. Re-embedding
- * them here would pay provider calls for chats nobody is reading, and the next
- * sweep would clear the result anyway.
+ * Stale chats are NOT skipped in the conversation-chunk phase — conversation-
+ * chunk embeddings are never cold-tiered (see
+ * `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts`), so a
+ * stale chat's chunks are re-embedded exactly like any other chat's.
  *
  * In `mismatched-dim` scope, entities already marked FAILED for this profile
  * are skipped too — those are deterministic failures (oversize, over-context,
@@ -33,11 +32,6 @@ import type { EmbeddingReindexAllPayload } from '../queue-service';
 import { ensureProcessorRunning } from '../processor';
 import { syncHelpDocs } from '@/lib/help/help-doc-sync';
 import { getVectorStoreManager } from '@/lib/embedding/vector-store';
-import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
-import {
-  resolveStaleChatDays,
-  retentionCutoff,
-} from '@/lib/background-jobs/maintenance/retention-constants';
 
 /** Max jobs per batch insert (SQLite variable limit is 999; stay well under). */
 const BATCH_SIZE = 200;
@@ -147,7 +141,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   let memoriesSkipped = 0;
   let chunksSkipped = 0;
   let mountChunksSkipped = 0;
-  let staleChatsSkipped = 0;
   let failedSkipped = 0;
 
   // In mismatched-dim scope, deterministically-failed entities are excluded
@@ -272,16 +265,9 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   // ============================================================================
   try {
     const chats = await repos.chats.findByUserId(job.userId);
-    const staleCutoffMs = retentionCutoff(await resolveStaleChatDays()).getTime();
     const failedChunkIds = await failedIdsFor('CONVERSATION_CHUNK');
 
     for (const chat of chats) {
-      // Cold-tiered chats are healed on reopen, not here — see module doc.
-      if (await isStale(chat, staleCutoffMs, repos)) {
-        staleChatsSkipped++;
-        continue;
-      }
-
       const chunks = await repos.conversationChunks.findByChatId(chat.id);
       const conversationChunks = enqueue('CONVERSATION_CHUNK', chunks, failedChunkIds, () => ({
         chatId: chat.id,
@@ -350,7 +336,6 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     memoriesSkipped,
     chunksSkipped,
     mountChunksSkipped,
-    staleChatsSkipped,
     failedSkipped,
     totalEnqueued: totalJobs,
   });

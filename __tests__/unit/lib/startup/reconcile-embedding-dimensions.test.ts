@@ -7,10 +7,10 @@
  * Float32 blobs, some int8-quantized) survived a switch to a 1024-d neural
  * default profile because switching WHICH profile is default never triggered
  * a re-embed. The reconcile must delete non-conforming vector-index entries,
- * snap index metadata, converge stale chats to the cold tier, count the
- * recoverable non-conforming rows, and enqueue a mismatched-dim reindex —
- * while excluding FAILED rows and orphans that would re-trigger the sweep on
- * every boot with no progress.
+ * snap index metadata, count the recoverable non-conforming rows (stale
+ * chats included — conversation-chunk embeddings are never cold-tiered), and
+ * enqueue a mismatched-dim reindex — while excluding FAILED rows and orphans
+ * that would re-trigger the sweep on every boot with no progress.
  */
 
 jest.mock('@/lib/database/backends/sqlite/client', () => ({
@@ -31,15 +31,6 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
 
 jest.mock('@/lib/embedding/vector-store', () => ({
   getVectorStoreManager: jest.fn(),
-}));
-
-jest.mock('@/lib/background-jobs/maintenance/collapse-stale-chat-assets', () => ({
-  isStale: jest.fn(),
-}));
-
-jest.mock('@/lib/background-jobs/maintenance/retention-constants', () => ({
-  resolveStaleChatDays: jest.fn(async () => 30),
-  retentionCutoff: jest.fn(() => new Date(0)),
 }));
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -81,10 +72,6 @@ const { enqueueEmbeddingReindexAll } = jest.requireMock('@/lib/background-jobs/q
 const { getVectorStoreManager } = jest.requireMock('@/lib/embedding/vector-store') as {
   getVectorStoreManager: jest.Mock;
 };
-const { isStale } = jest.requireMock(
-  '@/lib/background-jobs/maintenance/collapse-stale-chat-assets'
-) as { isStale: jest.Mock };
-
 const PROFILE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const TARGET_DIM = 1024;
@@ -156,10 +143,8 @@ describe('reconcileEmbeddingDimensions', () => {
     unloadAll = jest.fn();
     getVectorStoreManager.mockReturnValue({ unloadAll });
     getRepositories.mockReturnValue({
-      chats: { getLastPlayedMessageAt: jest.fn(async () => null) },
       backgroundJobs: { findRecentByType: jest.fn(async () => []) },
     });
-    isStale.mockImplementation(async (chat: { id: string }) => chat.id.startsWith('stale'));
   });
 
   afterEach(() => {
@@ -212,7 +197,10 @@ describe('reconcileEmbeddingDimensions', () => {
     });
   });
 
-  it('NULLs non-conforming chunks on stale chats and counts only live-chat chunks', async () => {
+  it('counts non-conforming chunks on stale AND live chats alike, excluding only orphans', async () => {
+    // Regression: conversation-chunk embeddings are never cold-tiered any
+    // more, so a stale chat's non-conforming chunk must be counted (and
+    // reindexed) exactly like a live chat's — never NULLed out here.
     insertDefaultProfile(mainDb);
     mainDb.prepare(`INSERT INTO chats (id, updatedAt) VALUES ('stale-chat', '2025-01-01T00:00:00.000Z')`).run();
     mainDb.prepare(`INSERT INTO chats (id, updatedAt) VALUES ('live-chat', '2026-07-01T00:00:00.000Z')`).run();
@@ -224,11 +212,12 @@ describe('reconcileEmbeddingDimensions', () => {
 
     const result = await reconcileEmbeddingDimensions();
 
-    expect(result.staleChunkEmbeddingsCleared).toBe(1);
     const staleRow = mainDb.prepare(`SELECT embedding FROM conversation_chunks WHERE id = 'cc-stale'`).get();
-    expect(staleRow.embedding).toBeNull();
-    // Live non-conforming chunk counted; orphan (chat gone) and good chunk not.
-    expect(result.mismatched.conversationChunks).toBe(1);
+    expect(staleRow.embedding).not.toBeNull();
+    // Both the stale and the live non-conforming chunk are counted; the
+    // orphan (chat gone) and the already-good chunk are not.
+    expect(result.mismatched.conversationChunks).toBe(2);
+    expect(result.reindexEnqueued).toBe(true);
   });
 
   it('counts non-conforming mount chunks only for ENABLED mount points', async () => {
@@ -253,7 +242,6 @@ describe('reconcileEmbeddingDimensions', () => {
     mainDb.prepare('INSERT INTO memories (id, characterId, embedding) VALUES (?, ?, ?)')
       .run('m-old', 'char-1', rawBlob(OLD_DIM));
     getRepositories.mockReturnValue({
-      chats: { getLastPlayedMessageAt: jest.fn(async () => null) },
       backgroundJobs: {
         findRecentByType: jest.fn(async () => [{ status: 'PENDING' }]),
       },

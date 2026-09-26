@@ -138,7 +138,7 @@ A caution for the impatient: because the fictional clock is anchored at the chat
 
 ### Data Retention
 
-Sets how many days a chat may sit with nobody actually speaking in it (Staff announcements don't count) before Quilltap's nightly housekeeping tidies away its regenerable working data — compression caches, pre-rendered pages, model scratch-work, superseded generated images, and semantic-search embeddings. The conversation itself is never touched, keyword search keeps working, and a tidied chat re-indexes itself for semantic search the moment you reopen it.
+Sets how many days a chat may sit with nobody actually speaking in it (Staff announcements don't count) before Quilltap's nightly housekeeping tidies away its regenerable working data — compression caches, pre-rendered pages, model scratch-work, and superseded generated images. The conversation itself is never touched, and semantic-search embeddings are always kept warm regardless of this window.
 
 - **Keep inactive chats' working data for N days** — 1 to 3650; the default is 30. Global only — no per-chat dial.
 

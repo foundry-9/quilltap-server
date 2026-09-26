@@ -7,6 +7,8 @@ target: main DB (quilltap.db); primary instance "Friday" (~837 MB)
 
 # Quilltap DB Size Reduction — Implementation Spec
 
+> **Partly reversed in 4.10.** Step 2 (cold-tiering conversation-chunk embeddings) was removed: keeping every chunk embedded costs ~16 MB on Friday, and cold-tiering took 85% of conversation history out of semantic search. `chats.renderedMarkdown` is no longer collapsed because it no longer exists — it was dropped (`drop-chat-rendered-markdown-v1`) and the transcript is rendered on demand (`lib/scriptorium/render-chat.ts`). The other collapses stand.
+
 ## 0. Purpose & scope
 
 `quilltap.db` on the Friday instance is ~837 MB. A dbstat breakdown attributes it

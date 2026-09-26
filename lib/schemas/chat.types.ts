@@ -985,9 +985,6 @@ export const ChatMetadataSchema = z.object({
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
 
-  /** Scriptorium: deterministic Markdown rendering of the full conversation */
-  renderedMarkdown: z.string().nullable().optional(),
-
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
 
@@ -1363,9 +1360,6 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Scene state tracker: structured summary of current scene (location, character actions, appearance, clothing) */
   sceneState: JsonSchema.nullable().optional(),
-
-  /** Scriptorium: deterministic Markdown rendering of the full conversation */
-  renderedMarkdown: z.string().nullable().optional(),
 
   /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),

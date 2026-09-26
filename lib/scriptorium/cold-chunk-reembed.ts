@@ -1,15 +1,18 @@
 /**
- * Cold-tier conversation-chunk re-embedding (re-index on demand)
+ * Un-embedded conversation-chunk re-embedding (re-index on demand)
  *
- * The stale-chat maintenance sweep cold-tiers quiet chats by NULLing their
- * `conversation_chunks.embedding` BLOBs (content is kept — see
- * `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts`). While
- * cold, a chat stays fully readable and keyword-searchable, but semantic
- * retrieval won't surface it. This module restores warmth transparently:
- * when a cold chat is opened, we detect chunks with content but no
- * embedding and enqueue per-chunk EMBEDDING_GENERATE jobs through the exact
- * pipeline the normal chunk indexer uses (same default profile, same
- * dimensions, same per-entity dedup in `enqueueEmbeddingGenerate`).
+ * A chat's `conversation_chunks` can end up with content but no embedding for
+ * reasons that have nothing to do with staleness: the embedding provider was
+ * down when the turn rendered, a render job died mid-flight, or (on an
+ * instance upgraded from before conversation-chunk embeddings were kept warm
+ * unconditionally) chunks left over from the old stale-chat cold-tiering
+ * sweep. Whatever the cause, a chat in this state stays fully readable and
+ * keyword-searchable, but semantic retrieval won't surface it. This module
+ * restores warmth transparently: when a chat is opened, we detect chunks
+ * with content but no embedding and enqueue per-chunk EMBEDDING_GENERATE
+ * jobs through the exact pipeline the normal chunk indexer uses (same
+ * default profile, same dimensions, same per-entity dedup in
+ * `enqueueEmbeddingGenerate`).
  *
  * Fire-and-forget from the chat GET path — a failure here must never break
  * loading the conversation. An in-memory per-chat debounce keeps repeated

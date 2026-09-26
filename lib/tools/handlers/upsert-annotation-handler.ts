@@ -14,6 +14,7 @@ import {
 } from '../upsert-annotation-tool';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
+import { renderChatConversation } from '@/lib/scriptorium/render-chat';
 
 const logger = createServiceLogger('UpsertAnnotationHandler');
 
@@ -64,7 +65,7 @@ export async function executeUpsertAnnotationTool(
 
     const { message_index, content } = parsed;
 
-    // Load chat and verify rendered markdown exists
+    // Load chat
     const chat = await repos.chats.findById(context.chatId);
     if (!chat) {
       logger.warn('Upsert annotation tool: chat not found', {
@@ -79,17 +80,19 @@ export async function executeUpsertAnnotationTool(
       };
     }
 
-    if (!chat.renderedMarkdown) {
+    // Message indices are the renderer's numbering, so count them from a live
+    // render rather than a stored copy.
+    const rendered = await renderChatConversation(chat);
+    const messageMatches = rendered?.markdown.match(/^### Message \d+/gm);
+    const messageCount = messageMatches ? messageMatches.length : 0;
+
+    if (messageCount === 0) {
       return {
         success: false,
         message_index,
-        error: 'Conversation has not been rendered yet.',
+        error: 'Conversation has no messages to annotate yet.',
       };
     }
-
-    // Validate message_index is within range
-    const messageMatches = chat.renderedMarkdown.match(/^### Message \d+/gm);
-    const messageCount = messageMatches ? messageMatches.length : 0;
 
     if (message_index >= messageCount) {
       logger.warn('Upsert annotation tool: message_index out of range', {
