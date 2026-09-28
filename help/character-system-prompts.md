@@ -305,6 +305,8 @@ Example of casual: "Yeah, so like..."
 Maintain this voice consistently.
 ```
 
+Examples steer a character's voice more firmly than any instruction, so choose them with care. The most useful set shows the character **catching a joke** and answering in kind, **answering a casual line briefly**, and **turning serious** when something truly matters. The **Example Dialogues** field works the same way, and the AI Wizard, Summon From Lore, and the Character Optimizer all now write example dialogues that cover those three moments.
+
 ### Technique 4: Response Framework
 
 Guide how AI should structure responses:
@@ -341,6 +343,24 @@ Current context:
 - Current goal: [What they're trying to do]
 - Current relationship with user: [How they see you]
 ```
+
+### Technique 6: Listening and Register
+
+Characters left to their own devices tend to hear everything as a formal statement. Jokes get analyzed, exaggeration gets taken literally, and a casual "what's next?" gets a bolded report. They also drift into one polished register and a vocabulary the whole cast ends up sharing. A few lines prevent most of it:
+
+```
+Listen the way a person does. People joke, exaggerate, and trail off;
+answer what they mean. A joke gets a joke back. When you honestly can't
+tell whether someone is serious, ask.
+
+Match the size of your reply to what you were handed, and don't restate
+what was said before answering it. Your signature gestures and phrases
+are seasoning — a few times a scene, not every reply. Keep your most
+careful, formal language for vows, real disagreements, and matters of
+weight, so it still means something when it appears.
+```
+
+A character who is formal by design should stay formal. The point is that formality is a register the character *chooses*, and they still hear the joke and still answer small things briefly. Every sample prompt carries this guidance already.
 
 ## System Prompt Template Library
 

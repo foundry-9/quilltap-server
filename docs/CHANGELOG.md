@@ -4,6 +4,27 @@
 
 ### 4.10-dev
 
+#### Changed: built-in character prompts teach listening and register
+
+- All 21 sample system prompts (`qtap-plugin-default-system-prompts` 1.1.24) now tell the
+  character to respond to what the speaker means: jokes answered in kind, exaggeration not taken
+  literally, offhand remarks not mined for subtext, and a question when seriousness is unclear.
+  They also size replies to the input, skip paraphrasing, ration signature habits and the
+  "not X — Y" construction, and reserve formal language for moments that call for it.
+- Each prompt ends with short example exchanges (a joke caught, a casual line answered briefly,
+  a serious moment). Every file uses different lines, and the examples are marked as showing
+  shape only, not voice or shared history.
+- The prompt-template seeder now refreshes existing built-in rows when the shipped text changes.
+  It used to insert only missing rows, so revised samples never reached existing installs.
+  Prompts already imported into characters are copies and are not changed.
+- The AI Wizard and Summon From Lore add the same listening and register direction to generated
+  system prompts, and require generated example dialogues to cover a joke, a casual line, and a
+  serious moment (`CONVERSATIONAL_VOICE_DIRECTION` / `EXAMPLE_DIALOGUE_COVERAGE` in
+  `lib/services/character-field-semantics.ts`).
+- The Character Optimizer no longer writes a habit that appears in most replies into a field as a
+  trait, keeps a system prompt's listening and register direction when refining it, and applies
+  the same example-dialogue coverage.
+
 #### Added: Import from Image offers an outfit
 
 - The wardrobe image analysis now also asks the vision model to name the ensemble

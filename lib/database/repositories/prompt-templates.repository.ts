@@ -55,97 +55,99 @@ export class PromptTemplatesRepository extends AbstractBaseRepository<PromptTemp
           : [];
 
         if (registryPrompts.length > 0) {
-          const collection = await this.getCollection();
-
           for (const prompt of registryPrompts) {
-            // Check if prompt already exists by name and isBuiltIn
-            const existing = await collection.findOne({
-              name: prompt.name,
-              isBuiltIn: true,
-            });
-
-            if (!existing) {
-              const id = this.generateId();
-              const now = this.getCurrentTimestamp();
-
-              const newTemplate: PromptTemplate = {
-                id,
-                userId: null,
-                name: prompt.name,
-                content: prompt.content,
-                description: `${prompt.category} prompt optimized for ${prompt.modelHint} models`,
-                isBuiltIn: true,
-                category: prompt.category,
-                modelHint: prompt.modelHint,
-                tags: [],
-                createdAt: now,
-                updatedAt: now,
-              };
-
-              const validated = this.validate(newTemplate);
-              await collection.insertOne(validated);
-
-              logger.info('Sample prompt template seeded from plugin', {
-                templateId: id,
-                name: prompt.name,
-                promptId: prompt.id,
-                modelHint: prompt.modelHint,
-                category: prompt.category,
-              });
-            }
+            await this.upsertBuiltInPrompt(prompt, 'plugin');
           }
           return;
         }
 
         // Fallback: load from filesystem (legacy prompts/ directory)
         const samplePrompts = await loadSamplePrompts();
-        if (samplePrompts.length === 0) {
-          return;
-        }
-
-        const collection = await this.getCollection();
-
         for (const sample of samplePrompts) {
-          // Check if prompt already exists by name and isBuiltIn
-          const existing = await collection.findOne({
-            name: sample.name,
-            isBuiltIn: true,
-          });
-
-          if (!existing) {
-            const id = this.generateId();
-            const now = this.getCurrentTimestamp();
-
-            const newTemplate: PromptTemplate = {
-              id,
-              userId: null,
-              name: sample.name,
-              content: sample.content,
-              description: `${sample.category} prompt optimized for ${sample.modelHint} models`,
-              isBuiltIn: true,
-              category: sample.category,
-              modelHint: sample.modelHint,
-              tags: [],
-              createdAt: now,
-              updatedAt: now,
-            };
-
-            const validated = this.validate(newTemplate);
-            await collection.insertOne(validated);
-
-            logger.info('Sample prompt template seeded from filesystem', {
-              templateId: id,
-              name: sample.name,
-              modelHint: sample.modelHint,
-              category: sample.category,
-            });
-          }
+          await this.upsertBuiltInPrompt(sample, 'filesystem');
         }
       },
       'Error seeding sample prompts',
       {},
       undefined
     );
+  }
+
+  /**
+   * Insert a built-in prompt template, or bring an existing built-in row up to
+   * date with the shipped text. Built-ins are read-only to the user (their
+   * edits go to copies), so the shipped source is authoritative. Characters
+   * that imported a template hold their own copy and are never touched here.
+   */
+  private async upsertBuiltInPrompt(
+    prompt: { name: string; content: string; category: string; modelHint: string },
+    source: 'plugin' | 'filesystem'
+  ): Promise<void> {
+    const collection = await this.getCollection();
+    const description = `${prompt.category} prompt optimized for ${prompt.modelHint} models`;
+    const now = this.getCurrentTimestamp();
+
+    const existing = await collection.findOne({
+      name: prompt.name,
+      isBuiltIn: true,
+    });
+
+    if (!existing) {
+      const id = this.generateId();
+      const newTemplate: PromptTemplate = {
+        id,
+        userId: null,
+        name: prompt.name,
+        content: prompt.content,
+        description,
+        isBuiltIn: true,
+        category: prompt.category,
+        modelHint: prompt.modelHint,
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const validated = this.validate(newTemplate);
+      await collection.insertOne(validated);
+
+      logger.info('Sample prompt template seeded', {
+        templateId: id,
+        name: prompt.name,
+        source,
+        modelHint: prompt.modelHint,
+        category: prompt.category,
+      });
+      return;
+    }
+
+    if (
+      existing.content === prompt.content &&
+      existing.description === description &&
+      existing.category === prompt.category &&
+      existing.modelHint === prompt.modelHint
+    ) {
+      return;
+    }
+
+    await collection.updateOne(
+      { id: existing.id },
+      {
+        $set: {
+          content: prompt.content,
+          description,
+          category: prompt.category,
+          modelHint: prompt.modelHint,
+          updatedAt: now,
+        },
+      }
+    );
+
+    logger.info('Built-in prompt template refreshed from shipped text', {
+      templateId: existing.id,
+      name: prompt.name,
+      source,
+    });
   }
 
   // ============================================================================

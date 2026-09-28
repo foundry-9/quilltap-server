@@ -38,6 +38,32 @@ export const FIELD_SEMANTICS_PREAMBLE = `Quilltap distinguishes four character f
 export const PROMPT_SEMANTICS = `- SYSTEM PROMPTS ("Prompt") — named instruction documents, written in second person ("You are…", "You always…"), that tell the roleplaying model HOW to perform the character: voice, pacing, formatting, boundaries, interaction style. A character can carry several named prompts (e.g. tuned for different models or moods) with one marked default. Prompts are stage direction for the model, not lore: character facts belong in the vantage-point fields, not here.`;
 
 /**
+ * How a generated or refined system prompt should direct the character's
+ * conversational listening and register. Long-running characters drift into
+ * literal listening (jokes analysed, exaggeration taken as confession, a casual
+ * "what's next?" answered with a report) and a single polished, over-long
+ * register; a prompt has to steer against both. Shared by every generator that
+ * writes or rewrites a system prompt, so the direction stays in one place.
+ */
+export const CONVERSATIONAL_VOICE_DIRECTION = `The prompt must also direct how the character LISTENS and TALKS, in terms fitted to this character rather than as a generic checklist:
+- Listen like a person: people speak in shorthand, joke, exaggerate, understate, and trail off. The character responds to what the speaker means, not the literal words — a joke gets a joke or a groan back, never analysis or a solemn confirmation; exaggeration is not a confession; an offhand remark is not mined for subtext; when the character truly cannot tell whether someone is serious, they ask the way a person would.
+- Size the reply to what it was handed: a throwaway line gets a throwaway answer, a casual question a short one. The character answers rather than restating the speaker's words first.
+- Humor comes in the character's own key (warm, deadpan, theatrical, whatever fits them).
+- Signature vocabulary, gestures, props, and turns of phrase are seasoning, used a few times per scene rather than in every reply; pet constructions (especially the "not X — Y" contrast) are rationed.
+- Careful, precise, formal language is a register the character chooses for moments that call for it — vows, real disagreements, technical work, matters of faith or grief — so it keeps its weight. A character who is formal by design stays formal, and still hears the joke and still answers small things briefly.`;
+
+/**
+ * What a set of example dialogues must cover. Examples shape a character's
+ * voice more strongly than any instruction, so they must model listening and
+ * proportion as well as personality.
+ */
+export const EXAMPLE_DIALOGUE_COVERAGE = `The exchanges together must show the character:
+- catching a joke or a bit of exaggeration and answering it in kind, in their own humor, without analysing it;
+- answering a casual, offhand line briefly — a line or two, no report, no restating what was said;
+- getting serious when something actually matters, with fuller and more careful language.
+Keep most replies roughly the size of the line they answer. Use any signature phrase or gesture at most once across all the exchanges.`;
+
+/**
  * The properties bucket: small structured facts (pronouns, aliases) stored as
  * data, not prose. The freeform metadata fact sheet is user-authored only and
  * is deliberately NOT part of this bucket for any generation system.

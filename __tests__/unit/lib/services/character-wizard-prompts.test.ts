@@ -7,6 +7,10 @@
  */
 
 import { FIELD_PROMPTS, PROPERTIES_PROMPT } from '@/lib/services/character-wizard.service'
+import {
+  CONVERSATIONAL_VOICE_DIRECTION,
+  EXAMPLE_DIALOGUE_COVERAGE,
+} from '@/lib/services/character-field-semantics'
 
 describe('character-wizard FIELD_PROMPTS', () => {
   it('defines a prompt for the identity field', () => {
@@ -68,6 +72,21 @@ describe('character-wizard FIELD_PROMPTS', () => {
     const p = FIELD_PROMPTS.systemPrompt
     expect(p).toContain('SYSTEM PROMPTS')
     expect(p.toLowerCase()).toContain('second person')
+  })
+
+  it('systemPrompt prompt directs listening and conversational register', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    expect(p).toContain(CONVERSATIONAL_VOICE_DIRECTION)
+    expect(p).toMatch(/listen like a person/i)
+    expect(p).toMatch(/seasoning/i)
+  })
+
+  it('exampleDialogues prompt asks for a joke caught, a casual line, and a serious moment', () => {
+    const p = FIELD_PROMPTS.exampleDialogues
+    expect(p).toContain(EXAMPLE_DIALOGUE_COVERAGE)
+    expect(p).toMatch(/catching a joke/i)
+    expect(p).toMatch(/casual, offhand line briefly/i)
+    expect(p).toMatch(/getting serious/i)
   })
 })
 

@@ -51,6 +51,16 @@ The samples arrive in three drawers, and choosing the right drawer is half the t
 
 Whichever you choose, none of them will ever write words for you: every sample instructs the character to speak only for itself.
 
+#### Listening, and knowing when to be brief
+
+Every sample also teaches the character to *listen* like a person, which is rarer among automatons than one might hope. A jest is met with a jest (or a groan), never a solemn confirmation; an exaggeration is not a confession; "what's next?" earns a sentence, not a quarterly report. The character sizes its reply to what it was handed, answers without first reciting your own words back to you, keeps its signature flourishes (the monocle, the catchphrase, the favourite turn of phrase) for occasional use, and saves its most careful, formal language for vows, genuine quarrels, and matters of weight. A character who is formal by nature stays formal, and still catches the joke.
+
+Each sample closes with a few short examples: a joke caught, a casual line answered briefly, and a serious moment given room. They demonstrate the *size* and the *listening*, never the voice; the character is told to use its own words and not to borrow those lines, and nothing in the examples counts as shared history.
+
+#### When the samples are revised
+
+The samples are refreshed from the shipped text whenever Quilltap is updated, so the Sample Prompts section always shows the current edition. A prompt you have already imported into a character, or copied into **My Prompts**, is your own copy and is never altered. To bring a character up to the new edition, import the sample into that character again (or copy the new passages into your own version).
+
 ### My Prompts
 
 These are custom prompts you've created:
@@ -223,6 +233,7 @@ Constraints:
 - **Test and iterate** — Refine prompts based on results
 - **Keep it concise** — Shorter is often better than longer
 - **Be consistent** — Use same terms and concepts throughout
+- **Teach listening, not only speaking** — Tell the character to answer what people *mean*, to match the size of its reply to the moment, and to keep formal language for moments that deserve it
 
 ### What Works Best
 

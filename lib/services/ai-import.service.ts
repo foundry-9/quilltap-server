@@ -24,6 +24,8 @@ import {
   PROMPT_SEMANTICS,
   PROPERTIES_SEMANTICS,
   PHYSICAL_DESCRIPTION_SEMANTICS,
+  CONVERSATIONAL_VOICE_DIRECTION,
+  EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
   WARDROBE_ITEMS_GENERATION_PROMPT,
@@ -190,7 +192,9 @@ Respond with JSON:
 {
   "firstMessage": "An engaging opening message from the character (1-3 paragraphs). Include *actions* and dialogue. This is how the character introduces themselves or sets the scene when first meeting someone.",
   "exampleDialogues": "2-3 example dialogue exchanges showing the character's voice.\\nFormat:\\n{{char}}: [dialogue and *actions*]\\n{{user}}: [response]\\n{{char}}: [follow-up]\\n\\nSeparate exchanges with a blank line."
-}`;
+}
+
+For exampleDialogues: ${EXAMPLE_DIALOGUE_COVERAGE}`;
 
 const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
 
@@ -205,7 +209,9 @@ Respond with JSON array:
   }
 ]
 
-The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.`;
+The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.
+
+${CONVERSATIONAL_VOICE_DIRECTION}`;
 
 const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
 

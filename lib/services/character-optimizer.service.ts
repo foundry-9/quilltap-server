@@ -24,6 +24,8 @@ import {
   FULL_FIELD_SEMANTICS,
   PROPERTIES_SEMANTICS,
   WARDROBE_SEMANTICS,
+  CONVERSATIONAL_VOICE_DIRECTION,
+  EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import { sanitizeGeneratedWardrobeItems, type GeneratedWardrobeItem } from '@/lib/wardrobe/generated-items';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
@@ -375,6 +377,8 @@ The vantage-point rule is strict:
 - A suggestion for MANIFESTO should be rare and high-stakes — propose manifesto changes only when the memory contradicts a basic tenet, not for tonal or stylistic improvements. Manifesto edits reverberate across every other field.
 - A suggestion for PERSONALITY must reflect the character's own self-knowledge and inner drivers. Never put outward behavior someone else would observe here, and never put public-facing identity facts.
 - Do NOT propose the same content under two different fields. Pick the one whose vantage point matches.
+- Do NOT codify repetition. A gesture, prop, phrase, or sentence construction that turns up in most of the character's replies is a tic to ration, not a trait to reinforce; never write it into a field as something the character does constantly.
+- A suggestion for EXAMPLEDIALOGUES must keep the examples modelling listening and proportion as well as voice. ${EXAMPLE_DIALOGUE_COVERAGE}
 - Do NOT suggest edits to title, scenarios, system prompts, the physical description, the wardrobe, or aliases in this response — those are out of scope for this pass (title is never editable here; the rest are each handled by their own dedicated passes).
 
 If you see nothing worth changing in the general fields, respond with an empty JSON array.
@@ -451,6 +455,8 @@ Additional rules specific to system-prompt refinement:
 - currentValue must be the existing prompt content verbatim.
 - proposedValue must be a complete replacement for the prompt content.
 - Do NOT change the prompt's evident interaction style (e.g. a "terse" prompt should stay terse); only sharpen its articulation of the character.
+- Never remove or weaken the prompt's direction about listening and conversational register (reading jokes and exaggeration for what they mean, sizing replies to the moment, rationing signature habits, saving formal language for moments that call for it).
+- Do NOT codify repetition. A gesture, prop, phrase, or construction that turns up in most replies is a tic to ration, not a trait to reinforce.
 
 Respond with a JSON array of at most one suggestion.`;
 }
@@ -598,6 +604,7 @@ ${SUGGESTION_SCHEMA_PREAMBLE}
 Additional rules specific to this pass:
 - For each new system prompt: field="systemPrompt", omit subId, include a "name" field with a short descriptive label, and put the complete prompt text in proposedValue. currentValue should be the empty string.
 - Be conservative: only propose a new prompt if there is a clear interaction style the existing set does not cover.
+- ${CONVERSATIONAL_VOICE_DIRECTION}
 
 Respond with a JSON array of suggestion objects (may be empty).`;
 }
