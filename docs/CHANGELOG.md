@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### Fixed: characters added to a running chat keep their default avatar
+
+- Adding a character to an existing chat (or re-adding a removed one) now requests a per-chat
+  avatar for their current outfit, as chat creation already did for the opening cast. Previously
+  the joining character showed their default avatar until their next wardrobe change.
+- Gated on the chat's avatar-generation setting and skipped in autonomous rooms, like other
+  automatic triggers. The request runs through the normal avatar job, so an outfit that already
+  has a cached avatar is rebound without a new image generation.
+- `refreshAvatarForArrivingCharacter` in `app/api/v1/chats/[id]/actions/participants.ts`.
+
 #### Changed: built-in character prompts teach listening and register
 
 - All 21 sample system prompts (`qtap-plugin-default-system-prompts` 1.1.24) now tell the

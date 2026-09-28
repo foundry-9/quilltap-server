@@ -274,8 +274,9 @@ Controls whether Quilltap generates unique AI portraits for each character in a 
 1. When enabled on chat creation, avatars are generated for all LLM-controlled characters as soon as the chat begins
 2. When toggled on during an active chat, generation is queued for all LLM characters
 3. Avatars update automatically when outfit changes occur (if enabled)
-4. Each portrait is filed against the exact ensemble that occasioned it. Should the character wear that same costume again — five minutes later or five weeks — the picture already taken is brought out of the cabinet rather than a fresh plate exposed, which costs you no time and not a farthing of your image budget. Alter so much as a scarf and that is a new ensemble, deserving of a new sitting
-5. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
+4. A character who joins mid-conversation — freshly invited or returning after an absence — sits for a portrait on arrival, dressed in whatever they walked in wearing, rather than loitering in their everyday likeness until their next change of clothes
+5. Each portrait is filed against the exact ensemble that occasioned it. Should the character wear that same costume again — five minutes later or five weeks — the picture already taken is brought out of the cabinet rather than a fresh plate exposed, which costs you no time and not a farthing of your image budget. Alter so much as a scarf and that is a new ensemble, deserving of a new sitting
+6. Generated avatars appear in the Chat Sidebar's **Participants** drawer and are specific to that conversation
 
 **Prerequisites:**
 

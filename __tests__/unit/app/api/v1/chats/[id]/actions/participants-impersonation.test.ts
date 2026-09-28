@@ -38,6 +38,10 @@ jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
   resolveProjectMountPointIds: jest.fn(async () => []),
 }))
 
+jest.mock('@/lib/wardrobe/avatar-generation', () => ({
+  triggerAvatarGenerationIfEnabled: jest.fn(),
+}))
+
 const {
   handleImpersonate,
   handleStopImpersonate,
