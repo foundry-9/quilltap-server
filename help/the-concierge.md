@@ -194,6 +194,8 @@ The Lantern's story backgrounds hold a courtesy of their own. By default the pro
 - the chat is **Unmoderated**;
 - you have **named** an uncensored image profile on the desk.
 
+Where the Concierge vets a character's appearance on the way in (the pre-screen, or any Unmoderated chat bound for an ordinary painter), a backdrop gets the gentler treatment: he removes the frank wording but leaves the character as undressed as the story has them, and marks them for the sheet. It is only the `generate_image` tool, whose drafting has no drapery of its own to offer, that still receives a change of clothes.
+
 A refused backdrop in a Moderated chat is carried across the street like any other picture, but it is never *redrafted*: the concealed draft is what goes, merely painted by a less squeamish hand. A refusal buys a second painter, never a franker commission.
 
 A picture that comes back unexpectedly demure has almost always lost one of two things:

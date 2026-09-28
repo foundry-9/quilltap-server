@@ -10,12 +10,14 @@ import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   AppearanceResolutionItem,
+  AppearanceSanitizeMode,
   Attachment,
   CharacterAppearanceInput,
   ChatMessage,
   CheapLLMTaskResult,
   DeriveSceneContextInput,
   ImagePromptExpansionContext,
+  SanitizedAppearance,
   SceneStateInput,
   StoryBackgroundPromptContext,
   UncensoredFallbackOptions,
@@ -256,6 +258,14 @@ CRITICAL GUIDELINES:
 - Write in a flowing, descriptive style suitable for image generation`
 
 /**
+ * Appended to a character's description when the Concierge's appearance pass
+ * (in `conceal` mode) found the character undressed. It survives only as far as
+ * the story-background crafter, whose concealed guidance names it; the crafter
+ * turns it into drapery, framing or shadow rather than passing it on.
+ */
+export const CONCEALMENT_MARKER = 'Undressed in this scene; depict with cinematic concealment.'
+
+/**
  * Intimacy guidance for a MODERATED image provider (the default). Teaches the
  * crafter to translate narrative nudity into cinematic concealment rather than
  * either rendering explicit anatomy (which the provider rejects) or sanitizing
@@ -271,7 +281,10 @@ When the scene context or a character description implies someone is undressed, 
 - Environment: water (bath, pool, sea, hot spring) at a discreet level; tall grass; deep snow; a steamed-over mirror
 - Implied context: tousled bedding, discarded clothing on the floor, a robe thrown over a chair — let the surroundings tell the story while the figure itself is shown with tasteful concealment
 
-The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.`
+The intent of the scene MUST come through. Use evocative mood language — "intimate", "tender", "vulnerable", "private moment", "morning after", "candlelit", "bare-shouldered", "barefoot", "freshly bathed" — to preserve the meaning. Do NOT erase the narrative by substituting fully-clothed alternatives ("wearing pajamas", "in casual clothes"); that destroys the scene. The reader of the final image should understand exactly what is happening; only the explicit anatomy is held back.
+
+PER-CHARACTER REQUIREMENT:
+Apply this to EACH character on their own, not just the ones you notice. A character must be depicted with at least one concealment technique above when their description ends with "${CONCEALMENT_MARKER}", or when it describes them as nude, naked, undressed, topless, bare-chested, partially undressed, or wearing nothing. Never pass a bare descriptor such as "topless" or "nude" through verbatim, and never dress such a character in clothes the story did not give them.`
 
 /**
  * Intimacy guidance for a Concierge UNCENSORED image provider. The concealment
@@ -393,6 +406,29 @@ GUIDELINES:
 
 You will receive a JSON array of objects with characterId and appearanceText.
 Respond with the SAME JSON array but with sanitized appearanceText values.
+
+JSON only - no other text.`
+
+/**
+ * Appearance sanitization, `conceal` mode. For a caller whose prompt crafter
+ * carries the cinematic-concealment guidance (story backgrounds): strip the
+ * explicit wording but keep the truth of the character's state, and flag an
+ * undressed character so the crafter can drape them rather than re-dress them.
+ */
+const APPEARANCE_CONCEALMENT_PROMPT = `You are a content safety filter for image generation prompts. You will receive character appearance descriptions that have been flagged as potentially explicit or inappropriate for a standard image generation provider. A later step will compose the image and knows how to handle undressed figures tastefully — drapery, framing, shadow, pose.
+
+Your task is to rewrite ONLY the explicit parts, and to report whether each character is undressed.
+
+GUIDELINES:
+- Remove explicit anatomical or sexual detail. Keep hair color, eye color, body type, and other non-explicit physical traits unchanged
+- Do NOT invent clothing. If the character is nude, topless, partially undressed, or wearing only something minimal, say so in plain neutral words ("unclothed", "bare-shouldered", "wrapped only in a towel") — never substitute pajamas, casual clothes, loungewear, or any garment the input does not give them
+- Keep whatever clothing the character does have, described neutrally ("lingerie" → "a silk slip")
+- Set "undressed" to true when the character is nude, topless, partially undressed, or wearing only a towel, sheet, or similar covering; otherwise false
+- Keep descriptions concise and suitable for image generation
+- Do NOT add new details that weren't implied by the original
+
+You will receive a JSON array of objects with characterId and appearanceText.
+Respond with a JSON array of objects with characterId, the rewritten appearanceText, and undressed (boolean).
 
 JSON only - no other text.`
 
@@ -967,18 +1003,29 @@ Determine what each character currently looks like and is wearing:`,
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @param chatId - Optional chat ID for logging
+ * @param mode - `redress` swaps explicit states for neutral clothing (for a
+ *   caller with no concealment guidance downstream); `conceal` keeps the
+ *   character's state and reports `undressed` so the story-background crafter
+ *   can drape them. Defaults to `redress`.
  * @returns Array of sanitized appearance texts keyed by characterId
  */
 export async function sanitizeAppearance(
   appearances: Array<{ characterId: string; appearanceText: string }>,
   selection: CheapLLMSelection,
   userId: string,
-  chatId?: string
-): Promise<CheapLLMTaskResult<Array<{ characterId: string; appearanceText: string }>>> {
+  chatId?: string,
+  mode: AppearanceSanitizeMode = 'redress'
+): Promise<CheapLLMTaskResult<SanitizedAppearance[]>> {
+  logger.debug('[CheapLLM] Sanitizing appearances', {
+    context: 'cheap-llm-tasks.sanitize-appearance',
+    chatId,
+    mode,
+    count: appearances.length,
+  })
   const messages: LLMMessage[] = [
     {
       role: 'system',
-      content: APPEARANCE_SANITIZATION_PROMPT,
+      content: mode === 'conceal' ? APPEARANCE_CONCEALMENT_PROMPT : APPEARANCE_SANITIZATION_PROMPT,
     },
     {
       role: 'user',
@@ -990,7 +1037,7 @@ export async function sanitizeAppearance(
     selection,
     messages,
     userId,
-    (content: string): Array<{ characterId: string; appearanceText: string }> => {
+    (content: string): SanitizedAppearance[] => {
       try {
         const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
@@ -1001,6 +1048,7 @@ export async function sanitizeAppearance(
         return parsed.map((item: Record<string, unknown>) => ({
           characterId: String(item.characterId || ''),
           appearanceText: String(item.appearanceText || ''),
+          ...(mode === 'conceal' ? { undressed: item.undressed === true } : {}),
         }))
       } catch {
         return appearances // Return originals on error

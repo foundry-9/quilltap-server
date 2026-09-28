@@ -259,3 +259,22 @@ export interface CharacterAppearanceInput {
     imagePrompt?: string | null
   }>
 }
+
+/**
+ * How the Concierge's appearance pass treats an explicit appearance bound for a
+ * moderated image provider. `redress` swaps explicit states for neutral
+ * clothing — for callers with no concealment guidance downstream. `conceal`
+ * keeps the character's state honest and flags an undressed one, for the
+ * story-background crafter, whose concealed guidance drapes them instead.
+ */
+export type AppearanceSanitizeMode = 'redress' | 'conceal'
+
+/**
+ * One character's appearance after the Concierge's sanitization pass
+ */
+export interface SanitizedAppearance {
+  characterId: string
+  appearanceText: string
+  /** `conceal` mode only: the character is undressed in this scene */
+  undressed?: boolean
+}

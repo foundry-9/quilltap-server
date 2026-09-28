@@ -14,7 +14,7 @@ import {
 } from '@/lib/file-storage/lantern-store-bridge';
 
 import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { CONCEALMENT_MARKER, craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
@@ -456,7 +456,11 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
         uncensoredImageTarget,
         cheapLLMSelection,
         job.userId,
-        payload.chatId
+        payload.chatId,
+        // This crafter carries the concealment guidance, so an undressed
+        // character is flagged for draping rather than re-dressed — the
+        // re-dressed text would hand the crafter a different scene.
+        'conceal'
       );
     } catch (error) {
       logger.warn('[StoryBackground] Appearance sanitization failed, using unsanitized', {
@@ -478,6 +482,14 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       const descParts = [genderPrefix + resolved.physicalDescription];
       if (resolved.clothingDescription) {
         descParts.push(`Wearing: ${resolved.clothingDescription}`);
+      }
+      if (resolved.needsConcealment) {
+        descParts.push(CONCEALMENT_MARKER);
+        logger.debug('[StoryBackground] Character flagged for cinematic concealment', {
+          context: 'background-jobs.story-background',
+          jobId: job.id,
+          characterId: char!.id,
+        });
       }
       return {
         name: char!.name,

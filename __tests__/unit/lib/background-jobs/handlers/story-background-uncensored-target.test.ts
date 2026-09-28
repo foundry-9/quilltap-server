@@ -78,6 +78,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
+  CONCEALMENT_MARKER: 'Undressed in this scene; depict with cinematic concealment.',
   craftStoryBackgroundPrompt: jest.fn(),
   deriveSceneContext: jest.fn(),
   extractVisibleConversation: jest.fn(),
@@ -387,6 +388,39 @@ describe('story-background handler — appearance sanitization gate', () => {
     await handleStoryBackgroundGeneration(makeJob(['char-1']))
 
     expect(sanitizeRoutesFlag()).toBe(true)
+  })
+
+  // The re-dressing sanitizer ("wearing nothing" → "casual clothes") used to
+  // run here, handing the concealment-trained crafter a different scene.
+  it('asks the sanitizer to flag undressed characters rather than re-dress them', async () => {
+    markDangerous(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(false)
+    withCharacter()
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    expect(mockSanitizeAppearances.mock.calls[0][7]).toBe('conceal')
+  })
+
+  it('marks a flagged character for concealment in the crafter input', async () => {
+    markDangerous(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(false)
+    withCharacter()
+    mockSanitizeAppearances.mockImplementation(async (a: never) =>
+      (a as Array<Record<string, unknown>>).map(x => ({
+        ...x,
+        physicalDescription: 'a young woman, unclothed, wearing pearls',
+        clothingDescription: '',
+        wasSanitized: true,
+        needsConcealment: true,
+      })) as never,
+    )
+
+    await handleStoryBackgroundGeneration(makeJob(['char-1']))
+
+    const ctx = mockCraftPrompt.mock.calls[0][0] as { characters: Array<{ description: string }> }
+    expect(ctx.characters[0].description).toMatch(/unclothed, wearing pearls\. Undressed in this scene; depict with cinematic concealment\.$/)
+    expect(ctx.characters[0].description).not.toMatch(/Wearing:/)
   })
 })
 

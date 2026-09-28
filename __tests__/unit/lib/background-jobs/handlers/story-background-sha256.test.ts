@@ -54,6 +54,7 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
+  CONCEALMENT_MARKER: 'Undressed in this scene; depict with cinematic concealment.',
   craftStoryBackgroundPrompt: jest.fn(),
   deriveSceneContext: jest.fn(),
   extractVisibleConversation: jest.fn(),

@@ -648,12 +648,74 @@ describe('Appearance Resolution Module', () => {
           ],
           testSelection,
           testUserId,
-          testChatId
+          testChatId,
+          'redress'
         )
 
         expect(result[0].wasSanitized).toBe(true)
         expect(result[0].physicalDescription).toBe('A young woman with red hair wearing casual clothes')
         expect(result[0].clothingDescription).toBe('') // Cleared
+        expect(result[0].needsConcealment).toBeUndefined()
+      })
+
+      it('should flag an undressed character for concealment in conceal mode', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [
+            { characterId: 'char-1', appearanceText: 'A young woman with red hair, unclothed', undressed: true },
+          ],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          dangerOnSettings,
+          false,
+          false,
+          testSelection,
+          testUserId,
+          testChatId,
+          'conceal'
+        )
+
+        expect(mockSanitizeAppearance.mock.calls[0][4]).toBe('conceal')
+        expect(result[0].physicalDescription).toBe('A young woman with red hair, unclothed')
+        expect(result[0].clothingDescription).toBe('')
+        expect(result[0].wasSanitized).toBe(true)
+        expect(result[0].needsConcealment).toBe(true)
+      })
+
+      it('should flag concealment even when the rewrite leaves the text unchanged', async () => {
+        mockClassifyContent.mockResolvedValue({
+          isDangerous: true,
+          score: 0.9,
+          categories: [{ category: 'sexual', score: 0.9 }],
+        })
+        mockSanitizeAppearance.mockResolvedValue({
+          success: true,
+          result: [
+            { characterId: 'char-1', appearanceText: 'A young woman with red hair. Blue jeans and t-shirt', undressed: true },
+          ],
+        })
+
+        const result = await sanitizeAppearancesIfNeeded(
+          sampleAppearances,
+          dangerOnSettings,
+          false,
+          false,
+          testSelection,
+          testUserId,
+          testChatId,
+          'conceal'
+        )
+
+        expect(result[0].wasSanitized).toBe(false)
+        expect(result[0].clothingDescription).toBe('Blue jeans and t-shirt')
+        expect(result[0].needsConcealment).toBe(true)
       })
 
       it('should NOT sanitize when dangerous and the scene routes uncensored', async () => {

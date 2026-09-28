@@ -22,6 +22,7 @@ import {
   type ChatMessage,
   type CharacterAppearanceInput,
   type AppearanceResolutionItem,
+  type AppearanceSanitizeMode,
 } from '@/lib/memory/cheap-llm-tasks'
 import {
   classifyContent,
@@ -58,6 +59,11 @@ export interface ResolvedCharacterAppearance {
   clothingSource: 'narrative' | 'stored' | 'default'
   /** Whether the Concierge sanitized this appearance */
   wasSanitized: boolean
+  /**
+   * Set by a `conceal`-mode sanitization when the character is undressed in
+   * the scene: the prompt crafter must drape them, never dress them.
+   */
+  needsConcealment?: boolean
 }
 
 /**
@@ -375,6 +381,11 @@ export async function resolveCharacterAppearances(
  * @param cheapLLMSelection - Cheap LLM provider for classification/sanitization
  * @param userId - Current user ID
  * @param chatId - Optional chat ID for logging
+ * @param mode - `redress` (default) swaps explicit states for neutral clothing;
+ *   `conceal` keeps the state and sets `needsConcealment`. Only a caller whose
+ *   crafter carries the concealment guidance (story backgrounds) may pass
+ *   `conceal` — anywhere else the flag would reach a moderated provider
+ *   with nothing downstream to act on it.
  * @returns Possibly-sanitized appearances (same array reference if unchanged)
  */
 export async function sanitizeAppearancesIfNeeded(
@@ -384,7 +395,8 @@ export async function sanitizeAppearancesIfNeeded(
   routesDangerousToUncensored: boolean,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,
-  chatId?: string
+  chatId?: string,
+  mode: AppearanceSanitizeMode = 'redress'
 ): Promise<ResolvedCharacterAppearance[]> {
   // 1. The appearance check is a classifier scan: a Moderated chat pays for
   // it only when the pre-screen is on. An Unmoderated chat is already known to
@@ -454,6 +466,7 @@ export async function sanitizeAppearancesIfNeeded(
     context: 'image-gen.appearance-resolution',
     chatId,
     characterCount: appearances.length,
+    mode,
   })
 
   const toSanitize = appearances.map(a => ({
@@ -465,7 +478,8 @@ export async function sanitizeAppearancesIfNeeded(
     toSanitize,
     cheapLLMSelection,
     userId,
-    chatId
+    chatId,
+    mode
   )
 
   if (!sanitizeResult.success || !sanitizeResult.result) {
@@ -482,15 +496,20 @@ export async function sanitizeAppearancesIfNeeded(
     const sanitized = sanitizeResult.result!.find(
       s => s.characterId === appearance.characterId
     )
-    if (sanitized && sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()) {
-      return {
-        ...appearance,
-        // Use sanitized text as both physical + clothing combined
-        physicalDescription: sanitized.appearanceText,
-        clothingDescription: '',
-        wasSanitized: true,
-      }
+    if (!sanitized) return appearance
+    const textChanged = sanitized.appearanceText !== `${appearance.physicalDescription}. ${appearance.clothingDescription}`.trim()
+    if (!textChanged && !sanitized.undressed) return appearance
+    return {
+      ...appearance,
+      ...(textChanged
+        ? {
+            // Use sanitized text as both physical + clothing combined
+            physicalDescription: sanitized.appearanceText,
+            clothingDescription: '',
+            wasSanitized: true,
+          }
+        : {}),
+      ...(sanitized.undressed ? { needsConcealment: true } : {}),
     }
-    return appearance
   })
 }

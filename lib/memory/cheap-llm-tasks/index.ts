@@ -19,6 +19,8 @@ export type {
   CompressionResult,
   AppearanceResolutionItem,
   CharacterAppearanceInput,
+  AppearanceSanitizeMode,
+  SanitizedAppearance,
 } from './types'
 
 // Execution surface — the deadline machinery and the two helpers a caller
@@ -85,6 +87,7 @@ export {
   craftStoryBackgroundPrompt,
   resolveAppearance,
   sanitizeAppearance,
+  CONCEALMENT_MARKER,
 } from './image-scene-tasks'
 
 // Compression tasks

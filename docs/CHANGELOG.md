@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Fixed: story backgrounds no longer re-dress characters the concealment prompt should drape
+
+- The Concierge's appearance sanitizer rewrote explicit appearances by substituting clothing
+  ("wearing nothing" → "wearing casual clothes") before the story-background prompt crafter ran.
+  The crafter's concealment guidance forbids exactly that substitution, so a sanitized character
+  reached it already dressed and was rendered as a different scene.
+- `sanitizeAppearancesIfNeeded` / `sanitizeAppearance` take a `mode`. Story backgrounds pass
+  `'conceal'`: the rewrite removes explicit wording but keeps the character's state, and reports
+  `undressed`, which sets `needsConcealment` on the appearance. The handler appends
+  `CONCEALMENT_MARKER` to that character's description.
+- The concealed crafter prompt gains a per-character requirement: every character carrying the
+  marker, or described as nude/naked/topless/undressed, must get at least one concealment
+  technique and must not be dressed. Previously the model applied concealment unevenly and could
+  pass a bare "topless" through.
+- The `generate_image` tool keeps the default `'redress'` mode; its prompt expander has no
+  concealment guidance to act on the marker.
+
 #### Fixed: characters added to a running chat keep their default avatar
 
 - Adding a character to an existing chat (or re-adding a removed one) now requests a per-chat
