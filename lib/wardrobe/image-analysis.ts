@@ -37,10 +37,23 @@ export interface ProposedWardrobeItem {
 }
 
 /**
+ * A proposed name for the whole look — the ensemble the proposed items make
+ * together. The client turns it into a composite item whose components are
+ * the pieces it just created, so it carries no ids or types of its own.
+ */
+export interface ProposedOutfit {
+  title: string
+  description: string
+  appropriateness: string
+}
+
+/**
  * Result of analyzing an image for wardrobe items
  */
 export interface ImageAnalysisResult {
   proposedItems: ProposedWardrobeItem[]
+  /** Null when the model named no ensemble (or found fewer than two pieces). */
+  proposedOutfit: ProposedOutfit | null
   provider: string
   model: string
 }
@@ -128,6 +141,11 @@ For each item you identify:
    - If the subject wears a distinct, deliberate hairstyle (braids, an updo, an elaborate coif, a wig), emit ONE "hair" item describing the styling. Plain, loose, unstyled hair is NOT an item.
 4. Suggest appropriateness tags (e.g., "formal", "casual", "combat", "intimate", "evening", "everyday") based on the visual context
 
+Then name the ensemble the items make together — the whole look, as one outfit:
+- A concise, evocative title for the outfit as a whole (e.g., "Midnight Gala Ensemble", "Rain-Soaked Detective's Kit")
+- A short description of the overall look and the impression it gives, without re-describing each piece
+- Appropriateness tags for the outfit as a whole
+
 Return your analysis as a JSON object with this exact structure:
 {
   "items": [
@@ -137,14 +155,20 @@ Return your analysis as a JSON object with this exact structure:
       "types": ["top"],
       "appropriateness": "casual, everyday"
     }
-  ]
+  ],
+  "outfit": {
+    "title": "Outfit Title",
+    "description": "Overall impression of the ensemble...",
+    "appropriateness": "evening, formal"
+  }
 }
 
 Important rules:
 - Focus ONLY on clothing, accessories, and a deliberate hairstyle if one is present. Do not describe faces, bodies, backgrounds, or other non-wearable features.
 - Each distinct garment or accessory should be its own item.
 - Valid types are ONLY: "top", "bottom", "footwear", "accessories", "hair"
-- If you cannot identify any clothing items, return {"items": []}
+- If you identify fewer than two items, set "outfit" to null.
+- If you cannot identify any clothing items, return {"items": [], "outfit": null}
 - Return ONLY the JSON object, no additional text or markdown.`
 
 function buildUserPrompt(guidance?: string): string {
@@ -165,9 +189,13 @@ function buildUserPrompt(guidance?: string): string {
 const VALID_TYPES = new Set<string>(WardrobeItemTypeEnum.options)
 
 /**
- * Parse and validate the LLM's JSON response into ProposedWardrobeItem[]
+ * Parse and validate the LLM's JSON response into proposed items plus the
+ * optional ensemble name.
  */
-function parseAnalysisResponse(content: string): ProposedWardrobeItem[] {
+function parseAnalysisResponse(content: string): {
+  proposedItems: ProposedWardrobeItem[]
+  proposedOutfit: ProposedOutfit | null
+} {
   // Strip markdown code fences if present
   let jsonStr = content.trim()
   if (jsonStr.startsWith('```')) {
@@ -195,7 +223,7 @@ function parseAnalysisResponse(content: string): ProposedWardrobeItem[] {
   }
 
   // Validate and normalize each item
-  return items
+  const proposedItems = items
     .filter((item): item is Record<string, unknown> => {
       if (!item || typeof item !== 'object') return false
       if (typeof (item as Record<string, unknown>).title !== 'string') return false
@@ -218,6 +246,31 @@ function parseAnalysisResponse(content: string): ProposedWardrobeItem[] {
           : '',
       }
     })
+
+  return {
+    proposedItems,
+    proposedOutfit: parseProposedOutfit((parsed as { outfit?: unknown }).outfit, proposedItems.length),
+  }
+}
+
+/**
+ * The outfit is optional garnish: a missing, malformed, or untitled one is
+ * dropped rather than failing the analysis, and an ensemble of fewer than two
+ * pieces is no ensemble at all.
+ */
+function parseProposedOutfit(raw: unknown, itemCount: number): ProposedOutfit | null {
+  if (itemCount < 2 || !raw || typeof raw !== 'object') return null
+  const outfit = raw as Record<string, unknown>
+  const title = typeof outfit.title === 'string' ? outfit.title.trim() : ''
+  if (!title) {
+    moduleLogger.debug('[Wardrobe Image Analysis] Model returned an outfit without a title; dropping it')
+    return null
+  }
+  return {
+    title,
+    description: typeof outfit.description === 'string' ? outfit.description.trim() : '',
+    appropriateness: typeof outfit.appropriateness === 'string' ? outfit.appropriateness.trim() : '',
+  }
 }
 
 // ============================================================================
@@ -363,10 +416,11 @@ async function runAnalyzeImageForWardrobeItems(
     })
 
     // 4. Parse the response
-    const proposedItems = parseAnalysisResponse(response.content)
+    const { proposedItems, proposedOutfit } = parseAnalysisResponse(response.content)
 
     moduleLogger.info('[Wardrobe Image Analysis] Analysis complete', {
       itemCount: proposedItems.length,
+      hasOutfit: proposedOutfit !== null,
       provider: profile.provider,
       model: profile.modelName,
       durationMs,
@@ -374,6 +428,7 @@ async function runAnalyzeImageForWardrobeItems(
 
     return {
       proposedItems,
+      proposedOutfit,
       provider: profile.provider,
       model: profile.modelName,
     }

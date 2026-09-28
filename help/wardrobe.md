@@ -89,8 +89,22 @@ A vision-capable LLM will examine the image and return a list of proposed wardro
 - **Edit** any field (title, types, appropriateness, description) before importing
 - **Deselect** items you do not wish to import
 - **Re-analyze** the image if the results are unsatisfactory
+- **Assemble an outfit** from the pieces --- see below
 
 Click **Import Selected** to add the approved items to the character's personal wardrobe. They are created as non-default items --- you may mark them as defaults or equip them afterwards, at your leisure.
+
+#### The Whole Look, Bundled
+
+A photograph seldom shows a single garment in isolation; it shows an *ensemble*, and it would be a poor valet who unpacked the trunk and then forgot which coat went with which trousers. Beneath the item cards, therefore, sits a card headed **Also create an outfit from these pieces**. The analyst proposes a title, a description, and appropriateness tags for the look as a whole; when it has done so, the card arrives already ticked and filled in, and you may amend any of it.
+
+On import, the individual pieces are stitched first, and then a composite outfit is assembled from precisely those pieces --- the same sort of bundle you would build by hand in the *Composes* panel (see *Composite Items* below), its slot coverage worked out from its components. By default the outfit **replaces** whatever occupies its slots when worn, so donning it swaps the whole look in a single gesture; untick *Replace everything in its slots when worn* if you would rather it layer.
+
+A few particulars:
+
+- The card wants **at least two** selected items; with only one, there is no ensemble to speak of and the card politely greys itself out.
+- If the analyst declined to name the look, the card starts unticked; tick it and supply a title yourself, and the import button will oblige.
+- Untick the card and you import only the pieces, exactly as before.
+- Should a piece fail to arrive, the outfit is assembled from those that did; should fewer than two arrive, or the outfit itself fail, the pieces are kept and a notice says the outfit was not made.
 
 **Requirements:** This feature requires at least one vision-capable provider to be configured (Anthropic Claude, OpenAI GPT-4o, Google Gemini, or xAI Grok). If you have configured an **Image Description Profile** in your Chat settings, that profile will be used; otherwise Quilltap will select any available vision-capable provider from your connection profiles.
 

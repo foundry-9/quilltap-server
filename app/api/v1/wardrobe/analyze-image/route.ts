@@ -3,7 +3,8 @@
  *
  * POST /api/v1/wardrobe/analyze-image
  * Accepts a base64-encoded image and optional guidance text,
- * analyzes it using a vision-capable LLM, and returns proposed wardrobe items.
+ * analyzes it using a vision-capable LLM, and returns proposed wardrobe items
+ * plus an optional proposed name for the ensemble they make together.
  */
 
 import { createContextHandler } from '@/lib/api/middleware'
@@ -44,12 +45,14 @@ export const POST = createContextHandler(async (req, { repos, user }) => {
 
     logger.info('[Wardrobe Image Analysis API] Analysis complete', {
       itemCount: result.proposedItems.length,
+      hasOutfit: result.proposedOutfit !== null,
       provider: result.provider,
       model: result.model,
     })
 
     return successResponse({
       proposedItems: result.proposedItems,
+      proposedOutfit: result.proposedOutfit,
       provider: result.provider,
       model: result.model,
     })

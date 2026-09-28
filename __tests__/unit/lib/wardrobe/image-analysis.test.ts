@@ -108,3 +108,59 @@ describe('wardrobe image analysis — the hair slot', () => {
     expect(user).toContain('deliberate hairstyle')
   })
 })
+
+describe('wardrobe image analysis — the proposed outfit', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  const TWO_ITEMS = [
+    { title: 'Velvet Blazer', description: 'Deep green', types: ['top'] },
+    { title: 'Oxford Brogues', description: 'Oxblood', types: ['footwear'] },
+  ]
+
+  async function analyzeRaw(payload: unknown) {
+    mockSendMessage.mockResolvedValue({ content: JSON.stringify(payload) })
+    return analyzeImageForWardrobeItems({ image: 'AAAA', mimeType: 'image/png' }, repos, 'user-1')
+  }
+
+  it('returns the named ensemble alongside the items', async () => {
+    const result = await analyzeRaw({
+      items: TWO_ITEMS,
+      outfit: { title: '  Club Night Ensemble ', description: 'Sharp.', appropriateness: 'evening' },
+    })
+    expect(result.proposedItems).toHaveLength(2)
+    expect(result.proposedOutfit).toEqual({
+      title: 'Club Night Ensemble',
+      description: 'Sharp.',
+      appropriateness: 'evening',
+    })
+  })
+
+  it('drops an outfit with no title rather than failing the analysis', async () => {
+    const result = await analyzeRaw({ items: TWO_ITEMS, outfit: { description: 'Nameless' } })
+    expect(result.proposedItems).toHaveLength(2)
+    expect(result.proposedOutfit).toBeNull()
+  })
+
+  it('treats a missing outfit as none', async () => {
+    const result = await analyzeRaw({ items: TWO_ITEMS })
+    expect(result.proposedOutfit).toBeNull()
+  })
+
+  it('offers no outfit for a single piece', async () => {
+    const result = await analyzeRaw({
+      items: [TWO_ITEMS[0]],
+      outfit: { title: 'Just a Blazer' },
+    })
+    expect(result.proposedOutfit).toBeNull()
+  })
+
+  it('asks the model to name the ensemble', async () => {
+    await analyzeRaw({ items: [] })
+    const [request] = mockSendMessage.mock.calls[0] as [{ messages: { role: string; content: string }[] }]
+    const system = request.messages.find((m) => m.role === 'system')!.content
+    expect(system).toContain('"outfit": {')
+    expect(system).toContain('set "outfit" to null')
+  })
+})

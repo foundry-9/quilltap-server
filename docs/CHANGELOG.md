@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Added: Import from Image offers an outfit
+
+- The wardrobe image analysis now also asks the vision model to name the ensemble
+  (`outfit: { title, description, appropriateness }`). The analyze-image endpoint returns it as
+  `proposedOutfit`, or `null` when the model names none, returns it without a title, or finds
+  fewer than two items. A bad outfit block never fails the analysis.
+- The review screen has an "Also create an outfit from these pieces" card, on by default when the
+  model named one and available whenever two or more items are selected. After the pieces are
+  created, their returned ids become the composite's `componentItemIds` and its `types` are their
+  union (`unionTypes`). No ids are assigned up front. The outfit defaults to `replace: true`.
+- If fewer than two pieces are created, or the outfit post fails, the imported pieces are kept and
+  an error toast says the outfit was not made.
+
 #### Changed: old conversations keep their embeddings; transcripts rendered on demand
 
 - The stale-chat sweep no longer clears `conversation_chunks.embedding`. On `Friday` it had
