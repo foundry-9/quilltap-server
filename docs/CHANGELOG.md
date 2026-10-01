@@ -4,6 +4,14 @@
 
 ### 4.10-dev
 
+#### Filed: bug 173, raw CLI SQL prints compressed message text as Buffer JSON
+
+- `quilltap db "<sql>"` (table, `--json`, `--repl`) prints compressed `chat_messages.content`
+  values (rows of 512 bytes or more) as `{"type":"Buffer","data":[…]}` unless the query wraps the
+  column in `qt_text()`. Stored data, server reads, and the `db messages` / `db message` /
+  `db llm-log` verbs are unaffected. Open; the proposed fix decodes compressed-text values in the
+  raw-SQL printer. See `docs/developer/bugs/bug-173-raw-sql-buffer-output.md`.
+
 #### Fixed: story backgrounds no longer re-dress characters the concealment prompt should drape
 
 - The Concierge's appearance sanitizer rewrote explicit appearances by substituting clothing
