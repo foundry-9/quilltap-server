@@ -126,6 +126,16 @@ describe('quilltap db — low-level path registers qt_text() (bug 162)', () => {
     expect(full).not.toContain('Buffer');
   });
 
+  it('prints a compressed column as text from --repl (bug 173)', () => {
+    const out = execFileSync(process.execPath, [BIN, 'db', '--data-dir', tempDir, '--repl'], {
+      encoding: 'utf-8',
+      input: "SELECT content FROM chat_messages WHERE id = 'm-1'\n",
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    expect(out).toContain(LONG_TEXT.slice(0, 40));
+    expect(out).not.toContain('Buffer');
+  });
+
   it('leaves non-text BLOBs (embeddings) untouched', () => {
     const out = runDb(tempDir, ['--json', 'SELECT embedding FROM chat_messages WHERE id = \'m-1\'']);
     const rows = JSON.parse(out);

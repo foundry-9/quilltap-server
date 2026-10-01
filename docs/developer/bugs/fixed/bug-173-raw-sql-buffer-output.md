@@ -22,7 +22,7 @@ binary columns print as before, and values that are already text (including an e
 `qt_text()`) are untouched. Nothing on disk changes. `qt_text()` is still needed to work on the text
 inside SQL (`WHERE`, `LIKE`, `substr`, `json_extract`); the CLI README says so. Pinned by
 `__tests__/unit/packages/quilltap/db-raw-sql-qt-text.integration.test.js` (run under
-`npm run test:integration`), whose two bug-173 cases fail without the call and whose embedding case
+`npm run test:integration`), whose three bug-173 cases (`--json`, table, `--repl`) fail without the call and whose embedding case
 holds non-text BLOBs to their old output.
 
 ## Symptom

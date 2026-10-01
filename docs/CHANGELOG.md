@@ -13,7 +13,7 @@
 - New `decodeCompressedTextInRows` in `packages/quilltap/lib/text-codec.js`. `qt_text()` is still
   needed to work on the text inside SQL (`WHERE`, `LIKE`, `json_extract`); the CLI README now says so.
 - Extended `__tests__/unit/packages/quilltap/db-raw-sql-qt-text.integration.test.js` with a mixed
-  compressed/plain fixture, a table-output case, and an embedding-BLOB case.
+  compressed/plain fixture, table-output and `--repl` cases, and an embedding-BLOB case.
 
 #### Spec: prompt trust and anti-committee safeguards
 
