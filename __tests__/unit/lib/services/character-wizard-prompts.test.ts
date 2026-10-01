@@ -10,6 +10,9 @@ import { FIELD_PROMPTS, PROPERTIES_PROMPT } from '@/lib/services/character-wizar
 import {
   CONVERSATIONAL_VOICE_DIRECTION,
   EXAMPLE_DIALOGUE_COVERAGE,
+  TRUST_SAFEGUARDS_DIRECTION,
+  COMPANION_TRUST_DISPOSITION,
+  COMPANION_TRUST_DISPOSITION_GATE,
 } from '@/lib/services/character-field-semantics'
 
 describe('character-wizard FIELD_PROMPTS', () => {
@@ -79,6 +82,24 @@ describe('character-wizard FIELD_PROMPTS', () => {
     expect(p).toContain(CONVERSATIONAL_VOICE_DIRECTION)
     expect(p).toMatch(/listen like a person/i)
     expect(p).toMatch(/seasoning/i)
+  })
+
+  it('systemPrompt prompt carries the trust safeguards', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    expect(p).toContain(TRUST_SAFEGUARDS_DIRECTION)
+    expect(p).toMatch(/not a committee/i)
+  })
+
+  it('systemPrompt prompt gates the companion trust disposition', () => {
+    const p = FIELD_PROMPTS.systemPrompt
+    const gate = p.indexOf(COMPANION_TRUST_DISPOSITION_GATE)
+    const disposition = p.indexOf(COMPANION_TRUST_DISPOSITION)
+    expect(gate).toBeGreaterThan(-1)
+    expect(disposition).toBeGreaterThan(gate)
+  })
+
+  it('systemPrompt prompt allows 600 words', () => {
+    expect(FIELD_PROMPTS.systemPrompt).toMatch(/under 600 words/)
   })
 
   it('exampleDialogues prompt asks for a joke caught, a casual line, and a serious moment', () => {

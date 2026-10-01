@@ -57,9 +57,23 @@ Every sample also teaches the character to *listen* like a person, which is rare
 
 Each sample closes with a few short examples: a joke caught, a casual line answered briefly, and a serious moment given room. They demonstrate the *size* and the *listening*, never the voice; the character is told to use its own words and not to borrow those lines, and nothing in the examples counts as shared history.
 
+#### Whose story it is
+
+Every sample also settles, once and for all, a question that long evenings with a full household have a way of unsettling: whose story is this? Yours, as it happens, and the samples now say so in five plain rules:
+
+- **What you narrate is what happened.** When you describe an event — in prose, or as a stage direction in whatever out-of-character marking your conversation uses — that is the fact of the scene. It outranks the character's notes, memories, and earlier impressions; if they disagree, the character misread and adjusts without a fuss. What the character *does* about it remains entirely its own affair.
+- **The conversation is the record, not the notebook.** Before correcting you about who said what, the character consults the conversation itself, and if you were right, it says so and moves along.
+- **No inventing the furniture.** A character who does not know whether the cellar has a second door says so, or asks. It does not conjure one to win an argument.
+- **Agreement is spoken aloud.** An arrangement binding you exists only if you agreed to it in plain words. Silence, a scene drawing to a close, an apology, or a bout of self-reproach is not a signature, and a measure introduced as temporary ("you'll have it back at breakfast") ends when it said it would.
+- **Disagree like a person, not a committee.** The character may object, argue with evidence, refuse, and remain thoroughly unpersuaded. What it may not do is turn the disagreement into procedure.
+
+That last rule names the failure the samples now list among their pitfalls: **the committee**. Left to their own devices over many chapters, a company of characters can quietly convene itself into a governing body — votes, sign-offs, co-signatures, second keys, witnesses, and standing conditions aimed squarely at your persona. Worry hardens into a rule, the rule tightens with each incident and never loosens, and before long you are a supervised suspect in your own story, which is the sort of thing that happens in the less cheerful chapters of a cautionary tale. People argue and then trust; they do not litigate. None of this makes a character a yes-man: a rival still schemes and a villain still refuses. They simply cannot deny what you narrated, or announce that you agreed to something you never said.
+
+The Companion, Platonic, and Romantic samples go one step further and give the character a *disposition of trust*: your judgment and firsthand account are its starting point rather than something to be re-earned each time, and in a crisis it backs you first and asks its questions afterward. (The fuller Romantic samples add that when the household is split, your call carries with the character, as the years between you have earned.) **MODERN General** stays neutral on the matter, as it does on the relationship itself, and carries the five rules alone. The Ollama samples carry a compact version of all of it, since small local models follow a short list better than a sermon.
+
 #### When the samples are revised
 
-The samples are refreshed from the shipped text whenever Quilltap is updated, so the Sample Prompts section always shows the current edition. A prompt you have already imported into a character, or copied into **My Prompts**, is your own copy and is never altered. To bring a character up to the new edition, import the sample into that character again (or copy the new passages into your own version).
+The samples are refreshed from the shipped text whenever Quilltap is updated, so the Sample Prompts section always shows the current edition. A prompt you have already imported into a character, or copied into **My Prompts**, is your own copy and is never altered. To bring a character up to the new edition, import the sample into that character again (or copy the new passages into your own version). The current edition — the *Whose Story It Is* edition, shipped with version 1.1.25 of the sample prompts plugin — is the one that adds the rules and the trust disposition described above, so a character imported before it will not have them until it is imported afresh.
 
 ### My Prompts
 

@@ -4,6 +4,74 @@
 
 ### 4.10-dev
 
+#### Scene note on chained multi-character turns (anti-committee phase 4)
+
+- New `lib/chat/context/user-narration-anchor.ts`. On a chained multi-character turn (no new user
+  message, the user has spoken, and a character has replied since), a one-sentence trailing note
+  says the user's latest message is the current state of the scene. It leads the trailing
+  user message, ahead of the progressions report and turn-skip note.
+- The note names the seat that wrote the latest human line (resolved from its participant), falling
+  back to the `{{user}}` name only for an unseated user, so a human driving several seats is named
+  correctly.
+- Never added for the first responder or in single-character chats; byte-identical context when
+  it does not apply. Not persisted; no cache-version bump (uncached tail).
+- `context-builder.service.ts` passes its human-turn message ids to `buildContext`.
+- The server-side turn race (a stopped turn landing after the user's newer message) remains a
+  follow-up.
+- Spec marked implemented with an "As built" section; the live memory-consent eval has not yet
+  been run against a real model.
+- Docs: `help/chat-multi-character.md`.
+
+#### Memory extraction stops manufacturing consent (anti-committee phase 3)
+
+- SELF and OTHER extractor prompts gain an AGREEMENTS, PROPOSALS, AND CONDITIONS section: record an
+  agreement only on the agreeing party's own words of assent; record proposals and conditions as
+  such, attributed to their speaker; silence, an apology, or the exchange ending is not assent
+  ("…; X had not yet responded"); keep stated limits ("until breakfast").
+- OTHER's hinge and 0.90 importance anchor now require the subject to have spoken the commitment;
+  new 0.55 anchor for an unanswered proposal; a new good example and a new bad example (invented
+  assent). SELF's 0.90 anchor gets the same clause; the `future` tag excludes proposals.
+- The user-persona SELF preamble states the persona has not yet answered anything said after their
+  line. The turn transcript heading says the user's lines came first when the turn has one.
+- The episode pass records proposals as proposals.
+- Regression fixture (`__tests__/unit/lib/fixtures/proposal-no-reply.ts`) and unit test; opt-in
+  live eval in `__tests__/eval/memory-consent/` (skipped unless `MEMORY_CONSENT_EVAL_MODEL` is set).
+- Existing memories are untouched; Regenerate memories re-extracts under the new rules.
+- Docs: `help/memory-playing-a-character.md`, `help/episodic-memory.md`.
+
+#### Character generators carry the trust safeguards (anti-committee phase 2)
+
+- `character-field-semantics.ts` adds `TRUST_SAFEGUARDS_DIRECTION`, `COMPANION_TRUST_DISPOSITION`
+  (with `COMPANION_TRUST_DISPOSITION_GATE` / `GATED_COMPANION_TRUST_DISPOSITION`), and
+  `COMMITTEE_DRIFT_GUARDRAIL`.
+- AI Wizard and Summon From Lore system-prompt meta-prompts include the safeguards and the gated
+  disposition (included only when the material establishes the character as the user's companion,
+  partner, family, or crew). Word caps raised from 500 to 600.
+- Character Optimizer: the analysis pass flags committee drift as a pattern to correct; every
+  suggestion pass forbids proposing a rule that constrains the user's persona; the system-prompt
+  refine and new-prompt passes carry the safeguards and may not weaken them.
+- External Prompt generator now uses `character-field-semantics` for the first time (listening
+  direction, safeguards, gated disposition) and is told not to leave a literal `{{user}}`.
+- Tests for each meta-prompt, including the optimizer refine-pass guardrails that were untested.
+- Docs: four generator help pages; CLAUDE.md "Character fields" note.
+
+#### Sample prompts: "Whose story it is" safeguards (anti-committee phase 1)
+
+- All 21 shipped sample prompts now carry a universal block: the user's narration is what happened
+  (including out-of-character stage directions, in whatever marking the chat uses), check the
+  conversation before correcting the user, don't invent setting facts to win a point, agreements
+  binding the user exist only in plain words, and disagreement never becomes procedure (votes,
+  sign-offs, second keys, standing conditions). Ollama samples get a compact Do/Don't form.
+- Each file's failure-mode list gains "the committee"; existing "hold the position" lines keep
+  their text and gain a counterweight clause.
+- Companion, platonic, and romantic samples add a trust disposition (the user's judgment is the
+  starting point; back them first in a crisis). MODERN General stays relationship-neutral.
+- Plugin bumped to 1.1.25; `index.ts` no longer reports a stale 1.1.0. Built-in rows refresh on
+  next read; users' imported and copied prompts are untouched.
+- New `__tests__/unit/plugins/default-system-prompts-content.test.ts` reads the shipped `.md` files.
+- Docs: `help/prompts.md`, the plugin README, `PROMPT_ARCHITECTURE.md`,
+  `SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md`.
+
 #### Fixed: bug 173, raw CLI SQL prints compressed message text as Buffer JSON
 
 - `quilltap db "<sql>"` (table and `--json`) and SQL typed at `--repl` now decode compressed-text

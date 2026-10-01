@@ -27,6 +27,8 @@ import {
   PROMPT_SEMANTICS,
   PROPERTIES_SEMANTICS,
   CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  GATED_COMPANION_TRUST_DISPOSITION,
   EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
@@ -226,7 +228,11 @@ Character facts live in the identity/description/personality/manifesto fields â€
 
 ${CONVERSATIONAL_VOICE_DIRECTION}
 
-Keep it under 500 words but comprehensive.`,
+${TRUST_SAFEGUARDS_DIRECTION}
+
+${GATED_COMPANION_TRUST_DISPOSITION}
+
+Keep it under 600 words but comprehensive.`,
 };
 
 export const PROPERTIES_PROMPT = `${PROPERTIES_SEMANTICS}

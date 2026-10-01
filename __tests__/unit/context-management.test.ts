@@ -1006,6 +1006,91 @@ describe('Context Manager', () => {
       expect(userMsg.content).toContain('## Memories About Other Characters')
     })
 
+    // Anti-committee §9: the chained-turn scene note. A chained turn carries no
+    // new user message, so the human's narration sits mid-history; the note
+    // rides first in the trailing user message and is absent otherwise.
+    describe('user narration anchor (chained turns)', () => {
+      const chainedRepos = () => ({
+        memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+        chatInforms: {
+          findPendingForParticipant: jest.fn().mockResolvedValue([]),
+          findConsumedByMessages: jest.fn().mockResolvedValue([]),
+        },
+      })
+      const chat = {
+        id: 'chat-1',
+        userId: 'user',
+        participants: allParticipants,
+        title: 'Test Chat',
+        contextSummary: null,
+        sillyTavernMetadata: null,
+        tags: [],
+        messageCount: 2,
+        lastMessageAt: timestamp,
+        lastRenameCheckInterchange: 0,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }
+      const history: MessageWithParticipant[] = [
+        { role: 'USER', content: '((The engine stalls.))', id: 'u1', participantId: 'participant-user', createdAt: timestamp },
+        { role: 'ASSISTANT', content: 'The engine is running fine.', id: 'a1', participantId: 'participant-b', createdAt: timestamp },
+      ]
+      const run = (overrides: Record<string, unknown>) =>
+        buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat,
+          existingMessages: history.map(m => ({ role: m.role, content: m.content, id: m.id })),
+          embeddingProfileId: null,
+          skipMemories: true,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: history,
+          ...overrides,
+        } as any)
+
+      it('pushes the scene note as the trailing message on a chained turn', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const result = await run({ humanTurnMessageIds: new Set(['u1']) })
+        const tail = result.messages[result.messages.length - 1]
+        expect(tail.role).toBe('user')
+        expect(tail.content.startsWith("Scene note: Alex's most recent message is the current state of the scene.")).toBe(true)
+      })
+
+      it('leads the trailing message, ahead of the turn-skip note', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const result = await run({
+          humanTurnMessageIds: new Set(['u1']),
+          turnSkip: { offerSkip: true, recentlyAddressed: false, characterName: 'Lyra' },
+        })
+        const tail = result.messages[result.messages.length - 1].content
+        expect(tail.startsWith('Scene note:')).toBe(true)
+        expect(tail).toContain('\n\n---\n\n')
+        expect(tail.indexOf('Scene note:')).toBeLessThan(tail.indexOf('[NOTHING TO ADD]'))
+      })
+
+      it('is byte-identical to no anchor when the human has not spoken', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const withIds = await run({ humanTurnMessageIds: new Set(['not-in-window']) })
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const without = await run({})
+        expect(withIds.messages).toEqual(without.messages)
+        expect(without.messages.some(m => typeof m.content === 'string' && m.content.includes('Scene note:'))).toBe(false)
+      })
+
+      it('never fires on the first responder, who has the new user message', async () => {
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const withIds = await run({ humanTurnMessageIds: new Set(['u1']), newUserMessage: 'Onward.' })
+        mockedGetRepositories.mockReturnValue(chainedRepos() as any)
+        const without = await run({ newUserMessage: 'Onward.' })
+        expect(withIds.messages).toEqual(without.messages)
+      })
+    })
+
     it('ignores summary/system messages when scanning off-scene mentions', async () => {
       const offSceneCharacter: Character = {
         ...characterA,

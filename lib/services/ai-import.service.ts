@@ -25,6 +25,8 @@ import {
   PROPERTIES_SEMANTICS,
   PHYSICAL_DESCRIPTION_SEMANTICS,
   CONVERSATIONAL_VOICE_DIRECTION,
+  TRUST_SAFEGUARDS_DIRECTION,
+  GATED_COMPANION_TRUST_DISPOSITION,
   EXAMPLE_DIALOGUE_COVERAGE,
 } from '@/lib/services/character-field-semantics';
 import {
@@ -196,7 +198,7 @@ Respond with JSON:
 
 For exampleDialogues: ${EXAMPLE_DIALOGUE_COVERAGE}`;
 
-const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
+export const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
 
 Create system prompts that instruct an AI how to roleplay as this character.
 
@@ -204,14 +206,19 @@ Respond with JSON array:
 [
   {
     "name": "Main",
-    "content": "A comprehensive system prompt (300-500 words) covering identity, speech patterns, behaviors, boundaries, and relationship dynamics. Write in second person ('You are...', 'You always...').",
+    "content": "A comprehensive system prompt (300-600 words) covering identity, speech patterns, behaviors, boundaries, and relationship dynamics. Write in second person ('You are...', 'You always...').",
     "isDefault": true
   }
 ]
 
 The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.
 
-${CONVERSATIONAL_VOICE_DIRECTION}`;
+${CONVERSATIONAL_VOICE_DIRECTION}
+
+${TRUST_SAFEGUARDS_DIRECTION}
+
+${GATED_COMPANION_TRUST_DISPOSITION}
+Use the relationships array in the Prior Analysis, where one is given, as evidence for that decision.`;
 
 const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
 

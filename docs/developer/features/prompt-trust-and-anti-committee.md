@@ -1,6 +1,6 @@
 # Prompt Trust and Anti-Committee Safeguards
 
-**Status:** Approved (2026-09-30) — spec final, §13 decisions recorded; implementation not yet started, awaiting a separate go-ahead.
+**Status:** Implemented (2026-10-01) in 4.10-dev, all four phases — see §15 "As built". The §10.3 live eval has not yet been run against a real cheap model; the spec moves to `complete/` once it has.
 **Scope:** quilltap-server. The 21 shipped sample prompts in the `default-system-prompts` plugin; the four LLM features that write character persona text (AI Wizard, Summon From Lore, Character Optimizer, External Prompt generator) and the shared `character-field-semantics.ts` they draw from; the Commonplace Book turn extractor's SELF and OTHER prompts plus the turn-transcript renderer that feeds them; one new trailing per-turn context note on chained multi-character turns. No schema change, no migration, no new table, no `.qtap` export change.
 **Non-scope:** users' own prompt copies (never touched); the roleplay *templates* (formatting entity, separate from the sample prompts); the Scenario Builder (writes a scene, not a character); the server-side cure for the turn race itself (documented as a follow-up in §9).
 **Related:** [prompt-person-consistency.md](complete/prompt-person-consistency.md) (generator chokepoint pattern this spec extends), [memory-extraction-enrichment.md](complete/memory-extraction-enrichment.md) (the extractor prompts this spec amends), [character-progressions.md](complete/character-progressions.md) (the trailing-section pattern §9 copies), [context-summary-speaker-names.md](complete/context-summary-speaker-names.md) (bug 161: a cheap LLM told to name something it had no name for invented one — the same failure class as manufactured consent).
@@ -582,3 +582,26 @@ Small commits, each shippable alone, each with its CHANGELOG line and help updat
 3. **Memory extraction** — renderer heading, SELF/OTHER sections and anchors, user-persona preamble, episode sentence, unit tests, the fixture, the opt-in eval; help pages.
 4. **Narration anchor** — new module, `context-manager.ts` wiring, tests; `help/chat-multi-character.md`.
 5. **Verify** — full `npm run test:unit`, `npx tsc`, `npm run lint`; run the §10.3 eval against V4test's cheap-LLM profile and record the pass rate in this document's "As built" section; attach the §10.4 rendered prompts.
+
+## 15. As built (2026-10-01)
+
+All four phases shipped as specified; the deviations and additions are below.
+
+**Phase 1 — sample prompts.** All 21 files carry U (or C for Ollama), F, and the §6.4 counterweights; T is in every file except MODERN_GENERAL. Plugin 1.1.25, `index.ts` version fixed. Adaptations:
+
+- Files written in second person (GPT5, GPT4O, GROK, MISTRAL, DeepSeek, Claude) got U and T in second person rather than U verbatim with `{{char}}`.
+- Several romantic files had no "Endless agreement is not love." saint line (CLAUDE, GPT4O, GPT5, GROK, GEMINI, DEEPSEEK, MISTRAL, GENERIC romantic). The governance clause went on the nearest equivalent ("…is nobody. Nor is a partner who governs…", or the sentence added before it). Where a family's named T section does not exist in the romantic sibling, T ends the nearest equivalent ("How you are", "What makes you you", "The relationship").
+- Ollama's consent bullet ends "— agreement is in plain words" and its T bullet ends "— trust in their judgment is the starting point", so the content test's phrases hold in the compact form. OLLAMA_ROMANTIC does not carry the household-split sentence.
+- `__tests__/unit/plugins/default-system-prompts-content.test.ts` asserts §6.6 per file (140 cases).
+
+**Phase 2 — generators.** Two extra exports beside the three constants: `COMPANION_TRUST_DISPOSITION_GATE` (the §7.2 gate sentence) and `GATED_COMPANION_TRUST_DISPOSITION` (gate + disposition), so the Wizard, Summon From Lore and External Prompt share one gated paragraph and the tests can check order. The optimizer's refine and new-prompt passes carry their own framing-based gate (§7.3) before the bare disposition. `SUGGESTION_SCHEMA_PREAMBLE`, `SYSTEM_PROMPTS_PROMPT` and `META_SYSTEM_PROMPT` are now exported for tests. The External Prompt meta-prompt also tells the model to name the person in plain words rather than leave a literal `{{user}}`, since external tools do not substitute placeholders.
+
+**Phase 3 — memory extraction.** The AGREEMENTS section is one constant (`AGREEMENTS_INSTRUCTION_BLOCK`) interpolated into both bodies. The ordered heading is `ORDERED_TURN_TRANSCRIPT_HEADING`, exported. The bad-assent items are a second OTHER bad example rather than appended to the existing one, because that one's "Correct output: []" does not apply to them. The §10.2 fixture lives at `__tests__/unit/lib/fixtures/proposal-no-reply.ts`, not `__tests__/unit/lib/memory/fixtures/`: jest's `testMatch` treats every `.ts` under `__tests__/unit/` as a suite except that ignored directory. The unit regression is `lib/memory/cheap-llm-tasks/__tests__/memory-consent-regression.test.ts`.
+
+**§10.3 eval.** `__tests__/eval/memory-consent/` is skipped unless `MEMORY_CONSENT_EVAL_MODEL` is set. It sends the real extractor prompts to any OpenAI-compatible endpoint (see its README) rather than going through a connection profile, so it runs without an instance. **Pass rate: not yet recorded** — the implementing session had no instance or API key. Run it against V4test's cheap-LLM model and record the result here.
+
+**Phase 4 — narration anchor.** `lib/chat/context/user-narration-anchor.ts`. The caller (`context-builder.service.ts`) passes its existing `userTurnMessageIds` into `buildContext` as `humanTurnMessageIds`; the name is `userCharacter?.name || 'User'`, the same resolution `{{user}}` gets in the identity stack. A character line after the human's is recognised by role `assistant` or by a `participantId` that is not a human turn, because multi-character attribution re-roles other characters' replies to `user`.
+
+**§10.4 review copies.** CLAUDE_COMPANION, DEEPSEEK_COMPANION and GENERIC_COMPANION were rendered through `processTemplate` (char Amy, user Owen) for a read-through; no placeholders survived.
+
+**Verification.** `npx tsc` clean; `npm run lint` clean; `npm run test:unit` 925 suites / 13,893 tests passed (the eval suite skipped).

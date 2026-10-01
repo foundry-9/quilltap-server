@@ -182,6 +182,30 @@ You may return ONE memory beyond the stated cap only when that extra
 memory is a dated or placed EVENT — events must not crowd out hinge or
 state candidates.`
 
+/**
+ * Shared by the SELF and OTHER bodies. Mechanism 6 of the anti-committee
+ * spec: a character states a condition, the turn ends on it, and the
+ * extractor records "{{user}} agreed" for every observer. Assent must be
+ * spoken by the agreeing party; proposals stay proposals; limits stay in.
+ * See docs/developer/features/prompt-trust-and-anti-committee.md §8.
+ */
+const AGREEMENTS_INSTRUCTION_BLOCK = `AGREEMENTS, PROPOSALS, AND CONDITIONS — read these strictly
+- Record an agreement ONLY when the agreeing party's own words of
+  assent appear in this transcript, spoken by that party: "yes,"
+  "fine," "deal," "I'll do it." Nothing else counts.
+- A condition, demand, rule, or proposal is recorded as what it is and
+  attributed to whoever said it — "X proposed…", "X asked that…",
+  "X set a condition that…" — never as accepted by anyone else.
+- Silence is not assent. Neither is the exchange ending, an apology,
+  self-criticism, a change of subject, "I'll think about it," or
+  "I need to sit with that." When a proposal was the last word, say
+  so: "…; <name> had not yet responded."
+- The USER's lines came BEFORE every character line in this turn, so
+  nothing the USER said can be assent to a proposal made after it.
+- Keep stated limits in the text: "until breakfast," "for tonight,"
+  "custody, not confiscation — back at breakfast." A memory that
+  drops the limit records a different, larger thing than was said.`
+
 const TAGS_INSTRUCTION_BLOCK = `TAGS — every memory object MUST carry exactly one value from each axis.
 These describe the memory's frame; they do not change its content.
 
@@ -190,6 +214,8 @@ These describe the memory's frame; they do not change its content.
             moment  — true only at this instant in the scene
             present — true now and expected to stay true
             future  — a stated intent or commitment not yet acted on
+                      (the speaker's own; a proposal awaiting someone
+                      else's answer is \`moment\`)
 
   scope     one of: narrow | wide
             narrow  — true only inside this project / story
@@ -287,14 +313,17 @@ WHAT TO SKIP
   exit codes, commit hashes, command names.
 ${ORIENTING_CONTEXT_SKIP_BULLET}
 
+${AGREEMENTS_INSTRUCTION_BLOCK}
+
 DEDUPLICATION
 Before finalizing, scan your own list. If two memories encode the
 same underlying realization or decision in different words, keep
 the more specific one and drop the other.
 
 IMPORTANCE — calibrate to these anchors
-  0.90  The subject made a major commitment or had a self-revelation
-        that changes how they understand themselves.
+  0.90  The subject made a major commitment (one the subject spoke
+        themselves) or had a self-revelation that changes how they
+        understand themselves.
   0.65  The subject formed a substantive new opinion, plan, or
         position.
   0.40  The subject expressed a fresh preference, reaction, or novel
@@ -378,7 +407,11 @@ const FIRST_PERSON_USER_CLAUSE =
   `the SUBJECT's lines in the transcript may be written in the first person. ` +
   `Read every "I", "me", "my", and "myself" in the SUBJECT's own lines as ` +
   `referring to the SUBJECT — attribute those decisions, realizations, and ` +
-  `actions to the SUBJECT, not to anyone else in the exchange.\n\n`
+  `actions to the SUBJECT, not to anyone else in the exchange. ` +
+  `The SUBJECT's lines came first in this turn and the SUBJECT has not yet ` +
+  `responded to anything the characters said after them. Never record the ` +
+  `SUBJECT as having accepted, agreed to, or consented to anything proposed ` +
+  `in those later lines.\n\n`
 
 function getSelfMemoryExtractionPrompt(
   maxMemories: number,
@@ -431,8 +464,9 @@ Do not pad to reach the cap. Subjects with nothing worth keeping
 should simply be omitted from the array.
 
 WHAT TO PICK (priority order, applied per subject)
-1. HINGES — a decision, commitment, agreement, refusal, or realignment
-   formed during this exchange.
+1. HINGES — a decision, commitment, agreement (spoken by the agreeing
+   party — see AGREEMENTS below), refusal, or realignment formed
+   during this exchange.
 2. NEW FACTS — concrete information about the subject that is not in
    their ALREADY ESTABLISHED block (each subject has their own block
    in the CONTEXT footer): background, history, plans, skills,
@@ -469,6 +503,8 @@ WHAT TO SKIP (do not produce a memory for any of these)
 - Anything implied by previously-established facts about the subject.
 ${ORIENTING_CONTEXT_SKIP_BULLET}
 
+${AGREEMENTS_INSTRUCTION_BLOCK}
+
 DEDUPLICATION
 Before finalizing, scan your own list. Within a single subject, if two
 memories encode the same underlying fact in different words, keep the
@@ -477,10 +513,14 @@ distinct memories about the same event from their own angle — that
 is allowed and expected.
 
 IMPORTANCE — calibrate to these anchors
-  0.90  An explicit new commitment or revelation that changes how the
-        observer relates to the subject.
+  0.90  An explicit new commitment the subject themselves spoke, or a
+        revelation, that changes how the observer relates to the
+        subject. A proposal made TO the subject is not the subject's
+        commitment.
   0.60  A new substantive fact about the subject's background, plans,
         or skills.
+  0.55  A proposal, condition, or demand the subject stated, not yet
+        answered.
   0.40  A new preference, trait, or novel gesture expressed in passing.
   0.20  A specific event occurred with the subject present, no new
         information.
@@ -522,6 +562,16 @@ EXAMPLE — good extraction (observer is Friday, subjects 1=Amy 2=Charlie):
     "temporal": "future",
     "scope": "narrow",
     "context": "information"
+  },
+  {
+    "subjectIndex": 1,
+    "content": "Amy set a condition that nothing fires without the household hearing it first; Charlie had not yet responded when the exchange ended.",
+    "summary": "proposed household-hears-first condition",
+    "keywords": ["condition", "proposal", "household"],
+    "importance": 0.55,
+    "temporal": "moment",
+    "scope": "narrow",
+    "context": "relationships"
   }
 ]
 
@@ -537,6 +587,15 @@ identity fact about subject 1, all should be skipped):
 ]
 All six restate facts in subject 1's ALREADY ESTABLISHED block.
 Correct output: [].
+
+EXAMPLE — bad extraction (assent invented for subject 2):
+[
+  { "subjectIndex": 2, "content": "Charlie agreed that nothing fires without the household hearing it first", "importance": 0.85 },
+  { "subjectIndex": 2, "content": "Charlie accepted the new household rule", "importance": 0.8 }
+]
+Charlie said nothing after Amy's condition; recording assent invents
+it. Correct output: the condition attributed to Amy, as in the third
+good item above.
 
 ${EVENT_INSTRUCTION_BLOCK}
 
@@ -774,6 +833,10 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
   }
 }
 
+/** The transcript heading when the turn carries a human line (spec §8.2). */
+export const ORDERED_TURN_TRANSCRIPT_HEADING =
+  "TURN TRANSCRIPT (in the order spoken — the USER's lines came first; nothing the USER says here answers anything a character says below it):"
+
 /**
  * Render the participant roster + joined transcript for inclusion in
  * extraction prompts. Single shared formatter so the user-pass, self-pass
@@ -829,9 +892,17 @@ function renderTurnContext(transcript: TurnTranscript): string {
     transcriptSections.push(`${characterLabel} says:\n"${slice.text}"`)
   }
 
+  // By construction the human's line opens the turn and the next human line
+  // is not in it, so nothing the human says here answers a character below.
+  // Saying so is what keeps the extractor from manufacturing assent. A turn
+  // with no human line keeps the plain heading, byte-identical to before.
+  const heading = transcript.userMessage !== null || hasUserSlice
+    ? ORDERED_TURN_TRANSCRIPT_HEADING
+    : 'TURN TRANSCRIPT:'
+
   return `${roster.join('\n')}
 
-TURN TRANSCRIPT:
+${heading}
 
 ${transcriptSections.join('\n\n')}`
 }
@@ -1088,6 +1159,8 @@ For each episode:
   participants  names of those involved
   importance    0.20–1.00 (0.9 = a day the participants will retell for
                 years; 0.5 = a pleasant but ordinary outing)
+
+An episode records what was said and done, not what was agreed: attribute proposals and conditions to their speaker, and record an agreement only where the agreeing party's own assent appears in the window.
 
 Return a JSON array only. No prose, no code fences. If nothing qualifies, return [].`
 

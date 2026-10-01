@@ -1131,6 +1131,8 @@ export async function buildMessageContext(
     turnSkip: options.turnSkip,
     // Swipe re-apply: deliver the informs the re-rolled line's generation saw.
     regenerationOfMessageIds: options.regenerationOfMessageIds,
+    // The human's own turns, for the chained-turn scene note.
+    humanTurnMessageIds: userTurnMessageIds,
   })
 
   // Log context building results for debugging

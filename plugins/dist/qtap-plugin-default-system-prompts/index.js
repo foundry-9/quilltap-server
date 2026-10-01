@@ -21536,7 +21536,7 @@ var plugin = createSystemPromptPlugin({
     pluginId: "default-system-prompts",
     displayName: "Default System Prompts",
     description: "Built-in system prompt templates for various LLM models in companion and romantic categories",
-    version: "1.1.0"
+    version: "1.1.25"
   },
   prompts: loadPrompts()
 });
