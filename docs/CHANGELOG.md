@@ -69,6 +69,17 @@
 - Docs: `help/prompts.md`, the plugin README, `PROMPT_ARCHITECTURE.md`,
   `SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md`.
 
+#### Fixed: bug 173, raw CLI SQL prints compressed message text as Buffer JSON
+
+- `quilltap db "<sql>"` (table and `--json`) and SQL typed at `--repl` now decode compressed-text
+  values before printing, so `SELECT content FROM chat_messages …` shows text for long messages
+  instead of `{"type":"Buffer","data":[…]}`. Only values with the compressed-text header
+  (`0x51 0x01 0x01`) are decoded; embedding BLOBs and other binary columns print as before.
+- New `decodeCompressedTextInRows` in `packages/quilltap/lib/text-codec.js`. `qt_text()` is still
+  needed to work on the text inside SQL (`WHERE`, `LIKE`, `json_extract`); the CLI README now says so.
+- Extended `__tests__/unit/packages/quilltap/db-raw-sql-qt-text.integration.test.js` with a mixed
+  compressed/plain fixture, table-output and `--repl` cases, and an embedding-BLOB case.
+
 #### Spec: prompt trust and anti-committee safeguards
 
 - Added `docs/developer/features/prompt-trust-and-anti-committee.md`, the approved design for

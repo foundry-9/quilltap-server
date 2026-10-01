@@ -109,6 +109,8 @@ npx quilltap db --llm-logs --tables
 npx quilltap db --data-dir /path/to/data --tables
 ```
 
+A word on the longer messages: Quilltap keeps any message of 512 bytes or more folded up in compressed form, the way a sensible traveller rolls shirts rather than packing them flat. When a query *returns* such a column — `SELECT content FROM chat_messages`, say — the command unrolls it for you, so the text prints as text. When you need to work on the text *inside* the query (a `WHERE … LIKE`, a `substr`, a `json_extract`), wrap the column in `qt_text()` first: `SELECT id FROM chat_messages WHERE qt_text(content) LIKE '%pie%'`.
+
 ### Tidying Up the Premises
 
 From time to time — particularly after a great churn of message deletion, log pruning, or document-store reshuffling — the databases will accumulate unused pages and grow stale query-planner statistics. A spot of housekeeping reclaims the disk space and restores the planner's wits:

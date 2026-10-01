@@ -14,6 +14,7 @@ const {
   openEncryptedDb,
 } = require('../lib/db-helpers');
 const { resolveInstance } = require('../lib/instances');
+const { decodeCompressedTextInRows } = require('../lib/text-codec');
 const { resolveModuleDir, ensureNativeModules, ensureDatabaseNativeModule } = require('../lib/native-modules');
 
 const PACKAGE_DIR = path.resolve(__dirname, '..');
@@ -1042,6 +1043,8 @@ async function dbCommand(args) {
       const stmt = db.prepare(sql);
       if (stmt.reader) {
         const rows = stmt.all();
+        // Compressed text columns arrive as Buffers; print them as text (bug 173).
+        decodeCompressedTextInRows(rows);
         if (asJson) {
           console.log(JSON.stringify(rows, null, 2));
         } else if (rows.length === 0) {
@@ -1110,6 +1113,7 @@ async function dbCommand(args) {
             const stmt = db.prepare(trimmed);
             if (stmt.reader) {
               const rows = stmt.all();
+              decodeCompressedTextInRows(rows);
               if (rows.length === 0) console.log('(no results)');
               else console.table(rows);
             } else {
