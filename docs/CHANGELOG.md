@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Spec: prompt trust and anti-committee safeguards
+
+- Added `docs/developer/features/prompt-trust-and-anti-committee.md`, the approved design for
+  stopping long multi-character roleplay from drifting into "the committee": characters governing
+  the user's persona with votes, sign-offs, and standing conditions, contradicting narrated events
+  from their notes, treating silence as consent, and remembering temporary measures as permanent.
+- Covers the 21 shipped sample prompts (a universal block in each family's native structure, a
+  committee failure-mode bullet, a trust disposition for companion/platonic/romantic variants only,
+  and counterweights on existing "hold the position" lines), the four prompt generators (one shared
+  direction in `character-field-semantics.ts`; the Character Optimizer treats committee behavior as
+  drift and may never propose a rule constraining the user), the memory extractor (agreements only
+  on explicit assent, proposals attributed to their speaker, "had not yet responded", limits kept),
+  and a trailing scene note on chained multi-character turns.
+- Records the survey findings the design rests on, including the server-side turn race (a stopped
+  character turn finishes and lands after the user's newer message), which is left as a follow-up.
+- Spec only; no code changes yet.
+
 #### Filed: bug 173, raw CLI SQL prints compressed message text as Buffer JSON
 
 - `quilltap db "<sql>"` (table, `--json`, `--repl`) prints compressed `chat_messages.content`
