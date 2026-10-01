@@ -28,6 +28,17 @@ So when control passes back to the machine, the character carries forward everyt
 - **It tells the others, too.** Just as before, the *other* characters in the scene continue to form their own memories *about* the figure you are playing. That was always so; what is new is that the figure now remembers them back.
 - **A note on revisiting the past.** Should you ever ask the Book to [reconsider a conversation already had](memory-regenerate.md), it will now offer up the memories your played character would have formed as well — there for your inspection before anything is written down.
 
+## What Counts as an Agreement
+
+The Book is now a stickler about consent, and nowhere more so than for the character you play. Within a turn your line always comes first, so nothing you wrote can be assent to a proposal some other character made *after* it — and the Book will never file your character as having agreed, accepted, or consented to such a thing. More generally, for every character in the room:
+
+- **Only explicit assent counts** — the agreeing party's own words ("yes," "fine," "deal") in the transcript. Silence, the scene ending, an apology, self-reproach, or "I need to sit with that" do not.
+- **A proposal is recorded as a proposal**, attributed to whoever made it: "Amy set a condition that…", never "Charlie agreed that…".
+- **Stated limits are kept.** Custody "until breakfast" is remembered as lasting until breakfast, not forever.
+- **A proposal that was the last word is marked as such** — "…; Charlie had not yet responded." If you accept it on your next turn, that turn's memories record the acceptance in its own right.
+
+Memories formed before this rule arrived are left as they were. If some of them claim an agreement that never happened, [Regenerate the Commonplace Book](memory-regenerate.md) re-extracts the conversation under the new rules (or simply delete the offending entry).
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

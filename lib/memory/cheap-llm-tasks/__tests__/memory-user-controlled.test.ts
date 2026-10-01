@@ -9,6 +9,7 @@
 // ── Subject ───────────────────────────────────────────────────────────────────
 import {
   extractSelfMemoriesFromTurn,
+  ORDERED_TURN_TRANSCRIPT_HEADING,
 } from '../memory-tasks';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -110,6 +111,13 @@ describe('SELF first-person preamble (isUserControlled)', () => {
     expect(ucSystem.length).toBeGreaterThan(aiSystem.length);
     expect(ucSystem.startsWith('IMPORTANT: The SUBJECT below is ' + CLAUSE_MARKER)).toBe(true);
   });
+
+  it('tells the extractor the SUBJECT has not yet answered anything said after their lines', async () => {
+    await runSelf(transcript([obsSlice(true)]), 'obs');
+    const system = lastSystemMessage();
+    expect(system).toContain('the SUBJECT has not yet responded to anything the characters said after them');
+    expect(system).toContain('Never record the SUBJECT as having accepted, agreed to, or consented to anything');
+  });
 });
 
 describe('renderTurnContext — user-controlled single-feed + roster', () => {
@@ -174,5 +182,30 @@ describe('renderTurnContext — user-controlled single-feed + roster', () => {
     expect(user).toContain('The user says:');
     expect(user).toContain('Avery (the character) says:');
     expect(user).not.toContain('the user-controlled character');
+  });
+
+  it('uses the ordered heading when the turn carries a user line', async () => {
+    const t = transcript([aiSlice], { userMessage: 'tell me a story' });
+    await runSelf(t, 'char-a');
+    const user = lastUserMessage();
+    expect(user).toContain(ORDERED_TURN_TRANSCRIPT_HEADING);
+    expect(user).not.toMatch(/^TURN TRANSCRIPT:$/m);
+  });
+
+  it('uses the ordered heading when the user line arrives as a user-controlled slice', async () => {
+    const t = transcript([userSlice, aiSlice], {
+      userMessage: 'I refuse to go.',
+      userCharacterId: 'char-user',
+      userCharacterName: 'Operator',
+    });
+    await runSelf(t, 'char-a');
+    expect(lastUserMessage()).toContain(ORDERED_TURN_TRANSCRIPT_HEADING);
+  });
+
+  it('keeps the plain heading when no user line exists (greeting-only turn)', async () => {
+    await runSelf(transcript([aiSlice]), 'char-a');
+    const user = lastUserMessage();
+    expect(user).toMatch(/^TURN TRANSCRIPT:$/m);
+    expect(user).not.toContain(ORDERED_TURN_TRANSCRIPT_HEADING);
   });
 });

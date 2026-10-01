@@ -268,3 +268,34 @@ describe('Prompt structure — TAGS block, skip bullet, and cache-safe ORIENTING
     expect(system).not.toContain('x'.repeat(1501));
   });
 });
+
+describe('agreements, proposals, and conditions (anti-committee §8.3)', () => {
+  it('SELF prompt carries the AGREEMENTS section between WHAT TO SKIP and DEDUPLICATION', async () => {
+    await runSelf();
+    const system = lastSystemMessage();
+    const skip = system.indexOf('WHAT TO SKIP');
+    const agreements = system.indexOf('AGREEMENTS, PROPOSALS, AND CONDITIONS');
+    const dedup = system.indexOf('DEDUPLICATION');
+    expect(skip).toBeGreaterThan(-1);
+    expect(agreements).toBeGreaterThan(skip);
+    expect(dedup).toBeGreaterThan(agreements);
+    expect(system).toContain('had not yet responded');
+    expect(system).toContain('(one the subject spoke');
+  });
+
+  it('OTHER prompt carries the AGREEMENTS section, the spoken-assent hinge, and the 0.55 anchor', async () => {
+    await runOther();
+    const system = lastSystemMessage();
+    expect(system).toContain('AGREEMENTS, PROPOSALS, AND CONDITIONS');
+    expect(system).toContain('agreement (spoken by the agreeing');
+    expect(system).toContain('A proposal made TO the subject is not the subject\'s');
+    expect(system).toMatch(/0\.55 {2}A proposal, condition, or demand the subject stated, not yet\s+answered\./);
+    expect(system).toContain('Charlie had not yet responded when the exchange ended');
+    expect(system).toContain('recording assent invents');
+  });
+
+  it('TAGS block reserves `future` for the speaker\'s own intent', async () => {
+    await runSelf();
+    expect(lastSystemMessage()).toContain("a proposal awaiting someone\n                      else's answer is `moment`");
+  });
+});

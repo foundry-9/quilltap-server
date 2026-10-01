@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Memory extraction stops manufacturing consent (anti-committee phase 3)
+
+- SELF and OTHER extractor prompts gain an AGREEMENTS, PROPOSALS, AND CONDITIONS section: record an
+  agreement only on the agreeing party's own words of assent; record proposals and conditions as
+  such, attributed to their speaker; silence, an apology, or the exchange ending is not assent
+  ("…; X had not yet responded"); keep stated limits ("until breakfast").
+- OTHER's hinge and 0.90 importance anchor now require the subject to have spoken the commitment;
+  new 0.55 anchor for an unanswered proposal; a new good example and a new bad example (invented
+  assent). SELF's 0.90 anchor gets the same clause; the `future` tag excludes proposals.
+- The user-persona SELF preamble states the persona has not yet answered anything said after their
+  line. The turn transcript heading says the user's lines came first when the turn has one.
+- The episode pass records proposals as proposals.
+- Regression fixture (`__tests__/unit/lib/fixtures/proposal-no-reply.ts`) and unit test; opt-in
+  live eval in `__tests__/eval/memory-consent/` (skipped unless `MEMORY_CONSENT_EVAL_MODEL` is set).
+- Existing memories are untouched; Regenerate memories re-extracts under the new rules.
+- Docs: `help/memory-playing-a-character.md`, `help/episodic-memory.md`.
+
 #### Character generators carry the trust safeguards (anti-committee phase 2)
 
 - `character-field-semantics.ts` adds `TRUST_SAFEGUARDS_DIRECTION`, `COMPANION_TRUST_DISPOSITION`
