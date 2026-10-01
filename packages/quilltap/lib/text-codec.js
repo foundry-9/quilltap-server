@@ -58,4 +58,33 @@ function registerTextCodecFunction(db) {
   db.function('qt_text', { deterministic: true }, (value) => decodeText(value));
 }
 
-module.exports = { decodeText, isCompressedTextBlob, registerTextCodecFunction };
+/**
+ * Decode every compressed-text value in a set of result rows, in place, for
+ * printing. Raw SQL (`quilltap db "SELECT content …"`, `--repl`) hands BLOBs to
+ * `JSON.stringify` / `console.table` as Buffers, which print as
+ * `{"type":"Buffer","data":[…]}` and read as data loss (bug 173). Only values
+ * carrying the `0x51 0x01 0x01` header are touched — embedding BLOBs and other
+ * binary columns pass through unchanged, as does anything already text
+ * (including an explicit `qt_text()`). Returns the number of values decoded.
+ */
+function decodeCompressedTextInRows(rows) {
+  let decoded = 0;
+  if (!Array.isArray(rows)) return decoded;
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    for (const key of Object.keys(row)) {
+      if (isCompressedTextBlob(row[key])) {
+        row[key] = decodeText(row[key]);
+        decoded++;
+      }
+    }
+  }
+  return decoded;
+}
+
+module.exports = {
+  decodeText,
+  decodeCompressedTextInRows,
+  isCompressedTextBlob,
+  registerTextCodecFunction,
+};

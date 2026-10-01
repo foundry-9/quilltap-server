@@ -7,6 +7,9 @@
  * column nor write a `chat_messages` row (the FTS5 sync triggers call the
  * function, so the write failed loudly).
  *
+ * Also covers bug 173 — the raw-SQL printer handed compressed BLOBs to
+ * JSON.stringify / console.table, which printed them as Buffer byte arrays.
+ *
  * These drive the bin itself, because the defect lived in the bin's private
  * opener and not in `openEncryptedDb`, which had the registration all along.
  */
@@ -43,6 +46,7 @@ function compressText(text) {
 const LONG_TEXT =
   'The Tuesday-night pie was, as ever, an act of considerable optimism. ' +
   'x'.repeat(600);
+const SHORT_TEXT = 'A brief remark, well under the compression floor.';
 
 /** Run the bin's `db` command against the fixture dir; returns stdout. */
 function runDb(tempDir, extraArgs) {
@@ -70,6 +74,7 @@ describe('quilltap db — low-level path registers qt_text() (bug 162)', () => {
         id TEXT PRIMARY KEY,
         chatId TEXT,
         content TEXT,
+        embedding BLOB,
         updatedAt TEXT
       );
       CREATE VIRTUAL TABLE chat_messages_fts USING fts5(content);
@@ -85,8 +90,11 @@ describe('quilltap db — low-level path registers qt_text() (bug 162)', () => {
         VALUES (new.rowid, qt_text(new.content));
       END;
     `);
-    db.prepare('INSERT INTO chat_messages (id, chatId, content, updatedAt) VALUES (?, ?, ?, ?)')
-      .run('m-1', 'c-1', compressText(LONG_TEXT), '2026-09-21T23:30:00.000Z');
+    const insert = db.prepare(
+      'INSERT INTO chat_messages (id, chatId, content, embedding, updatedAt) VALUES (?, ?, ?, ?, ?)'
+    );
+    insert.run('m-1', 'c-1', compressText(LONG_TEXT), Buffer.from([0xeb, 1, 2, 3]), '2026-09-21T23:30:00.000Z');
+    insert.run('m-2', 'c-1', SHORT_TEXT, null, '2026-09-21T23:31:00.000Z');
     db.close();
   });
 
@@ -104,10 +112,24 @@ describe('quilltap db — low-level path registers qt_text() (bug 162)', () => {
     expect(rows[0].s).toBe(LONG_TEXT.slice(0, 40));
   });
 
-  it('returns the raw BLOB without qt_text(), so the decode is the function talking', () => {
-    const out = runDb(tempDir, ['--json', 'SELECT content FROM chat_messages LIMIT 1']);
+  it('prints a compressed column as text without qt_text() (bug 173)', () => {
+    const out = runDb(tempDir, ['--json', 'SELECT id, content FROM chat_messages ORDER BY id']);
     const rows = JSON.parse(out);
-    expect(rows[0].content).not.toBe(LONG_TEXT);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].content).toBe(LONG_TEXT);
+    expect(rows[1].content).toBe(SHORT_TEXT);
+  });
+
+  it('prints a compressed column as text in table output (bug 173)', () => {
+    const full = runDb(tempDir, ['SELECT content FROM chat_messages WHERE id = \'m-1\'']);
+    expect(full).toContain(LONG_TEXT.slice(0, 40));
+    expect(full).not.toContain('Buffer');
+  });
+
+  it('leaves non-text BLOBs (embeddings) untouched', () => {
+    const out = runDb(tempDir, ['--json', 'SELECT embedding FROM chat_messages WHERE id = \'m-1\'']);
+    const rows = JSON.parse(out);
+    expect(rows[0].embedding).toEqual({ type: 'Buffer', data: [0xeb, 1, 2, 3] });
   });
 
   it('completes a --write UPDATE whose index trigger calls qt_text()', () => {
@@ -120,7 +142,7 @@ describe('quilltap db — low-level path registers qt_text() (bug 162)', () => {
   });
 
   it('still serves --tables and --count from the same opener', () => {
-    expect(runDb(tempDir, ['--count', 'chat_messages']).trim()).toBe('1');
+    expect(runDb(tempDir, ['--count', 'chat_messages']).trim()).toBe('2');
     expect(runDb(tempDir, ['--tables'])).toContain('chat_messages');
   });
 });
