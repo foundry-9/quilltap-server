@@ -2,18 +2,28 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **FIXED in v4 (2026-10-01)** |
 | **Found** | 2026-09-30, on a 4.9.x named instance, while checking a disputed memory against its source messages with `npx quilltap db --json "SELECT … content FROM chat_messages …"` |
-| **Fixed** | — |
+| **Fixed** | 2026-10-01, v4.10-dev (CLI 4.10.0-dev.101) |
 | **Severity** | Low. No stored data is damaged and the server reads every row correctly. The fault is in CLI output: a raw query shows long messages as byte arrays, which reads as data loss and blocks transcript checks done by hand |
 | **Who it bites** | anyone who runs raw SQL (`quilltap db "<sql>"`, `--json`, `--repl`) against a compressed text column without wrapping it in `qt_text()`. The high-level verbs (`db messages`, `db message`, `db llm-log`) already decode |
 | **Provenance** | Original to v4. Arrived with the compressed text columns in `186eb09cb` (bugs 159, 160, 2026-09-21). That commit added `qt_text()` to the CLI connection and the high-level verbs decode, but the raw-SQL printer passes BLOB values straight to `JSON.stringify` / `console.table` |
 | **Defect site** | `packages/quilltap/bin/quilltap.js:1041–1051` (raw `sql` branch: `stmt.all()` → `JSON.stringify(rows)` / `console.table(rows)`) and the matching `--repl` SQL branch below it |
-| **Fix site** | Not yet fixed. Likely `packages/quilltap/bin/quilltap.js`, raw-SQL and repl output, using `isCompressedTextBlob` / `decodeText` from `packages/quilltap/lib/text-codec.js` |
+| **Fix site** | `packages/quilltap/lib/text-codec.js` (`decodeCompressedTextInRows`), called from the raw-SQL and `--repl` SQL branches of `packages/quilltap/bin/quilltap.js` |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-01).** The raw-SQL printer (table and `--json`) and the `--repl` SQL branch
+pass their rows through `decodeCompressedTextInRows` (`packages/quilltap/lib/text-codec.js`) before
+printing. It decodes only values carrying the `0x51 0x01 0x01` header, so embedding BLOBs and other
+binary columns print as before, and values that are already text (including an explicit
+`qt_text()`) are untouched. Nothing on disk changes. `qt_text()` is still needed to work on the text
+inside SQL (`WHERE`, `LIKE`, `substr`, `json_extract`); the CLI README says so. Pinned by
+`__tests__/unit/packages/quilltap/db-raw-sql-qt-text.integration.test.js` (run under
+`npm run test:integration`), whose three bug-173 cases (`--json`, table, `--repl`) fail without the call and whose embedding case
+holds non-text BLOBs to their old output.
 
 ## Symptom
 
@@ -67,9 +77,9 @@ and its output looks like an encryption envelope rather than a missing function 
 cover the high-level verbs, which decode, and `qt_text()` itself. Nothing covers what a raw query
 prints for an undecoded BLOB.
 
-## The fix (proposed)
+## The fix
 
-In the raw-SQL and `--repl` output paths, replace any column value that passes
+As built. In the raw-SQL and `--repl` output paths, replace any column value that passes
 `isCompressedTextBlob` with its `decodeText` result before printing. This decodes only values with
 the `0x51 0x01 0x01` header, so embedding blobs (`0xEB`) and other binary columns are left alone.
 Values that are already text are unchanged, and an explicit `qt_text()` still works.
