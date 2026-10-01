@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Fix bug 174: vault images sent to Z.AI and NanoGPT as a server path
+
+- Images attached from a document store (character-vault photos, project-store images) failed on
+  every Z.AI vision profile with `400 messages[0].content[0].file must contain at least one of
+  file_id, file_url, or file_data`. The turn stopped and no fallback ran.
+- Cause: `loadMountFileAsAttachment` (`lib/chat-files-v2.ts`) set `FileAttachment.url` to the
+  server-relative `/api/v1/mount-points/…` path beside the base64 `data`, and the Z.AI and NanoGPT
+  plugins sent `url` in preference to `data`. Reproduced against `api.z.ai`; WebP itself is accepted.
+- The host now puts that path in `filepath` only. Both plugins send `data` first and forward a `url`
+  only when it is an absolute http(s) address.
+- `qtap-plugin-z-ai` 1.1.32, `qtap-plugin-nanogpt` 1.2.9.
+- Tests: `__tests__/unit/plugins/image-attachment-url-preference.test.ts`, plus two cases in
+  `__tests__/unit/lib/chat-files-v2-mount-document.test.ts`.
+
 #### Scene note on chained multi-character turns (anti-committee phase 4)
 
 - New `lib/chat/context/user-narration-anchor.ts`. On a chained multi-character turn (no new user

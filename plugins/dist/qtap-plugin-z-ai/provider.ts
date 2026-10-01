@@ -146,9 +146,16 @@ export class ZAIProvider implements TextProvider {
     return parts;
   }
 
+  /**
+   * The bytes win whenever there are any. A URL is used only when it is one the
+   * provider can actually fetch: an absolute http(s) address. Preferring `url`
+   * sent the host's server-relative path for a vault image straight to the
+   * provider, which answered "messages[0].content[0].file must contain at least
+   * one of file_id, file_url, or file_data" and failed the turn (bug 174).
+   */
   private attachmentToImageUrl(attachment: FileAttachment): string | null {
-    if (attachment.url) return attachment.url;
     if (attachment.data) return `data:${attachment.mimeType};base64,${attachment.data}`;
+    if (attachment.url && /^https?:\/\//i.test(attachment.url)) return attachment.url;
     return null;
   }
 

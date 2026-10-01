@@ -587,15 +587,14 @@ async function loadMountFileAsAttachment(
       const document = await repos.docMountDocuments.findByFileId(mountLink.fileId);
       if (document) {
         const buffer = Buffer.from(document.content, 'utf-8');
-        const url = `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`;
+        // `filepath` only, never `url`: see the note on the blob branch below.
         return {
           id: mountLink.id,
-          filepath: url,
+          filepath: `/api/v1/mount-points/${mountLink.mountPointId}/files/${encodeURI(mountLink.relativePath)}`,
           filename: mountLink.originalFileName ?? mountLink.fileName,
           mimeType: textMime,
           size: buffer.length,
           data: buffer.toString('base64'),
-          url,
         };
       }
     }
@@ -661,16 +660,17 @@ async function loadMountFileAsAttachment(
     }
   }
 
-  const url = `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`;
-
+  // The server path goes in `filepath` and never in `url`. `FileAttachment.url`
+  // means "a URL the provider can fetch", and a plugin that honours it sends
+  // it in place of the bytes — so a server-relative path there reached Z.AI
+  // and NanoGPT as an unfetchable image and the turn died with a 400 (bug 174).
   return {
     id: mountLink.id,
-    filepath: url,
+    filepath: `/api/v1/mount-points/${mountLink.mountPointId}/blobs/${encodeURI(mountLink.relativePath)}`,
     filename: mountLink.originalFileName ?? mountLink.fileName,
     mimeType: outputMimeType,
     size: buffer.length,
     data: buffer.toString('base64'),
-    url,
   };
 }
 
