@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Sample prompts: "Whose story it is" safeguards (anti-committee phase 1)
+
+- All 21 shipped sample prompts now carry a universal block: the user's narration is what happened
+  (including out-of-character stage directions, in whatever marking the chat uses), check the
+  conversation before correcting the user, don't invent setting facts to win a point, agreements
+  binding the user exist only in plain words, and disagreement never becomes procedure (votes,
+  sign-offs, second keys, standing conditions). Ollama samples get a compact Do/Don't form.
+- Each file's failure-mode list gains "the committee"; existing "hold the position" lines keep
+  their text and gain a counterweight clause.
+- Companion, platonic, and romantic samples add a trust disposition (the user's judgment is the
+  starting point; back them first in a crisis). MODERN General stays relationship-neutral.
+- Plugin bumped to 1.1.25; `index.ts` no longer reports a stale 1.1.0. Built-in rows refresh on
+  next read; users' imported and copied prompts are untouched.
+- New `__tests__/unit/plugins/default-system-prompts-content.test.ts` reads the shipped `.md` files.
+- Docs: `help/prompts.md`, the plugin README, `PROMPT_ARCHITECTURE.md`,
+  `SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md`.
+
 #### Spec: prompt trust and anti-committee safeguards
 
 - Added `docs/developer/features/prompt-trust-and-anti-committee.md`, the approved design for

@@ -596,6 +596,10 @@ if (plugin.getPrompts) {
 "
 ```
 
+### Test the Prompt Text
+
+The module test above checks that prompts load, not what they say. For the bundled plugin, `__tests__/unit/plugins/default-system-prompts-content.test.ts` (in the Quilltap repository) reads every shipped `prompts/*.md` file and asserts required content: the "Whose story it is" safeguards (narration as fact, consent in plain words, the committee failure mode), the trust disposition in every file except `MODERN_GENERAL.md`, no hard-coded `((` out-of-character marking, correct project spelling, and that each file's existing "disagree and hold" line is still present. Editing a bundled prompt means keeping that test green. A third-party plugin can use the same pattern: a Jest test that reads its own `prompts/` directory with `fs` and asserts the phrases its prompts must keep. See [prompt-trust-and-anti-committee.md](./features/prompt-trust-and-anti-committee.md).
+
 ---
 
 ## Publishing to npm

@@ -219,7 +219,7 @@ interface CharacterSystemPrompt {
 
 Selection order per participant: participant `selectedSystemPromptId` → the prompt flagged `isDefault` → none. Prompts are synced into the character's vault (`managed-fields.ts` → `buildSystemPromptFile`), edited under `/settings?tab=prompts` (`components/settings/prompts/`), and served by `/api/v1/characters/[id]/prompts`.
 
-Starter prompts come from `SYSTEM_PROMPT` plugins, loaded by `lib/plugins/system-prompt-registry.ts` and addressed as `pluginShortName/promptName`. The bundled set ships in `plugins/dist/qtap-plugin-default-system-prompts/prompts/` as `MODEL_CATEGORY.md` (`CLAUDE_COMPANION.md`, `GPT5_ROMANTIC.md`, `GENERIC_COMPANION.md`, …). Third-party collections: [System Prompt Plugin Development Guide](./SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md).
+Starter prompts come from `SYSTEM_PROMPT` plugins, loaded by `lib/plugins/system-prompt-registry.ts` and addressed as `pluginShortName/promptName`. The bundled set ships in `plugins/dist/qtap-plugin-default-system-prompts/prompts/` as `MODEL_CATEGORY.md` (`CLAUDE_COMPANION.md`, `GPT5_ROMANTIC.md`, `GENERIC_COMPANION.md`, …). Every bundled prompt carries a shared "Whose story it is" block (narration as fact, explicit consent, no committee); all but `MODERN_GENERAL.md` add a trust disposition, and the Ollama pair carry a compact version ([prompt-trust-and-anti-committee.md](features/prompt-trust-and-anti-committee.md)). `__tests__/unit/plugins/default-system-prompts-content.test.ts` reads the shipped `.md` files and asserts that content, so an edit to a bundled prompt must keep it passing. Third-party collections: [System Prompt Plugin Development Guide](./SYSTEM_PROMPT_PLUGIN_DEVELOPMENT.md).
 
 ## 12. The public identity card
 
