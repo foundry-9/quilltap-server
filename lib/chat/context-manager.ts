@@ -2715,6 +2715,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     historyWindow: selectedMessages,
     humanTurnMessageIds: options.humanTurnMessageIds,
     userName: userCharacter?.name || 'User',
+    nameForParticipant: participantId => {
+      const seat = allParticipants?.find(p => p.id === participantId)
+      return seat?.characterId ? participantCharacters?.get(seat.characterId)?.name : undefined
+    },
   })
 
   // Add new user message (only if provided - not in continue mode)

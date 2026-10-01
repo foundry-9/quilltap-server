@@ -10,6 +10,9 @@
   message, the user has spoken, and a character has replied since), a one-sentence trailing note
   says the user's latest message is the current state of the scene. It leads the trailing
   user message, ahead of the progressions report and turn-skip note.
+- The note names the seat that wrote the latest human line (resolved from its participant), falling
+  back to the `{{user}}` name only for an unseated user, so a human driving several seats is named
+  correctly.
 - Never added for the first responder or in single-character chats; byte-identical context when
   it does not apply. Not persisted; no cache-version bump (uncached tail).
 - `context-builder.service.ts` passes its human-turn message ids to `buildContext`.

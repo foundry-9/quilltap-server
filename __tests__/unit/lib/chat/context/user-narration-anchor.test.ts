@@ -65,4 +65,25 @@ describe('buildUserNarrationAnchor', () => {
     ]
     expect(buildUserNarrationAnchor({ ...base, historyWindow: window })).not.toBe('')
   })
+
+  it('names the seat that wrote the latest human line, not the Speaking As fallback', () => {
+    const names: Record<string, string> = { 'p-user': 'Owen', 'p-user-2': 'Alex' }
+    const window = [
+      { role: 'USER', id: 'u1', participantId: 'p-user-2' },
+      { role: 'USER', id: 'u2', participantId: 'p-user' },
+      { role: 'ASSISTANT', id: 'a1', participantId: 'p-a' },
+    ]
+    const note = buildUserNarrationAnchor({
+      ...base,
+      historyWindow: window,
+      userName: 'Alex',
+      nameForParticipant: id => names[id],
+    })
+    expect(note).toBe(renderUserNarrationAnchor('Owen'))
+  })
+
+  it('falls back to the user name when the author has no seat', () => {
+    const note = buildUserNarrationAnchor({ ...base, userName: 'Alex', nameForParticipant: () => undefined })
+    expect(note).toBe(renderUserNarrationAnchor('Alex'))
+  })
 })

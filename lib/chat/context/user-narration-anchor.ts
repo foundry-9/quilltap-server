@@ -46,8 +46,17 @@ export interface BuildUserNarrationAnchorInput {
    * before whisper normalization re-roles Staff whispers to USER.
    */
   humanTurnMessageIds: ReadonlySet<string> | null | undefined
-  /** The human persona's display name, resolved the way `{{user}}` is. */
+  /**
+   * Fallback display name, resolved the way `{{user}}` is. Used only when the
+   * matched human message's author cannot be named (an unseated user).
+   */
   userName: string
+  /**
+   * Names the author of the matched human message from its `participantId`.
+   * The human may drive several seats, and the "Speaking As" selection is not
+   * necessarily who wrote the latest line, so the seat that wrote it wins.
+   */
+  nameForParticipant?: (participantId: string) => string | undefined
 }
 
 /** The note itself. Exported for tests and the help page's wording. */
@@ -83,10 +92,14 @@ export function buildUserNarrationAnchor(input: BuildUserNarrationAnchorInput): 
     .some(m => m.role.toLowerCase() === 'assistant' || (!!m.participantId && !(m.id && humanIds.has(m.id))))
   if (!characterSpokeSince) return ''
 
+  const authorParticipantId = input.historyWindow[lastHumanIndex].participantId
+  const authorName = (authorParticipantId && input.nameForParticipant?.(authorParticipantId)) || input.userName
+
   logger.debug('[UserNarrationAnchor] Scene note applies to this chained turn', {
     context: CONTEXT,
     historyWindowSize: input.historyWindow.length,
     lastHumanIndex,
+    resolvedFromSeat: authorName !== input.userName,
   })
-  return renderUserNarrationAnchor(input.userName)
+  return renderUserNarrationAnchor(authorName)
 }
