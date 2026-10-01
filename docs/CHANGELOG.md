@@ -4,6 +4,21 @@
 
 ### 4.10-dev
 
+#### Scene note on chained multi-character turns (anti-committee phase 4)
+
+- New `lib/chat/context/user-narration-anchor.ts`. On a chained multi-character turn (no new user
+  message, the user has spoken, and a character has replied since), a one-sentence trailing note
+  says the user's latest message is the current state of the scene. It leads the trailing
+  user message, ahead of the progressions report and turn-skip note.
+- Never added for the first responder or in single-character chats; byte-identical context when
+  it does not apply. Not persisted; no cache-version bump (uncached tail).
+- `context-builder.service.ts` passes its human-turn message ids to `buildContext`.
+- The server-side turn race (a stopped turn landing after the user's newer message) remains a
+  follow-up.
+- Spec marked implemented with an "As built" section; the live memory-consent eval has not yet
+  been run against a real model.
+- Docs: `help/chat-multi-character.md`.
+
 #### Memory extraction stops manufacturing consent (anti-committee phase 3)
 
 - SELF and OTHER extractor prompts gain an AGREEMENTS, PROPOSALS, AND CONDITIONS section: record an

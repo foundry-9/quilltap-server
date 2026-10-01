@@ -107,6 +107,10 @@ Quilltap now serves every speaker in a group scene a standing set of house rules
 
 The rules are strongest paired with [turn skipping](turn-skipping.md), which gives a character with nothing new to offer a graceful exit instead of an obligation to perform. Stronger models take the instruction more faithfully than budget ones — if a scene still sounds like a chorus, the speaking characters' connection profiles are the next place to look.
 
+### Your Narration Stands
+
+By the time the third character in a round takes the floor, your message is no longer the freshest thing in the room — two replies sit on top of it, and occasionally one of them (a turn you stopped that finished anyway, say) contradicts what you narrated. So on every chained turn — the second responder onward, and any Continue or Nudge — each character is handed a brief **scene note**: your most recent message is the current state of the scene, and where any other speaker's line conflicts with what you narrated, your account is what happened. What the character *does* about it remains its own business. The note is never added on the first responder's turn (your message is already the last word there), and nothing is stored.
+
 ### Control Modes
 
 Each character can be:

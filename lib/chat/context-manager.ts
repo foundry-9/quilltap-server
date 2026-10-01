@@ -205,6 +205,7 @@ import {
 } from '@/lib/services/aurora-notifications/core-whisper'
 import { shouldFireCoreWhisper } from '@/lib/chat/context/core-whisper-trigger'
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section'
+import { buildUserNarrationAnchor } from '@/lib/chat/context/user-narration-anchor'
 import {
   postHostTimestampAnnouncement,
   buildTimestampContent,
@@ -598,6 +599,12 @@ export interface BuildContextOptions {
    * rather than pass. Never persisted. Undefined / `offerSkip: false` → no note.
    */
   turnSkip?: { offerSkip: boolean; recentlyAddressed: boolean; characterName: string }
+  /**
+   * Row ids of the human's own turns (USER, no `systemSender`), captured by the
+   * caller before whisper normalization re-roles Staff whispers to USER. Feeds
+   * the chained-turn scene note (`buildUserNarrationAnchor`). Absent → no note.
+   */
+  humanTurnMessageIds?: ReadonlySet<string>
 }
 
 /**
@@ -2697,6 +2704,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     ? buildTurnSkipInstruction(options.turnSkip.characterName, options.turnSkip.recentlyAddressed)
     : ''
 
+  // Chained multi-character turns: the human's narration sits mid-history and
+  // the newest line is another character's, possibly one that contradicts it
+  // (a stopped turn that finished server-side, or a second tab). The scene note
+  // names the human's latest message as the state of the scene. Empty unless it
+  // applies; never on the first responder, who has the human's line last.
+  const userNarrationAnchor = buildUserNarrationAnchor({
+    isMultiCharacter,
+    hasNewUserMessage: !!newUserMessage,
+    historyWindow: selectedMessages,
+    humanTurnMessageIds: options.humanTurnMessageIds,
+    userName: userCharacter?.name || 'User',
+  })
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -2721,14 +2741,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       name: newUserMsgName,
       metadata: { isUserTurn: true },
     })
-  } else if (turnSkipInstruction || progressionsLLMContext) {
+  } else if (userNarrationAnchor || turnSkipInstruction || progressionsLLMContext) {
     // Chained / continue turns carry no new user message, so neither the note
     // nor the progressions report can ride as a trailing section above. Push
     // them as their own trailing user message (same off-scene/timestamp
     // pattern) so the model sees them this turn, in the same order they would
     // have taken there. Anthropic 4.6+ rejects role=assistant tails, so 'user'
-    // is required.
-    const trailingOnly = [progressionsLLMContext, turnSkipInstruction].filter(Boolean)
+    // is required. The scene note leads: it is about the scene, the others
+    // about the character.
+    const trailingOnly = [userNarrationAnchor, progressionsLLMContext, turnSkipInstruction].filter(Boolean)
     contextMessages.push({
       role: 'user',
       content: trailingOnly.join('\n\n---\n\n'),
