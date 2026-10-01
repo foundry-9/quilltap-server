@@ -4,6 +4,22 @@
 
 ### 4.10-dev
 
+#### Character generators carry the trust safeguards (anti-committee phase 2)
+
+- `character-field-semantics.ts` adds `TRUST_SAFEGUARDS_DIRECTION`, `COMPANION_TRUST_DISPOSITION`
+  (with `COMPANION_TRUST_DISPOSITION_GATE` / `GATED_COMPANION_TRUST_DISPOSITION`), and
+  `COMMITTEE_DRIFT_GUARDRAIL`.
+- AI Wizard and Summon From Lore system-prompt meta-prompts include the safeguards and the gated
+  disposition (included only when the material establishes the character as the user's companion,
+  partner, family, or crew). Word caps raised from 500 to 600.
+- Character Optimizer: the analysis pass flags committee drift as a pattern to correct; every
+  suggestion pass forbids proposing a rule that constrains the user's persona; the system-prompt
+  refine and new-prompt passes carry the safeguards and may not weaken them.
+- External Prompt generator now uses `character-field-semantics` for the first time (listening
+  direction, safeguards, gated disposition) and is told not to leave a literal `{{user}}`.
+- Tests for each meta-prompt, including the optimizer refine-pass guardrails that were untested.
+- Docs: four generator help pages; CLAUDE.md "Character fields" note.
+
 #### Sample prompts: "Whose story it is" safeguards (anti-committee phase 1)
 
 - All 21 shipped sample prompts now carry a universal block: the user's narration is what happened
