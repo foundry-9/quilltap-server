@@ -9,6 +9,7 @@
 
 import path from 'path';
 import fs from 'fs/promises';
+import { projectRosterAdmits } from '@/lib/projects/roster-access';
 import {
   resolveDocEditPath,
   readFileWithMtime,
@@ -840,7 +841,11 @@ export async function handleGrep(
   // directory would either duplicate matches or, post-migration, search a
   // stale snapshot. We only walk the legacy fs for projects that haven't
   // been migrated to a database-backed official store yet.
-  if (!input.mount_point && context.projectId) {
+  if (
+    !input.mount_point &&
+    context.projectId &&
+    (await projectRosterAdmits(context.projectId, context.characterId))
+  ) {
     const officialMount = await resolveOfficialProjectMount(context.projectId);
     if (!officialMount) {
       const { getFilesDir } = await import('@/lib/paths');
@@ -1062,7 +1067,12 @@ export async function handleListFiles(
   // a stale on-disk directory from before the migration — or duplicating
   // entries the document-store branch already emitted — we route through
   // the official mount when one exists.
-  if (shouldIncludeProject && context.projectId) {
+  // Roster-gated: a character off the project roster lists no project files.
+  if (
+    shouldIncludeProject &&
+    context.projectId &&
+    (await projectRosterAdmits(context.projectId, context.characterId))
+  ) {
     const officialMount = await resolveOfficialProjectMount(context.projectId);
     if (officialMount) {
       // When listing every scope (no input.scope filter) the document-store

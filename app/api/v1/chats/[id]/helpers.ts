@@ -508,18 +508,8 @@ export async function processChatUpdates(
           return { error: 'Project not found', status: 404 };
         }
 
-        if (!project.allowAnyCharacter) {
-          const characterIds = updatedChat.participants
-            .filter((p) => p.type === 'CHARACTER' && p.characterId)
-            .map((p) => p.characterId as string);
-
-          const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-          if (newCharacterIds.length > 0) {
-            await repos.projects.update(validatedData.chat.projectId, {
-              characterRoster: [...project.characterRoster, ...newCharacterIds],
-            });
-          }
-        }
+        // Moving a chat into a project never edits the roster — it is a
+        // hand-curated access list (lib/projects/roster-access.ts).
       }
     }
 

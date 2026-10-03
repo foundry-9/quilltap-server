@@ -1133,15 +1133,16 @@ interface ProjectChatDefaults {
 
 /**
  * The defaults a new chat inherits from its project — tool settings, avatar
- * generation, image profile, roleplay template — and, as a side effect, the
- * roster update: a project that does not `allowAnyCharacter` adopts every
- * character participant it has not met before. Without a project every
+ * generation, image profile, roleplay template. Without a project every
  * default is empty/null. A missing project is the caller's 404.
+ *
+ * The character roster is never touched here: it is a hand-curated access
+ * list (project file tools + shared wardrobe), edited only from the project's
+ * Characters card, so joining a chat must not grant access.
  */
 async function resolveProjectDefaults(
   repos: Repos,
   projectId: string | undefined,
-  participants: ChatParticipantBaseInput[],
 ): Promise<({ ok: true } & ProjectChatDefaults) | { ok: false; response: NextResponse }> {
   if (!projectId) {
     return {
@@ -1156,19 +1157,6 @@ async function resolveProjectDefaults(
   const project = await repos.projects.findById(projectId);
   if (!project) {
     return { ok: false, response: notFound('Project') };
-  }
-
-  if (!project.allowAnyCharacter) {
-    const characterIds = participants
-      .filter((p) => p.type === 'CHARACTER' && p.characterId)
-      .map((p) => p.characterId as string);
-
-    const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-    if (newCharacterIds.length > 0) {
-      await repos.projects.update(projectId, {
-        characterRoster: [...project.characterRoster, ...newCharacterIds],
-      });
-    }
   }
 
   return {
@@ -1276,7 +1264,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   }));
 
   // Default tool settings and avatar generation from project (if creating chat within a project)
-  const projectDefaults = await resolveProjectDefaults(repos, validatedData.projectId, participantsWithTimestamps);
+  const projectDefaults = await resolveProjectDefaults(repos, validatedData.projectId);
   if (!projectDefaults.ok) {
     return projectDefaults.response;
   }

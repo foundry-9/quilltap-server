@@ -198,17 +198,16 @@ Standard turn management applies:
 - Re-save project instructions
 - Try asking AI to check project files
 
-### Character can't join project chat
+### Character can't use the project files or wardrobe
 
 **Causes:**
 - Roster mode enabled
-- Character not in roster
-- Character configuration issue
+- Character not on the roster
 
 **Solutions:**
-- Add character to project roster
+- Add the character to the roster from the project's Characters card
 - Or enable "Allow Any Character"
-- Check character has valid connection profile
+- The roster never stops a character joining a chat; if one can't, check their connection profile
 
 ### Project files not accessible
 

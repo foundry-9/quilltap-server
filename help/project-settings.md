@@ -149,28 +149,26 @@ Leave the dropdown on "Inherit from global default" and the project quietly defe
 
 ## Character Access Settings
 
-Control which characters can participate in project chats.
+Control which characters may use their tools on the project's files and shared wardrobe. (Who may *chat* in the project is never restricted.)
 
 ### Allow Any Character
 
-Toggle that controls character access:
+The switch at the top of the **Characters** card:
 
 **ON (Default):**
-- Any character can join project chats
-- No roster restrictions
-- Most flexible
+- Every character may read and edit project files and borrow from the project wardrobe
+- The roster is set aside
 
-**OFF (Roster Mode):**
-- Only roster characters can participate
-- Characters must be approved
-- More controlled
+**OFF (Roster Only):**
+- Only characters on the roster may use project files and the project wardrobe
+- Everyone else may still chat, without those keys
 
 ### Managing the Roster
 
-When roster mode is enabled:
-- Characters section shows approved list
-- Add characters via roster or chat creation
-- Remove characters from roster as needed
+With Allow Any Character off:
+- Click **Add character** in the Characters card to add someone
+- Click the **×** on a roster card to remove someone
+- Joining a project chat never adds a character to the roster
 
 See [Project Characters](project-characters.md) for full roster details.
 
@@ -262,8 +260,8 @@ Settings are typically organized in cards:
 
 ### Characters Card
 - Allow Any Character toggle
-- Roster display (when applicable)
-- Add/remove character options
+- Roster display and **Add character** picker (when Allow Any Character is off)
+- Remove a character with the × on their card
 
 ## Saving Settings
 

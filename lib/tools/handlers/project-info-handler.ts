@@ -257,10 +257,11 @@ export function formatProjectInfoResults(output: ProjectInfoToolOutput): string 
         `Project: ${info.name}`,
         info.description ? `Description: ${info.description}` : null,
         `Files: ${info.fileCount}, Chats: ${info.chatCount}, Memories: ${info.memoryCount}`,
-        info.characterRoster.length > 0
-          ? `Characters: ${info.characterRoster.map(c => c.name).join(', ')}`
-          : 'No characters in roster',
-        info.allowAnyCharacter ? '(Any character can participate)' : null,
+        info.allowAnyCharacter
+          ? 'Project files and wardrobe: open to every character'
+          : info.characterRoster.length > 0
+            ? `Project files and wardrobe: roster only (${info.characterRoster.map(c => c.name).join(', ')})`
+            : 'Project files and wardrobe: roster only (roster is empty)',
         info.documentStore
           ? `Document Store: ${info.documentStore.name} (${info.documentStore.fileCount} files, ${info.documentStore.blobCount} blobs, storeType=${info.documentStore.storeType})`
           : 'Document Store: (none linked)',

@@ -121,6 +121,7 @@ function mockWorld(opts: { transparency?: boolean; crossCharacterReads?: boolean
     },
     projects: {
       findById: jest.fn().mockResolvedValue({ id: 'proj-1', officialMountPointId: PROJECT_STORE.id }),
+      canCharacterParticipate: jest.fn().mockResolvedValue(true),
     },
     docMountPoints: {
       findById: jest.fn().mockImplementation(async (id: string) => ALL_STORES.find((s) => s.id === id) ?? null),

@@ -4,6 +4,36 @@
 
 ### 4.10-dev
 
+#### Project character roster now gates file tools and the shared wardrobe
+
+- The roster was stored and displayed but never enforced: `ProjectsRepository.canCharacterParticipate`
+  had no callers. It now gates exactly two things: a character's tool access to the project's
+  files, and to the project tier of the shared wardrobe. Chat membership, project instructions,
+  automatic knowledge retrieval and already-equipped garments are not affected.
+- New chokepoint `lib/projects/roster-access.ts` (`projectRosterAdmits`, `rosterGatedProjectId`).
+  No project or no character (operator surfaces) is admitted; a missing project or failed lookup
+  is refused.
+- Gated sites: `collectAccessibleMountPointIds` (doc_* listing and `document_store` resolution),
+  `resolveProjectPath` (`scope: 'project'` throws `ACCESS_DENIED`), the legacy project branches in
+  `doc_grep` / `doc_list_files`, blank-document creation in `doc_open_document` (falls back to
+  General), `search_scriptorium`'s pool, and `resolveSharedWardrobeTiersForChat` (all
+  `wardrobe_*` tools). The Salon's operator equip route passes `{ operator: true }` and is
+  not gated.
+- Chat creation and moving a chat into a project no longer add participants to the roster.
+- New projects default to `allowAnyCharacter: true` (API schema and repository create). Stored
+  projects keep their value.
+- Fixed the Characters card showing "0 characters in roster" / "No visible characters" after any
+  project setting change: `PUT /api/v1/projects/[id]` returned the raw project with roster ids
+  as strings, which the page swapped in over the enriched roster. PUT now returns the same
+  enriched shape as GET (shared `enrichProject` in `project-crud.ts`).
+- Characters card: **Add character** picker (searchable, excludes rostered and archived
+  characters) and always-visible remove buttons, shown when Allow Any Character is off. Wired to
+  the existing `add-character` / `remove-character` actions.
+- `project_info` now states project file and wardrobe access instead of "Any character can
+  participate".
+- Tests: `lib/projects/__tests__/roster-access.test.ts`; roster mocks added to three existing
+  path-resolver and search_scriptorium suites.
+
 #### Fix bug 174: vault images sent to Z.AI and NanoGPT as a server path
 
 - Images attached from a document store (character-vault photos, project-store images) failed on

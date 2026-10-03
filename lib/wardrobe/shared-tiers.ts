@@ -18,8 +18,11 @@
 
 import {
   resolveGroupMountPointIdsForCharacter,
-  resolveProjectMountPointIdsForChat,
+  resolveProjectMountPointIds,
 } from '@/lib/mount-index/tiered-mount-pool';
+import { rosterGatedProjectId } from '@/lib/projects/roster-access';
+import { getRepositories } from '@/lib/repositories/factory';
+import { logger } from '@/lib/logger';
 
 /**
  * The shared mounts in scope for one character's wardrobe.
@@ -46,20 +49,64 @@ export interface ResolvedSharedWardrobeTiers extends SharedWardrobeTiers {
   projectMountPointIds: string[];
 }
 
+export interface SharedWardrobeTierOptions {
+  /**
+   * The human operator is choosing on the character's behalf (the Salon's
+   * outfit dialog), so the project roster does not apply. Character tool calls
+   * never set this.
+   */
+  operator?: boolean;
+}
+
 /**
  * Resolve both shared tiers for a character in a chat. Each tier fails soft to
  * `[]` on its own (the underlying resolvers swallow and log), so a missing chat
  * or a character with no group memberships simply narrows the pool.
+ *
+ * The project tier is roster-gated: a character off the chat's project roster
+ * gets no project stores, unless `operator` is set
+ * (see `lib/projects/roster-access.ts`).
  */
 export async function resolveSharedWardrobeTiersForChat(
   chatId: string | null | undefined,
   characterId: string | null | undefined,
+  options: SharedWardrobeTierOptions = {},
 ): Promise<ResolvedSharedWardrobeTiers> {
   const [groupMountPointIds, projectMountPointIds] = await Promise.all([
     resolveGroupMountPointIdsForCharacter(characterId),
-    resolveProjectMountPointIdsForChat(chatId),
+    resolveProjectTierForChat(chatId, characterId, options),
   ]);
   return { groupMountPointIds, projectMountPointIds };
+}
+
+async function resolveProjectTierForChat(
+  chatId: string | null | undefined,
+  characterId: string | null | undefined,
+  options: SharedWardrobeTierOptions,
+): Promise<string[]> {
+  if (!chatId) return [];
+  let projectId: string | null = null;
+  try {
+    const chat = await getRepositories().chats.findById(chatId);
+    projectId = chat?.projectId ?? null;
+  } catch (error) {
+    logger.warn('[Wardrobe] Project lookup for chat failed', {
+      chatId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+  if (!projectId) return [];
+  const gated = options.operator ? projectId : await rosterGatedProjectId(projectId, characterId);
+  if (!gated) {
+    logger.debug('[Wardrobe] Character off project roster — project wardrobe withheld', {
+      chatId,
+      projectId,
+      characterId,
+    });
+    return [];
+  }
+  return resolveProjectMountPointIds(gated);
 }
 
 /**

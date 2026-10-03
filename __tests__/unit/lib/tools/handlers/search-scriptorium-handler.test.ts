@@ -62,6 +62,7 @@ describe('search-scriptorium-handler', () => {
       characters: {
         findById: mockFindCharacterById,
       },
+      projects: { canCharacterParticipate: jest.fn().mockResolvedValue(true) },
       projectDocMountLinks: {
         findByProjectId: mockFindProjectMountLinks,
       },

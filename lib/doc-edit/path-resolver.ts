@@ -16,6 +16,7 @@ import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
 import { getRepositories } from '@/lib/repositories/factory';
+import { projectRosterAdmits, rosterGatedProjectId, PROJECT_ROSTER_REFUSAL } from '@/lib/projects/roster-access';
 import type { DocMountPointType } from '@/lib/schemas/mount-index.types';
 import {
   readDatabaseDocument,
@@ -356,12 +357,22 @@ async function collectAccessibleMountPointIds(
   // The opacity covenant subtracts the two vault tiers and nothing else. The
   // character still goes INTO the pool so her group stores resolve — that is
   // the whole point of expressing this as a subtraction (bug 152).
+  //
+  // The project tier is roster-gated: a character off the project's roster
+  // sees no project-linked stores (see lib/projects/roster-access.ts).
   const vaultsVisible = !context.hideCharacterVaults;
+  const projectId = await rosterGatedProjectId(context.projectId, context.characterId);
+  if (context.projectId && !projectId) {
+    logger.debug('Path resolver: character off project roster — project tier withheld', {
+      projectId: context.projectId,
+      characterId: context.characterId,
+    });
+  }
   const pool = await resolveTieredMountPool(
     {
       characterId: context.characterId,
       characterIds: context.characterIds,
-      projectId: context.projectId,
+      projectId,
     },
     { includeParticipants: vaultsVisible },
   );
@@ -587,6 +598,14 @@ async function resolveProjectPath(
       'Project ID is required for project scope',
       'MISSING_CONTEXT'
     );
+  }
+
+  if (!(await projectRosterAdmits(context.projectId, context.characterId))) {
+    logger.info('Project scope refused: character off project roster', {
+      projectId: context.projectId,
+      characterId: context.characterId,
+    });
+    throw new PathResolutionError(PROJECT_ROSTER_REFUSAL, 'ACCESS_DENIED');
   }
 
   const repos = getRepositories();

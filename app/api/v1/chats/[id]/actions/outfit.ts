@@ -218,7 +218,8 @@ export async function handleEquipSlot(
     // Project tier for tri-tier wardrobe resolution — lets a chat equip items
     // that live in the project's document store, not just the character vault
     // or Quilltap General.
-    const tiers = await resolveSharedWardrobeTiersForChat(chatId, characterId);
+    // The operator is dressing the character, so the project roster does not apply.
+    const tiers = await resolveSharedWardrobeTiersForChat(chatId, characterId, { operator: true });
 
     let updatedSlots;
 

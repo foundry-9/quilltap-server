@@ -97,6 +97,7 @@ function mockWorld(opts: { transparency?: boolean } = {}) {
       findByIdRaw: jest.fn().mockResolvedValue({ id: 'grp-severed', officialMountPointId: GROUP_STORE.id }),
     },
     groupDocMountLinks: { findByGroupId: jest.fn().mockResolvedValue([]) },
+    projects: { canCharacterParticipate: jest.fn().mockResolvedValue(true) },
     projectDocMountLinks: {
       findByProjectId: jest.fn().mockResolvedValue([{ mountPointId: PROJECT_STORE.id }]),
     },

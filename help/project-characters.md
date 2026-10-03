@@ -6,242 +6,99 @@ url: /prospero/:id
 
 > **[Open this page in Quilltap](/prospero)**
 
-Project characters are the cast of characters associated with a project. You can optionally control which characters can participate in project chats using the character roster feature.
+Every project keeps a **character roster** — a guest list, if you like, kept by a butler of the old school who admits only those whose names he has been given. The roster does not decide who may *chat* in a project; any character may be invited into any project conversation, and every one of them hears the project's instructions and benefits from its knowledge as a matter of course. What the roster governs is the key to the study and the wardrobe:
 
-## Character Access Modes
+- **Project files** — whether a character may open, list, search, write or edit the project's documents *with their own tools* (`doc_read_file`, `doc_list_files`, `doc_grep`, `doc_write_file`, `search_scriptorium`, and their cousins)
+- **The shared wardrobe** — whether a character may browse and put on the garments hanging in the project's `Wardrobe/` folders (`wardrobe_list`, `wardrobe_wear`, and the rest of the `wardrobe_*` set)
 
-Projects have two modes for character access:
+A character off the roster can still chat perfectly happily. They simply find the study door locked and the project's coat-rack out of reach, and are told so politely should they try the handle.
 
-### Open Mode (Default)
+## The Two Modes
 
-**"Allow Any Character" = ON**
+The **Allow Any Character** switch at the top of the project's **Characters** card chooses between them.
 
-- Any character can start or join project chats
-- No roster restrictions
-- Most flexible option
-- Characters are not tracked at the project level
+### Open House (the default)
 
-**Best for:**
-- General-purpose projects
-- Exploratory worldbuilding
-- Projects with many potential characters
-- When you don't need access control
+**Allow Any Character = ON**
 
-### Roster Mode
+- Every character in a project chat may use the project files and shared wardrobe
+- The roster is set aside, and the add/remove controls are tucked away
+- New projects begin this way
 
-**"Allow Any Character" = OFF**
+**Best for:** general-purpose projects, exploratory worldbuilding, and any household where the doors stand open.
 
-- Only characters in the roster can participate
-- Provides controlled access
-- Tracks which characters belong to the project
-- Characters can be added/removed from roster
+### Roster Only
 
-**Best for:**
-- Focused roleplay campaigns
-- Story projects with defined cast
-- When character consistency matters
-- Collaborative projects with specific participants
+**Allow Any Character = OFF**
 
-## The Character Roster
+- Only the characters on the roster may use the project files and shared wardrobe
+- Everyone else may still chat, but their file and wardrobe tools come up empty for this project
+- The roster is curated entirely by hand — joining a project chat does **not** put a character on it
 
-The roster is a list of characters approved for project participation.
+**Best for:** campaigns where some characters should not be rummaging through the game-master's notes, stories with secrets kept from part of the cast, and collaborative projects with specific keyholders.
 
-### Viewing the Roster
+## Managing the Roster
+
+The roster lives on the project's page, in the **Characters** card. Switch **Allow Any Character** off and the controls appear.
+
+### Adding a Character
 
 1. Open the project
-2. Go to the **Characters** section
-3. See all characters in the roster
+2. Expand the **Characters** card
+3. Make sure **Allow Any Character** is off
+4. Click **Add character**
+5. Search for the character by name, then click them to add them
+6. Click **Done** when the guest list is complete
 
-Each character card shows:
-- Avatar or initials
+Characters already on the roster do not appear in the picker. Archived characters cannot be added until they are rehydrated.
+
+### Removing a Character
+
+1. Find the character's card in the roster
+2. Click the small **×** in its corner
+
+The character keeps their chats, their messages and their place in your library. They lose only the key: from their next tool call onward, the project's files and shared wardrobe are closed to them.
+
+### Each Roster Card Shows
+
+- Avatar (or initials)
 - Character name
-- Number of chats in this project
-- Associated tags
+- How many of the project's chats they appear in
 
-### Auto-Adding to Roster
+Quick-hide rules apply to the roster just as they do elsewhere, so a hidden character may leave the card reading "No visible characters (some may be hidden)."
 
-Characters are automatically added to the roster when:
+## What the Roster Does Not Touch
 
-1. You start a new chat with them in the project
-2. You add them to an existing project chat
-3. They're explicitly added via the roster interface
-
-This means the roster grows organically as you use the project.
-
-### Manually Adding Characters
-
-1. Open the project
-2. Go to Characters section
-3. Click **Add Character** (if available)
-4. Select character(s) from your library
-5. Characters are added to roster
-
-**Note:** If the interface doesn't have an explicit add button, simply start a chat with the character in the project.
-
-### Removing Characters from Roster
-
-1. Find the character in the roster
-2. Click the **X** or **Remove** button on their card
-3. Character is removed from the roster
-
-**What happens:**
-- Character can no longer join new project chats
-- Existing chats with that character remain
-- Past messages are preserved
-- Character is not deleted from your library
-
-## Enabling Roster Mode
-
-### Turning On Roster Restrictions
-
-1. Open the project
-2. Go to **Settings** section
-3. Find **Allow Any Character** toggle
-4. Turn it **OFF**
-5. Roster mode is now active
-
-### Turning Off Roster Restrictions
-
-1. Open the project
-2. Go to **Settings** section
-3. Find **Allow Any Character** toggle
-4. Turn it **ON**
-5. Any character can now participate
-
-## Roster vs. Participation
-
-Important distinction:
-
-**Roster** = Characters approved to join
-**Participation** = Characters who have actually chatted
-
-A character can be:
-- In roster but never participated (ready to join)
-- In roster and actively participating (has chats)
-- Removed from roster but has past chats (no new participation)
-
-## Multi-Character Considerations
-
-### Adding Characters to Group Chats
-
-In roster mode:
-- Only roster characters can be added to project chats
-- Attempting to add non-roster character will fail
-- Add them to roster first, then to chat
-
-In open mode:
-- Any character can be added
-- No restrictions
-
-### Character Selection
-
-When starting a project chat or adding participants:
-- Character picker may filter to roster-only
-- Or show all characters with roster indicators
-- Depends on mode and UI configuration
-
-## Managing Your Cast
-
-### Organizing by Project
-
-Use projects to maintain character consistency:
-
-1. Create project for a story/campaign
-2. Enable roster mode
-3. Add only relevant characters
-4. All chats stay focused on your cast
-
-### Tracking Character Usage
-
-The roster shows:
-- Which characters belong to the project
-- How many chats each character has
-- When they were last active (if shown)
-
-### Evolving the Cast
-
-As your project grows:
-- Add new characters when introduced
-- Remove characters who leave the story
-- Roster reflects current cast
-
-## Best Practices
-
-### For Roleplay Campaigns
-
-- Enable roster mode at start
-- Add player characters and key NPCs
-- Use roster to track cast
-- Add new characters as they appear in story
-
-### For Novel Projects
-
-- Start with main characters in roster
-- Add supporting characters as they're developed
-- Keep roster focused on active cast
-- Remove cut characters
-
-### For Worldbuilding
-
-- Consider open mode for exploration
-- Or use roster for specific region/faction focus
-- Characters represent different aspects of world
-
-### For Collaboration
-
-- Use roster to define who "lives" in this world
-- Add collaborator's characters as needed
-- Maintains shared understanding of cast
+- **Chatting** — any character may join any project chat, roster or no
+- **Project instructions** — delivered to every character in a project chat
+- **Automatic knowledge** — project knowledge is still offered to every character each turn; only *deliberate* file access by tool is gated
+- **What a character is already wearing** — garments already on stay on; a character off the roster simply cannot pick new ones from the project's wardrobe
+- **You** — when you dress a character yourself from the Salon's outfit dialog, the project's wardrobe is always at hand, whatever the roster says
+- **Group stores, the character's own vault, and Quilltap General** — those follow their own rules and are not project property
 
 ## Troubleshooting
 
-### Can't add character to project chat
+### A character says the project files are closed to them
 
-**Causes:**
-- Roster mode enabled
-- Character not in roster
-- Character has configuration issues
+**Cause:** Allow Any Character is off and the character is not on the roster.
 
-**Solutions:**
-- Add character to roster first
-- Or enable "Allow Any Character"
-- Check character has valid connection profile
+**Solution:** Add the character to the roster, or switch Allow Any Character on.
 
-### Character shows in roster but can't chat
+### A character cannot find a garment from the project's wardrobe
 
-**Causes:**
-- Character missing connection profile
-- Character is inactive/disabled
-- API key issues
+**Cause:** the same — the project wardrobe is roster-gated.
 
-**Solutions:**
-- Verify character has connection profile set
-- Check character is active
-- Confirm API key is valid
+**Solution:** Add the character to the roster, or dress them yourself from the Salon's outfit dialog.
 
-### Removed character still appearing in chats
+### I removed a character, but they still appear in project chats
 
-**Expected behavior:**
-- Past chats with removed characters remain
-- Past messages are preserved
-- Only future participation is blocked
+**Expected.** The roster governs file and wardrobe access, not chat membership. Remove them from the chat itself if you would rather they leave the room.
 
-**If appearing in new chats:**
-- Refresh the page
-- Check roster mode is active
-- Verify character was actually removed
+### The roster is empty and nobody can reach the files
 
-### Roster not updating
+**Cause:** Allow Any Character is off with no one on the roster.
 
-**Causes:**
-- UI not refreshed
-- Save failed
-- Network issue
-
-**Solutions:**
-- Refresh the page
-- Wait and check again
-- Try removing/adding again
+**Solution:** Add the characters who should have access, or switch Allow Any Character back on.
 
 ## In-Chat Navigation
 

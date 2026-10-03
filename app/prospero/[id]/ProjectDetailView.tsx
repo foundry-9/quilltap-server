@@ -52,6 +52,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     handleSaveDefaultRoleplayTemplate,
     handleSaveBackgroundDisplayMode,
     handleSaveAlertCharactersOfLanternImages,
+    handleAddCharacter,
     handleRemoveCharacter,
   } = useProjectDetail(projectId)
 
@@ -194,6 +195,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
         />
         <CharactersCard
           project={project}
+          onAddCharacter={handleAddCharacter}
           onRemoveCharacter={handleRemoveCharacter}
           onToggleAllowAnyCharacter={handleToggleAllowAnyCharacter}
           expanded={cardState.characters}

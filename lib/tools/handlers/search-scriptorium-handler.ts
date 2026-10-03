@@ -23,6 +23,7 @@ import {
   type TieredMountPool,
 } from '@/lib/mount-index/tiered-mount-pool'
 import { getRepositories } from '@/lib/repositories/factory'
+import { rosterGatedProjectId } from '@/lib/projects/roster-access'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import {
   SearchScriptoriumToolInput,
@@ -161,11 +162,12 @@ export async function executeSearchScriptoriumTool(
         const enabled = await repos.docMountPoints.findEnabled()
         operatorStoreIds = enabled.map((mp) => mp.id)
       } else {
+        // The project tier is roster-gated (lib/projects/roster-access.ts).
         pool = await resolveTieredMountPool(
           {
             userId: context.userId,
             characterId: context.characterId,
-            projectId: context.projectId,
+            projectId: await rosterGatedProjectId(context.projectId, context.characterId),
           },
           { requireOwnership: true },
         )

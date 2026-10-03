@@ -6425,9 +6425,11 @@ Create a new project.
   "name": "My Project",
   "description": "Optional description",
   "instructions": "Optional system prompt instructions",
-  "allowAnyCharacter": false
+  "allowAnyCharacter": true
 }
 ```
+
+`allowAnyCharacter` defaults to `true`. When `false`, only characters on `characterRoster` may use their tools on the project's files and the project tier of the shared wardrobe (see `lib/projects/roster-access.ts`); chat membership is never restricted.
 
 #### `GET /api/v1/projects/[id]`
 
@@ -6449,13 +6451,15 @@ Update project properties.
 }
 ```
 
+Returns the same enriched project as `GET` (roster entries are objects, not ids).
+
 #### `DELETE /api/v1/projects/[id]`
 
 Delete a project. Chats and files are disassociated (not deleted).
 
 #### `POST /api/v1/projects/[id]?action=add-character`
 
-Add a character to the project roster.
+Add a character to the project roster. Archived characters are refused (400). This is the only way onto the roster; creating a chat does not add its participants.
 
 **Request Body:**
 ```json
