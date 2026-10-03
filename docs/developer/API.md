@@ -349,7 +349,9 @@ Check application health status.
 
 **Authentication**: Not required
 
-**Response**: `200 OK`
+**Response**: `200 OK` when every service is healthy; `503` when any is `degraded` or `unhealthy`
+(and while startup is still running). Locked mode answers `423`; an instance-lock conflict or
+version-guard block answers `409`.
 
 ```json
 {
@@ -357,9 +359,19 @@ Check application health status.
   "timestamp": "2025-01-19T12:00:00.000Z",
   "uptime": 86400,
   "environment": "production",
-  "database": "connected"
+  "services": {
+    "json": { "status": "healthy", "message": "JSON store is operational" },
+    "fileStorage": { "status": "healthy", "message": "Local file storage operational", "mode": "local" },
+    "structure": { "status": "healthy", "message": "All structural tables verified" }
+  }
 }
 ```
+
+`services.structure` reports the boot-time structural table check
+(`lib/startup/verify-structural-tables.ts`). When a mount-index, LLM-logs or `help_doc_chunks`
+table is damaged or its database unavailable, it is `degraded` and carries a `problems` array
+(for example `"table doc_mount_file_links is missing column relativePath"`); reads through that
+table answer empty until it is repaired.
 
 ---
 

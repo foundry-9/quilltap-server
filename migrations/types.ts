@@ -38,6 +38,16 @@ export interface Migration {
   introducedInVersion: string;
   /** Dependencies on other migrations (by ID) */
   dependsOn?: string[];
+  /**
+   * A failure of this migration does not stop the boot. Set it only on a
+   * data pass over rows that are already valid, which writes no state the
+   * rest of startup depends on and which a later boot can finish: its
+   * `shouldRun` must still answer true after a failed pass, because the
+   * runner records no ledger row for it. The runner logs the failure, defers
+   * the migration to the next boot, and carries on. Anything that
+   * `dependsOn` a deferred migration is deferred with it.
+   */
+  resumable?: boolean;
   /** Function to check if migration needs to run */
   shouldRun: () => Promise<boolean>;
   /** Function to run the migration */
@@ -90,6 +100,12 @@ export interface MigrationRunResult {
   totalDurationMs: number;
   /** Failed migration IDs */
   failed?: string[];
+  /**
+   * Migrations that did not complete this boot but do not stop it: resumable
+   * migrations that failed, and anything depending on one. Each is retried
+   * at the next boot.
+   */
+  deferred?: string[];
   /** Error message if overall process failed */
   error?: string;
 }

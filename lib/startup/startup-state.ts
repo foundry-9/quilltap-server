@@ -88,6 +88,11 @@ interface StartupStateData {
   instanceLockConflict: InstanceLockConflict | null;
   /** Version guard block info when running an older version against a newer database */
   versionGuardBlock: VersionGuardBlock | null;
+  /**
+   * Damaged tables found by the boot-time structural check
+   * (`verify-structural-tables.ts`, bug 176). Reported by `/api/health`.
+   */
+  structuralProblems: string[];
 }
 
 // Extend globalThis type for our startup state
@@ -123,6 +128,7 @@ function getGlobalState(): StartupStateData {
       migrationWarningsNotified: false,
       instanceLockConflict: null,
       versionGuardBlock: null,
+      structuralProblems: [],
     };
   }
 
@@ -390,6 +396,20 @@ export const startupState = {
   },
 
   /**
+   * Record the boot-time structural check's findings (empty when sound).
+   */
+  setStructuralProblems(problems: string[]): void {
+    getGlobalState().structuralProblems = [...problems];
+  },
+
+  /**
+   * Damaged tables found by the boot-time structural check.
+   */
+  getStructuralProblems(): string[] {
+    return [...(getGlobalState().structuralProblems ?? [])];
+  },
+
+  /**
    * Set version guard block details.
    * Called when the running version is older than the database's highest version.
    */
@@ -517,6 +537,7 @@ export const startupState = {
       migrationWarningsNotified: false,
       instanceLockConflict: null,
       versionGuardBlock: null,
+      structuralProblems: [],
     };
     global.__quilltapMigrationWarnings = [];
     setReadyPromise(undefined);

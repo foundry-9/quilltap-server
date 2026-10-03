@@ -4,6 +4,30 @@
 
 ### 4.10-dev
 
+#### Fix bugs 175 and 176: boot-time migration and table-structure handling
+
+- Bug 175: a failed `collapse-duplicate-avatar-rolls-v1` pass stopped the server with exit code 1
+  on every boot, though the pass is resumable and writes no ledger row on failure. `Migration`
+  now has an optional `resumable` flag. A failed resumable migration (failed result or thrown
+  exception) is logged, gets no ledger row, is listed in the run result's new `deferred` array
+  instead of `failed`, and the runner continues; anything that `dependsOn` it is deferred unrun.
+  Only the avatar-roll collapse is marked resumable; every other migration still stops the boot.
+- Bug 176: once a structural migration was in `migrations_state`, nothing at boot checked its
+  table again, so a damaged mount-index or `help_doc_chunks` table made every document-store read
+  return empty behind a healthy `/api/health`. New boot pass `verifyStructuralTables`
+  (`lib/startup/verify-structural-tables.ts`, Phase 3.1) calls `verifyStructure()` on every
+  dedicated-database repository and on `HelpDocChunksRepository`: the table ensure with no
+  fallback, then `findTableShapeProblem` (`lib/database/table-shape.ts`), which requires a real
+  table (not a view) carrying every schema column. Problems are logged at ERROR, kept on
+  `startupState`, and reported by `/api/health` as a `degraded` `structure` service with a
+  `problems` list. The boot is not stopped. An unavailable dedicated database is reported the
+  same way.
+- Tests: `__tests__/unit/migrations/runner-resumable.test.ts`,
+  `__tests__/unit/startup/verify-structural-tables.test.ts`. The global `startupState` mock in
+  `jest.setup.ts` gained the two structural accessors.
+- Docs: `help/cli-migrations.md`, `docs/developer/API.md` (health response), bug files moved to
+  `docs/developer/bugs/fixed/`.
+
 #### Project character roster now gates file tools and the shared wardrobe
 
 - The roster was stored and displayed but never enforced: `ProjectsRepository.canCharacterParticipate`

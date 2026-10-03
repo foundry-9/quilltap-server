@@ -325,6 +325,10 @@ export const collapseDuplicateAvatarRollsMigration: Migration = {
   description: 'Collapse duplicate avatar rolls to one image per configuration',
   introducedInVersion: '4.10.0',
   dependsOn: ['add-file-generation-key-column-v1'],
+  // A failed pass leaves every undeleted victim unkeyed and writes no ledger
+  // row, so the next boot's shouldRun finds the work and finishes it. Not
+  // worth keeping the server down for (bug 175).
+  resumable: true,
 
   async shouldRun(): Promise<boolean> {
     if (!isSQLiteBackend()) return false;

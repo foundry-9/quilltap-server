@@ -31,6 +31,9 @@
  *   `fn` inside `safeQuery`.
  * - `ensureRawDb()` is `withRawDb` without the fallback — the connection or
  *   a throw — for writers that must fail loudly when the database is gone.
+ * - `verifyStructure()` is the boot-time check (bug 176): the same ensure a
+ *   first read runs, with no fallback, plus a shape check the
+ *   `IF NOT EXISTS` DDL cannot make. It answers what is wrong, or null.
  *
  * The parent process is the only writer of any of these databases; a forked
  * job child reaches the same repositories through a proxy that buffers the
@@ -46,6 +49,7 @@ import { SQLiteCollection } from '../backends/sqlite/backend';
 import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { AbstractBaseRepository, RepositoryDbTarget } from './base.repository';
 import { extractErrorMessage } from './safe-query';
+import { findTableShapeProblem } from '../table-shape';
 
 /** The dedicated databases a repository can live in — everything but main. */
 export type DedicatedDbTarget = Exclude<RepositoryDbTarget, 'main'>;
@@ -160,6 +164,39 @@ export abstract class AbstractDedicatedDbRepository<T extends BaseEntity> extend
     const db = this.acquireDb();
     await this.ensureTable(db);
     return db;
+  }
+
+  /**
+   * Check that this repository's table is usable and has its schema's shape.
+   * Runs the ensure with no fallback (so a failure surfaces here rather than
+   * as an empty read later), then compares the table on disk against the
+   * schema. Returns a description of the problem, or null when the table is
+   * sound. Never throws.
+   */
+  async verifyStructure(): Promise<string | null> {
+    let db: DatabaseType;
+    try {
+      db = this.acquireDb();
+    } catch (error) {
+      return `${DB_LABELS[this.dbTarget]} database unavailable: ${extractErrorMessage(error)}`;
+    }
+
+    try {
+      await this.ensureTable(db);
+      const problem = await findTableShapeProblem(
+        <R>(sql: string, params: unknown[]) => db.prepare(sql).all(...params) as R[],
+        this.collectionName,
+        this.schema,
+      );
+      logger.debug('Verified dedicated-database table structure', {
+        collection: this.collectionName,
+        dbTarget: this.dbTarget,
+        ok: problem === null,
+      });
+      return problem;
+    } catch (error) {
+      return `${this.collectionName} in ${DB_LABELS[this.dbTarget]} database: ${extractErrorMessage(error)}`;
+    }
   }
 
   /**

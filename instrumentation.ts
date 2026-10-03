@@ -432,6 +432,7 @@ export async function register() {
         context: 'instrumentation.register',
         migrationsRun: migrationResult.migrationsRun,
         migrationsSkipped: migrationResult.migrationsSkipped,
+        deferred: migrationResult.deferred,
         totalDurationMs: migrationResult.totalDurationMs,
       });
 
@@ -562,6 +563,22 @@ export async function register() {
       startupProgress.setCurrent('subsystem:file-storage:start');
       if (!fileStorageManager.isInitialized()) {
         await fileStorageManager.initialize();
+      }
+
+      // ================================================================
+      // PHASE 3.1: Verify structural tables (bug 176)
+      // ================================================================
+      // Ledgered migrations are never asked again, so this is the one boot
+      // step that looks at the mount-index and help-chunks tables. Damage is
+      // logged and reported by /api/health; it does not stop the boot.
+      try {
+        const { verifyStructuralTables } = await import('./lib/startup/verify-structural-tables');
+        await verifyStructuralTables();
+      } catch (verifyError) {
+        logger.warn('Structural table check could not run, continuing startup', {
+          context: 'instrumentation.register',
+          error: verifyError instanceof Error ? verifyError.message : String(verifyError),
+        });
       }
 
       // ================================================================

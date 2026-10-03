@@ -1,6 +1,7 @@
 /**
  * Health check endpoint for monitoring
- * Checks connectivity for JSON store and file storage
+ * Checks connectivity for JSON store and file storage, and reports any
+ * damaged table found by the boot-time structural check (bug 176)
  * Returns 200 OK if healthy, 503 if degraded or unhealthy
  *
  * IMPORTANT: This route uses dynamic imports for database and file storage
@@ -31,6 +32,7 @@ interface HealthResponse {
   services: {
     json?: ServiceHealth;
     fileStorage?: ServiceHealth;
+    structure?: ServiceHealth & { problems?: string[] };
   };
 }
 
@@ -98,6 +100,40 @@ async function checkFileStorageHealth(
     try {
       const { logger } = await import('@/lib/logger');
       logger.child({ module: 'health' }).error('File storage health check error', { error: errorMessage });
+    } catch { /* logger unavailable */ }
+  }
+}
+
+/**
+ * Report the boot-time structural check (`lib/startup/verify-structural-tables.ts`).
+ * A damaged table is degraded, not unhealthy: the server runs, but reads
+ * through that table answer empty until it is repaired.
+ */
+async function checkStructuralHealth(
+  services: HealthResponse['services'],
+  serviceStatuses: HealthStatus[]
+): Promise<void> {
+  try {
+    const { startupState } = await import('@/lib/startup/startup-state');
+    const problems = startupState.getStructuralProblems();
+    if (problems.length === 0) {
+      services.structure = {
+        status: 'healthy',
+        message: 'All structural tables verified',
+      };
+      serviceStatuses.push('healthy');
+      return;
+    }
+    services.structure = {
+      status: 'degraded',
+      message: `${problems.length} damaged table${problems.length === 1 ? '' : 's'}; reads through ${problems.length === 1 ? 'it' : 'them'} answer empty`,
+      problems,
+    };
+    serviceStatuses.push('degraded');
+  } catch (error) {
+    try {
+      const { logger } = await import('@/lib/logger');
+      logger.child({ module: 'health' }).warn('Structural health check unavailable', { error: getErrorMessage(error) });
     } catch { /* logger unavailable */ }
   }
 }
@@ -198,6 +234,9 @@ export async function GET() {
 
     // Check file storage
     await checkFileStorageHealth(services, serviceStatuses);
+
+    // Report the boot-time structural table check
+    await checkStructuralHealth(services, serviceStatuses);
 
     // Determine overall status
     const overallStatus = getOverallStatus(serviceStatuses);

@@ -10,6 +10,8 @@ import { HelpDocChunk, HelpDocChunkSchema } from '@/lib/schemas/help-doc-chunk.t
 import { AbstractBaseRepository } from './base.repository';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
+import { findTableShapeProblem } from '../table-shape';
+import { extractErrorMessage } from './safe-query';
 
 /**
  * Help Document Chunks Repository
@@ -31,6 +33,26 @@ export class HelpDocChunksRepository extends AbstractBaseRepository<HelpDocChunk
   protected async getCollection(): Promise<DatabaseCollection<HelpDocChunk>> {
     await registerBlobColumns('help_doc_chunks', ['embedding']);
     return super.getCollection();
+  }
+
+  /**
+   * Boot-time structural check (bug 176): ensure the collection with no
+   * fallback, then compare `help_doc_chunks` on disk with its schema. Its
+   * migration is ledgered after the first boot, so nothing else at startup
+   * would notice the table being damaged. Returns the problem, or null.
+   * Never throws.
+   */
+  async verifyStructure(): Promise<string | null> {
+    try {
+      await this.getCollection();
+      return await findTableShapeProblem(
+        <R>(sql: string, params: unknown[]) => rawQuery<R[]>(sql, params),
+        this.collectionName,
+        this.schema,
+      );
+    } catch (error) {
+      return `${this.collectionName} in main database: ${extractErrorMessage(error)}`;
+    }
   }
 
   // ============================================================================
