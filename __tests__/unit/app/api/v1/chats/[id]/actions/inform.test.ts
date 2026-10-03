@@ -152,6 +152,7 @@ describe('chats [id] inform actions', () => {
         contentMarkdown: BODY,
         participantIds: [ALICE, BOB],
         recordMessageId: RECORD_ID,
+        permanent: false,
       })
       expect(postInformRecord).toHaveBeenCalledWith({
         chatId: CHAT_ID,
@@ -175,6 +176,21 @@ describe('chats [id] inform actions', () => {
         expect.objectContaining({ targetParticipantIds: null }),
       )
       expect(body.targetParticipantIds).toBeNull()
+    })
+
+    it('passes a standing inform through to the batch and the response', async () => {
+      const res = await handleInform(
+        makeRequest({ contentMarkdown: BODY, targetParticipantIds: [ALICE], permanent: true }),
+        CHAT_ID,
+        ctx,
+      )
+      const body = await res.json()
+
+      expect(res.status).toBe(201)
+      expect(ctx.repos.chatInforms.createBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ participantIds: [ALICE], permanent: true }),
+      )
+      expect(body.permanent).toBe(true)
     })
 
     it('a subset whispers the record to just those seats', async () => {
@@ -354,6 +370,20 @@ describe('chats [id] inform actions', () => {
       expect(body).toEqual({ success: true, removed: 1, recordDeleted: false })
       expect(ctx.repos.chats.deleteMessagesByIds).not.toHaveBeenCalled()
       expect(publishRealtime).toHaveBeenCalledWith('chats', CHAT_ID)
+    })
+
+    it('withdraws a standing batch already delivered, keeping its record', async () => {
+      ctx.repos.chatInforms.findByBatchId.mockResolvedValue([
+        makeRow({ id: 'row-0', participantId: ALICE, permanent: true, consumedAt: '2026-01-01T21:20:00.000Z', consumedByMessageId: 'msg-1' }),
+        makeRow({ id: 'row-1', participantId: BOB, permanent: true }),
+      ])
+      ctx.repos.chatInforms.deletePendingByBatch.mockResolvedValue(2)
+
+      const res = await handleCancelInform(makeRequest({ batchId: BATCH_ID }), CHAT_ID, ctx)
+      const body = await res.json()
+
+      expect(body).toEqual({ success: true, removed: 2, recordDeleted: false })
+      expect(ctx.repos.chats.deleteMessagesByIds).not.toHaveBeenCalled()
     })
 
     it('still answers when the record message refuses to go', async () => {

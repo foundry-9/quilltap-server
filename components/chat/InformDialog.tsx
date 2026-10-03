@@ -5,8 +5,11 @@
  *
  * The operator picks one, several or every LLM-controlled seat and writes a
  * short second-person passage. Each target receives it verbatim as a system
- * block on their next generation, and then it is consumed. Nothing here is
- * ever spoken aloud; the transcript keeps a Host record for the operator alone.
+ * block on their next generation, and then it is consumed — unless the
+ * operator ticks **Keep it standing in this chat**, which delivers it on every
+ * turn those seats take in this conversation until withdrawn from the chip.
+ * Off by default. Nothing here is ever spoken aloud; the transcript keeps a
+ * Host record for the operator alone.
  *
  * Structure, props style and `qt-*` vocabulary mirror
  * {@link ../chat/InsertAnnouncementDialog} deliberately — the two dialogs sit
@@ -94,6 +97,9 @@ export default function InformDialog({
   // Chosen seats. EMPTY MEANS EVERYONE — the default, and what a full
   // selection collapses back to when it is posted.
   const [selected, setSelected] = useState<string[]>([])
+  // A standing inform rides every turn in THIS chat until withdrawn. Off by
+  // default: the ordinary inform is a one-shot.
+  const [permanent, setPermanent] = useState(false)
   const [isPosting, setIsPosting] = useState(false)
 
   // Note: state resets naturally on each open because the parent conditionally
@@ -142,6 +148,7 @@ export default function InformDialog({
         body: JSON.stringify({
           contentMarkdown: content.trim(),
           targetParticipantIds,
+          permanent,
         }),
       })
 
@@ -152,8 +159,13 @@ export default function InformDialog({
         return
       }
 
+      const whom = everyone ? 'the company' : selectedNames.join(', ')
       showSuccessToast(
-        everyone ? 'The company has been informed' : `Informed ${selectedNames.join(', ')}`,
+        permanent
+          ? `A standing note for ${whom}, for the rest of this chat`
+          : everyone
+            ? 'The company has been informed'
+            : `Informed ${whom}`,
       )
       onPosted?.()
       void queryClient.invalidateQueries({ queryKey: queryKeys.chats.informs(chatId) })
@@ -247,8 +259,10 @@ export default function InformDialog({
             notice — <em>You see that Alice slipped the letter into her sleeve.</em>{' '}
             <em>You remember that Bob and Carol were at school together.</em> Everyone you
             tick receives the identical words before their next turn, so set down a passage
-            that is true from each of their chairs. It is never spoken aloud, and once they
-            have had their turn it is gone, like a note fed to the fire.
+            that is true from each of their chairs. It is never spoken aloud, and{' '}
+            {permanent
+              ? 'it stays at their elbow for every turn they take in this chat, until you withdraw it.'
+              : 'once they have had their turn it is gone, like a note fed to the fire.'}
           </div>
 
           {/* The passage itself */}
@@ -267,8 +281,26 @@ export default function InformDialog({
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Footer — the standing toggle sits with the buttons, so it is the
+            last thing read before posting. */}
         <div className="flex-shrink-0 border-t qt-border-default px-4 py-3 flex items-center justify-end gap-3">
+          <label className="mr-auto flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={permanent}
+              onChange={(e) => setPermanent(e.target.checked)}
+              disabled={isPosting}
+              className="qt-checkbox mt-0.5"
+              aria-describedby="inform-permanent-hint"
+            />
+            <span className="flex flex-col">
+              <span className="qt-text-small">Keep it standing in this chat</span>
+              <span id="inform-permanent-hint" className="qt-text-xs">
+                Every turn they take here, until you withdraw it. This chat only — it
+                follows no one anywhere else.
+              </span>
+            </span>
+          </label>
           <button
             type="button"
             onClick={onClose}

@@ -6,6 +6,11 @@
  * seats, delivered verbatim as its own system block on each target's next
  * generation.
  *
+ * A **standing** row (`permanent: true`) is never retired by consumption: it is
+ * in force for every generation its seat makes in this chat until the operator
+ * withdraws it. `consumedAt` / `consumedByMessageId` on such a row record only
+ * its first delivery. `isInformInForce` is the one definition of "still owed".
+ *
  * One row per (batch × target). Because the body is duplicated per target,
  * consumption is a single-row write — there is no shared array for a buffered
  * job-child write to clobber when two seats consume in the same batch.
@@ -20,11 +25,29 @@ import { randomUUID } from 'node:crypto';
 import {
   ChatInform,
   ChatInformSchema,
+  isInformInForce,
   type PendingInformBatch,
 } from '@/lib/schemas/chat-inform.types';
 import { AbstractBaseRepository } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter } from '../interfaces';
+
+/** Posting order: oldest first, `id` breaking a same-millisecond tie. */
+function byPostingOrder(a: ChatInform, b: ChatInform): number {
+  const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  return delta !== 0 ? delta : a.id.localeCompare(b.id);
+}
+
+/**
+ * Delivery order: standing rows first, then one-shot rows, each in posting
+ * order. Standing passages are the same turn after turn, so putting them ahead
+ * of the one-shots keeps the front of the block stable for providers that
+ * cache by prefix.
+ */
+function byDeliveryOrder(a: ChatInform, b: ChatInform): number {
+  if (Boolean(a.permanent) !== Boolean(b.permanent)) return a.permanent ? -1 : 1;
+  return byPostingOrder(a, b);
+}
 
 export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
   constructor() {
@@ -55,9 +78,11 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
   // ============================================================================
 
   /**
-   * Every pending row owed to one seat, oldest first. This is what the prompt
-   * path delivers; `id` breaks a createdAt tie so stacking order is stable
-   * across the two rows a single post can mint in the same millisecond.
+   * Every row still in force for one seat, in delivery order: standing rows
+   * (whether or not they have been delivered before), then unconsumed one-shot
+   * rows, each oldest first. This is what the prompt path delivers; `id`
+   * breaks a createdAt tie so stacking order is stable across the two rows a
+   * single post can mint in the same millisecond.
    */
   async findPendingForParticipant(chatId: string, participantId: string): Promise<ChatInform[]> {
     return this.safeQuery(
@@ -66,12 +91,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
           chatId,
           participantId,
         } as TypedQueryFilter<ChatInform>);
-        return rows
-          .filter(r => !r.consumedAt)
-          .sort((a, b) => {
-            const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-            return delta !== 0 ? delta : a.id.localeCompare(b.id);
-          });
+        return rows.filter(isInformInForce).sort(byDeliveryOrder);
       },
       'Error finding pending informs for participant',
       { chatId, participantId },
@@ -99,10 +119,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
         } as TypedQueryFilter<ChatInform>);
         return rows
           .filter(r => r.consumedByMessageId && wanted.has(r.consumedByMessageId))
-          .sort((a, b) => {
-            const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-            return delta !== 0 ? delta : a.id.localeCompare(b.id);
-          });
+          .sort(byDeliveryOrder);
       },
       'Error finding informs consumed by messages',
       { chatId, participantId, messageCount: messageIds.length },
@@ -111,20 +128,15 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
   }
 
   /**
-   * Pending rows for a chat, folded back into the batches they were posted as
-   * — one entry per post, carrying the seats still owed it. Drives the
-   * composer's pending chip.
+   * Rows still in force for a chat, folded back into the batches they were
+   * posted as — one entry per post, carrying the seats still owed it (every
+   * target, for a standing batch). Drives the composer's pending chip.
    */
   async findPendingBatches(chatId: string): Promise<PendingInformBatch[]> {
     return this.safeQuery(
       async () => {
         const rows = await this.findByFilter({ chatId } as TypedQueryFilter<ChatInform>);
-        const pending = rows
-          .filter(r => !r.consumedAt)
-          .sort((a, b) => {
-            const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-            return delta !== 0 ? delta : a.id.localeCompare(b.id);
-          });
+        const pending = rows.filter(isInformInForce).sort(byPostingOrder);
 
         const batches = new Map<string, PendingInformBatch>();
         for (const row of pending) {
@@ -138,6 +150,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
             contentMarkdown: row.contentMarkdown,
             createdAt: row.createdAt,
             recordMessageId: row.recordMessageId ?? null,
+            permanent: Boolean(row.permanent),
             pendingParticipantIds: [row.participantId],
           });
         }
@@ -175,14 +188,17 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
 
   /**
    * Mint one batch: a fresh `batchId` and one row per target, all carrying the
-   * same body. Returns the created rows.
+   * same body. `permanent` makes it a standing inform for this chat. Returns
+   * the created rows.
    */
   async createBatch(params: {
     chatId: string;
     contentMarkdown: string;
     participantIds: string[];
     recordMessageId?: string | null;
+    permanent?: boolean;
   }): Promise<ChatInform[]> {
+    const permanent = params.permanent === true;
     const batchId = randomUUID();
     const created: ChatInform[] = [];
     for (const participantId of params.participantIds) {
@@ -192,6 +208,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
         participantId,
         contentMarkdown: params.contentMarkdown,
         recordMessageId: params.recordMessageId ?? null,
+        permanent,
         consumedAt: null,
         consumedByMessageId: null,
       });
@@ -204,6 +221,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
       batchId,
       targetCount: created.length,
       recordMessageId: params.recordMessageId ?? null,
+      permanent,
     });
 
     return created;
@@ -213,7 +231,9 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
    * Mark exactly these rows consumed by `messageId`. Called once a generation
    * has produced a *persisted* assistant message — never from context building,
    * so a provider failure that saves nothing leaves the rows pending for the
-   * seat's next attempt.
+   * seat's next attempt. On a standing row this stamps its first delivery and
+   * leaves it in force; `buildInformBlock` only hands over rows not yet
+   * stamped, so a later turn never moves the stamp.
    */
   async markConsumed(ids: string[], messageId: string): Promise<number> {
     if (ids.length === 0) return 0;
@@ -243,9 +263,10 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
   }
 
   /**
-   * Cancel: drop only the rows nobody has had yet. A seat that already read
-   * the passage keeps its consumed row, so a later swipe of that turn still
-   * re-applies it.
+   * Cancel: drop every row still in force — the one-shot rows nobody has had
+   * yet, and every row of a standing batch (withdrawing it is the only way it
+   * ends). A seat that already consumed a one-shot passage keeps its row, so a
+   * later swipe of that turn still re-applies it.
    */
   async deletePendingByBatch(batchId: string): Promise<number> {
     return this.safeQuery(
@@ -253,7 +274,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
         const rows = await this.findByBatchId(batchId);
         let count = 0;
         for (const row of rows) {
-          if (row.consumedAt) continue;
+          if (!isInformInForce(row)) continue;
           if (await this.delete(row.id)) count++;
         }
         logger.debug('Pending informs deleted by batch', {
@@ -269,7 +290,7 @@ export class ChatInformsRepository extends AbstractBaseRepository<ChatInform> {
     );
   }
 
-  /** A seat has left the chat: it can never collect what it was owed. */
+  /** A seat has left the chat: it can never collect what it was owed, standing or not. */
   async deletePendingForParticipant(chatId: string, participantId: string): Promise<number> {
     return this.safeQuery(
       async () => {

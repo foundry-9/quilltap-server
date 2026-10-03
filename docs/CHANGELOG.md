@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Inform: standing (per-chat) informs
+
+- The Inform dialog has a "Keep it standing in this chat" checkbox, off by default. A standing
+  inform is delivered on every generation its targets make in that chat until withdrawn, instead of
+  being consumed after one turn. It is scoped to the chat: it does not change the character and
+  does not follow them into other chats, merges or continuations.
+- New `chat_informs.permanent` column (`add-chat-informs-permanent-v1`, default 0). On a standing
+  row, `consumedAt` / `consumedByMessageId` record only the first delivery; `isInformInForce`
+  (`lib/schemas/chat-inform.types.ts`) is the single "still in force" predicate.
+- `buildInformBlock` puts standing passages ahead of one-shot ones (stable block prefix), includes
+  them on swipes, and hands back only never-delivered rows for consumption.
+- `POST ?action=inform` accepts `permanent` (default false); `GET ?action=informs` reports it per
+  batch; `cancel-inform` on a standing batch deletes every row of it. The composer chip reads
+  "on every turn in this chat" for a standing batch.
+- `.qtap` export schema, import remap and backup/restore carry the flag; older bundles import as
+  one-shot.
+
 #### Fix bugs 175 and 176: boot-time migration and table-structure handling
 
 - Bug 175: a failed `collapse-duplicate-avatar-rolls-v1` pass stopped the server with exit code 1

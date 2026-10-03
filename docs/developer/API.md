@@ -3425,6 +3425,8 @@ Unlike the off-scene rehearsal, the character is given their full per-turn syste
 
 An **Inform** is an out-of-character passage the operator hands to one or more LLM-controlled seats. Each target receives it verbatim as its own system block immediately after their system prompt on their next generation, and it is then consumed for them. The transcript keeps a *record* — a Host message (`systemSender: "host"`, `systemKind: "inform"`) carrying exactly what was typed, public when every eligible seat was targeted and whispered to the targets otherwise. **The record never reaches a model**; it is stripped from every character's context.
 
+A **standing** inform (`permanent: true`) is the exception to "consumed once": it is delivered on every generation its targets make in this chat until withdrawn with `cancel-inform`. It is scoped to the chat and never leaves it.
+
 #### `POST /api/v1/chats/[id]?action=inform`
 
 **Request Body**:
@@ -3432,11 +3434,12 @@ An **Inform** is an out-of-character passage the operator hands to one or more L
 ```json
 {
   "contentMarkdown": "You notice the clock has stopped.",
-  "targetParticipantIds": ["participant-uuid"]
+  "targetParticipantIds": ["participant-uuid"],
+  "permanent": false
 }
 ```
 
-`targetParticipantIds` carries **chat participant ids, not character ids**. `null` means every eligible seat at post time. An eligible seat is a `CHARACTER` participant with `controlledBy: "llm"` that has not been removed — silent and absent seats are valid targets (they receive the inform whenever they next generate); user-controlled seats are never targets. When an explicit list covers every eligible seat it is treated as `null`, so the public/whisper distinction follows actual coverage rather than how the operator clicked.
+`permanent` is optional and defaults to `false` (a one-shot inform). `targetParticipantIds` carries **chat participant ids, not character ids**. `null` means every eligible seat at post time. An eligible seat is a `CHARACTER` participant with `controlledBy: "llm"` that has not been removed — silent and absent seats are valid targets (they receive the inform whenever they next generate); user-controlled seats are never targets. When an explicit list covers every eligible seat it is treated as `null`, so the public/whisper distinction follows actual coverage rather than how the operator clicked.
 
 **Response**: `201 Created`
 
@@ -3445,6 +3448,7 @@ An **Inform** is an out-of-character passage the operator hands to one or more L
   "success": true,
   "batchId": "batch-uuid",
   "targetParticipantIds": null,
+  "permanent": false,
   "message": { "id": "message-uuid", "systemKind": "inform", "...": "..." }
 }
 ```
@@ -3455,7 +3459,7 @@ An **Inform** is an out-of-character passage the operator hands to one or more L
 
 #### `GET /api/v1/chats/[id]?action=informs`
 
-The batches still owed to somebody, for the composer's pending chip.
+The batches still in force — pending one-shots and standing informs — for the composer's pending chip.
 
 **Response**: `200 OK`
 
@@ -3467,19 +3471,20 @@ The batches still owed to somebody, for the composer's pending chip.
       "contentMarkdown": "You notice the clock has stopped.",
       "createdAt": "2026-01-01T21:14:00.000Z",
       "recordMessageId": "message-uuid",
+      "permanent": false,
       "pendingParticipantIds": ["participant-uuid"]
     }
   ]
 }
 ```
 
-Rows whose seat is no longer in the chat are omitted, and a batch left with no pending seat is dropped entirely.
+Rows whose seat is no longer in the chat are omitted, and a batch left with no pending seat is dropped entirely. A standing batch lists every target still seated, whether or not it has been delivered.
 
 #### `POST /api/v1/chats/[id]?action=cancel-inform`
 
 **Request Body**: `{ "batchId": "batch-uuid" }`
 
-Deletes only the batch's *pending* rows. A seat that already read the passage keeps its consumed row, so a later swipe of that turn still re-applies it. When nothing in the batch was consumed the record message is deleted too — it would otherwise document something that never happened; when anything was consumed the record stays and only the remaining targets are dropped. Publishes the `chats` realtime hint explicitly, since deleting pending rows touches no message row.
+Deletes only the batch's *pending* rows — or, for a standing batch, every row of it, since withdrawal is the only way it ends. A seat that already read a one-shot passage keeps its consumed row, so a later swipe of that turn still re-applies it. When nothing in the batch was ever delivered (for a standing row, `consumedAt` stamps its first delivery) the record message is deleted too — it would otherwise document something that never happened; when anything was consumed the record stays and only the remaining targets are dropped. Publishes the `chats` realtime hint explicitly, since deleting pending rows touches no message row.
 
 **Response**: `200 OK` — `{ "success": true, "removed": 2, "recordDeleted": true }`. `404` when the batch is unknown; `400` when it belongs to another conversation.
 

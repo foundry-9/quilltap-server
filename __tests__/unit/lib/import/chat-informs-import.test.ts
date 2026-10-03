@@ -262,6 +262,14 @@ describe('remapChatInform', () => {
     expect(result.data.chatId).toBe('chat-preserved-ids')
   })
 
+  it('carries a standing flag through, and reads a bundle without one as one-shot', () => {
+    const standing = remapChatInform(inform({ permanent: true }) as never, idMaps, known)
+    const legacy = remapChatInform(inform() as never, idMaps, known)
+
+    expect(standing.ok && standing.data.permanent).toBe(true)
+    expect(legacy.ok && legacy.data.permanent).toBe(false)
+  })
+
   it('reports the missing seat rather than guessing one', () => {
     const result = remapChatInform(inform({ participantId: BOB }) as never, idMaps, known)
 

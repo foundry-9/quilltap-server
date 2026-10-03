@@ -3,9 +3,11 @@
 /**
  * PendingInformChips — the notes still waiting in the wings.
  *
- * One chip per pending Inform batch, sitting in the composer just above the
- * form: *Informing Alice, Bob before their next turn*, with a × that cancels
- * the batch and a hover title carrying the passage's first line.
+ * One chip per Inform batch still in force, sitting in the composer just above
+ * the form: *Informing Alice, Bob before their next turn* — or, for a standing
+ * inform, *Informing Alice, Bob on every turn in this chat* — with a × that
+ * cancels (or withdraws) the batch and a hover title carrying the passage's
+ * first line.
  *
  * Realtime rides the existing `chats` topic. Posting an inform inserts the Host
  * record, consuming one rides the assistant-message insert, and the cancel
@@ -30,7 +32,9 @@ export interface PendingInformBatch {
   contentMarkdown: string
   createdAt: string
   recordMessageId: string | null
-  /** CHAT PARTICIPANT ids still awaiting delivery. */
+  /** A standing inform — delivered every turn in this chat until withdrawn. */
+  permanent?: boolean
+  /** CHAT PARTICIPANT ids still awaiting delivery (every target, if standing). */
   pendingParticipantIds: string[]
 }
 
@@ -94,12 +98,20 @@ export function PendingInformChips({ chatId, participantNames }: Readonly<Pendin
           .filter((name): name is string => Boolean(name))
         // A batch whose seats have all left the chat has nothing left to name.
         if (names.length === 0) return null
-        const label = `Informing ${names.join(', ')} before their next turn`
+        const label = batch.permanent
+          ? `Informing ${names.join(', ')} on every turn in this chat`
+          : `Informing ${names.join(', ')} before their next turn`
         return (
           <div
             key={batch.batchId}
             className="qt-chat-tool-result-chip"
-            title={firstLine(batch.contentMarkdown)}
+            // The label truncates in a narrow composer, so a standing chip says
+            // what it is in the hover title too.
+            title={
+              batch.permanent
+                ? `Standing in this chat until withdrawn — ${firstLine(batch.contentMarkdown)}`
+                : firstLine(batch.contentMarkdown)
+            }
           >
             <Icon name="info" className="qt-chat-attachment-chip-icon qt-chat-attachment-chip-icon-info" />
             <span className="text-foreground max-w-[280px] truncate">{label}</span>
@@ -108,7 +120,7 @@ export function PendingInformChips({ chatId, participantNames }: Readonly<Pendin
               onClick={() => cancel.mutate(batch.batchId)}
               disabled={cancel.isPending}
               className="qt-chat-attachment-chip-remove"
-              title="Withdraw this inform"
+              title={batch.permanent ? 'Withdraw this standing inform' : 'Withdraw this inform'}
               aria-label={`Withdraw the inform for ${names.join(', ')}`}
             >
               <Icon name="close" className="w-4 h-4" />

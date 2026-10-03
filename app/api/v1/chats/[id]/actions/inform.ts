@@ -3,7 +3,10 @@
  *
  * The Salon's **Inform**: an out-of-character passage the operator hands to one
  * or more LLM-controlled seats. Each target receives it verbatim as its own
- * system block on their next generation, and it is then consumed for them.
+ * system block on their next generation, and it is then consumed for them —
+ * unless it was posted as a **standing** inform (`permanent: true`), which rides
+ * every generation those seats make in this chat until the operator withdraws
+ * it. A standing inform belongs to this chat alone; nothing carries it out.
  *
  * The transcript keeps a record — a Host message carrying exactly what was
  * typed, public when everyone was targeted and whispered to the targets
@@ -122,6 +125,7 @@ export async function handleInform(
     contentMarkdown: validated.contentMarkdown.trim(),
     participantIds,
     recordMessageId: message?.id ?? null,
+    permanent: validated.permanent,
   });
 
   const batchId = rows[0]?.batchId ?? null;
@@ -132,18 +136,21 @@ export async function handleInform(
     targetCount: participantIds.length,
     audience: recordTargets ? 'whisper' : 'public',
     recordMessageId: message?.id ?? null,
+    permanent: validated.permanent,
   });
 
   return created({
     success: true,
     batchId,
     targetParticipantIds: recordTargets,
+    permanent: validated.permanent,
     message,
   });
 }
 
 /**
- * GET ?action=informs — the pending batches, for the composer's chip.
+ * GET ?action=informs — the batches still in force (pending one-shots and
+ * standing informs), for the composer's chip.
  *
  * Rows whose seat has left the chat are filtered out defensively; the
  * remove-participant path deletes them, so this only ever catches a row that
@@ -184,9 +191,11 @@ export async function handleGetInforms(
 /**
  * POST ?action=cancel-inform — withdraw a batch's still-pending targets.
  *
- * A seat that already read the passage keeps its consumed row (a later swipe of
- * that turn must still re-apply it), and the record stays with it. When nothing
- * was consumed the record goes too: it would otherwise document something that
+ * A seat that already read a one-shot passage keeps its consumed row (a later
+ * swipe of that turn must still re-apply it), and the record stays with it. A
+ * standing batch is withdrawn whole — every row goes, delivered or not, since
+ * withdrawal is the only way it ends. Either way, when nothing was ever
+ * delivered the record goes too: it would otherwise document something that
  * never happened.
  */
 export async function handleCancelInform(
@@ -205,7 +214,10 @@ export async function handleCancelInform(
     return badRequest('That inform belongs to another conversation.');
   }
 
+  // On a standing row `consumedAt` stamps its first delivery, so this reads
+  // "was it ever delivered to anyone" for both kinds.
   const anyConsumed = rows.some((row) => Boolean(row.consumedAt));
+  const permanent = rows.some((row) => row.permanent);
   const recordMessageId = rows.find((row) => row.recordMessageId)?.recordMessageId ?? null;
 
   const removed = await repos.chatInforms.deletePendingByBatch(batchId);
@@ -235,6 +247,7 @@ export async function handleCancelInform(
     batchId,
     removed,
     anyConsumed,
+    permanent,
     recordDeleted,
   });
 

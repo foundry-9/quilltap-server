@@ -25,6 +25,10 @@ The point is to steer — to change how a character behaves, or how they read wh
 happening, or both — without putting words in anyone's mouth and without the passage
 becoming a standing instruction.
 
+**Addendum (2026-10-03) — standing informs.** The dialog gained a *Keep it standing in this
+chat* checkbox, off by default. See [Standing informs](#standing-informs) for the design; it
+supersedes the "consumed once" wording below wherever a row has `permanent: true`.
+
 ## Vocabulary
 
 - **Inform** — one operator-authored passage, posted once, aimed at one or more seats.
@@ -316,11 +320,46 @@ Button, modal state, `InformDialog` (measure the toolbar), pending chip, query k
 9. Export `.qtap`, import into a scratch instance: rows present with remapped ids. Backup, restore: same.
 10. Confirm no new polling: the chip's query has no bare `refetchInterval`.
 
+## Standing informs
+
+Added after the original build. An inform posted with `permanent: true` is **in force** for
+every generation its targets make in this chat until the operator withdraws it.
+
+- **Storage.** `chat_informs.permanent INTEGER NOT NULL DEFAULT 0`
+  (`add-chat-informs-permanent-v1`). On a standing row `consumedAt` / `consumedByMessageId`
+  record only the *first* delivery and do not retire it. `isInformInForce(row)`
+  (`lib/schemas/chat-inform.types.ts`) — `permanent || !consumedAt` — is the one predicate every
+  "still owed" read uses: `findPendingForParticipant`, `findPendingBatches`,
+  `deletePendingByBatch`, `deletePendingForParticipant`.
+- **Delivery order.** Standing rows first, then one-shot rows, each in posting order. A standing
+  passage is identical turn after turn, so leading with it keeps the block's prefix stable for
+  providers that cache by prefix. The block is still empty-is-absent and still sits between
+  system blocks 2 and 3; no builder version is bumped.
+- **Consumption.** `buildInformBlock` returns in `rowIds` only rows with no `consumedAt` — every
+  one-shot row, and a standing row on its first delivery — so the finalizer's `markConsumed` stamps
+  that first delivery once and never moves it.
+- **Swipes.** A swipe gets the rows its line consumed *plus* every standing row now in force,
+  de-duplicated, standing first; still no pending one-shot rows, still no `rowIds`. The reason
+  pending one-shots stay out of a swipe (they would land and vanish) does not apply to a passage
+  that does not vanish.
+- **Withdrawal.** `cancel-inform` on a standing batch deletes every row of it. The record is
+  deleted only when no row was ever delivered, the same rule as before read through the
+  first-delivery stamp.
+- **Scope.** Per chat, by construction: the row hangs off one `chatId` and nothing outside the
+  prompt path of that chat reads it. It does not touch the character, does not travel through a
+  merge or continuation (pending informs never did), and is not memory. The dialog and help copy
+  say so in plain terms.
+- **Transcript record.** Unchanged — same `systemKind: 'inform'`, same strip. The composer chip is
+  where standing-ness shows: *Informing Alice, Bob on every turn in this chat*.
+- **Export/import/backup.** The flag rides the existing `chat_inform` record; a bundle without it
+  imports as one-shot.
+
 ## Deferred
 
 - LLM rewrite into second person with review (the announcement dialog's `VoiceRewriteReviewPanel` would fit if ever wanted).
 - Per-target variants of the same inform.
-- Expiry after N turns, or a standing "until cancelled" mode.
+- Expiry after N turns. (The standing "until cancelled" mode is implemented — see
+  [Standing informs](#standing-informs).)
 - Editing a pending inform (cancel and re-post covers it).
 - Carrying pending informs across a merge or continuation.
 - A `qt-*` class review for the chip and dialog beyond what the announcement dialog already uses — reuse first.

@@ -11,6 +11,9 @@
  *     is what keeps a turn without informs byte-identical to one built before
  *     the feature existed.
  *   - It never writes. Selection is not delivery.
+ *   - Standing informs (`permanent: true`): they lead the block, ride a swipe
+ *     too, and only an undelivered one is handed back for consumption — so the
+ *     first-delivery stamp never moves and the row is never retired.
  */
 
 import { buildInformBlock, INFORM_BLOCK_SEPARATOR } from '@/lib/chat/context/inform-block'
@@ -26,6 +29,7 @@ function row(overrides: Record<string, unknown> = {}) {
     participantId: SEAT,
     contentMarkdown: 'You notice the clock has stopped.',
     recordMessageId: 'msg-record',
+    permanent: false,
     createdAt: '2026-09-19T10:00:00.000Z',
     updatedAt: '2026-09-19T10:00:00.000Z',
     consumedAt: null,
@@ -111,9 +115,6 @@ describe('buildInformBlock', () => {
       expect((repos as never as ReturnType<typeof makeRepos> & { chatInforms: Record<string, jest.Mock> })
         .chatInforms.findConsumedByMessages)
         .toHaveBeenCalledWith(CHAT, SEAT, ['msg-target', 'msg-sibling'])
-      expect((repos as never as { chatInforms: Record<string, jest.Mock> })
-        .chatInforms.findPendingForParticipant)
-        .not.toHaveBeenCalled()
     })
 
     it('never hands back row ids, so a swipe cannot consume', async () => {
@@ -132,6 +133,41 @@ describe('buildInformBlock', () => {
       expect(result.rowIds).toEqual([])
     })
 
+    it('carries every standing row now in force, ahead of the re-applied ones, once each', async () => {
+      const standing = row({
+        id: 'standing-row',
+        permanent: true,
+        contentMarkdown: 'You are, and remain, quietly furious.',
+        consumedAt: '2026-09-19T10:05:00.000Z',
+        consumedByMessageId: 'msg-target',
+      })
+      const pending = [standing, row({ id: 'pending-row', contentMarkdown: 'Brand new.' })]
+      // The standing row's first delivery was the very message being swiped,
+      // so the consumed-by read returns it too.
+      const consumed = [
+        standing,
+        row({
+          id: 'consumed-row',
+          contentMarkdown: 'What she knew at the time.',
+          consumedAt: '2026-09-19T10:05:00.000Z',
+          consumedByMessageId: 'msg-target',
+        }),
+      ]
+      const repos = makeRepos(pending, consumed)
+
+      const result = await buildInformBlock({
+        repos,
+        chatId: CHAT,
+        participantId: SEAT,
+        regenerationOfMessageIds: ['msg-target'],
+      })
+
+      expect(result.content).toBe(
+        `You are, and remain, quietly furious.${INFORM_BLOCK_SEPARATOR}What she knew at the time.`,
+      )
+      expect(result.rowIds).toEqual([])
+    })
+
     it('falls back to the pending set when the regeneration list is empty', async () => {
       const repos = makeRepos([row()])
 
@@ -143,6 +179,35 @@ describe('buildInformBlock', () => {
       })
 
       expect(result.rowIds).toEqual(['row-1'])
+    })
+  })
+
+  describe('standing informs', () => {
+    it('delivers a standing row that was delivered before, but does not hand it back to consume', async () => {
+      const repos = makeRepos([
+        row({
+          id: 'standing-row',
+          permanent: true,
+          contentMarkdown: 'You are the ship\'s cat.',
+          consumedAt: '2026-09-19T10:05:00.000Z',
+          consumedByMessageId: 'msg-first',
+        }),
+        row({ id: 'oneshot-row', batchId: 'batch-2', contentMarkdown: 'The lamp gutters.' }),
+      ])
+
+      const result = await buildInformBlock({ repos, chatId: CHAT, participantId: SEAT })
+
+      expect(result.content).toBe(`You are the ship's cat.${INFORM_BLOCK_SEPARATOR}The lamp gutters.`)
+      expect(result.rowIds).toEqual(['oneshot-row'])
+    })
+
+    it('hands back a standing row that has never been delivered, to stamp its first delivery', async () => {
+      const repos = makeRepos([row({ id: 'standing-row', permanent: true })])
+
+      const result = await buildInformBlock({ repos, chatId: CHAT, participantId: SEAT })
+
+      expect(result.content).toBe('You notice the clock has stopped.')
+      expect(result.rowIds).toEqual(['standing-row'])
     })
   })
 

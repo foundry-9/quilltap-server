@@ -1052,8 +1052,9 @@
         "participantId": { "$ref": "#/$defs/UUID", "description": "A chat PARTICIPANT id, never a character id." },
         "contentMarkdown": { "type": "string", "description": "Exactly what the operator typed. Delivered verbatim; never framed." },
         "recordMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The Host transcript message documenting the post. Nullable so a record-write failure cannot orphan the batch." },
-        "consumedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }] },
-        "consumedByMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The assistant message whose generation delivered this row." },
+        "permanent": { "type": "boolean", "default": false, "description": "A standing inform: delivered on every generation this seat makes in this chat until withdrawn, never consumed. Absent means false (a one-shot inform)." },
+        "consumedAt": { "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }], "description": "When the row was consumed; on a standing row, its first delivery only." },
+        "consumedByMessageId": { "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }], "description": "The assistant message whose generation delivered this row (the first such, for a standing row)." },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
       }

@@ -320,6 +320,7 @@ import { addConciergeSettingsMigration } from './add-concierge-settings';
 import { dropChatConciergeOverrideMigration } from './drop-chat-concierge-override';
 // Scriptorium: transcripts rendered on demand; drop the stored copy
 import { dropChatRenderedMarkdownMigration } from './drop-chat-rendered-markdown';
+import { addChatInformsPermanentMigration } from './add-chat-informs-permanent';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -836,6 +837,8 @@ export const migrations: Migration[] = [
   dropChatConciergeOverrideMigration,
   // Scriptorium: drop chats.renderedMarkdown (rendered on demand now)
   dropChatRenderedMarkdownMigration,
+  // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
+  addChatInformsPermanentMigration,
 ];
 
 export {
@@ -1240,5 +1243,7 @@ export {
   dropChatConciergeOverrideMigration,
   // Scriptorium: drop chats.renderedMarkdown (rendered on demand now)
   dropChatRenderedMarkdownMigration,
+  // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
+  addChatInformsPermanentMigration,
 };
 

@@ -154,6 +154,7 @@ describe('InformDialog — posting', () => {
     expect(postedBody(spy)).toEqual({
       contentMarkdown: 'You notice the clock has stopped.',
       targetParticipantIds: null,
+      permanent: false,
     })
     expect(onPosted).toHaveBeenCalledTimes(1)
   })
@@ -172,6 +173,7 @@ describe('InformDialog — posting', () => {
     expect(postedBody(spy)).toEqual({
       contentMarkdown: 'You see Bob pocket the key.',
       targetParticipantIds: [ALICE],
+      permanent: false,
     })
   })
 
@@ -191,6 +193,27 @@ describe('InformDialog — posting', () => {
     expect(postedBody(spy)).toEqual({
       contentMarkdown: 'You hear the gate close.',
       targetParticipantIds: null,
+      permanent: false,
+    })
+  })
+
+  it('posts a standing inform when the toggle is ticked (off by default)', async () => {
+    const spy = mockPost()
+    const { onClose } = renderDialog()
+
+    const toggle = screen.getByLabelText(/Keep it standing in this chat/) as HTMLInputElement
+    expect(toggle.checked).toBe(false)
+    fireEvent.click(toggle)
+    fireEvent.change(screen.getByLabelText('What they are told'), {
+      target: { value: 'You are the ship\'s cat.' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Inform' }))
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(postedBody(spy)).toEqual({
+      contentMarkdown: 'You are the ship\'s cat.',
+      targetParticipantIds: null,
+      permanent: true,
     })
   })
 

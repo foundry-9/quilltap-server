@@ -101,6 +101,16 @@ describe('PendingInformChips', () => {
     )
   })
 
+  it('says a standing inform rides every turn in this chat', async () => {
+    routeFetch([{ ...BATCH, permanent: true }])
+    renderChips()
+
+    const chip = await screen.findByText('Informing Alice, Bob on every turn in this chat')
+    expect(chip.parentElement?.getAttribute('title')).toBe(
+      'Standing in this chat until withdrawn — You see that Alice slipped the letter into her sleeve.',
+    )
+  })
+
   it('skips a batch whose seats have all left the chat', async () => {
     routeFetch([{ ...BATCH, batchId: 'batch-2', pendingParticipantIds: [GHOST] }])
     const { container } = renderChips()

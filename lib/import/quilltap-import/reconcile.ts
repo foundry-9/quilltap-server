@@ -94,6 +94,8 @@ export function remapChatInform(
       participantId: inform.participantId,
       contentMarkdown: inform.contentMarkdown,
       recordMessageId,
+      // Bundles written before standing informs existed carry no flag.
+      permanent: inform.permanent === true,
       consumedAt: inform.consumedAt ?? null,
       consumedByMessageId: consumedByMessageIdCleared ? null : consumedByMessageId,
     },

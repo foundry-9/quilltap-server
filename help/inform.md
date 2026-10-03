@@ -14,7 +14,7 @@ The **Inform** button — the small *i* in the composer's left gutter, keeping c
 
 Click it and a floating panel appears: wide enough to hold the whole formatting rail without the buttons wrapping, draggable by its title bar, resizable at the corner, and disposed to remember where you last left it. Choose who is to be informed. Write a short passage. Press **Inform**.
 
-Each character you named receives that passage — *your words exactly, with nothing added* — immediately after their system prompt, the next time they are asked to speak. And then it is spent, for them, forever.
+Each character you named receives that passage — *your words exactly, with nothing added* — immediately after their system prompt, the next time they are asked to speak. And then it is spent, for them, forever. (Unless you tell it to stay. See [Keeping it standing](#keeping-it-standing-in-this-chat).)
 
 Three properties are worth committing to memory, because everything else follows from them.
 
@@ -22,7 +22,7 @@ Three properties are worth committing to memory, because everything else follows
 
 **It is verbatim.** Quilltap adds no preamble, no framing, no anxious little rider about not mentioning this to the others. The Staff do not clear their throats first. What you typed is what arrives — which is why *how* you write it matters rather more than usual. See the next section.
 
-**It is consumed, not standing.** Once a character has actually taken their turn, the note is gone from their next one. An inform steers a moment; it does not become a house rule. If you want a standing instruction, that is what a character's personality and system prompts are for.
+**It is consumed, not standing — unless you say otherwise.** Once a character has actually taken their turn, the note is gone from their next one. An inform steers a moment; it does not become a house rule. If you want something to stay, tick the box described below, and it will stay — but only in this conversation.
 
 ## Write it to them, in the second person
 
@@ -46,6 +46,23 @@ Silent and absent characters *do* appear, and may be informed. They will collect
 
 Tick every character individually and Quilltap treats it as Everyone. The distinction that follows is about who was actually covered, not about how you happened to click.
 
+## Keeping it standing in this chat
+
+At the foot of the panel, beside the buttons, sits a modest checkbox: **Keep it standing in this chat.** It is unticked every time the panel opens, and an ordinary inform is the one-shot affair described above.
+
+Tick it, and the passage stops being a note fed to the fire and becomes a card propped on the mantelpiece. Every character you named receives it on **every** turn they take in this conversation from now on — the same words, in the same place, after their system prompt — until you withdraw it. Taking a turn does not spend it. Passing does not spend it. A swipe of an earlier line carries it too, for a standing note is in force for every prompt made while it stands.
+
+The emphasis on *this chat* is not decorative. A standing inform belongs to the conversation in which you wrote it and nowhere else:
+
+- It does not alter the character. Their personality, manifesto and system prompts are untouched.
+- It does not follow the character into any other chat, nor into a new one you start tomorrow.
+- It does not travel through a merge or a continuation.
+- It does not become a memory.
+
+If you find yourself wanting the same standing note in every conversation a character has, that is a sign it belongs in the character proper — their personality or a system prompt — rather than on the mantelpiece of one room.
+
+When a character has standing notes and an ordinary one waiting at once, the standing notes come first and the fresh one follows, divided by the usual rule.
+
 ## The record in the transcript
 
 Every inform leaves a note in the conversation, authored by The Host, carrying exactly the words you wrote. Its chip reads *out of character.*
@@ -60,7 +77,9 @@ Nor does it become memory. The passage is not a message, so the turn's memory ex
 
 While a character still has an inform waiting, a small chip sits above the composer — *Informing Alice, Bob before their next turn* — with the first line of the passage on hover. Press its **×** to call the whole thing back.
 
-Cancel before anyone has collected it and the record goes too; it would be an odd sort of archive that documented something which never happened. Cancel after some of the company have already had it, and the record stays (it is now true) while the characters still waiting are quietly struck off the list.
+A standing inform has a chip of its own that never clears by itself: *Informing Alice, Bob on every turn in this chat.* That chip is the only way to see which notes are standing, and its **×** is the only way to take one down. Withdraw it and it is gone for every character it named, from their very next turn.
+
+Cancel before anyone has collected it and the record goes too; it would be an odd sort of archive that documented something which never happened. Cancel after some of the company have already had it, and the record stays (it is now true) while the characters still waiting are quietly struck off the list. A standing note withdrawn after it has been delivered even once likewise keeps its record — the transcript ought to show what was in force while it was.
 
 Post two informs to the same character before she speaks and she gets both, in the order you wrote them, separated by a modest horizontal rule. They stack; they do not overwrite.
 

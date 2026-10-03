@@ -661,6 +661,7 @@ CREATE TABLE "chat_informs" (
   "updatedAt" TEXT NOT NULL,
   "consumedAt" TEXT,
   "consumedByMessageId" TEXT,
+  "permanent" INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE
 );
 
@@ -686,6 +687,13 @@ buffered job-child write could clobber.
 - `consumedAt` null means pending. `consumedByMessageId` is the assistant
   message whose generation delivered the row; it is what makes a
   regenerate/swipe of that message re-apply the same inform.
+- `permanent` (boolean, added by `add-chat-informs-permanent-v1`) marks a
+  **standing** inform: it is delivered on every generation its seat makes in
+  this chat until the operator withdraws it, and is never retired by
+  consumption — on such a row `consumedAt` / `consumedByMessageId` record only
+  the first delivery. Withdrawing deletes every row of a standing batch.
+  `isInformInForce` (`lib/schemas/chat-inform.types.ts`) is the one definition
+  of "still in force".
 - Consumed rows are **kept**. They are tiny, they are what makes a swipe honest,
   and the chat's cascade removes them. There is no sweep.
 
