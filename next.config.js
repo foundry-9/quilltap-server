@@ -19,6 +19,7 @@ const nextConfig = {
     'node-pty',         // Native module for terminal control
     'sharp',            // Native image processing (platform-specific binaries)
     '@napi-rs/canvas',  // Native canvas backend used by pdfjs-dist for PDF rendering
+    'pdf-parse',        // Must load natively: pdfjs-dist finds @napi-rs/canvas (its DOMMatrix polyfill) via createRequire(import.meta.url), which webpack bakes to the build machine's path
     'ws',               // WebSocket library for terminal streaming
   ],
 
@@ -36,6 +37,8 @@ const nextConfig = {
       './node_modules/ws/**/*',
       './node_modules/@img/**/*',
       './node_modules/@napi-rs/**/*',
+      './node_modules/pdf-parse/**/*',
+      './node_modules/pdfjs-dist/**/*',
       './node_modules/@xterm/**/*',
       './first-startup/**/*',
       './themes/bundled/**/*',

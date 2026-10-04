@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Fix bugs 177 and 178: PDF text extraction
+
+- Bug 177: `extractPdfContent` (`lib/services/file-content-extractor.ts`) called `pdf-parse` as
+  the 1.x function, but 2.x exports a `PDFParse` class, so every PDF source given to Summon From
+  Lore or the AI character wizard was skipped with only a warning (since 2.7.0). It now reads
+  through `convertPdfBufferToText`, the single `pdf-parse` caller, and falls back to the regex
+  extractor when that finds no text.
+- Bug 178: packaged builds (Docker, Electron tarball) logged `DOMMatrix is not defined` for every
+  PDF and extracted no text. Webpack bundled `pdf-parse` / `pdfjs-dist` and replaced
+  `import.meta.url` with the CI runner's path, so `pdfjs-dist` could not load `@napi-rs/canvas` to
+  polyfill `DOMMatrix`. `pdf-parse` is now in `serverExternalPackages`, and `pdf-parse` and
+  `pdfjs-dist` are in `outputFileTracingIncludes`.
+
 #### Inform: standing (per-chat) informs
 
 - The Inform dialog has a "Keep it standing in this chat" checkbox, off by default. A standing

@@ -16,6 +16,7 @@
 import { logger } from '@/lib/logger'
 import { fileStorageManager } from '@/lib/file-storage/manager'
 import { formatBytes } from '@/lib/utils/format-bytes'
+import { convertPdfBufferToText } from '@/lib/mount-index/converters/pdf-converter'
 import type { FileEntry } from '@/lib/schemas/types'
 
 /**
@@ -162,48 +163,30 @@ async function extractTextContent(
 
 /**
  * Extract content from a PDF file
- * Uses pdf-parse library if available
+ *
+ * Reads through `convertPdfBufferToText`, the one pdf-parse caller, which
+ * answers '' on any failure; the regex fallback covers that case.
  */
 async function extractPdfContent(buffer: Buffer): Promise<ExtractedContent> {
   try {
-    // Dynamically import pdf-parse to handle it not being installed
-    // Using require for optional dependency to avoid TypeScript module errors
-    let pdfParse: ((buffer: Buffer) => Promise<{ text: string }>) | null = null
-    try {
-       
-      pdfParse = require('pdf-parse')
-    } catch {
-      // pdf-parse is not installed
+    let content = (await convertPdfBufferToText(buffer)).trim()
+
+    if (!content) {
+      logger.warn('pdf-parse found no text, using native fallback extraction', {
+        size: buffer.length,
+      })
+      content = extractPdfTextFallback(buffer)
     }
 
-    if (!pdfParse) {
-      logger.warn('pdf-parse not available, using native fallback extraction')
-      const fallbackText = extractPdfTextFallback(buffer)
-      if (!fallbackText) {
-        return {
-          success: false,
-          contentType: 'error',
-          error: 'Failed to extract PDF content (pdf-parse unavailable and fallback extractor found no text)',
-        }
-      }
-
-      let content = fallbackText
-      let truncated = false
-      if (content.length > MAX_CONTENT_LENGTH) {
-        content = content.slice(0, MAX_CONTENT_LENGTH)
-        truncated = true
-      }
-
+    if (!content) {
       return {
-        success: true,
-        content,
-        contentType: 'text',
-        truncated,
+        success: false,
+        contentType: 'error',
+        error: 'Failed to extract PDF content (no text found)',
       }
     }
 
-    const data = await pdfParse(buffer)
-    let content = data.text
+    logger.debug('Extracted PDF content', { size: buffer.length, chars: content.length })
 
     let truncated = false
     if (content.length > MAX_CONTENT_LENGTH) {
