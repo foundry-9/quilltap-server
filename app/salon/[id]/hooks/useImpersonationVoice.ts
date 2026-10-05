@@ -4,13 +4,18 @@
  * In Their Own Words — interception of the composer's submit for an
  * impersonated seat.
  *
- * When the instance setting is on and the seat the composer will attribute the
- * message to is one the human is *impersonating* (the Bug 44 overlay, not an
- * owner seat), the draft does not go straight to the chat. It is stashed, the
- * review dialog opens, and the seat's own model restates it in the character's
- * voice. Nothing reaches the chat until the operator chooses — and every exit
- * from the dialog that does not send leaves the draft exactly where it was,
- * because only `sendMessage` clears the editor.
+ * When the instance setting is not `off` and the seat the composer will
+ * attribute the message to is one the human is *impersonating* (the Bug 44
+ * overlay, not an owner seat), the draft does not go straight to the chat. It
+ * is stashed and the review dialog opens. Under `ask` the dialog waits on the
+ * draft alone — no model is called until the operator asks for a restatement —
+ * and under `always` the seat's own model starts restating it at once. Nothing
+ * reaches the chat until the operator chooses, and every exit from the dialog
+ * that does not send leaves the draft exactly where it was, because only
+ * `sendMessage` clears the editor.
+ *
+ * Only an explicit Restate / Regenerate press (or opening under `always`) ever
+ * spends a model call; changing a picker just drops a stale proposal.
  *
  * @module app/salon/[id]/hooks/useImpersonationVoice
  */
@@ -18,6 +23,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { parseCarinaQuery } from '@/lib/chat/carina-parser'
 import { showErrorToast } from '@/lib/toast'
+import type { ImpersonationVoiceMode } from '@/lib/schemas/settings.types'
 import type { AttachedFile, PendingToolResult } from '../types'
 
 /** The minimum a gate decision needs to know about the speaking seat. */
@@ -28,8 +34,8 @@ export interface RehearsalSeat {
 }
 
 export interface ShouldRehearseArgs {
-  /** `chatSettings.impersonationVoiceRewrite`. */
-  enabled: boolean
+  /** `chatSettings.impersonationVoiceMode`. */
+  mode: ImpersonationVoiceMode
   /** The seat the composer will attribute this message to (`speakingSeat`). */
   seat: RehearsalSeat | null
   impersonatingParticipantIds: readonly string[]
@@ -49,14 +55,14 @@ export interface ShouldRehearseArgs {
  * character has a voice of their own that a model normally supplies".
  */
 export function shouldRehearseImpersonatedLine({
-  enabled,
+  mode,
   seat,
   impersonatingParticipantIds,
   text,
   hasAttachmentsOnly,
   bypassOnce,
 }: ShouldRehearseArgs): boolean {
-  if (!enabled) return false
+  if (mode === 'off') return false
   if (bypassOnce) return false
   if (!seat) return false
   if (seat.type !== 'CHARACTER') return false
@@ -83,7 +89,12 @@ export interface RehearsalTarget {
   selectedSystemPromptId?: string | null
 }
 
-type Stage = 'idle' | 'generating' | 'review'
+/**
+ * `draft` — open on the operator's words, no restatement requested (or the one
+ * on screen was dropped by a picker change). `generating` / `review` — a
+ * restatement is in flight / on screen (possibly empty after a failure).
+ */
+export type ImpersonationVoiceStage = 'idle' | 'draft' | 'generating' | 'review'
 
 interface PendingSend {
   seed: string
@@ -121,13 +132,13 @@ export function useImpersonationVoice({
 }: UseImpersonationVoiceOptions) {
   const [pending, setPending] = useState<PendingSend | null>(null)
   const [target, setTarget] = useState<RehearsalTarget | null>(null)
-  const [stage, setStage] = useState<Stage>('idle')
+  const [stage, setStage] = useState<ImpersonationVoiceStage>('idle')
   const [proposal, setProposal] = useState('')
   const [profileOverride, setProfileOverride] = useState<string | null>(null)
   const [systemPromptOverride, setSystemPromptOverride] = useState<string | null>(null)
   const [resolvedVoice, setResolvedVoice] = useState<{ profileName: string; modelName: string } | null>(null)
   const sendArgsRef = useRef<SendMessageArgs | null>(null)
-  // Mirrors `pending` so the picker / regenerate callbacks read the live draft
+  // Mirrors `pending` so the restate / send callbacks read the live draft
   // without a stale closure, and without the dialog holding a second copy of
   // the text (which would need an effect to stay in step).
   const pendingRef = useRef<PendingSend | null>(null)
@@ -209,7 +220,7 @@ export function useImpersonationVoice({
         text: string
         seat: RehearsalSeat | null
         seatTarget: RehearsalTarget | null
-        enabled: boolean
+        mode: ImpersonationVoiceMode
         impersonatingParticipantIds: readonly string[]
         attachedFiles: AttachedFile[]
         pendingToolResults: PendingToolResult[]
@@ -221,7 +232,7 @@ export function useImpersonationVoice({
         && (args.attachedFiles.length > 0 || args.pendingToolResults.length > 0)
 
       const armed = shouldRehearseImpersonatedLine({
-        enabled: args.enabled,
+        mode: args.mode,
         seat: args.seat,
         impersonatingParticipantIds: args.impersonatingParticipantIds,
         text: args.text,
@@ -246,7 +257,13 @@ export function useImpersonationVoice({
       setSystemPromptOverride(null)
       setResolvedVoice(null)
       sendArgsRef.current = args.sendArgs
-      void runPreview(args.text, null, null, args.seatTarget.participantId)
+      if (args.mode === 'always') {
+        void runPreview(args.text, null, null, args.seatTarget.participantId)
+      } else {
+        // `ask`: the operator speaks for the character unless they say
+        // otherwise, so no model is called until they press Restate.
+        setStage('draft')
+      }
       return true
     },
     [runPreview, writePending],
@@ -294,33 +311,42 @@ export function useImpersonationVoice({
     if (stash) send(stash.seed)
   }, [send])
 
-  // The draft the operator can see right now — an edit in the dialog is kept,
-  // so a later "Send as written" sends what they are looking at.
-  const regenerate = useCallback(() => {
+  /**
+   * Restate (first time) or Regenerate (again) — the only operator action that
+   * spends a model call. Uses the draft the operator can see right now, so an
+   * edit in the dialog is carried into the attempt.
+   */
+  const restate = useCallback(() => {
     const stash = pendingRef.current
-    if (!target || !stash) return
+    if (!target || !stash || stash.seed.trim().length === 0) return
     void runPreview(stash.seed, profileOverride, systemPromptOverride, target.participantId)
   }, [target, profileOverride, systemPromptOverride, runPreview])
 
-  /** Changing a picker drops the proposal and re-runs on the current draft. */
+  /**
+   * A picker change makes any proposal on screen stale: drop it and wait for
+   * the operator to ask again, rather than spending a call they did not request.
+   */
+  const dropStaleProposal = useCallback(() => {
+    setProposal('')
+    // The voice the last call reported is no longer the one that would speak.
+    setResolvedVoice(null)
+    setStage('draft')
+  }, [])
+
   const changeProfile = useCallback(
     (profileId: string | null) => {
       setProfileOverride(profileId)
-      const stash = pendingRef.current
-      if (!target || !stash) return
-      void runPreview(stash.seed, profileId, systemPromptOverride, target.participantId)
+      dropStaleProposal()
     },
-    [target, systemPromptOverride, runPreview],
+    [dropStaleProposal],
   )
 
   const changeSystemPrompt = useCallback(
     (systemPromptId: string | null) => {
       setSystemPromptOverride(systemPromptId)
-      const stash = pendingRef.current
-      if (!target || !stash) return
-      void runPreview(stash.seed, profileOverride, systemPromptId, target.participantId)
+      dropStaleProposal()
     },
-    [target, profileOverride, runPreview],
+    [dropStaleProposal],
   )
 
   /** Back to the composer — the draft is still in the editor, untouched. */
@@ -348,7 +374,7 @@ export function useImpersonationVoice({
     intercept,
     send,
     sendAsWritten,
-    regenerate,
+    restate,
     changeProfile,
     changeSystemPrompt,
     editOriginal,

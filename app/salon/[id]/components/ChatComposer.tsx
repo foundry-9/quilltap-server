@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/icon'
 import FormattingToolbar from '@/components/chat/FormattingToolbar'
 import ComposerGutterTools from '@/components/chat/ComposerGutterTools'
 import PendingInformChips from '@/components/chat/PendingInformChips'
-import { SpeakingAsAvatar } from './SpeakingAsAvatar'
+import { SpeakingAsAvatar, voiceRehearsalTitle, type VoiceRehearsalCue } from './SpeakingAsAvatar'
 import type { AvatarImageSource } from '@/components/ui/Avatar'
 import { QuillAnimation } from '@/components/chat/QuillAnimation'
 import { LexicalComposerWrapper } from '@/components/chat/lexical'
@@ -120,11 +120,12 @@ interface ChatComposerProps {
     character?: AvatarImageSource | null
   } | null
   /**
-   * In Their Own Words is armed for the speaking-as seat: a typed line will be
-   * handed to that character to restate, for review, before it posts.
-   * Informational only — the gate itself lives in `useImpersonationVoice`.
+   * In Their Own Words is armed for the speaking-as seat: a typed line opens
+   * the review dialog before it posts — waiting on the operator (`ask`) or
+   * restating at once (`always`). Null when not armed. Informational only —
+   * the gate itself lives in `useImpersonationVoice`.
    */
-  voiceRehearsalArmed?: boolean
+  voiceRehearsal?: VoiceRehearsalCue | null
   /** Character ids the `@` typeahead lists first — this chat's cast. */
   mentionPriorityCharacterIds?: readonly string[]
 }
@@ -178,7 +179,7 @@ export function ChatComposer({
   onOpenTerminalClick,
   isTerminalModeActive,
   speakingAs,
-  voiceRehearsalArmed = false,
+  voiceRehearsal = null,
   mentionPriorityCharacterIds,
 }: ChatComposerProps) {
   // Every input surface in here is shut by either flag, so ask the question
@@ -420,7 +421,7 @@ export function ChatComposer({
                 title={speakingAs.title}
                 src={speakingAs.character}
                 canType={hasActiveCharacters && !composerLocked && !streaming && !waitingForResponse}
-                voiceRehearsal={voiceRehearsalArmed}
+                voiceRehearsal={voiceRehearsal}
               />
             </div>
           )}
@@ -548,8 +549,8 @@ export function ChatComposer({
                 ? "Add a character to start chatting"
                 : (streaming || waitingForResponse)
                   ? "Generating..."
-                  : voiceRehearsalArmed && speakingAs
-                    ? `Sends your draft to ${speakingAs.name} to say in their own words first`
+                  : voiceRehearsal && speakingAs
+                    ? voiceRehearsalTitle(voiceRehearsal, speakingAs.name, 'send')
                     : "Send message"}
             >
               <Icon name="send" className="w-5 h-5" />

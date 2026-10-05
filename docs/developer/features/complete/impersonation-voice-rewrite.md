@@ -583,3 +583,31 @@ an attachment-only send never opens the dialog; a provider failure leaves
    **Default: no** — the seat's own profile is the right default nearly always.
 3. Should the owner persona seat be included behind a second toggle later?
    **Default: revisit after use.** Kept out of scope on purpose (see Non-goals).
+
+## Addendum (2026-10-04): three modes, draft-first dialog
+
+The original design called the model the moment the dialog opened, so every
+impersonated line cost a request — including lines the operator never meant
+to have restated. The boolean became a three-state mode:
+
+- `chat_settings.impersonationVoiceMode` — `'off'` / `'ask'` / `'always'`
+  (`ImpersonationVoiceModeEnum` in `lib/schemas/settings.types.ts`, default
+  `'off'`). Migration `impersonation-voice-mode-v1` translated the old
+  INTEGER column (1 → `'ask'`, else `'off'`) and dropped it; a backup that
+  still carries the boolean is translated on restore by
+  `withImpersonationVoiceModeFromLegacy` (`lib/chat/impersonation-voice-legacy.ts`).
+- Gate rule 1 is now `mode !== 'off'`; `shouldRehearseImpersonatedLine` takes
+  `mode` instead of `enabled`.
+- The hook gained a `draft` stage. Under `'ask'`, `intercept` opens the dialog
+  in `draft` and calls nothing; under `'always'` it calls the preview at once
+  as before. `restate()` (Restate in their voice / Regenerate) is the only
+  operator action that spends a call.
+- A picker change no longer re-runs the preview. It sets the override, clears
+  the proposal and returns to `draft`.
+- In `draft` the dialog shows no proposal panel; the footer is Cancel / Edit
+  original / Restate in their voice / **Send as written** (primary), and
+  Cmd/Ctrl+Enter in the draft sends it as written. Once a restatement is in
+  flight or on screen the footer is the original one (Send primary).
+- The composer cue (`voiceRehearsal`, shared wording in
+  `voiceRehearsalTitle` in `SpeakingAsAvatar.tsx`) now carries the mode, so
+  the portrait and Send tooltips say which of the two will happen.

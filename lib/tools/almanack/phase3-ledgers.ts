@@ -638,7 +638,7 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     },
     textReplacements: { enabled: true, rules: 0, enabledRules: 0 },
     composerSpellcheck: true,
-    impersonationVoiceRewrite: false,
+    impersonationVoiceMode: 'off',
     autoScrollOnResponseComplete: false,
     imageDescriptionProfileConfigured: false,
     uncensoredVisionProfileConfigured: false,
@@ -758,7 +758,7 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
       enabledRules: num(ruleRow?.enabled),
     },
     composerSpellcheck: chatSettings?.composerSpellcheck ?? true,
-    impersonationVoiceRewrite: chatSettings?.impersonationVoiceRewrite ?? false,
+    impersonationVoiceMode: chatSettings?.impersonationVoiceMode ?? 'off',
     autoScrollOnResponseComplete: chatSettings?.autoScrollOnResponseComplete ?? false,
     imageDescriptionProfileConfigured: !!chatSettings?.imageDescriptionProfileId,
     uncensoredVisionProfileConfigured:

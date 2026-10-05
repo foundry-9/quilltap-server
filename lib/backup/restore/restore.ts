@@ -20,6 +20,10 @@ import {
   withConciergeSettingsFromLegacy,
   type SettingsWithLegacyConcierge,
 } from '@/lib/services/dangerous-content/legacy-concierge-settings';
+import {
+  withImpersonationVoiceModeFromLegacy,
+  type SettingsWithLegacyImpersonationVoice,
+} from '@/lib/chat/impersonation-voice-legacy';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
@@ -387,14 +391,24 @@ export async function restore(
       (chat) => getConciergeState(withConciergeModeFromLegacy(chat as Parameters<typeof withConciergeModeFromLegacy>[0])) === 'unmoderated',
     );
     for (const rawSettings of data.chatSettings || []) {
-      const settings = withConciergeSettingsFromLegacy(
+      const conciergeTranslated = withConciergeSettingsFromLegacy(
         rawSettings as SettingsWithLegacyConcierge<typeof rawSettings>,
         backupHasUnmoderatedChats,
       ) as typeof rawSettings;
-      if (settings !== rawSettings) {
+      if (conciergeTranslated !== rawSettings) {
         moduleLogger.debug('Translated pre-4.10 Concierge settings for restore', {
           settingsId: rawSettings.id,
           backupHasUnmoderatedChats,
+        });
+      }
+      // A 4.10-dev backup carries the retired on/off impersonationVoiceRewrite.
+      const settings = withImpersonationVoiceModeFromLegacy(
+        conciergeTranslated as SettingsWithLegacyImpersonationVoice<typeof conciergeTranslated>,
+      ) as typeof rawSettings;
+      if (settings !== conciergeTranslated) {
+        moduleLogger.debug('Translated the retired impersonated-line voice toggle for restore', {
+          settingsId: rawSettings.id,
+          impersonationVoiceMode: (settings as { impersonationVoiceMode?: string }).impersonationVoiceMode,
         });
       }
       try {

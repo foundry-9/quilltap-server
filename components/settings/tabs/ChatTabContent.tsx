@@ -42,7 +42,7 @@ export function ChatTabContent() {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
-    handleImpersonationVoiceRewriteChange,
+    handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleContextCompressionUpdate,
@@ -102,7 +102,7 @@ export function ChatTabContent() {
           <ImpersonationVoiceSettings
             settings={settings}
             saving={saving}
-            onChange={handleImpersonationVoiceRewriteChange}
+            onChange={handleImpersonationVoiceModeChange}
           />
         </CollapsibleCard>
 

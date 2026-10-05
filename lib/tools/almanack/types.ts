@@ -292,7 +292,7 @@ export interface FeatureConfigInfo {
   };
   textReplacements: { enabled: boolean; rules: number; enabledRules: number };
   composerSpellcheck: boolean;
-  impersonationVoiceRewrite: boolean;
+  impersonationVoiceMode: 'off' | 'ask' | 'always';
   autoScrollOnResponseComplete: boolean;
   imageDescriptionProfileConfigured: boolean;
   uncensoredVisionProfileConfigured: boolean;

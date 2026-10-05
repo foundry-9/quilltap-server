@@ -318,6 +318,24 @@ export const TabooSettingsSchema = z.object({
 export type TabooSettings = z.infer<typeof TabooSettingsSchema>;
 
 // ============================================================================
+// IMPERSONATED-LINE VOICE (In Their Own Words)
+// ============================================================================
+
+/**
+ * What happens to a line typed while impersonating a character (the Salon's
+ * Impersonate button — the `chat.impersonatingParticipantIds` overlay):
+ *
+ * - `off`    — it posts as typed; no dialog.
+ * - `ask`    — the review dialog opens with the draft and no model call; the
+ *              operator chooses to send it as written or have it restated.
+ * - `always` — the review dialog opens and the restatement starts at once.
+ *
+ * Never applies to a `controlledBy: 'user'` seat.
+ */
+export const ImpersonationVoiceModeEnum = z.enum(['off', 'ask', 'always']);
+export type ImpersonationVoiceMode = z.infer<typeof ImpersonationVoiceModeEnum>;
+
+// ============================================================================
 // AUTONOMOUS ROOM SETTINGS (4.6 Private Character Rooms)
 // ============================================================================
 
@@ -680,8 +698,8 @@ export const ChatSettingsSchema = z.object({
   composerEmoji: z.boolean().default(true),
   /** Whether the `\` Unicode typeahead fires in the Salon composer and Document Mode editor (default: true). The formatting toolbar's symbol picker is NOT gated by this — an explicit button press is never a surprise. */
   composerUnicode: z.boolean().default(true),
-  /** Whether a line typed while impersonating a character (the Salon's Impersonate button — the `chat.impersonatingParticipantIds` overlay) is first restated by that character's own model, for review, before it posts. Never fires for a `controlledBy: 'user'` seat (default: false). */
-  impersonationVoiceRewrite: z.boolean().default(false),
+  /** What happens to a line typed while impersonating a character — see `ImpersonationVoiceModeEnum` (default: 'off'). Replaced the 4.10-dev boolean `impersonationVoiceRewrite`. */
+  impersonationVoiceMode: ImpersonationVoiceModeEnum.default('off'),
   /** Master switch for user-defined word-boundary text replacements in the Salon composer and Document Mode rich editor (default: true). Rule list lives in the text_replacement_rules table. */
   textReplacementsEnabled: z.boolean().default(true),
   /** Whether the Salon scrolls to the newest message when an assistant reply finishes streaming or a new message arrives. Only scrolls when the reader is already near the bottom. Default off so long replies don't yank the reader away from where they're reading. */

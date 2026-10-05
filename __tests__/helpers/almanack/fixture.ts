@@ -310,6 +310,7 @@ export function makeAlmanackFixture(
       },
       textReplacements: { enabled: true, rules: 12, enabledRules: 10 },
       composerSpellcheck: true,
+      impersonationVoiceMode: 'ask',
       autoScrollOnResponseComplete: false,
       imageDescriptionProfileConfigured: true,
       uncensoredVisionProfileConfigured: false,

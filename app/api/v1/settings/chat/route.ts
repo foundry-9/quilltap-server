@@ -10,7 +10,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -60,7 +60,7 @@ async function updateChatSettings(
   composerSpellcheck?: boolean,
   composerEmoji?: boolean,
   composerUnicode?: boolean,
-  impersonationVoiceRewrite?: boolean,
+  impersonationVoiceMode?: unknown,
   textReplacementsEnabled?: boolean,
   autonomousRoomSettings?: unknown,
   thinkingDisplay?: unknown,
@@ -233,12 +233,13 @@ async function updateChatSettings(
     }
     updateData.composerUnicode = composerUnicode
   }
-  if (typeof impersonationVoiceRewrite !== 'undefined') {
-    if (typeof impersonationVoiceRewrite !== 'boolean') {
-      throw new Error('Invalid impersonationVoiceRewrite value (must be boolean)')
+  if (typeof impersonationVoiceMode !== 'undefined') {
+    const parsedMode = ImpersonationVoiceModeEnum.safeParse(impersonationVoiceMode)
+    if (!parsedMode.success) {
+      throw new Error(`Invalid impersonationVoiceMode value (must be one of ${ImpersonationVoiceModeEnum.options.join(', ')})`)
     }
-    updateData.impersonationVoiceRewrite = impersonationVoiceRewrite
-    logger.debug('[Settings v1] impersonationVoiceRewrite updated', { userId, impersonationVoiceRewrite })
+    updateData.impersonationVoiceMode = parsedMode.data
+    logger.debug('[Settings v1] impersonationVoiceMode updated', { userId, impersonationVoiceMode: parsedMode.data })
   }
   if (typeof textReplacementsEnabled !== 'undefined') {
     if (typeof textReplacementsEnabled !== 'boolean') {
@@ -389,7 +390,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
-      impersonationVoiceRewrite,
+      impersonationVoiceMode,
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,
@@ -423,7 +424,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       composerSpellcheck,
       composerEmoji,
       composerUnicode,
-      impersonationVoiceRewrite,
+      impersonationVoiceMode,
       textReplacementsEnabled,
       autonomousRoomSettings,
       thinkingDisplay,

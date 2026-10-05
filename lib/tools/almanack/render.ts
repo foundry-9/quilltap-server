@@ -38,6 +38,12 @@ function formatDateTime(iso: string | null): string {
   return Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleString();
 }
 
+const IMPERSONATION_VOICE_MODE_LABELS: Record<string, string> = {
+  off: 'Never',
+  ask: 'Ask each time',
+  always: 'Always restate',
+};
+
 function yesNo(value: boolean): string {
   return value ? 'Yes' : 'No';
 }
@@ -736,7 +742,7 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push(`- **Thinking Visible by Default**: ${yesNo(fc.thinkingDisplay.defaultVisible)}`);
   push(`- **Thinking Collapsed by Default**: ${yesNo(fc.thinkingDisplay.defaultCollapsed)}`);
   push(`- **Composer Spellcheck**: ${yesNo(fc.composerSpellcheck)}`);
-  push(`- **Impersonated Lines in Character Voice**: ${yesNo(fc.impersonationVoiceRewrite)}`);
+  push(`- **Impersonated Lines in Character Voice**: ${IMPERSONATION_VOICE_MODE_LABELS[fc.impersonationVoiceMode] ?? fc.impersonationVoiceMode}`);
   push(`- **Auto-Scroll on Response Complete**: ${yesNo(fc.autoScrollOnResponseComplete)}`);
   push(
     `- **Text Replacements**: ${yesNo(fc.textReplacements.enabled)} ` +

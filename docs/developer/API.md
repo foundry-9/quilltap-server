@@ -37,7 +37,7 @@ API reference for Quilltap v4.3 and later.
 
 > **Freshness note (v4.10-dev):** Additions since v4.9:
 >
-> - **Impersonated-line voice rewrite** — `POST /api/v1/chats/[id]?action=impersonation-voice-preview` restates a line typed while impersonating a character in that character's own voice, for operator review before it posts. Gated by the new `impersonationVoiceRewrite` field on chat settings (default off).
+> - **Impersonated-line voice rewrite** — `POST /api/v1/chats/[id]?action=impersonation-voice-preview` restates a line typed while impersonating a character in that character's own voice, for operator review before it posts. Gated by the `impersonationVoiceMode` field on chat settings (`'off'` / `'ask'` / `'always'`, default `'off'`); under `'ask'` the client calls this only when the operator presses Restate.
 
 ## Table of Contents
 
@@ -3389,7 +3389,7 @@ Generate an in-character rewrite of a seed announcement for an off-scene charact
 
 #### `POST /api/v1/chats/[id]?action=impersonation-voice-preview`
 
-The IN-SCENE cousin of `announcement-preview`: restate a line the operator typed while **impersonating** a character in that character's own voice. Gated on the instance setting `chat_settings.impersonationVoiceRewrite` (default off) on the client; the server's own gate is the chat's impersonation overlay. Persists nothing — the caller (the Salon's *In Their Own Words* dialog) shows the proposal to the operator, who sends it, edits it, regenerates it, or sends their own draft as written. The chosen line then posts through the ordinary `POST /api/v1/messages` send path, attributed to the seat exactly as it would be without the rewrite.
+The IN-SCENE cousin of `announcement-preview`: restate a line the operator typed while **impersonating** a character in that character's own voice. Gated on the instance setting `chat_settings.impersonationVoiceMode` on the client: `'off'` never opens the dialog, `'ask'` opens it on the draft and calls this action only when the operator presses **Restate in their voice** (or **Regenerate**), and `'always'` calls it as the dialog opens. A picker change in the dialog never re-calls it on its own. The server's own gate is the chat's impersonation overlay. Persists nothing — the caller (the Salon's *In Their Own Words* dialog) shows the proposal to the operator, who sends it, edits it, regenerates it, or sends their own draft as written. The chosen line then posts through the ordinary `POST /api/v1/messages` send path, attributed to the seat exactly as it would be without the rewrite.
 
 Unlike the off-scene rehearsal, the character is given their full per-turn system prompt (identity stack, roleplay template, Taboo, standing instructions — never tool instructions) plus the last 12 played messages shaped as that seat would see them, so the restatement answers the moment it lands in.
 

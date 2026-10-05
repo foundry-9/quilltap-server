@@ -18,6 +18,25 @@
 import { getAvatarSrc, type AvatarImageSource } from '@/components/ui/Avatar'
 import { useImagesHidden } from '@/components/quick-hide/images-hidden-context'
 import { Icon } from '@/components/ui/icon'
+import type { ImpersonationVoiceMode } from '@/lib/schemas/settings.types'
+
+/** An armed In Their Own Words mode — what a send from this seat will do. */
+export type VoiceRehearsalCue = Exclude<ImpersonationVoiceMode, 'off'>
+
+/**
+ * The one wording of the cue, shared by the portrait and the Send button so
+ * the two can never describe different behaviour.
+ */
+export function voiceRehearsalTitle(cue: VoiceRehearsalCue, name: string, where: 'portrait' | 'send'): string {
+  if (cue === 'always') {
+    return where === 'portrait'
+      ? `Speaking as ${name} — your draft goes to ${name} to say in their own words first`
+      : `Sends your draft to ${name} to say in their own words first`
+  }
+  return where === 'portrait'
+    ? `Speaking as ${name} — your draft opens for review; send it as written or have ${name} restate it`
+    : `Opens your draft for review — send it as written or have ${name} restate it`
+}
 
 interface SpeakingAsAvatarProps {
   /** The character the human is currently speaking as. */
@@ -29,11 +48,11 @@ interface SpeakingAsAvatarProps {
   /** Extra wrapper classes (e.g. responsive show/hide from the composer). */
   className?: string
   /**
-   * True when In Their Own Words is armed for this seat — a typed line goes to
-   * the character for a restatement you review before it posts. Purely a cue:
-   * the badge says what will happen, it does not make it happen.
+   * The armed In Their Own Words mode for this seat, or null — a typed line
+   * opens the review dialog before it posts. Purely a cue: the badge says what
+   * will happen, it does not make it happen.
    */
-  voiceRehearsal?: boolean
+  voiceRehearsal?: VoiceRehearsalCue | null
 }
 
 export function SpeakingAsAvatar({
@@ -42,7 +61,7 @@ export function SpeakingAsAvatar({
   src,
   canType,
   className = '',
-  voiceRehearsal = false,
+  voiceRehearsal = null,
 }: Readonly<SpeakingAsAvatarProps>) {
   const imagesHidden = useImagesHidden()
   const avatarSrc = imagesHidden ? null : getAvatarSrc(src ?? null)
@@ -56,7 +75,7 @@ export function SpeakingAsAvatar({
       style={{ borderRadius: 'var(--radius-md)' }}
       title={
         voiceRehearsal
-          ? `Speaking as ${name} — your draft goes to ${name} to say in their own words first`
+          ? voiceRehearsalTitle(voiceRehearsal, name, 'portrait')
           : canType
             ? `Speaking as ${name}`
             : `Speaking as ${name} — waiting for the room`

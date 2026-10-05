@@ -321,6 +321,8 @@ import { dropChatConciergeOverrideMigration } from './drop-chat-concierge-overri
 // Scriptorium: transcripts rendered on demand; drop the stored copy
 import { dropChatRenderedMarkdownMigration } from './drop-chat-rendered-markdown';
 import { addChatInformsPermanentMigration } from './add-chat-informs-permanent';
+// Impersonated lines: impersonationVoiceRewrite (on/off) → impersonationVoiceMode (off / ask / always)
+import { impersonationVoiceModeMigration } from './impersonation-voice-mode';
 // Add textReplacementsEnabled column to chat_settings (Layer 1.5 master toggle)
 import { addTextReplacementsEnabledFieldMigration } from './add-text-replacements-enabled-field';
 // 4.6 character vault cutover: move every content field into the vault and drop the DB columns
@@ -839,6 +841,8 @@ export const migrations: Migration[] = [
   dropChatRenderedMarkdownMigration,
   // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
   addChatInformsPermanentMigration,
+  // Impersonated lines: impersonationVoiceRewrite (on/off) → impersonationVoiceMode (off / ask / always)
+  impersonationVoiceModeMigration,
 ];
 
 export {
@@ -1245,5 +1249,6 @@ export {
   dropChatRenderedMarkdownMigration,
   // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
   addChatInformsPermanentMigration,
+  impersonationVoiceModeMigration,
 };
 

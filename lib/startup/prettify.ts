@@ -146,6 +146,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-composer-emoji-field-v1': 'Cataloguing the little faces',
   'add-composer-unicode-field-v1': 'Teaching the machine its Greek',
   'add-impersonation-voice-rewrite-field-v1': "Fitting the prompter's box beneath the stage, so a borrowed voice may be rehearsed before it carries…",
+  'impersonation-voice-mode-v1': "Teaching the prompter to wait until called upon, rather than whispering every line unbidden…",
   'add-smart-typography-settings-field-v1': 'Teaching the quotation marks to curtsey',
   'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
   'add-chat-informs-table-v1': 'Laying out a tray for the notes you slip the cast',

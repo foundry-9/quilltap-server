@@ -613,11 +613,13 @@ export function SalonView({ chatId }: SalonViewProps) {
     }
   }, [speakingSeat])
 
-  // In Their Own Words: when the instance setting is on and the composer will
-  // attribute this message to a seat the human is *impersonating*, the draft
-  // goes to that character's own model for a restatement the operator reviews
-  // before anything posts. Owner-persona seats are deliberately out of scope.
-  const impersonationVoiceEnabled = chatSettings?.impersonationVoiceRewrite ?? false
+  // In Their Own Words: when the instance setting is not 'off' and the composer
+  // will attribute this message to a seat the human is *impersonating*, the
+  // draft opens in a review dialog first — under 'ask' it waits for the
+  // operator to send it as written or ask for a restatement; under 'always'
+  // the character's own model starts restating it at once. Owner-persona seats
+  // are deliberately out of scope.
+  const impersonationVoiceMode = chatSettings?.impersonationVoiceMode ?? 'off'
   const rehearsalTarget = useMemo(() => {
     const p = speakingSeat
     if (!p?.character) return null
@@ -643,15 +645,17 @@ export function SalonView({ chatId }: SalonViewProps) {
     sendMessage: sseStreaming.sendMessage,
     focusComposer,
   })
-  // Armed for the current seat: drives the composer's informational cue. The
-  // text-dependent half of the gate is checked at submit time.
-  const impersonationVoiceArmed = Boolean(
-    impersonationVoiceEnabled
+  // Armed for the current seat (the mode, or null): drives the composer's
+  // informational cue. The text-dependent half of the gate is checked at submit
+  // time.
+  const impersonationVoiceCue =
+    impersonationVoiceMode !== 'off'
     && speakingSeat
     && speakingSeat.type === 'CHARACTER'
     && speakingSeat.controlledBy !== 'user'
-    && impersonation.impersonatingParticipantIds.includes(speakingSeat.id),
-  )
+    && impersonation.impersonatingParticipantIds.includes(speakingSeat.id)
+      ? impersonationVoiceMode
+      : null
 
   // Bug 49: the composer's speaking-as follows the current user-driven turn.
   // When the rotation lands on a seat the human drives — their own character OR
@@ -1693,7 +1697,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         <ChatComposer
           id={id}
           speakingAs={speakingAsSeat}
-          voiceRehearsalArmed={impersonationVoiceArmed}
+          voiceRehearsal={impersonationVoiceCue}
           mentionPriorityCharacterIds={castCharacterIds}
           input={input}
           setInput={setInput}
@@ -1753,7 +1757,7 @@ export function SalonView({ chatId }: SalonViewProps) {
                 text,
                 seat: speakingSeat,
                 seatTarget: rehearsalTarget,
-                enabled: impersonationVoiceEnabled,
+                mode: impersonationVoiceMode,
                 impersonatingParticipantIds: impersonation.impersonatingParticipantIds,
                 attachedFiles,
                 pendingToolResults,

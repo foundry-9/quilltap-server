@@ -20,7 +20,7 @@ const IMPERSONATED = 'seat-evangeline'
 
 function args(over: Partial<ShouldRehearseArgs> = {}): ShouldRehearseArgs {
   return {
-    enabled: true,
+    mode: 'ask',
     seat: { id: IMPERSONATED, type: 'CHARACTER', controlledBy: 'llm' },
     impersonatingParticipantIds: [IMPERSONATED],
     text: 'I tell him I will take the job.',
@@ -42,7 +42,7 @@ describe('every chat setting the Salon reads is LIVE', () => {
 
   it('SalonView takes its settings from useChatSettingsQuery', () => {
     expect(salonView).toContain('const { data: chatSettings } = useChatSettingsQuery()')
-    expect(salonView).toContain('chatSettings?.impersonationVoiceRewrite')
+    expect(salonView).toContain('chatSettings?.impersonationVoiceMode')
   })
 
   it('the mount-only fetch is gone, and cannot be called back', () => {
@@ -58,8 +58,16 @@ describe('shouldRehearseImpersonatedLine', () => {
   })
 
   describe('rule 1 — the instance setting', () => {
-    it('never fires when the setting is off', () => {
-      expect(shouldRehearseImpersonatedLine(args({ enabled: false }))).toBe(false)
+    it('never fires when the mode is off', () => {
+      expect(shouldRehearseImpersonatedLine(args({ mode: 'off' }))).toBe(false)
+    })
+
+    it('fires under ask (the dialog opens, but no model is called yet)', () => {
+      expect(shouldRehearseImpersonatedLine(args({ mode: 'ask' }))).toBe(true)
+    })
+
+    it('fires under always', () => {
+      expect(shouldRehearseImpersonatedLine(args({ mode: 'always' }))).toBe(true)
     })
   })
 

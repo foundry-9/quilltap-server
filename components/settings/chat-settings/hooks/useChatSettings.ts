@@ -12,6 +12,7 @@ import {
   ImageProfile,
   AvatarDisplayMode,
   AvatarDisplayStyle,
+  ImpersonationVoiceMode,
   CheapLLMSettings,
   MemoryCascadePreferences,
   TokenDisplaySettings,
@@ -63,7 +64,7 @@ interface UseChatSettingsReturn {
   handleComposerSpellcheckChange: (value: boolean) => Promise<void>
   handleComposerEmojiChange: (value: boolean) => Promise<void>
   handleComposerUnicodeChange: (value: boolean) => Promise<void>
-  handleImpersonationVoiceRewriteChange: (value: boolean) => Promise<void>
+  handleImpersonationVoiceModeChange: (value: ImpersonationVoiceMode) => Promise<void>
   handleAutoScrollOnResponseCompleteChange: (value: boolean) => Promise<void>
   handleTextReplacementsEnabledChange: (value: boolean) => Promise<void>
   handleAgentModeDefaultEnabledChange: (value: boolean) => Promise<void>
@@ -427,15 +428,15 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
-   * Update the impersonated-line voice-rewrite setting (the Impersonate
-   * overlay only — a `controlledBy: 'user'` seat is never rehearsed)
+   * Update the impersonated-line voice mode — off / ask / always (the
+   * Impersonate overlay only — a `controlledBy: 'user'` seat is never rehearsed)
    */
-  const handleImpersonationVoiceRewriteChange = useCallback(
-    async (value: boolean) => {
+  const handleImpersonationVoiceModeChange = useCallback(
+    async (value: ImpersonationVoiceMode) => {
       if (!settings) return
 
       await patchChatSettings(
-        { impersonationVoiceRewrite: value },
+        { impersonationVoiceMode: value },
         'Failed to update impersonated-line voice setting',
         'Failed to update impersonated-line voice setting'
       )
@@ -713,7 +714,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleComposerSpellcheckChange,
     handleComposerEmojiChange,
     handleComposerUnicodeChange,
-    handleImpersonationVoiceRewriteChange,
+    handleImpersonationVoiceModeChange,
     handleAutoScrollOnResponseCompleteChange,
     handleTextReplacementsEnabledChange,
     handleAgentModeDefaultEnabledChange,

@@ -382,12 +382,12 @@ export function ChatModals({
           onSeedChange={impersonationVoice.setSeed}
           proposal={impersonationVoice.proposal}
           onProposalChange={impersonationVoice.setProposal}
-          generating={impersonationVoice.stage === 'generating'}
+          stage={impersonationVoice.stage === 'idle' ? 'draft' : impersonationVoice.stage}
           profileOverride={impersonationVoice.profileOverride}
           systemPromptOverride={impersonationVoice.systemPromptOverride}
           onSend={impersonationVoice.send}
           onSendAsWritten={impersonationVoice.sendAsWritten}
-          onRegenerate={impersonationVoice.regenerate}
+          onRestate={impersonationVoice.restate}
           onChangeProfile={impersonationVoice.changeProfile}
           onChangeSystemPrompt={impersonationVoice.changeSystemPrompt}
           onEditOriginal={impersonationVoice.editOriginal}

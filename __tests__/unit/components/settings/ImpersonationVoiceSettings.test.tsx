@@ -1,9 +1,8 @@
 /**
- * The Composer card's "Impersonated lines in the character's own words" toggle.
+ * The Composer card's "Impersonated lines in the character's own words" mode.
  *
- * Off by default matters here: this is the one Composer toggle the factory
- * leaves unchecked, and a row that defaulted the other way would quietly
- * rehearse every impersonated line on a fresh instance.
+ * Off by default matters here: a row that defaulted otherwise would quietly
+ * open a dialog on every impersonated line on a fresh instance.
  */
 
 import { describe, it, expect, jest as jestGlobal } from '@jest/globals'
@@ -24,38 +23,37 @@ function renderRow(
       onChange={onChange as never}
     />,
   )
-  return { onChange, checkbox: screen.getByRole('checkbox') as HTMLInputElement }
+  const radio = (label: string) => screen.getByRole('radio', { name: new RegExp(label) }) as HTMLInputElement
+  return { onChange, radio }
 }
 
 describe('ImpersonationVoiceSettings', () => {
-  it('is unchecked when the field has never been set', () => {
-    const { checkbox } = renderRow()
-    expect(checkbox.checked).toBe(false)
+  it('selects Never when the field has never been set', () => {
+    const { radio } = renderRow()
+    expect(radio('Never').checked).toBe(true)
+    expect(radio('Ask each time').checked).toBe(false)
+    expect(radio('Always restate').checked).toBe(false)
   })
 
-  it('reflects a stored true', () => {
-    expect(renderRow({ impersonationVoiceRewrite: true }).checkbox.checked).toBe(true)
+  it('reflects a stored ask', () => {
+    expect(renderRow({ impersonationVoiceMode: 'ask' }).radio('Ask each time').checked).toBe(true)
   })
 
-  it('reflects a stored false', () => {
-    expect(renderRow({ impersonationVoiceRewrite: false }).checkbox.checked).toBe(false)
+  it('reflects a stored always', () => {
+    expect(renderRow({ impersonationVoiceMode: 'always' }).radio('Always restate').checked).toBe(true)
   })
 
-  it('reports the new value when ticked', () => {
-    const { onChange, checkbox } = renderRow({ impersonationVoiceRewrite: false })
-    fireEvent.click(checkbox)
-    expect(onChange).toHaveBeenCalledWith(true)
-  })
-
-  it('reports the new value when unticked', () => {
-    const { onChange, checkbox } = renderRow({ impersonationVoiceRewrite: true })
-    fireEvent.click(checkbox)
-    expect(onChange).toHaveBeenCalledWith(false)
+  it('reports the chosen mode', () => {
+    const { onChange, radio } = renderRow({ impersonationVoiceMode: 'off' })
+    fireEvent.click(radio('Ask each time'))
+    expect(onChange).toHaveBeenCalledWith('ask')
+    fireEvent.click(radio('Always restate'))
+    expect(onChange).toHaveBeenCalledWith('always')
   })
 
   it('is disabled while a save is in flight', () => {
-    const { checkbox } = renderRow({ impersonationVoiceRewrite: false }, { saving: true })
-    expect(checkbox.disabled).toBe(true)
+    const { radio } = renderRow({ impersonationVoiceMode: 'off' }, { saving: true })
+    expect(radio('Ask each time').disabled).toBe(true)
   })
 
   it('names the Impersonate button as the trigger and says what is left alone', () => {

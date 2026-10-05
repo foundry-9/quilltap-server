@@ -8,9 +8,11 @@ import type {
   ConciergeSettings as ConciergeSettingsType,
   ConciergeDisplaySettings,
   ConciergePreScreenSettings,
+  ImpersonationVoiceMode,
 } from '@/lib/schemas/settings.types'
 import { DEFAULT_CONCIERGE_SETTINGS as SERVER_DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service'
 
+export type { ImpersonationVoiceMode }
 export type AvatarDisplayMode = 'ALWAYS' | 'GROUP_ONLY' | 'NEVER'
 export type AvatarDisplayStyle = 'CIRCULAR' | 'RECTANGULAR'
 export type CheapLLMStrategy = 'USER_DEFINED' | 'PROVIDER_CHEAPEST' | 'LOCAL_FIRST'
@@ -95,8 +97,8 @@ export interface ChatSettings {
   composerEmoji?: boolean
   /** Whether the `\` Unicode typeahead fires in the composer and Document Mode editor (the toolbar picker is not gated by this) */
   composerUnicode?: boolean
-  /** Whether a line typed while impersonating a character is first restated by that character's own model, for review, before it posts */
-  impersonationVoiceRewrite?: boolean
+  /** What happens to a line typed while impersonating a character: posts as typed ('off'), opens the review dialog without a model call ('ask'), or opens it and restates at once ('always') */
+  impersonationVoiceMode?: ImpersonationVoiceMode
   /** Master switch for user-defined word-boundary text replacements in the composer and Document Mode editor */
   textReplacementsEnabled?: boolean
   /** Whether the Salon auto-scrolls to the newest message when a response completes (only when already near the bottom) */

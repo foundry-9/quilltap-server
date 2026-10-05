@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Impersonated-line voice: three modes, no model call until asked
+
+- The impersonated-line voice setting is now three-way: `chat_settings.impersonationVoiceMode`
+  (`'off'` / `'ask'` / `'always'`, default `'off'`), replacing the boolean
+  `impersonationVoiceRewrite`. Settings shows it as Never / Ask each time / Always restate.
+- `ask`: an impersonated line opens the review dialog on the draft only. No model is called until
+  the user presses "Restate in their voice". "Send as written" is the primary button, and
+  Cmd/Ctrl+Enter in the draft sends as written. `always` keeps the old behavior: the restatement
+  starts when the dialog opens.
+- Changing the voice or system-prompt picker in the dialog no longer re-runs the restatement. It
+  clears the stale proposal and waits for Restate.
+- Migration `impersonation-voice-mode-v1` maps the old column (1 → `'ask'`, otherwise `'off'`) and
+  drops it. Backups that still carry the boolean are translated on restore
+  (`withImpersonationVoiceModeFromLegacy`, `lib/chat/impersonation-voice-legacy.ts`).
+- `PUT /api/v1/settings/chat` takes `impersonationVoiceMode` and rejects any other value. The
+  composer portrait and Send-button tooltips describe the active mode. The Almanack reports the mode.
+
 #### Fix bugs 177 and 178: PDF text extraction
 
 - Bug 177: `extractPdfContent` (`lib/services/file-content-extractor.ts`) called `pdf-parse` as
