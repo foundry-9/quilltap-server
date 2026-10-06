@@ -4,8 +4,8 @@
  * InformDialog — a quiet word out of character.
  *
  * The operator picks one, several or every LLM-controlled seat and writes a
- * short second-person passage. Each target receives it verbatim as a system
- * block on their next generation, and then it is consumed — unless the
+ * short second-person passage. Each target receives it verbatim (under one vouching header) as the
+ * last context section of their next generation, and then it is consumed — unless the
  * operator ticks **Keep it standing in this chat**, which delivers it on every
  * turn those seats take in this conversation until withdrawn from the chip.
  * Off by default. Nothing here is ever spoken aloud; the transcript keeps a

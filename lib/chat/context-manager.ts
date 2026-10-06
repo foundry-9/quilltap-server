@@ -1983,8 +1983,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // afterwards (tool schemas, agent-mode instructions, tool-change notice);
   // history must not be packed into space those will occupy.
   //
-  // The inform block is the one sanctioned turn-variable system block. It is
-  // read here rather than at assembly so its tokens are spoken for before the
+  // The inform block rides the trailing context sections (see the new-user-
+  // message assembly below), not the system prefix. It is read here rather
+  // than at assembly so its tokens are spoken for before the
   // history selection spends what is left: an operator's passage is short, but
   // a budget that cannot see it is how bytes get onto the wire under a clean
   // log line. Empty-is-absent, so a turn with no informs costs exactly nothing
@@ -2127,30 +2128,6 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     content: identityReminder,
     metadata: { isInjected: true },
   })
-
-  // The inform block — an out-of-character passage the operator handed this
-  // seat, delivered verbatim and nothing else: no preamble, no Host voice, no
-  // "do not mention this", for transparent and opaque characters alike.
-  //
-  // It sits here, after the static prefix (blocks 1 and 2) and before the
-  // compressed history, because blocks 1 and 2 are the cacheable region: the
-  // Anthropic plugin puts its `cache_control` breakpoint on the FIRST system
-  // block only, OpenAI-style prefix caching is unaffected by anything after an
-  // unchanged prefix, and local providers fold the leading system run into one
-  // message. To the model, that is exactly "after the system prompt".
-  //
-  // Nothing is pushed when there is nothing to deliver — the conditional, not
-  // an empty string, is what keeps a turn without informs byte-identical and
-  // the cache-determinism golden intact. Neither IDENTITY_STACK_BUILDER_VERSION
-  // nor PROMPT_CACHE_STRUCTURE_VERSION is bumped: the block is conditional, not
-  // structural. See `lib/chat/context/inform-block.ts`.
-  if (informBlock) {
-    contextMessages.push({
-      role: 'system',
-      content: informBlock,
-      metadata: { isInjected: true },
-    })
-  }
 
   // System block 3 — compressed-history rolling summary, only when budget
   // compression fired. Lives in its own block so its churn (refreshed every
@@ -2721,6 +2698,26 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     },
   })
 
+  // The inform block — the operator's passages for this seat, under the one
+  // vouching header `buildInformBlock` puts on them — goes in the trailing
+  // sections below, after recalled memories and the progressions report, so it
+  // is the last thing about the world the model reads before it answers, and a
+  // recalled memory that contradicts it comes before it, not after. It used to
+  // sit as a bare system block after the identity reminder, where a long
+  // history buried it and a weaker model disbelieved it outright.
+  //
+  // Trailing, it never touches the cacheable prefix, and it is delivered on
+  // continue / chained / autonomous turns as well (the trailing-only branch),
+  // as it always was. Empty-is-absent: with nothing owed, nothing is added.
+  if (informBlock) {
+    logger.debug('[Inform] Delivering inform block as a trailing context section', {
+      chatId: chat.id,
+      participantId: respondingParticipant?.id,
+      onNewUserMessage: !!newUserMessage,
+      rowIds: informBlockResult.rowIds,
+    })
+  }
+
   // Add new user message (only if provided - not in continue mode)
   // In multi-character mode, include the user's character name
   if (newUserMessage) {
@@ -2734,6 +2731,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     if (llmRecallText) trailingContextSections.push(llmRecallText)
     if (suparnaMailLLMContext) trailingContextSections.push(suparnaMailLLMContext)
     if (progressionsLLMContext) trailingContextSections.push(progressionsLLMContext)
+    if (informBlock) trailingContextSections.push(informBlock)
     if (turnSkipInstruction) trailingContextSections.push(turnSkipInstruction)
     const composedUserContent = trailingContextSections.length > 0
       ? `${newUserMessage}\n\n---\n\n${trailingContextSections.join('\n\n---\n\n')}`
@@ -2745,15 +2743,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       name: newUserMsgName,
       metadata: { isUserTurn: true },
     })
-  } else if (userNarrationAnchor || turnSkipInstruction || progressionsLLMContext) {
-    // Chained / continue turns carry no new user message, so neither the note
-    // nor the progressions report can ride as a trailing section above. Push
-    // them as their own trailing user message (same off-scene/timestamp
+  } else if (userNarrationAnchor || turnSkipInstruction || progressionsLLMContext || informBlock) {
+    // Chained / continue turns carry no new user message, so neither the note,
+    // the progressions report nor the inform block can ride as a trailing
+    // section above. Push them as their own trailing user message (same off-scene/timestamp
     // pattern) so the model sees them this turn, in the same order they would
     // have taken there. Anthropic 4.6+ rejects role=assistant tails, so 'user'
     // is required. The scene note leads: it is about the scene, the others
     // about the character.
-    const trailingOnly = [userNarrationAnchor, progressionsLLMContext, turnSkipInstruction].filter(Boolean)
+    const trailingOnly = [userNarrationAnchor, progressionsLLMContext, informBlock, turnSkipInstruction].filter(Boolean)
     contextMessages.push({
       role: 'user',
       content: trailingOnly.join('\n\n---\n\n'),

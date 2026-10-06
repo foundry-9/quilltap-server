@@ -16,7 +16,7 @@
  *     first-delivery stamp never moves and the row is never retired.
  */
 
-import { buildInformBlock, INFORM_BLOCK_SEPARATOR } from '@/lib/chat/context/inform-block'
+import { buildInformBlock, INFORM_BLOCK_HEADER, INFORM_BLOCK_SEPARATOR } from '@/lib/chat/context/inform-block'
 
 const CHAT = 'chat-1'
 const SEAT = 'participant-a'
@@ -51,12 +51,12 @@ function makeRepos(pending: unknown[] = [], consumed: unknown[] = []) {
 }
 
 describe('buildInformBlock', () => {
-  it('returns the pending passage verbatim, with no framing of any kind', async () => {
+  it('returns the pending passage verbatim under the one vouching header', async () => {
     const repos = makeRepos([row()])
 
     const result = await buildInformBlock({ repos, chatId: CHAT, participantId: SEAT })
 
-    expect(result.content).toBe('You notice the clock has stopped.')
+    expect(result.content).toBe(`${INFORM_BLOCK_HEADER}\n\nYou notice the clock has stopped.`)
     expect(result.rowIds).toEqual(['row-1'])
   })
 
@@ -68,7 +68,7 @@ describe('buildInformBlock', () => {
 
     const result = await buildInformBlock({ repos, chatId: CHAT, participantId: SEAT })
 
-    expect(result.content).toBe(`First thing.${INFORM_BLOCK_SEPARATOR}Second thing.`)
+    expect(result.content).toBe(`${INFORM_BLOCK_HEADER}\n\nFirst thing.${INFORM_BLOCK_SEPARATOR}Second thing.`)
     expect(result.rowIds).toEqual(['row-1', 'row-2'])
   })
 
@@ -110,7 +110,7 @@ describe('buildInformBlock', () => {
         regenerationOfMessageIds: ['msg-target', 'msg-sibling'],
       })
 
-      expect(result.content).toBe('What she knew at the time.')
+      expect(result.content).toBe(`${INFORM_BLOCK_HEADER}\n\nWhat she knew at the time.`)
       expect(result.content).not.toContain('Brand new.')
       expect((repos as never as ReturnType<typeof makeRepos> & { chatInforms: Record<string, jest.Mock> })
         .chatInforms.findConsumedByMessages)
@@ -163,7 +163,7 @@ describe('buildInformBlock', () => {
       })
 
       expect(result.content).toBe(
-        `You are, and remain, quietly furious.${INFORM_BLOCK_SEPARATOR}What she knew at the time.`,
+        `${INFORM_BLOCK_HEADER}\n\nYou are, and remain, quietly furious.${INFORM_BLOCK_SEPARATOR}What she knew at the time.`,
       )
       expect(result.rowIds).toEqual([])
     })
@@ -197,7 +197,7 @@ describe('buildInformBlock', () => {
 
       const result = await buildInformBlock({ repos, chatId: CHAT, participantId: SEAT })
 
-      expect(result.content).toBe(`You are the ship's cat.${INFORM_BLOCK_SEPARATOR}The lamp gutters.`)
+      expect(result.content).toBe(`${INFORM_BLOCK_HEADER}\n\nYou are the ship's cat.${INFORM_BLOCK_SEPARATOR}The lamp gutters.`)
       expect(result.rowIds).toEqual(['oneshot-row'])
     })
 
@@ -206,7 +206,7 @@ describe('buildInformBlock', () => {
 
       const result = await buildInformBlock({ repos, chatId: CHAT, participantId: SEAT })
 
-      expect(result.content).toBe('You notice the clock has stopped.')
+      expect(result.content).toBe(`${INFORM_BLOCK_HEADER}\n\nYou notice the clock has stopped.`)
       expect(result.rowIds).toEqual(['standing-row'])
     })
   })

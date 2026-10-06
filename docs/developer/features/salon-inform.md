@@ -29,6 +29,26 @@ becoming a standing instruction.
 chat* checkbox, off by default. See [Standing informs](#standing-informs) for the design; it
 supersedes the "consumed once" wording below wherever a row has `permanent: true`.
 
+**Addendum (2026-10-06) — placement and framing reopened by the operator.** On Friday, a
+standing inform told Abigail her hull would be re-plated in Tessarium. It was delivered
+correctly — a bare 135-character system block after the 22.7K identity block, ~65 messages
+above the turn — and she disbelieved it, because her own recall and `doc_grep` returned a
+high-importance memory that the Tessarium was a single, non-replicable ingot. Two decisions
+below are therefore superseded:
+
+- **Where:** the block is now a **trailing context section** (`lib/chat/context-manager.ts`),
+  after recall / mail / progressions and before the turn-skip note, appended to the new user
+  message — or, on chained / continue / autonomous turns and swipes, to the trailing-only user
+  message. It is the last word about the world before the model answers, and it follows any
+  recalled memory that contradicts it. Being trailing, it never touches the cacheable prefix;
+  still empty-is-absent; still no version bumps. Which generations receive it is unchanged.
+- **Framing:** one fixed second-person header, `INFORM_BLOCK_HEADER`
+  (`lib/chat/context/inform-block.ts`), precedes the passages: they are true, already known,
+  and outrank an older memory or record. The passages themselves are still verbatim, with no
+  "do not mention this" and no Host voice.
+
+The sections below describe the original design; where they conflict, this addendum wins.
+
 ## Vocabulary
 
 - **Inform** — one operator-authored passage, posted once, aimed at one or more seats.
@@ -48,8 +68,8 @@ These were settled with the operator before this spec was written. Do not reopen
 | Regenerate / swipe | Re-applies. A swipe of a message that consumed an inform sees the same inform again. Pending informs are *not* delivered to a swipe. |
 | Stacking | Multiple pending batches are all delivered, in posting order, `---`-separated. |
 | Pending indicator | Yes: a composer chip naming who is still to be informed, with a cancel affordance. |
-| Where in the prompt | A **separate system block** after the static system group (blocks 1–2), before the compressed-history block. Never inside block 1 or 2. |
-| Framing text | **None.** The block is exactly what the operator typed. No preamble, no "do not mention this", no Host voice — for transparent and opaque characters alike. |
+| Where in the prompt | ~~A separate system block after blocks 1–2.~~ **Superseded 2026-10-06:** a trailing context section after recall and progressions. Never inside block 1 or 2. |
+| Framing text | ~~None.~~ **Superseded 2026-10-06:** one fixed vouching header (`INFORM_BLOCK_HEADER`), then the operator's words verbatim. Still no "do not mention this", no Host voice — for transparent and opaque characters alike. |
 | Subset targets — transcript record | A Host message whispered to the targets, body verbatim. Operator-visible; stripped from every model's context. |
 | All targets — transcript record | A public Host message, body verbatim. Same strip. The system block is the only delivery; the record is never double-delivered. |
 | Host's wording | Text alone. No "The Host informs the company:" prefix in the record either. |
@@ -278,7 +298,7 @@ Debug on every touched backend path: the reader (`pending` / `reapplied` counts 
 ## Tests
 
 - `__tests__/unit/lib/chat/context/inform-block.test.ts` — pending rows in order; `---` join; regeneration set includes consumed-by rows and excludes pending ones; empty → `content: null`, `rowIds: []`.
-- `buildContext` — with no rows the assembled messages are **byte-identical** to today (extend the existing cache-determinism golden with an explicit empty-informs assertion); with rows, exactly one extra `system` message sits between the identity reminder and the compressed-history block, and no other message changes.
+- `buildContext` — with no rows the assembled messages are **byte-identical** to today (extend the existing cache-determinism golden with an explicit empty-informs assertion); with rows, the system messages are untouched and only the final user message changes, by the appended header-plus-passages section (and a turn with no new user message gets it as its own trailing user message).
 - `buildMessageContext` — an `inform` record is absent from the formatted history in single- and multi-character chats, for transparent and opaque rosters, and from the swipe path.
 - `actions/inform` — `null` → every eligible seat; explicit full coverage → public record; a user-controlled or removed id → 400; record failure still creates the batch; cancel with nothing consumed deletes the record, cancel after partial consumption keeps it.
 - Finalizer — `markConsumed` called with the threaded ids and the saved message id; not called when the save throws; the partial-preservation path consumes.

@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Inform: delivered last, with a header
+
+- The inform block moved from a system message after the identity reminder to a trailing context
+  section: appended to the new user message after recall, mail and progressions (or to the
+  trailing-only user message on chained, continue, autonomous and swipe turns). A long history
+  buried the old position, and a character whose recall contradicted the inform disbelieved it.
+- The block now opens with one fixed header (`INFORM_BLOCK_HEADER`) stating that the passages are
+  true, already known to the character, and override older memories or records that conflict.
+  The passages themselves are still verbatim.
+- The system prefix is unchanged with or without an inform, so prompt caching is unaffected.
+  Help (`help/inform.md`), the design doc and `PROMPT_ARCHITECTURE.md` are updated.
+
 #### Impersonated-line voice: three modes, no model call until asked
 
 - The impersonated-line voice setting is now three-way: `chat_settings.impersonationVoiceMode`

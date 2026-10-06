@@ -2,17 +2,21 @@
  * The inform block — the one reader of `chat_informs` on the prompt path.
  *
  * An **inform** is an out-of-character passage the operator hands to a seat:
- * something the character now knows or notices, delivered verbatim as its own
- * system block immediately after the static system prefix on that seat's next
- * generation, and consumed once the turn produces a persisted assistant
- * message.
+ * something the character now knows or notices, delivered as a trailing
+ * section of that seat's next generation — the last thing the model reads
+ * before it answers — and consumed once the turn produces a persisted
+ * assistant message.
  *
  * Two rules give this module its whole shape.
  *
- * **It never frames the text.** The block is exactly what the operator typed —
- * no preamble, no "do not mention this", no Host voice, for transparent and
- * opaque characters alike. Several pending passages join with a `---` rule and
- * nothing else. Anything more would be the House speaking over the operator.
+ * **It frames the text once, and only to vouch for it.** The operator's words
+ * go through verbatim, under a single fixed header (`INFORM_BLOCK_HEADER`)
+ * telling the character the passages are true, already known, and outrank an
+ * older memory that disagrees. A bare sentence buried in the prompt read as
+ * ambient noise: a character who recalled a contradicting memory simply
+ * disbelieved it. There is still no "do not mention this" and no Host voice,
+ * for transparent and opaque characters alike, and several passages join with
+ * a `---` rule and nothing else.
  *
  * **It never writes.** Selection and consumption are deliberately separate:
  * building a context is not evidence that anything was delivered, and a
@@ -48,6 +52,16 @@ import type { ChatInform } from '@/lib/schemas/chat-inform.types'
 /** The separator between stacked passages. Nothing else joins them. */
 export const INFORM_BLOCK_SEPARATOR = '\n\n---\n\n'
 
+/**
+ * The one line of framing the block carries, ahead of the operator's passages.
+ * Second person: it is read inside the character's own prompt. It vouches for
+ * the passages and nothing more — it neither hides them nor tells the
+ * character what to do with them.
+ */
+export const INFORM_BLOCK_HEADER =
+  'Things you now know, as of this moment — true in this story, and already known to you. ' +
+  'Where any of it conflicts with an older memory or something in your records, this is the current truth:'
+
 export interface BuildInformBlockOptions {
   repos: ReturnType<typeof getRepositories>
   chatId: string
@@ -62,7 +76,7 @@ export interface BuildInformBlockOptions {
 }
 
 export interface InformBlock {
-  /** The assembled system block, or null when there is nothing to deliver. */
+  /** The assembled section (header + passages), or null when there is nothing to deliver. */
   content: string | null
   /**
    * The rows this block carried that the finalizer should consume: every
@@ -129,7 +143,7 @@ export async function buildInformBlock({
   })
 
   return {
-    content: bodies.join(INFORM_BLOCK_SEPARATOR),
+    content: `${INFORM_BLOCK_HEADER}\n\n${bodies.join(INFORM_BLOCK_SEPARATOR)}`,
     // A swipe never consumes: the caller ignores these, but returning an empty
     // list makes that impossible to get wrong by accident. Off a swipe, a
     // standing row already delivered is left out so its first-delivery stamp

@@ -14,25 +14,27 @@ The **Inform** button — the small *i* in the composer's left gutter, keeping c
 
 Click it and a floating panel appears: wide enough to hold the whole formatting rail without the buttons wrapping, draggable by its title bar, resizable at the corner, and disposed to remember where you last left it. Choose who is to be informed. Write a short passage. Press **Inform**.
 
-Each character you named receives that passage — *your words exactly, with nothing added* — immediately after their system prompt, the next time they are asked to speak. And then it is spent, for them, forever. (Unless you tell it to stay. See [Keeping it standing](#keeping-it-standing-in-this-chat).)
+Each character you named receives that passage — *your words exactly*, beneath a single line of introduction — as the very last thing they read before they next open their mouth. And then it is spent, for them, forever. (Unless you tell it to stay. See [Keeping it standing](#keeping-it-standing-in-this-chat).)
 
 Three properties are worth committing to memory, because everything else follows from them.
 
 **It is never spoken.** The passage goes to the model as a private note, not as a line in the scene. Nobody hears it. Nobody can quote it. It is not a message and it never becomes one.
 
-**It is verbatim.** Quilltap adds no preamble, no framing, no anxious little rider about not mentioning this to the others. The Staff do not clear their throats first. What you typed is what arrives — which is why *how* you write it matters rather more than usual. See the next section.
+**It is verbatim, and it is vouched for.** Your words arrive untouched. The House sets exactly one line above them, and that line says only this: *these things are true, you already know them, and where they quarrel with an older memory or something in your records, they win.* There is no anxious little rider about not mentioning it to the others, and no Staff member clears their throat. The vouching line is there because a bare sentence, however true, is easily out-argued — a character who has just recalled forty memories to the contrary will otherwise trust the forty. What you typed is still what arrives, which is why *how* you write it matters rather more than usual. See the next section.
 
 **It is consumed, not standing — unless you say otherwise.** Once a character has actually taken their turn, the note is gone from their next one. An inform steers a moment; it does not become a house rule. If you want something to stay, tick the box described below, and it will stay — but only in this conversation.
 
 ## Write it to them, in the second person
 
-The passage is delivered inside the character's own prompt, in the place where the House ordinarily addresses them directly. Write it the way that place reads:
+The passage is delivered inside the character's own prompt, at the tail of it, where the House ordinarily addresses them directly about the moment at hand. Write it the way that place reads:
 
 > You see that Alice slipped the letter into her sleeve.
 
 > You remember that Bob and Carol were at school together.
 
 Not *"Tell Alice about the letter"* — that is an instruction to a machine, and it will be followed like one. Not *"Alice slipped the letter into her sleeve"* — a bare third-person statement sits ambiguously between narration and stage direction, and a model asked to interpret it may simply narrate it back at you.
+
+If the news overturns something the character firmly believes, say so outright rather than leaving them to reconcile it. *"You and Charlie found a way to make more Tessarium; the old 'last ingot' limit no longer holds"* carries the day where *"The hull will be re-plated in Tessarium"* may be met with polite, well-sourced disbelief. And if the fact is meant to outlive this conversation, it belongs in the Commonplace Book as a memory, not only on the mantelpiece.
 
 And be mindful when you inform several characters at once. Everyone you tick receives the **identical words**. If the passage is true from Alice's chair but nonsense from Bob's, you want two informs, not one.
 
@@ -50,7 +52,7 @@ Tick every character individually and Quilltap treats it as Everyone. The distin
 
 At the foot of the panel, beside the buttons, sits a modest checkbox: **Keep it standing in this chat.** It is unticked every time the panel opens, and an ordinary inform is the one-shot affair described above.
 
-Tick it, and the passage stops being a note fed to the fire and becomes a card propped on the mantelpiece. Every character you named receives it on **every** turn they take in this conversation from now on — the same words, in the same place, after their system prompt — until you withdraw it. Taking a turn does not spend it. Passing does not spend it. A swipe of an earlier line carries it too, for a standing note is in force for every prompt made while it stands.
+Tick it, and the passage stops being a note fed to the fire and becomes a card propped on the mantelpiece. Every character you named receives it on **every** turn they take in this conversation from now on — the same words, in the same place, last before they speak — until you withdraw it. Taking a turn does not spend it. Passing does not spend it. A swipe of an earlier line carries it too, for a standing note is in force for every prompt made while it stands.
 
 The emphasis on *this chat* is not decorative. A standing inform belongs to the conversation in which you wrote it and nowhere else:
 

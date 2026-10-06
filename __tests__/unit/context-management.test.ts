@@ -38,6 +38,7 @@ import {
   buildContext,
   type MessageWithParticipant,
 } from '@/lib/chat/context-manager'
+import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/repositories/factory'
@@ -1273,7 +1274,7 @@ describe('Context Manager', () => {
     // The inform block — the one sanctioned turn-variable system block.
     // ------------------------------------------------------------------
 
-    const buildWithInforms = async (pendingRows: unknown[]) => {
+    const buildWithInforms = async (pendingRows: unknown[], newUserMessage: string | null = 'Ready for the next task?') => {
       mockedGetRepositories.mockReturnValue({
         memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
         chatInforms: {
@@ -1307,7 +1308,7 @@ describe('Context Manager', () => {
           { role: 'USER', content: 'Hello', id: 'm1' },
           { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
         ],
-        newUserMessage: 'Ready for the next task?',
+        newUserMessage: newUserMessage ?? undefined,
         skipMemories: true,
         respondingParticipant: participantA,
         allParticipants,
@@ -1335,44 +1336,48 @@ describe('Context Manager', () => {
     it('adds nothing at all when the seat is owed no inform', async () => {
       const result = await buildWithInforms([])
 
-      // Empty-is-absent: with nothing pending the builder must push NOTHING,
-      // not an empty system message. This is what keeps an ordinary turn
-      // byte-identical to one assembled before Inform existed, and is what the
-      // provider prompt caches depend on.
+      // Empty-is-absent: with nothing pending the builder must add NOTHING —
+      // no empty section, no stray rule. This is what keeps an ordinary turn
+      // byte-identical to one assembled before Inform existed.
       expect(result.informRowIds).toEqual([])
       const systemBlocks = result.messages.filter(m => m.role === 'system')
       expect(systemBlocks).toHaveLength(2)
       expect(systemBlocks[1].content).toContain('## Identity Reminder')
+      expect(result.messages[result.messages.length - 1].content).toBe('Ready for the next task?')
     })
 
-    it('slots exactly one extra system block after the identity reminder, verbatim', async () => {
+    it('rides the new user message as a trailing section, under its header', async () => {
       const withoutInform = await buildWithInforms([])
       const withInform = await buildWithInforms([
         informRow('row-1', 'You notice the clock has stopped.'),
       ])
 
-      const systemBlocks = withInform.messages.filter(m => m.role === 'system')
-      expect(systemBlocks).toHaveLength(3)
-      expect(systemBlocks[1].content).toContain('## Identity Reminder')
-
-      // Verbatim: exactly what the operator typed. No preamble, no Host voice,
-      // no "do not mention this".
-      expect(systemBlocks[2].content).toBe('You notice the clock has stopped.')
-
-      // Blocks 1 and 2 — the cacheable static prefix — are untouched.
-      expect(systemBlocks[0].content).toBe(
-        withoutInform.messages.filter(m => m.role === 'system')[0].content,
-      )
-      expect(systemBlocks[1].content).toBe(
-        withoutInform.messages.filter(m => m.role === 'system')[1].content,
+      // The system prefix — the cacheable region — is untouched.
+      expect(withInform.messages.filter(m => m.role === 'system')).toEqual(
+        withoutInform.messages.filter(m => m.role === 'system'),
       )
 
-      // And no non-system message changed either.
-      expect(withInform.messages.filter(m => m.role !== 'system')).toEqual(
-        withoutInform.messages.filter(m => m.role !== 'system'),
+      // Only the last message changed, and only by the appended section: the
+      // operator's words verbatim under the one vouching header, last in line.
+      expect(withInform.messages.slice(0, -1)).toEqual(withoutInform.messages.slice(0, -1))
+      const last = withInform.messages[withInform.messages.length - 1]
+      expect(last.role).toBe('user')
+      expect(last.content).toBe(
+        `Ready for the next task?\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nYou notice the clock has stopped.`,
       )
 
       expect(withInform.informRowIds).toEqual(['row-1'])
+    })
+
+    it('rides its own trailing user message on a turn with no new user message', async () => {
+      // Chained, nudged and autonomous turns run without a new user message;
+      // the inform must still reach them, last in line.
+      const result = await buildWithInforms([informRow('row-1', 'The lamp gutters.')], null)
+
+      const last = result.messages[result.messages.length - 1]
+      expect(last.role).toBe('user')
+      expect(last.content).toBe(`${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`)
+      expect(result.informRowIds).toEqual(['row-1'])
     })
 
     it('stacks several pending passages in posting order, rule-separated', async () => {
@@ -1381,8 +1386,8 @@ describe('Context Manager', () => {
         informRow('row-2', 'Second thing.'),
       ])
 
-      const systemBlocks = result.messages.filter(m => m.role === 'system')
-      expect(systemBlocks[2].content).toBe('First thing.\n\n---\n\nSecond thing.')
+      const last = result.messages[result.messages.length - 1]
+      expect(last.content).toContain(`${INFORM_BLOCK_HEADER}\n\nFirst thing.\n\n---\n\nSecond thing.`)
       expect(result.informRowIds).toEqual(['row-1', 'row-2'])
     })
   })
