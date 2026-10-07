@@ -19,6 +19,7 @@ import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import { findEquippedSlots } from './wardrobe-handler-shared';
 import { formatRelativeDays } from '@/lib/format-time';
 import { neverWornSummary } from '@/lib/schemas/wardrobe-wear.types';
+import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
 /**
  * Context required for wardrobe list tool execution
@@ -132,6 +133,7 @@ export async function executeWardrobeListTool(
         title: item.title,
         description: item.description ?? null,
         image_prompt: item.imagePrompt ?? null,
+        image_file_id: item.imageFileId ?? null,
         types: item.types,
         appropriateness: item.appropriateness ?? null,
         is_own: item.characterId === context.characterId,
@@ -170,6 +172,7 @@ export async function executeWardrobeListTool(
       includeEquipped: include_equipped !== false,
       compositeCount: finalItems.filter((i) => i.is_composite).length,
       neverWornCount: finalItems.filter((i) => i.wear_count === 0).length,
+      withPictureCount: finalItems.filter((i) => i.image_file_id).length,
     });
 
     return {
@@ -241,8 +244,9 @@ export function formatWardrobeListResults(
       : '';
 
     const wearTag = formatWardrobeListWearNote(item, nowMs);
+    const pictureTag = item.image_file_id ? ` · picture: ${formatWardrobeImageHandle(item.image_file_id)}` : '';
 
-    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}`);
+    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}${pictureTag}`);
   }
 
   return lines.join('\n');

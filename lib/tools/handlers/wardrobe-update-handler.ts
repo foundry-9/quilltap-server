@@ -27,6 +27,21 @@ import {
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 import { buildWardrobeReadFailure, buildWardrobeReadOutput } from './wardrobe-read-handler';
+import { formatWardrobeToolImageLine, maybeQueueWardrobeToolImage } from '@/lib/wardrobe/tool-image-generation';
+
+/** Whether a patch changes what a picture of the item would show. */
+function patchChangesLook(item: WardrobeItem, patch: Partial<WardrobeItem>): boolean {
+  if (patch.title !== undefined && patch.title !== item.title) return true;
+  if (patch.imagePrompt !== undefined && patch.imagePrompt !== (item.imagePrompt ?? null)) return true;
+  if (patch.types !== undefined && patch.types.join(',') !== item.types.join(',')) return true;
+  if (
+    patch.componentItemIds !== undefined &&
+    patch.componentItemIds.join(',') !== (item.componentItemIds ?? []).join(',')
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export interface WardrobeUpdateToolContext {
   userId: string;
@@ -65,6 +80,7 @@ export async function executeWardrobeUpdateTool(
       is_default,
       replace,
       component_item_ids,
+      generate_image,
     } = parsed;
 
     const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
@@ -108,6 +124,18 @@ export async function executeWardrobeUpdateTool(
       return buildWardrobeReadFailure(`Failed to update wardrobe item "${item.title}"`);
     }
 
+    // An edit redraws by default only when it changes how the item looks.
+    const changesLook = patchChangesLook(item, patch);
+    const imageGeneration = await maybeQueueWardrobeToolImage(repos, {
+      userId: context.userId,
+      chatId: context.chatId,
+      characterId: context.characterId,
+      itemId: updated.id,
+      requested: generate_image,
+      defaultWhenEnabled: changesLook,
+      callerContext: 'wardrobe-update-handler',
+    });
+
     logger.info('Wardrobe update completed', {
       context: 'wardrobe-update-handler',
       userId: context.userId,
@@ -115,9 +143,12 @@ export async function executeWardrobeUpdateTool(
       characterId: context.characterId,
       itemId: updated.id,
       fields: Object.keys(patch),
+      changesLook,
+      imageGeneration: imageGeneration?.status,
     });
 
-    return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, updated, tiers);
+    const output = await buildWardrobeReadOutput(repos, context.characterId, context.chatId, updated, tiers);
+    return imageGeneration ? { ...output, image_generation: imageGeneration } : output;
   } catch (error) {
     logger.error('Wardrobe update tool execution failed', {
       context: 'wardrobe-update-handler',
@@ -138,5 +169,8 @@ export function formatWardrobeUpdateResults(output: WardrobeUpdateToolOutput): s
   if (!output.success) {
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
-  return `Updated "${output.title}" (${output.item_id}).`;
+  const imageLine = formatWardrobeToolImageLine(output.image_generation);
+  return imageLine
+    ? `Updated "${output.title}" (${output.item_id}).\n${imageLine}`
+    : `Updated "${output.title}" (${output.item_id}).`;
 }

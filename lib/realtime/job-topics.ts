@@ -63,6 +63,11 @@ export function topicsForCompletedJob(
     case 'CHARACTER_HEADSHOULDERS_BACKFILL':
       return [{ topic: 'characters', id: str(payload, 'characterId') }];
 
+    case 'WARDROBE_ITEM_IMAGE_GENERATION':
+      // The picture lands in the owner's vault and its pointer in the item's
+      // frontmatter; the character's wardrobe views watch both.
+      return [{ topic: 'characters', id: str(payload, 'characterId') }, { topic: 'mountPoints' }];
+
     case 'TITLE_UPDATE':
     case 'CONTEXT_SUMMARY':
     case 'CHAT_DANGER_CLASSIFICATION':

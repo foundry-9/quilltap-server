@@ -55,6 +55,11 @@ export interface WardrobeListItemResult {
   description: string | null;
   /** Portrait Cue — the visual phrase steering image generation (null = falls back to title). */
   image_prompt: string | null;
+  /**
+   * The item's current picture: an image file uuid that `describe_image`
+   * looks at and `keep_image` files. null = no picture yet.
+   */
+  image_file_id: string | null;
   types: string[];
   appropriateness: string | null;
   /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
@@ -115,8 +120,9 @@ export const wardrobeListToolDefinition = {
       'Supports optional filtering by item type and appropriateness context. ' +
       'Each item includes its equipped status (which slot[s] it occupies, if any), ' +
       'a composite flag indicating whether it bundles other items, and an is_own ' +
-      'flag (shared archetypes can be worn but not edited), and when it was last ' +
-      'worn (or that it never has been). ' +
+      'flag (shared archetypes can be worn but not edited), when it was last ' +
+      'worn (or that it never has been), and, when the item has a picture, its ' +
+      'image_file_id — pass that to describe_image to see what the item looks like. ' +
       'Use wardrobe_wear to put on / layer items, wardrobe_take_off to remove them, ' +
       'and wardrobe_read for the full detail (including the Portrait Cue) of one item. ' +
       'Archived items are excluded from results.',

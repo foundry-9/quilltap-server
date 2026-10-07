@@ -229,6 +229,20 @@ export interface CharacterAvatarGenerationPayload {
 }
 
 /**
+ * Payload for a wardrobe item picture queued by a wardrobe tool. Tools only
+ * create and edit character-owned items, so the container is always the
+ * owning character's wardrobe.
+ */
+export interface WardrobeItemImageGenerationPayload {
+  /** Chat the tool ran in — scopes the pending-job dedupe and the realtime hint */
+  chatId: string;
+  /** The character whose wardrobe holds the item (the recipient, for a gift) */
+  characterId: string;
+  /** The wardrobe item to draw */
+  itemId: string;
+}
+
+/**
  * Payload for chat danger classification job
  */
 export interface ChatDangerClassificationPayload {
@@ -1217,6 +1231,54 @@ export async function enqueueCharacterAvatarGeneration(
     context: 'background-jobs.queue',
     chatId: payload.chatId,
     characterId: payload.characterId,
+    jobId,
+  });
+
+  return { jobId, isNew: true };
+}
+
+/**
+ * Enqueue a picture of one wardrobe item, on behalf of a wardrobe tool.
+ * Collapses against a still-PENDING job for the same item: the handler reads
+ * the item when it runs, so one queued job already covers any later edit. A
+ * PROCESSING job has already built its prompt, so a fresh one is enqueued.
+ */
+export async function enqueueWardrobeItemImageGeneration(
+  userId: string,
+  payload: WardrobeItemImageGenerationPayload,
+): Promise<{ jobId: string; isNew: boolean }> {
+  const repos = getRepositories();
+
+  const pendingJobs = await repos.backgroundJobs.findPendingForChat(payload.chatId);
+  const existingJob = pendingJobs.find(
+    job => job.type === 'WARDROBE_ITEM_IMAGE_GENERATION'
+      && job.status === 'PENDING'
+      && (job.payload as unknown as WardrobeItemImageGenerationPayload).itemId === payload.itemId
+  );
+
+  if (existingJob) {
+    logger.info('[WardrobeItemImage] Reusing existing pending job', {
+      context: 'background-jobs.queue',
+      chatId: payload.chatId,
+      itemId: payload.itemId,
+      existingJobId: existingJob.id,
+    });
+    return { jobId: existingJob.id, isNew: false };
+  }
+
+  // One try: a refusal or a provider failure would only be paid for again.
+  const jobId = await enqueueJob(
+    userId,
+    'WARDROBE_ITEM_IMAGE_GENERATION',
+    payload as unknown as Record<string, unknown>,
+    { maxAttempts: 1 },
+  );
+
+  logger.info('[WardrobeItemImage] Wardrobe item image job enqueued', {
+    context: 'background-jobs.queue',
+    chatId: payload.chatId,
+    characterId: payload.characterId,
+    itemId: payload.itemId,
     jobId,
   });
 

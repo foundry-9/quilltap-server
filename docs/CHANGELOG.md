@@ -4,6 +4,35 @@
 
 ### 4.10-dev
 
+#### Wardrobe tools: pictures and picture ids
+
+- New setting `chatSettings.wardrobeImageSettings.generateFromTools` (default false; no migration,
+  the schema default fills existing JSON). Settings → Images → Wardrobe Images gains a checkbox.
+- `wardrobe_create` and `wardrobe_update` take an optional `generate_image` boolean. The setting is
+  both gate and default: off, nothing is generated and an explicit request is answered with
+  `image_generation.status: 'not-enabled'`; on, create defaults to generating and update defaults to
+  generating only when title, image_prompt, types or components actually change. Decision lives in
+  `maybeQueueWardrobeToolImage` (`lib/wardrobe/tool-image-generation.ts`), which never throws.
+- New background job `WARDROBE_ITEM_IMAGE_GENERATION` (activity kind `image`, `maxAttempts: 1`,
+  deduped against a PENDING job for the same item) runs `generateWardrobeItemImage` against the
+  owning character's wardrobe. Missing profile, refusal, archived owner, or a vanished/archived item
+  end the job without retry. Completion hints the `characters` and `mountPoints` topics.
+- `writeWardrobeItemImage` now routes to the parent over host-RPC (new method
+  `writeWardrobeItemImage`) when called in the job child, instead of throwing.
+  `deleteWardrobeItemImageLink` still refuses in the child.
+- `wardrobe_list` and `wardrobe_read` (and the `wardrobe_update` echo) return `image_file_id`, and
+  their formatted text names it with a pointer to `describe_image` / `keep_image`.
+
+#### Avatar generation from the picker is portrait
+
+- `POST /api/v1/images?action=generate` accepts `options.orientation`
+  (`portrait` | `landscape` | `square`), passed to `buildImageGenParams`, where it outranks
+  `size` / `aspectRatio`.
+- `ImageGenerationDialog` takes an `orientation` prop; when set it sends that instead of a size and
+  hides the size and Gemini aspect-ratio pickers. `ImageUploadDialog` forwards
+  `generateOrientation`, and `AvatarSelector` (profile and character avatars) passes `portrait`.
+  The character avatar job and the wardrobe preview-avatar route already used portrait.
+
 #### Chat gallery: misfiled backdrops and missing reused avatars
 
 - Superseded story backgrounds that never reached a Lantern mount were listed under Generated.

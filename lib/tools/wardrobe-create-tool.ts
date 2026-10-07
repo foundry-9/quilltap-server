@@ -17,6 +17,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance';
+import type { WardrobeToolImageResult } from '@/lib/wardrobe/tool-image-generation';
 
 /**
  * Zod schema for the wardrobe create tool's input.
@@ -98,6 +99,15 @@ export const wardrobeCreateToolInputSchema = z
         'the calling character\'s wardrobe (case-insensitive).'
       )
       .optional(),
+    generate_image: z
+      .boolean()
+      .describe(
+        'Whether to have a picture of the new item drawn in the background. ' +
+        'Omit to follow the operator\'s setting (on when they allow the ' +
+        'wardrobe tools to make pictures). Pictures are only ever made when ' +
+        'the operator allows it; the response says what happened.'
+      )
+      .optional(),
     replace: z
       .boolean()
       .describe(
@@ -153,6 +163,8 @@ export interface WardrobeCreateToolOutput {
    * wardrobe item IDs (multi-item slots support layering).
    */
   current_state?: Record<WardrobeItemType, string[]>;
+  /** What became of a picture of the item, when one was wanted. */
+  image_generation?: WardrobeToolImageResult;
   error?: string;
 }
 
@@ -172,7 +184,8 @@ export const wardrobeCreateToolDefinition = {
       '(or component_titles) referring to existing items in the character\'s wardrobe. ' +
       'For composites, the slots covered are computed from the union of the components\' ' +
       'slots, so you do not need to supply types yourself. Optionally set image_prompt ' +
-      '(a Portrait Cue) to steer image generation. ' +
+      '(a Portrait Cue) to steer image generation; if the operator allows it, a picture ' +
+      'of the item is drawn in the background (generate_image). ' +
       'You can give the item to another character in the chat by specifying a recipient.',
     parameters: zodToOpenAISchema(wardrobeCreateToolInputSchema),
   },

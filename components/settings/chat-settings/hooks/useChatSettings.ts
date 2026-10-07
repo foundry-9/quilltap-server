@@ -73,6 +73,7 @@ interface UseChatSettingsReturn {
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
   handleWardrobeImageProfileChange: (profileId: string | null) => Promise<void>
+  handleWardrobeImageGenerateFromToolsChange: (enabled: boolean) => Promise<void>
   handleConciergeUpdate: (updates: ConciergeSettingsUpdate) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
@@ -667,6 +668,26 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Let (or stop) the wardrobe tools queueing pictures of the items they touch
+   * Uses settingsRef to prevent race conditions with concurrent updates
+   */
+  const handleWardrobeImageGenerateFromToolsChange = useCallback(
+    async (enabled: boolean) => {
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
+
+      const currentSettings = latestSettings.wardrobeImageSettings || DEFAULT_WARDROBE_IMAGE_SETTINGS
+      await patchChatSettings(
+        { wardrobeImageSettings: { ...currentSettings, generateFromTools: enabled } },
+        'Failed to update wardrobe image settings',
+        'Failed to update wardrobe tool pictures'
+      )
+    },
+    [patchChatSettings]
+  )
+
+  /**
    * Update the Concierge's settings. Top-level fields replace; `display` and
    * `preScreen` deep-merge, so a card can send just the field it changed.
    * Uses settingsRef to prevent race conditions with concurrent updates
@@ -744,6 +765,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
     handleWardrobeImageProfileChange,
+    handleWardrobeImageGenerateFromToolsChange,
     handleConciergeUpdate,
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,

@@ -25,6 +25,7 @@ import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schema
 import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { formatWardrobeToolImageLine, maybeQueueWardrobeToolImage } from '@/lib/wardrobe/tool-image-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
@@ -185,6 +186,7 @@ export async function executeWardrobeCreateTool(
       component_item_ids,
       component_titles,
       replace,
+      generate_image,
     } = parsed;
 
     // Resolve the target character — defaults to the calling character
@@ -287,6 +289,17 @@ export async function executeWardrobeCreateTool(
       });
     }
 
+    // A new garment is drawn by default when the operator allows tool pictures.
+    const imageGeneration = await maybeQueueWardrobeToolImage(repos, {
+      userId: context.userId,
+      chatId: context.chatId,
+      characterId: targetCharacterId,
+      itemId: newItem.id,
+      requested: generate_image,
+      defaultWhenEnabled: true,
+      callerContext: 'wardrobe-create-handler',
+    });
+
     logger.info('Wardrobe create completed', {
       context: 'wardrobe-create-handler',
       userId: context.userId,
@@ -300,6 +313,7 @@ export async function executeWardrobeCreateTool(
       componentCount: componentItemIds.length,
       equipped,
       effect,
+      imageGeneration: imageGeneration?.status,
     });
 
     return {
@@ -318,6 +332,7 @@ export async function executeWardrobeCreateTool(
       ...(componentItemIds.length > 0 ? { resolved_component_item_ids: componentItemIds } : {}),
       ...(recipientName ? { recipient_name: recipientName } : {}),
       ...(currentState ? { current_state: currentState } : {}),
+      ...(imageGeneration ? { image_generation: imageGeneration } : {}),
     };
   } catch (error) {
     if (error instanceof WardrobeCreateError) {
@@ -384,6 +399,9 @@ export function formatWardrobeCreateResults(output: WardrobeCreateToolOutput): s
   } else {
     parts.push(`- Not equipped (added to wardrobe${recipientNote ? ` of ${output.recipient_name}` : ''} only)`);
   }
+
+  const imageLine = formatWardrobeToolImageLine(output.image_generation);
+  if (imageLine) parts.push(imageLine);
 
   return parts.join('\n');
 }

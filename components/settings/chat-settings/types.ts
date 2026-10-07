@@ -539,10 +539,12 @@ export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
 }
 
 /**
- * Default wardrobe image settings — no designated profile, so the default image profile draws.
+ * Default wardrobe image settings — no designated profile, so the default image profile draws;
+ * the wardrobe tools do not queue pictures.
  */
 export const DEFAULT_WARDROBE_IMAGE_SETTINGS: WardrobeImageSettings = {
   imageProfileId: null,
+  generateFromTools: false,
 }
 
 /**

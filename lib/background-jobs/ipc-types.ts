@@ -140,7 +140,8 @@ export interface ChildShutdownAckMessage {
  *     participant character's vault
  *   - `removeConversationSummariesFromVaults` — sweep a deleted conversation's
  *     summary out of every participant vault
- * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore` embed a
+ * `writeCharacterAvatarToVault`/`writeLanternBackgroundToMountStore`/
+ * `writeWardrobeItemImage` embed a
  * server-generated `blobId`/`linkId` (deduped by sha, so the id may reference a
  * pre-existing blob) into the returned `storageKey`, which the handler persists
  * into `files.create` — a buffered/synthetic id would dangle, hence host-RPC
@@ -157,6 +158,7 @@ export interface ChildHostRpcRequestMessage {
     | 'uploadFile'
     | 'writeCharacterAvatarToVault'
     | 'writeLanternBackgroundToMountStore'
+    | 'writeWardrobeItemImage'
     | 'writeConversationSummaryToVaults'
     | 'removeConversationSummariesFromVaults'
     | 'startScheduledAutonomousRun';

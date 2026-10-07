@@ -21,6 +21,11 @@ thumbnail to). Independent of [wardrobe-wear-ledger.md](wardrobe-wear-ledger.md)
 >   is how delete/move/copy find it.
 > - **§6.1 caption.** The profile name and reroute flag come from the generate response; a
 >   reopened editor names the stored `generationModel` instead.
+> - **Later addition: tool-queued pictures.** `wardrobe_create` / `wardrobe_update` can queue a
+>   `WARDROBE_ITEM_IMAGE_GENERATION` job, gated by `wardrobeImageSettings.generateFromTools`
+>   (`lib/wardrobe/tool-image-generation.ts`). The bridge's blob write now has a host-RPC arm for
+>   that job; the "parent-process only" rule in §2.1 holds for deletes. `wardrobe_list` /
+>   `wardrobe_read` expose `image_file_id` for `describe_image`.
 > - **Known limit.** Importing the same character twice into one instance already duplicates
 >   wardrobe item ids across vaults; picture history is keyed by item id, so the two copies share it.
 

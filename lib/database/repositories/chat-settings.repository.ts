@@ -221,6 +221,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             },
             wardrobeImageSettings: {
               imageProfileId: null,
+              generateFromTools: false,
             },
             conciergeSettings: DEFAULT_CONCIERGE_SETTINGS,
             autoLockSettings: {

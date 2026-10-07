@@ -73,6 +73,12 @@ const generateImageSchema = z.object({
       quality: imageQualitySchema.optional(),
       style: z.enum(['vivid', 'natural']).optional(),
       aspectRatio: z.string().optional(),
+      /**
+       * A shape rather than a size: resolved onto the provider's own mechanism
+       * and outranking `size` / `aspectRatio`. The avatar picker sends
+       * `portrait`, so an avatar is drawn tall whatever the provider calls it.
+       */
+      orientation: z.enum(['portrait', 'landscape', 'square']).optional(),
     })
     .optional(),
 });
@@ -341,8 +347,9 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
 
   // One call against one connection profile. The shared builder gives this
   // route the profile's stored defaults, LoRAs and residual options the same
-  // way the Salon's `generate_image` does. No orientation is resolved: this
-  // route's caller passes an explicit size and means it.
+  // way the Salon's `generate_image` does. An explicit size is honoured as
+  // given unless the caller asked for a shape (`options.orientation`), which
+  // the builder resolves per provider and lets outrank the size.
   const attempt = async (candidate: ConnectionProfile, key: string) => {
     const provider = candidate.id === primaryProfileId
       ? primaryProvider
@@ -357,6 +364,7 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
         style: options.style,
         aspectRatio: options.aspectRatio,
       },
+      orientation: options.orientation,
       logContext: { context: 'api.v1.images.generate', profileId: candidate.id },
     });
     return provider.generateImage(params, key);

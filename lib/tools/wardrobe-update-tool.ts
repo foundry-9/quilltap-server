@@ -17,6 +17,7 @@ import { zodToOpenAISchema } from './zod-to-openai-schema'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
 import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
 import type { WardrobeReadToolOutput } from './wardrobe-read-tool'
+import type { WardrobeToolImageResult } from '@/lib/wardrobe/tool-image-generation'
 
 /**
  * Zod schema for the wardrobe_update tool's input.
@@ -75,6 +76,18 @@ export const wardrobeUpdateToolInputSchema = z
         'leaf. Omit to leave unchanged.'
       )
       .optional(),
+    generate_image: z
+      .boolean()
+      .describe(
+        'Whether to have a new picture of the item drawn in the background. ' +
+        'Omit to follow the operator\'s setting: when they allow the wardrobe ' +
+        'tools to make pictures, a change to how the item looks (title, ' +
+        'image_prompt, types or components) redraws it. Pass true to redraw ' +
+        'anyway (for instance, to give an item its first picture). Pictures ' +
+        'are only ever made when the operator allows it; the response says ' +
+        'what happened.'
+      )
+      .optional(),
   })
   .refine((o) => o.item_id !== undefined || o.item_title !== undefined, {
     message: 'item_id or item_title is required',
@@ -83,8 +96,13 @@ export const wardrobeUpdateToolInputSchema = z
 /** Input parameters for wardrobe_update */
 export type WardrobeUpdateToolInput = z.infer<typeof wardrobeUpdateToolInputSchema>
 
-/** Output from wardrobe_update — a read-shaped echo of the updated item. */
-export type WardrobeUpdateToolOutput = WardrobeReadToolOutput
+/**
+ * Output from wardrobe_update — a read-shaped echo of the updated item, plus
+ * what became of a picture when one was wanted.
+ */
+export type WardrobeUpdateToolOutput = WardrobeReadToolOutput & {
+  image_generation?: WardrobeToolImageResult
+}
 
 /**
  * Tool definition compatible with OpenAI's tool_calls format
@@ -97,7 +115,8 @@ export const wardrobeUpdateToolDefinition = {
       'Edit the stored fields of an existing wardrobe item: title, description, ' +
       'image_prompt (Portrait Cue), appropriateness, coverage types, default-' +
       'outfit membership, composite replace behaviour, and component list. Only ' +
-      'the fields you supply change. This does NOT put the item on — use ' +
+      'the fields you supply change. If the operator allows it, a new picture ' +
+      'of the item is drawn in the background (generate_image). This does NOT put the item on — use ' +
       'wardrobe_wear for that. Only your OWN items can be edited; shared ' +
       'archetypes (project / Quilltap General) are read-only.',
     parameters: zodToOpenAISchema(wardrobeUpdateToolInputSchema),

@@ -7,6 +7,10 @@
  * store events are mocked locally. `sanitizeLeafName` stays real (pure).
  */
 
+jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({
+  callHost: jest.fn(),
+}));
+
 jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn().mockResolvedValue('folder-id'),
 }));
@@ -30,6 +34,7 @@ import {
   wardrobeItemImagePath,
 } from '@/lib/file-storage/wardrobe-image-bridge';
 import { getRepositories } from '@/lib/repositories/factory';
+import { callHost } from '@/lib/background-jobs/child/host-rpc-client';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { emitDocumentDeleted, emitDocumentWritten } from '@/lib/mount-index/db-store-events';
 import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helpers';
@@ -141,17 +146,20 @@ describe('writeWardrobeItemImage', () => {
     expect(refreshStats).toHaveBeenCalledWith('vault-1');
   });
 
-  it('refuses to run in the job child', async () => {
+  it('routes to the parent over host-RPC in the job child', async () => {
     process.env.QUILLTAP_JOB_CHILD = '1';
-    await expect(
-      writeWardrobeItemImage({
-        mountPointId: 'vault-1',
-        itemId: ITEM_ID,
-        kind: 'generated',
-        content: Buffer.from('x'),
-        contentType: 'image/webp',
-      }),
-    ).rejects.toThrow(/parent-process only/);
+    const hostResult = { storageKey: 'mount-blob:vault-1:blob-1', linkId: 'link-1' };
+    jest.mocked(callHost).mockResolvedValue(hostResult);
+    const input = {
+      mountPointId: 'vault-1',
+      itemId: ITEM_ID,
+      kind: 'generated' as const,
+      content: Buffer.from('x'),
+      contentType: 'image/webp',
+    };
+
+    await expect(writeWardrobeItemImage(input)).resolves.toBe(hostResult);
+    expect(callHost).toHaveBeenCalledWith('writeWardrobeItemImage', input);
     expect(linkBlobContent).not.toHaveBeenCalled();
     expect(mockEmitWritten).not.toHaveBeenCalled();
   });

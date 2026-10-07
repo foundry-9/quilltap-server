@@ -184,6 +184,7 @@ async function updateChatSettings(
     updateData.wardrobeImageSettings = WardrobeImageSettingsSchema.parse(wardrobeImageSettings)
     logger.debug('[Settings v1] Wardrobe image settings updated', {
       imageProfileId: updateData.wardrobeImageSettings.imageProfileId ?? null,
+      generateFromTools: updateData.wardrobeImageSettings.generateFromTools,
     })
   }
   if (typeof contextCompressionSettings !== 'undefined') {

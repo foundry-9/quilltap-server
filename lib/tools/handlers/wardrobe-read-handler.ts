@@ -31,6 +31,7 @@ import {
 import type { WardrobeRepos } from './wardrobe-handler-shared';
 import { resolveWearers } from '@/lib/wardrobe/wear-history';
 import { formatRelativeDays } from '@/lib/format-time';
+import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
 export interface WardrobeReadToolContext {
   userId: string;
@@ -71,6 +72,7 @@ export async function buildWardrobeReadOutput(
     title: item.title,
     description: item.description ?? null,
     image_prompt: item.imagePrompt ?? null,
+    image_file_id: item.imageFileId ?? null,
     types: item.types,
     appropriateness: item.appropriateness ?? null,
     is_default: item.isDefault ?? false,
@@ -192,6 +194,7 @@ export function buildWardrobeReadFailure(error: string): WardrobeReadToolOutput 
     title: '',
     description: null,
     image_prompt: null,
+    image_file_id: null,
     types: [],
     appropriateness: null,
     is_default: false,
@@ -273,6 +276,7 @@ export function formatWardrobeReadResults(
   if (output.appropriateness) lines.push(`  appropriateness: ${output.appropriateness}`);
   if (output.description) lines.push(`  description: ${output.description}`);
   lines.push(`  portrait cue: ${output.image_prompt ?? '(none — falls back to title)'}`);
+  lines.push(`  picture: ${output.image_file_id ? formatWardrobeImageHandle(output.image_file_id) : '(none)'}`);
   if (output.is_composite) {
     lines.push(`  composite: ${output.component_titles.join(', ') || 'unresolved components'} (replace=${output.replace})`);
   }

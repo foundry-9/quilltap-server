@@ -41,6 +41,11 @@ export interface WardrobeReadToolOutput {
   description: string | null;
   /** Portrait Cue — the visual phrase steering image generation (null = falls back to title). */
   image_prompt: string | null;
+  /**
+   * The item's current picture: an image file uuid that `describe_image`
+   * looks at and `keep_image` files. null = no picture yet.
+   */
+  image_file_id: string | null;
   types: string[];
   appropriateness: string | null;
   /** Whether this item is part of the character's default outfit. */
@@ -105,8 +110,9 @@ export const wardrobeReadToolDefinition = {
       'Returns everything wardrobe_list omits: the Portrait Cue (image_prompt), ' +
       'default-outfit membership, composite/replace behaviour, the full ' +
       'component list, archived status, whether you own it, the slots it is ' +
-      'currently equipped in, and its wear history (how often it has been worn, ' +
-      'when, and by whom). Items from your own wardrobe, the project, and ' +
+      'currently equipped in, its wear history (how often it has been worn, ' +
+      'when, and by whom), and its picture\'s image_file_id when it has one ' +
+      '(pass that to describe_image to see what it looks like). Items from your own wardrobe, the project, and ' +
       'Quilltap General all resolve.',
     parameters: zodToOpenAISchema(wardrobeReadToolInputSchema),
   },

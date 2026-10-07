@@ -4829,10 +4829,15 @@ Generate images using an LLM image provider.
     "n": 1,
     "quality": "hd",
     "style": "vivid",
-    "aspectRatio": "1:1"
+    "aspectRatio": "1:1",
+    "orientation": "portrait"
   }
 }
 ```
+
+`options.orientation` (`portrait` | `landscape` | `square`, optional) asks for a shape rather than a
+size: `buildImageGenParams` resolves it onto the provider's own mechanism and it outranks `size` /
+`aspectRatio`. The avatar picker's Generate dialog sends `portrait`.
 
 **Response**: `201 Created`
 

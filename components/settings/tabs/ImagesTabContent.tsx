@@ -21,6 +21,7 @@ export function ImagesTabContent() {
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
     handleWardrobeImageProfileChange,
+    handleWardrobeImageGenerateFromToolsChange,
   } = useChatSettingsContext()
 
   return (
@@ -63,6 +64,7 @@ export function ImagesTabContent() {
               loadingProfiles={loadingProfiles}
               imageProfiles={imageProfiles}
               onProfileChange={handleWardrobeImageProfileChange}
+              onGenerateFromToolsChange={handleWardrobeImageGenerateFromToolsChange}
             />
           ) : (
             <div className="qt-alert-error">Failed to load settings</div>

@@ -132,15 +132,34 @@ describe('useChatSettings — optimistic update', () => {
     await act(async () => {
       await result.current.handleWardrobeImageProfileChange('profile-1')
     })
-    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1' })
+    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: false })
 
     await act(async () => {
       await result.current.handleWardrobeImageProfileChange(null)
     })
 
     expect(putBodies()).toEqual([
-      { wardrobeImageSettings: { imageProfileId: 'profile-1' } },
-      { wardrobeImageSettings: { imageProfileId: null } },
+      { wardrobeImageSettings: { imageProfileId: 'profile-1', generateFromTools: false } },
+      { wardrobeImageSettings: { imageProfileId: null, generateFromTools: false } },
     ])
+  })
+
+  it('handleWardrobeImageGenerateFromToolsChange PUTs the switch and keeps the designated profile', async () => {
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+    await waitFor(() => expect(result.current.settings).not.toBeNull())
+
+    await act(async () => {
+      await result.current.handleWardrobeImageProfileChange('profile-1')
+    })
+    await act(async () => {
+      await result.current.handleWardrobeImageGenerateFromToolsChange(true)
+    })
+
+    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1', generateFromTools: true })
+    const lastPut = mockFetch.mock.calls
+      .filter(([url, init]: [string, RequestInit | undefined]) => url === '/api/v1/settings/chat' && init?.method === 'PUT')
+      .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+      .pop()
+    expect(lastPut).toEqual({ wardrobeImageSettings: { imageProfileId: 'profile-1', generateFromTools: true } })
   })
 })

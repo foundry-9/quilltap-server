@@ -127,6 +127,7 @@ export function AvatarSelector({
         onSuccess={handleUploadSuccess}
         contextType={contextType}
         contextId={contextId}
+        generateOrientation="portrait"
       />
     </>
   );

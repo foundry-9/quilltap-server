@@ -1865,6 +1865,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "description": "If true, wear the item immediately after creation. Defaults to false. Wearing honors the new item's replace flag: off (the default) layers it over what is already worn, on replaces those slots. For composites this places the composite (as a single id) into every slot it covers. The response reports the resulting effect (layered vs replaced).",
       "type": "boolean",
     },
+    "generate_image": {
+      "description": "Whether to have a picture of the new item drawn in the background. Omit to follow the operator's setting (on when they allow the wardrobe tools to make pictures). Pictures are only ever made when the operator allows it; the response says what happened.",
+      "type": "boolean",
+    },
     "image_prompt": {
       "description": "Optional Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator IN PLACE OF the title (e.g. "intricate dense burnished-gold circular rank glyph on the shoulder"). Terse, never Markdown; it is joined into a comma-separated outfit list. Omit to fall back to the title.",
       "type": "string",
@@ -2018,6 +2022,10 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
     "description": {
       "description": "New description. Omit to leave unchanged.",
       "type": "string",
+    },
+    "generate_image": {
+      "description": "Whether to have a new picture of the item drawn in the background. Omit to follow the operator's setting: when they allow the wardrobe tools to make pictures, a change to how the item looks (title, image_prompt, types or components) redraws it. Pass true to redraw anyway (for instance, to give an item its first picture). Pictures are only ever made when the operator allows it; the response says what happened.",
+      "type": "boolean",
     },
     "image_prompt": {
       "description": "New Portrait Cue — a short, literal, plain-text visual phrase fed to the image generator in place of the title. Terse, never Markdown. Omit to leave unchanged.",

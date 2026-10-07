@@ -20,8 +20,12 @@
  * also why they are not renamed or deleted with the item: the item routes
  * remove them explicitly (`lib/wardrobe/item-images.ts`).
  *
- * Parent-process only. Every caller is an API route; rather than grow a
- * host-RPC arm nobody calls, the bridge refuses to run in the job child.
+ * Writes run on the parent's RW connection. `writeWardrobeItemImage` is
+ * reachable from the job child (`WARDROBE_ITEM_IMAGE_GENERATION`, queued by
+ * the wardrobe tools) and routes there via host-RPC, the way the avatar and
+ * Lantern bridges do: its `blobId` / `linkId` are server-computed and are
+ * baked into the `files` row's storageKey, so a buffered synthetic id would
+ * dangle. `deleteWardrobeItemImageLink` has no child caller and refuses.
  *
  * @module file-storage/wardrobe-image-bridge
  */
@@ -62,7 +66,7 @@ function timestampStem(now: Date): string {
 function refuseInJobChild(operation: string): void {
   if (process.env.QUILLTAP_JOB_CHILD === '1') {
     throw new Error(
-      `${operation} is parent-process only; wardrobe images are written from API routes, never from the job child`,
+      `${operation} is parent-process only; wardrobe image links are removed from API routes, never from the job child`,
     );
   }
 }
@@ -101,7 +105,15 @@ export interface WriteWardrobeItemImageResult {
 export async function writeWardrobeItemImage(
   input: WriteWardrobeItemImageInput,
 ): Promise<WriteWardrobeItemImageResult> {
-  refuseInJobChild('writeWardrobeItemImage');
+  if (process.env.QUILLTAP_JOB_CHILD === '1') {
+    const { callHost } = await import('@/lib/background-jobs/child/host-rpc-client');
+    logger.debug('[WardrobeImageBridge] Routing wardrobe image write to the parent', {
+      context: LOG_CONTEXT,
+      mountPointId: input.mountPointId,
+      itemId: input.itemId,
+    });
+    return callHost<WriteWardrobeItemImageResult>('writeWardrobeItemImage', input);
+  }
 
   const repos = getRepositories();
   const folder = wardrobeItemImageFolder(input.itemId);

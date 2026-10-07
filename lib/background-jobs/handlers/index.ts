@@ -18,6 +18,7 @@ import { handleStoryBackgroundGeneration } from './story-background';
 import { handleChatDangerClassification } from './chat-danger-classification';
 import { handleSceneStateTracking } from './scene-state-tracking';
 import { handleCharacterAvatarGeneration } from './character-avatar';
+import { handleWardrobeItemImageGeneration } from './wardrobe-item-image';
 import { handleConversationRender } from './conversation-render';
 import { handleMemoryHousekeeping } from './memory-housekeeping';
 import { handleMemoryRegenerateChat } from './memory-regenerate-chat';
@@ -51,6 +52,7 @@ const handlers: Record<BackgroundJobType, JobHandler> = {
   CHAT_DANGER_CLASSIFICATION: handleChatDangerClassification,
   SCENE_STATE_TRACKING: handleSceneStateTracking,
   CHARACTER_AVATAR_GENERATION: handleCharacterAvatarGeneration,
+  WARDROBE_ITEM_IMAGE_GENERATION: handleWardrobeItemImageGeneration,
   CONVERSATION_RENDER: handleConversationRender,
   MEMORY_HOUSEKEEPING: handleMemoryHousekeeping,
   MEMORY_REGENERATE_CHAT: handleMemoryRegenerateChat,

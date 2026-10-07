@@ -14,6 +14,7 @@
  *     (→ `writeProjectFileToMountStore`)
  *   - `writeCharacterAvatarToVault` — project-less character-vault avatar writes
  *   - `writeLanternBackgroundToMountStore` — project-less Lantern background writes
+ *   - `writeWardrobeItemImage` — wardrobe item pictures queued by the wardrobe tools
  *
  * `startScheduledAutonomousRun` is here for a different reason: ORDERING. The
  * scheduled run-start must commit `currentRunId`/`runState` on the RW connection
@@ -87,6 +88,15 @@ async function runMethod(
       );
       const params = args[0] as Parameters<typeof writeLanternBackgroundToMountStore>[0];
       return writeLanternBackgroundToMountStore(params);
+    }
+    case 'writeWardrobeItemImage': {
+      const { writeWardrobeItemImage } = await import(
+        '@/lib/file-storage/wardrobe-image-bridge'
+      );
+      const params = args[0] as Parameters<typeof writeWardrobeItemImage>[0];
+      // Structured clone delivers a Buffer as a plain Uint8Array; the bridge
+      // hashes and stores it, so hand it a real Buffer.
+      return writeWardrobeItemImage({ ...params, content: Buffer.from(params.content) });
     }
     case 'writeConversationSummaryToVaults': {
       const { writeConversationSummaryToVaults } = await import(

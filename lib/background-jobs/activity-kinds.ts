@@ -64,6 +64,7 @@ export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> =
   // ── Img ──────────────────────────────────────────────────────────────────
   STORY_BACKGROUND_GENERATION: 'image',
   CHARACTER_AVATAR_GENERATION: 'image',
+  WARDROBE_ITEM_IMAGE_GENERATION: 'image',
   CHARACTER_HEADSHOULDERS_BACKFILL: 'image',
 
   // ── Deliberately uncounted ───────────────────────────────────────────────

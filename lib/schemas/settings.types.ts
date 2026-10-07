@@ -614,6 +614,13 @@ export type StoryBackgroundsSettings = z.infer<typeof StoryBackgroundsSettingsSc
 export const WardrobeImageSettingsSchema = z.object({
   /** The designated profile; null = the user's default image profile. */
   imageProfileId: UUIDSchema.nullable().default(null),
+  /**
+   * Let the wardrobe tools (`wardrobe_create` / `wardrobe_update`) queue a
+   * picture of the item they touched. Off by default: every picture is a paid
+   * provider call the operator did not click for. Read through
+   * `wardrobeToolImagesEnabled` (`lib/wardrobe/tool-image-generation.ts`).
+   */
+  generateFromTools: z.boolean().default(false),
 });
 
 export type WardrobeImageSettings = z.infer<typeof WardrobeImageSettingsSchema>;

@@ -53,6 +53,39 @@ describe('ImageGenerationDialog - actual component requests', () => {
       expect.objectContaining({ method: 'POST' })
     );
   });
+
+  async function generateAndReadBody(props: Partial<React.ComponentProps<typeof ImageGenerationDialog>>) {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          profiles: [{ id: 'profile-1', name: 'OpenAI GPT', provider: 'OPENAI', modelName: 'gpt-image-1' }],
+        }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) });
+
+    render(<ImageGenerationDialog isOpen={true} onClose={jest.fn()} {...props} />);
+    await waitFor(() => expect(screen.getByText(/^Generate$/)).not.toBeDisabled());
+    fireEvent.change(screen.getByPlaceholderText('Describe the image you want to generate...'), {
+      target: { value: 'A likeness' },
+    });
+    fireEvent.click(screen.getByText(/^Generate$/));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+    return JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body);
+  }
+
+  it('sends a fixed orientation instead of a size when one is given (the avatar picker)', async () => {
+    const body = await generateAndReadBody({ orientation: 'portrait' });
+    expect(body.options.orientation).toBe('portrait');
+    expect(body.options.size).toBeUndefined();
+    expect(screen.queryByText('Size')).toBeNull();
+  });
+
+  it('sends the chosen size when no orientation is given', async () => {
+    const body = await generateAndReadBody({});
+    expect(body.options.size).toBe('1024x1024');
+    expect(body.options.orientation).toBeUndefined();
+  });
 });
 
 describe('Image Generation Dialog - API Integration', () => {

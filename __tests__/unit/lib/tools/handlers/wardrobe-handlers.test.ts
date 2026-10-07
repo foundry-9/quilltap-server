@@ -21,6 +21,13 @@ jest.mock('@/lib/background-jobs/queue-service', () => ({
   enqueueWardrobeOutfitAnnouncement: jest.fn().mockResolvedValue(undefined),
 }))
 
+// The decision itself is covered in tool-image-generation.test.ts; here we
+// only check what the handlers hand it and how they report the answer.
+jest.mock('@/lib/wardrobe/tool-image-generation', () => {
+  const actual = jest.requireActual('@/lib/wardrobe/tool-image-generation') as Record<string, unknown>
+  return { ...actual, maybeQueueWardrobeToolImage: jest.fn().mockResolvedValue(undefined) }
+})
+
 // Project-tier resolution is exercised elsewhere; here it's a deterministic no-op.
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
   resolveProjectMountPointIdsForChat: jest.fn().mockResolvedValue([]),
@@ -50,6 +57,10 @@ const { executeWardrobeArchiveTool } = require('@/lib/tools/handlers/wardrobe-ar
 const { executeWardrobeWearTool } = require('@/lib/tools/handlers/wardrobe-wear-handler')
 const { executeWardrobeTakeOffTool } = require('@/lib/tools/handlers/wardrobe-take-off-handler')
 const outfitDisplacement = require('@/lib/wardrobe/outfit-displacement')
+const toolImages = require('@/lib/wardrobe/tool-image-generation')
+const { formatWardrobeListResults } = require('@/lib/tools/handlers/wardrobe-list-handler')
+const { formatWardrobeReadResults } = require('@/lib/tools/handlers/wardrobe-read-handler')
+const { formatWardrobeCreateResults } = require('@/lib/tools/handlers/wardrobe-create-handler')
 // Not mocked — the fake repository below uses the real merge rule so the tier
 // precedence the handler relies on is the one under test.
 const { mergeWearablePool } = require('@/lib/wardrobe/wearable-pool')
@@ -60,6 +71,7 @@ const mockEquipItem = outfitDisplacement.equipItem as jest.Mock
 const mockReplaceItem = outfitDisplacement.replaceItem as jest.Mock
 const mockAddToSlot = outfitDisplacement.addToSlot as jest.Mock
 const mockRemoveFromSlot = outfitDisplacement.removeFromSlot as jest.Mock
+const mockMaybeQueueImage = toolImages.maybeQueueWardrobeToolImage as jest.Mock
 
 const now = '2026-04-07T00:00:00.000Z'
 
@@ -203,6 +215,22 @@ describe('wardrobe tool handlers', () => {
       expect(result.items[0].is_own).toBe(true)
     })
 
+    it('surfaces each item\'s picture as an image_file_id named for describe_image', async () => {
+      repos.wardrobe.findByCharacterId.mockResolvedValue([
+        makeWardrobeItem({ id: 'pictured', imageFileId: 'file-9' }),
+        makeWardrobeItem({ id: 'bare', title: 'Bare Shirt' }),
+      ])
+
+      const result = await executeWardrobeListTool({}, context)
+      const byId = Object.fromEntries(result.items.map((i: any) => [i.item_id, i]))
+      expect(byId['pictured'].image_file_id).toBe('file-9')
+      expect(byId['bare'].image_file_id).toBeNull()
+
+      const text = formatWardrobeListResults(result)
+      expect(text).toMatch(/picture: file-9 \(pass to describe_image/)
+      expect(text.split('\n').find((l: string) => l.includes('Bare Shirt'))).not.toMatch(/picture:/)
+    })
+
     it('filters by type', async () => {
       repos.wardrobe.findByCharacterId.mockResolvedValue([
         makeWardrobeItem({ id: 'a', types: ['top'] }),
@@ -229,6 +257,15 @@ describe('wardrobe tool handlers', () => {
       expect(result.image_prompt).toBe('a literal cue')
       expect(result.is_own).toBe(true)
       expect(result.is_composite).toBe(false)
+    })
+
+    it('reports the current picture and how to look at it', async () => {
+      repos.wardrobe.findById.mockResolvedValue(makeWardrobeItem({ id: 'item-1', imageFileId: 'file-3' }))
+
+      const result = await executeWardrobeReadTool({ item_id: 'item-1' }, context)
+
+      expect(result.image_file_id).toBe('file-3')
+      expect(formatWardrobeReadResults(result)).toMatch(/picture: file-3 \(pass to describe_image/)
     })
 
     it('fails when the item is not found', async () => {
@@ -261,6 +298,25 @@ describe('wardrobe tool handlers', () => {
       expect(repos.wardrobe.create).toHaveBeenCalledWith(
         expect.objectContaining({ imagePrompt: null })
       )
+    })
+
+    it('asks for a picture of the new item, defaulting on, for the item\'s owner', async () => {
+      repos.wardrobe.create.mockResolvedValue(makeWardrobeItem({ id: 'new-4', title: 'Gloves' }))
+      mockMaybeQueueImage.mockResolvedValueOnce({ status: 'queued', message: 'Drawing it.' })
+
+      const result = await executeWardrobeCreateTool(
+        { title: 'Gloves', types: ['accessories'], generate_image: true },
+        context
+      )
+
+      expect(mockMaybeQueueImage).toHaveBeenCalledWith(repos, expect.objectContaining({
+        characterId: 'char-1',
+        itemId: 'new-4',
+        requested: true,
+        defaultWhenEnabled: true,
+      }))
+      expect(result.image_generation).toEqual({ status: 'queued', message: 'Drawing it.' })
+      expect(formatWardrobeCreateResults(result)).toContain('- Picture: Drawing it.')
     })
 
     it('equips immediately when equip_now is set', async () => {
@@ -299,6 +355,38 @@ describe('wardrobe tool handlers', () => {
         'char-1'
       )
       expect(result.image_prompt).toBe('new cue')
+    })
+
+    it('defaults a redraw on only when the edit changes how the item looks', async () => {
+      const item = makeWardrobeItem({ id: 'item-1', characterId: 'char-1' })
+      repos.wardrobe.findById.mockResolvedValue(item)
+      repos.wardrobe.update.mockResolvedValue(item)
+
+      await executeWardrobeUpdateTool({ item_id: 'item-1', appropriateness: 'casual' }, context)
+      expect(mockMaybeQueueImage).toHaveBeenLastCalledWith(repos, expect.objectContaining({
+        itemId: 'item-1',
+        requested: undefined,
+        defaultWhenEnabled: false,
+      }))
+
+      // Same cue as stored: not a change.
+      await executeWardrobeUpdateTool({ item_id: 'item-1', title: 'Evening Dress' }, context)
+      expect(mockMaybeQueueImage).toHaveBeenLastCalledWith(repos, expect.objectContaining({ defaultWhenEnabled: false }))
+
+      await executeWardrobeUpdateTool({ item_id: 'item-1', image_prompt: 'midnight velvet gown' }, context)
+      expect(mockMaybeQueueImage).toHaveBeenLastCalledWith(repos, expect.objectContaining({ defaultWhenEnabled: true }))
+    })
+
+    it('echoes the picture outcome on the update result', async () => {
+      const item = makeWardrobeItem({ id: 'item-1', characterId: 'char-1' })
+      repos.wardrobe.findById.mockResolvedValue(item)
+      repos.wardrobe.update.mockResolvedValue(item)
+      mockMaybeQueueImage.mockResolvedValueOnce({ status: 'not-enabled', message: 'Not allowed.' })
+
+      const result = await executeWardrobeUpdateTool({ item_id: 'item-1', generate_image: true }, context)
+
+      expect(result.success).toBe(true)
+      expect(result.image_generation).toEqual({ status: 'not-enabled', message: 'Not allowed.' })
     })
 
     it('refuses to edit a shared archetype and never calls the repo', async () => {
