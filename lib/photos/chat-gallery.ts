@@ -275,6 +275,7 @@ export async function listChatGallery(
   });
 
   await passMessageAttachments(events, collector, repos);
+  await passCurrentAvatars(chatId, chat, cast, collector, repos);
   await passCastPortraits(chat, cast, collector, repos);
   await passInlineMarkdown(events, chat, cast, collector, repos);
 
@@ -428,7 +429,7 @@ async function passLinkedFiles(
     let characterId: string | undefined;
     let isCurrent = false;
 
-    if (isCurrentBackground || paths.some(isStoryBackgroundPath)) {
+    if (isCurrentBackground || isStoryBackgroundFile(file, paths)) {
       source = 'story-background';
       isCurrent = isCurrentBackground;
     } else if (avatarOwner || isAvatarFile(file, paths) || overrideOwners.has(file.id)) {
@@ -497,9 +498,15 @@ function resolveAvatarOverrideOwners(cast: Cast, chatId: string): Map<string, st
   return owners;
 }
 
-/** The Lantern writes a chat's backdrops to `generated/` in its own mount. */
-function isStoryBackgroundPath(relativePath: string): boolean {
-  return relativePath.toLowerCase().startsWith('generated/');
+/**
+ * A Lantern backdrop, recognised by where it was stored: `generated/` in its
+ * own mount, or the `/story-backgrounds/` folder the job files every backdrop
+ * under. A superseded backdrop is no longer `storyBackgroundImageId`, so one
+ * that never reached a mount is known only by its folder.
+ */
+function isStoryBackgroundFile(file: FileEntry, paths: readonly string[]): boolean {
+  if (file.folderPath === '/story-backgrounds/') return true;
+  return paths.some((p) => p.toLowerCase().startsWith('generated/'));
 }
 
 /**
@@ -563,6 +570,90 @@ async function passMessageAttachments(
   }
 
   log.debug('Chat gallery pass complete', { pass: 'message-attachments', found });
+}
+
+// ============================================================================
+// Pass 2b — avatars the chat is wearing but never minted
+// ============================================================================
+
+/**
+ * The avatar each character is wearing in this chat, when pass 1 did not find
+ * it. The avatar job's configuration cache hands a chat a repaint first painted
+ * for *another* chat — it rebinds `characterAvatars` / `avatarOverrides` but
+ * never links the file here (nor should it: that would let this chat's bin
+ * delete another chat's picture). So the wearing is the only trace, and this
+ * pass reads it.
+ *
+ * Every override row for this chat is read, not only `characterAvatars`, so a
+ * character who has since left the chat still shows what they wore.
+ */
+async function passCurrentAvatars(
+  chatId: string,
+  chat: ChatMetadata,
+  cast: Cast,
+  collector: EntryCollector,
+  repos: RepositoryContainer,
+): Promise<void> {
+  const wearing = new Map<string, string>(); // imageId → characterId
+  const current = new Set<string>();
+  const avatars = chat.characterAvatars;
+  if (avatars && typeof avatars === 'object') {
+    for (const [characterId, entry] of Object.entries(avatars as Record<string, unknown>)) {
+      const imageId = (entry as { imageId?: unknown } | null)?.imageId;
+      if (typeof imageId !== 'string' || !imageId) continue;
+      wearing.set(imageId, characterId);
+      current.add(imageId);
+    }
+  }
+  for (const [imageId, characterId] of resolveAvatarOverrideOwners(cast, chatId)) {
+    if (!wearing.has(imageId)) wearing.set(imageId, characterId);
+  }
+
+  let found = 0;
+  for (const [imageId, characterId] of wearing) {
+    if (collector.has(imageId)) continue;
+    const resolved = await safeResolveAvatar(imageId, repos);
+    if (!resolved) continue;
+    if (resolved.sha256 && collector.hasSha(resolved.sha256)) continue;
+
+    const file =
+      resolved.kind === 'legacy-file'
+        ? await repos.files.findById(imageId).catch(() => null)
+        : null;
+    const filename =
+      file?.originalFilename ??
+      (resolved.relativePath ? path.posix.basename(resolved.relativePath) : null) ??
+      `${cast.byCharacterId.get(characterId)?.name ?? 'avatar'}.webp`;
+
+    collector.add({
+      id: imageId,
+      idKind: resolved.kind === 'vault-link' ? 'link' : 'file',
+      url: resolved.url,
+      filename,
+      mimeType: resolved.mimeType ?? file?.mimeType ?? 'image/webp',
+      size: file?.size ?? 0,
+      width: file?.width ?? undefined,
+      height: file?.height ?? undefined,
+      sha256: resolved.sha256 ?? undefined,
+      createdAt: avatarBoundAt(chat, characterId) ?? file?.createdAt ?? chat.updatedAt,
+      source: 'avatar',
+      characterId,
+      characterName: cast.byCharacterId.get(characterId)?.name,
+      isCurrent: current.has(imageId),
+      // Minted by another chat, which still owns the record.
+      deletable: false,
+    });
+    found += 1;
+  }
+
+  log.debug('Chat gallery pass complete', { chatId, pass: 'current-avatars', found });
+}
+
+/** When this chat put the avatar on, which is where it belongs on the roll. */
+function avatarBoundAt(chat: ChatMetadata, characterId: string): string | undefined {
+  const generatedAt = (chat.characterAvatars as Record<string, { generatedAt?: unknown }> | undefined)
+    ?.[characterId]?.generatedAt;
+  return typeof generatedAt === 'string' && generatedAt ? generatedAt : undefined;
 }
 
 // ============================================================================

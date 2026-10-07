@@ -342,6 +342,75 @@ describe('listChatGallery — the nine ways an image reaches a chat', () => {
     });
   });
 
+  it('#6 a superseded backdrop that never reached a mount is known by its folder', async () => {
+    const repos = makeRepos({
+      chat: chat({ storyBackgroundImageId: 'bg-current' }),
+      files: [
+        file({ id: 'bg-current', source: 'GENERATED', folderPath: '/story-backgrounds/', createdAt: '2026-09-03T00:00:00.000Z' }),
+        file({ id: 'bg-old', source: 'GENERATED', folderPath: '/story-backgrounds/', createdAt: '2026-09-01T00:00:00.000Z' }),
+      ],
+    });
+
+    const entries = await listChatGallery(CHAT_ID, repos);
+
+    expect(bySource(entries, 'generated')).toHaveLength(0);
+    expect(bySource(entries, 'story-background')).toEqual([
+      expect.objectContaining({ id: 'bg-current', isCurrent: true }),
+      expect.objectContaining({ id: 'bg-old', isCurrent: false }),
+    ]);
+  });
+
+  it('#7 a cached repaint reused from another chat is worn here, but not deletable here', async () => {
+    const repos = makeRepos({
+      chat: chat({
+        characterAvatars: {
+          [CHAR_A]: { imageId: 'av-reused', generatedAt: '2026-09-05T00:00:00.000Z' },
+        },
+      }),
+      characters: [
+        character({
+          id: CHAR_A,
+          avatarOverrides: [
+            { chatId: CHAT_ID, imageId: 'av-reused' },
+            { chatId: 'other-chat', imageId: 'av-reused' },
+          ],
+        }),
+        character({ id: CHAR_B }),
+      ],
+      files: [
+        // Painted for another chat; the cache hit never linked it here.
+        file({
+          id: 'av-reused',
+          source: 'GENERATED',
+          linkedTo: ['other-chat', CHAR_A],
+          createdAt: '2026-09-01T00:00:00.000Z',
+        }),
+        file({
+          id: 'av-first',
+          source: 'GENERATED',
+          linkedTo: [CHAT_ID, CHAR_A],
+          tags: [CHAR_A],
+          folderPath: '/character-avatars/',
+          createdAt: '2026-09-04T00:00:00.000Z',
+        }),
+      ],
+    });
+
+    const entries = await listChatGallery(CHAT_ID, repos);
+    const avatars = bySource(entries, 'avatar');
+
+    expect(avatars).toHaveLength(2);
+    // Sorted by when this chat put it on, not when it was first painted.
+    expect(avatars[0]).toMatchObject({
+      id: 'av-reused',
+      isCurrent: true,
+      deletable: false,
+      characterId: CHAR_A,
+      createdAt: '2026-09-05T00:00:00.000Z',
+    });
+    expect(avatars[1]).toMatchObject({ id: 'av-first', isCurrent: false, deletable: true });
+  });
+
   it('#8 the cast portraits — one legacy file id, one vault link id, neither deletable', async () => {
     const repos = makeRepos({
       characters: [

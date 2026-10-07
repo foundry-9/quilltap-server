@@ -4,6 +4,16 @@
 
 ### 4.10-dev
 
+#### Chat gallery: misfiled backdrops and missing reused avatars
+
+- Superseded story backgrounds that never reached a Lantern mount were listed under Generated.
+  The enumerator now also recognizes a backdrop by its `/story-backgrounds/` folder.
+- An avatar the character-avatar job reused from its configuration cache was missing from the
+  gallery: the cache hit rebinds `characterAvatars` / `avatarOverrides` but never links the file to
+  the chat. A new pass in `lib/photos/chat-gallery.ts` lists every avatar the chat's bindings name
+  that the linked-files pass missed, marked current when worn and never deletable (another chat
+  owns the record).
+
 #### Wardrobe programme specs (design only)
 
 - Three approved specs under `docs/developer/features/`, no code yet: `wardrobe-list-legibility.md`

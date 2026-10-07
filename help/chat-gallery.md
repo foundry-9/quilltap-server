@@ -15,7 +15,7 @@ The **Gallery** now sits in the sidebar's **Organize** drawer, at the foot of th
 Seven kinds of picture, and the gallery knows which is which:
 
 - **Backgrounds** — the backdrops the Lantern painted for this story. Every one of them, not merely the one currently on the wall: a conversation's backdrops over the course of an evening are a record of where the evening went, and it would be a poor gallery that showed only the last.
-- **Avatars** — the portraits Aurora repainted mid-conversation, when a character changed their outfit or their circumstances. Again, all of them; the one presently being worn is marked.
+- **Avatars** — the portraits Aurora repainted mid-conversation, when a character changed their outfit or their circumstances. Again, all of them; the one presently being worn is marked. When Aurora finds she has already painted exactly this outfit for another conversation, she hands that portrait over rather than painting it twice, and it appears here all the same.
 - **Portraits** — the cast's own standing portraits, the faces they wear by default. These belong to the characters, not to this conversation, and the gallery is only looking at them.
 - **Generated** — the pictures summoned in this conversation, whether by a character reaching for `generate_image` or by your own hand at the Generate Image dialog.
 - **Attached** — photographs you uploaded, files you linked in from the library, and plates the Librarian fetched out of a document store.
@@ -44,7 +44,7 @@ The same **Download** button, with **Copy** beside it, sits at the top right of 
 
 ## When the bin appears, and when it does not
 
-The bin is offered only where the conversation itself minted the record: photographs you uploaded, pictures generated here, and superseded backdrops and repainted portraits. Everything else in the gallery belongs to somebody else — a character owns their standing portrait, an album owns a kept picture, a document store owns a fetched plate — and the gallery is a view over other people's shelves, not a licence to clear them.
+The bin is offered only where the conversation itself minted the record: photographs you uploaded, pictures generated here, and superseded backdrops and repainted portraits. A portrait Aurora borrowed from another conversation is that conversation's to retire, not this one's, so it carries no bin. Everything else in the gallery belongs to somebody else — a character owns their standing portrait, an album owns a kept picture, a document store owns a fetched plate — and the gallery is a view over other people's shelves, not a licence to clear them.
 
 Nor will you find a bin on the backdrop presently on the wall or the portrait a character is presently wearing. Those are what the conversation is showing; retiring one out from under it would leave the Salon looking at nothing.
 
