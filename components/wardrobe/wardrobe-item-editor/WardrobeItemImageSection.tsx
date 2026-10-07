@@ -186,7 +186,7 @@ function ActiveImageSection({
       await afterChange()
     },
     onError: (error) => {
-      if (error instanceof WardrobeImageRequestError && error.status === 422) {
+      if (error instanceof WardrobeImageRequestError && error.status === 422 && error.refusal?.refused !== false) {
         const last = error.refusal?.trail?.[error.refusal.trail.length - 1]
         const who = last?.profileName ?? 'The artist'
         const why = last?.detail ? ` (${last.detail})` : ''

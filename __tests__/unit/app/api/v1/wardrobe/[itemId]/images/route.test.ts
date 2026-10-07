@@ -292,6 +292,15 @@ describe('POST', () => {
       expect(body.details).toEqual({ trail, refused: true })
     })
 
+    it('502s (not 422) when the provider fails for a reason other than refusal', async () => {
+      mockGenerate.mockRejectedValue(new (WardrobeImageGenerationError as any)('rate limited', null, false))
+      const res = await POST(jsonPost('action=generate&scope=character&id=char-1', {}), routeCtx)
+      expect(res.status).toBe(502)
+      const body = await res.json()
+      expect(body.error).toMatch(/rate limited/)
+      expect(body.details).toEqual({ trail: null, refused: false })
+    })
+
     it('409s for an archived character', async () => {
       mockGenerate.mockRejectedValue(new CharacterArchivedError('char-1'))
       const res = await POST(jsonPost('action=generate&scope=character&id=char-1', {}), routeCtx)

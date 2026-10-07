@@ -40,7 +40,11 @@ function makeItem(overrides: Partial<ListedWardrobeItem> = {}): ListedWardrobeIt
 
 function renderRow(
   item: ListedWardrobeItem,
-  opts: { canManage?: (item: WardrobeItem) => boolean; onGenerateImage?: jest.Mock } = {},
+  opts: {
+    canManage?: (item: WardrobeItem) => boolean
+    onGenerateImage?: jest.Mock
+    generatingImageIds?: ReadonlySet<string>
+  } = {},
 ) {
   return render(
     <WardrobeItemRow
@@ -55,6 +59,7 @@ function renderRow(
       onCopy={jest.fn()}
       onDelete={jest.fn()}
       onGenerateImage={opts.onGenerateImage ?? jest.fn()}
+      generatingImageIds={opts.generatingImageIds}
     />,
   )
 }
@@ -161,6 +166,17 @@ describe('WardrobeItemRow — picture', () => {
     expect(items.indexOf('Generate image')).toBe(items.indexOf('Edit') + 1)
     fireEvent.click(screen.getByRole('menuitem', { name: 'Generate image' }))
     expect(onGenerateImage).toHaveBeenCalledWith(item)
+  })
+
+  it('disables "Generate image" while that item\'s picture is already being drawn', () => {
+    const onGenerateImage = jest.fn()
+    const item = makeItem()
+    renderRow(item, { onGenerateImage, generatingImageIds: new Set([item.id]) })
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    const entry = screen.getByRole('menuitem', { name: 'Generating image…' })
+    expect(entry).toBeDisabled()
+    fireEvent.click(entry)
+    expect(onGenerateImage).not.toHaveBeenCalled()
   })
 
   it('withholds "Generate image" from a borrowed row', () => {

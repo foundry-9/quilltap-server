@@ -9,13 +9,13 @@
 - Wardrobe items and outfits can carry pictures. New frontmatter key `imageFileId` (the current
   picture) on `WardrobeItemSchema`, the vault builder/parser and `updateWardrobeSchema`; create
   bodies never set it. Item PUTs refuse an `imageFileId` not linked to the item (400).
-- Pictures are blob links at `Wardrobe/images/<itemId>/<timestamp>-<kind>.webp` in the item's own
+- Pictures are blob links at `Wardrobe/images/<itemId>/<timestamp>-<kind>-<8 hex>.webp` in the item's own
   mount, written by `writeWardrobeItemImage` (`lib/file-storage/wardrobe-image-bridge.ts`, parent
   process only), each with a `files` row (`linkedTo: [itemId]`, category IMAGE). History is
   `files.findByLinkedTo(itemId)`; `lib/wardrobe/item-images.ts` is the only writer of `imageFileId`.
 - New route `/api/v1/wardrobe/[itemId]/images?scope=&id=`: `GET` lists pictures; `POST` actions
   `generate`, `upload`, `set-current`, `delete-image`. 404 when the item is not in the named
-  container, 409 for an archived character, 422 with the Concierge trail on an unrerouted refusal.
+  container, 409 for an archived character, 422 with the Concierge trail on an unrerouted refusal, 502 on any other provider failure.
 - Generation is synchronous (`trackActivity('image')`) through `generateImageWithConciergeFailover`
   with new purpose `'wardrobe'` and no chat. A character's own item is drawn worn by the character
   (full length; hair items head and shoulders); shared items are drawn catalogue style. Prompt:
@@ -35,7 +35,14 @@
 - `.qtap` character exports attach `_imageFiles` (picture file metadata) to each character-owned
   `wardrobe_item` record; bytes ride in the vault blobs. Import re-mints the rows against the
   imported vault after reconciliation and repoints `imageFileId`, or leaves it null. Export schema
-  updated; `uuid-remap.ts` remaps `imageFileId`.
+  updated; `uuid-remap.ts` remaps `imageFileId`. Archived character-owned items are now included in
+  character exports so their pictures and ledger rows travel.
+- New-account restore keeps picture rows' `linkedTo`/`tags` on the item's (unchanged) id and repoints
+  each item's frontmatter `imageFileId` to the remapped file id through the per-mount wardrobe update
+  (`planWardrobeImagePointerFixes`); archived characters' vaults are left untouched.
+- Transfer moves resolve the source's writable mount before any write (archived source → 409) and
+  repoint picture rows and drop source links only after the source item is gone
+  (`commitMovedImages`). Item-delete picture cleanup continues past a single failure.
 
 #### Wardrobe wear ledger
 

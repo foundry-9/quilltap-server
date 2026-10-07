@@ -26,7 +26,8 @@
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { createContextHandler } from '@/lib/api/middleware'
-import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses'
+import { successResponse, badRequest, conflict, notFound, serverError } from '@/lib/api/responses'
+import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import { logger } from '@/lib/logger'
 import { readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
@@ -40,8 +41,9 @@ import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body'
 import { resolveWardrobeContainer } from '@/lib/wardrobe/resolve-container'
 import {
   carryItemImages,
-  dropSourceImageLinks,
+  commitMovedImages,
   resolveContainerMountPointId,
+  type PendingImageMove,
 } from '@/lib/wardrobe/item-images'
 import type { ResolvedWardrobeContainer } from '@/lib/wardrobe/resolve-container'
 import type { WardrobeContainerScope } from '@/lib/wardrobe/wardrobe-container'
@@ -375,8 +377,18 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       }
     }
 
-    // Pictures travel before the items land, so a landed item's `imageFileId`
-    // never dangles. A copy's pointer is rewritten to its own copied file.
+    // A move writes to the source too (its item and its picture links go), so
+    // its writable mount is resolved before anything is written: an archived
+    // source character refuses here (the tombstone), not half-way through.
+    if (action === 'move' || componentMode === 'move') {
+      await resolveContainerMountPointId(source.scope, source.characterId, source.mountPointId)
+    }
+
+    // Pictures are linked at the destination before the items land, so a
+    // landed item's `imageFileId` never dangles. A copy's pointer is rewritten
+    // to its own copied file; a move's rows are re-pointed only after the
+    // source item is gone (commitMovedImages), so a failure before then leaves
+    // the source whole.
     const destinationMountPointId = await resolveContainerMountPointId(
       destination.scope,
       destination.characterId,
@@ -390,9 +402,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       })),
       { original: source.item, planned: nextItem, mode: action },
     ]
-    const sourceImageLinks: Array<{ itemId: string; links: Array<{ mountPointId: string; leafName: string }> }> = []
+    const pendingImageMoves: Array<{ itemId: string; pending: PendingImageMove }> = []
     for (const traveller of travellers) {
-      const { fileIdMap, sourceLinks } = await carryItemImages(repos, {
+      const { fileIdMap, pendingMove } = await carryItemImages(repos, {
         mode: traveller.mode,
         sourceItemId: traveller.original.id,
         destinationItemId: traveller.planned.id,
@@ -402,7 +414,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       const currentImage = traveller.original.imageFileId
       traveller.planned.imageFileId = currentImage ? fileIdMap.get(currentImage) ?? null : null
       if (traveller.mode === 'move') {
-        sourceImageLinks.push({ itemId: traveller.original.id, links: sourceLinks })
+        pendingImageMoves.push({ itemId: traveller.original.id, pending: pendingMove })
       }
     }
 
@@ -432,8 +444,8 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     }
 
     // The moved items' source-side picture links go once their items have.
-    for (const { itemId, links } of sourceImageLinks) {
-      await dropSourceImageLinks(itemId, links)
+    for (const { itemId, pending } of pendingImageMoves) {
+      await commitMovedImages(repos, itemId, pending)
     }
 
     // Post-write verification: read the outfit BACK from the destination and
@@ -485,6 +497,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return badRequest(error.issues.map((issue) => issue.message).join('; '))
+    }
+    if (error instanceof CharacterArchivedError) {
+      return conflict('An archived character\'s wardrobe cannot be changed')
     }
     logger.error('[WardrobeTransfers v1] Failed to transfer item', {}, error instanceof Error ? error : undefined)
     return serverError('Failed to transfer wardrobe item')

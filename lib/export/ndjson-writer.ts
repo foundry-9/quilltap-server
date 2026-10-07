@@ -244,7 +244,10 @@ async function* streamCharacters(
     // Wardrobe items — one record each. Read through the overlay: post-cutover
     // the character vault is the authoritative store, not the wardrobe_items table.
     try {
-      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+      // Archived garments too: the vault carries their documents and picture
+      // blobs regardless, and an archived item's record is what lets the
+      // importer re-mint its pictures and keep its ledger rows.
+      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id, true);
       for (const item of wardrobeItems) {
         // `origin` is a read-time annotation the list endpoints attach; the
         // repository never sets it, and it must never ride into a bundle.

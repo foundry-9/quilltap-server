@@ -79,8 +79,12 @@ interface WardrobeItemRowProps {
    * whoever manages its own wardrobe.
    */
   onGenerateImage?: (item: WardrobeItem) => void
-  /** True while this row's picture is being generated. */
-  isGeneratingImage?: boolean
+  /**
+   * Items whose picture is being generated right now. Passed down to nested
+   * component rows too, so every representation of an item is busy while its
+   * commission is out.
+   */
+  generatingImageIds?: ReadonlySet<string>
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
   /** Nesting depth for composite components — used for indentation. */
@@ -103,11 +107,12 @@ export function WardrobeItemRow({
   onDelete,
   onToggleArchived,
   onGenerateImage,
-  isGeneratingImage = false,
+  generatingImageIds,
   onEquip,
   onAddToSlot,
   depth = 0,
 }: WardrobeItemRowProps) {
+  const isGeneratingImage = generatingImageIds?.has(item.id) ?? false
   const isComposite = item.componentItemIds.length > 0
   const [expanded, setExpanded] = useState(false)
   // Without an explicit predicate, fall back to the character-view rule:
@@ -485,6 +490,7 @@ export function WardrobeItemRow({
                 onCopy={onCopy}
                 onDelete={onDelete}
                 onGenerateImage={onGenerateImage}
+                generatingImageIds={generatingImageIds}
                 depth={depth + 1}
               />
             ))

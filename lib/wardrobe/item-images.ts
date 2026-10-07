@@ -358,23 +358,40 @@ export async function cleanupItemImages(
   logTag: string,
   meta: Record<string, unknown>,
 ): Promise<void> {
+  let images: FileEntry[];
   try {
-    const images = await listWardrobeItemImages(repos, itemId);
-    for (const file of images) {
-      await removeImageFile(repos, itemId, file);
-    }
-    if (images.length > 0) {
-      logger.info(`${logTag} Removed wardrobe item images with the item`, {
-        ...meta,
-        itemId,
-        count: images.length,
-      });
-    }
+    images = await listWardrobeItemImages(repos, itemId);
   } catch (error) {
-    logger.warn(`${logTag} Cleanup of wardrobe item images had issues`, {
+    logger.warn(`${logTag} Could not list wardrobe item images for cleanup`, {
       ...meta,
       itemId,
       error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+
+  // One picture failing must not strand the rest: the item is already gone,
+  // so there is nothing left to retry the cleanup from.
+  let removed = 0;
+  for (const file of images) {
+    try {
+      await removeImageFile(repos, itemId, file);
+      removed++;
+    } catch (error) {
+      logger.warn(`${logTag} Failed to remove a wardrobe item image; continuing`, {
+        ...meta,
+        itemId,
+        fileId: file.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  if (images.length > 0) {
+    logger.info(`${logTag} Removed wardrobe item images with the item`, {
+      ...meta,
+      itemId,
+      removed,
+      failed: images.length - removed,
     });
   }
 }
@@ -383,9 +400,12 @@ export async function cleanupItemImages(
  * Carry an item's pictures to another mount for a transfer.
  *
  * - `move` (same item id): each picture is re-linked at the same relative path
- *   in the destination (the same bytes de-duplicate to one blob), its `files`
- *   row re-pointed at the new storage key. The source links are returned for
- *   {@link dropSourceImageLinks} once the source item is gone.
+ *   in the destination (the same bytes de-duplicate to one blob). Nothing
+ *   else changes yet: the `files` rows keep their source storage key and the
+ *   source links stay, so a transfer that fails part-way leaves the source
+ *   item whole (the shared blob reads the same through either link). The
+ *   returned `pendingMove` is applied by {@link commitMovedImages} once the
+ *   item has landed and the source copy is gone.
  * - `copy` (fresh item id): each picture is linked under the new id, with a
  *   new `files` row linked to the new item. Returns the old → new file id map
  *   so the copy's `imageFileId` points at its own copy.
@@ -399,9 +419,9 @@ export async function carryItemImages(
     destinationMountPointId: string;
     userId: string;
   },
-): Promise<{ fileIdMap: Map<string, string>; sourceLinks: Array<{ mountPointId: string; leafName: string }> }> {
+): Promise<{ fileIdMap: Map<string, string>; pendingMove: PendingImageMove }> {
   const fileIdMap = new Map<string, string>();
-  const sourceLinks: Array<{ mountPointId: string; leafName: string }> = [];
+  const pendingMove: PendingImageMove = { repoints: [] };
   const images = await listWardrobeItemImages(repos, args.sourceItemId);
 
   for (const file of images) {
@@ -428,10 +448,13 @@ export async function carryItemImages(
     const storageKey = buildMountBlobStorageKey(args.destinationMountPointId, written.blobId);
 
     if (args.mode === 'move') {
-      await repos.files.update(file.id, { storageKey });
-      if (parsed.mountPointId !== args.destinationMountPointId) {
-        sourceLinks.push({ mountPointId: parsed.mountPointId, leafName: file.originalFilename });
-      }
+      pendingMove.repoints.push({
+        fileId: file.id,
+        storageKey,
+        sourceLink: parsed.mountPointId !== args.destinationMountPointId
+          ? { mountPointId: parsed.mountPointId, leafName: file.originalFilename }
+          : null,
+      });
       fileIdMap.set(file.id, file.id);
     } else {
       const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = file;
@@ -459,7 +482,45 @@ export async function carryItemImages(
       count: fileIdMap.size,
     });
   }
-  return { fileIdMap, sourceLinks };
+  return { fileIdMap, pendingMove };
+}
+
+/** What a move still owes once its item has landed: row repoints, then source links to drop. */
+export interface PendingImageMove {
+  repoints: Array<{
+    fileId: string;
+    storageKey: string;
+    /** The link to drop once the row points at the destination; null when there is none. */
+    sourceLink: { mountPointId: string; leafName: string } | null;
+  }>;
+}
+
+/**
+ * Finish a move's pictures after the item has landed at the destination and
+ * left the source: point each `files` row at its destination link, then drop
+ * the source links. A row that fails to repoint keeps its source link (it is
+ * still readable there) rather than being left pointing at nothing.
+ */
+export async function commitMovedImages(
+  repos: Pick<RepositoryContainer, 'files'>,
+  itemId: string,
+  pending: PendingImageMove,
+): Promise<void> {
+  const toDrop: Array<{ mountPointId: string; leafName: string }> = [];
+  for (const { fileId, storageKey, sourceLink } of pending.repoints) {
+    try {
+      await repos.files.update(fileId, { storageKey });
+      if (sourceLink) toDrop.push(sourceLink);
+    } catch (error) {
+      logger.warn('[WardrobeImages] Failed to repoint a moved wardrobe picture; keeping its source link', {
+        context: LOG_CONTEXT,
+        itemId,
+        fileId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  await dropSourceImageLinks(itemId, toDrop);
 }
 
 /** After a move: drop the source mount's links (`deleteWithGC`; the blob survives via the new link). */

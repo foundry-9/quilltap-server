@@ -437,6 +437,8 @@ describe('ndjson-writer', () => {
 
       const data = records.find((r) => r.kind === 'wardrobe_item')!.data as Record<string, unknown>;
       expect(findByLinkedTo).toHaveBeenCalledWith('coat');
+      // Archived garments are read too: their pictures ride in the vault.
+      expect(globalRepos.wardrobe.findByCharacterId).toHaveBeenCalledWith(character.id, true);
       expect(data.imageFileId).toBe('file-1');
       const imageFiles = data._imageFiles as Array<Record<string, unknown>>;
       expect(imageFiles).toHaveLength(1);

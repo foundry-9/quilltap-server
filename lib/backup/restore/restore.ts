@@ -40,7 +40,8 @@ import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
 import { deleteUserData } from './delete-service';
-import { remapBackupData } from './uuid-remap';
+import { planWardrobeImagePointerFixes, remapBackupData, type WardrobeImagePointerFix } from './uuid-remap';
+import { updateProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 
@@ -93,8 +94,12 @@ export async function restore(
     }
 
     // For new-account mode, remap all UUIDs
+    let wardrobeImagePointerFixes: WardrobeImagePointerFix[] = [];
     if (mode === 'new-account') {
       const remapper = new UuidRemapper();
+      // Planned against the original data with the same remapper, so each
+      // pointer resolves to the id its `files` row is about to receive.
+      wardrobeImagePointerFixes = planWardrobeImagePointerFixes(data, remapper);
       data = remapBackupData(data, targetUserId, remapper);
     }
 
@@ -735,6 +740,39 @@ export async function restore(
         warnings.push(`Failed to restore wardrobe item "${item.title}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore wardrobe item', { wardrobeItemId: item.id, error });
       }
+    }
+
+    // 22f-ter. Wardrobe picture pointers (new-account mode). The vaults and
+    // the picture `files` rows are in place; each item's frontmatter
+    // `imageFileId` still names the file's pre-remap id. Repoint it through
+    // the ordinary per-mount wardrobe update, which re-projects the document
+    // (so its content hash follows the new text). The mount-scoped writer is
+    // used for every tier: it addresses the folder by mount, and a character
+    // vault's frontmatter carries no characterId to disturb.
+    // An archived character's vault is a tombstone: it is never written, so
+    // its pictures keep their old pointer (readable history, no current pick).
+    const tombstonedVaults = new Set(
+      data.characters
+        .filter((c) => c.archivedAt && c.characterDocumentMountPointId)
+        .map((c) => c.characterDocumentMountPointId as string)
+    );
+    let wardrobeImagePointersFixed = 0;
+    for (const fix of wardrobeImagePointerFixes) {
+      if (tombstonedVaults.has(fix.mountPointId) || tombstonedVaults.has(fix.sourceMountPointId)) continue;
+      try {
+        if (await updateProjectWardrobeItem(fix.mountPointId, fix.itemId, { imageFileId: fix.imageFileId })) {
+          wardrobeImagePointersFixed++;
+        }
+      } catch (error) {
+        warnings.push(`Failed to repoint a wardrobe item's picture (${fix.itemId}): ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to repoint wardrobe item picture after restore', { ...fix, error });
+      }
+    }
+    if (wardrobeImagePointerFixes.length > 0) {
+      moduleLogger.info('Repointed wardrobe item pictures after new-account restore', {
+        planned: wardrobeImagePointerFixes.length,
+        fixed: wardrobeImagePointersFixed,
+      });
     }
 
     // 22g. Document store embedded chunks. The repo's create() accepts the

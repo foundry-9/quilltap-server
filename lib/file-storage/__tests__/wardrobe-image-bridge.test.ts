@@ -78,7 +78,7 @@ afterAll(() => {
 });
 
 describe('writeWardrobeItemImage', () => {
-  it('writes to Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>.webp', async () => {
+  it('writes to Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>-<8 hex>.webp', async () => {
     const result = await writeWardrobeItemImage({
       mountPointId: 'vault-1',
       itemId: ITEM_ID,
@@ -87,9 +87,9 @@ describe('writeWardrobeItemImage', () => {
       contentType: 'image/webp',
     });
 
-    const pattern = new RegExp(`^Wardrobe/images/${ITEM_ID}/\\d{8}-\\d{6}-generated\\.webp$`);
+    const pattern = new RegExp(`^Wardrobe/images/${ITEM_ID}/\\d{8}-\\d{6}-generated-[0-9a-f]{8}\\.webp$`);
     expect(result.relativePath).toMatch(pattern);
-    expect(result.leafName).toMatch(/^\d{8}-\d{6}-generated\.webp$/);
+    expect(result.leafName).toMatch(/^\d{8}-\d{6}-generated-[0-9a-f]{8}\.webp$/);
     expect(mockResolveUnique).toHaveBeenCalledWith('vault-1', expect.stringMatching(pattern));
     expect(mockEnsureFolderPath).toHaveBeenCalledWith('vault-1', `Wardrobe/images/${ITEM_ID}`);
     expect(linkBlobContent).toHaveBeenCalledWith(
@@ -113,7 +113,7 @@ describe('writeWardrobeItemImage', () => {
       content: Buffer.from('x'),
       contentType: 'image/webp',
     });
-    expect(result.leafName).toMatch(/-uploaded\.webp$/);
+    expect(result.leafName).toMatch(/-uploaded-[0-9a-f]{8}\.webp$/);
   });
 
   it('keeps an exact leaf name when given one, without collision bumping', async () => {

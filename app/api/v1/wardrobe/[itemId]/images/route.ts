@@ -188,7 +188,9 @@ async function handleGenerate(req: NextRequest, ctx: RequestContext, { itemId }:
         error.refused
           ? 'The image provider declined to draw this garment'
           : `Image generation failed: ${error.message}`,
-        422,
+        // 422 is a content refusal; anything else (auth, rate limit, timeout,
+        // an empty answer) is the provider failing, and says so.
+        error.refused ? 422 : 502,
         { trail: error.trail, refused: error.refused },
       );
     }

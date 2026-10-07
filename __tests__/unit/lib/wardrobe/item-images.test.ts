@@ -47,6 +47,7 @@ const {
   assertItemImageChoice,
   carryItemImages,
   cleanupItemImages,
+  commitMovedImages,
   deleteWardrobeItemImage,
   dropSourceImageLinks,
   ForeignWardrobeImageError,
@@ -246,6 +247,14 @@ describe('cleanupItemImages', () => {
     expect(repos.files.delete).not.toHaveBeenCalledWith('file-doc')
   })
 
+  it('carries on past a picture that fails to go, and does not throw', async () => {
+    mockDeleteLink.mockRejectedValueOnce(new Error('locked'))
+    await expect(cleanupItemImages(repos, ITEM_ID, '[Test]', {})).resolves.toBeUndefined()
+    expect(mockDeleteLink).toHaveBeenCalledTimes(3)
+    // The first picture's row stays (its link could not go); the others are removed.
+    expect(repos.files.delete).toHaveBeenCalledTimes(2)
+  })
+
   it('logs rather than throws when the clean-up fails', async () => {
     repos.files.findByLinkedTo.mockRejectedValue(new Error('db gone'))
     await expect(cleanupItemImages(repos, ITEM_ID, '[Test]', {})).resolves.toBeUndefined()
@@ -253,8 +262,8 @@ describe('cleanupItemImages', () => {
 })
 
 describe('carryItemImages', () => {
-  it('move: re-links each picture in the destination, re-points storageKey, returns source links', async () => {
-    const { fileIdMap, sourceLinks } = await carryItemImages(repos, {
+  it('move: re-links each picture in the destination and defers the row repoints and source drops', async () => {
+    const { fileIdMap, pendingMove } = await carryItemImages(repos, {
       mode: 'move',
       sourceItemId: ITEM_ID,
       destinationItemId: ITEM_ID,
@@ -269,33 +278,36 @@ describe('carryItemImages', () => {
       leafName: 'file-a.webp',
       content: Buffer.from('bytes:mount-blob:vault-src:blob-file-a'),
     }))
-    expect(repos.files.update).toHaveBeenCalledWith('file-a', { storageKey: 'mount-blob:vault-dest:blob-dest-file-a.webp' })
+    // Nothing at the source changes yet: a transfer failing later leaves it whole.
+    expect(repos.files.update).not.toHaveBeenCalled()
+    expect(mockDeleteLink).not.toHaveBeenCalled()
     expect(repos.files.create).not.toHaveBeenCalled()
     expect([...fileIdMap.entries()]).toEqual(
       expect.arrayContaining([['file-a', 'file-a'], ['file-b', 'file-b'], ['file-c', 'file-c']]),
     )
-    expect(sourceLinks).toEqual(expect.arrayContaining([
-      { mountPointId: 'vault-src', leafName: 'file-a.webp' },
-      { mountPointId: 'vault-src', leafName: 'file-b.webp' },
-      { mountPointId: 'vault-src', leafName: 'file-c.webp' },
+    expect(pendingMove.repoints).toEqual(expect.arrayContaining([
+      {
+        fileId: 'file-a',
+        storageKey: 'mount-blob:vault-dest:blob-dest-file-a.webp',
+        sourceLink: { mountPointId: 'vault-src', leafName: 'file-a.webp' },
+      },
     ]))
-    // The source links are dropped later, by dropSourceImageLinks — not here.
-    expect(mockDeleteLink).not.toHaveBeenCalled()
+    expect(pendingMove.repoints).toHaveLength(3)
   })
 
   it('move within the same mount returns no source links to drop', async () => {
-    const { sourceLinks } = await carryItemImages(repos, {
+    const { pendingMove } = await carryItemImages(repos, {
       mode: 'move',
       sourceItemId: ITEM_ID,
       destinationItemId: ITEM_ID,
       destinationMountPointId: 'vault-src',
       userId: 'user-1',
     })
-    expect(sourceLinks).toEqual([])
+    expect(pendingMove.repoints.every((r) => r.sourceLink === null)).toBe(true)
   })
 
   it('copy: creates new rows linked to the new id and returns the id map', async () => {
-    const { fileIdMap, sourceLinks } = await carryItemImages(repos, {
+    const { fileIdMap, pendingMove } = await carryItemImages(repos, {
       mode: 'copy',
       sourceItemId: ITEM_ID,
       destinationItemId: 'item-copy',
@@ -319,7 +331,7 @@ describe('carryItemImages', () => {
       expect(['file-a', 'file-b', 'file-c']).toContain(from)
       expect(to).toMatch(/^copy-\d$/)
     }
-    expect(sourceLinks).toEqual([])
+    expect(pendingMove.repoints).toEqual([])
   })
 
   it('skips a picture whose blob cannot be read', async () => {
@@ -333,6 +345,27 @@ describe('carryItemImages', () => {
     })
     expect(fileIdMap.has('file-b')).toBe(false)
     expect(fileIdMap.size).toBe(2)
+  })
+})
+
+describe('commitMovedImages', () => {
+  it('repoints each row, then drops only the source links whose row moved', async () => {
+    repos.files.update.mockImplementation(async (id: string) => {
+      if (id === 'file-b') throw new Error('busy')
+      return null
+    })
+    await commitMovedImages(repos, ITEM_ID, {
+      repoints: [
+        { fileId: 'file-a', storageKey: 'mount-blob:vault-dest:a', sourceLink: { mountPointId: 'vault-src', leafName: 'a.webp' } },
+        { fileId: 'file-b', storageKey: 'mount-blob:vault-dest:b', sourceLink: { mountPointId: 'vault-src', leafName: 'b.webp' } },
+        { fileId: 'file-c', storageKey: 'mount-blob:vault-src:c', sourceLink: null },
+      ],
+    })
+    expect(repos.files.update).toHaveBeenCalledWith('file-a', { storageKey: 'mount-blob:vault-dest:a' })
+    expect(mockDeleteLink).toHaveBeenCalledWith('vault-src', ITEM_ID, 'a.webp')
+    // file-b failed to repoint, so its source link — still its only home — stays.
+    expect(mockDeleteLink).not.toHaveBeenCalledWith('vault-src', ITEM_ID, 'b.webp')
+    expect(mockDeleteLink).toHaveBeenCalledTimes(1)
   })
 })
 

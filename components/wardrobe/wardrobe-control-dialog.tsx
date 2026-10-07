@@ -269,7 +269,10 @@ function WardrobeControlDialogInner({
   const [kindFilter, setKindFilter] = useState<ItemKind>('items')
   const [titleFilter, setTitleFilter] = useState('')
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null)
-  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null)
+  // Every item whose picture is being drawn right now. A set, not one id: two
+  // rows may each have a commission out, and an item can appear more than once
+  // (as itself and as a component of an outfit row).
+  const [generatingImageIds, setGeneratingImageIds] = useState<ReadonlySet<string>>(() => new Set())
 
   // Image profiles + avatar gen state
   const [imageProfiles, setImageProfiles] = useState<ImageProfileSummary[]>([])
@@ -608,8 +611,9 @@ function WardrobeControlDialogInner({
   const handleGenerateImage = useCallback(
     async (item: WardrobeItem) => {
       if (!selectedContainer) return
+      if (generatingImageIds.has(item.id)) return
       const home = isCharacterScope ? homeContainerForItem(item) : selectedContainer
-      setGeneratingImageId(item.id)
+      setGeneratingImageIds((prev) => new Set(prev).add(item.id))
       try {
         const result = await generateWardrobeItemImage(item.id, home)
         showSuccessToast(
@@ -622,10 +626,14 @@ function WardrobeControlDialogInner({
       } catch (error) {
         showErrorToast(error instanceof Error ? error.message : 'Failed to generate a picture')
       } finally {
-        setGeneratingImageId(null)
+        setGeneratingImageIds((prev) => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        })
       }
     },
-    [selectedContainer, isCharacterScope, reloadActiveItems, queryClient],
+    [selectedContainer, isCharacterScope, reloadActiveItems, queryClient, generatingImageIds],
   )
 
   const handleDelete = useCallback(
@@ -1419,7 +1427,7 @@ function WardrobeControlDialogInner({
                     onToggleDefault={handleToggleDefault}
                     onToggleArchived={handleToggleArchived}
                     onGenerateImage={handleGenerateImage}
-                    isGeneratingImage={generatingImageId === item.id}
+                    generatingImageIds={generatingImageIds}
                     onEdit={(it) => setEditingItem(it)}
                     onDuplicate={handleDuplicate}
                     onMove={(it) => {

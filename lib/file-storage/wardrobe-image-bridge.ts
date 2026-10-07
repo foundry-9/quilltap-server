@@ -6,7 +6,7 @@
  * or Quilltap General — beside the markdown, keyed by item id so a rename
  * cannot orphan them:
  *
- *   Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>.webp
+ *   Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>-<8 hex>.webp
  *
  * The bytes go through `linkBlobContent`, which normalizes images to WebP,
  * de-duplicates by sha256 (an Import-from-image photograph shared by N pieces
@@ -27,6 +27,7 @@
  */
 
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
@@ -106,7 +107,10 @@ export async function writeWardrobeItemImage(
   const folder = wardrobeItemImageFolder(input.itemId);
   const desiredLeaf = input.leafName
     ? sanitizeLeafName(input.leafName)
-    : `${timestampStem(new Date())}-${input.kind}.webp`;
+    // The random tail keeps two writes in the same second apart:
+    // resolveUniqueRelativePath only checks, it does not reserve, and a second
+    // linkBlobContent at the same path would overwrite the first's link.
+    : `${timestampStem(new Date())}-${input.kind}-${randomUUID().slice(0, 8)}.webp`;
   const relativePath = input.leafName
     ? `${folder}/${desiredLeaf}`
     : await resolveUniqueRelativePath(input.mountPointId, `${folder}/${desiredLeaf}`);
