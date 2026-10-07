@@ -13,9 +13,10 @@
  */
 
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_META, formatSlotLabels } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { selectGarments } from '@/lib/wardrobe/composed-outfits'
+import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
 
 interface EquippedSlotRowProps {
   slot: WardrobeItemType
@@ -26,7 +27,7 @@ interface EquippedSlotRowProps {
    * whole — equipped chips resolve their labels from it, including labels for
    * composites the picker itself won't offer.
    */
-  allItems: WardrobeItem[]
+  allItems: ListedWardrobeItem[]
   onAdd: (slot: WardrobeItemType, itemId: string) => void
   onRemove: (slot: WardrobeItemType, itemId: string) => void
   onClear: (slot: WardrobeItemType) => void
@@ -162,24 +163,33 @@ export function EquippedSlotRow({
             </div>
           ) : (
             <ul className="divide-y qt-border-default">
-              {candidates.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onAdd(slot, c.id)
-                      setPickerOpen(false)
-                      setSearch('')
-                    }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:qt-bg-muted"
-                  >
-                    <span className="truncate text-sm text-foreground">{c.title}</span>
-                    <span className="qt-text-xs qt-text-secondary">
-                      {c.types.join(', ')}
-                    </span>
-                  </button>
-                </li>
-              ))}
+              {candidates.map((c) => {
+                // Two same-named garments from different tiers are exactly the
+                // case this list must tell apart, so a borrowed one says where
+                // it hangs.
+                const originLabel = wardrobeOriginLabel(c.origin)
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onAdd(slot, c.id)
+                        setPickerOpen(false)
+                        setSearch('')
+                      }}
+                      className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
+                    >
+                      <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                        {c.title}
+                      </span>
+                      <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">
+                        {formatSlotLabels(c.types)}
+                        {originLabel ? ` · ${originLabel}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

@@ -359,6 +359,39 @@ describe('ndjson-writer', () => {
     });
   });
 
+  describe('streamExportRecords() - wardrobe items', () => {
+    it('never carries the read-time origin annotation into a wardrobe_item record', async () => {
+      const character = createMockCharacter({ userId: testUserId });
+      userRepos.characters.findById.mockImplementation(async (id: string) =>
+        id === character.id ? character : null
+      );
+      globalRepos.wardrobe.findByCharacterId.mockResolvedValue([
+        {
+          id: 'coat',
+          characterId: character.id,
+          title: 'Travelling coat',
+          types: ['top'],
+          origin: { scope: 'character', id: character.id, name: 'Somebody' },
+        },
+      ]);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'characters',
+          scope: 'selected',
+          selectedIds: [character.id],
+          includeMemories: false,
+        })
+      )) as Array<Record<string, unknown>>;
+
+      const wardrobe = records.filter((r) => r.kind === 'wardrobe_item');
+      expect(wardrobe).toHaveLength(1);
+      const data = wardrobe[0].data as Record<string, unknown>;
+      expect(data.title).toBe('Travelling coat');
+      expect(data).not.toHaveProperty('origin');
+    });
+  });
+
   // ==========================================================================
   // Round-trip via createNdjsonStream()
   // ==========================================================================

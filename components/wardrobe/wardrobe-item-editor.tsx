@@ -16,6 +16,7 @@ import {
   GENERAL_CONTAINER,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
+  type ListedWardrobeItem,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
 import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
@@ -200,7 +201,12 @@ export function WardrobeItemEditor({
         ])
 
         const collected: CandidateItem[] = []
-        const pushCandidates = (list: WardrobeItem[] | undefined, shared: boolean) => {
+        // `local` lists are the wardrobe being edited; anything else is
+        // borrowed and keeps the origin its endpoint attached.
+        const pushCandidates = (
+          list: ListedWardrobeItem[] | undefined,
+          local: boolean,
+        ) => {
           for (const w of list ?? []) {
             if (collected.some((c) => c.id === w.id)) continue
             collected.push({
@@ -208,23 +214,23 @@ export function WardrobeItemEditor({
               title: w.title,
               types: w.types,
               componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-              isShared: shared,
+              origin: local ? null : (w.origin ?? null),
             })
           }
         }
         if (personalRes && personalRes.ok) {
-          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          const data = (await personalRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
           // In a shared container this first fetch IS the container's list;
           // its items are the local (manageable) set, not shared imports.
-          pushCandidates(data.wardrobeItems, false)
+          pushCandidates(data.wardrobeItems, true)
         }
         if (projectRes && projectRes.ok) {
-          const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          pushCandidates(data.wardrobeItems, true)
+          const data = (await projectRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
+          pushCandidates(data.wardrobeItems, false)
         }
         if (archetypeRes.ok) {
-          const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          pushCandidates(data.wardrobeItems, true)
+          const data = (await archetypeRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
+          pushCandidates(data.wardrobeItems, false)
         }
         if (!cancelled) setCandidates(collected)
       } catch (err) {

@@ -19,18 +19,18 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import {
   wardrobeCollectionUrl,
   withWardrobeArchivedParam,
   type WardrobeContainer,
+  type WardrobeItemWithOrigin,
 } from '@/lib/wardrobe/wardrobe-container'
 
 export interface UseWardrobeContainerItemsResult {
-  /** Items that live in the container itself — the editable set. */
-  items: WardrobeItem[]
-  /** `items` plus General archetypes, for resolving composite components. */
-  resolutionItems: WardrobeItem[]
+  /** Items that live in the container itself — the editable set. Each carries the container's origin. */
+  items: WardrobeItemWithOrigin[]
+  /** `items` plus General archetypes (each with its own origin), for resolving composite components. */
+  resolutionItems: WardrobeItemWithOrigin[]
   loading: boolean
   /** True once at least one fetch has completed for the current container. */
   fetched: boolean
@@ -54,8 +54,8 @@ export function useWardrobeContainerItems(
   const active = scope !== null && scope !== 'character'
   const includeArchived = opts?.includeArchived === true
 
-  const [items, setItems] = useState<WardrobeItem[]>([])
-  const [resolutionItems, setResolutionItems] = useState<WardrobeItem[]>([])
+  const [items, setItems] = useState<WardrobeItemWithOrigin[]>([])
+  const [resolutionItems, setResolutionItems] = useState<WardrobeItemWithOrigin[]>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
 
@@ -78,11 +78,11 @@ export function useWardrobeContainerItems(
           : fetch(withWardrobeArchivedParam('/api/v1/wardrobe', true)),
       ])
       if (!containerRes.ok) throw new Error(`HTTP ${containerRes.status}`)
-      const data = (await containerRes.json()) as { wardrobeItems?: WardrobeItem[] }
+      const data = (await containerRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
       const own = data.wardrobeItems ?? []
       const pool = [...own]
       if (generalRes && generalRes.ok) {
-        const generalData = (await generalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+        const generalData = (await generalRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
         for (const w of generalData.wardrobeItems ?? []) {
           if (!pool.some((c) => c.id === w.id)) pool.push(w)
         }

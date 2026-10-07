@@ -1924,6 +1924,8 @@ Global archetype wardrobe items that can be shared across characters.
 
 List all archetype wardrobe items. Items with a non-null `archivedAt` are omitted unless `?includeArchived=true` is passed — the same opt-in honoured by the character (`/api/v1/characters/[id]/wardrobe`, including `?scope=group`), project (`/api/v1/projects/[id]/wardrobe`) and group (`/api/v1/groups/[id]/wardrobe`) collection endpoints. Clients should build these URLs through `wardrobeCollectionUrl()` / `withWardrobeArchivedParam()` in `lib/wardrobe/wardrobe-container.ts` so the parameter can't drift.
 
+Every wardrobe **collection read** — and each single-item `GET` — tags its items with a read-time **`origin`**: `{ scope, id, name }`, where `scope` is `character` / `general` / `project` / `group`, `id` is the container id (`null` for General) and `name` is its display name (`"Quilltap General"` for General). The character route's `?scope=group` read tags each item with the group whose store it hangs in. `origin` is never persisted, never exported, and is not a field of `createWardrobeSchema` / `updateWardrobeSchema`. Clients spell the chip text with `wardrobeOriginLabel()` (`lib/wardrobe/wardrobe-container.ts`).
+
 The **outfit-selection LLM never receives archived items**, at any tier, with no parameter and no override: its candidate pool is built by `mergeWearablePool`, which drops them after the tier merge.
 
 **Response**: `200 OK`
@@ -1939,7 +1941,8 @@ The **outfit-selection LLM never receives archived items**, at any tier, with no
       "appropriateness": "casual",
       "isDefault": false,
       "characterId": null,
-      "archivedAt": null
+      "archivedAt": null,
+      "origin": { "scope": "general", "id": null, "name": "Quilltap General" }
     }
   ]
 }

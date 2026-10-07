@@ -20,12 +20,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { selectComposedOutfits } from '@/lib/wardrobe/composed-outfits'
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
+import { formatSlotLabels } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
 
 export interface OutfitQuickPickProps {
   /** The character's full wearable pool (garments and composed outfits). */
-  items: WardrobeItem[]
+  items: ListedWardrobeItem[]
   /** Wear the chosen outfit. The parent applies the usual equip rules. */
   onWear: (item: WardrobeItem) => void
 }
@@ -108,7 +109,9 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
             <div className="px-3 py-2 qt-text-xs qt-text-secondary">No matching outfits.</div>
           ) : (
             <ul className="divide-y qt-border-default">
-              {candidates.map((outfit) => (
+              {candidates.map((outfit) => {
+                const originLabel = wardrobeOriginLabel(outfit.origin)
+                return (
                 <li key={outfit.id}>
                   <button
                     type="button"
@@ -119,16 +122,20 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
                       setOpen(false)
                       setSearch('')
                     }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:qt-bg-muted"
+                    className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
                   >
-                    <span className="truncate text-sm text-foreground">{outfit.title}</span>
-                    <span className="qt-text-xs qt-text-secondary whitespace-nowrap">
-                      {outfit.types.map((t) => WARDROBE_SLOT_META[t].label).join(', ')}
+                    <span className="min-w-0 flex-1 break-words text-sm text-foreground">
+                      {outfit.title}
+                    </span>
+                    <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">
+                      {formatSlotLabels(outfit.types)}
                       {outfit.replace ? ' · replaces' : ''}
+                      {originLabel ? ` · ${originLabel}` : ''}
                     </span>
                   </button>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </div>

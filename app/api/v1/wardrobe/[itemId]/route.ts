@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
+import { GENERAL_WARDROBE_ORIGIN, withOrigin } from '@/lib/wardrobe/wardrobe-container';
 
 // GET /api/v1/wardrobe/[itemId]
 export const GET = createContextParamsHandler<{ itemId: string }>(
@@ -23,7 +24,8 @@ export const GET = createContextParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      return NextResponse.json({ wardrobeItem: item });
+      const [wardrobeItem] = withOrigin([item], GENERAL_WARDROBE_ORIGIN);
+      return NextResponse.json({ wardrobeItem });
     } catch (error) {
       logger.error(
         '[Wardrobe Archetypes v1] Error fetching archetype item',

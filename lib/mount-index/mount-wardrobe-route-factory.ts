@@ -37,6 +37,7 @@ import {
 import { createWardrobeSchema, updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
+import { withOrigin, type WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
 import {
   parseWardrobeInstructionsBody,
@@ -93,8 +94,13 @@ export interface MountWardrobeItemHandlers {
 type OwnerRow = { id: string; name: string };
 
 type OwnerStoreResolution =
-  | { ok: true; mountPointId: string }
+  | { ok: true; mountPointId: string; origin: WardrobeOrigin }
   | { ok: false; response: NextResponse };
+
+/** The origin a tier's collection read attaches to every item it lists. */
+function ownerOrigin(ownerLabel: MountWardrobeRouteConfig['ownerLabel'], row: OwnerRow): WardrobeOrigin {
+  return { scope: ownerLabel === 'Group' ? 'group' : 'project', id: row.id, name: row.name };
+}
 
 /**
  * The tier's owner-lookup and store-ensure steps, each mapped to the response
@@ -121,7 +127,7 @@ function makeOwnerStoreSteps(config: MountWardrobeRouteConfig) {
     if (!ensured) {
       return { ok: false, response: serverError(`Failed to ensure ${owner} document store`) };
     }
-    return { ok: true, mountPointId: ensured.mountPointId };
+    return { ok: true, mountPointId: ensured.mountPointId, origin: ownerOrigin(ownerLabel, row) };
   }
 
   async function resolveOwnerStore(
@@ -222,10 +228,13 @@ export function createMountWardrobeHandlers(
     async (req: NextRequest, { repos }: RequestContext, { id }) => {
       const resolved = await resolveOwnerStore(repos, id);
       if (!resolved.ok) return resolved.response;
-      const { mountPointId } = resolved;
+      const { mountPointId, origin } = resolved;
       await ensureWardrobeFolder(mountPointId);
 
-      const wardrobeItems = await readWardrobe(mountPointId, readIncludeArchived(req));
+      const wardrobeItems = withOrigin(
+        await readWardrobe(mountPointId, readIncludeArchived(req)),
+        origin,
+      );
 
       logListedItems?.({ ownerId: id, mountPointId, count: wardrobeItems.length });
 
@@ -245,7 +254,7 @@ export function createMountWardrobeHandlers(
 
       const store = await ensureStore(found.row);
       if (!store.ok) return store.response;
-      const { mountPointId } = store;
+      const { mountPointId, origin } = store;
       await ensureWardrobeFolder(mountPointId);
 
       const now = new Date().toISOString();
@@ -274,7 +283,7 @@ export function createMountWardrobeHandlers(
       });
 
       // Return the freshly listed items so the client doesn't need a follow-up GET.
-      const wardrobeItems = await readWardrobe(mountPointId, true);
+      const wardrobeItems = withOrigin(await readWardrobe(mountPointId, true), origin);
       return created({ mountPointId, wardrobeItem: stored, wardrobeItems });
     }),
   );
@@ -305,29 +314,30 @@ export function createMountWardrobeItemHandlers(
   async function resolveMount(
     repos: RequestContext['repos'],
     ownerId: string,
-  ): Promise<string | null> {
+  ): Promise<{ mountPointId: string; origin: WardrobeOrigin } | null> {
     const resolved = await resolveOwnerStore(repos, ownerId);
-    return resolved.ok ? resolved.mountPointId : null;
+    return resolved.ok ? { mountPointId: resolved.mountPointId, origin: resolved.origin } : null;
   }
 
   // GET — fetch one item
   const GET = createContextParamsHandler<{ id: string; itemId: string }>(
     async (_req: NextRequest, { repos }: RequestContext, { id, itemId }) => {
-      const mountPointId = await resolveMount(repos, id);
-      if (!mountPointId) return notFound(ownerLabel);
+      const mount = await resolveMount(repos, id);
+      if (!mount) return notFound(ownerLabel);
 
-      const items = await readWardrobe(mountPointId, true);
+      const items = await readWardrobe(mount.mountPointId, true);
       const item = items.find((i) => i.id === itemId);
       if (!item) return notFound(`${ownerLabel} wardrobe item`);
 
-      return successResponse({ wardrobeItem: item });
+      const [wardrobeItem] = withOrigin([item], mount.origin);
+      return successResponse({ wardrobeItem });
     },
   );
 
   // PUT — update one item
   const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     async (req: NextRequest, { user, repos }: RequestContext, { id, itemId }) => {
-      const mountPointId = await resolveMount(repos, id);
+      const mountPointId = (await resolveMount(repos, id))?.mountPointId;
       if (!mountPointId) return notFound(ownerLabel);
 
       const body = await req.json();
@@ -370,7 +380,7 @@ export function createMountWardrobeItemHandlers(
   // DELETE — delete one item
   const DELETE = createContextParamsHandler<{ id: string; itemId: string }>(
     async (_req: NextRequest, { repos }: RequestContext, { id, itemId }) => {
-      const mountPointId = await resolveMount(repos, id);
+      const mountPointId = (await resolveMount(repos, id))?.mountPointId;
       if (!mountPointId) return notFound(ownerLabel);
 
       await cleanupEquippedRefs(repos.chats, itemId, logTag, {

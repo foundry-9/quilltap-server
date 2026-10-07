@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
+import { withOrigin } from '@/lib/wardrobe/wardrobe-container';
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
 export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
@@ -28,7 +29,8 @@ export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
         return notFound('Wardrobe item');
       }
 
-      return successResponse({ wardrobeItem: item });
+      const [wardrobeItem] = withOrigin([item], { scope: 'character', id, name: character.name });
+      return successResponse({ wardrobeItem });
     } catch (error) {
       logger.error('[Wardrobe v1] Error fetching wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch wardrobe item');

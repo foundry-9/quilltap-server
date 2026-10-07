@@ -135,7 +135,9 @@ it('GET lists the group mount wardrobe after ensuring store and folder', async (
 
   expect(res.status).toBe(200)
   expect(res.body.mountPointId).toBe(MOUNT_ID)
-  expect(res.body.wardrobeItems).toEqual([storedItem])
+  expect(res.body.wardrobeItems).toEqual([
+    { ...storedItem, origin: { scope: 'group', id: GROUP_ID, name: 'Main Cast' } },
+  ])
   expect(ensureGroupOfficialStore).toHaveBeenCalledWith(GROUP_ID, 'Main Cast')
   expect(ensureGroupWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
   // Archived garments are hidden unless the caller asks.

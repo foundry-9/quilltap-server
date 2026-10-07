@@ -1,7 +1,8 @@
 'use client'
 
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES, formatSlotLabels } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel } from '@/lib/wardrobe/wardrobe-container'
 import type { CandidateItem, CandidateGroup } from './types'
 import { GROUP_LABEL, GROUP_ORDER } from './constants'
 import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
@@ -87,15 +88,17 @@ export function WardrobeComponentPicker({
             Currently in this outfit:
           </p>
           <div className="flex flex-wrap gap-2">
-            {selectedComponents.map((c) => (
+            {selectedComponents.map((c) => {
+              const originLabel = wardrobeOriginLabel(c.origin)
+              return (
               <span
                 key={c.id}
                 className="inline-flex items-center gap-1 rounded-full qt-bg-muted border qt-border-default px-2 py-0.5 qt-text-xs"
               >
                 {c.title}
-                {c.isShared ? (
-                  <span className="qt-badge qt-badge-info ml-1">
-                    shared
+                {originLabel ? (
+                  <span className="qt-badge qt-badge-wardrobe-shared ml-1">
+                    {originLabel}
                   </span>
                 ) : null}
                 <button
@@ -107,7 +110,8 @@ export function WardrobeComponentPicker({
                   ×
                 </button>
               </span>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -156,25 +160,26 @@ export function WardrobeComponentPicker({
                   <ul className="divide-y qt-border-default">
                     {items.map((c) => {
                       const checked = componentItemIds.includes(c.id)
+                      const originLabel = wardrobeOriginLabel(c.origin)
                       return (
                         <li key={c.id}>
-                          <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:qt-bg-muted">
+                          <label className="flex items-start gap-2 px-3 py-2 cursor-pointer hover:qt-bg-muted">
                             <input
                               type="checkbox"
-                              className="qt-checkbox"
+                              className="qt-checkbox mt-0.5"
                               checked={checked}
                               onChange={() => onToggleComponent(c.id)}
                             />
-                            <span className="flex-1 truncate text-sm text-foreground">
+                            <span className="min-w-0 flex-1 break-words text-sm text-foreground">
                               {c.title}
-                              {c.isShared ? (
-                                <span className="ml-1 qt-badge qt-badge-info">
-                                  shared
-                                </span>
-                              ) : null}
                             </span>
-                            <span className="qt-text-xs qt-text-secondary">
-                              {c.types.join(', ')}
+                            {originLabel && (
+                              <span className="qt-badge qt-badge-wardrobe-shared shrink-0">
+                                {originLabel}
+                              </span>
+                            )}
+                            <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">
+                              {formatSlotLabels(c.types)}
                               {c.componentItemIds.length > 0 ? ' · bundle' : ''}
                             </span>
                           </label>

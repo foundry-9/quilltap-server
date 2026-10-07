@@ -1544,9 +1544,9 @@ function WardrobeControlDialogInner({
           sourceProjectId={dialogProjectId}
           // Browsing a shared container, the item's home is known exactly —
           // name it as the source and drop it from the destination list. In
-          // the character view the home tier of a merged shared item isn't
-          // tracked, so the server probes (and only a character-owned item's
-          // own vault can be safely excluded).
+          // the character view a merged shared item's `origin` is a display
+          // annotation only, so the server probes (and only a character-owned
+          // item's own vault can be safely excluded).
           source={isCharacterScope ? null : selectedContainer}
           excludeDestination={
             isCharacterScope

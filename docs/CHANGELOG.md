@@ -4,6 +4,18 @@
 
 ### 4.10-dev
 
+#### Wardrobe lists: wrapping titles, origin chip
+
+- Garment selection lists (the per-slot picker, the Wear-an-outfit pull-down, the editor's
+  component picker, the project wardrobe card) wrap long titles instead of truncating them, and
+  print slots as display labels ("Top, Bottom") via the new `formatSlotLabels`.
+- Wardrobe list endpoints tag each item with a read-time `origin` (`{ scope, id, name }`); the
+  character route's `?scope=group` read attributes items per group through the new
+  `resolveGroupMountsForCharacter` and `findArchetypesInMountsAttributed`. The dialog row's
+  "· shared" text is replaced by a `qt-badge-wardrobe-shared` chip naming the source
+  ("Project · Thornfield"); the pickers append the origin to the slot list. `origin` is never
+  stored or exported.
+
 #### Wardrobe programme specs (design only)
 
 - Three approved specs under `docs/developer/features/`, no code yet: `wardrobe-list-legibility.md`

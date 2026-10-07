@@ -202,7 +202,10 @@ async function* streamCharacters(
     try {
       const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
       for (const item of wardrobeItems) {
-        yield { kind: 'wardrobe_item', characterId: id, data: item };
+        // `origin` is a read-time annotation the list endpoints attach; the
+        // repository never sets it, and it must never ride into a bundle.
+        const { origin: _origin, ...data } = item as typeof item & { origin?: unknown };
+        yield { kind: 'wardrobe_item', characterId: id, data };
       }
     } catch (error) {
       logger.warn('Failed to load wardrobe items for character export', {
