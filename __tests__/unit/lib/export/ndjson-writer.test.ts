@@ -396,6 +396,59 @@ describe('ndjson-writer', () => {
       expect(data.title).toBe('Travelling coat');
       expect(data).not.toHaveProperty('origin');
     });
+
+    it("carries a character-owned item's imageFileId and its pictures' file metadata", async () => {
+      const character = createMockCharacter({ userId: testUserId });
+      userRepos.characters.findById.mockImplementation(async (id: string) =>
+        id === character.id ? character : null
+      );
+      globalRepos.wardrobe.findByCharacterId.mockResolvedValue([
+        { id: 'coat', characterId: character.id, title: 'Travelling coat', types: ['top'], imageFileId: 'file-1' },
+      ]);
+      const findByLinkedTo = jest.fn<(id: string) => Promise<unknown[]>>().mockResolvedValue([
+        {
+          id: 'file-1',
+          originalFilename: '20260101-120000-generated.webp',
+          mimeType: 'image/webp',
+          size: 1234,
+          width: 768,
+          height: 1024,
+          source: 'GENERATED',
+          category: 'IMAGE',
+          folderPath: null,
+          generationPrompt: 'a travelling coat',
+          generationModel: 'gpt-image-1',
+          createdAt: '2026-01-01T12:00:00.000Z',
+          storageKey: 'mount-blob:vault:blob',
+        },
+        // Not a picture: never carried.
+        { id: 'file-2', category: 'DOCUMENT', folderPath: null, originalFilename: 'notes.md' },
+      ]);
+      (globalRepos as unknown as { files: unknown }).files = { findByLinkedTo };
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'characters',
+          scope: 'selected',
+          selectedIds: [character.id],
+          includeMemories: false,
+        })
+      )) as Array<Record<string, unknown>>;
+
+      const data = records.find((r) => r.kind === 'wardrobe_item')!.data as Record<string, unknown>;
+      expect(findByLinkedTo).toHaveBeenCalledWith('coat');
+      expect(data.imageFileId).toBe('file-1');
+      const imageFiles = data._imageFiles as Array<Record<string, unknown>>;
+      expect(imageFiles).toHaveLength(1);
+      expect(imageFiles[0]).toMatchObject({
+        id: 'file-1',
+        originalFilename: '20260101-120000-generated.webp',
+        source: 'GENERATED',
+        generationPrompt: 'a travelling coat',
+      });
+      // Metadata only: the bytes ride in the vault's blobs, not on the record.
+      expect(imageFiles[0]).not.toHaveProperty('storageKey');
+    });
   });
 
   describe('streamExportRecords() - wardrobe wear ledger', () => {

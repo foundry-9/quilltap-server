@@ -2,7 +2,7 @@
 
 **Status:** implemented in 4.10-dev (2026-10-07). Part 2 of the wardrobe programme; do
 [wardrobe-list-legibility.md](wardrobe-list-legibility.md) first (this spec adds a line and a
-sort to the row it reshapes). [wardrobe-item-images.md](../wardrobe-item-images.md) is part 3 and
+sort to the row it reshapes). [wardrobe-item-images.md](wardrobe-item-images.md) is part 3 and
 is independent of this one.
 
 Every wardrobe item keeps a tally: how many times it has been worn, when it was first and last

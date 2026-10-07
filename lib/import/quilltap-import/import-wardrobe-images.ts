@@ -15,7 +15,7 @@
  * bundle (no vault records) carries no bytes: its items were created by
  * `importCharacters` with no picture and stay that way.
  *
- * Design of record: docs/developer/features/wardrobe-item-images.md §7
+ * Design of record: docs/developer/features/complete/wardrobe-item-images.md §7
  *
  * @module import/quilltap-import/import-wardrobe-images
  */

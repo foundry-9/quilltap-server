@@ -8,7 +8,7 @@
  * view manages — a borrowed garment is drawn by whoever manages its wardrobe.
  * The pickers show a 28 px thumbnail beside a candidate that has one.
  *
- * Design of record: docs/developer/features/wardrobe-item-images.md §6
+ * Design of record: docs/developer/features/complete/wardrobe-item-images.md §6
  */
 
 // Uses global jest (not @jest/globals) so the jest-dom matcher augmentation

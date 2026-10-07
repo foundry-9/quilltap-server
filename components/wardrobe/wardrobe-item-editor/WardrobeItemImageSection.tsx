@@ -16,7 +16,7 @@
  * In create mode there is no item id to hang a picture on, so the section is
  * present but inert.
  *
- * Design of record: docs/developer/features/wardrobe-item-images.md §6.1
+ * Design of record: docs/developer/features/complete/wardrobe-item-images.md §6.1
  *
  * @module components/wardrobe/wardrobe-item-editor/WardrobeItemImageSection
  */

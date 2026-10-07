@@ -11,7 +11,7 @@
  * The URL comes from `wardrobeImageThumbnailUrl`, the one place the thumbnail
  * route is spelled.
  *
- * Design of record: docs/developer/features/wardrobe-item-images.md §6.2–6.3
+ * Design of record: docs/developer/features/complete/wardrobe-item-images.md §6.2–6.3
  *
  * @module components/wardrobe/wardrobe-item-thumbnail
  */
