@@ -237,6 +237,12 @@ export const OutfitSelectionSchema = z.object({
   mode: OutfitSelectionModeEnum,
   /** Manual slot selections — only used when mode is 'manual' */
   slots: EquippedSlotsSchema.optional(),
+  /**
+   * 'manual' only: bundles the composer dissolved into `slots` (an outfit
+   * picked from the quick-pick), so the wear ledger can credit the outfit as
+   * worn. Validated and expanded server-side.
+   */
+  wornBundleIds: z.array(z.string().min(1)).optional(),
 });
 
 export type OutfitSelection = z.infer<typeof OutfitSelectionSchema>;

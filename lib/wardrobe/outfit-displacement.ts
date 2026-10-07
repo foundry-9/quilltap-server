@@ -34,6 +34,11 @@
  * `wearItemIntoSlots` / `replaceItemIntoSlots` / `computeDisplacedSlots` are
  * pure (no-DB) variants for frontend optimistic updates and unit tests.
  *
+ * Every persisted primitive writes through `wardrobeWear.commitEquippedOutfit`
+ * — the wear ledger's chokepoint — and tells it which bundle (if any) it
+ * dissolved, since the stored leaves alone cannot say an outfit was worn. The
+ * chokepoint diffs against the true prior slots and credits the wears.
+ *
  * @module wardrobe/outfit-displacement
  */
 
@@ -52,12 +57,20 @@ import {
   makeEmptyEquippedSlots,
 } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import type {
+  CommitEquippedOutfitInput,
+  CommitEquippedOutfitResult,
+  EquipSource,
+} from '@/lib/database/repositories/wardrobe-wear.repository';
 
 /** Minimal repository interfaces needed for these primitives */
 export interface DisplacementRepos {
   chats: {
     getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>;
-    setEquippedOutfit(chatId: string, characterId: string, slots: EquippedSlots): Promise<EquippedSlots | null>;
+  };
+  /** The equip chokepoint: writes the slots and credits the wear ledger. */
+  wardrobeWear: {
+    commitEquippedOutfit(input: CommitEquippedOutfitInput): Promise<CommitEquippedOutfitResult>;
   };
   /**
    * Optional — supplied, a bundle's components are resolved so it can dissolve
@@ -85,6 +98,43 @@ async function lookupForBundle(
 ): Promise<WearableLookup | undefined> {
   if (!repos.wardrobe || !isBundle(item)) return undefined;
   return loadBundleLookup({ wardrobe: repos.wardrobe }, characterId, item.componentItemIds, opts);
+}
+
+/** A put-on gesture's origin, for the ledger. Take-off is implied by `removeFromSlot`. */
+export type PutOnSource = Extract<EquipSource, 'ui' | 'tool'>;
+
+/** A dissolved bundle and the leaves it contributed, for the ledger's composite credit. */
+export type WornBundle = { id: string; leafIds: string[] };
+
+/**
+ * The bundle credit a put-on gesture claims: the bundle and the leaves it
+ * dissolved into, or nothing when the item is a leaf or could not dissolve
+ * (stored whole — the leaf diff then credits it as itself).
+ */
+export function wornBundlesFor(
+  item: WearableNode,
+  itemsById: WearableLookup | undefined,
+  onlySlot?: WardrobeItemType,
+): WornBundle[] {
+  const leaves = dissolveBundleToLeaves(item, itemsById);
+  if (!leaves) return [];
+  const contributed = onlySlot ? leaves.filter((leaf) => leaf.slots.includes(onlySlot)) : leaves;
+  if (contributed.length === 0) return [];
+  return [{ id: item.id, leafIds: contributed.map((leaf) => leaf.id) }];
+}
+
+async function commit(
+  repos: DisplacementRepos,
+  chatId: string,
+  characterId: string,
+  nextSlots: EquippedSlots,
+  source: EquipSource,
+  wornBundles: WornBundle[],
+): Promise<EquippedSlots> {
+  // From the job child the result is synthetic (the write is buffered), so the
+  // primitives return the slots they computed rather than the chokepoint's echo.
+  await repos.wardrobeWear.commitEquippedOutfit({ chatId, characterId, nextSlots, wornBundles, source });
+  return nextSlots;
 }
 
 async function loadSlots(
@@ -163,14 +213,14 @@ export async function equipItem(
   characterId: string,
   newItem: { id: string; types: WardrobeItemType[]; componentItemIds?: string[]; replace?: boolean },
   opts?: EquipOptions,
+  source: PutOnSource = 'ui',
 ): Promise<EquippedSlots> {
   const [slots, itemsById] = await Promise.all([
     loadSlots(repos, chatId, characterId),
     lookupForBundle(repos, characterId, newItem, opts),
   ]);
   const next = wearItemIntoSlots(slots, newItem, itemsById);
-  const result = await repos.chats.setEquippedOutfit(chatId, characterId, next);
-  return result ?? next;
+  return commit(repos, chatId, characterId, next, source, wornBundlesFor(newItem, itemsById));
 }
 
 /**
@@ -184,14 +234,14 @@ export async function replaceItem(
   characterId: string,
   newItem: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
   opts?: EquipOptions,
+  source: PutOnSource = 'ui',
 ): Promise<EquippedSlots> {
   const [slots, itemsById] = await Promise.all([
     loadSlots(repos, chatId, characterId),
     lookupForBundle(repos, characterId, newItem, opts),
   ]);
   const next = replaceItemIntoSlots(slots, newItem, itemsById);
-  const result = await repos.chats.setEquippedOutfit(chatId, characterId, next);
-  return result ?? next;
+  return commit(repos, chatId, characterId, next, source, wornBundlesFor(newItem, itemsById));
 }
 
 /**
@@ -234,6 +284,7 @@ export async function addToSlot(
   slot: WardrobeItemType,
   item: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
   opts?: EquipOptions,
+  source: PutOnSource = 'ui',
 ): Promise<EquippedSlots> {
   if (!item.types.includes(slot)) {
     throw new Error(
@@ -247,8 +298,7 @@ export async function addToSlot(
   ]);
   const slots = addItemToSlot(current, slot, item, itemsById);
 
-  const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-  return result ?? slots;
+  return commit(repos, chatId, characterId, slots, source, wornBundlesFor(item, itemsById, slot));
 }
 
 /**
@@ -270,8 +320,7 @@ export async function removeFromSlot(
     slots[slot] = slots[slot].filter((id) => id !== itemId);
   }
 
-  const result = await repos.chats.setEquippedOutfit(chatId, characterId, slots);
-  return result ?? slots;
+  return commit(repos, chatId, characterId, slots, 'take-off', []);
 }
 
 /** Pure-function variants for frontend optimistic updates. */

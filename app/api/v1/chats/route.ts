@@ -1367,6 +1367,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
     progress,
+    source: 'chat-start',
   };
   progress.status('Consulting the wardrobe…');
   try {

@@ -268,7 +268,7 @@ export async function executeWardrobeCreateTool(
     let currentState: EquippedSlots | undefined;
 
     if (equip_now) {
-      await equipItem(repos, context.chatId, targetCharacterId, newItem, tiers);
+      await equipItem(repos, context.chatId, targetCharacterId, newItem, tiers, 'tool');
 
       equipped = true;
       effect = newItem.replace ? 'replaced' : 'layered';
