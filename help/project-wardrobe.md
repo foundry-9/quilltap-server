@@ -42,11 +42,15 @@ The **Wardrobe** card on each project's page is your atelier — and the [Wardro
 - **Archive** an item with the **Archive** button — a dust sheet rather than a bonfire. The garment withdraws from the project's wardrobe lists and from the outfit composer, and is withheld outright from any character choosing their own attire, while the file itself stays put. Tick **Show archived**, which keeps company with **+ New wardrobe item**, to see what you have stored away; each retired garment wears a small **Archived** badge and offers a **Restore** button. A character presently *wearing* an archived garment goes on wearing it — archiving tidies the drawer, it does not undress anybody.
 - **Delete** an item with the **Delete** button, after a moment's confirmation. Equipped references across existing chats are cleaned up; composites that bundled the item tolerate its absence gracefully.
 
+Project garments may carry pictures too (see [Portraits of the Garments](wardrobe.md#portraits-of-the-garments)); having no one in particular to wear them, they are drawn catalogue style --- on a dress form or laid flat.
+
 ## Wearing Project Garments
 
 Project wardrobe items behave exactly like any other once a chat belongs to the project. Characters may wear them through the Wardrobe dialog, dress themselves into them via the wardrobe tools, and have them appear in scene-state, avatar, and image-generation prompts — all without the item being duplicated into each character's personal armoire.
 
 The project's `Wardrobe/` folder may also keep an optional page of **Dressing Instructions** (`instructions.md`) — a standing word, addressed to the character in the second person, consulted when a character in one of the project's chats dresses themselves and neither they nor their groups keep instructions of their own. Edit it from the collapsible **Dressing Instructions** panel in the [Wardrobe dialog](wardrobe.md#dressing-instructions-a-standing-word-with-the-valet) with the project selected.
+
+A shared garment keeps **one ledger across every character who borrows it**. The project's dinner jacket, worn by three of the cast over a season, shows a single tally of wears --- and, in its editor's *Wear history*, the account of each borrower in turn. (See [The Ledger](wardrobe.md#the-ledger) for what counts as a wear.)
 
 ## Keeping the Folder Healthy
 

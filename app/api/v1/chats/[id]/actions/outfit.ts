@@ -21,7 +21,11 @@ import {
   replaceItem,
   addToSlot,
   removeFromSlot,
+  wornBundlesFor,
 } from '@/lib/wardrobe/outfit-displacement';
+import type { WornBundle } from '@/lib/wardrobe/outfit-displacement';
+import { loadBundleLookup } from '@/lib/wardrobe/hydrate-components';
+import { isBundle } from '@/lib/wardrobe/dissolve-bundles';
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
@@ -43,6 +47,14 @@ const equipBodySchema = z
     itemId: z.string().nullable().optional(),
     /** Required when mode === 'set_all'. Replaces every slot atomically. */
     slots: EquippedSlotsSchema.optional(),
+    /**
+     * `set_all` only: bundles the client dissolved into `slots` (the dialog
+     * stages bundles as their leaves). A claim, not a fact — the server
+     * validates each against the character's reachable tiers, expands it to
+     * its leaves, and the wear ledger credits it only if one of those leaves
+     * was newly put on.
+     */
+    wornBundleIds: z.array(z.string().min(1)).optional(),
   })
   .superRefine((value, ctx) => {
     if (
@@ -200,6 +212,37 @@ export async function handleGetOutfitSummary(
 }
 
 /**
+ * Turn a `set_all` request's `wornBundleIds` into the ledger's bundle credit.
+ * Ids the character cannot reach, and items that are not bundles, are dropped
+ * (a client cannot credit a garment it cannot see); each survivor is expanded
+ * to its leaves server-side.
+ */
+async function resolveWornBundles(
+  { repos }: RequestContext,
+  characterId: string,
+  wornBundleIds: string[],
+  tiers: Awaited<ReturnType<typeof resolveSharedWardrobeTiersForChat>>,
+): Promise<WornBundle[]> {
+  const ids = Array.from(new Set(wornBundleIds));
+  if (ids.length === 0) return [];
+  const bundles = (await repos.wardrobe.findByIdsForCharacter(characterId, ids, tiers)).filter(isBundle);
+  const result: WornBundle[] = [];
+  for (const bundle of bundles) {
+    const lookup = await loadBundleLookup(repos, characterId, bundle.componentItemIds, tiers);
+    result.push(...wornBundlesFor(bundle, lookup));
+  }
+  if (result.length !== ids.length) {
+    logger.debug('[Chats v1] Some claimed worn bundles were not credited', {
+      characterId,
+      claimed: ids.length,
+      resolved: result.length,
+      context: 'wardrobe',
+    });
+  }
+  return result;
+}
+
+/**
  * POST ?action=equip — Mutate equipped state for a character in this chat.
  *
  * Body: `{ characterId, mode, slot?, itemId? }` — same `mode` semantics as
@@ -213,7 +256,7 @@ export async function handleEquipSlot(
   const { repos } = ctx;
   try {
     const body = await req.json();
-    const { characterId, mode, slot, itemId, slots: bodySlots } = equipBodySchema.parse(body);
+    const { characterId, mode, slot, itemId, slots: bodySlots, wornBundleIds } = equipBodySchema.parse(body);
 
     // Project tier for tri-tier wardrobe resolution — lets a chat equip items
     // that live in the project's document store, not just the character vault
@@ -240,9 +283,17 @@ export async function handleEquipSlot(
           }
         }
       }
-      updatedSlots = await repos.chats.setEquippedOutfit(chatId, characterId, bodySlots!);
+      const wornBundles = await resolveWornBundles(ctx, characterId, wornBundleIds ?? [], tiers);
+      await repos.wardrobeWear.commitEquippedOutfit({
+        chatId,
+        characterId,
+        nextSlots: bodySlots!,
+        wornBundles,
+        source: 'ui',
+      });
+      updatedSlots = bodySlots!;
       logger.info('[Chats v1] Equipped outfit replaced (set_all)', {
-        chatId, characterId, context: 'wardrobe',
+        chatId, characterId, wornBundleCount: wornBundles.length, context: 'wardrobe',
       });
     } else if (mode === 'wear' || mode === 'equip') {
       // itemId guaranteed by schema. Validate the item resolves and covers

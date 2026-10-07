@@ -17,6 +17,7 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
+import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -108,6 +109,7 @@ function makeRepos(
         setEquippedOutfit,
         getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null),
       },
+      wardrobeWear: ledgerOver({ setEquippedOutfit }),
     },
   }
 }

@@ -50,6 +50,10 @@ async function clearFormat3Entities(): Promise<void> {
     'vector_entries',
     'vector_indices',
     'text_replacement_rules',
+    // The wardrobe wear ledger. Global like the rest of this list (no userId),
+    // and its unique (itemId, wearer) index would otherwise make a
+    // replace-mode restore merge into stale tallies rather than replace them.
+    'wardrobe_wear_stats',
   ];
   for (const table of mainTables) {
     try {

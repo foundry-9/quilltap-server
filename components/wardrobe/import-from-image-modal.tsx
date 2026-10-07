@@ -11,17 +11,24 @@
  *    composite outfit. The pieces are created first; their returned ids become
  *    the outfit's `componentItemIds`, so nothing needs an id assigned up front.
  *
+ * Unless the operator declines, the photograph itself is attached to every
+ * piece (and the outfit) as its first picture, `kind=imported`. The server
+ * de-duplicates the bytes, so N pieces share one blob behind N links. A
+ * failed attachment never aborts the import — the garment stands without it.
+ *
  * @module components/wardrobe/import-from-image-modal
  */
 
 import { useState, useRef, useCallback } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { showErrorToast, showSuccessToast, showWarningToast } from '@/lib/toast'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { unionTypes } from '@/lib/wardrobe/composite-types'
+import { uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
+import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 
 // ============================================================================
 // TYPES
@@ -85,6 +92,8 @@ export function ImportFromImageModal({
   const [proposedItems, setProposedItems] = useState<ProposedItem[]>([])
   const [outfit, setOutfit] = useState<OutfitDraft>(EMPTY_OUTFIT)
   const [importing, setImporting] = useState(false)
+  /** Keep the photograph as each created piece's first picture. */
+  const [keepPhotograph, setKeepPhotograph] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -222,6 +231,27 @@ export function ImportFromImageModal({
 
     setImporting(true)
 
+    // Every create below posts to the character's own wardrobe, so that is
+    // the container each new piece (and the outfit) lives in.
+    const container: WardrobeContainer = { scope: 'character', id: characterId }
+    const photograph = keepPhotograph ? selectedFile : null
+    let pictureFailures = 0
+
+    /** Attach the photograph to a freshly created item; never throws. */
+    const attachPhotograph = async (itemId: string, title: string): Promise<void> => {
+      if (!photograph) return
+      try {
+        await uploadWardrobeItemImage(itemId, container, photograph, 'imported')
+      } catch (err) {
+        pictureFailures += 1
+        console.warn(
+          '[ImportFromImageModal] Failed to attach the photograph to item:',
+          title,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+
     try {
       const created: WardrobeItem[] = []
 
@@ -243,6 +273,7 @@ export function ImportFromImageModal({
 
         if (result.ok && result.data?.wardrobeItem) {
           created.push(result.data.wardrobeItem)
+          await attachPhotograph(result.data.wardrobeItem.id, item.title)
         } else {
           console.warn('[ImportFromImageModal] Failed to create item:', item.title, result.error)
         }
@@ -264,7 +295,7 @@ export function ImportFromImageModal({
       // create calls above; the outfit's coverage is their slot union, exactly
       // as the item editor computes it for a hand-built bundle.
       if (willCreateOutfit && created.length >= MIN_OUTFIT_PIECES) {
-        const outfitResult = await fetchJson(
+        const outfitResult = await fetchJson<{ wardrobeItem: WardrobeItem }>(
           `/api/v1/characters/${characterId}/wardrobe`,
           {
             method: 'POST',
@@ -281,6 +312,9 @@ export function ImportFromImageModal({
           }
         )
         if (outfitResult.ok) {
+          if (outfitResult.data?.wardrobeItem) {
+            await attachPhotograph(outfitResult.data.wardrobeItem.id, outfit.title.trim())
+          }
           showSuccessToast(`Outfit "${outfit.title.trim()}" assembled from ${created.length} pieces`)
         } else {
           console.warn('[ImportFromImageModal] Failed to create outfit:', outfit.title, outfitResult.error)
@@ -290,6 +324,14 @@ export function ImportFromImageModal({
         showErrorToast('Too few pieces were imported to assemble an outfit')
       }
 
+      if (pictureFailures > 0) {
+        showWarningToast(
+          pictureFailures === 1
+            ? 'One piece arrived without its photograph; the darkroom mislaid it. You may attach it by hand.'
+            : `${pictureFailures} pieces arrived without their photograph; the darkroom mislaid them. You may attach it by hand.`
+        )
+      }
+
       onImported()
       onClose()
     } catch (err) {
@@ -297,7 +339,7 @@ export function ImportFromImageModal({
     } finally {
       setImporting(false)
     }
-  }, [proposedItems, characterId, onImported, onClose, willCreateOutfit, outfit])
+  }, [proposedItems, characterId, onImported, onClose, willCreateOutfit, outfit, keepPhotograph, selectedFile])
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -460,6 +502,24 @@ export function ImportFromImageModal({
                   </div>
                 )}
 
+                {/* Keep the photograph as each piece's first picture */}
+                <label className="flex items-start gap-3 cursor-pointer px-3 py-2 rounded qt-bg-muted">
+                  <input
+                    type="checkbox"
+                    checked={keepPhotograph}
+                    onChange={(e) => setKeepPhotograph(e.target.checked)}
+                    className="qt-checkbox mt-0.5"
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="text-sm text-foreground block">
+                      The photograph will be kept as each piece&apos;s first picture
+                    </span>
+                    <span className="text-xs qt-text-secondary block mt-0.5">
+                      Pressed into every garment&apos;s album, and the outfit&apos;s too. Untick it to leave the albums blank.
+                    </span>
+                  </span>
+                </label>
+
                 {/* Item cards */}
                 <div className="space-y-4">
                   {proposedItems.map((item, index) => (
@@ -475,6 +535,7 @@ export function ImportFromImageModal({
                           type="checkbox"
                           checked={item.selected}
                           onChange={(e) => updateItem(index, { selected: e.target.checked })}
+                          aria-label={`Import ${item.title || 'this item'}`}
                           className="qt-checkbox mt-1"
                         />
                         <div className="flex-1 min-w-0">

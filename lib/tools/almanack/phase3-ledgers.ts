@@ -611,6 +611,7 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     contextCompression: { enabled: true, windowSize: 5, compressionTargetTokens: 800 },
     agentMode: { maxTurns: 10, defaultEnabled: false },
     storyBackgrounds: { enabled: false, hasDefaultImageProfile: false },
+    wardrobeImages: { hasDesignatedImageProfile: false },
     timestamps: { mode: 'NONE', format: 'FRIENDLY' },
     autoLock: { enabled: false, idleMinutes: 15 },
     memoryCascade: {
@@ -714,6 +715,9 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     storyBackgrounds: {
       enabled: sb?.enabled ?? false,
       hasDefaultImageProfile: !!sb?.defaultImageProfileId,
+    },
+    wardrobeImages: {
+      hasDesignatedImageProfile: !!chatSettings?.wardrobeImageSettings?.imageProfileId,
     },
     timestamps: {
       mode: ts?.mode ?? 'NONE',

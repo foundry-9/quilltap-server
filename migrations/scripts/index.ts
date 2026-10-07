@@ -414,6 +414,11 @@ import { addImpersonationVoiceRewriteFieldMigration } from './add-impersonation-
 import { addTranscriptVersionColumnMigration } from './add-transcript-version-column-v1';
 import { addFileGenerationKeyColumnMigration } from './add-file-generation-key-column-v1';
 import { collapseDuplicateAvatarRollsMigration } from './collapse-duplicate-avatar-rolls-v1';
+// Wardrobe wear ledger: wardrobe_wear_stats table, then a one-time seed from current outfits
+import { addWardrobeWearStatsTableMigration } from './add-wardrobe-wear-stats-table-v1';
+import { seedWardrobeWearStatsMigration } from './seed-wardrobe-wear-stats-v1';
+// Wardrobe item images: chat_settings.wardrobeImageSettings (the designated image profile)
+import { addWardrobeImageSettingsFieldMigration } from './add-wardrobe-image-settings-field-v1';
 
 /**
  * All available migrations.
@@ -843,6 +848,11 @@ export const migrations: Migration[] = [
   addChatInformsPermanentMigration,
   // Impersonated lines: impersonationVoiceRewrite (on/off) → impersonationVoiceMode (off / ask / always)
   impersonationVoiceModeMigration,
+  // Wardrobe wear ledger: the table, then a one-time seed from current outfits
+  addWardrobeWearStatsTableMigration,
+  seedWardrobeWearStatsMigration,
+  // Wardrobe item images: chat_settings.wardrobeImageSettings
+  addWardrobeImageSettingsFieldMigration,
 ];
 
 export {
@@ -1250,5 +1260,10 @@ export {
   // Salon Inform: chat_informs.permanent (standing informs, delivered every turn)
   addChatInformsPermanentMigration,
   impersonationVoiceModeMigration,
+  // Wardrobe wear ledger: the table, then a one-time seed from current outfits
+  addWardrobeWearStatsTableMigration,
+  seedWardrobeWearStatsMigration,
+  // Wardrobe item images: chat_settings.wardrobeImageSettings
+  addWardrobeImageSettingsFieldMigration,
 };
 

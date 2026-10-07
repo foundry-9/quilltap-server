@@ -8,7 +8,7 @@
  * @module lib/wardrobe/default-outfit
  */
 
-import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles'
+import { dissolveBundlesInSlotsWithCredit } from '@/lib/wardrobe/dissolve-bundles'
 import { makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
@@ -29,6 +29,17 @@ export function sortForDefaultOutfit(items: WardrobeItem[]): WardrobeItem[] {
 }
 
 export function buildDefaultOutfit(items: WardrobeItem[]): EquippedSlots {
+  return buildDefaultOutfitWithCredit(items).slots
+}
+
+/**
+ * {@link buildDefaultOutfit}, also returning the `isDefault` bundles it
+ * dissolved and the leaves each contributed — the wear ledger credits an
+ * outfit only when its caller says one was put on.
+ */
+export function buildDefaultOutfitWithCredit(
+  items: WardrobeItem[],
+): { slots: EquippedSlots; wornBundles: Array<{ id: string; leafIds: string[] }> } {
   const next: EquippedSlots = makeEmptyEquippedSlots()
   for (const item of sortForDefaultOutfit(items)) {
     if (!item.isDefault || item.archivedAt) continue
@@ -36,5 +47,5 @@ export function buildDefaultOutfit(items: WardrobeItem[]): EquippedSlots {
   }
   // A bundle marked default goes on as its parts, like every other put-on
   // gesture — the wardrobe should never open onto a card over empty slots.
-  return dissolveBundlesInSlots(next, new Map(items.map((i) => [i.id, i])))
+  return dissolveBundlesInSlotsWithCredit(next, new Map(items.map((i) => [i.id, i])))
 }

@@ -40,7 +40,8 @@ import type { RestoreOptions, RestoreSummary } from '../types';
 import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
 import { deleteUserData } from './delete-service';
-import { remapBackupData } from './uuid-remap';
+import { planWardrobeImagePointerFixes, remapBackupData, type WardrobeImagePointerFix } from './uuid-remap';
+import { updateProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 
@@ -93,8 +94,12 @@ export async function restore(
     }
 
     // For new-account mode, remap all UUIDs
+    let wardrobeImagePointerFixes: WardrobeImagePointerFix[] = [];
     if (mode === 'new-account') {
       const remapper = new UuidRemapper();
+      // Planned against the original data with the same remapper, so each
+      // pointer resolves to the id its `files` row is about to receive.
+      wardrobeImagePointerFixes = planWardrobeImagePointerFixes(data, remapper);
       data = remapBackupData(data, targetUserId, remapper);
     }
 
@@ -737,6 +742,39 @@ export async function restore(
       }
     }
 
+    // 22f-ter. Wardrobe picture pointers (new-account mode). The vaults and
+    // the picture `files` rows are in place; each item's frontmatter
+    // `imageFileId` still names the file's pre-remap id. Repoint it through
+    // the ordinary per-mount wardrobe update, which re-projects the document
+    // (so its content hash follows the new text). The mount-scoped writer is
+    // used for every tier: it addresses the folder by mount, and a character
+    // vault's frontmatter carries no characterId to disturb.
+    // An archived character's vault is a tombstone: it is never written, so
+    // its pictures keep their old pointer (readable history, no current pick).
+    const tombstonedVaults = new Set(
+      data.characters
+        .filter((c) => c.archivedAt && c.characterDocumentMountPointId)
+        .map((c) => c.characterDocumentMountPointId as string)
+    );
+    let wardrobeImagePointersFixed = 0;
+    for (const fix of wardrobeImagePointerFixes) {
+      if (tombstonedVaults.has(fix.mountPointId) || tombstonedVaults.has(fix.sourceMountPointId)) continue;
+      try {
+        if (await updateProjectWardrobeItem(fix.mountPointId, fix.itemId, { imageFileId: fix.imageFileId })) {
+          wardrobeImagePointersFixed++;
+        }
+      } catch (error) {
+        warnings.push(`Failed to repoint a wardrobe item's picture (${fix.itemId}): ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to repoint wardrobe item picture after restore', { ...fix, error });
+      }
+    }
+    if (wardrobeImagePointerFixes.length > 0) {
+      moduleLogger.info('Repointed wardrobe item pictures after new-account restore', {
+        planned: wardrobeImagePointerFixes.length,
+        fixed: wardrobeImagePointersFixed,
+      });
+    }
+
     // 22g. Document store embedded chunks. The repo's create() accepts the
     // chunk in serialised form; the schema rehydrates embedding as Float32Array.
     let docMountChunksRestored = 0;
@@ -933,6 +971,27 @@ export async function restore(
     if (textReplacementRulesRestored > 0) {
       moduleLogger.debug('Restored text replacement rules', { count: textReplacementRulesRestored });
     }
+
+    // 22n-bis. Wardrobe wear ledger (global; keyed by item id, no FKs). Written
+    // as given through the repository's import/restore path — no increment.
+    // Replace mode truncated the table first (delete-service); a collision on
+    // (item, wearer) in any other mode takes the backup's tally. The backup's
+    // rows are unique on that key already, so no pre-merge is needed.
+    let wardrobeWearRestored = 0;
+    const wardrobeWearRows = data.wardrobeWear || [];
+    if (wardrobeWearRows.length > 0) {
+      try {
+        await globalRepos.wardrobeWear.upsertRows(wardrobeWearRows);
+        wardrobeWearRestored = wardrobeWearRows.length;
+      } catch (error) {
+        warnings.push(`Failed to restore the wardrobe wear ledger: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore wardrobe wear ledger', { rowCount: wardrobeWearRows.length, error });
+      }
+    }
+    moduleLogger.debug('Restored wardrobe wear ledger', {
+      total: wardrobeWearRows.length,
+      restored: wardrobeWearRestored,
+    });
 
     // 22o. Instance settings — applied last because the mount-point keys
     // reference doc_mount_points that we just restored above. Upsert by key
@@ -1152,6 +1211,7 @@ export async function restore(
       groupDocMountLinks: groupDocMountLinksRestored,
       groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
+      wardrobeWear: wardrobeWearRestored,
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,
         skippedReason: reconcileResult.skippedReason,

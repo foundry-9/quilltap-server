@@ -283,6 +283,7 @@ export function makeAlmanackFixture(
       contextCompression: { enabled: true, windowSize: 5, compressionTargetTokens: 800 },
       agentMode: { maxTurns: 10, defaultEnabled: false },
       storyBackgrounds: { enabled: true, hasDefaultImageProfile: true },
+      wardrobeImages: { hasDesignatedImageProfile: false },
       timestamps: { mode: 'EVERY_MESSAGE', format: 'FRIENDLY' },
       autoLock: { enabled: false, idleMinutes: 15 },
       memoryCascade: {

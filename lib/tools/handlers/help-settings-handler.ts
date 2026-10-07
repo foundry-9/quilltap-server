@@ -149,6 +149,7 @@ async function fetchCategorySettings(
         count: profiles.length,
         profiles: profiles.map(p => sanitizeImageProfile(p as unknown as Record<string, unknown>)),
         storyBackgroundsSettings: settings?.storyBackgroundsSettings || null,
+        wardrobeImageSettings: settings?.wardrobeImageSettings || null,
       }
     }
 

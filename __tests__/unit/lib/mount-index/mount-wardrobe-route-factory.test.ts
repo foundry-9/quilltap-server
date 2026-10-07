@@ -47,6 +47,17 @@ jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
   writeWardrobeInstructionsFile: jest.fn(),
 }));
 
+// Pictures: the PUT validates a hand-set `imageFileId` and the DELETE drops the
+// item's pictures, both through lib/wardrobe/item-images (tested on its own).
+jest.mock('@/lib/wardrobe/item-images', () => {
+  class ForeignWardrobeImageError extends Error {}
+  return {
+    ForeignWardrobeImageError,
+    assertItemImageChoice: jest.fn(async () => undefined),
+    cleanupItemImages: jest.fn(async () => undefined),
+  };
+});
+
 import {
   createMountWardrobeHandlers,
   createMountWardrobeItemHandlers,
@@ -61,6 +72,14 @@ import {
   writeWardrobeInstructionsFile,
 } from '@/lib/wardrobe/wardrobe-instructions';
 
+import {
+  ForeignWardrobeImageError,
+  assertItemImageChoice,
+  cleanupItemImages,
+} from '@/lib/wardrobe/item-images';
+
+const mockAssertImageChoice = jest.mocked(assertItemImageChoice);
+const mockCleanupItemImages = jest.mocked(cleanupItemImages);
 const mockCreate = jest.mocked(createProjectWardrobeItem);
 const mockUpdate = jest.mocked(updateProjectWardrobeItem);
 const mockDelete = jest.mocked(deleteProjectWardrobeItem);
@@ -72,6 +91,11 @@ let ensureOfficialStore: jest.Mock;
 let readWardrobe: jest.Mock;
 let ensureWardrobeFolder: jest.Mock;
 let removeEquippedItemFromAllChats: jest.Mock;
+let deleteByItemIds: jest.Mock;
+let findSummaries: jest.Mock;
+let findHistory: jest.Mock;
+let findByIdRaw: jest.Mock;
+let findChatById: jest.Mock;
 
 const BASE = {
   ownerLabel: 'Project' as const,
@@ -111,9 +135,19 @@ function req(url: string, body?: unknown, method = 'GET') {
 function ctx() {
   return {
     user: { id: 'user-1' },
-    repos: { chats: { removeEquippedItemFromAllChats } },
+    repos: {
+      chats: { removeEquippedItemFromAllChats, findById: findChatById },
+      characters: { findByIdRaw },
+      wardrobeWear: { deleteByItemIds, findSummaries, findHistory },
+    },
   } as never;
 }
+
+/** The origin the project tier's reads attach. */
+const PROJECT_ORIGIN = { scope: 'project', id: 'proj-1', name: 'The Estate' };
+
+/** The canonical never-worn summary every collection read attaches by default. */
+const NEVER_WORN = { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null };
 
 function wardrobeItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -142,6 +176,11 @@ beforeEach(() => {
   readWardrobe = jest.fn().mockResolvedValue([wardrobeItem()]);
   ensureWardrobeFolder = jest.fn().mockResolvedValue(undefined);
   removeEquippedItemFromAllChats = jest.fn().mockResolvedValue(undefined);
+  deleteByItemIds = jest.fn().mockResolvedValue(undefined);
+  findSummaries = jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, NEVER_WORN])));
+  findHistory = jest.fn().mockResolvedValue({ ...NEVER_WORN, wearers: [] });
+  findByIdRaw = jest.fn().mockResolvedValue(null);
+  findChatById = jest.fn().mockResolvedValue(null);
   mockCreate.mockImplementation(async (_mount, i) => i as never);
   mockUpdate.mockResolvedValue(wardrobeItem({ title: 'Updated' }) as never);
   mockDelete.mockResolvedValue(true as never);
@@ -156,10 +195,29 @@ describe('collection GET — listing', () => {
     expect(ensureOfficialStore).toHaveBeenCalledWith('proj-1', 'The Estate');
     expect(ensureWardrobeFolder).toHaveBeenCalledWith('mount-1');
     expect(res.status).toBe(200);
+    // Every item is tagged with the wardrobe the read found it in, and its wear.
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'mount-1',
-      wardrobeItems: [wardrobeItem()],
+      wardrobeItems: [{ ...wardrobeItem(), origin: PROJECT_ORIGIN, wear: NEVER_WORN }],
     });
+  });
+
+  it('attaches each item\'s wear summary from one ledger read', async () => {
+    readWardrobe.mockResolvedValue([wardrobeItem(), wardrobeItem({ id: 'item-2', title: 'Spats' })]);
+    const worn = {
+      wearCount: 3,
+      firstWornAt: '2026-03-14T10:00:00.000Z',
+      lastWornAt: '2026-10-04T10:00:00.000Z',
+      lastWornChatId: '11111111-1111-4111-8111-111111111111',
+    };
+    findSummaries.mockResolvedValue(new Map([['item-1', worn], ['item-2', NEVER_WORN]]));
+
+    const res = await collection().GET(req('https://x.test/'), ctx(), { id: 'proj-1' });
+    const body = await res.json();
+
+    expect(findSummaries).toHaveBeenCalledTimes(1);
+    expect(findSummaries).toHaveBeenCalledWith(['item-1', 'item-2']);
+    expect(body.wardrobeItems.map((i: { wear: unknown }) => i.wear)).toEqual([worn, NEVER_WORN]);
   });
 
   it('honours ?includeArchived', async () => {
@@ -324,7 +382,9 @@ describe('item GET', () => {
     });
 
     expect(readWardrobe).toHaveBeenCalledWith('mount-1', true);
-    await expect(res.json()).resolves.toEqual({ wardrobeItem: wardrobeItem() });
+    await expect(res.json()).resolves.toEqual({
+      wardrobeItem: { ...wardrobeItem(), origin: PROJECT_ORIGIN },
+    });
   });
 
   it('404s on an unknown item', async () => {
@@ -346,6 +406,99 @@ describe('item GET', () => {
     });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('item GET ?action=wear-history', () => {
+  const VIVIENNE = '22222222-2222-4222-8222-222222222222';
+  const GONE = '33333333-3333-4333-8333-333333333333';
+  const CHAT = '44444444-4444-4444-8444-444444444444';
+
+  const HISTORY = {
+    wearCount: 6,
+    firstWornAt: '2026-03-14T10:00:00.000Z',
+    lastWornAt: '2026-10-04T10:00:00.000Z',
+    lastWornChatId: CHAT,
+    wearers: [
+      { characterId: VIVIENNE, wearCount: 3, firstWornAt: '2026-03-14T10:00:00.000Z', lastWornAt: '2026-10-04T10:00:00.000Z', lastWornChatId: CHAT },
+      { characterId: GONE, wearCount: 2, firstWornAt: '2026-04-01T10:00:00.000Z', lastWornAt: '2026-05-01T10:00:00.000Z', lastWornChatId: null },
+      { characterId: null, wearCount: 1, firstWornAt: '2026-03-20T10:00:00.000Z', lastWornAt: '2026-03-20T10:00:00.000Z', lastWornChatId: null },
+    ],
+  };
+
+  function wearHistory(itemId = 'item-1') {
+    return item().GET(req('https://x.test/?action=wear-history'), ctx(), { id: 'proj-1', itemId });
+  }
+
+  beforeEach(() => {
+    findHistory.mockResolvedValue(HISTORY);
+    findByIdRaw.mockImplementation(async (id: string) =>
+      id === VIVIENNE ? { id: VIVIENNE, name: 'Vivienne', defaultImageId: null } : null,
+    );
+  });
+
+  it('names wearers through the raw read, labels the missing and the unattributed', async () => {
+    findChatById.mockResolvedValue({ id: CHAT, title: 'The Thornfield Dinner' });
+
+    const res = await wearHistory();
+
+    expect(res.status).toBe(200);
+    expect(findHistory).toHaveBeenCalledWith('item-1');
+    expect(findByIdRaw).toHaveBeenCalledWith(VIVIENNE);
+    expect(findByIdRaw).toHaveBeenCalledWith(GONE);
+    await expect(res.json()).resolves.toEqual({
+      history: HISTORY,
+      wearers: [
+        { characterId: VIVIENNE, name: 'Vivienne', avatarUrl: null },
+        { characterId: GONE, name: 'a departed character', avatarUrl: null },
+        { characterId: null, name: 'unattributed', avatarUrl: null },
+      ],
+      lastWornChat: { id: CHAT, title: 'The Thornfield Dinner' },
+    });
+  });
+
+  it('costs a label, not a 500, when a wearer read throws', async () => {
+    findByIdRaw.mockRejectedValue(new Error('vault unavailable'));
+
+    const res = await wearHistory();
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.wearers[0]).toEqual({ characterId: VIVIENNE, name: 'a departed character', avatarUrl: null });
+  });
+
+  it('links the last-worn chat only when it still exists', async () => {
+    findChatById.mockResolvedValue(null);
+
+    const body = await (await wearHistory()).json();
+
+    expect(findChatById).toHaveBeenCalledWith(CHAT);
+    expect(body.lastWornChat).toBeNull();
+  });
+
+  it('answers a never-worn item with an empty history and no chat lookup', async () => {
+    findHistory.mockResolvedValue({ ...NEVER_WORN, wearers: [] });
+
+    const body = await (await wearHistory()).json();
+
+    expect(body).toEqual({ history: { ...NEVER_WORN, wearers: [] }, wearers: [], lastWornChat: null });
+    expect(findChatById).not.toHaveBeenCalled();
+  });
+
+  it('404s for an item not in this store, before touching the ledger', async () => {
+    const res = await wearHistory('nope');
+
+    expect(res.status).toBe(404);
+    expect(findHistory).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unknown action rather than serving the item', async () => {
+    const res = await item().GET(req('https://x.test/?action=wear-histroy'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(400);
   });
 });
 
@@ -451,6 +604,39 @@ describe('item DELETE', () => {
     await expect(res.json()).resolves.toEqual({ success: true });
   });
 
+  it("drops the item's wear-ledger rows before deleting", async () => {
+    const order: string[] = [];
+    deleteByItemIds.mockImplementation(async () => {
+      order.push('ledger');
+    });
+    mockDelete.mockImplementation(async () => {
+      order.push('delete');
+      return true as never;
+    });
+
+    const res = await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(deleteByItemIds).toHaveBeenCalledWith(['item-1']);
+    expect(order).toEqual(['ledger', 'delete']);
+    expect(res.status).toBe(200);
+  });
+
+  it('deletes anyway when the ledger cleanup fails', async () => {
+    deleteByItemIds.mockRejectedValue(new Error('ledger busy'));
+
+    const res = await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(removeEquippedItemFromAllChats).toHaveBeenCalledWith('item-1');
+    expect(mockDelete).toHaveBeenCalledWith('mount-1', 'item-1');
+    expect(res.status).toBe(200);
+  });
+
   it('deletes anyway when the cleanup fails — a dangling reference is harmless', async () => {
     removeEquippedItemFromAllChats.mockRejectedValue(new Error('chats db busy'));
 
@@ -490,5 +676,57 @@ describe('the tier label follows the config', () => {
     const res = await GET(req('https://x.test/'), ctx(), { id: 'group-1', itemId: 'item-1' });
 
     await expect(res.json()).resolves.toEqual({ error: 'Group not found' });
+  });
+});
+
+describe('item pictures', () => {
+  it('PUT refuses an imageFileId that is not one of the item\'s own pictures, before writing', async () => {
+    mockAssertImageChoice.mockRejectedValueOnce(new ForeignWardrobeImageError('foreign'));
+
+    const res = await item().PUT(req('https://x.test/', { imageFileId: '0d2b7c1e-6a3f-4c8e-9b51-2f7e3a9d4c10' }, 'PUT'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockAssertImageChoice).toHaveBeenCalledWith(expect.anything(), 'item-1', '0d2b7c1e-6a3f-4c8e-9b51-2f7e3a9d4c10');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('PUT passes one of the item\'s own pictures through', async () => {
+    const res = await item().PUT(req('https://x.test/', { imageFileId: '1e3c8d2f-7b4a-4d9f-8c62-3a8f4b0e5d21' }, 'PUT'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(200);
+    const patch = mockUpdate.mock.calls[0][2] as { imageFileId?: string | null };
+    expect(patch.imageFileId).toBe('1e3c8d2f-7b4a-4d9f-8c62-3a8f4b0e5d21');
+  });
+
+  it('DELETE drops the item\'s pictures once the item is gone', async () => {
+    const order: string[] = [];
+    mockDelete.mockImplementation(async () => {
+      order.push('delete');
+      return true as never;
+    });
+    mockCleanupItemImages.mockImplementationOnce(async () => {
+      order.push('pictures');
+    });
+
+    const res = await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockCleanupItemImages).toHaveBeenCalledWith(expect.anything(), 'item-1', '[Projects v1]', expect.objectContaining({ mountPointId: 'mount-1' }));
+    expect(order).toEqual(['delete', 'pictures']);
+  });
+
+  it('DELETE leaves the pictures alone when there was nothing to delete', async () => {
+    mockDelete.mockResolvedValue(false as never);
+    await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), { id: 'proj-1', itemId: 'item-1' });
+    expect(mockCleanupItemImages).not.toHaveBeenCalled();
   });
 });

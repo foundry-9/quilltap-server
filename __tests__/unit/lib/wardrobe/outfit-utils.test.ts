@@ -10,6 +10,7 @@ import {
   removeFromSlot,
 } from '@/lib/wardrobe/outfit-displacement'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
+import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -474,6 +475,7 @@ describe('wardrobe outfit utilities', () => {
         getEquippedOutfitForCharacter: jest.Mock
         setEquippedOutfit: jest.Mock
       }
+      wardrobeWear: ReturnType<typeof ledgerOver>
     }
 
     beforeEach(() => {
@@ -482,7 +484,8 @@ describe('wardrobe outfit utilities', () => {
           getEquippedOutfitForCharacter: jest.fn(),
           setEquippedOutfit: jest.fn(async (_chatId: string, _characterId: string, slots: unknown) => slots),
         },
-      }
+      } as typeof repos
+      repos.wardrobeWear = ledgerOver(repos.chats)
     })
 
     it('equipItem layers a multi-slot leaf garment when the replace flag is off', async () => {

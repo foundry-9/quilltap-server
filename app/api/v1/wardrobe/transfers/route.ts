@@ -9,12 +9,25 @@
  *   (outfit), the optional `components` field brings its same-container
  *   components along — all or nothing — with the outfit's `componentItemIds`
  *   rewritten to the components' destination ids when copies mint fresh ones.
+ *
+ * The wear ledger (`wardrobe_wear_stats`) is keyed by item id and is never
+ * written here: a move keeps the id, so the tally follows the garment for
+ * free (the source-side delete goes straight to the store, not through
+ * `cleanupEquippedRefs`, so it does not drop the rows); a copy mints a fresh
+ * id and is a new garment whose ledger starts empty.
+ *
+ * Pictures (`Wardrobe/images/<itemId>/` in the source mount) travel with every
+ * transferred item: a move re-links them into the destination mount at the
+ * same path and re-points their `files` rows, dropping the source links once
+ * the source item is gone; a copy links them under the copy's new id with
+ * fresh `files` rows, and the copy's `imageFileId` points at its own copy.
  */
 
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { createContextHandler } from '@/lib/api/middleware'
-import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses'
+import { successResponse, badRequest, conflict, notFound, serverError } from '@/lib/api/responses'
+import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 import { logger } from '@/lib/logger'
 import { readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
@@ -26,6 +39,12 @@ import type { RepositoryContainer } from '@/lib/repositories/factory'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body'
 import { resolveWardrobeContainer } from '@/lib/wardrobe/resolve-container'
+import {
+  carryItemImages,
+  commitMovedImages,
+  resolveContainerMountPointId,
+  type PendingImageMove,
+} from '@/lib/wardrobe/item-images'
 import type { ResolvedWardrobeContainer } from '@/lib/wardrobe/resolve-container'
 import type { WardrobeContainerScope } from '@/lib/wardrobe/wardrobe-container'
 
@@ -210,6 +229,7 @@ async function createAtDestination(
       {
         ...wardrobeItemFromCreateBody(item, destination.characterId),
         migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
+        imageFileId: item.imageFileId ?? null,
         archivedAt: item.archivedAt ?? null,
       },
       {
@@ -357,6 +377,47 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       }
     }
 
+    // A move writes to the source too (its item and its picture links go), so
+    // its writable mount is resolved before anything is written: an archived
+    // source character refuses here (the tombstone), not half-way through.
+    if (action === 'move' || componentMode === 'move') {
+      await resolveContainerMountPointId(source.scope, source.characterId, source.mountPointId)
+    }
+
+    // Pictures are linked at the destination before the items land, so a
+    // landed item's `imageFileId` never dangles. A copy's pointer is rewritten
+    // to its own copied file; a move's rows are re-pointed only after the
+    // source item is gone (commitMovedImages), so a failure before then leaves
+    // the source whole.
+    const destinationMountPointId = await resolveContainerMountPointId(
+      destination.scope,
+      destination.characterId,
+      destination.mountPointId,
+    )
+    const travellers: Array<{ original: WardrobeItem; planned: WardrobeItem; mode: 'move' | 'copy' }> = [
+      ...travellingComponents.map((component, i) => ({
+        original: component,
+        planned: plannedComponents[i],
+        mode: (componentMode === 'copy' ? 'copy' : 'move') as 'move' | 'copy',
+      })),
+      { original: source.item, planned: nextItem, mode: action },
+    ]
+    const pendingImageMoves: Array<{ itemId: string; pending: PendingImageMove }> = []
+    for (const traveller of travellers) {
+      const { fileIdMap, pendingMove } = await carryItemImages(repos, {
+        mode: traveller.mode,
+        sourceItemId: traveller.original.id,
+        destinationItemId: traveller.planned.id,
+        destinationMountPointId,
+        userId: user.id,
+      })
+      const currentImage = traveller.original.imageFileId
+      traveller.planned.imageFileId = currentImage ? fileIdMap.get(currentImage) ?? null : null
+      if (traveller.mode === 'move') {
+        pendingImageMoves.push({ itemId: traveller.original.id, pending: pendingMove })
+      }
+    }
+
     // Components land first so the outfit's references resolve the moment it
     // arrives; the write layer tolerates missing components, but there is no
     // reason to create that window.
@@ -380,6 +441,11 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       if (!removed) {
         return serverError('Failed to remove item from source after move')
       }
+    }
+
+    // The moved items' source-side picture links go once their items have.
+    for (const { itemId, pending } of pendingImageMoves) {
+      await commitMovedImages(repos, itemId, pending)
     }
 
     // Post-write verification: read the outfit BACK from the destination and
@@ -431,6 +497,9 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return badRequest(error.issues.map((issue) => issue.message).join('; '))
+    }
+    if (error instanceof CharacterArchivedError) {
+      return conflict('An archived character\'s wardrobe cannot be changed')
     }
     logger.error('[WardrobeTransfers v1] Failed to transfer item', {}, error instanceof Error ? error : undefined)
     return serverError('Failed to transfer wardrobe item')

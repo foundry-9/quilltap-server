@@ -1,8 +1,28 @@
 # Wardrobe item images: a picture of every garment and outfit
 
-**Status:** spec, approved for implementation. Part 3 of the wardrobe programme; do
-[wardrobe-list-legibility.md](wardrobe-list-legibility.md) first (it reshapes the row this
-spec adds a thumbnail to). Independent of [wardrobe-wear-ledger.md](wardrobe-wear-ledger.md).
+**Status:** implemented in 4.10-dev. Part 3 of the wardrobe programme; follows
+[wardrobe-list-legibility.md](wardrobe-list-legibility.md) (it reshapes the row this spec adds a
+thumbnail to). Independent of [wardrobe-wear-ledger.md](wardrobe-wear-ledger.md).
+
+> **As built (2026-10-07).** Where the implementation departs from the text below:
+>
+> - **§3.1 needed a migration.** `chat_settings` is column-per-field, so `wardrobeImageSettings`
+>   got a column via `add-wardrobe-image-settings-field-v1` (default `{"imageProfileId":null}`).
+> - **§3.3 step 2 reads the owner with `characters.findById`, not `findByIdRaw`.** The raw row
+>   lacks the vault-managed physical description; a read failure still falls to catalogue.
+> - **§3.2 "sanitizer and concealment pass".** The avatar pipeline has neither, so none runs
+>   here; the worn prompt shares only `buildFigureIdentityBlock` with the avatar.
+> - **§7 export.** Picture `files` rows are not emitted as `file` records (that would ship every
+>   picture's bytes twice). Each character-owned `wardrobe_item` record carries `_imageFiles`
+>   (metadata only); the bytes ride in the vault blobs. `importWardrobeItemImages` re-mints the rows
+>   against the imported vault after `reconcileRelationships`, keeping the exported id when free.
+> - **§2.2 the link.** A `files` row's `originalFilename` is its link's leaf name, so the link is
+>   always `Wardrobe/images/<itemId>/<originalFilename>` in the mount its `storageKey` names; that
+>   is how delete/move/copy find it.
+> - **§6.1 caption.** The profile name and reroute flag come from the generate response; a
+>   reopened editor names the stored `generationModel` instead.
+> - **Known limit.** Importing the same character twice into one instance already duplicates
+>   wardrobe item ids across vaults; picture history is keyed by item id, so the two copies share it.
 
 A wardrobe item or outfit may carry an image. It can be **generated in place** from a button
 in the editor (or the row's menu), using an image-generation profile designated for wardrobe

@@ -26,7 +26,7 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
  * Archived items are already gone from the pool the composer is handed (see
  * `mergeWearablePool`); nothing is re-filtered here.
  */
-export function selectComposedOutfits(items: WardrobeItem[]): WardrobeItem[] {
+export function selectComposedOutfits<T extends WardrobeItem>(items: T[]): T[] {
   return items
     .filter((item) => isBundle(item))
     .sort((a, b) => a.title.localeCompare(b.title));
@@ -36,6 +36,6 @@ export function selectComposedOutfits(items: WardrobeItem[]): WardrobeItem[] {
  * The garments in a wearable pool — everything that isn't a composed outfit.
  * Order is the caller's; the slot pickers apply their own filtering.
  */
-export function selectGarments(items: WardrobeItem[]): WardrobeItem[] {
+export function selectGarments<T extends WardrobeItem>(items: T[]): T[] {
   return items.filter((item) => !isBundle(item));
 }

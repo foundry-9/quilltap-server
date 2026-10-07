@@ -1,4 +1,5 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals'
+import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: {
@@ -55,6 +56,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
         },
       },
     }
+    ctx.repos.wardrobeWear = ledgerOver(ctx.repos.chats)
   })
 
   it('equips a vault-only wardrobe item via the overlay lookup (mode: equip)', async () => {
@@ -215,5 +217,98 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       accessories: [],
       hair: [],
     })
+  })
+})
+
+describe('chats [id] equip action — wear ledger', () => {
+  let ctx: any
+  const SHIRT = '5a1e0000-0000-4000-8000-000000000001'
+  const SLACKS = '5a1e0000-0000-4000-8000-000000000002'
+  const SUIT = '5a1e0000-0000-4000-8000-000000000003'
+  const EMPTY = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
+  const shirt = { id: SHIRT, title: 'Shirt', types: ['top'], componentItemIds: [] }
+  const slacks = { id: SLACKS, title: 'Slacks', types: ['bottom'], componentItemIds: [] }
+  const suit = { id: SUIT, title: 'Suit', types: ['top', 'bottom'], componentItemIds: [SHIRT, SLACKS] }
+  const all = new Map<string, any>([shirt, slacks, suit].map((i) => [i.id, i]))
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ctx = {
+      user: { id: 'user-1' },
+      repos: {
+        wardrobe: {
+          findByIdForCharacter: jest.fn(async (_c: string, id: string) => all.get(id) ?? null),
+          findByIdsForCharacter: jest.fn(async (_c: string, ids: string[]) =>
+            ids.map((id) => all.get(id)).filter(Boolean),
+          ),
+        },
+        chats: {
+          findById: jest.fn(),
+          getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null),
+          setEquippedOutfit: jest.fn(async (_c: string, _ch: string, slots: unknown) => slots),
+        },
+        characters: { findById: jest.fn().mockResolvedValue({ id: 'char-1', name: 'Gary' }) },
+      },
+    }
+    ctx.repos.wardrobeWear = ledgerOver(ctx.repos.chats)
+  })
+
+  it('set_all forwards the reachable worn bundles, expanded to their leaves', async () => {
+    const response = await handleEquipSlot(
+      makeRequest({
+        characterId: 'char-1',
+        mode: 'set_all',
+        slots: { ...EMPTY, top: [SHIRT], bottom: [SLACKS] },
+        wornBundleIds: [SUIT, SHIRT, 'not-reachable'],
+      }),
+      'chat-1',
+      ctx,
+    )
+    expect(response.status).toBe(200)
+    const input = ctx.repos.wardrobeWear.commitEquippedOutfit.mock.calls[0][0]
+    expect(input).toMatchObject({
+      chatId: 'chat-1',
+      characterId: 'char-1',
+      source: 'ui',
+      // A leaf claimed as a bundle and an id the character cannot see are dropped.
+      wornBundles: [{ id: SUIT, leafIds: [SHIRT, SLACKS] }],
+    })
+  })
+
+  it('set_all without wornBundleIds claims nothing', async () => {
+    await handleEquipSlot(
+      makeRequest({ characterId: 'char-1', mode: 'set_all', slots: { ...EMPTY, top: [SHIRT] } }),
+      'chat-1',
+      ctx,
+    )
+    expect(ctx.repos.wardrobeWear.commitEquippedOutfit.mock.calls[0][0].wornBundles).toEqual([])
+  })
+
+  it('wearing a bundle claims it with the leaves it dissolved into', async () => {
+    await handleEquipSlot(makeRequest({ characterId: 'char-1', mode: 'wear', itemId: SUIT }), 'chat-1', ctx)
+    const input = ctx.repos.wardrobeWear.commitEquippedOutfit.mock.calls[0][0]
+    expect(input).toMatchObject({ source: 'ui', wornBundles: [{ id: SUIT, leafIds: [SHIRT, SLACKS] }] })
+    expect(input.nextSlots).toMatchObject({ top: [SHIRT], bottom: [SLACKS] })
+  })
+
+  it('set_all reports a failed save instead of success, and schedules nothing', async () => {
+    const { enqueueWardrobeOutfitAnnouncement } = require('@/lib/background-jobs/queue-service')
+    ctx.repos.wardrobeWear.commitEquippedOutfit.mockRejectedValueOnce(new Error('disk full'))
+    const response = await handleEquipSlot(
+      makeRequest({ characterId: 'char-1', mode: 'set_all', slots: { ...EMPTY, top: [SHIRT] } }),
+      'chat-1',
+      ctx,
+    )
+    expect(response.status).toBe(500)
+    expect(enqueueWardrobeOutfitAnnouncement).not.toHaveBeenCalled()
+  })
+
+  it("taking off is committed as 'take-off'", async () => {
+    await handleEquipSlot(
+      makeRequest({ characterId: 'char-1', mode: 'clear_slot', slot: 'top' }),
+      'chat-1',
+      ctx,
+    )
+    expect(ctx.repos.wardrobeWear.commitEquippedOutfit.mock.calls[0][0]).toMatchObject({ source: 'take-off', wornBundles: [] })
   })
 })

@@ -68,3 +68,11 @@ it('truncates conversation_annotations on a replace-mode / delete-all clear', as
   const truncated = rawQuery.mock.calls.map((c) => c[0] as string);
   expect(truncated).toContain('DELETE FROM "conversation_annotations"');
 });
+
+it('truncates wardrobe_wear_stats so a replace-mode restore replaces the ledger', async () => {
+  rawQuery.mockClear();
+  await deleteUserData('user-1');
+
+  const truncated = rawQuery.mock.calls.map((c) => c[0] as string);
+  expect(truncated).toContain('DELETE FROM "wardrobe_wear_stats"');
+});

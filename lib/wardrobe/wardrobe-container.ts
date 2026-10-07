@@ -25,6 +25,66 @@ export interface WardrobeContainer {
 
 export const GENERAL_CONTAINER: WardrobeContainer = { scope: 'general', id: null }
 
+/** Display name of the singleton General library, as an origin chip spells it. */
+export const GENERAL_WARDROBE_NAME = 'Quilltap General'
+
+/**
+ * Which wardrobe a collection read found an item in. A read-time annotation
+ * attached by the list endpoints on the way out — never persisted, never
+ * exported, never accepted on create/update. A garment has no idea which
+ * project it lives in; the read that found it does.
+ */
+export interface WardrobeOrigin {
+  scope: WardrobeContainerScope
+  /** Container id; null for `general`. */
+  id: string | null
+  /** Display name, resolved server-side. */
+  name: string
+}
+
+/** The origin every Quilltap General read attaches. */
+export const GENERAL_WARDROBE_ORIGIN: WardrobeOrigin = {
+  scope: 'general',
+  id: null,
+  name: GENERAL_WARDROBE_NAME,
+}
+
+export type WardrobeItemWithOrigin = WardrobeItem & { origin: WardrobeOrigin }
+
+/**
+ * A listed item that may carry an origin — the prop type for list components,
+ * which also render items from callers that never fetched through a
+ * collection read (a fixture, an equipped id resolved from elsewhere).
+ */
+export type ListedWardrobeItem = WardrobeItem & { origin?: WardrobeOrigin }
+
+/**
+ * The one place the origin chip text is spelled. Returns null for a
+ * character-owned item (a garment in its own vault is not "shared from"
+ * anywhere) and for an item that arrived without an origin.
+ */
+export function wardrobeOriginLabel(origin: WardrobeOrigin | null | undefined): string | null {
+  if (!origin) return null
+  switch (origin.scope) {
+    case 'general':
+      return `Shared · ${GENERAL_WARDROBE_NAME}`
+    case 'project':
+      return `Project · ${origin.name}`
+    case 'group':
+      return `Group · ${origin.name}`
+    case 'character':
+      return null
+  }
+}
+
+/** Tag every item in a collection read with the container it came from. */
+export function withOrigin(
+  items: readonly WardrobeItem[],
+  origin: WardrobeOrigin,
+): WardrobeItemWithOrigin[] {
+  return items.map((item) => ({ ...item, origin }))
+}
+
 /**
  * The container an item is addressed through in the *character view*, where
  * the list is a merge of every tier the character can reach: a

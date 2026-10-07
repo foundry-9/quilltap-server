@@ -167,3 +167,30 @@ export function formatRelativeAge(ts: number, nowMs: number = Date.now()): strin
   const minutes = Math.floor(seconds / 60)
   return `${minutes}m ago`
 }
+
+/**
+ * Day-resolution relative age ("today", "yesterday", "3 days ago", "last
+ * week", "2 weeks ago", "last month", "4 months ago", "2 years ago") for a raw
+ * epoch-millisecond timestamp.
+ *
+ * Distinct from {@link formatRelativeAge}, which counts seconds and minutes
+ * for a readout that ticks. This is the ladder for things that happened days
+ * or months ago — a memory's age in recall, a garment last worn. The memory
+ * injector's label (`formatRelativeAge` in `lib/memory/memory-weighting.ts`)
+ * delegates here so the two readings cannot drift.
+ *
+ * `nowMs` is injectable so callers (and their tests) can pin the clock.
+ */
+export function formatRelativeDays(ts: number, nowMs: number = Date.now()): string {
+  const daysOld = Math.max(0, (nowMs - ts) / 86400000)
+
+  if (daysOld < 1) return 'today'
+  if (daysOld < 2) return 'yesterday'
+  if (daysOld < 7) return `${Math.floor(daysOld)} days ago`
+  if (daysOld < 14) return 'last week'
+  if (daysOld < 30) return `${Math.floor(daysOld / 7)} weeks ago`
+  if (daysOld < 60) return 'last month'
+  if (daysOld < 365) return `${Math.floor(daysOld / 30)} months ago`
+  const years = Math.floor(daysOld / 365)
+  return `${years} year${years > 1 ? 's' : ''} ago`
+}

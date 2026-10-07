@@ -41,7 +41,7 @@ const logger = createServiceLogger('ConciergeRefusalLedger')
 export interface RefusalRecord {
   chatId: string
   kind: 'text' | 'image'
-  purpose: 'chat' | 'cheap' | 'tool' | 'lantern' | 'avatar' | 'dialog'
+  purpose: 'chat' | 'cheap' | 'tool' | 'lantern' | 'avatar' | 'dialog' | 'wardrobe'
   refusedProfileId: string
   refusedProfileName: string
   provider: string

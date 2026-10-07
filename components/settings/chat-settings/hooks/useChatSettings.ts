@@ -27,6 +27,7 @@ import {
   AgentModeSettings,
   DEFAULT_AGENT_MODE_SETTINGS,
   DEFAULT_STORY_BACKGROUNDS_SETTINGS,
+  DEFAULT_WARDROBE_IMAGE_SETTINGS,
   ConciergeSettings,
   ConciergeSettingsUpdate,
   DEFAULT_CONCIERGE_SETTINGS,
@@ -71,6 +72,7 @@ interface UseChatSettingsReturn {
   handleAgentModeMaxTurnsChange: (value: number) => Promise<void>
   handleStoryBackgroundsEnabledChange: (value: boolean) => Promise<void>
   handleStoryBackgroundsProfileChange: (profileId: string | null) => Promise<void>
+  handleWardrobeImageProfileChange: (profileId: string | null) => Promise<void>
   handleConciergeUpdate: (updates: ConciergeSettingsUpdate) => Promise<void>
   handleTimezoneChange: (timezone: string | null) => Promise<void>
   handleAutonomousRoomSettingsUpdate: (updates: Partial<AutonomousRoomSettings>) => Promise<void>
@@ -645,6 +647,26 @@ export function useChatSettings(): UseChatSettingsReturn {
   )
 
   /**
+   * Update the image profile that draws wardrobe item pictures (null = the default image profile)
+   * Uses settingsRef to prevent race conditions with concurrent updates
+   */
+  const handleWardrobeImageProfileChange = useCallback(
+    async (profileId: string | null) => {
+      // Use ref for latest state to prevent race conditions
+      const latestSettings = settingsRef.current
+      if (!latestSettings) return
+
+      const currentSettings = latestSettings.wardrobeImageSettings || DEFAULT_WARDROBE_IMAGE_SETTINGS
+      await patchChatSettings(
+        { wardrobeImageSettings: { ...currentSettings, imageProfileId: profileId } },
+        'Failed to update wardrobe image settings',
+        'Failed to update wardrobe image profile'
+      )
+    },
+    [patchChatSettings]
+  )
+
+  /**
    * Update the Concierge's settings. Top-level fields replace; `display` and
    * `preScreen` deep-merge, so a card can send just the field it changed.
    * Uses settingsRef to prevent race conditions with concurrent updates
@@ -721,6 +743,7 @@ export function useChatSettings(): UseChatSettingsReturn {
     handleAgentModeMaxTurnsChange,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
+    handleWardrobeImageProfileChange,
     handleConciergeUpdate,
     handleTimezoneChange,
     handleAutonomousRoomSettingsUpdate,

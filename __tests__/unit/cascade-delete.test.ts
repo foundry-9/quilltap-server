@@ -646,5 +646,71 @@ describe('Cascade Delete Utilities', () => {
 
       expect(charsRepo.delete).toHaveBeenCalledWith('char-1')
     })
+
+    function minimalReposFor(character: unknown, wardrobeWear: unknown, order?: string[]) {
+      return {
+        characters: {
+          findByIdRaw: jest.fn().mockResolvedValue(character),
+          findByDefaultImageId: jest.fn().mockResolvedValue([]),
+          findByAvatarOverrideImageId: jest.fn().mockResolvedValue([]),
+          delete: jest.fn().mockImplementation(async () => {
+            order?.push('delete-character')
+          }),
+        },
+        chats: {
+          findByCharacterId: jest.fn().mockResolvedValue([]),
+          getMessages: jest.fn().mockResolvedValue([]),
+        },
+        personas: { findByDefaultImageId: jest.fn().mockResolvedValue([]) },
+        memories: {
+          countByCharacterId: jest.fn().mockResolvedValue(0),
+          findByCharacterId: jest.fn().mockResolvedValue([]),
+        },
+        files: {
+          findById: jest.fn().mockResolvedValue(null),
+          findByIds: jest.fn().mockResolvedValue([]),
+          delete: jest.fn().mockResolvedValue(true),
+        },
+        docMountFileLinks: { findByIdWithContent: jest.fn().mockResolvedValue(null) },
+        characterPluginData: { deleteByCharacterId: jest.fn().mockResolvedValue(0) },
+        wardrobeWear,
+      }
+    }
+
+    it("folds the character's wear-ledger rows into unattributed before deleting the character", async () => {
+      const order: string[] = []
+      const wardrobeWear = {
+        foldWearerIntoUnattributed: jest.fn().mockImplementation(async () => {
+          order.push('fold')
+        }),
+      }
+      const repos = minimalReposFor(createMockCharacter('char-1'), wardrobeWear, order)
+      mockGetRepositories.mockReturnValue(repos as any)
+
+      const result = await executeCascadeDelete('char-1', {
+        deleteExclusiveChats: false,
+        deleteExclusiveImages: false,
+      })
+
+      expect(result.success).toBe(true)
+      expect(wardrobeWear.foldWearerIntoUnattributed).toHaveBeenCalledWith('char-1')
+      expect(order).toEqual(['fold', 'delete-character'])
+    })
+
+    it('still deletes the character when the wear-ledger fold fails', async () => {
+      const wardrobeWear = {
+        foldWearerIntoUnattributed: jest.fn().mockRejectedValue(new Error('ledger busy') as never),
+      }
+      const repos = minimalReposFor(createMockCharacter('char-1'), wardrobeWear)
+      mockGetRepositories.mockReturnValue(repos as any)
+
+      const result = await executeCascadeDelete('char-1', {
+        deleteExclusiveChats: false,
+        deleteExclusiveImages: false,
+      })
+
+      expect(result.success).toBe(true)
+      expect(repos.characters.delete).toHaveBeenCalledWith('char-1')
+    })
   })
 })

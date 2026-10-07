@@ -219,6 +219,7 @@ async function applyOutfitForAddedParticipant(
         projectMountPointIds: await resolveProjectMountPointIds(chat.projectId ?? null),
         scenarioText: chat.scenarioText ?? null,
         cheapLLMConfig: buildCheapLLMConfig(chatSettings),
+        source: 'participant-added',
       },
     );
     logger.debug('[Chats v1] Outfit applied for added participant', {

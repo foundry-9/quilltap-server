@@ -24,13 +24,20 @@ import type {
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
+  ExportedWardrobeImageFile,
+  ExportedWardrobeItem,
 } from './types';
 import type { MessageEvent, Memory } from '@/lib/schemas/types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { isFileExcludedFromExport } from './excluded-files';
 import { getPlugin } from '@/lib/plugins/registry';
 import { listPortableInstanceSettings } from '@/lib/instance-settings';
+import {
+  isWardrobeItemDocumentPath,
+  wardrobeItemIdForDocument,
+} from '@/lib/database/repositories/vault-overlay/parsers';
 
 const logger = baseLogger.child({ module: 'export:ndjson-writer' });
 const APP_VERSION = packageJson.version;
@@ -169,11 +176,48 @@ function bump(counts: QuilltapExportCounts, key: keyof QuilltapExportCounts, del
 // PER-ENTITY ASYNC GENERATORS
 // ============================================================================
 
+/**
+ * The `files` rows of one wardrobe item's pictures, reduced to the metadata an
+ * importer needs to re-mint them against the imported vault's blobs. The
+ * export-exclusion predicate is asked like everywhere else; IMAGE files pass.
+ */
+async function exportedWardrobeImageFiles(
+  repos: ReturnType<typeof getRepositories>,
+  itemId: string,
+): Promise<ExportedWardrobeImageFile[]> {
+  try {
+    const files = (await repos.files.findByLinkedTo(itemId)).filter(
+      (f) => f.category === 'IMAGE' && !isFileExcludedFromExport(f),
+    );
+    return files.map((f) => ({
+      id: f.id,
+      originalFilename: f.originalFilename,
+      mimeType: f.mimeType,
+      size: f.size,
+      width: f.width ?? null,
+      height: f.height ?? null,
+      source: f.source,
+      generationPrompt: f.generationPrompt ?? null,
+      generationModel: f.generationModel ?? null,
+      generationRevisedPrompt: f.generationRevisedPrompt ?? null,
+      description: f.description ?? null,
+      createdAt: f.createdAt,
+    }));
+  } catch (error) {
+    logger.warn('Failed to load wardrobe item pictures for export', {
+      itemId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
 async function* streamCharacters(
   userId: string,
   ids: string[],
   includeMemories: boolean,
-  counts: QuilltapExportCounts
+  counts: QuilltapExportCounts,
+  wardrobeItemIds: Set<string>
 ): AsyncGenerator<QtapRecord> {
   const repos = getUserRepositories(userId);
   const globalRepos = getRepositories();
@@ -200,9 +244,22 @@ async function* streamCharacters(
     // Wardrobe items — one record each. Read through the overlay: post-cutover
     // the character vault is the authoritative store, not the wardrobe_items table.
     try {
-      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+      // Archived garments too: the vault carries their documents and picture
+      // blobs regardless, and an archived item's record is what lets the
+      // importer re-mint its pictures and keep its ledger rows.
+      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id, true);
       for (const item of wardrobeItems) {
-        yield { kind: 'wardrobe_item', characterId: id, data: item };
+        // `origin` is a read-time annotation the list endpoints attach; the
+        // repository never sets it, and it must never ride into a bundle.
+        const { origin: _origin, ...rest } = item as typeof item & { origin?: unknown };
+        // A character-owned item carries its pictures' file metadata; the
+        // bytes ride in the vault's blobs below (Wardrobe/images/<itemId>/).
+        const imageFiles = rest.characterId ? await exportedWardrobeImageFiles(globalRepos, rest.id) : [];
+        const data: ExportedWardrobeItem = imageFiles.length > 0 ? { ...rest, _imageFiles: imageFiles } : rest;
+        yield { kind: 'wardrobe_item', characterId: id, data };
+        // Character-owned items only: a shared item the overlay might surface
+        // here is not this bundle's to carry, nor is its wear ledger.
+        if (data.characterId) wardrobeItemIds.add(data.id);
       }
     } catch (error) {
       logger.warn('Failed to load wardrobe items for character export', {
@@ -244,6 +301,7 @@ async function* streamCharacters(
       try {
         yield* streamOneStore(globalRepos, character.characterDocumentMountPointId, counts, {
           skipProjectLinks: true,
+          wardrobeItemIds,
         });
       } catch (error) {
         logger.warn('Failed to export character vault', {
@@ -594,12 +652,15 @@ async function* streamGroups(
  * @param opts.skipProjectLinks omit `project_doc_mount_link` records. Character
  * vaults never carry project links, so the characters path passes this to keep
  * bundles clean.
+ * @param opts.wardrobeItemIds collector for the ids of the wardrobe items this
+ * store carries (`Wardrobe/*.md` documents), so the export can emit their
+ * wear-ledger rows once every store has been streamed.
  */
 async function* streamOneStore(
   repos: ReturnType<typeof getRepositories>,
   mountPointId: string,
   counts: QuilltapExportCounts,
-  opts?: { skipProjectLinks?: boolean }
+  opts?: { skipProjectLinks?: boolean; wardrobeItemIds?: Set<string> }
 ): AsyncGenerator<QtapRecord> {
   {
     const mp = await repos.docMountPoints.findById(mountPointId);
@@ -664,6 +725,9 @@ async function* streamOneStore(
           },
         };
         bump(counts, 'documentStoreDocuments');
+        if (opts?.wardrobeItemIds && isWardrobeItemDocumentPath(d.relativePath)) {
+          opts.wardrobeItemIds.add(wardrobeItemIdForDocument(d));
+        }
       }
     }
 
@@ -724,14 +788,48 @@ async function* streamOneStore(
 async function* streamDocumentStores(
   _userId: string,
   ids: string[],
-  counts: QuilltapExportCounts
+  counts: QuilltapExportCounts,
+  wardrobeItemIds: Set<string>
 ): AsyncGenerator<QtapRecord> {
   // Document stores are instance-scoped — use global repos on purpose.
   const repos = getRepositories();
 
   for (const id of ids) {
-    yield* streamOneStore(repos, id, counts);
+    yield* streamOneStore(repos, id, counts, { wardrobeItemIds });
   }
+}
+
+/**
+ * The wear ledger (`wardrobe_wear_stats`) for every wardrobe item the export
+ * carried — character-owned items and shared items riding in a store's
+ * `Wardrobe/` folder alike. Emitted last, after every entity record, so the
+ * importer has every item, character and chat in hand before it remaps a row.
+ * The ledger is keyed by item id with no FK, so rows for an item are found by
+ * id alone; a failure here costs the tally, never the export.
+ */
+async function* streamWardrobeWear(
+  wardrobeItemIds: Set<string>,
+  counts: QuilltapExportCounts
+): AsyncGenerator<QtapRecord> {
+  if (wardrobeItemIds.size === 0) return;
+  let rows: WardrobeWearStatsRow[] = [];
+  try {
+    rows = await getRepositories().wardrobeWear.findRowsForItems(Array.from(wardrobeItemIds));
+  } catch (error) {
+    logger.warn('Failed to load wardrobe wear ledger for export', {
+      itemCount: wardrobeItemIds.size,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
+  for (const row of rows) {
+    yield { kind: 'wardrobe_wear', data: row };
+    bump(counts, 'wardrobeWear');
+  }
+  logger.debug('Exported wardrobe wear ledger rows', {
+    itemCount: wardrobeItemIds.size,
+    rowCount: rows.length,
+  });
 }
 
 /**
@@ -1024,10 +1122,12 @@ export async function* streamExportRecords(
   };
 
   const includeMemories = options.includeMemories ?? false;
+  /** Ids of every wardrobe item the export carries, for the wear-ledger tail. */
+  const wardrobeItemIds = new Set<string>();
 
   switch (options.type) {
     case 'characters':
-      yield* streamCharacters(userId, ids, includeMemories, counts);
+      yield* streamCharacters(userId, ids, includeMemories, counts, wardrobeItemIds);
       break;
     case 'chats':
       yield* streamChats(userId, ids, includeMemories, counts);
@@ -1054,7 +1154,7 @@ export async function* streamExportRecords(
       yield* streamGroups(userId, ids, counts);
       break;
     case 'document-stores':
-      yield* streamDocumentStores(userId, ids, counts);
+      yield* streamDocumentStores(userId, ids, counts, wardrobeItemIds);
       break;
     case 'files':
       yield* streamFiles(userId, ids, counts);
@@ -1074,6 +1174,8 @@ export async function* streamExportRecords(
     default:
       throw new Error(`Unknown export type: ${options.type}`);
   }
+
+  yield* streamWardrobeWear(wardrobeItemIds, counts);
 
   yield { kind: '__footer__', counts };
 

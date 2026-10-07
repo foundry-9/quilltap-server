@@ -78,6 +78,7 @@ interface WriterGlobalRepos {
   docMountDocuments: { findByMountPointId: jest.Mock };
   docMountBlobs: { listByMountPoint: jest.Mock; readData: jest.Mock };
   projectDocMountLinks: { findByMountPointId: jest.Mock };
+  wardrobeWear: { findRowsForItems: jest.Mock };
 }
 
 function makeUserRepos(): WriterUserRepos {
@@ -173,6 +174,11 @@ function makeGlobalRepos(): WriterGlobalRepos {
     },
     projectDocMountLinks: {
       findByMountPointId: jest
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValue([]),
+    },
+    wardrobeWear: {
+      findRowsForItems: jest
         .fn<() => Promise<unknown[]>>()
         .mockResolvedValue([]),
     },
@@ -356,6 +362,278 @@ describe('ndjson-writer', () => {
       };
       expect(footer.counts.characters).toBe(1);
       expect(footer.counts.memories).toBe(2);
+    });
+  });
+
+  describe('streamExportRecords() - wardrobe items', () => {
+    it('never carries the read-time origin annotation into a wardrobe_item record', async () => {
+      const character = createMockCharacter({ userId: testUserId });
+      userRepos.characters.findById.mockImplementation(async (id: string) =>
+        id === character.id ? character : null
+      );
+      globalRepos.wardrobe.findByCharacterId.mockResolvedValue([
+        {
+          id: 'coat',
+          characterId: character.id,
+          title: 'Travelling coat',
+          types: ['top'],
+          origin: { scope: 'character', id: character.id, name: 'Somebody' },
+        },
+      ]);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'characters',
+          scope: 'selected',
+          selectedIds: [character.id],
+          includeMemories: false,
+        })
+      )) as Array<Record<string, unknown>>;
+
+      const wardrobe = records.filter((r) => r.kind === 'wardrobe_item');
+      expect(wardrobe).toHaveLength(1);
+      const data = wardrobe[0].data as Record<string, unknown>;
+      expect(data.title).toBe('Travelling coat');
+      expect(data).not.toHaveProperty('origin');
+    });
+
+    it("carries a character-owned item's imageFileId and its pictures' file metadata", async () => {
+      const character = createMockCharacter({ userId: testUserId });
+      userRepos.characters.findById.mockImplementation(async (id: string) =>
+        id === character.id ? character : null
+      );
+      globalRepos.wardrobe.findByCharacterId.mockResolvedValue([
+        { id: 'coat', characterId: character.id, title: 'Travelling coat', types: ['top'], imageFileId: 'file-1' },
+      ]);
+      const findByLinkedTo = jest.fn<(id: string) => Promise<unknown[]>>().mockResolvedValue([
+        {
+          id: 'file-1',
+          originalFilename: '20260101-120000-generated.webp',
+          mimeType: 'image/webp',
+          size: 1234,
+          width: 768,
+          height: 1024,
+          source: 'GENERATED',
+          category: 'IMAGE',
+          folderPath: null,
+          generationPrompt: 'a travelling coat',
+          generationModel: 'gpt-image-1',
+          createdAt: '2026-01-01T12:00:00.000Z',
+          storageKey: 'mount-blob:vault:blob',
+        },
+        // Not a picture: never carried.
+        { id: 'file-2', category: 'DOCUMENT', folderPath: null, originalFilename: 'notes.md' },
+      ]);
+      (globalRepos as unknown as { files: unknown }).files = { findByLinkedTo };
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'characters',
+          scope: 'selected',
+          selectedIds: [character.id],
+          includeMemories: false,
+        })
+      )) as Array<Record<string, unknown>>;
+
+      const data = records.find((r) => r.kind === 'wardrobe_item')!.data as Record<string, unknown>;
+      expect(findByLinkedTo).toHaveBeenCalledWith('coat');
+      // Archived garments are read too: their pictures ride in the vault.
+      expect(globalRepos.wardrobe.findByCharacterId).toHaveBeenCalledWith(character.id, true);
+      expect(data.imageFileId).toBe('file-1');
+      const imageFiles = data._imageFiles as Array<Record<string, unknown>>;
+      expect(imageFiles).toHaveLength(1);
+      expect(imageFiles[0]).toMatchObject({
+        id: 'file-1',
+        originalFilename: '20260101-120000-generated.webp',
+        source: 'GENERATED',
+        generationPrompt: 'a travelling coat',
+      });
+      // Metadata only: the bytes ride in the vault's blobs, not on the record.
+      expect(imageFiles[0]).not.toHaveProperty('storageKey');
+    });
+  });
+
+  describe('streamExportRecords() - wardrobe wear ledger', () => {
+    const COAT_ID = '11111111-1111-4111-8111-111111111111';
+    const HAT_ID = '22222222-2222-4222-8222-222222222222';
+    const SCARF_ID = '33333333-3333-4333-8333-333333333333';
+
+    function wearRow(itemId: string, overrides: Record<string, unknown> = {}) {
+      return {
+        id: generateId(),
+        itemId,
+        wearerCharacterId: null,
+        wearCount: 2,
+        firstWornAt: '2026-01-01T00:00:00.000Z',
+        lastWornAt: '2026-02-01T00:00:00.000Z',
+        lastWornChatId: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-02-01T00:00:00.000Z',
+        ...overrides,
+      };
+    }
+
+    function wardrobeDoc(mountPointId: string, relativePath: string, id: string | null) {
+      const fileName = relativePath.split('/').pop() as string;
+      return {
+        mountPointId,
+        relativePath,
+        fileName,
+        fileType: 'markdown',
+        content: id ? `---\nid: ${id}\ntitle: ${fileName}\ntypes: [top]\n---\n` : '# Notes\n',
+        contentSha256: 'a'.repeat(64),
+        plainTextLength: 10,
+        lastModified: '2026-01-01T00:00:00.000Z',
+        folderId: null,
+        fileId: generateId(),
+        linkId: generateId(),
+        linkGroupId: null,
+      };
+    }
+
+    function mountPoint(id: string) {
+      return {
+        id,
+        name: 'Store',
+        basePath: '',
+        mountType: 'database' as const,
+        storeType: 'documents',
+        includePatterns: [],
+        excludePatterns: [],
+        enabled: true,
+      };
+    }
+
+    it("emits a character's ledger rows — owned items and vault items — after every other record", async () => {
+      const vaultId = generateId();
+      const character = {
+        ...createMockCharacter({ userId: testUserId }),
+        characterDocumentMountPointId: vaultId,
+      };
+      userRepos.characters.findById.mockImplementation(async (id: string) =>
+        id === character.id ? character : null
+      );
+      globalRepos.wardrobe.findByCharacterId.mockResolvedValue([
+        { id: COAT_ID, characterId: character.id, title: 'Coat', types: ['top'] },
+      ]);
+      globalRepos.docMountPoints.findById.mockImplementation(async (id: string) =>
+        id === vaultId ? mountPoint(vaultId) : null
+      );
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        wardrobeDoc(vaultId, 'Wardrobe/Coat.md', COAT_ID),
+        wardrobeDoc(vaultId, 'Wardrobe/Hat.md', HAT_ID),
+      ]);
+      const rows = [wearRow(COAT_ID, { wearerCharacterId: character.id }), wearRow(HAT_ID)];
+      globalRepos.wardrobeWear.findRowsForItems.mockResolvedValue(rows);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'characters',
+          scope: 'selected',
+          selectedIds: [character.id],
+        })
+      )) as Array<Record<string, unknown>>;
+
+      const requested = globalRepos.wardrobeWear.findRowsForItems.mock.calls[0][0] as string[];
+      expect([...requested].sort()).toEqual([COAT_ID, HAT_ID].sort());
+
+      const kinds = records.map((r) => r.kind as string);
+      const wearIdx = kinds.indexOf('wardrobe_wear');
+      expect(kinds.filter((k) => k === 'wardrobe_wear')).toHaveLength(2);
+      // After every entity record, immediately before the footer.
+      expect(kinds.slice(wearIdx)).toEqual(['wardrobe_wear', 'wardrobe_wear', '__footer__']);
+      expect(records[wearIdx].data).toEqual(rows[0]);
+
+      const footer = records[records.length - 1] as { counts: Record<string, number> };
+      expect(footer.counts.wardrobeWear).toBe(2);
+    });
+
+    it("emits the ledger for a store's Wardrobe items only — not notes, nested files or instructions", async () => {
+      const storeId = generateId();
+      globalRepos.docMountPoints.findById.mockResolvedValue(mountPoint(storeId));
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        wardrobeDoc(storeId, 'Wardrobe/Scarf.md', SCARF_ID),
+        wardrobeDoc(storeId, 'Wardrobe/instructions.md', null),
+        wardrobeDoc(storeId, 'Wardrobe/Old/Coat.md', COAT_ID),
+        wardrobeDoc(storeId, 'Notes/Hat.md', HAT_ID),
+      ]);
+      globalRepos.wardrobeWear.findRowsForItems.mockResolvedValue([wearRow(SCARF_ID)]);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'document-stores',
+          scope: 'selected',
+          selectedIds: [storeId],
+        })
+      )) as Array<Record<string, unknown>>;
+
+      expect(globalRepos.wardrobeWear.findRowsForItems).toHaveBeenCalledWith([SCARF_ID]);
+      expect(records.filter((r) => r.kind === 'wardrobe_wear')).toHaveLength(1);
+    });
+
+    it('reads no ledger when the export carries no wardrobe items', async () => {
+      const storeId = generateId();
+      globalRepos.docMountPoints.findById.mockResolvedValue(mountPoint(storeId));
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        wardrobeDoc(storeId, 'Notes/Hat.md', HAT_ID),
+      ]);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'document-stores',
+          scope: 'selected',
+          selectedIds: [storeId],
+        })
+      )) as Array<Record<string, unknown>>;
+
+      expect(globalRepos.wardrobeWear.findRowsForItems).not.toHaveBeenCalled();
+      expect(records.some((r) => r.kind === 'wardrobe_wear')).toBe(false);
+    });
+
+    it('still finishes the export when the ledger cannot be read', async () => {
+      const storeId = generateId();
+      globalRepos.docMountPoints.findById.mockResolvedValue(mountPoint(storeId));
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        wardrobeDoc(storeId, 'Wardrobe/Scarf.md', SCARF_ID),
+      ]);
+      globalRepos.wardrobeWear.findRowsForItems.mockRejectedValue(new Error('ledger busy') as never);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'document-stores',
+          scope: 'selected',
+          selectedIds: [storeId],
+        })
+      )) as Array<Record<string, unknown>>;
+
+      expect(records[records.length - 1].kind).toBe('__footer__');
+      expect(records.some((r) => r.kind === 'wardrobe_wear')).toBe(false);
+    });
+
+    it('round-trips through the stream reader into data.wardrobeWear', async () => {
+      const storeId = generateId();
+      globalRepos.docMountPoints.findById.mockResolvedValue(mountPoint(storeId));
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        wardrobeDoc(storeId, 'Wardrobe/Scarf.md', SCARF_ID),
+      ]);
+      const ledger = [wearRow(SCARF_ID)];
+      globalRepos.wardrobeWear.findRowsForItems.mockResolvedValue(ledger);
+
+      const { assembleExportFromStream } = await import('@/lib/import/quilltap-import-stream');
+      const records = await drain(
+        streamExportRecords(testUserId, {
+          type: 'document-stores',
+          scope: 'selected',
+          selectedIds: [storeId],
+        })
+      );
+      const assembled = await assembleExportFromStream(
+        (async function* () {
+          for (const r of records) yield JSON.parse(JSON.stringify(r));
+        })()
+      );
+
+      expect((assembled.data as { wardrobeWear?: unknown[] }).wardrobeWear).toEqual(ledger);
     });
   });
 

@@ -358,6 +358,9 @@ export function buildWardrobeItemFile(
   if (item.migratedFromClothingRecordId) {
     data.migratedFromClothingRecordId = item.migratedFromClothingRecordId;
   }
+  if (item.imageFileId) {
+    data.imageFileId = item.imageFileId;
+  }
   data.createdAt = item.createdAt;
   data.updatedAt = item.updatedAt;
 

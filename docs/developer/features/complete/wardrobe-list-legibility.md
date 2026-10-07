@@ -1,9 +1,32 @@
 # Wardrobe lists: titles that wrap, and a chip that says where a shared garment came from
 
-**Status:** spec, approved for implementation. Part 1 of a three-part wardrobe programme —
+**Status:** design of record; shipped in 4.10-dev. Part 1 of a three-part wardrobe programme —
 this one first, because it is small and the other two build on the row it reshapes:
 [wardrobe-wear-ledger.md](wardrobe-wear-ledger.md) (part 2) and
 [wardrobe-item-images.md](wardrobe-item-images.md) (part 3).
+
+**As built — where the implementation departs from the text below:**
+
+- **Collision precedence (§4.1, §8, §10).** The flat `findArchetypesInMounts` lets a *later*
+  mount shadow an earlier one (`Map.set` in order), not the first. The text's "first group
+  wins … the same order the flat read produces" contradicts itself; the binding requirement is
+  that the winner is the same item either way, so `findArchetypesInMountsAttributed` iterates the
+  same flattened order with the same last-write-wins rule, and its test asserts parity with the
+  flat read rather than a fixed winner.
+- **`hover:qt-bg-muted` (§6.3).** Already has its escaped hand-written form in
+  `_utilities.css`, so the lint gate accepts it; left as is.
+- **Tools (§7).** Dropped, per its own escape clause: threading origin into
+  `findWearablePoolForCharacter` means carrying group and project names through
+  `SharedWardrobeTiers` and every resolver that builds it, not just the pool builder.
+  `wardrobe_list` still says `[shared — read-only]`.
+- **`CandidateItem.origin`** is `WardrobeOrigin | null`: null for items that live in the
+  wardrobe being edited, so a project editor's own items carry no chip (as they carried no
+  "shared" badge before).
+- **List-component props** take `ListedWardrobeItem` (`WardrobeItem & { origin?: … }`) rather
+  than the required-origin type, since equipped ids and fixtures can reach them without one;
+  `wardrobeOriginLabel` accepts `null`/`undefined` and renders nothing.
+- **Export.** The NDJSON writer strips any `origin` key from `wardrobe_item` records as well as
+  testing for its absence.
 
 Two complaints from the operator, both about reading a list of garments:
 

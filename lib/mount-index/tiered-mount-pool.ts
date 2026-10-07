@@ -181,6 +181,24 @@ export async function resolveProjectMountPointIds(
 }
 
 /**
+ * One group's name and stores. Throws on lookup failure — the public wrappers
+ * below decide how to fail soft.
+ */
+async function readGroupStores(
+  groupId: string,
+): Promise<{ name: string; mountPointIds: string[] }> {
+  const repos = getRepositories();
+  const ids = new Set<string>();
+  // findByIdRaw avoids a store read on this hot path — we only need the
+  // group's name and officialMountPointId pointer, not its hydrated content.
+  const group = await repos.groups.findByIdRaw(groupId);
+  if (group?.officialMountPointId) ids.add(group.officialMountPointId);
+  const links = await repos.groupDocMountLinks.findByGroupId(groupId);
+  for (const link of links) ids.add(link.mountPointId);
+  return { name: group?.name ?? '', mountPointIds: [...ids] };
+}
+
+/**
  * One group's stores: its official store plus every store linked to it. For a
  * caller that holds a group rather than a member (the Scenario Builder launched
  * from a group's page). Returns `[]` on any lookup failure (fails soft).
@@ -190,17 +208,61 @@ export async function resolveMountPointIdsForGroup(
 ): Promise<string[]> {
   if (!groupId) return [];
   try {
-    const repos = getRepositories();
-    const ids = new Set<string>();
-    // findByIdRaw avoids a store read on this hot path — we only need the
-    // group's officialMountPointId pointer, not its hydrated content.
-    const group = await repos.groups.findByIdRaw(groupId);
-    if (group?.officialMountPointId) ids.add(group.officialMountPointId);
-    const links = await repos.groupDocMountLinks.findByGroupId(groupId);
-    for (const link of links) ids.add(link.mountPointId);
-    return [...ids];
+    return (await readGroupStores(groupId)).mountPointIds;
   } catch (error) {
     logger.warn('Group store lookup failed', { groupId, error: errMsg(error) });
+    return [];
+  }
+}
+
+/** One group's share of a character's group tier. */
+export interface GroupMounts {
+  group: { id: string; name: string };
+  mountPointIds: string[];
+}
+
+/**
+ * The group tier for a character, kept grouped: one entry per group the
+ * character belongs to, in membership order, each carrying that group's
+ * official store first and its linked stores after. A store linked to two of
+ * the character's groups is credited to the first only, so every mount appears
+ * exactly once across the result. Groups left with no stores are dropped.
+ *
+ * Callers that need to say *which* group a shared item hangs in (the wardrobe
+ * dialog's origin chip) use this; everyone else uses the flat
+ * {@link resolveGroupMountPointIdsForCharacter}, which is defined over this
+ * function so the two orders cannot drift. Fails soft to `[]`; a single
+ * group's lookup failure drops that group alone.
+ */
+export async function resolveGroupMountsForCharacter(
+  characterId: string | null | undefined,
+): Promise<GroupMounts[]> {
+  if (!characterId) return [];
+  try {
+    const repos = getRepositories();
+    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
+    if (memberships.length === 0) return [];
+    const claimed = new Set<string>();
+    const result: GroupMounts[] = [];
+    for (const membership of memberships) {
+      let stores: { name: string; mountPointIds: string[] };
+      try {
+        stores = await readGroupStores(membership.groupId);
+      } catch (error) {
+        logger.warn('Group store lookup failed', {
+          groupId: membership.groupId,
+          error: errMsg(error),
+        });
+        continue;
+      }
+      const mountPointIds = stores.mountPointIds.filter((id) => !claimed.has(id));
+      for (const id of mountPointIds) claimed.add(id);
+      if (mountPointIds.length === 0) continue;
+      result.push({ group: { id: membership.groupId, name: stores.name }, mountPointIds });
+    }
+    return result;
+  } catch (error) {
+    logger.warn('Group mount lookup failed', { characterId, error: errMsg(error) });
     return [];
   }
 }
@@ -215,20 +277,8 @@ export async function resolveMountPointIdsForGroup(
 export async function resolveGroupMountPointIdsForCharacter(
   characterId: string | null | undefined,
 ): Promise<string[]> {
-  if (!characterId) return [];
-  try {
-    const repos = getRepositories();
-    const memberships = await repos.groupCharacterMembers.findByCharacterId(characterId);
-    if (memberships.length === 0) return [];
-    const ids = new Set<string>();
-    for (const membership of memberships) {
-      for (const id of await resolveMountPointIdsForGroup(membership.groupId)) ids.add(id);
-    }
-    return [...ids];
-  } catch (error) {
-    logger.warn('Group mount lookup failed', { characterId, error: errMsg(error) });
-    return [];
-  }
+  const groups = await resolveGroupMountsForCharacter(characterId);
+  return groups.flatMap((g) => g.mountPointIds);
 }
 
 /**

@@ -17,11 +17,17 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { showConfirmation } from '@/lib/alert'
-import { WARDROBE_SLOT_TYPES, type WardrobeItem, type WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import {
+  WARDROBE_SLOT_TYPES,
+  formatSlotLabels,
+  type WardrobeItem,
+  type WardrobeItemType,
+} from '@/lib/schemas/wardrobe.types'
 import type {
   CreateProjectWardrobeInput,
   UseProjectWardrobeReturn,
 } from '@/app/prospero/[id]/hooks/useProjectWardrobe'
+import { formatWearLine, wearOf, type WearAnnotated } from '@/lib/wardrobe/wear-display'
 
 interface ProjectWardrobeManagerProps {
   mutator: UseProjectWardrobeReturn
@@ -316,14 +322,14 @@ export function ProjectWardrobeManager({
               </label>
               <div className="max-h-40 overflow-y-auto qt-border qt-border-default rounded p-2 space-y-1">
                 {componentChoices.map((choice) => (
-                  <label key={choice.id} className="flex items-center gap-1.5 qt-text-small">
+                  <label key={choice.id} className="flex items-start gap-1.5 qt-text-small">
                     <input
                       type="checkbox"
                       checked={draft.componentItemIds.includes(choice.id)}
                       onChange={() => toggleComponent(choice.id)}
-                      className="qt-checkbox"
+                      className="qt-checkbox mt-0.5"
                     />
-                    <span className="truncate">{choice.title}</span>
+                    <span className="min-w-0 break-words">{choice.title}</span>
                   </label>
                 ))}
               </div>
@@ -351,14 +357,18 @@ export function ProjectWardrobeManager({
             <li key={item.id} className="py-3 flex items-start gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <h4 className="qt-label truncate">{item.title}</h4>
-                  <span className="qt-text-xs qt-text-secondary truncate">{item.types.join(', ')}</span>
+                  <h4 className="qt-label min-w-0 break-words">{item.title}</h4>
+                  <span className="qt-text-xs qt-text-secondary">{formatSlotLabels(item.types)}</span>
                   {item.componentItemIds && item.componentItemIds.length > 0 && (
                     <span className="qt-badge qt-text-secondary">Composite</span>
                   )}
                   {item.isDefault && <span className="qt-badge qt-badge-primary">Default</span>}
                   {item.archivedAt && <span className="qt-badge qt-text-secondary">Archived</span>}
                 </div>
+                {/* Wear ledger tally — a shared garment keeps one count across every borrower. */}
+                <p className="qt-text-xs qt-text-secondary mt-0.5" data-testid="wardrobe-wear-line">
+                  {formatWearLine(wearOf(item as WardrobeItem & WearAnnotated))}
+                </p>
                 {/* Prefer the Portrait Cue (the image-maker's view); fall back to the prose description. */}
                 {(item.imagePrompt || item.description) && (
                   <p className="qt-text-small qt-text-secondary mt-1">

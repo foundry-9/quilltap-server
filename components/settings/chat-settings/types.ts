@@ -9,6 +9,7 @@ import type {
   ConciergeDisplaySettings,
   ConciergePreScreenSettings,
   ImpersonationVoiceMode,
+  WardrobeImageSettings as WardrobeImageSettingsType,
 } from '@/lib/schemas/settings.types'
 import { DEFAULT_CONCIERGE_SETTINGS as SERVER_DEFAULT_CONCIERGE_SETTINGS } from '@/lib/services/dangerous-content/resolver.service'
 
@@ -73,6 +74,13 @@ export interface StoryBackgroundsSettings {
   defaultImageProfileId?: string | null
 }
 
+/**
+ * Wardrobe Image Settings
+ * The designated image profile that draws pictures of wardrobe items.
+ * Re-exported from schema types; `imageProfileId: null` = the default image profile.
+ */
+export type WardrobeImageSettings = WardrobeImageSettingsType
+
 export interface ChatSettings {
   id: string
   userId: string
@@ -107,6 +115,8 @@ export interface ChatSettings {
   agentModeSettings?: AgentModeSettings
   /** Story backgrounds settings for AI-generated chat backgrounds */
   storyBackgroundsSettings?: StoryBackgroundsSettings
+  /** The image profile that draws wardrobe item pictures */
+  wardrobeImageSettings?: WardrobeImageSettings
   /** The Concierge: failover, the uncensored desk, display, and the optional pre-screen */
   conciergeSettings?: ConciergeSettings
   /** Default IANA timezone for timestamp formatting */
@@ -526,6 +536,13 @@ export const DEFAULT_AGENT_MODE_SETTINGS: AgentModeSettings = {
 export const DEFAULT_STORY_BACKGROUNDS_SETTINGS: StoryBackgroundsSettings = {
   enabled: false,
   defaultImageProfileId: null,
+}
+
+/**
+ * Default wardrobe image settings — no designated profile, so the default image profile draws.
+ */
+export const DEFAULT_WARDROBE_IMAGE_SETTINGS: WardrobeImageSettings = {
+  imageProfileId: null,
 }
 
 /**

@@ -87,6 +87,17 @@ export const CLOTHING_SLOT_TYPES: readonly WardrobeItemType[] =
   WARDROBE_SLOT_TYPES.filter((s) => WARDROBE_SLOT_META[s].isClothing);
 
 /**
+ * "Top, Bottom, Footwear" — a slot list as display labels, in canonical slot
+ * order. Every garment list that prints a slot list calls this, so they agree
+ * on labels rather than raw keys. Unknown entries are ignored.
+ */
+export function formatSlotLabels(types: readonly string[]): string {
+  return WARDROBE_SLOT_TYPES.filter((s) => types.includes(s))
+    .map((s) => WARDROBE_SLOT_META[s].label)
+    .join(', ');
+}
+
+/**
  * True when an empty `slot` should still be reported (as a phrase, a label, or
  * an "(empty)" marker). False for unreported-if-blank slots — skip them.
  *
@@ -137,6 +148,12 @@ export const createWardrobeSchema = wardrobeItemFieldsSchema;
  */
 export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
   archived: z.boolean().optional(),
+  /**
+   * Choose the item's current picture among its OWN images. Update-only — a
+   * create body never carries it — and the item routes refuse a file that is
+   * not linked to the item (`assertItemImageChoice`, `lib/wardrobe/item-images.ts`).
+   */
+  imageFileId: UUIDSchema.nullable().optional(),
 });
 
 // ============================================================================
@@ -182,6 +199,13 @@ export const WardrobeItemSchema = z.object({
   replace: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
+  /**
+   * The item's current picture — a `files` row linked to this item. The
+   * history is every IMAGE file `linkedTo` the item, never a frontmatter list.
+   * Written only by the images route (generate / upload / set-current /
+   * delete-image) or a PUT that chooses among the item's own images.
+   */
+  imageFileId: UUIDSchema.nullable().optional(),
   /** When the item was archived (null = active) */
   archivedAt: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,
@@ -226,6 +250,12 @@ export const OutfitSelectionSchema = z.object({
   mode: OutfitSelectionModeEnum,
   /** Manual slot selections — only used when mode is 'manual' */
   slots: EquippedSlotsSchema.optional(),
+  /**
+   * 'manual' only: bundles the composer dissolved into `slots` (an outfit
+   * picked from the quick-pick), so the wear ledger can credit the outfit as
+   * worn. Validated and expanded server-side.
+   */
+  wornBundleIds: z.array(z.string().min(1)).optional(),
 });
 
 export type OutfitSelection = z.infer<typeof OutfitSelectionSchema>;

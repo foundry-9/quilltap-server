@@ -3,7 +3,7 @@
  *
  * The character view lists the merge of the character's own garments with
  * every shared tier above them (group / project / Quilltap General). Those
- * borrowed rows are badged `· shared` and can't be edited from here, and when
+ * borrowed rows carry an origin chip and can't be edited from here, and when
  * you're dressing a character or building an outfit out of their own clothes
  * they're just noise. The toggle is on by default — hiding is opt-in — and it
  * filters after the merge, since ownership isn't something the fetch can ask
@@ -15,8 +15,9 @@ import {
   WardrobeDialogProvider,
   useWardrobeDialog,
 } from '@/components/providers/wardrobe-dialog-provider'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import React, { useEffect } from 'react'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),
@@ -51,7 +52,7 @@ const OWN_ITEM = {
   characterId: CHARACTER_ID,
 }
 
-/** A Quilltap General archetype merged in from above — badged `· shared`. */
+/** A Quilltap General archetype merged in from above — chipped `Shared · Quilltap General`. */
 const SHARED_ITEM = {
   id: 'watch',
   title: 'Apple Watch',
@@ -100,7 +101,8 @@ function Opener(): null {
 }
 
 function renderDialog(): void {
-  render(
+  // The dialog invalidates the wear-ledger queries after an equip commits.
+  renderWithQuery(
     <WardrobeDialogProvider>
       <Opener />
       <WardrobeControlDialog />

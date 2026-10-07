@@ -16,10 +16,13 @@ import {
   GENERAL_CONTAINER,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
+  type ListedWardrobeItem,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
 import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
 import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
+import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
+import { WardrobeItemImageSection } from './wardrobe-item-editor/WardrobeItemImageSection'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
@@ -57,6 +60,12 @@ interface WardrobeItemEditorProps {
   autoFocusTitle?: boolean
   onClose: () => void
   onSave: () => void
+  /**
+   * Called when the item's current picture changes (generate / upload / make
+   * current / delete) without the editor closing, so the lists behind it can
+   * refresh their thumbnails.
+   */
+  onImageChanged?: () => void
 }
 
 export function WardrobeItemEditor({
@@ -71,6 +80,7 @@ export function WardrobeItemEditor({
   autoFocusTitle = false,
   onClose,
   onSave,
+  onImageChanged,
 }: WardrobeItemEditorProps) {
   const isEditing = !!item
   // A non-character container pins the editor to that container's endpoints.
@@ -200,7 +210,12 @@ export function WardrobeItemEditor({
         ])
 
         const collected: CandidateItem[] = []
-        const pushCandidates = (list: WardrobeItem[] | undefined, shared: boolean) => {
+        // `local` lists are the wardrobe being edited; anything else is
+        // borrowed and keeps the origin its endpoint attached.
+        const pushCandidates = (
+          list: ListedWardrobeItem[] | undefined,
+          local: boolean,
+        ) => {
           for (const w of list ?? []) {
             if (collected.some((c) => c.id === w.id)) continue
             collected.push({
@@ -208,23 +223,23 @@ export function WardrobeItemEditor({
               title: w.title,
               types: w.types,
               componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-              isShared: shared,
+              origin: local ? null : (w.origin ?? null),
             })
           }
         }
         if (personalRes && personalRes.ok) {
-          const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          const data = (await personalRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
           // In a shared container this first fetch IS the container's list;
           // its items are the local (manageable) set, not shared imports.
-          pushCandidates(data.wardrobeItems, false)
+          pushCandidates(data.wardrobeItems, true)
         }
         if (projectRes && projectRes.ok) {
-          const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          pushCandidates(data.wardrobeItems, true)
+          const data = (await projectRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
+          pushCandidates(data.wardrobeItems, false)
         }
         if (archetypeRes.ok) {
-          const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
-          pushCandidates(data.wardrobeItems, true)
+          const data = (await archetypeRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
+          pushCandidates(data.wardrobeItems, false)
         }
         if (!cancelled) setCandidates(collected)
       } catch (err) {
@@ -369,6 +384,15 @@ export function WardrobeItemEditor({
     (!isBundle && selectedTypes.length === 0) ||
     (isBundle && componentItemIds.length === 0)
 
+  // The item's own route when editing — where Update PUTs and where the wear
+  // history is read. Pinned to a shared container, that container's route (an
+  // edit must never leak a project or group item into Quilltap General);
+  // otherwise the item keeps its existing tier.
+  const itemHomeContainer: WardrobeContainer | null = item
+    ? sharedContainer ?? (isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId })
+    : null
+  const editItemUrl = item && itemHomeContainer ? wardrobeItemUrl(itemHomeContainer, item.id) : null
+
   const handleSave = async (): Promise<void> => {
     setSubmitAttempted(true)
     if (!formData.title.trim()) {
@@ -412,15 +436,10 @@ export function WardrobeItemEditor({
       // (character view): editing keeps the item in its existing tier and
       // creating honours the chosen destination scope.
       let url: string
-      if (sharedContainer) {
-        url = isEditing
-          ? wardrobeItemUrl(sharedContainer, item.id)
-          : wardrobeCollectionUrl(sharedContainer)
-      } else if (isEditing) {
-        url = wardrobeItemUrl(
-          isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId },
-          item.id,
-        )
+      if (isEditing && editItemUrl) {
+        url = editItemUrl
+      } else if (sharedContainer) {
+        url = wardrobeCollectionUrl(sharedContainer)
       } else if (createScope === 'project' && projectId) {
         url = wardrobeCollectionUrl({ scope: 'project', id: projectId })
       } else if (createScope === 'global') {
@@ -619,6 +638,14 @@ export function WardrobeItemEditor({
               )}
             </div>
 
+            {/* Picture — directly under Title, the most visible thing in the
+                form. Inert in create mode: a fresh item has no id yet. */}
+            <WardrobeItemImageSection
+              item={item ?? null}
+              container={itemHomeContainer}
+              onImageChanged={onImageChanged}
+            />
+
             {/* Single mode: Types checkboxes */}
             {!isBundle && (
               <div>
@@ -762,6 +789,16 @@ export function WardrobeItemEditor({
                 minHeight="10rem"
               />
             </div>
+
+            {/* Wear ledger — read-only, edit mode only (a new item has none). */}
+            {item && editItemUrl && (
+              <WardrobeWearHistorySection
+                itemId={item.id}
+                itemUrl={editItemUrl}
+                createdAt={item.createdAt}
+                isComposite={(item.componentItemIds?.length ?? 0) > 0}
+              />
+            )}
           </div>
 
           {/* Footer */}

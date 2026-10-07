@@ -100,6 +100,8 @@ const storedItem = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
+const NEVER_WORN = { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null }
+
 function routeCtx(params: Record<string, string>): any {
   return { params: Promise.resolve(params) }
 }
@@ -115,6 +117,10 @@ beforeEach(() => {
       },
       chats: {
         removeEquippedItemFromAllChats: jest.fn().mockResolvedValue(undefined),
+      },
+      wardrobeWear: {
+        deleteByItemIds: jest.fn().mockResolvedValue(undefined),
+        findSummaries: jest.fn(async (ids: string[]) => new Map(ids.map((id) => [id, NEVER_WORN]))),
       },
     },
   }
@@ -135,7 +141,10 @@ it('GET lists the group mount wardrobe after ensuring store and folder', async (
 
   expect(res.status).toBe(200)
   expect(res.body.mountPointId).toBe(MOUNT_ID)
-  expect(res.body.wardrobeItems).toEqual([storedItem])
+  expect(res.body.wardrobeItems).toEqual([
+    { ...storedItem, origin: { scope: 'group', id: GROUP_ID, name: 'Main Cast' }, wear: NEVER_WORN },
+  ])
+  expect(mockCtx.repos.wardrobeWear.findSummaries).toHaveBeenCalledWith([ITEM_ID])
   expect(ensureGroupOfficialStore).toHaveBeenCalledWith(GROUP_ID, 'Main Cast')
   expect(ensureGroupWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
   // Archived garments are hidden unless the caller asks.
@@ -198,6 +207,7 @@ it('DELETE scrubs equipped references then deletes from the group mount', async 
 
   expect(res.status).toBe(200)
   expect(mockCtx.repos.chats.removeEquippedItemFromAllChats).toHaveBeenCalledWith(ITEM_ID)
+  expect(mockCtx.repos.wardrobeWear.deleteByItemIds).toHaveBeenCalledWith([ITEM_ID])
   expect(deleteProjectWardrobeItem).toHaveBeenCalledWith(MOUNT_ID, ITEM_ID)
 })
 

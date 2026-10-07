@@ -23,15 +23,20 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import {
   GENERAL_CONTAINER,
   wardrobeCollectionUrl,
   withWardrobeArchivedParam,
+  type WardrobeItemWithOrigin,
 } from '@/lib/wardrobe/wardrobe-container'
 
 export interface UseCharacterWardrobeItemsResult {
-  items: WardrobeItem[]
+  /**
+   * The merged pool. Each item carries the `origin` its endpoint attached;
+   * de-duplication keeps the first (winning) copy, so the origin is the
+   * winning tier's.
+   */
+  items: WardrobeItemWithOrigin[]
   loading: boolean
   /**
    * True once at least one fetch has completed for the current character —
@@ -73,7 +78,7 @@ export function useCharacterWardrobeItems(
   const projectId = opts?.projectId ?? null
   const chatId = opts?.chatId ?? null
   const includeArchived = opts?.includeArchived === true
-  const [items, setItems] = useState<WardrobeItem[]>([])
+  const [items, setItems] = useState<WardrobeItemWithOrigin[]>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
   const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(projectId)
@@ -113,26 +118,26 @@ export function useCharacterWardrobeItems(
       ])
 
       // Merge with precedence: personal > group > project > general.
-      const collected: WardrobeItem[] = []
-      const push = (list: WardrobeItem[] | undefined) => {
+      const collected: WardrobeItemWithOrigin[] = []
+      const push = (list: WardrobeItemWithOrigin[] | undefined) => {
         for (const w of list ?? []) {
           if (!collected.some((c) => c.id === w.id)) collected.push(w)
         }
       }
       if (personalRes.ok) {
-        const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+        const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
         push(data.wardrobeItems)
       }
       if (groupRes.ok) {
-        const data = (await groupRes.json()) as { wardrobeItems?: WardrobeItem[] }
+        const data = (await groupRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
         push(data.wardrobeItems)
       }
       if (projectRes && projectRes.ok) {
-        const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItem[] }
+        const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
         push(data.wardrobeItems)
       }
       if (archetypeRes.ok) {
-        const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItem[] }
+        const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
         push(data.wardrobeItems)
       }
       setItems(collected)

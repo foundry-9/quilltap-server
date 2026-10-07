@@ -25,7 +25,8 @@
               "mountPoints": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStore" } },
               "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
-              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } }
+              "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
+              "wardrobeWear": { "type": "array", "items": { "$ref": "#/$defs/WardrobeWear" } }
             },
             "additionalProperties": false,
             "description": "From 4.8 a characters export carries each character's vault as well: its mount point, folders, documents and blobs appear here exactly as they would in a document-stores export. That is what makes avatars, photographs and correspondence survive a cross-instance import. Project links never appear — a character vault has none."
@@ -178,7 +179,8 @@
               "folders": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreFolder" } },
               "documents": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreDocument" } },
               "blobs": { "type": "array", "items": { "$ref": "#/$defs/ExportedDocumentStoreBlob" } },
-              "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } }
+              "projectLinks": { "type": "array", "items": { "$ref": "#/$defs/ExportedProjectDocMountLink" } },
+              "wardrobeWear": { "type": "array", "items": { "$ref": "#/$defs/WardrobeWear" } }
             },
             "additionalProperties": false
           }
@@ -376,6 +378,7 @@
         "conversationAnnotations": { "type": "integer", "minimum": 0 },
         "chatDocuments": { "type": "integer", "minimum": 0 },
         "chatInforms": { "type": "integer", "minimum": 0 },
+        "wardrobeWear": { "type": "integer", "minimum": 0 },
         "files": { "type": "integer", "minimum": 0 },
         "folders": { "type": "integer", "minimum": 0 },
         "promptTemplates": { "type": "integer", "minimum": 0 },
@@ -1303,6 +1306,24 @@
       }
     },
 
+    "WardrobeWear": {
+      "type": "object",
+      "description": "One wear-ledger row (wardrobe_wear_stats): one wearer's tally for one exported wardrobe item \u2014 a character-owned item or a shared item riding as a Wardrobe/*.md document. In an NDJSON stream each row is a `wardrobe_wear` record emitted after every other entity record. All ids are source-instance ids: the importer remaps itemId and wearerCharacterId, folds a wearer it cannot resolve into the item's unattributed row (wearerCharacterId null), clears lastWornChatId when the chat did not come along, and drops a row whose item did not import.",
+      "required": ["id", "itemId", "wearerCharacterId", "wearCount", "firstWornAt", "lastWornAt", "lastWornChatId", "createdAt", "updatedAt"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "$ref": "#/$defs/UUID" },
+        "itemId": { "type": "string", "minLength": 1, "description": "The wardrobe item's id (its Wardrobe/*.md frontmatter id). Not a row id: items are vault files." },
+        "wearerCharacterId": { "type": ["string", "null"], "description": "The character who wore it. Null is the unattributed row \u2014 the wearer was deleted, or an earlier import could not resolve them. At most one row per (itemId, wearerCharacterId)." },
+        "wearCount": { "type": "integer", "minimum": 0, "description": "Equip transitions: each time the item went from not worn to worn on this wearer in a chat." },
+        "firstWornAt": { "$ref": "#/$defs/Timestamp" },
+        "lastWornAt": { "$ref": "#/$defs/Timestamp" },
+        "lastWornChatId": { "type": ["string", "null"], "description": "The chat of the last wear. May name a chat since deleted." },
+        "createdAt": { "$ref": "#/$defs/Timestamp" },
+        "updatedAt": { "$ref": "#/$defs/Timestamp" }
+      }
+    },
+
     "WardrobeItem": {
       "type": "object",
       "description": "A wardrobe item (clothing, accessory, etc.) belonging to a character.",
@@ -1356,6 +1377,36 @@
             { "type": "null" }
           ],
           "description": "Provenance tracking for items migrated from legacy clothingRecords"
+        },
+        "imageFileId": {
+          "oneOf": [
+            { "$ref": "#/$defs/UUID" },
+            { "type": "null" }
+          ],
+          "description": "The item's current picture: the id of one of its own image files (see _imageFiles). Null or absent means no picture. The importer re-mints the file rows and points this at the item's own copy, or nulls it when the picture did not come along."
+        },
+        "_imageFiles": {
+          "type": "array",
+          "description": "Character-owned items only: metadata of the item's pictures (the item's image file history). The bytes are not here — they ride in the character's vault as blobs at Wardrobe/images/<itemId>/<originalFilename>.",
+          "items": {
+            "type": "object",
+            "required": ["id", "originalFilename", "mimeType", "size", "source", "createdAt"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "$ref": "#/$defs/UUID" },
+              "originalFilename": { "type": "string" },
+              "mimeType": { "type": "string" },
+              "size": { "type": "number" },
+              "width": { "type": ["number", "null"] },
+              "height": { "type": ["number", "null"] },
+              "source": { "type": "string", "enum": ["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"] },
+              "generationPrompt": { "type": ["string", "null"] },
+              "generationModel": { "type": ["string", "null"] },
+              "generationRevisedPrompt": { "type": ["string", "null"] },
+              "description": { "type": ["string", "null"] },
+              "createdAt": { "$ref": "#/$defs/Timestamp" }
+            }
+          }
         },
         "archivedAt": {
           "oneOf": [

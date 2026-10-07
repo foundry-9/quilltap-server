@@ -16,6 +16,8 @@ import { serverError, created, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
+import { GENERAL_WARDROBE_ORIGIN, withOrigin } from '@/lib/wardrobe/wardrobe-container';
+import { attachWear } from '@/lib/wardrobe/wear-history';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureGeneralWardrobeFolder } from '@/lib/mount-index/general-wardrobe';
 import {
@@ -59,7 +61,12 @@ export const GET = createContextHandler(
     async (req, { repos }) => {
       try {
         const archetypeItems = await repos.wardrobe.findArchetypes(readIncludeArchived(req));
-        return successResponse({ wardrobeItems: archetypeItems });
+        return successResponse({
+          wardrobeItems: await attachWear(
+            withOrigin(archetypeItems, GENERAL_WARDROBE_ORIGIN),
+            repos,
+          ),
+        });
       } catch (error) {
         logger.error(
           '[Wardrobe Archetypes v1] Error fetching archetype items',

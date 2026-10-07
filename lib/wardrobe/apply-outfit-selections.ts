@@ -5,7 +5,9 @@
  * add-participant flow (`/api/v1/chats/[id]?action=add-participant`).
  *
  * Resolves each character's `OutfitSelection` to a concrete `EquippedSlots`
- * record and persists it on the chat via `repos.chats.setEquippedOutfit`.
+ * record and persists it on the chat via the wear ledger's chokepoint,
+ * `repos.wardrobeWear.commitEquippedOutfit`, along with the bundles each mode
+ * dissolved — so an outfit put on at chat start is credited as worn.
  *
  * Modes:
  * - `default`       — load wardrobe items marked default and equip them
@@ -19,7 +21,8 @@
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles';
+import { dissolveBundleToLeaves, dissolveBundlesInSlotsWithCredit } from '@/lib/wardrobe/dissolve-bundles';
+import type { EquipSource } from '@/lib/database/repositories/wardrobe-wear.repository';
 import {
   CLOTHING_SLOT_TYPES,
   WARDROBE_SLOT_TYPES,
@@ -43,7 +46,7 @@ import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
-import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit';
+import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
 import type {
   CreationProgressEmitter,
   OutfitPreviewSlots,
@@ -151,6 +154,41 @@ export interface OutfitSelectionContext {
    * decided four-slot outfit afterwards. Inert when absent.
    */
   progress?: CreationProgressEmitter;
+  /**
+   * Why these characters are being dressed, for the wear ledger: a new chat
+   * (`'chat-start'`, the default), a seat added or reactivated
+   * (`'participant-added'`), or a merge (`'merge'`, which never credits a
+   * wear — a merge stitches chats together and changes nobody's clothes).
+   */
+  source?: Extract<EquipSource, 'chat-start' | 'participant-added' | 'merge'>;
+}
+
+/** A resolved outfit plus the bundles dissolved to build it. */
+interface ResolvedOutfit {
+  slots: EquippedSlots;
+  wornBundles: Array<{ id: string; leafIds: string[] }>;
+}
+
+/**
+ * The bundle credit a manual selection claims: the client dissolved the
+ * bundles itself and names them in `wornBundleIds`. Validated against the
+ * character's pool and expanded here; the ledger still credits a bundle only
+ * when one of its leaves was newly put on.
+ */
+function manualWornBundles(
+  wornBundleIds: readonly string[] | undefined,
+  pool: WardrobeItem[],
+): ResolvedOutfit['wornBundles'] {
+  if (!wornBundleIds || wornBundleIds.length === 0) return [];
+  const byId = new Map(pool.map((i) => [i.id, i]));
+  const result: ResolvedOutfit['wornBundles'] = [];
+  for (const id of new Set(wornBundleIds)) {
+    const bundle = byId.get(id);
+    if (!bundle) continue;
+    const leaves = dissolveBundleToLeaves(bundle, byId);
+    if (leaves) result.push({ id: bundle.id, leafIds: leaves.map((leaf) => leaf.id) });
+  }
+  return result;
 }
 
 /**
@@ -188,7 +226,7 @@ function toOutfitPreviewSlots(
  *     apiece, and serially they added up (one stalled provider held the whole
  *     cast). Nothing is written here, and one character's failure can't cancel
  *     its siblings.
- *  2. **Commit, serially.** `chats.setEquippedOutfit` reads the chat's whole
+ *  2. **Commit, serially.** The chokepoint's slot write reads the chat's whole
  *     `equippedOutfit` map, sets one key, and writes it back, so concurrent
  *     writers would lose every entry but the last.
  *
@@ -319,24 +357,30 @@ export async function applyOutfitSelections(
    * should be written at all (an unrecognised mode).
    *
    * Deliberately does **no** persistence: these run concurrently, and
-   * `setEquippedOutfit` is a read-modify-write of a single JSON column keyed by
+   * the slot write is a read-modify-write of a single JSON column keyed by
    * character, so concurrent writers would drop each other's entries. The
    * caller commits the results serially afterwards.
    */
   const resolveSelection = async (
     selection: OutfitSelection,
-  ): Promise<EquippedSlots | null> => {
+  ): Promise<ResolvedOutfit | null> => {
     const { characterId, mode } = selection;
 
     switch (mode) {
       case 'default':
-        return buildDefaultOutfit(await getPool(characterId));
+        return buildDefaultOutfitWithCredit(await getPool(characterId));
 
-      case 'manual':
-        return selection.slots ?? makeEmptyEquippedSlots();
+      case 'manual': {
+        // The composer dissolves client-side and sends leaves; an outfit
+        // picked from the quick-pick rides along in `wornBundleIds`.
+        const wornBundles = selection.wornBundleIds?.length
+          ? manualWornBundles(selection.wornBundleIds, await getPool(characterId))
+          : [];
+        return { slots: selection.slots ?? makeEmptyEquippedSlots(), wornBundles };
+      }
 
       case 'none':
-        return makeEmptyEquippedSlots();
+        return { slots: makeEmptyEquippedSlots(), wornBundles: [] };
 
       case 'previous_chat': {
         if (context?.sourceChatId) {
@@ -345,7 +389,8 @@ export async function applyOutfitSelections(
               context.sourceChatId,
               characterId,
             );
-            if (previousSlots) return previousSlots;
+            // A carry-over of leaves: the bundle was credited in the source chat.
+            if (previousSlots) return { slots: previousSlots, wornBundles: [] };
           } catch (error) {
             logger.warn('[applyOutfitSelections] Failed to copy previous-chat outfit; falling back to default', {
               chatId,
@@ -360,11 +405,11 @@ export async function applyOutfitSelections(
             characterId,
           });
         }
-        return buildDefaultOutfit(await getPool(characterId));
+        return buildDefaultOutfitWithCredit(await getPool(characterId));
       }
 
       case 'llm_choose': {
-        let chosen: EquippedSlots | null = null;
+        let chosen: ResolvedOutfit | null = null;
         // Track whether we announced a consult so the fallback path can still
         // resolve the dialog's panel instead of leaving it spinning.
         let consulted = false;
@@ -472,7 +517,7 @@ export async function applyOutfitSelections(
                     // The prompt lets the model pick a bundle outright; break
                     // it into its parts before it's stored, so the wardrobe
                     // reads as garments rather than an opaque card.
-                    chosen = dissolveBundlesInSlots(
+                    chosen = dissolveBundlesInSlotsWithCredit(
                       result.result.slots,
                       new Map(wardrobeItems.map((i) => [i.id, i])),
                     );
@@ -507,18 +552,18 @@ export async function applyOutfitSelections(
             });
             context?.progress?.log(`${consultedName} chose to wear nothing at all.`, 'info');
           }
-          await publishPreview(characterId, consultedName, chosen);
+          await publishPreview(characterId, consultedName, chosen.slots);
           return chosen;
         }
 
-        const slots = buildDefaultOutfit(await getPool(characterId));
+        const fallback = buildDefaultOutfitWithCredit(await getPool(characterId));
         // If we already told the dialog we were consulting this character,
         // resolve their panel with the default we fell back to (and note it).
         if (consulted && context?.progress) {
           context.progress.log(`${consultedName} settled on their usual attire.`, 'warn');
-          await publishPreview(characterId, consultedName, slots);
+          await publishPreview(characterId, consultedName, fallback.slots);
         }
-        return slots;
+        return fallback;
       }
 
       default:
@@ -534,9 +579,10 @@ export async function applyOutfitSelections(
   // can't cancel its siblings.
   const resolved = await Promise.allSettled(selections.map(resolveSelection));
 
-  // Commit serially, in the caller's order. `setEquippedOutfit` reads the chat's
-  // whole `equippedOutfit` map, sets one key, and writes it back — running these
-  // concurrently would lose every entry but the last.
+  // Commit serially, in the caller's order. The chokepoint's write reads the
+  // chat's whole `equippedOutfit` map, sets one key, and writes it back —
+  // running these concurrently would lose every entry but the last.
+  const source = context?.source ?? 'chat-start';
   for (let i = 0; i < selections.length; i += 1) {
     const { characterId } = selections[i];
     const outcome = resolved[i];
@@ -552,7 +598,13 @@ export async function applyOutfitSelections(
     if (!outcome.value) continue;
 
     try {
-      await repos.chats.setEquippedOutfit(chatId, characterId, outcome.value);
+      await repos.wardrobeWear.commitEquippedOutfit({
+        chatId,
+        characterId,
+        nextSlots: outcome.value.slots,
+        wornBundles: outcome.value.wornBundles,
+        source,
+      });
     } catch (error) {
       logger.error('[applyOutfitSelections] Failed to persist equipped outfit', {
         chatId,

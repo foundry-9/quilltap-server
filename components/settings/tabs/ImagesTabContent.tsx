@@ -5,6 +5,7 @@ import { useChatSettingsContext } from '@/components/settings/chat-settings/Chat
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import ImageProfilesTab from '@/components/settings/image-profiles-tab'
 import { StoryBackgroundsSettings } from '@/components/settings/chat-settings/StoryBackgroundsSettings'
+import { WardrobeImageSettings } from '@/components/settings/chat-settings/WardrobeImageSettings'
 import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
 import { useSettingsSection } from './useSettingsSection'
 
@@ -19,6 +20,7 @@ export function ImagesTabContent() {
     loadingProfiles,
     handleStoryBackgroundsEnabledChange,
     handleStoryBackgroundsProfileChange,
+    handleWardrobeImageProfileChange,
   } = useChatSettingsContext()
 
   return (
@@ -43,6 +45,24 @@ export function ImagesTabContent() {
               imageProfiles={imageProfiles}
               onEnabledChange={handleStoryBackgroundsEnabledChange}
               onProfileChange={handleStoryBackgroundsProfileChange}
+            />
+          ) : (
+            <div className="qt-alert-error">Failed to load settings</div>
+          )}
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Wardrobe Images" description="Choose the artist who draws pictures of garments and outfits" sectionId="wardrobe-images" forceOpen={activeSection === 'wardrobe-images'}>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="qt-text-secondary">Loading settings...</div>
+            </div>
+          ) : settings ? (
+            <WardrobeImageSettings
+              settings={settings}
+              saving={saving}
+              loadingProfiles={loadingProfiles}
+              imageProfiles={imageProfiles}
+              onProfileChange={handleWardrobeImageProfileChange}
             />
           ) : (
             <div className="qt-alert-error">Failed to load settings</div>

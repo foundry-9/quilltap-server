@@ -48,6 +48,12 @@ import type {
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
+import {
+  isWardrobeItemDocumentPath,
+  wardrobeItemIdForDocument,
+} from '@/lib/database/repositories/vault-overlay/parsers';
+import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -71,6 +77,101 @@ const MOUNT_POINT_SETTING_KEYS = new Set([
 ]);
 
 /**
+ * Old → new wardrobe item id for new-account mode.
+ *
+ * A wardrobe item is not a row: it is a `Wardrobe/*.md` document whose id
+ * lives in its frontmatter, and this remap never rewrites document content.
+ * So an item id is **not** a remapper key — sending it through
+ * `remapper.remap` would mint a fresh id that names no item, orphaning every
+ * wear-ledger row that points at it. Instead:
+ *
+ * - a frontmatter id travels verbatim, so it maps to itself;
+ * - an item with no frontmatter id has an id derived from its mount point and
+ *   path, and the mount point *is* remapped — recompute it against the new
+ *   mount-point id, exactly as the vault reader will after the restore;
+ * - a legacy (pre-cutover) `wardrobeItems` row is remapped by id like any
+ *   other row (see `remappedWardrobeItems`), so its ledger rows follow it.
+ */
+function buildWardrobeItemIdRemap(
+  data: BackupData,
+  remapper: UuidRemapper
+): Map<string, string> {
+  const map = new Map<string, string>();
+  const contentByFileId = new Map<string, unknown>(
+    (data.docMountDocuments || []).map((doc) => [doc.fileId, doc.content])
+  );
+  for (const link of data.docMountFileLinks || []) {
+    if (!isWardrobeItemDocumentPath(link.relativePath)) continue;
+    const content = contentByFileId.get(link.fileId);
+    if (typeof content !== 'string') continue;
+    const oldId = wardrobeItemIdForDocument({
+      mountPointId: link.mountPointId,
+      relativePath: link.relativePath,
+      content,
+    });
+    const newId = wardrobeItemIdForDocument({
+      mountPointId: remapper.remap(link.mountPointId),
+      relativePath: link.relativePath,
+      content,
+    });
+    map.set(oldId, newId);
+  }
+  for (const item of data.wardrobeItems || []) {
+    map.set(item.id, remapper.remap(item.id));
+  }
+  return map;
+}
+
+/** One wardrobe item whose current-picture pointer must follow its file's new id. */
+export interface WardrobeImagePointerFix {
+  /** The item's mount, already remapped. */
+  mountPointId: string;
+  /** The item's mount as the backup named it (before the remap). */
+  sourceMountPointId: string;
+  /** The item's id in the restored instance. */
+  itemId: string;
+  /** The picture's remapped `files` id. */
+  imageFileId: string;
+}
+
+/**
+ * New-account mode remaps `files.id`, but an item's `imageFileId` lives in its
+ * `Wardrobe/*.md` frontmatter, which this remap never rewrites. List the
+ * pointers that need to follow their file, for the restore to apply through
+ * the ordinary wardrobe update once the vaults have landed (that path
+ * re-projects the document, so content hashes stay consistent).
+ *
+ * Pass the ORIGINAL (pre-remap) backup data and the same remapper used for
+ * `remapBackupData`, so file ids resolve to the ids the rows received.
+ */
+export function planWardrobeImagePointerFixes(
+  original: BackupData,
+  remapper: UuidRemapper
+): WardrobeImagePointerFix[] {
+  const fileIds = new Set((original.files || []).map((f) => f.id));
+  const itemIdRemap = buildWardrobeItemIdRemap(original, remapper);
+  const contentByFileId = new Map<string, unknown>(
+    (original.docMountDocuments || []).map((doc) => [doc.fileId, doc.content])
+  );
+  const fixes: WardrobeImagePointerFix[] = [];
+  for (const link of original.docMountFileLinks || []) {
+    if (!isWardrobeItemDocumentPath(link.relativePath)) continue;
+    const content = contentByFileId.get(link.fileId);
+    if (typeof content !== 'string') continue;
+    const pointer = parseFrontmatter(content).data?.imageFileId;
+    if (typeof pointer !== 'string' || !fileIds.has(pointer)) continue;
+    const oldItemId = wardrobeItemIdForDocument({ mountPointId: link.mountPointId, relativePath: link.relativePath, content });
+    fixes.push({
+      mountPointId: remapper.remap(link.mountPointId),
+      sourceMountPointId: link.mountPointId,
+      itemId: itemIdRemap.get(oldItemId) ?? oldItemId,
+      imageFileId: remapper.remap(pointer),
+    });
+  }
+  return fixes;
+}
+
+/**
  * Remaps all UUIDs in the backup data for new-account mode
  */
 export function remapBackupData(
@@ -84,13 +185,18 @@ export function remapBackupData(
     userId: targetUserId,
   }));
 
+  // Wardrobe item ids are not remapper keys (see buildWardrobeItemIdRemap).
+  // Built up front: a wardrobe picture's `files` row names its item in
+  // `linkedTo` / `tags`, and those must follow the item, not mint a stranger.
+  const wardrobeItemIdRemap = buildWardrobeItemIdRemap(data, remapper);
+  const remapLinkId = (id: string): string => wardrobeItemIdRemap.get(id) ?? remapper.remap(id);
+
   // Remap files
-  // IMPORTANT: Chain remapFields → remapArrayFields so array spread doesn't overwrite remapped scalar fields
+  // IMPORTANT: Chain remapFields → array remaps so array spread doesn't overwrite remapped scalar fields
   const remappedFiles = data.files.map((file) => ({
-    ...remapper.remapArrayFields(
-      remapper.remapFields(file, ['id', 'projectId']),
-      ['linkedTo', 'tags']
-    ),
+    ...remapper.remapFields(file, ['id', 'projectId']),
+    ...(Array.isArray(file.linkedTo) ? { linkedTo: file.linkedTo.map(remapLinkId) } : {}),
+    ...(Array.isArray(file.tags) ? { tags: file.tags.map(remapLinkId) } : {}),
     userId: targetUserId,
   }));
 
@@ -331,6 +437,12 @@ export function remapBackupData(
         defaultImageProfileId: remapper.remap(remapped.storyBackgroundsSettings.defaultImageProfileId),
       };
     }
+    if (remapped.wardrobeImageSettings?.imageProfileId) {
+      remapped.wardrobeImageSettings = {
+        ...remapped.wardrobeImageSettings,
+        imageProfileId: remapper.remap(remapped.wardrobeImageSettings.imageProfileId),
+      };
+    }
     return remapped as ChatSettings;
   });
 
@@ -346,7 +458,8 @@ export function remapBackupData(
   // composites at parse time pass through this same path.
   const remappedWardrobeItems = (data.wardrobeItems || []).map((item) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(item, ['id', 'characterId']),
+      // imageFileId names a `files` row, remapped with the files above.
+      remapper.remapFields(item, ['id', 'characterId', 'imageFileId']),
       ['componentItemIds']
     ),
   })) as WardrobeItem[];
@@ -446,6 +559,17 @@ export function remapBackupData(
     ...remapper.remapFields(member, ['id', 'groupId', 'characterId']),
   })) as GroupCharacterMember[];
 
+  // Wardrobe wear ledger. `id`, `wearerCharacterId` and `lastWornChatId` go
+  // through the remapper like any FK (a wearer or chat absent from the backup
+  // gets a fresh id that names nothing — the readers already label a missing
+  // wearer and "a chat since deleted"). `itemId` does not: see
+  // buildWardrobeItemIdRemap. An item id the backup carries no document for
+  // passes through unchanged.
+  const remappedWardrobeWear = (data.wardrobeWear || []).map((row) => ({
+    ...remapper.remapFields(row, ['id', 'wearerCharacterId', 'lastWornChatId']),
+    itemId: wardrobeItemIdRemap.get(row.itemId) ?? row.itemId,
+  })) as WardrobeWearStatsRow[];
+
   // Instance settings — only the mount-point keys carry UUIDs we need to
   // remap. Everything else is opaque text (numbers, JSON config blobs).
   const remappedInstanceSettings = (data.instanceSettings || []).map((row) => {
@@ -502,5 +626,6 @@ export function remapBackupData(
     // Text replacement rules: global config, no userId, no FKs to remapped
     // entities, and nothing references rule IDs — pass through unchanged.
     textReplacementRules: data.textReplacementRules || [],
+    wardrobeWear: remappedWardrobeWear,
   };
 }

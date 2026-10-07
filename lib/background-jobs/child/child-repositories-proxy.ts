@@ -195,6 +195,16 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   // replays it on its RW connection; the child's own publish would be a no-op
   // anyway. Callers discard the return.
   'chats.announceTranscriptChange': 'write',
+  // Wardrobe wear ledger. `commitEquippedOutfit` is the equip chokepoint: it
+  // writes a character's slots and credits the wears the write represents,
+  // diffing against the prior slots. Buffered whole so the parent replays it
+  // on its RW connection, where the prior state is true — the child's
+  // snapshot is stale within a job and blind to its own earlier writes, so a
+  // child-side diff would double-count. Callers discard the return.
+  'wardrobeWear.commitEquippedOutfit': 'write',
+  // Character-delete cleanup: folds rows into the unattributed row. Not
+  // reached from a job today; classified so it can never be mistaken for a read.
+  'wardrobeWear.foldWearerIntoUnattributed': 'write',
   // background jobs
   'backgroundJobs.cancelByType': 'write',
   'backgroundJobs.createBatch': 'write',

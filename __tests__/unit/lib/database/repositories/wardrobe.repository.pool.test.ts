@@ -193,3 +193,65 @@ describe('findWearablePoolForCharacter', () => {
     expect(pool.map((i: { id: string }) => i.id).sort()).toEqual(['c-only', 'g-only', 'p-only']);
   });
 });
+
+describe('findArchetypesInMountsAttributed', () => {
+  const SISTERS = { id: 'G1', name: 'The Sisters' };
+  const REGIMENT = { id: 'G2', name: 'The Regiment' };
+
+  it('tags every item with the group whose store it hangs in', async () => {
+    mockMount.mockImplementation(async (mountPointId: string) =>
+      mountPointId === 'm-sisters' ? [item('shawl', 'sisters')] : [item('kit', 'regiment')],
+    );
+
+    const items = await repo.findArchetypesInMountsAttributed([
+      { group: SISTERS, mountPointIds: ['m-sisters'] },
+      { group: REGIMENT, mountPointIds: ['m-regiment'] },
+    ]);
+
+    const origins = Object.fromEntries(
+      items.map((i: { id: string; origin: unknown }) => [i.id, i.origin]),
+    );
+    expect(origins).toEqual({
+      shawl: { scope: 'group', id: 'G1', name: 'The Sisters' },
+      kit: { scope: 'group', id: 'G2', name: 'The Regiment' },
+    });
+  });
+
+  it('resolves an id collision exactly as the flat read does, and the winner keeps its own origin', async () => {
+    mockMount.mockImplementation(async (mountPointId: string) =>
+      mountPointId === 'm-sisters'
+        ? [item('livery', 'sisters')]
+        : [item('livery', 'regiment')],
+    );
+
+    const flat = await repo.findArchetypesInMounts(['m-sisters', 'm-regiment']);
+    const attributed = await repo.findArchetypesInMountsAttributed([
+      { group: SISTERS, mountPointIds: ['m-sisters'] },
+      { group: REGIMENT, mountPointIds: ['m-regiment'] },
+    ]);
+
+    expect(attributed).toHaveLength(1);
+    expect(attributed[0].title).toBe(flat[0].title);
+    const winner = flat[0].title === 'livery (sisters)' ? SISTERS : REGIMENT;
+    expect(attributed[0].origin).toEqual({ scope: 'group', ...winner });
+  });
+
+  it('skips an unreadable store and keeps the other groups', async () => {
+    mockMount.mockImplementation(async (mountPointId: string) => {
+      if (mountPointId === 'm-broken') throw new Error('store offline');
+      return [item('kit', 'regiment')];
+    });
+
+    const items = await repo.findArchetypesInMountsAttributed([
+      { group: SISTERS, mountPointIds: ['m-broken'] },
+      { group: REGIMENT, mountPointIds: ['m-regiment'] },
+    ]);
+
+    expect(items.map((i: { id: string }) => i.id)).toEqual(['kit']);
+  });
+
+  it('reads nothing for an empty group tier', async () => {
+    expect(await repo.findArchetypesInMountsAttributed([])).toEqual([]);
+    expect(mockMount).not.toHaveBeenCalled();
+  });
+});

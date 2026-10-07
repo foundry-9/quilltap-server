@@ -516,6 +516,7 @@ Update chat settings.
     "embeddingProvider": "SAME_PROVIDER" | "OPENAI" | "LOCAL"
   },
   "imageDescriptionProfileId": "profile-uuid" | null,
+  "wardrobeImageSettings": { "imageProfileId": "image-profile-uuid" | null },
   "themePreference": {
     "activeThemeId": "theme-id" | null,
     "colorMode": "light" | "dark" | "system"
@@ -1924,6 +1925,30 @@ Global archetype wardrobe items that can be shared across characters.
 
 List all archetype wardrobe items. Items with a non-null `archivedAt` are omitted unless `?includeArchived=true` is passed — the same opt-in honoured by the character (`/api/v1/characters/[id]/wardrobe`, including `?scope=group`), project (`/api/v1/projects/[id]/wardrobe`) and group (`/api/v1/groups/[id]/wardrobe`) collection endpoints. Clients should build these URLs through `wardrobeCollectionUrl()` / `withWardrobeArchivedParam()` in `lib/wardrobe/wardrobe-container.ts` so the parameter can't drift.
 
+Every wardrobe **collection read** — and each single-item `GET` — tags its items with a read-time **`origin`**: `{ scope, id, name }`, where `scope` is `character` / `general` / `project` / `group`, `id` is the container id (`null` for General) and `name` is its display name (`"Quilltap General"` for General). The character route's `?scope=group` read tags each item with the group whose store it hangs in. `origin` is never persisted, never exported, and is not a field of `createWardrobeSchema` / `updateWardrobeSchema`. Clients spell the chip text with `wardrobeOriginLabel()` (`lib/wardrobe/wardrobe-container.ts`).
+
+Every wardrobe **collection read** also tags each item with a read-time **`wear`** summary from the wear ledger (`wardrobe_wear_stats`): `{ wearCount, firstWornAt, lastWornAt, lastWornChatId }`, totals across every character who has worn it. A never-worn item carries `{ wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null }` — never `undefined`. Like `origin`, `wear` is a response annotation: never persisted with the item, never accepted on write. `lastWornChatId` may name a chat since deleted.
+
+Each single-item `GET` (General, character, project and group item routes) also answers **`?action=wear-history`**:
+
+```json
+{
+  "history": {
+    "wearCount": 4, "firstWornAt": "…", "lastWornAt": "…", "lastWornChatId": "chat-uuid",
+    "wearers": [
+      { "characterId": "char-uuid", "wearCount": 3, "firstWornAt": "…", "lastWornAt": "…", "lastWornChatId": "chat-uuid" },
+      { "characterId": null, "wearCount": 1, "firstWornAt": "…", "lastWornAt": "…", "lastWornChatId": null }
+    ]
+  },
+  "wearers": [ { "characterId": "char-uuid", "name": "Vivienne", "avatarUrl": "…" }, { "characterId": null, "name": "unattributed", "avatarUrl": null } ],
+  "lastWornChat": { "id": "chat-uuid", "title": "The Thornfield Dinner" }
+}
+```
+
+`history.wearers` is most recent first; `characterId: null` is the unattributed row (wearers since deleted, or an import that could not resolve them). Names are resolved raw, so a broken vault costs a label rather than a 500; a character that no longer exists is labelled "a departed character". `lastWornChat` is `null` when the chat no longer exists.
+
+A **wear** is one equip transition: a garment going from not worn to worn on one character in one chat, by any path (opening outfit, Wear, `wardrobe_wear`, an outfit pick, `wardrobe_create` with `equip_now`). Re-saving the same outfit is not a wear; taking it off and putting it back on is a second. Wearing an outfit (composite) credits the outfit once and each garment it actually put on. Merges are not wears.
+
 The **outfit-selection LLM never receives archived items**, at any tier, with no parameter and no override: its candidate pool is built by `mergeWearablePool`, which drops them after the tier merge.
 
 **Response**: `200 OK`
@@ -1939,7 +1964,8 @@ The **outfit-selection LLM never receives archived items**, at any tier, with no
       "appropriateness": "casual",
       "isDefault": false,
       "characterId": null,
-      "archivedAt": null
+      "archivedAt": null,
+      "origin": { "scope": "general", "id": null, "name": "Quilltap General" }
     }
   ]
 }
@@ -1975,7 +2001,23 @@ Accepts **`archived: boolean`** alongside the content fields — the same field 
 
 #### `DELETE /api/v1/wardrobe/[itemId]`
 
-Delete an archetype wardrobe item. Cleans up all character references first.
+Delete an archetype wardrobe item. Cleans up all character references first, and its pictures (mount links and `files` rows) after the item is gone. The character, project and group item `DELETE`s do the same.
+
+Every wardrobe item (all tiers) carries an optional **`imageFileId`** — its current picture. Item `PUT`s accept it only to choose among the item's own pictures (a file not linked to the item → 400); create bodies never carry it.
+
+#### `/api/v1/wardrobe/[itemId]/images`
+
+One route for an item's pictures in every tier; the item's container rides in the query: `?scope=character|project|group|general&id=<containerId>` (`id` omitted for `general`). The item must live in that container (404 otherwise). Writes against an archived character's item answer **409** (the tombstone). Clients build URLs through `wardrobeItemImagesUrl()` in `lib/wardrobe/item-images-client.ts`.
+
+| Method | Action | Body | Response |
+|---|---|---|---|
+| `GET` | — | — | `{ current: fileId \| null, images: [{ fileId, url, thumbnailUrl, source, createdAt, prompt?, model? }] }`, newest first |
+| `POST` | `generate` | `{ imageProfileId? }` | `201 { image, current, prompt, subject: 'worn'\|'catalogue', profile: { id, name }, rerouted, trail }` |
+| `POST` | `upload` | multipart `file` (JPEG/PNG/WebP/GIF, ≤ 10 MB) and optional `kind: 'uploaded'\|'imported'` | `201 { image, current }` |
+| `POST` | `set-current` | `{ fileId }` | `{ current }` |
+| `POST` | `delete-image` | `{ fileId }` | `{ current }` — the next-newest becomes current |
+
+A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current` and `delete-image` refuse a file not linked to the item (400).
 
 #### `POST /api/v1/wardrobe/analyze-image`
 
@@ -2017,7 +2059,7 @@ Return the destination options for moving or copying a wardrobe item between tie
 
 Move or copy one wardrobe item between wardrobe tiers. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
-For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
+For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Pictures travel with every transferred item: a move re-links them into the destination mount (same path, same deduplicated blob) and re-points their `files` rows, then drops the source links; a copy links them under the new id with fresh `files` rows and points the copy's `imageFileId` at its own copy. Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
 
 ---
 
@@ -2377,7 +2419,7 @@ Add a character to the chat.
 - `controlledBy` accepts `"llm"` (default) or `"user"` (a seat the human owns and types for directly). `connectionProfileId` is required for LLM control and ignored for user control. Note this is durable seat **ownership** and is distinct from impersonation, which overlays a seat via `impersonatingParticipantIds` without changing `controlledBy` (see `action=impersonate`).
 - `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
 - `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
-- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object, and optionally `wornBundleIds` — the outfits the composer dissolved into those slots, so the wear ledger credits them), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
 - `mode: "llm_choose"` consults a cheap LLM per character. Consults for all characters in one request run concurrently; each is bounded by a 60s timeout. The model may return `"deliberate": true` alongside empty slots to dress the character in nothing on purpose; an all-empty response *without* that flag, a failure, or a timeout falls back to `default`.
 - `mode: "default"` resolves across **all three wardrobe tiers** — the character's own vault, the project stores linked to the chat's project, and Quilltap General. Items marked `isDefault` in any tier are equipped and **layer** in the same slot (ordered by `createdAt` ascending). Tiers are merged before the `isDefault` filter, so a character's own copy of a shared item shadows it by id: a personal `isDefault: false` override means the shared default is not worn. `llm_choose` draws its candidate list from that same merged pool.
 
@@ -2794,6 +2836,10 @@ Mutate a character's equipped outfit. Dispatches on `mode`:
 - `remove_from_slot` — remove `itemId` from `slot` (omit `itemId` to clear the slot).
 - `clear_slot` — empty `slot`.
 - `set_all` — replace the whole equipped state atomically with a `slots` object.
+
+`set_all` also accepts an optional **`wornBundleIds: string[]`** — the outfits (composites) the client dissolved into `slots`, since the stored slots hold only the garments. It is a claim, not a fact: ids the character cannot reach are dropped, each survivor is expanded to its garments server-side, and the wear ledger credits an outfit only when at least one of its garments was newly put on.
+
+Every mode writes through the wear ledger's chokepoint (`wardrobeWear.commitEquippedOutfit`), which credits a wear to each garment the change newly put on.
 
 `equip` is accepted as a deprecated alias for `wear`.
 
