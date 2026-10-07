@@ -343,7 +343,7 @@ function ActiveImageSection({
             />
           </a>
           {generating && (
-            <div className="absolute inset-0 flex items-center justify-center rounded qt-bg-default/70">
+            <div className="absolute inset-0 flex items-center justify-center rounded qt-bg-overlay-medium">
               <div
                 className="animate-spin rounded-full h-8 w-8 border-b-2 qt-border-primary"
                 role="status"
