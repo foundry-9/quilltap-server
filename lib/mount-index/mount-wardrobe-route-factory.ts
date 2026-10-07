@@ -39,7 +39,12 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
 import { withOrigin, type WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { attachWear, buildWearHistoryPayload } from '@/lib/wardrobe/wear-history';
-import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
+import {
+  applyArchiveFlag,
+  cleanupEquippedRefs,
+  cleanupItemImages,
+  imageChoiceError,
+} from '@/lib/wardrobe/item-route-steps';
 import {
   parseWardrobeInstructionsBody,
   handleReadWardrobeInstructions,
@@ -383,6 +388,9 @@ export function createMountWardrobeItemHandlers(
       const body = await req.json();
       const { archived, ...fields } = updateWardrobeSchema.parse(body);
 
+      const imageError = await imageChoiceError(repos, itemId, fields.imageFileId);
+      if (imageError) return badRequest(imageError);
+
       // `archived` is a request-shaped boolean; the item stores a timestamp.
       // Archiving is idempotent, so an already-archived item keeps its stamp.
       let archivePatch: { archivedAt: string | null } | null = null;
@@ -431,6 +439,12 @@ export function createMountWardrobeItemHandlers(
 
       const success = await deleteProjectWardrobeItem(mountPointId, itemId);
       if (!success) return notFound(`${ownerLabel} wardrobe item`);
+
+      await cleanupItemImages(repos, itemId, logTag, {
+        [logIdKey]: id,
+        mountPointId,
+        context: 'wardrobe',
+      });
 
       logger.info(`${logTag} Deleted ${owner} wardrobe item`, {
         [logIdKey]: id,

@@ -8,7 +8,7 @@
 
 import { randomUUID } from 'crypto'
 import { UuidRemapper } from '@/lib/backup/uuid-remapper'
-import { remapBackupData } from '@/lib/backup/restore/uuid-remap'
+import { planWardrobeImagePointerFixes, remapBackupData } from '@/lib/backup/restore/uuid-remap'
 import type { BackupData } from '@/lib/backup/types'
 import type { Project } from '@/lib/schemas/types'
 
@@ -760,3 +760,78 @@ describe('remapBackupData() - wardrobe wear ledger', () => {
     expect(result.wardrobeWear![0].itemId).not.toBe('legacy-item')
   })
 })
+
+describe('wardrobe item pictures in a new-account restore', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  const ITEM_ID = '11111111-1111-4111-8111-111111111111'
+
+  // A vault holding one garment whose frontmatter names its current picture,
+  // and that picture's files row (linked to the item, and to a chat).
+  const backup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [
+      { id: 'file-old', linkedTo: [ITEM_ID, 'chat-old'], tags: [ITEM_ID] },
+    ] as unknown as BackupData['files'],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+    docMountFileLinks: [
+      { id: 'link-1', mountPointId: 'mount-old', fileId: 'docfile-1', relativePath: 'Wardrobe/Coat.md' },
+    ] as unknown as BackupData['docMountFileLinks'],
+    docMountDocuments: [
+      {
+        id: 'doc-1',
+        fileId: 'docfile-1',
+        content: `---\nid: ${ITEM_ID}\ntitle: Coat\ntypes:\n  - top\nimageFileId: file-old\n---\nA coat.`,
+      },
+    ] as unknown as BackupData['docMountDocuments'],
+  })
+
+  it("keeps a picture row's item link on the item's (unchanged) id, remapping only other links", () => {
+    const remapper = new UuidRemapper()
+    const result = remapBackupData(backup(), 'target-user', remapper)
+    const file = result.files[0]
+    const mapping = remapper.getMapping()
+
+    expect(file.id).toBe(mapping['file-old'])
+    expect(file.linkedTo).toEqual([ITEM_ID, mapping['chat-old']])
+    expect(file.tags).toEqual([ITEM_ID])
+  })
+
+  it("plans the frontmatter pointer onto the picture's new file id, against the remapped mount", () => {
+    const remapper = new UuidRemapper()
+    const original = backup()
+    const fixes = planWardrobeImagePointerFixes(original, remapper)
+    const result = remapBackupData(original, 'target-user', remapper)
+
+    expect(fixes).toEqual([
+      {
+        mountPointId: remapper.getMapping()['mount-old'],
+        sourceMountPointId: 'mount-old',
+        itemId: ITEM_ID,
+        imageFileId: result.files[0].id,
+      },
+    ])
+  })
+
+  it('plans nothing for a pointer naming a file the backup does not carry', () => {
+    const data = backup()
+    data.files = []
+    expect(planWardrobeImagePointerFixes(data, new UuidRemapper())).toEqual([])
+  })
+})
+

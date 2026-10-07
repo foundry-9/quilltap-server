@@ -268,6 +268,7 @@ export interface FeatureConfigInfo {
   contextCompression: { enabled: boolean; windowSize: number; compressionTargetTokens: number };
   agentMode: { maxTurns: number; defaultEnabled: boolean };
   storyBackgrounds: { enabled: boolean; hasDefaultImageProfile: boolean };
+  wardrobeImages: { hasDesignatedImageProfile: boolean };
   timestamps: { mode: string; format: string };
   autoLock: { enabled: boolean; idleMinutes: number };
   memoryCascade: { onMessageDelete: string; onSwipeRegenerate: string };

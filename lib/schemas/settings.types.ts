@@ -602,6 +602,23 @@ export const StoryBackgroundsSettingsSchema = z.object({
 export type StoryBackgroundsSettings = z.infer<typeof StoryBackgroundsSettingsSchema>;
 
 // ============================================================================
+// WARDROBE IMAGE SETTINGS
+// ============================================================================
+
+/**
+ * Which image profile draws wardrobe items' pictures (Settings → Images →
+ * Wardrobe Images). Deliberately separate from the Lantern's backdrop desk:
+ * a profile chosen for landscapes may balk at a garment. Resolved by
+ * `resolveWardrobeImageProfile` (`lib/image-gen/profile-resolution.ts`).
+ */
+export const WardrobeImageSettingsSchema = z.object({
+  /** The designated profile; null = the user's default image profile. */
+  imageProfileId: UUIDSchema.nullable().default(null),
+});
+
+export type WardrobeImageSettings = z.infer<typeof WardrobeImageSettingsSchema>;
+
+// ============================================================================
 // CHAT SETTINGS
 // ============================================================================
 
@@ -737,6 +754,8 @@ export const ChatSettingsSchema = z.object({
     enabled: false,
     defaultImageProfileId: null,
   }),
+  /** The designated image profile for wardrobe item pictures */
+  wardrobeImageSettings: WardrobeImageSettingsSchema.optional(),
   /** The Concierge: failover to the uncensored desk, display of flagged content, the optional pre-screen */
   conciergeSettings: ConciergeSettingsSchema.default({
     enabled: true,

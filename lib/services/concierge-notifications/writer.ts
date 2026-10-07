@@ -382,7 +382,7 @@ export type ConciergeRefusalKind =
   | 'refusal-not-permitted';
 
 /** What was being made when the refusal happened. */
-export type ConciergeRefusalPurpose = 'tool' | 'lantern' | 'avatar' | 'dialog' | 'text';
+export type ConciergeRefusalPurpose = 'tool' | 'lantern' | 'avatar' | 'dialog' | 'wardrobe' | 'text';
 
 export interface ConciergeRefusalDetails {
   /** Provider of the profile that refused (e.g. 'OPENAI'). */
@@ -412,6 +412,8 @@ function refusalCommission(purpose: ConciergeRefusalPurpose): { voiced: string; 
       return { voiced: 'the commission for a new portrait', plain: 'a character portrait' };
     case 'dialog':
       return { voiced: 'the commission for a picture', plain: 'an image request' };
+    case 'wardrobe':
+      return { voiced: 'the commission for a picture of a garment', plain: 'a wardrobe picture' };
     case 'text':
       return { voiced: 'the request for a reply', plain: 'this turn' };
   }

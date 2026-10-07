@@ -17,6 +17,7 @@ import { WARDROBE_SLOT_META, formatSlotLabels } from '@/lib/schemas/wardrobe.typ
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { selectGarments } from '@/lib/wardrobe/composed-outfits'
 import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeItemThumbnail } from './wardrobe-item-thumbnail'
 
 interface EquippedSlotRowProps {
   slot: WardrobeItemType
@@ -179,6 +180,7 @@ export function EquippedSlotRow({
                       }}
                       className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:qt-bg-muted"
                     >
+                      <WardrobeItemThumbnail fileId={c.imageFileId} size={28} />
                       <span className="min-w-0 flex-1 break-words text-sm text-foreground">
                         {c.title}
                       </span>

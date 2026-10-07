@@ -1378,6 +1378,36 @@
           ],
           "description": "Provenance tracking for items migrated from legacy clothingRecords"
         },
+        "imageFileId": {
+          "oneOf": [
+            { "$ref": "#/$defs/UUID" },
+            { "type": "null" }
+          ],
+          "description": "The item's current picture: the id of one of its own image files (see _imageFiles). Null or absent means no picture. The importer re-mints the file rows and points this at the item's own copy, or nulls it when the picture did not come along."
+        },
+        "_imageFiles": {
+          "type": "array",
+          "description": "Character-owned items only: metadata of the item's pictures (the item's image file history). The bytes are not here — they ride in the character's vault as blobs at Wardrobe/images/<itemId>/<originalFilename>.",
+          "items": {
+            "type": "object",
+            "required": ["id", "originalFilename", "mimeType", "size", "source", "createdAt"],
+            "additionalProperties": true,
+            "properties": {
+              "id": { "$ref": "#/$defs/UUID" },
+              "originalFilename": { "type": "string" },
+              "mimeType": { "type": "string" },
+              "size": { "type": "number" },
+              "width": { "type": ["number", "null"] },
+              "height": { "type": ["number", "null"] },
+              "source": { "type": "string", "enum": ["UPLOADED", "GENERATED", "IMPORTED", "SYSTEM"] },
+              "generationPrompt": { "type": ["string", "null"] },
+              "generationModel": { "type": ["string", "null"] },
+              "generationRevisedPrompt": { "type": ["string", "null"] },
+              "description": { "type": ["string", "null"] },
+              "createdAt": { "$ref": "#/$defs/Timestamp" }
+            }
+          }
+        },
         "archivedAt": {
           "oneOf": [
             { "$ref": "#/$defs/Timestamp" },

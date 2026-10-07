@@ -417,6 +417,8 @@ import { collapseDuplicateAvatarRollsMigration } from './collapse-duplicate-avat
 // Wardrobe wear ledger: wardrobe_wear_stats table, then a one-time seed from current outfits
 import { addWardrobeWearStatsTableMigration } from './add-wardrobe-wear-stats-table-v1';
 import { seedWardrobeWearStatsMigration } from './seed-wardrobe-wear-stats-v1';
+// Wardrobe item images: chat_settings.wardrobeImageSettings (the designated image profile)
+import { addWardrobeImageSettingsFieldMigration } from './add-wardrobe-image-settings-field-v1';
 
 /**
  * All available migrations.
@@ -849,6 +851,8 @@ export const migrations: Migration[] = [
   // Wardrobe wear ledger: the table, then a one-time seed from current outfits
   addWardrobeWearStatsTableMigration,
   seedWardrobeWearStatsMigration,
+  // Wardrobe item images: chat_settings.wardrobeImageSettings
+  addWardrobeImageSettingsFieldMigration,
 ];
 
 export {
@@ -1259,5 +1263,7 @@ export {
   // Wardrobe wear ledger: the table, then a one-time seed from current outfits
   addWardrobeWearStatsTableMigration,
   seedWardrobeWearStatsMigration,
+  // Wardrobe item images: chat_settings.wardrobeImageSettings
+  addWardrobeImageSettingsFieldMigration,
 };
 

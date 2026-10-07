@@ -24,6 +24,8 @@ import type {
   SanitizedConnectionProfile,
   SanitizedImageProfile,
   SanitizedEmbeddingProfile,
+  ExportedWardrobeImageFile,
+  ExportedWardrobeItem,
 } from './types';
 import type { MessageEvent, Memory } from '@/lib/schemas/types';
 import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
@@ -174,6 +176,42 @@ function bump(counts: QuilltapExportCounts, key: keyof QuilltapExportCounts, del
 // PER-ENTITY ASYNC GENERATORS
 // ============================================================================
 
+/**
+ * The `files` rows of one wardrobe item's pictures, reduced to the metadata an
+ * importer needs to re-mint them against the imported vault's blobs. The
+ * export-exclusion predicate is asked like everywhere else; IMAGE files pass.
+ */
+async function exportedWardrobeImageFiles(
+  repos: ReturnType<typeof getRepositories>,
+  itemId: string,
+): Promise<ExportedWardrobeImageFile[]> {
+  try {
+    const files = (await repos.files.findByLinkedTo(itemId)).filter(
+      (f) => f.category === 'IMAGE' && !isFileExcludedFromExport(f),
+    );
+    return files.map((f) => ({
+      id: f.id,
+      originalFilename: f.originalFilename,
+      mimeType: f.mimeType,
+      size: f.size,
+      width: f.width ?? null,
+      height: f.height ?? null,
+      source: f.source,
+      generationPrompt: f.generationPrompt ?? null,
+      generationModel: f.generationModel ?? null,
+      generationRevisedPrompt: f.generationRevisedPrompt ?? null,
+      description: f.description ?? null,
+      createdAt: f.createdAt,
+    }));
+  } catch (error) {
+    logger.warn('Failed to load wardrobe item pictures for export', {
+      itemId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
 async function* streamCharacters(
   userId: string,
   ids: string[],
@@ -206,11 +244,18 @@ async function* streamCharacters(
     // Wardrobe items — one record each. Read through the overlay: post-cutover
     // the character vault is the authoritative store, not the wardrobe_items table.
     try {
-      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id);
+      // Archived garments too: the vault carries their documents and picture
+      // blobs regardless, and an archived item's record is what lets the
+      // importer re-mint its pictures and keep its ledger rows.
+      const wardrobeItems = await globalRepos.wardrobe.findByCharacterId(id, true);
       for (const item of wardrobeItems) {
         // `origin` is a read-time annotation the list endpoints attach; the
         // repository never sets it, and it must never ride into a bundle.
-        const { origin: _origin, ...data } = item as typeof item & { origin?: unknown };
+        const { origin: _origin, ...rest } = item as typeof item & { origin?: unknown };
+        // A character-owned item carries its pictures' file metadata; the
+        // bytes ride in the vault's blobs below (Wardrobe/images/<itemId>/).
+        const imageFiles = rest.characterId ? await exportedWardrobeImageFiles(globalRepos, rest.id) : [];
+        const data: ExportedWardrobeItem = imageFiles.length > 0 ? { ...rest, _imageFiles: imageFiles } : rest;
         yield { kind: 'wardrobe_item', characterId: id, data };
         // Character-owned items only: a shared item the overlay might surface
         // here is not this bundle's to carry, nor is its wear ledger.

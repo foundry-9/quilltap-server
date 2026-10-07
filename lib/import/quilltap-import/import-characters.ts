@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
 import type { Character } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import type { ExportedCharacter } from '@/lib/export/types';
+import type { ExportedCharacter, ExportedWardrobeItem } from '@/lib/export/types';
 import { type LegacyOutfitPreset, legacyPresetToComposite } from './legacy-presets';
 import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
@@ -230,14 +230,14 @@ export async function importCharacters(
  * the same composite.
  */
 async function importCharacterWardrobeItems(
-  wardrobeItems: WardrobeItem[] | undefined,
+  wardrobeItems: ExportedWardrobeItem[] | undefined,
   legacyPresets: LegacyOutfitPreset[] | undefined,
   newCharacterId: string,
   warnings: string[],
   /** Records source item id → minted id for the wear-ledger import. */
   wardrobeItemIdMap: Map<string, string>
 ): Promise<number> {
-  let combined: WardrobeItem[] = wardrobeItems ? [...wardrobeItems] : [];
+  let combined: ExportedWardrobeItem[] = wardrobeItems ? [...wardrobeItems] : [];
 
   if (legacyPresets && legacyPresets.length > 0) {
     const hasComposites = combined.some(
@@ -264,7 +264,7 @@ async function importCharacterWardrobeItems(
   const globalRepos = getRepositories();
   let importedCount = 0;
 
-  const importable: WardrobeItem[] = [];
+  const importable: ExportedWardrobeItem[] = [];
   for (const item of combined) {
     // Skip archetype items (characterId = null) — they are shared, not per-character
     if (!item.characterId) {
@@ -303,7 +303,20 @@ async function importCharacterWardrobeItems(
 
   for (const item of ordered) {
     try {
-      const { id: _, characterId: __, createdAt, updatedAt, migratedFromClothingRecordId, ...itemData } = item;
+      // `imageFileId` / `_imageFiles` name pictures whose rows have not been
+      // minted here yet; `importWardrobeItemImages` re-mints them against the
+      // imported vault once it has landed and points the item at its own copy.
+      // Until then the item carries no picture rather than a dangling id.
+      const {
+        id: _,
+        characterId: __,
+        createdAt,
+        updatedAt,
+        migratedFromClothingRecordId,
+        imageFileId: _imageFileId,
+        _imageFiles: _files,
+        ...itemData
+      } = item;
 
       const originalComponentIds = item.componentItemIds ?? [];
       const remappedComponentIds = originalComponentIds

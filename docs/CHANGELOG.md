@@ -4,6 +4,46 @@
 
 ### 4.10-dev
 
+#### Wardrobe item images
+
+- Wardrobe items and outfits can carry pictures. New frontmatter key `imageFileId` (the current
+  picture) on `WardrobeItemSchema`, the vault builder/parser and `updateWardrobeSchema`; create
+  bodies never set it. Item PUTs refuse an `imageFileId` not linked to the item (400).
+- Pictures are blob links at `Wardrobe/images/<itemId>/<timestamp>-<kind>-<8 hex>.webp` in the item's own
+  mount, written by `writeWardrobeItemImage` (`lib/file-storage/wardrobe-image-bridge.ts`, parent
+  process only), each with a `files` row (`linkedTo: [itemId]`, category IMAGE). History is
+  `files.findByLinkedTo(itemId)`; `lib/wardrobe/item-images.ts` is the only writer of `imageFileId`.
+- New route `/api/v1/wardrobe/[itemId]/images?scope=&id=`: `GET` lists pictures; `POST` actions
+  `generate`, `upload`, `set-current`, `delete-image`. 404 when the item is not in the named
+  container, 409 for an archived character, 422 with the Concierge trail on an unrerouted refusal, 502 on any other provider failure.
+- Generation is synchronous (`trackActivity('image')`) through `generateImageWithConciergeFailover`
+  with new purpose `'wardrobe'` and no chat. A character's own item is drawn worn by the character
+  (full length; hair items head and shoulders); shared items are drawn catalogue style. Prompt:
+  `lib/wardrobe/item-image-prompt.ts`; the avatar prompt's identity block is now the shared
+  `buildFigureIdentityBlock` (avatar output unchanged). New LLM log type `WARDROBE_ITEM_IMAGE`.
+- New setting `chatSettings.wardrobeImageSettings.imageProfileId` (column added by
+  `add-wardrobe-image-settings-field-v1`), resolved by `resolveWardrobeImageProfile`: per-call
+  override → designated → default image profile. Settings → Images gains a Wardrobe Images card.
+  Remapped on restore; reported in the Almanack and `help_settings` (`images`).
+- Item deletes (all tiers) remove the item's picture links and rows after the item goes. Transfers
+  carry pictures: a move re-links them into the destination and drops the source links; a copy
+  duplicates them under the new id and repoints the copy's `imageFileId`.
+- UI: Image section in the item editor (generate with profile override, upload, history strip with
+  make-current/delete, refusal notice); 40 px row thumbnails and a "Generate image" menu entry for
+  manageable rows; 28 px thumbnails in the slot and quick-pick choosers; Import from image keeps
+  the photograph as each created piece's first picture (checkbox, on by default).
+- `.qtap` character exports attach `_imageFiles` (picture file metadata) to each character-owned
+  `wardrobe_item` record; bytes ride in the vault blobs. Import re-mints the rows against the
+  imported vault after reconciliation and repoints `imageFileId`, or leaves it null. Export schema
+  updated; `uuid-remap.ts` remaps `imageFileId`. Archived character-owned items are now included in
+  character exports so their pictures and ledger rows travel.
+- New-account restore keeps picture rows' `linkedTo`/`tags` on the item's (unchanged) id and repoints
+  each item's frontmatter `imageFileId` to the remapped file id through the per-mount wardrobe update
+  (`planWardrobeImagePointerFixes`); archived characters' vaults are left untouched.
+- Transfer moves resolve the source's writable mount before any write (archived source → 409) and
+  repoint picture rows and drop source links only after the source item is gone
+  (`commitMovedImages`). Item-delete picture cleanup continues past a single failure.
+
 #### Wardrobe wear ledger
 
 - New `wardrobe_wear_stats` table (`add-wardrobe-wear-stats-table-v1`): per wardrobe item and wearer,

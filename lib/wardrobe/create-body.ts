@@ -5,8 +5,10 @@
  * Every create endpoint — character, General, project, group — and the
  * transfer route's "land a copy here" write build their item through this,
  * so the defaults (`componentItemIds: []`, `isDefault: false`, `replace:
- * false`, nulls for the optional prose fields, no clothing-record provenance)
- * can't drift between tiers.
+ * false`, nulls for the optional prose fields, no clothing-record provenance,
+ * no picture) can't drift between tiers. A fresh item never carries an
+ * `imageFileId`: a picture hangs off an item that already has an id, through
+ * the images route.
  *
  * Client-safe: type-only imports.
  *
@@ -42,5 +44,6 @@ export function wardrobeItemFromCreateBody(
     isDefault: body.isDefault ?? false,
     replace: body.replace ?? false,
     migratedFromClothingRecordId: null,
+    imageFileId: null,
   };
 }

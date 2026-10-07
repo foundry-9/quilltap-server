@@ -10,9 +10,14 @@
 
 import { createContextParamsHandler, dispatchAction, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
-import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
+import {
+  applyArchiveFlag,
+  cleanupEquippedRefs,
+  cleanupItemImages,
+  imageChoiceError,
+} from '@/lib/wardrobe/item-route-steps';
 import { withOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { buildWearHistoryPayload } from '@/lib/wardrobe/wear-history';
 
@@ -75,6 +80,9 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     const body = await req.json();
     const { archived, ...fields } = updateWardrobeSchema.parse(body);
 
+    const imageError = await imageChoiceError(repos, itemId, fields.imageFileId);
+    if (imageError) return badRequest(imageError);
+
     // `archived` is a request-shaped boolean; the item stores a timestamp.
     // Archiving is idempotent, so an already-archived item keeps its stamp.
     const archivePatch = applyArchiveFlag(existing.archivedAt, archived);
@@ -121,6 +129,8 @@ export const DELETE = createContextParamsHandler<{ id: string; itemId: string }>
       if (!success) {
         return notFound('Wardrobe item');
       }
+
+      await cleanupItemImages(repos, itemId, '[Wardrobe v1]', { characterId: id, itemId });
 
       logger.info('[Wardrobe v1] Wardrobe item deleted', {
         characterId: id,

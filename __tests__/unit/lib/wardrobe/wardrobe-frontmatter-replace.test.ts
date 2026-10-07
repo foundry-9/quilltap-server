@@ -66,3 +66,25 @@ describe('wardrobe frontmatter — replace flag round-trip', () => {
     expect(parsed!.replace).toBe(false)
   })
 })
+
+describe('wardrobe frontmatter — imageFileId round-trip', () => {
+  const FILE_ID = '0d2b7c1e-6a3f-4c8e-9b51-2f7e3a9d4c10'
+
+  it('emits `imageFileId` in frontmatter and parses it back', () => {
+    const md = buildWardrobeItemFile(makeItem({ imageFileId: FILE_ID }), new Map())
+    expect(md).toContain(`imageFileId: ${FILE_ID}`)
+
+    const parsed = parseWardrobeItemFile(docFor(md), 'c1')
+    expect(parsed).not.toBeNull()
+    expect(parsed!.imageFileId).toBe(FILE_ID)
+  })
+
+  it('omits `imageFileId` when there is no picture and parses to null', () => {
+    const md = buildWardrobeItemFile(makeItem({ imageFileId: null }), new Map())
+    expect(md).not.toMatch(/imageFileId/)
+
+    const parsed = parseWardrobeItemFile(docFor(md), 'c1')
+    expect(parsed).not.toBeNull()
+    expect(parsed!.imageFileId).toBeNull()
+  })
+})

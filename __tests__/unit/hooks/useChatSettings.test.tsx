@@ -119,4 +119,28 @@ describe('useChatSettings — optimistic update', () => {
     expect(second.conciergeSettings.enabled).toBe(true)
     expect(result.current.settings?.conciergeSettings?.preScreen.enabled).toBe(true)
   })
+
+  it('handleWardrobeImageProfileChange PUTs the designated profile, and null for the default', async () => {
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+    await waitFor(() => expect(result.current.settings).not.toBeNull())
+
+    const putBodies = () =>
+      mockFetch.mock.calls
+        .filter(([url, init]: [string, RequestInit | undefined]) => url === '/api/v1/settings/chat' && init?.method === 'PUT')
+        .map(([, init]) => JSON.parse(String((init as RequestInit).body)))
+
+    await act(async () => {
+      await result.current.handleWardrobeImageProfileChange('profile-1')
+    })
+    expect(result.current.settings?.wardrobeImageSettings).toEqual({ imageProfileId: 'profile-1' })
+
+    await act(async () => {
+      await result.current.handleWardrobeImageProfileChange(null)
+    })
+
+    expect(putBodies()).toEqual([
+      { wardrobeImageSettings: { imageProfileId: 'profile-1' } },
+      { wardrobeImageSettings: { imageProfileId: null } },
+    ])
+  })
 })

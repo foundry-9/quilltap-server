@@ -516,6 +516,7 @@ Update chat settings.
     "embeddingProvider": "SAME_PROVIDER" | "OPENAI" | "LOCAL"
   },
   "imageDescriptionProfileId": "profile-uuid" | null,
+  "wardrobeImageSettings": { "imageProfileId": "image-profile-uuid" | null },
   "themePreference": {
     "activeThemeId": "theme-id" | null,
     "colorMode": "light" | "dark" | "system"
@@ -2000,7 +2001,23 @@ Accepts **`archived: boolean`** alongside the content fields — the same field 
 
 #### `DELETE /api/v1/wardrobe/[itemId]`
 
-Delete an archetype wardrobe item. Cleans up all character references first.
+Delete an archetype wardrobe item. Cleans up all character references first, and its pictures (mount links and `files` rows) after the item is gone. The character, project and group item `DELETE`s do the same.
+
+Every wardrobe item (all tiers) carries an optional **`imageFileId`** — its current picture. Item `PUT`s accept it only to choose among the item's own pictures (a file not linked to the item → 400); create bodies never carry it.
+
+#### `/api/v1/wardrobe/[itemId]/images`
+
+One route for an item's pictures in every tier; the item's container rides in the query: `?scope=character|project|group|general&id=<containerId>` (`id` omitted for `general`). The item must live in that container (404 otherwise). Writes against an archived character's item answer **409** (the tombstone). Clients build URLs through `wardrobeItemImagesUrl()` in `lib/wardrobe/item-images-client.ts`.
+
+| Method | Action | Body | Response |
+|---|---|---|---|
+| `GET` | — | — | `{ current: fileId \| null, images: [{ fileId, url, thumbnailUrl, source, createdAt, prompt?, model? }] }`, newest first |
+| `POST` | `generate` | `{ imageProfileId? }` | `201 { image, current, prompt, subject: 'worn'\|'catalogue', profile: { id, name }, rerouted, trail }` |
+| `POST` | `upload` | multipart `file` (JPEG/PNG/WebP/GIF, ≤ 10 MB) and optional `kind: 'uploaded'\|'imported'` | `201 { image, current }` |
+| `POST` | `set-current` | `{ fileId }` | `{ current }` |
+| `POST` | `delete-image` | `{ fileId }` | `{ current }` — the next-newest becomes current |
+
+A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current` and `delete-image` refuse a file not linked to the item (400).
 
 #### `POST /api/v1/wardrobe/analyze-image`
 
@@ -2042,7 +2059,7 @@ Return the destination options for moving or copying a wardrobe item between tie
 
 Move or copy one wardrobe item between wardrobe tiers. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
-For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
+For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Pictures travel with every transferred item: a move re-links them into the destination mount (same path, same deduplicated blob) and re-points their `files` rows, then drops the source links; a copy links them under the new id with fresh `files` rows and points the copy's `imageFileId` at its own copy. Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
 
 ---
 

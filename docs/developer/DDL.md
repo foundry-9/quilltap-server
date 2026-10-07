@@ -430,6 +430,10 @@ CREATE INDEX "idx_wardrobe_items_character" ON "wardrobe_items"("characterId");
 
 `componentItemIds` is a JSON array of other wardrobe item ids. An empty array (or NULL, treated identically) means a leaf item; a populated array means a composite — equipping the item stores its own id but at read time `expandComposites` resolves the components transitively (cycle-tolerant, depth-capped). Cycles are rejected at save time by the vault writers (`wardrobe-writes.ts`).
 
+#### Wardrobe/images/<itemId>/ (picture blobs)
+
+Each wardrobe item's pictures live beside its markdown in the same mount (character vault, project/group official store, or Quilltap General) as blob links at `Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<generated|uploaded|imported>-<8 hex>.webp` (the random tail keeps two writes in the same second apart), written by `writeWardrobeItemImage` (`lib/file-storage/wardrobe-image-bridge.ts`) through `linkBlobContent` (WebP-normalized, sha256-deduplicated — an Import-from-image photograph shared by several pieces is one blob behind several links). Each picture also has a `files` row whose `storageKey` is `mount-blob:{mountPointId}:{blobId}` and whose `originalFilename` is the link's leaf name. The `Wardrobe/` projection (`vault-projection.ts`) lists and sweeps `.md` documents only, so these blobs are never mistaken for garments and are never renamed or swept with the item: they are keyed by item id, and the item delete routes (`cleanupItemImages`) and the transfer route (`carryItemImages`) handle them explicitly.
+
 #### Wardrobe/*.md frontmatter
 
 The vault-first wardrobe files carry their fields in YAML frontmatter, with
@@ -448,6 +452,7 @@ emitted only when set; vault path lookups are case-insensitive.
 | replace | bool | **Composites only**, emitted only when `true`. When `true`, equipping the composite first clears every slot it designates (`types`) and then places only its own components; when `false`/absent, equipping is **additive** — components layer onto whatever already occupies those slots without clearing. Leaf items always replace their own slots and ignore the flag. |
 | archived / archivedAt | bool / string (ISO 8601) | `archived: true` marks the item archived; `archivedAt` records when (falls back to the document's `updatedAt`). |
 | migratedFromClothingRecordId | string (UUID) | Provenance from the legacy clothingRecords migration. |
+| imageFileId | string (UUID) | The item's current picture: a `files` row (category `IMAGE`, `linkedTo: [itemId]`). Emitted only when set. The history is every IMAGE file linked to the item, never a frontmatter list. Written only by `lib/wardrobe/item-images.ts` (the `/api/v1/wardrobe/[itemId]/images` route) or by an item `PUT` that chooses among the item's own pictures. |
 | createdAt | string (ISO 8601) | Creation timestamp (falls back to the document's `createdAt`). |
 | updatedAt | string (ISO 8601) | Last-update timestamp (falls back to the document's `updatedAt`). |
 
@@ -1013,6 +1018,7 @@ CREATE TABLE "chat_settings" (
   "answerConfirmationSettings" TEXT DEFAULT '{"enabled":false}', -- added in 4.8 (add-answer-confirmation-columns-v2): global default for the Salon answer-confirmation check { enabled }. Per-project override in project properties.json; per-chat override on chats.answerConfirmationOverride.
   "customTools" INTEGER DEFAULT 1, -- added in 4.8 (add-custom-tools-field-v1): when 0, Pascal's run_custom pseudo-tool is never offered to models and the composer gutter button is hidden. Custom tool definitions themselves are retained.
   "smartTypographySettings" TEXT DEFAULT '{"displayQuotes":false,"dashes":true,"ellipsis":true}', -- added in 4.8.2 (add-smart-typography-settings-field-v1): Layer 1.6 { displayQuotes, dashes, ellipsis }. `displayQuotes` curls quotes at RENDER time only — chat_messages.content is never rewritten, so model input, embeddings and exports are unaffected; suppressed for a template whose patterns claim a quote character. `dashes`/`ellipsis` are type-time and DO write real –/—/… into the composer text.
+  "wardrobeImageSettings" TEXT DEFAULT '{"imageProfileId":null}', -- added in 4.10 (add-wardrobe-image-settings-field-v1): { imageProfileId } — the image profile designated for drawing wardrobe items' pictures (Settings → Images → Wardrobe Images). Resolved by `resolveWardrobeImageProfile`: per-generation override → this → the user's default image profile. Never falls back to storyBackgroundsSettings.
   UNIQUE("userId")
 );
 

@@ -47,6 +47,17 @@ jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
   writeWardrobeInstructionsFile: jest.fn(),
 }));
 
+// Pictures: the PUT validates a hand-set `imageFileId` and the DELETE drops the
+// item's pictures, both through lib/wardrobe/item-images (tested on its own).
+jest.mock('@/lib/wardrobe/item-images', () => {
+  class ForeignWardrobeImageError extends Error {}
+  return {
+    ForeignWardrobeImageError,
+    assertItemImageChoice: jest.fn(async () => undefined),
+    cleanupItemImages: jest.fn(async () => undefined),
+  };
+});
+
 import {
   createMountWardrobeHandlers,
   createMountWardrobeItemHandlers,
@@ -61,6 +72,14 @@ import {
   writeWardrobeInstructionsFile,
 } from '@/lib/wardrobe/wardrobe-instructions';
 
+import {
+  ForeignWardrobeImageError,
+  assertItemImageChoice,
+  cleanupItemImages,
+} from '@/lib/wardrobe/item-images';
+
+const mockAssertImageChoice = jest.mocked(assertItemImageChoice);
+const mockCleanupItemImages = jest.mocked(cleanupItemImages);
 const mockCreate = jest.mocked(createProjectWardrobeItem);
 const mockUpdate = jest.mocked(updateProjectWardrobeItem);
 const mockDelete = jest.mocked(deleteProjectWardrobeItem);
@@ -657,5 +676,57 @@ describe('the tier label follows the config', () => {
     const res = await GET(req('https://x.test/'), ctx(), { id: 'group-1', itemId: 'item-1' });
 
     await expect(res.json()).resolves.toEqual({ error: 'Group not found' });
+  });
+});
+
+describe('item pictures', () => {
+  it('PUT refuses an imageFileId that is not one of the item\'s own pictures, before writing', async () => {
+    mockAssertImageChoice.mockRejectedValueOnce(new ForeignWardrobeImageError('foreign'));
+
+    const res = await item().PUT(req('https://x.test/', { imageFileId: '0d2b7c1e-6a3f-4c8e-9b51-2f7e3a9d4c10' }, 'PUT'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockAssertImageChoice).toHaveBeenCalledWith(expect.anything(), 'item-1', '0d2b7c1e-6a3f-4c8e-9b51-2f7e3a9d4c10');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('PUT passes one of the item\'s own pictures through', async () => {
+    const res = await item().PUT(req('https://x.test/', { imageFileId: '1e3c8d2f-7b4a-4d9f-8c62-3a8f4b0e5d21' }, 'PUT'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(200);
+    const patch = mockUpdate.mock.calls[0][2] as { imageFileId?: string | null };
+    expect(patch.imageFileId).toBe('1e3c8d2f-7b4a-4d9f-8c62-3a8f4b0e5d21');
+  });
+
+  it('DELETE drops the item\'s pictures once the item is gone', async () => {
+    const order: string[] = [];
+    mockDelete.mockImplementation(async () => {
+      order.push('delete');
+      return true as never;
+    });
+    mockCleanupItemImages.mockImplementationOnce(async () => {
+      order.push('pictures');
+    });
+
+    const res = await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), {
+      id: 'proj-1',
+      itemId: 'item-1',
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockCleanupItemImages).toHaveBeenCalledWith(expect.anything(), 'item-1', '[Projects v1]', expect.objectContaining({ mountPointId: 'mount-1' }));
+    expect(order).toEqual(['delete', 'pictures']);
+  });
+
+  it('DELETE leaves the pictures alone when there was nothing to delete', async () => {
+    mockDelete.mockResolvedValue(false as never);
+    await item().DELETE(req('https://x.test/', undefined, 'DELETE'), ctx(), { id: 'proj-1', itemId: 'item-1' });
+    expect(mockCleanupItemImages).not.toHaveBeenCalled();
   });
 });

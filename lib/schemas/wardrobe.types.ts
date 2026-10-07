@@ -148,6 +148,12 @@ export const createWardrobeSchema = wardrobeItemFieldsSchema;
  */
 export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
   archived: z.boolean().optional(),
+  /**
+   * Choose the item's current picture among its OWN images. Update-only — a
+   * create body never carries it — and the item routes refuse a file that is
+   * not linked to the item (`assertItemImageChoice`, `lib/wardrobe/item-images.ts`).
+   */
+  imageFileId: UUIDSchema.nullable().optional(),
 });
 
 // ============================================================================
@@ -193,6 +199,13 @@ export const WardrobeItemSchema = z.object({
   replace: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
   migratedFromClothingRecordId: UUIDSchema.nullable().optional(),
+  /**
+   * The item's current picture — a `files` row linked to this item. The
+   * history is every IMAGE file `linkedTo` the item, never a frontmatter list.
+   * Written only by the images route (generate / upload / set-current /
+   * delete-image) or a PUT that chooses among the item's own images.
+   */
+  imageFileId: UUIDSchema.nullable().optional(),
   /** When the item was archived (null = active) */
   archivedAt: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,

@@ -3,7 +3,7 @@
 **Status:** design of record; shipped in 4.10-dev. Part 1 of a three-part wardrobe programme —
 this one first, because it is small and the other two build on the row it reshapes:
 [wardrobe-wear-ledger.md](wardrobe-wear-ledger.md) (part 2) and
-[wardrobe-item-images.md](../wardrobe-item-images.md) (part 3).
+[wardrobe-item-images.md](wardrobe-item-images.md) (part 3).
 
 **As built — where the implementation departs from the text below:**
 

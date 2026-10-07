@@ -249,7 +249,7 @@ export async function assembleExportFromStream(
           break;
         }
         if (!parent.wardrobeItems) parent.wardrobeItems = [];
-        parent.wardrobeItems.push(wi.data as WardrobeItem);
+        parent.wardrobeItems.push(wi.data);
         break;
       }
 

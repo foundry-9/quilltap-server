@@ -53,6 +53,15 @@ jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
   deleteProjectWardrobeItem: jest.fn(),
 }))
 
+// Pictures: the transfer carries each traveller's images through
+// lib/wardrobe/item-images; here they are stubbed so the item plumbing is
+// what these tests exercise (item-images has its own suite).
+jest.mock('@/lib/wardrobe/item-images', () => ({
+  resolveContainerMountPointId: jest.fn(),
+  carryItemImages: jest.fn(),
+  commitMovedImages: jest.fn(),
+}))
+
 import { randomUUID } from 'crypto'
 import { GET, POST } from '@/app/api/v1/wardrobe/transfers/route'
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store'
@@ -62,6 +71,8 @@ import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/
 import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe'
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
 import { createProjectWardrobeItem, deleteProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+import { carryItemImages, commitMovedImages, resolveContainerMountPointId } from '@/lib/wardrobe/item-images'
+import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
 
 describe('wardrobe transfer route', () => {
   beforeEach(() => {
@@ -113,6 +124,9 @@ describe('wardrobe transfer route', () => {
     ;(ensureFolderPath as jest.Mock).mockResolvedValue('folder-1')
     ;(createProjectWardrobeItem as jest.Mock).mockImplementation(async (_mount: string, item: any) => item)
     ;(deleteProjectWardrobeItem as jest.Mock).mockResolvedValue(true)
+    ;(resolveContainerMountPointId as jest.Mock).mockResolvedValue('dest-mount-1')
+    ;(carryItemImages as jest.Mock).mockResolvedValue({ fileIdMap: new Map(), pendingMove: { repoints: [] } })
+    ;(commitMovedImages as jest.Mock).mockResolvedValue(undefined)
   })
 
   function expectNoLedgerWrites() {
@@ -639,5 +653,119 @@ describe('wardrobe transfer route', () => {
     expect(body.componentsTransferred).toBe(0)
     expect(body.wardrobeItem.componentItemIds).toEqual(['comp-a', 'comp-b'])
     expect(createdAtGeneral).toHaveLength(1)
+  })
+  describe('pictures travel with the item', () => {
+    const pictured = {
+      id: 'item-1',
+      characterId: 'char-src',
+      title: 'Linen shirt',
+      description: null,
+      imagePrompt: null,
+      types: ['top'],
+      componentItemIds: [],
+      appropriateness: null,
+      isDefault: false,
+      replace: false,
+      migratedFromClothingRecordId: null,
+      imageFileId: 'file-old',
+      archivedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    beforeEach(() => {
+      mockCtx.repos.characters.findById.mockImplementation(async (id: string) => {
+        if (id === 'char-src' || id === 'char-dst') return { id, userId: 'user-1' }
+        return null
+      })
+      mockCtx.repos.wardrobe.findByCharacterId.mockImplementation(async (id: string) =>
+        id === 'char-src' ? [pictured] : [],
+      )
+      mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
+        ...pictured,
+        ...data,
+        id: options.id,
+        characterId: data.characterId,
+      }))
+    })
+
+    it('a copy carries the pictures under the new id and points imageFileId at its own copy', async () => {
+      ;(carryItemImages as jest.Mock).mockResolvedValue({
+        fileIdMap: new Map([['file-old', 'file-new']]),
+        pendingMove: { repoints: [] },
+      })
+
+      const res = await POST(req({
+        action: 'copy',
+        itemId: 'item-1',
+        sourceCharacterId: 'char-src',
+        sourceProjectId: null,
+        destination: { scope: 'character', id: 'char-dst' },
+      }))
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(carryItemImages).toHaveBeenCalledWith(mockCtx.repos, {
+        mode: 'copy',
+        sourceItemId: 'item-1',
+        destinationItemId: 'copy-uuid-1',
+        destinationMountPointId: 'dest-mount-1',
+        userId: 'user-1',
+      })
+      expect(mockCtx.repos.wardrobe.create.mock.calls[0][0].imageFileId).toBe('file-new')
+      expect(body.wardrobeItem.imageFileId).toBe('file-new')
+      expect(commitMovedImages).not.toHaveBeenCalled()
+    })
+
+    it('a move from an archived source is refused (409) before anything is written', async () => {
+      ;(resolveContainerMountPointId as jest.Mock).mockRejectedValueOnce(new CharacterArchivedError('char-src'))
+
+      const res = await POST(req({
+        action: 'move',
+        itemId: 'item-1',
+        sourceCharacterId: 'char-src',
+        sourceProjectId: null,
+        destination: { scope: 'general' },
+      }))
+
+      expect(res.status).toBe(409)
+      expect(carryItemImages).not.toHaveBeenCalled()
+      expect(mockCtx.repos.wardrobe.create).not.toHaveBeenCalled()
+      expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+    })
+
+    it('a move re-links the pictures and commits the repoints only after the source item is gone', async () => {
+      const pending = {
+        repoints: [{
+          fileId: 'file-old',
+          storageKey: 'mount-blob:dest-mount-1:blob-1',
+          sourceLink: { mountPointId: 'vault-src', leafName: '20261007-120000-generated-abcd1234.webp' },
+        }],
+      }
+      ;(carryItemImages as jest.Mock).mockResolvedValue({
+        fileIdMap: new Map([['file-old', 'file-old']]),
+        pendingMove: pending,
+      })
+
+      const res = await POST(req({
+        action: 'move',
+        itemId: 'item-1',
+        sourceCharacterId: 'char-src',
+        sourceProjectId: null,
+        destination: { scope: 'general' },
+      }))
+
+      expect(res.status).toBe(200)
+      expect((carryItemImages as jest.Mock).mock.calls[0][1]).toMatchObject({
+        mode: 'move',
+        sourceItemId: 'item-1',
+        destinationItemId: 'item-1',
+      })
+      expect(mockCtx.repos.wardrobe.create.mock.calls[0][0].imageFileId).toBe('file-old')
+      expect(commitMovedImages).toHaveBeenCalledWith(mockCtx.repos, 'item-1', pending)
+      const deleteOrder = mockCtx.repos.wardrobe.delete.mock.invocationCallOrder[0]
+      const dropOrder = (commitMovedImages as jest.Mock).mock.invocationCallOrder[0]
+      expect(dropOrder).toBeGreaterThan(deleteOrder)
+    })
   })
 })
