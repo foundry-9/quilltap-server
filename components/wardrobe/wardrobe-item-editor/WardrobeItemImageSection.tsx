@@ -29,6 +29,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { showConfirmation } from '@/lib/alert'
 import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import type { ChatSettings } from '@/components/settings/chat-settings/types'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import {
@@ -72,9 +73,8 @@ interface WardrobeItemImageSectionProps {
 }
 
 /** The designated wardrobe profile, read off the chat-settings row. */
-function selectDesignatedProfileId(settings: unknown): string | null {
-  const s = settings as { wardrobeImageSettings?: { imageProfileId?: string | null } | null }
-  return s?.wardrobeImageSettings?.imageProfileId ?? null
+function selectDesignatedProfileId(settings: Pick<ChatSettings, 'wardrobeImageSettings'>): string | null {
+  return settings.wardrobeImageSettings?.imageProfileId ?? null
 }
 
 function profileLabel(p: ImageProfileOption): string {
