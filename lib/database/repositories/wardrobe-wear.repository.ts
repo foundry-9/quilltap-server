@@ -30,7 +30,7 @@
  * writes with `increment` / `delete` / `upsert`; `foldWearerIntoUnattributed`
  * and `commitEquippedOutfit` carry explicit overrides.
  *
- * Design of record: docs/developer/features/wardrobe-wear-ledger.md
+ * Design of record: docs/developer/features/complete/wardrobe-wear-ledger.md
  */
 
 import { randomUUID } from 'node:crypto';

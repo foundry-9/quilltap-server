@@ -160,7 +160,8 @@ export async function importCharacters(
             (rawCharacter as ExportedCharacter).wardrobeItems,
             (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
             newCharacter.id,
-            warnings
+            warnings,
+            idMaps.wardrobeItems
           );
 
           // Import plugin data for duplicated character
@@ -189,7 +190,8 @@ export async function importCharacters(
         (rawCharacter as ExportedCharacter).wardrobeItems,
         (rawCharacter as ExportedCharacter & { outfitPresets?: LegacyOutfitPreset[] }).outfitPresets,
         newCharacter.id,
-        warnings
+        warnings,
+        idMaps.wardrobeItems
       );
 
       // Import plugin data for this character
@@ -231,7 +233,9 @@ async function importCharacterWardrobeItems(
   wardrobeItems: WardrobeItem[] | undefined,
   legacyPresets: LegacyOutfitPreset[] | undefined,
   newCharacterId: string,
-  warnings: string[]
+  warnings: string[],
+  /** Records source item id → minted id for the wear-ledger import. */
+  wardrobeItemIdMap: Map<string, string>
 ): Promise<number> {
   let combined: WardrobeItem[] = wardrobeItems ? [...wardrobeItems] : [];
 
@@ -321,6 +325,7 @@ async function importCharacterWardrobeItems(
         { id: newIdByOldId.get(item.id) }
       );
       importedCount++;
+      wardrobeItemIdMap.set(item.id, newIdByOldId.get(item.id) as string);
 
       moduleLogger.debug('Imported wardrobe item for character', {
         originalId: item.id,

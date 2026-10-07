@@ -9,7 +9,7 @@
  *     lastWornChat }`, naming wearers through the raw read and labelling the
  *     ones it cannot name, and only after the item has been found in its tier.
  *
- * Design of record: docs/developer/features/wardrobe-wear-ledger.md §5.1
+ * Design of record: docs/developer/features/complete/wardrobe-wear-ledger.md §5.1
  */
 
 // Use global `jest` so module mocks hoist before the route imports.

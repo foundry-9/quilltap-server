@@ -1,6 +1,6 @@
 /**
  * Wear ledger — the Wardrobe dialog's staged edits carry the outfits they put
- * on (docs/developer/features/wardrobe-wear-ledger.md §3.3).
+ * on (docs/developer/features/complete/wardrobe-wear-ledger.md §3.3).
  *
  * The dialog dissolves a bundle to its leaves before staging, so the slot map
  * it flushes cannot say an outfit was worn. The bundle ids accumulate per

@@ -4,6 +4,46 @@
 
 ### 4.10-dev
 
+#### Wardrobe wear ledger
+
+- New `wardrobe_wear_stats` table (`add-wardrobe-wear-stats-table-v1`): per wardrobe item and wearer,
+  a wear count, first and last worn, and the chat last worn in. Unique on
+  `(itemId, COALESCE(wearerCharacterId, ''))`. `seed-wardrobe-wear-stats-v1` backfills one wear per
+  chat from every chat's current `equippedOutfit`, dated by the chat's `updatedAt`.
+- New `WardrobeWearRepository` (`repos.wardrobeWear`). `commitEquippedOutfit` is now the only caller
+  of `chats.setEquippedOutfit`: it writes the slots, diffs them against the prior slots, and credits
+  one wear to each newly worn item, plus each dissolved bundle the caller names when one of its leaves
+  was newly worn. Source `'merge'` credits nothing. A unit test fences other callers.
+- The chokepoint is a buffered write in the job child (`METHOD_OVERRIDES`), so autonomous turns are
+  credited against the true prior state at replay.
+- The displacement primitives (`equipItem`, `replaceItem`, `addToSlot`, `removeFromSlot`) take a
+  `source` and pass the bundle they dissolved. `applyOutfitSelections` takes `context.source`
+  (`chat-start` / `participant-added` / `merge`); `buildDefaultOutfitWithCredit` and
+  `dissolveBundlesInSlotsWithCredit` report the bundles they dissolved.
+- `POST /api/v1/chats/[id]?action=equip` `set_all` accepts optional `wornBundleIds`;
+  `OutfitSelection` accepts optional `wornBundleIds` for `manual`. Both are validated against the
+  character's reachable items and expanded server-side.
+- Wardrobe collection GETs attach a read-time `wear` summary (one `findSummaries` call, via
+  `attachWear` in `lib/wardrobe/wear-history.ts`); item GETs answer `?action=wear-history` with
+  per-wearer rows, names resolved through `findByIdRaw` ("a departed character" / "unattributed"),
+  and the last chat (null when deleted). Unknown item-GET actions now return 400.
+- `wardrobe_list` appends "last worn …" / "never worn" per item; `wardrobe_read` adds a wear line
+  (second person for the asking character). New `formatRelativeDays` in `lib/format-time.ts`;
+  `memory-weighting`'s relative age delegates to it.
+- Wardrobe dialog: wear line on each row, a Sort select (Title / Recently worn / Most worn / Newest)
+  and a Never worn filter; staged edits accumulate the bundles they put on and send them as
+  `wornBundleIds` with `set_all`, reset on rebase. The editor gains a Wear history section; the
+  project wardrobe card shows the wear line; the new-chat composer sends `wornBundleIds`.
+- Item delete drops the item's ledger rows (`cleanupEquippedRefs` now takes `{ chats, wardrobeWear }`).
+  Character delete folds the character's rows into the unattributed row. Move keeps the item id and
+  its ledger; copy starts empty.
+- `.qtap` exports carry `wardrobe_wear` records for exported character-owned and `Wardrobe/` document
+  items (`$defs/WardrobeWear`); import remaps item, wearer and chat ids, folds unknown wearers into the
+  unattributed row, drops rows whose item did not import, and never rewinds an existing tally.
+- Backups include `data/wardrobe-wear.json`; restore writes it back; new-account remap leaves
+  frontmatter item ids alone; the delete service truncates the table.
+- Filed bug 179 (open): in the job child a second outfit change in one turn overwrites the first.
+
 #### Wardrobe lists: wrapping titles, origin chip
 
 - Garment selection lists (the per-slot picker, the Wear-an-outfit pull-down, the editor's

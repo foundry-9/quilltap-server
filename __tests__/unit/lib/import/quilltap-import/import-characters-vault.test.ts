@@ -44,6 +44,7 @@ function makeIdMaps(): any {
     characterVaultMounts: new Map(),
     skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
+    wardrobeItems: new Map(),
   };
 }
 
@@ -140,5 +141,48 @@ describe('importCharacters — vault bookkeeping', () => {
     // copy would strand a store nothing points at.
     expect(idMaps.skippedCharacterVaults.has('source-mount')).toBe(true);
     expect(idMaps.characterVaultMounts.size).toBe(0);
+  });
+});
+
+describe('importCharacters — wardrobe item id bookkeeping', () => {
+  it('records each minted wardrobe item id so the wear ledger can follow it', async () => {
+    installRepos(null);
+    const wardrobeCreate = jest.fn(async (data: Record<string, unknown>, options: { id: string }) => ({
+      ...data,
+      id: options.id,
+    }));
+    (getRepositories as jest.Mock).mockReturnValue({
+      wardrobe: { create: wardrobeCreate },
+      characterPluginData: { upsert: jest.fn() },
+    });
+    const idMaps = makeIdMaps();
+
+    await importCharacters(
+      'user-1',
+      [
+        exportedCharacter({
+          characterDocumentMountPointId: null,
+          wardrobeItems: [
+            {
+              id: 'source-coat',
+              characterId: 'source-char',
+              title: 'Coat',
+              types: ['top'],
+              componentItemIds: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+        }),
+      ],
+      { conflictStrategy: 'duplicate', includeMemories: false, includeRelatedEntities: false } as any,
+      idMaps,
+      (getUserRepositories as jest.Mock)('user-1'),
+      []
+    );
+
+    expect(wardrobeCreate).toHaveBeenCalledTimes(1);
+    const mintedId = (wardrobeCreate.mock.calls[0] as unknown as [unknown, { id: string }])[1].id;
+    expect(idMaps.wardrobeItems.get('source-coat')).toBe(mintedId);
   });
 });

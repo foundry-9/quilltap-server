@@ -28,6 +28,8 @@ import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
 import {
+  CHARACTER_WARDROBE_FOLDER,
+  isWardrobeInstructionsFileName,
   CharacterVaultPropertiesSchema,
   type CharacterVaultProperties,
   CharacterVaultMetadataSchema,
@@ -227,6 +229,55 @@ export function parsePromptFile(
 }
 
 /**
+ * The id a `Wardrobe/*.md` file's item carries: its frontmatter `id` when that
+ * is UUID-shaped, otherwise a stable id derived from where the file lives. The
+ * single source of this rule — `parseWardrobeItemFile` and the `.qtap`
+ * wear-ledger export/import (which need an item's id without parsing the whole
+ * item) both call it, so they can never disagree about which item a file is.
+ */
+export function resolveWardrobeItemId(
+  frontmatterId: unknown,
+  mountPointId: string,
+  relativePath: string,
+): string {
+  return typeof frontmatterId === 'string' && /^[0-9a-f-]{36}$/i.test(frontmatterId)
+    ? frontmatterId
+    : stableUuidFromString(`wardrobe-item:${mountPointId}:${relativePath}`);
+}
+
+/**
+ * True for a document path that holds a wardrobe item: a `.md` file directly
+ * inside a mount's `Wardrobe/` folder (not nested deeper), other than the
+ * dressing-guidance `instructions.md`. Mirrors the non-recursive folder read
+ * `readCharacterVaultWardrobe` performs.
+ */
+export function isWardrobeItemDocumentPath(relativePath: string): boolean {
+  const prefix = `${CHARACTER_WARDROBE_FOLDER}/`.toLowerCase();
+  const pathLower = relativePath.toLowerCase();
+  if (!pathLower.startsWith(prefix)) return false;
+  const rest = pathLower.slice(prefix.length);
+  if (rest.length === 0 || rest.includes('/') || !rest.endsWith('.md')) return false;
+  return !isWardrobeInstructionsFileName(rest);
+}
+
+/**
+ * The item id of a `Wardrobe/*.md` document, read from its frontmatter alone
+ * (see {@link resolveWardrobeItemId}). Callers check
+ * {@link isWardrobeItemDocumentPath} first.
+ */
+export function wardrobeItemIdForDocument(doc: {
+  mountPointId: string;
+  relativePath: string;
+  content: string;
+}): string {
+  return resolveWardrobeItemId(
+    parseFrontmatter(doc.content).data?.id,
+    doc.mountPointId,
+    doc.relativePath,
+  );
+}
+
+/**
  * Parse a `Wardrobe/<title>.md` file. Frontmatter carries the structured
  * fields (id, title, types, appropriateness, default flag, archive flag,
  * componentItems, timestamps); the body is the freeform description.
@@ -292,10 +343,7 @@ export function parseWardrobeItemFile(
     return null;
   }
 
-  const id =
-    typeof parsed.data?.id === 'string' && /^[0-9a-f-]{36}$/i.test(parsed.data.id as string)
-      ? (parsed.data.id as string)
-      : stableUuidFromString(`wardrobe-item:${doc.mountPointId}:${doc.relativePath}`);
+  const id = resolveWardrobeItemId(parsed.data?.id, doc.mountPointId, doc.relativePath);
 
   const appropriateness =
     typeof parsed.data?.appropriateness === 'string' && parsed.data.appropriateness.length > 0

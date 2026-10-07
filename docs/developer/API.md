@@ -1926,6 +1926,28 @@ List all archetype wardrobe items. Items with a non-null `archivedAt` are omitte
 
 Every wardrobe **collection read** — and each single-item `GET` — tags its items with a read-time **`origin`**: `{ scope, id, name }`, where `scope` is `character` / `general` / `project` / `group`, `id` is the container id (`null` for General) and `name` is its display name (`"Quilltap General"` for General). The character route's `?scope=group` read tags each item with the group whose store it hangs in. `origin` is never persisted, never exported, and is not a field of `createWardrobeSchema` / `updateWardrobeSchema`. Clients spell the chip text with `wardrobeOriginLabel()` (`lib/wardrobe/wardrobe-container.ts`).
 
+Every wardrobe **collection read** also tags each item with a read-time **`wear`** summary from the wear ledger (`wardrobe_wear_stats`): `{ wearCount, firstWornAt, lastWornAt, lastWornChatId }`, totals across every character who has worn it. A never-worn item carries `{ wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null }` — never `undefined`. Like `origin`, `wear` is a response annotation: never persisted with the item, never accepted on write. `lastWornChatId` may name a chat since deleted.
+
+Each single-item `GET` (General, character, project and group item routes) also answers **`?action=wear-history`**:
+
+```json
+{
+  "history": {
+    "wearCount": 4, "firstWornAt": "…", "lastWornAt": "…", "lastWornChatId": "chat-uuid",
+    "wearers": [
+      { "characterId": "char-uuid", "wearCount": 3, "firstWornAt": "…", "lastWornAt": "…", "lastWornChatId": "chat-uuid" },
+      { "characterId": null, "wearCount": 1, "firstWornAt": "…", "lastWornAt": "…", "lastWornChatId": null }
+    ]
+  },
+  "wearers": [ { "characterId": "char-uuid", "name": "Vivienne", "avatarUrl": "…" }, { "characterId": null, "name": "unattributed", "avatarUrl": null } ],
+  "lastWornChat": { "id": "chat-uuid", "title": "The Thornfield Dinner" }
+}
+```
+
+`history.wearers` is most recent first; `characterId: null` is the unattributed row (wearers since deleted, or an import that could not resolve them). Names are resolved raw, so a broken vault costs a label rather than a 500; a character that no longer exists is labelled "a departed character". `lastWornChat` is `null` when the chat no longer exists.
+
+A **wear** is one equip transition: a garment going from not worn to worn on one character in one chat, by any path (opening outfit, Wear, `wardrobe_wear`, an outfit pick, `wardrobe_create` with `equip_now`). Re-saving the same outfit is not a wear; taking it off and putting it back on is a second. Wearing an outfit (composite) credits the outfit once and each garment it actually put on. Merges are not wears.
+
 The **outfit-selection LLM never receives archived items**, at any tier, with no parameter and no override: its candidate pool is built by `mergeWearablePool`, which drops them after the tier merge.
 
 **Response**: `200 OK`
@@ -2380,7 +2402,7 @@ Add a character to the chat.
 - `controlledBy` accepts `"llm"` (default) or `"user"` (a seat the human owns and types for directly). `connectionProfileId` is required for LLM control and ignored for user control. Note this is durable seat **ownership** and is distinct from impersonation, which overlays a seat via `impersonatingParticipantIds` without changing `controlledBy` (see `action=impersonate`).
 - `hasHistoryAccess` (default `false`) controls whether the new participant sees messages from before they joined.
 - `joinScenario` is optional context describing how the character entered; surfaced as a Host announcement targeted at the new participant when `hasHistoryAccess` is false.
-- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
+- `outfitSelection` is optional. Modes: `default`, `manual` (provide a `slots` object, and optionally `wornBundleIds` — the outfits the composer dissolved into those slots, so the wear ledger credits them), `llm_choose` (cheap LLM picks), `none` (start undressed). Omitting it on a fresh add defaults to `mode: "default"` so the new arrival is dressed; on reactivation of a previously-removed participant, omitting it preserves their previous outfit.
 - `mode: "llm_choose"` consults a cheap LLM per character. Consults for all characters in one request run concurrently; each is bounded by a 60s timeout. The model may return `"deliberate": true` alongside empty slots to dress the character in nothing on purpose; an all-empty response *without* that flag, a failure, or a timeout falls back to `default`.
 - `mode: "default"` resolves across **all three wardrobe tiers** — the character's own vault, the project stores linked to the chat's project, and Quilltap General. Items marked `isDefault` in any tier are equipped and **layer** in the same slot (ordered by `createdAt` ascending). Tiers are merged before the `isDefault` filter, so a character's own copy of a shared item shadows it by id: a personal `isDefault: false` override means the shared default is not worn. `llm_choose` draws its candidate list from that same merged pool.
 
@@ -2797,6 +2819,10 @@ Mutate a character's equipped outfit. Dispatches on `mode`:
 - `remove_from_slot` — remove `itemId` from `slot` (omit `itemId` to clear the slot).
 - `clear_slot` — empty `slot`.
 - `set_all` — replace the whole equipped state atomically with a `slots` object.
+
+`set_all` also accepts an optional **`wornBundleIds: string[]`** — the outfits (composites) the client dissolved into `slots`, since the stored slots hold only the garments. It is a claim, not a fact: ids the character cannot reach are dropped, each survivor is expanded to its garments server-side, and the wear ledger credits an outfit only when at least one of its garments was newly put on.
+
+Every mode writes through the wear ledger's chokepoint (`wardrobeWear.commitEquippedOutfit`), which credits a wear to each garment the change newly put on.
 
 `equip` is accepted as a deprecated alias for `wear`.
 

@@ -48,6 +48,8 @@ Project wardrobe items behave exactly like any other once a chat belongs to the 
 
 The project's `Wardrobe/` folder may also keep an optional page of **Dressing Instructions** (`instructions.md`) — a standing word, addressed to the character in the second person, consulted when a character in one of the project's chats dresses themselves and neither they nor their groups keep instructions of their own. Edit it from the collapsible **Dressing Instructions** panel in the [Wardrobe dialog](wardrobe.md#dressing-instructions-a-standing-word-with-the-valet) with the project selected.
 
+A shared garment keeps **one ledger across every character who borrows it**. The project's dinner jacket, worn by three of the cast over a season, shows a single tally of wears --- and, in its editor's *Wear history*, the account of each borrower in turn. (See [The Ledger](wardrobe.md#the-ledger) for what counts as a wear.)
+
 ## Keeping the Folder Healthy
 
 Should you, in some moment of housekeeping zeal, delete the `Wardrobe/` folder or even the entire `Project Files:` document store, fear not — both are reconstructed at the next server start (and at the next visit to the project page, whichever comes first). The structure reappears empty, ready for fresh garments; previously-deleted files do not return.

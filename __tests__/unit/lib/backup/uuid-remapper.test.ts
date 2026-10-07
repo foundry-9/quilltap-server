@@ -13,6 +13,9 @@ import type { BackupData } from '@/lib/backup/types'
 import type { Project } from '@/lib/schemas/types'
 
 jest.mock('crypto', () => ({
+  // The wardrobe parser derives stable ids with createHash; only randomUUID
+  // is under test control.
+  ...jest.requireActual('crypto'),
   randomUUID: jest.fn(),
 }))
 
@@ -643,5 +646,117 @@ describe('remapBackupData() - group FK remapping', () => {
     expect(result.groupDocMountLinks?.[0].groupId).toBe(newGroupId)
     expect(result.groupDocMountLinks?.[0].mountPointId).toBe(newMountId)
     expect(result.groupDocMountLinks?.[0].groupId).not.toBe('group-old')
+  })
+})
+
+describe('remapBackupData() - wardrobe wear ledger', () => {
+  // Real UUID-shaped ids: the wardrobe parser only honours a frontmatter id of
+  // that shape. The remapper itself is mocked to mint `remapped-N`.
+  const FRONTMATTER_ITEM = '11111111-1111-4111-8111-111111111111'
+  const OLD_MOUNT = '22222222-2222-4222-8222-222222222222'
+
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  const emptyBackup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+  })
+
+  function ledgerRow(itemId: string, overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'row-old',
+      itemId,
+      wearerCharacterId: 'char-old',
+      wearCount: 4,
+      firstWornAt: '2026-01-01T00:00:00.000Z',
+      lastWornAt: '2026-02-01T00:00:00.000Z',
+      lastWornChatId: 'chat-old',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-02-01T00:00:00.000Z',
+      ...overrides,
+    }
+  }
+
+  it('keeps a frontmatter item id (document content is not rewritten) and remaps the FKs', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      characters: [{ id: 'char-old' }] as unknown as BackupData['characters'],
+      docMountFileLinks: [
+        { id: 'link-1', fileId: 'file-1', mountPointId: OLD_MOUNT, relativePath: 'Wardrobe/Coat.md' },
+      ] as unknown as BackupData['docMountFileLinks'],
+      docMountDocuments: [
+        { id: 'doc-1', fileId: 'file-1', content: `---\nid: ${FRONTMATTER_ITEM}\ntitle: Coat\ntypes: [top]\n---\n` },
+      ] as unknown as BackupData['docMountDocuments'],
+      wardrobeWear: [ledgerRow(FRONTMATTER_ITEM)] as unknown as BackupData['wardrobeWear'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const mapping = remapper.getMapping()
+    const row = result.wardrobeWear![0]
+
+    expect(row.itemId).toBe(FRONTMATTER_ITEM)
+    expect(row.id).toBe(mapping['row-old'])
+    expect(row.wearerCharacterId).toBe(mapping['char-old'])
+    expect(row.wearerCharacterId).toBe(result.characters[0].id)
+    expect(row.lastWornChatId).toBe(mapping['chat-old'])
+    expect(row.wearCount).toBe(4)
+  })
+
+  it('recomputes a path-derived item id against the remapped mount point', () => {
+    const remapper = new UuidRemapper()
+    const content = '---\ntitle: Hat\ntypes: [accessories]\n---\n'
+    const { wardrobeItemIdForDocument } = jest.requireActual(
+      '@/lib/database/repositories/vault-overlay/parsers'
+    ) as typeof import('@/lib/database/repositories/vault-overlay/parsers')
+    const oldItemId = wardrobeItemIdForDocument({ mountPointId: OLD_MOUNT, relativePath: 'Wardrobe/Hat.md', content })
+    const data: BackupData = {
+      ...emptyBackup(),
+      docMountPoints: [{ id: OLD_MOUNT }] as unknown as BackupData['docMountPoints'],
+      docMountFileLinks: [
+        { id: 'link-1', fileId: 'file-1', mountPointId: OLD_MOUNT, relativePath: 'Wardrobe/Hat.md' },
+      ] as unknown as BackupData['docMountFileLinks'],
+      docMountDocuments: [{ id: 'doc-1', fileId: 'file-1', content }] as unknown as BackupData['docMountDocuments'],
+      wardrobeWear: [ledgerRow(oldItemId, { wearerCharacterId: null, lastWornChatId: null })] as unknown as BackupData['wardrobeWear'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const newMountId = result.docMountPoints![0].id
+    const expected = wardrobeItemIdForDocument({ mountPointId: newMountId, relativePath: 'Wardrobe/Hat.md', content })
+
+    expect(result.wardrobeWear![0].itemId).toBe(expected)
+    expect(result.wardrobeWear![0].itemId).not.toBe(oldItemId)
+    expect(result.wardrobeWear![0].wearerCharacterId).toBeNull()
+    expect(result.wardrobeWear![0].lastWornChatId).toBeNull()
+  })
+
+  it('follows a legacy wardrobe_items row through the remapper', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      wardrobeItems: [{ id: 'legacy-item', characterId: 'char-old', componentItemIds: [] }] as unknown as BackupData['wardrobeItems'],
+      wardrobeWear: [ledgerRow('legacy-item')] as unknown as BackupData['wardrobeWear'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    expect(result.wardrobeWear![0].itemId).toBe(result.wardrobeItems![0].id)
+    expect(result.wardrobeWear![0].itemId).not.toBe('legacy-item')
   })
 })

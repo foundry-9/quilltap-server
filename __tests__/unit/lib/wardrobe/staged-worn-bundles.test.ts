@@ -1,6 +1,6 @@
 /**
  * Wear ledger — the Wardrobe dialog's staged bundle claims
- * (docs/developer/features/wardrobe-wear-ledger.md §3.3, "The Wardrobe
+ * (docs/developer/features/complete/wardrobe-wear-ledger.md §3.3, "The Wardrobe
  * dialog's staged edits").
  *
  * The dialog dissolves an outfit to its leaves client-side, so the slots it

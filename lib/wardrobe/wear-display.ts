@@ -10,7 +10,7 @@
  * a field of the item, so an item that arrived without one is read as never
  * worn — {@link wearOf} is the one place that rule lives.
  *
- * Design of record: docs/developer/features/wardrobe-wear-ledger.md §5.2–§5.3
+ * Design of record: docs/developer/features/complete/wardrobe-wear-ledger.md §5.2–§5.3
  *
  * @module lib/wardrobe/wear-display
  */

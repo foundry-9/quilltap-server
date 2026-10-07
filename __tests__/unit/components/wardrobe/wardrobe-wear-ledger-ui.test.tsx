@@ -1,6 +1,6 @@
 /**
  * Wear ledger — the operator-facing surfaces
- * (docs/developer/features/wardrobe-wear-ledger.md §5.2 and §5.4):
+ * (docs/developer/features/complete/wardrobe-wear-ledger.md §5.2 and §5.4):
  *
  *  - the one muted line under a Wardrobe dialog row, and
  *  - the editor's read-only "Wear history" section, fetched on open through

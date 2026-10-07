@@ -7,7 +7,7 @@
  * Wardrobe items are vault files, not rows, so the tally cannot live in their
  * frontmatter without rewriting the whole `Wardrobe/` folder on every wear and
  * turning `updatedAt` into "last worn". See
- * docs/developer/features/wardrobe-wear-ledger.md.
+ * docs/developer/features/complete/wardrobe-wear-ledger.md.
  *
  * The DDL is shared with the repository tests through
  * `lib/database/backends/sqlite/wardrobe-wear-stats-ddl.ts`.

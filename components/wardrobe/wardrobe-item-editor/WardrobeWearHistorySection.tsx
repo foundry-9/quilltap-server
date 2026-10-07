@@ -11,7 +11,7 @@
  * Edit mode only — a new item has no history. For a composite, a one-line
  * note explains that wearing the outfit also credits its garments.
  *
- * Design of record: docs/developer/features/wardrobe-wear-ledger.md §5.4
+ * Design of record: docs/developer/features/complete/wardrobe-wear-ledger.md §5.4
  *
  * @module components/wardrobe/wardrobe-item-editor/WardrobeWearHistorySection
  */

@@ -17,7 +17,7 @@
  *
  * Server-only (repositories, logger).
  *
- * Design of record: docs/developer/features/wardrobe-wear-ledger.md §5
+ * Design of record: docs/developer/features/complete/wardrobe-wear-ledger.md §5
  *
  * @module lib/wardrobe/wear-history
  */

@@ -8,7 +8,7 @@
  * `wardrobe_wear_stats` SQL table instead, one row per (item × wearer), and is
  * written only through `WardrobeWearRepository.commitEquippedOutfit`.
  *
- * Design of record: docs/developer/features/wardrobe-wear-ledger.md
+ * Design of record: docs/developer/features/complete/wardrobe-wear-ledger.md
  *
  * @module schemas/wardrobe-wear.types
  */

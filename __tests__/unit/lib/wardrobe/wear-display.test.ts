@@ -1,6 +1,6 @@
 /**
  * Wear ledger — the row line and the Wardrobe dialog's sort / "Never worn"
- * filter (docs/developer/features/wardrobe-wear-ledger.md §5.2–§5.3).
+ * filter (docs/developer/features/complete/wardrobe-wear-ledger.md §5.2–§5.3).
  */
 
 import {
