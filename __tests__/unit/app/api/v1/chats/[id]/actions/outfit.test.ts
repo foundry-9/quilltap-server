@@ -291,6 +291,18 @@ describe('chats [id] equip action — wear ledger', () => {
     expect(input.nextSlots).toMatchObject({ top: [SHIRT], bottom: [SLACKS] })
   })
 
+  it('set_all reports a failed save instead of success, and schedules nothing', async () => {
+    const { enqueueWardrobeOutfitAnnouncement } = require('@/lib/background-jobs/queue-service')
+    ctx.repos.wardrobeWear.commitEquippedOutfit.mockRejectedValueOnce(new Error('disk full'))
+    const response = await handleEquipSlot(
+      makeRequest({ characterId: 'char-1', mode: 'set_all', slots: { ...EMPTY, top: [SHIRT] } }),
+      'chat-1',
+      ctx,
+    )
+    expect(response.status).toBe(500)
+    expect(enqueueWardrobeOutfitAnnouncement).not.toHaveBeenCalled()
+  })
+
   it("taking off is committed as 'take-off'", async () => {
     await handleEquipSlot(
       makeRequest({ characterId: 'char-1', mode: 'clear_slot', slot: 'top' }),

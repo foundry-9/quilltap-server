@@ -16,6 +16,10 @@ jest.mock('@/lib/database/manager', () => ({
   rawQuery: jest.fn(),
 }))
 
+jest.mock('@/lib/database/backends/sqlite/client', () => ({
+  getRawDatabase: jest.fn(),
+}))
+
 import path from 'path'
 import {
   WardrobeWearRepository,
@@ -27,6 +31,7 @@ import { makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
 
 const { rawQuery } = jest.requireMock('@/lib/database/manager') as { rawQuery: jest.Mock }
+const { getRawDatabase } = jest.requireMock('@/lib/database/backends/sqlite/client') as { getRawDatabase: jest.Mock }
 
 // Real binding by absolute root path — a bare require resolves to the mock.
 const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'))
@@ -74,6 +79,7 @@ describe('WardrobeWearRepository', () => {
       const stmt = db.prepare(sql)
       return stmt.reader ? stmt.all(...params) : stmt.run(...params)
     })
+    getRawDatabase.mockReturnValue(db)
     chats = fakeChats()
     repo = new WardrobeWearRepository(chats)
   })
@@ -101,6 +107,23 @@ describe('WardrobeWearRepository', () => {
       expect(row.firstWornAt).toBe('2026-01-01T00:00:00.000Z')
       expect(row.lastWornAt).toBe('2026-02-01T00:00:00.000Z')
       expect(row.lastWornChatId).toBe(CHAT_2)
+    })
+
+    it('records a batch whole or not at all', async () => {
+      await expect(
+        repo.incrementWears([
+          { itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' },
+          { itemId: null as unknown as string, wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' },
+        ]),
+      ).rejects.toThrow()
+      expect(rows()).toHaveLength(0)
+    })
+
+    it('nests inside an already-open transaction (the job applier)', async () => {
+      db.exec('BEGIN IMMEDIATE')
+      await repo.incrementWears([{ itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' }])
+      db.exec('ROLLBACK')
+      expect(rows()).toHaveLength(0)
     })
 
     it('keeps one row per wearer', async () => {
@@ -164,6 +187,16 @@ describe('WardrobeWearRepository', () => {
     expect(hat).toMatchObject({ wearerCharacterId: null, wearCount: 1 })
     // Other wearers are untouched.
     expect(all.find((r: any) => r.wearerCharacterId === CHAR_B)).toMatchObject({ wearCount: 1 })
+  })
+
+  it('foldWearerIntoUnattributed rolls back whole when the final delete fails', async () => {
+    await repo.incrementWears([{ itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' }])
+    db.exec(`CREATE TRIGGER "no_delete" BEFORE DELETE ON "wardrobe_wear_stats" BEGIN SELECT RAISE(ABORT, 'nope'); END`)
+
+    await expect(repo.foldWearerIntoUnattributed(CHAR_A)).rejects.toThrow(/nope/)
+
+    // No unattributed copy was left beside the original: nothing double-counts.
+    expect(rows()).toEqual([expect.objectContaining({ itemId: 'coat', wearerCharacterId: CHAR_A, wearCount: 1 })])
   })
 
   it('findSummaries totals across wearers and returns the zero summary for unknown ids', async () => {
@@ -274,9 +307,11 @@ describe('WardrobeWearRepository', () => {
       expect(counts()).toEqual({ [`shirt:${CHAR_A}`]: 1 })
     })
 
-    it('a failed slot write credits nothing', async () => {
+    it('a failed slot write throws and credits nothing', async () => {
       chats.setEquippedOutfit = async () => null
-      await repo.commitEquippedOutfit({ chatId: CHAT_1, characterId: CHAR_A, nextSlots: slots({ top: ['shirt'] }), source: 'ui' })
+      await expect(
+        repo.commitEquippedOutfit({ chatId: CHAT_1, characterId: CHAR_A, nextSlots: slots({ top: ['shirt'] }), source: 'ui' }),
+      ).rejects.toThrow(/Failed to save the equipped outfit/)
       expect(rows()).toHaveLength(0)
     })
 

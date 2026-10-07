@@ -36,6 +36,7 @@
 import { randomUUID } from 'node:crypto';
 import { AbstractBaseRepository, type CreateOptions } from './base.repository';
 import { rawQuery } from '../manager';
+import { getRawDatabase } from '../backends/sqlite/client';
 import { logger } from '@/lib/logger';
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
 import {
@@ -206,11 +207,18 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
    * job child this call is buffered and its return value is synthetic —
    * callers must not branch on it.
    *
-   * No explicit transaction: the read, the write and the increments run back
-   * to back with no yield to another request in between (the SQLite calls are
-   * synchronous under their async wrappers), and a child's replay already runs
-   * inside the applier's `BEGIN IMMEDIATE` — opening a second one there would
-   * throw. Each increment is itself a single atomic statement.
+   * Throws when the slot write fails (`setEquippedOutfit` resolves `null` on
+   * a database error), so no caller reports a change that was not saved; no
+   * wear is credited in that case.
+   *
+   * The credits for one call are written in a single synchronous transaction
+   * ({@link incrementWears}), so a call records all of its wears or none. The
+   * prior-slot read and the slot write are not inside it: the slot write goes
+   * through the chats repository's async update, exactly as the bare
+   * `setEquippedOutfit` did before the ledger, and two simultaneous equips of
+   * the same character in one chat race on the slots the same way they always
+   * have. The ledger cost of that race is at most a credit for a garment the
+   * other request then took off.
    */
   async commitEquippedOutfit(input: CommitEquippedOutfitInput): Promise<CommitEquippedOutfitResult> {
     const { chatId, characterId, nextSlots, source } = input;
@@ -220,7 +228,11 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
 
     const prior = await this.chats.getEquippedOutfitForCharacter(chatId, characterId);
     const written = await this.chats.setEquippedOutfit(chatId, characterId, nextSlots);
-    const slots = written ?? nextSlots;
+    if (!written) {
+      log.warn('Equipped outfit write failed; no wears credited', { chatId, characterId, source });
+      throw new Error(`Failed to save the equipped outfit for character ${characterId} in chat ${chatId}`);
+    }
+    const slots = written;
 
     const { newlyWornLeafIds, creditedBundleIds, changed } = diffEquippedOutfit(
       prior,
@@ -229,7 +241,7 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
     );
 
     const credit = source === 'merge' ? [] : [...newlyWornLeafIds, ...creditedBundleIds];
-    if (written && credit.length > 0) {
+    if (credit.length > 0) {
       const at = input.at ?? new Date().toISOString();
       await this.incrementWears(
         credit.map((itemId) => ({ itemId, wearerCharacterId: characterId, chatId, at })),
@@ -242,9 +254,8 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
       source,
       newlyWorn: newlyWornLeafIds.length,
       creditedBundles: creditedBundleIds.length,
-      credited: written ? credit.length : 0,
+      credited: credit.length,
       changed,
-      written: !!written,
     });
 
     return { slots, newlyWornLeafIds, creditedBundleIds, changed };
@@ -254,23 +265,43 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
   // Writes
   // ============================================================================
 
-  /** Atomic upsert-and-increment, one statement per entry. Safe to replay from a job child. */
+  /**
+   * Atomic upsert-and-increment: every entry in one synchronous transaction,
+   * so a batch lands whole or not at all. Safe to replay from a job child.
+   */
   async incrementWears(entries: WardrobeWearIncrement[]): Promise<void> {
     if (entries.length === 0) return;
     const now = new Date().toISOString();
-    for (const entry of entries) {
-      await rawQuery(
-        WARDROBE_WEAR_INCREMENT_SQL,
-        wardrobeWearIncrementParams({
-          id: randomUUID(),
-          itemId: entry.itemId,
-          wearerCharacterId: entry.wearerCharacterId,
-          at: entry.at,
-          chatId: entry.chatId,
-          now,
-        }),
-      );
+    this.runAtomically((db) => {
+      const statement = db.prepare(WARDROBE_WEAR_INCREMENT_SQL);
+      for (const entry of entries) {
+        statement.run(
+          ...wardrobeWearIncrementParams({
+            id: randomUUID(),
+            itemId: entry.itemId,
+            wearerCharacterId: entry.wearerCharacterId,
+            at: entry.at,
+            chatId: entry.chatId,
+            now,
+          }),
+        );
+      }
+    });
+  }
+
+  /**
+   * Run `work` in one synchronous better-sqlite3 transaction on the main
+   * connection. No `await` happens inside, so nothing else on the connection
+   * can interleave; and when the job applier already holds a transaction
+   * (its hand-driven `BEGIN IMMEDIATE`), better-sqlite3 nests this one as a
+   * savepoint rather than failing to begin.
+   */
+  private runAtomically<R>(work: (db: NonNullable<ReturnType<typeof getRawDatabase>>) => R): R {
+    const db = getRawDatabase();
+    if (!db) {
+      throw new Error('Wardrobe wear ledger: the main database is not initialized');
     }
+    return db.transaction(() => work(db))();
   }
 
   /** Item deleted: drop its rows. A composite's deletion leaves its components' rows alone. */
@@ -294,12 +325,17 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
    * item.
    */
   async foldWearerIntoUnattributed(characterId: string): Promise<void> {
-    const rows = await this.findRowsForWearer(characterId);
-    if (rows.length === 0) return;
-
     const now = new Date().toISOString();
-    for (const row of rows) {
-      await rawQuery(
+    // Read, fold and delete in one transaction: a failure part-way rolls the
+    // whole fold back rather than leaving the wearer's rows *and* their
+    // unattributed copies, which would double-count every wear.
+    const folded = this.runAtomically((db) => {
+      const rows = db
+        .prepare(`SELECT * FROM "${WARDROBE_WEAR_STATS_TABLE}" WHERE "wearerCharacterId" = ?`)
+        .all(characterId) as RawRow[];
+      if (rows.length === 0) return 0;
+
+      const upsert = db.prepare(
         `INSERT INTO "${WARDROBE_WEAR_STATS_TABLE}"
            ("id", "itemId", "wearerCharacterId", "wearCount", "firstWornAt", "lastWornAt", "lastWornChatId", "createdAt", "updatedAt")
          VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
@@ -309,18 +345,21 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
            "lastWornChatId" = CASE WHEN excluded."lastWornAt" >= "lastWornAt" THEN excluded."lastWornChatId" ELSE "lastWornChatId" END,
            "lastWornAt" = MAX("lastWornAt", excluded."lastWornAt"),
            "updatedAt" = excluded."updatedAt"`,
-        [randomUUID(), row.itemId, row.wearCount, row.firstWornAt, row.lastWornAt, row.lastWornChatId, now, now],
       );
-    }
-    await rawQuery(
-      `DELETE FROM "${WARDROBE_WEAR_STATS_TABLE}" WHERE "wearerCharacterId" = ?`,
-      [characterId],
-    );
-
-    log.info('Folded a departed wearer into the unattributed wear ledger', {
-      characterId,
-      rowCount: rows.length,
+      for (const raw of rows) {
+        const row = normalizeRow(raw);
+        upsert.run(randomUUID(), row.itemId, row.wearCount, row.firstWornAt, row.lastWornAt, row.lastWornChatId, now, now);
+      }
+      db.prepare(`DELETE FROM "${WARDROBE_WEAR_STATS_TABLE}" WHERE "wearerCharacterId" = ?`).run(characterId);
+      return rows.length;
     });
+
+    if (folded > 0) {
+      log.info('Folded a departed wearer into the unattributed wear ledger', {
+        characterId,
+        rowCount: folded,
+      });
+    }
   }
 
   /**

@@ -42,6 +42,10 @@
   unattributed row, drops rows whose item did not import, and never rewinds an existing tally.
 - Backups include `data/wardrobe-wear.json`; restore writes it back; new-account remap leaves
   frontmatter item ids alone; the delete service truncates the table.
+- `commitEquippedOutfit` throws when the slot write fails (no wears credited), so `set_all` and the
+  other equip paths report the failure instead of success. Each call's credits, and a deleted
+  character's fold, run in one synchronous transaction (nested as a savepoint inside the job
+  applier's).
 - Filed bug 179 (open): in the job child a second outfit change in one turn overwrites the first.
 
 #### Wardrobe lists: wrapping titles, origin chip
