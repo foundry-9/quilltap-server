@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Wardrobe programme specs (design only)
+
+- Three approved specs under `docs/developer/features/`, no code yet: `wardrobe-list-legibility.md`
+  (titles wrap in every garment-selection list; the row's "· shared" marker becomes one chip naming
+  the source project, group, or Quilltap General, driven by a read-time `origin` annotation),
+  `wardrobe-wear-ledger.md` (per-item wear count, first/last worn, and per-wearer rows in a new
+  `wardrobe_wear_stats` table, credited inside a single equip chokepoint; outfits cascade to the
+  garments they put on), and `wardrobe-item-images.md` (an optional image per garment or outfit with
+  history, generated through the Concierge failover with a designated wardrobe image profile or
+  uploaded, and kept from Import-from-image photographs).
+- The specs record the decisions taken on 2026-10-07 and the audit finding that wardrobe items are
+  vault files, not SQL rows, which is why the wear tally lives in its own table.
+
 #### Inform: delivered last, with a header
 
 - The inform block moved from a system message after the identity reminder to a trailing context
