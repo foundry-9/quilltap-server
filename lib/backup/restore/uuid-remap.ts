@@ -382,6 +382,12 @@ export function remapBackupData(
         defaultImageProfileId: remapper.remap(remapped.storyBackgroundsSettings.defaultImageProfileId),
       };
     }
+    if (remapped.wardrobeImageSettings?.imageProfileId) {
+      remapped.wardrobeImageSettings = {
+        ...remapped.wardrobeImageSettings,
+        imageProfileId: remapper.remap(remapped.wardrobeImageSettings.imageProfileId),
+      };
+    }
     return remapped as ChatSettings;
   });
 
@@ -397,7 +403,8 @@ export function remapBackupData(
   // composites at parse time pass through this same path.
   const remappedWardrobeItems = (data.wardrobeItems || []).map((item) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(item, ['id', 'characterId']),
+      // imageFileId names a `files` row, remapped with the files above.
+      remapper.remapFields(item, ['id', 'characterId', 'imageFileId']),
       ['componentItemIds']
     ),
   })) as WardrobeItem[];

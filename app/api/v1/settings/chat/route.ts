@@ -10,7 +10,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { successResponse, serverError, badRequest } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
 import { TagStyleMapSchema, ThemePreferenceSchema } from '@/lib/schemas/common.types'
-import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
+import { TokenDisplaySettingsSchema, LLMLoggingSettingsSchema, AgentModeSettingsSchema, StoryBackgroundsSettingsSchema, WardrobeImageSettingsSchema, ConciergeSettingsSchema, AutoLockSettingsSchema, AnswerConfirmationSettingsSchema, SmartTypographySettingsSchema, ImpersonationVoiceModeEnum } from '@/lib/schemas/settings.types'
 import { type AvatarDisplayMode } from '@/lib/schemas/types'
 import { getErrorMessage } from '@/lib/error-utils'
 
@@ -67,6 +67,7 @@ async function updateChatSettings(
   autoScrollOnResponseComplete?: boolean,
   answerConfirmationSettings?: unknown,
   smartTypographySettings?: unknown,
+  wardrobeImageSettings?: unknown,
 ) {
   // Validate avatarDisplayMode if provided
   if (avatarDisplayMode) {
@@ -178,6 +179,12 @@ async function updateChatSettings(
   if (typeof storyBackgroundsSettings !== 'undefined') {
     const validatedStoryBackgroundsSettings = StoryBackgroundsSettingsSchema.parse(storyBackgroundsSettings)
     updateData.storyBackgroundsSettings = validatedStoryBackgroundsSettings
+  }
+  if (typeof wardrobeImageSettings !== 'undefined') {
+    updateData.wardrobeImageSettings = WardrobeImageSettingsSchema.parse(wardrobeImageSettings)
+    logger.debug('[Settings v1] Wardrobe image settings updated', {
+      imageProfileId: updateData.wardrobeImageSettings.imageProfileId ?? null,
+    })
   }
   if (typeof contextCompressionSettings !== 'undefined') {
     // Basic validation - ensure it's an object with expected structure
@@ -397,6 +404,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       autoScrollOnResponseComplete,
       answerConfirmationSettings,
       smartTypographySettings,
+      wardrobeImageSettings,
     } = body
 
     const chatSettings = await updateChatSettings(
@@ -431,6 +439,7 @@ export const PUT = createContextHandler(async (req: NextRequest, { user, repos }
       autoScrollOnResponseComplete,
       answerConfirmationSettings,
       smartTypographySettings,
+      wardrobeImageSettings,
     )
 
     return successResponse(chatSettings)

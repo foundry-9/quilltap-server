@@ -147,13 +147,39 @@ export interface QuilltapExportManifest {
 // ============================================================================
 
 /**
+ * One wardrobe picture's `files` row, as it rides on its item's record. The
+ * bytes are NOT here: they travel with the character's vault as a blob at
+ * `Wardrobe/images/<itemId>/<originalFilename>`, and the importer re-mints the
+ * row against the imported vault's blob.
+ */
+export interface ExportedWardrobeImageFile {
+  id: string;
+  originalFilename: string;
+  mimeType: string;
+  size: number;
+  width?: number | null;
+  height?: number | null;
+  source: 'UPLOADED' | 'GENERATED' | 'IMPORTED' | 'SYSTEM';
+  generationPrompt?: string | null;
+  generationModel?: string | null;
+  generationRevisedPrompt?: string | null;
+  description?: string | null;
+  createdAt: string;
+}
+
+/** A wardrobe item as exported: the item plus its pictures' file metadata. */
+export type ExportedWardrobeItem = WardrobeItem & {
+  _imageFiles?: ExportedWardrobeImageFile[];
+};
+
+/**
  * Character with resolved relationships
  */
 export interface ExportedCharacter extends Character {
   _linkedPersonaNames?: string[];
   _tagNames?: string[];
   /** Wardrobe items belonging to this character, exported alongside the character */
-  wardrobeItems?: WardrobeItem[];
+  wardrobeItems?: ExportedWardrobeItem[];
   /** Per-plugin metadata for this character, keyed by plugin name */
   pluginData?: Record<string, unknown>;
 }
@@ -655,7 +681,7 @@ export interface QtapCharacterRecord {
 export interface QtapWardrobeItemRecord {
   kind: 'wardrobe_item';
   characterId: string;
-  data: import('@/lib/schemas/wardrobe.types').WardrobeItem;
+  data: ExportedWardrobeItem;
 }
 
 /**

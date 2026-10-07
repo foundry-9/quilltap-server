@@ -704,6 +704,9 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push(`- **Enabled**: ${yesNo(fc.storyBackgrounds.enabled)}`);
   push(`- **Has Default Image Profile**: ${yesNo(fc.storyBackgrounds.hasDefaultImageProfile)}`, '');
 
+  push('#### Wardrobe Images', '');
+  push(`- **Has Designated Image Profile**: ${yesNo(fc.wardrobeImages.hasDesignatedImageProfile)}`, '');
+
   push('#### Aurora (Core Whisper)', '');
   push(`- **Enabled**: ${yesNo(fc.coreWhisper.enabled)}`);
   push(`- **Interval**: ${fc.coreWhisper.interval}`);

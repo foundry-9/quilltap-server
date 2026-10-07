@@ -93,6 +93,8 @@ A vision-capable LLM will examine the image and return a list of proposed wardro
 
 Click **Import Selected** to add the approved items to the character's personal wardrobe. They are created as non-default items --- you may mark them as defaults or equip them afterwards, at your leisure.
 
+Above the cards sits a small ticked box: **the photograph will be kept as each piece's first picture**. Leave it ticked and every piece --- and the outfit, should you assemble one --- arrives with your reference image already hung beside it (see [Portraits of the Garments](#portraits-of-the-garments)). The photograph is stored but once, however many pieces it dresses; untick the box if you would rather the pieces arrived unadorned.
+
 #### The Whole Look, Bundled
 
 A photograph seldom shows a single garment in isolation; it shows an *ensemble*, and it would be a poor valet who unpacked the trunk and then forgot which coat went with which trousers. Beneath the item cards, therefore, sits a card headed **Also create an outfit from these pieces**. The analyst proposes a title, a description, and appropriateness tags for the look as a whole; when it has done so, the card arrives already ticked and filled in, and you may amend any of it.
@@ -320,6 +322,31 @@ Change so much as a scarf, of course, and that is a different ensemble entirely,
 Should the filed portrait fail to please --- the light unkind, the expression wrong, the muse plainly elsewhere that afternoon --- the **regenerate** button on the character's portrait in the Chat Sidebar's **Participants** drawer commissions a new sitting on the spot. This is not a mere second opinion to be glanced at and discarded: the fresh portrait *replaces* the filed one for that ensemble, and it is the new picture that will be brought out every subsequent time the character wears those clothes. Press it as often as your taste and your image budget allow; the last one drawn is the one that stands. Do note that this settles only the matter of that particular costume --- the character's own standing portrait, the one that represents them everywhere outside this arrangement, is a separate commission and remains untouched.
 
 Conversations begun before the Hair slot arrived sit for their portraits exactly as the newer ones do. A dressed character in such a chat had, for a time, been quietly refused at the studio door --- the portraitist balked at an outfit that predated the fifth slot and simply produced nothing --- and along with the portrait went the scene's own account of what the character was wearing. Both are restored, and neither requires anything of you: the older ensembles are read as they always ought to have been, with the coiffure merely unarranged.
+
+## Portraits of the Garments
+
+A wardrobe item --- or a whole outfit --- may carry a picture of itself, so that two jackets of nearly identical name are told apart at a glance rather than by squinting at their descriptions. The picture appears as a small thumbnail beside the item in the wardrobe lists and in the slot and quick-pick choosers, and at full size in the item's editor.
+
+Open an item for editing and you will find an **Image** section directly beneath the title:
+
+- **✦ Generate** commissions a fresh picture from the image profile designated for wardrobe work (chosen in **Settings → Images → Wardrobe Images**, falling back to your default image profile). The little **▾** beside it lets you pick a different artist for this one sitting only. Drawing takes the better part of half a minute; the frame shows that work is under way, and the **Img** chip in the toolbar stays lit until the picture arrives.
+- **⬆ Upload** hangs a picture of your own (JPEG, PNG, WebP or GIF, up to 10 MB).
+- **The history strip** keeps every picture the item has had. The newest is current; hover over (or focus) an older one to **Make current** or **Delete** it. A disappointing regeneration therefore costs nothing --- the previous picture is one click away.
+
+Beneath the buttons a caption names the profile that drew the current picture, and confesses when the Concierge had to carry the commission across the street to the uncensored desk. Should the painter refuse outright and no more obliging studio be on hand, the editor says so plainly and offers the profile list, so you may try another artist.
+
+A brand-new item has no name on the register yet, so its Image section waits politely until the item has been saved once.
+
+The ⋮ menu on any item you manage also offers **Generate image**, which draws with the designated profile and drops the result straight into the row's thumbnail. Borrowed rows (a shared garment seen from a character's wardrobe) do not offer it: a shared garment is drawn from its own wardrobe, by whoever keeps it.
+
+### Who Wears It for the Picture
+
+- **A character's own garment is drawn worn by that character** --- full length, standing, on a plain studio ground, with the rest of the attire kept deliberately unremarkable so the garment remains the point of the picture. A hairstyle is framed head and shoulders instead.
+- **A shared garment** (Quilltap General, a project, or a group) belongs to nobody in particular, so it is drawn **catalogue style**: on a dress form or laid flat, with no one inside it. The caption says "catalogue shot" so the empty dress form comes as no surprise.
+
+An outfit follows the same rule for the whole ensemble. The picture's prompt is built from each piece's **Image cue** (or its title), never from the prose description, and is kept with the picture so you can see exactly what was asked of the painter. The "people and their outfits" aesthetic from **Settings → Images** applies to both kinds of picture.
+
+Pictures live beside the item in its own wardrobe's store, travel with it when you move or copy it to another wardrobe, go with it when it is deleted, and ride along in a character's `.qtap` export. An archived character's pictures may be admired but not changed.
 
 ## Migration from Legacy Clothing
 

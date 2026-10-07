@@ -15,6 +15,12 @@
  * free (the source-side delete goes straight to the store, not through
  * `cleanupEquippedRefs`, so it does not drop the rows); a copy mints a fresh
  * id and is a new garment whose ledger starts empty.
+ *
+ * Pictures (`Wardrobe/images/<itemId>/` in the source mount) travel with every
+ * transferred item: a move re-links them into the destination mount at the
+ * same path and re-points their `files` rows, dropping the source links once
+ * the source item is gone; a copy links them under the copy's new id with
+ * fresh `files` rows, and the copy's `imageFileId` points at its own copy.
  */
 
 import { randomUUID } from 'crypto'
@@ -32,6 +38,11 @@ import type { RepositoryContainer } from '@/lib/repositories/factory'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body'
 import { resolveWardrobeContainer } from '@/lib/wardrobe/resolve-container'
+import {
+  carryItemImages,
+  dropSourceImageLinks,
+  resolveContainerMountPointId,
+} from '@/lib/wardrobe/item-images'
 import type { ResolvedWardrobeContainer } from '@/lib/wardrobe/resolve-container'
 import type { WardrobeContainerScope } from '@/lib/wardrobe/wardrobe-container'
 
@@ -216,6 +227,7 @@ async function createAtDestination(
       {
         ...wardrobeItemFromCreateBody(item, destination.characterId),
         migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
+        imageFileId: item.imageFileId ?? null,
         archivedAt: item.archivedAt ?? null,
       },
       {
@@ -363,6 +375,37 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       }
     }
 
+    // Pictures travel before the items land, so a landed item's `imageFileId`
+    // never dangles. A copy's pointer is rewritten to its own copied file.
+    const destinationMountPointId = await resolveContainerMountPointId(
+      destination.scope,
+      destination.characterId,
+      destination.mountPointId,
+    )
+    const travellers: Array<{ original: WardrobeItem; planned: WardrobeItem; mode: 'move' | 'copy' }> = [
+      ...travellingComponents.map((component, i) => ({
+        original: component,
+        planned: plannedComponents[i],
+        mode: (componentMode === 'copy' ? 'copy' : 'move') as 'move' | 'copy',
+      })),
+      { original: source.item, planned: nextItem, mode: action },
+    ]
+    const sourceImageLinks: Array<{ itemId: string; links: Array<{ mountPointId: string; leafName: string }> }> = []
+    for (const traveller of travellers) {
+      const { fileIdMap, sourceLinks } = await carryItemImages(repos, {
+        mode: traveller.mode,
+        sourceItemId: traveller.original.id,
+        destinationItemId: traveller.planned.id,
+        destinationMountPointId,
+        userId: user.id,
+      })
+      const currentImage = traveller.original.imageFileId
+      traveller.planned.imageFileId = currentImage ? fileIdMap.get(currentImage) ?? null : null
+      if (traveller.mode === 'move') {
+        sourceImageLinks.push({ itemId: traveller.original.id, links: sourceLinks })
+      }
+    }
+
     // Components land first so the outfit's references resolve the moment it
     // arrives; the write layer tolerates missing components, but there is no
     // reason to create that window.
@@ -386,6 +429,11 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       if (!removed) {
         return serverError('Failed to remove item from source after move')
       }
+    }
+
+    // The moved items' source-side picture links go once their items have.
+    for (const { itemId, links } of sourceImageLinks) {
+      await dropSourceImageLinks(itemId, links)
     }
 
     // Post-write verification: read the outfit BACK from the destination and

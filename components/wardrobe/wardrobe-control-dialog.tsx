@@ -84,6 +84,7 @@ import { WardrobeItemRow } from './wardrobe-item-row'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
 import { WardrobeTransferDialog } from './WardrobeTransferDialog'
+import { generateWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
 
 interface CharacterSummary {
   id: string
@@ -268,6 +269,7 @@ function WardrobeControlDialogInner({
   const [kindFilter, setKindFilter] = useState<ItemKind>('items')
   const [titleFilter, setTitleFilter] = useState('')
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null)
+  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null)
 
   // Image profiles + avatar gen state
   const [imageProfiles, setImageProfiles] = useState<ImageProfileSummary[]>([])
@@ -596,6 +598,34 @@ function WardrobeControlDialogInner({
       await reloadActiveItems()
     },
     [selectedContainer, isCharacterScope, reloadActiveItems],
+  )
+
+  /**
+   * Draw a picture of one garment with the designated wardrobe profile (no
+   * picker — the editor has that). Offered only on manageable rows, so the
+   * item lives where its other management actions address it.
+   */
+  const handleGenerateImage = useCallback(
+    async (item: WardrobeItem) => {
+      if (!selectedContainer) return
+      const home = isCharacterScope ? homeContainerForItem(item) : selectedContainer
+      setGeneratingImageId(item.id)
+      try {
+        const result = await generateWardrobeItemImage(item.id, home)
+        showSuccessToast(
+          result.rerouted
+            ? `A portrait of "${item.title}" is hung — drawn at the uncensored desk`
+            : `A portrait of "${item.title}" is hung`,
+        )
+        void queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.images(item.id) })
+        await reloadActiveItems()
+      } catch (error) {
+        showErrorToast(error instanceof Error ? error.message : 'Failed to generate a picture')
+      } finally {
+        setGeneratingImageId(null)
+      }
+    },
+    [selectedContainer, isCharacterScope, reloadActiveItems, queryClient],
   )
 
   const handleDelete = useCallback(
@@ -1388,6 +1418,8 @@ function WardrobeControlDialogInner({
                     isUpdatingDefault={updatingDefaultId === item.id}
                     onToggleDefault={handleToggleDefault}
                     onToggleArchived={handleToggleArchived}
+                    onGenerateImage={handleGenerateImage}
+                    isGeneratingImage={generatingImageId === item.id}
                     onEdit={(it) => setEditingItem(it)}
                     onDuplicate={handleDuplicate}
                     onMove={(it) => {
@@ -1639,6 +1671,9 @@ function WardrobeControlDialogInner({
             setCreatingNew(null)
             setCreateBundleComponents([])
             await refreshAfterMutation()
+          }}
+          onImageChanged={() => {
+            void reloadActiveItems()
           }}
         />
       )}

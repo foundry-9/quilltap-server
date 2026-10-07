@@ -32,6 +32,7 @@ import {
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
 import { importWardrobeWear } from './import-wardrobe-wear';
+import { importWardrobeItemImages } from './import-wardrobe-images';
 import { importFiles } from './import-files';
 import {
   importPromptTemplates,
@@ -974,6 +975,13 @@ async function executeImportStrict(
 
     // Post-import reconciliation
     await reconcileRelationships(userId, repos, idMaps, warnings);
+
+    // Wardrobe pictures. After reconciliation: the character must already
+    // point at the vault the bundle carried, whose blobs hold the bytes and
+    // whose Wardrobe/*.md the item update writes back to.
+    if (data.characters && data.characters.length > 0) {
+      await importWardrobeItemImages(userId, data.characters, idMaps, warnings);
+    }
 
     // Re-embed what we just inserted. Imported memories carry no vector, and
     // without this their semantic search stays broken until the next boot's

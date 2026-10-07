@@ -41,6 +41,59 @@ interface BuildPromptOptions {
   characterAesthetic?: string | null;
 }
 
+/**
+ * How much of the figure a picture shows. Drives which physical-description
+ * variant leads: a head-and-shoulders crop prefers the dedicated
+ * head-and-shoulders prompt (it avoids sending below-the-crop anatomy that
+ * image-provider moderation rejects); a full-length shot prefers the fuller
+ * variants.
+ */
+export type FigureFraming = 'head-and-shoulders' | 'full-length';
+
+export interface FigureIdentityBlock {
+  /**
+   * "woman" / "man" from the character's pronouns, else "person" — never a
+   * binary presentation forced onto a character who hasn't declared one.
+   */
+  subjectNoun: string;
+  /** The chosen physical-description text, trimmed ('' when none). */
+  physicalText: string;
+  /** `physicalText` with exactly one closing period ('' when none). */
+  physBlock: string;
+}
+
+/**
+ * The identity block every picture of a character opens with: the physical
+ * description and the pronoun-derived sex anchor. Shared by the avatar
+ * portrait and the wardrobe item picture (`lib/wardrobe/item-image-prompt.ts`)
+ * so the two prompts cannot drift on who the figure is.
+ */
+export function buildFigureIdentityBlock(
+  character: Pick<Character, 'physicalDescription' | 'pronouns'>,
+  framing: FigureFraming,
+): FigureIdentityBlock {
+  let physicalText = '';
+  const desc = character.physicalDescription;
+  if (desc) {
+    const order = framing === 'head-and-shoulders'
+      ? [desc.headAndShouldersPrompt, desc.mediumPrompt, desc.shortPrompt, desc.longPrompt, desc.completePrompt, desc.fullDescription]
+      : [desc.completePrompt, desc.longPrompt, desc.mediumPrompt, desc.shortPrompt, desc.fullDescription, desc.headAndShouldersPrompt];
+    physicalText = (order.find((text) => !!text) || '').trim();
+  }
+
+  // Anchor the figure's apparent sex from the character's pronouns. Without
+  // it, a gender-neutral physical description plus an outfit cue (e.g. a
+  // "men's" shirt) can make the generator render the wrong sex. `they`/
+  // neopronouns/unset → no anchor, leaving "person".
+  const subjectNoun = genderNounFromPronouns(character.pronouns) ?? 'person';
+
+  // Strip any trailing terminal punctuation off the physical description so
+  // we don't end up with "background.." once we re-append a period.
+  const physBlock = physicalText ? `${physicalText.replace(/[.!?]+$/, '')}.` : '';
+
+  return { subjectNoun, physicalText, physBlock };
+}
+
 /** Cap for the avatar aesthetic preamble — a long doc can't blow the budget. */
 const AVATAR_AESTHETIC_MAX_CHARS = 600;
 
@@ -68,25 +121,8 @@ export async function buildCharacterAvatarPrompt(
 
   const leafCounts = bySlot(() => 0);
 
-  // Physical description — fall back through the canonical fields the avatar
-  // handler has always favored.
-  let physicalText = '';
-  const desc = character.physicalDescription;
-  if (desc) {
-    // Avatars are a head-and-shoulders crop, so prefer the dedicated
-    // head-and-shoulders prompt (face/hair/expression/neckline only). It avoids
-    // sending below-the-crop anatomy that image-provider moderation rejects.
-    // Fall back through the full-body variants when it isn't set yet.
-    physicalText = (
-      desc.headAndShouldersPrompt ||
-      desc.mediumPrompt ||
-      desc.shortPrompt ||
-      desc.longPrompt ||
-      desc.completePrompt ||
-      desc.fullDescription ||
-      ''
-    ).trim();
-  }
+  const figure = buildFigureIdentityBlock(character, 'head-and-shoulders');
+  const physicalText = figure.physicalText;
 
   let outfitText = '';
   // Whether the character's upper body is bare (no item bubbles up into the
@@ -150,12 +186,7 @@ export async function buildCharacterAvatarPrompt(
   const hasAppearance = Boolean(physicalText) || Boolean(outfitText);
   let prompt = '';
   if (hasAppearance) {
-    // Anchor the figure's apparent sex from the character's pronouns. Without
-    // it, a gender-neutral physical description plus an outfit cue (e.g. a
-    // "men's" shirt) can make the generator render the wrong sex. `they`/
-    // neopronouns/unset → no anchor, leaving "person" so we never force a
-    // binary presentation onto a character who hasn't declared one.
-    const subjectNoun = genderNounFromPronouns(character.pronouns) ?? 'person';
+    const { subjectNoun } = figure;
     // For a bare-topped character, crop higher — at the collarbone — so the
     // chest is physically out of frame. Bare shoulders and neck are unremarkable
     // to SFW image providers; a bare chest is what gets refused. The framing
@@ -164,9 +195,7 @@ export async function buildCharacterAvatarPrompt(
       ? `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure. Close-up headshot cropped at the collarbone — only the face, neck, and bare shoulders are visible; the chest and torso are outside the frame.`
       : `Solo portrait of a single ${subjectNoun}: ${character.name}. Show exactly one figure, head-and-shoulders crop, three-quarter view.`;
     const outro = `Character portrait, detailed, high quality, natural lighting. Only one person in the image.`;
-    // Strip any trailing terminal punctuation off the physical description so
-    // we don't end up with "background.." once we re-append a period.
-    const physBlock = physicalText ? `${physicalText.replace(/[.!?]+$/, '')}.` : '';
+    const { physBlock } = figure;
     // Outfit is a markdown list (lines starting with "- "). Markdown renderers
     // need a blank line before the first list item, so the outfit block is
     // separated from neighboring paragraphs by `\n\n` on each side.

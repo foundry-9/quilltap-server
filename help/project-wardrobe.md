@@ -42,6 +42,8 @@ The **Wardrobe** card on each project's page is your atelier — and the [Wardro
 - **Archive** an item with the **Archive** button — a dust sheet rather than a bonfire. The garment withdraws from the project's wardrobe lists and from the outfit composer, and is withheld outright from any character choosing their own attire, while the file itself stays put. Tick **Show archived**, which keeps company with **+ New wardrobe item**, to see what you have stored away; each retired garment wears a small **Archived** badge and offers a **Restore** button. A character presently *wearing* an archived garment goes on wearing it — archiving tidies the drawer, it does not undress anybody.
 - **Delete** an item with the **Delete** button, after a moment's confirmation. Equipped references across existing chats are cleaned up; composites that bundled the item tolerate its absence gracefully.
 
+Project garments may carry pictures too (see [Portraits of the Garments](wardrobe.md#portraits-of-the-garments)); having no one in particular to wear them, they are drawn catalogue style --- on a dress form or laid flat.
+
 ## Wearing Project Garments
 
 Project wardrobe items behave exactly like any other once a chat belongs to the project. Characters may wear them through the Wardrobe dialog, dress themselves into them via the wardrobe tools, and have them appear in scene-state, avatar, and image-generation prompts — all without the item being duplicated into each character's personal armoire.

@@ -254,6 +254,15 @@ export const queryKeys = {
       itemUrl === undefined
         ? (['wardrobe', 'wear-history', itemId] as const)
         : (['wardrobe', 'wear-history', itemId, itemUrl] as const),
+    /**
+     * One item's picture history (`/api/v1/wardrobe/[itemId]/images`). Keyed
+     * by item id first so `images(id)` prefix-invalidates every container the
+     * history was read through.
+     */
+    images: (itemId: string, containerKey?: string) =>
+      containerKey === undefined
+        ? (['wardrobe', 'images', itemId] as const)
+        : (['wardrobe', 'images', itemId, containerKey] as const),
   },
   mailbox: {
     all: ['mailbox'] as const,

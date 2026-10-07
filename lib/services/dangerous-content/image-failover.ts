@@ -65,7 +65,7 @@ export interface ImageFailoverContext<P extends FailoverProfile = ImageProfile> 
   userId: string
   /** Announcements need it; the dialog may have none. */
   chatId?: string | null
-  purpose: 'tool' | 'lantern' | 'avatar' | 'dialog'
+  purpose: 'tool' | 'lantern' | 'avatar' | 'dialog' | 'wardrobe'
   /** The Concierge policy, already resolved WITH the chat where there is one. */
   conciergePolicy: ResolvedConciergePolicy
   /**

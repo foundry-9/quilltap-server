@@ -11,9 +11,14 @@
 import { NextResponse } from 'next/server';
 import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
-import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
+import {
+  applyArchiveFlag,
+  cleanupEquippedRefs,
+  cleanupItemImages,
+  imageChoiceError,
+} from '@/lib/wardrobe/item-route-steps';
 import { GENERAL_WARDROBE_ORIGIN, withOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { buildWearHistoryPayload } from '@/lib/wardrobe/wear-history';
 
@@ -66,6 +71,9 @@ export const PUT = createContextParamsHandler<{ itemId: string }>(
     const body = await req.json();
     const { archived, ...fields } = updateWardrobeSchema.parse(body);
 
+    const imageError = await imageChoiceError(repos, itemId, fields.imageFileId);
+    if (imageError) return badRequest(imageError);
+
     const archivePatch = applyArchiveFlag(existing.archivedAt, archived);
 
     const item = await repos.wardrobe.update(
@@ -103,6 +111,8 @@ export const DELETE = createContextParamsHandler<{ itemId: string }>(
       if (!success) {
         return notFound('Archetype wardrobe item');
       }
+
+      await cleanupItemImages(repos, itemId, '[Wardrobe Archetypes v1]', { itemId });
 
       logger.info('[Wardrobe Archetypes v1] Archetype item deleted', { itemId });
 

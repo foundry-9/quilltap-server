@@ -22,6 +22,7 @@ import {
 import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
 import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
 import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
+import { WardrobeItemImageSection } from './wardrobe-item-editor/WardrobeItemImageSection'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
@@ -59,6 +60,12 @@ interface WardrobeItemEditorProps {
   autoFocusTitle?: boolean
   onClose: () => void
   onSave: () => void
+  /**
+   * Called when the item's current picture changes (generate / upload / make
+   * current / delete) without the editor closing, so the lists behind it can
+   * refresh their thumbnails.
+   */
+  onImageChanged?: () => void
 }
 
 export function WardrobeItemEditor({
@@ -73,6 +80,7 @@ export function WardrobeItemEditor({
   autoFocusTitle = false,
   onClose,
   onSave,
+  onImageChanged,
 }: WardrobeItemEditorProps) {
   const isEditing = !!item
   // A non-character container pins the editor to that container's endpoints.
@@ -380,14 +388,10 @@ export function WardrobeItemEditor({
   // history is read. Pinned to a shared container, that container's route (an
   // edit must never leak a project or group item into Quilltap General);
   // otherwise the item keeps its existing tier.
-  const editItemUrl = item
-    ? sharedContainer
-      ? wardrobeItemUrl(sharedContainer, item.id)
-      : wardrobeItemUrl(
-          isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId },
-          item.id,
-        )
+  const itemHomeContainer: WardrobeContainer | null = item
+    ? sharedContainer ?? (isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId })
     : null
+  const editItemUrl = item && itemHomeContainer ? wardrobeItemUrl(itemHomeContainer, item.id) : null
 
   const handleSave = async (): Promise<void> => {
     setSubmitAttempted(true)
@@ -633,6 +637,14 @@ export function WardrobeItemEditor({
                 <p className="mt-1 text-xs qt-text-destructive">Enter a title</p>
               )}
             </div>
+
+            {/* Picture — directly under Title, the most visible thing in the
+                form. Inert in create mode: a fresh item has no id yet. */}
+            <WardrobeItemImageSection
+              item={item ?? null}
+              container={itemHomeContainer}
+              onImageChanged={onImageChanged}
+            />
 
             {/* Single mode: Types checkboxes */}
             {!isBundle && (

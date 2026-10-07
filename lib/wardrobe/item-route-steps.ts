@@ -4,9 +4,12 @@
  *
  *   - PUT: translate the request's optional `archived` boolean into an
  *     `archivedAt` patch via `archivedPatch`;
+ *   - PUT: refuse an `imageFileId` that is not one of the item's own pictures
+ *     (`imageChoiceError`);
  *   - DELETE: scrub equipped references to the item from every chat, and drop
  *     its wear-ledger rows, before the row/file goes — logging (never failing)
- *     when either clean-up hiccups.
+ *     when either clean-up hiccups — and drop its pictures once it is gone
+ *     (`cleanupItemImages`, re-exported here).
  *
  * Server-only (logs through the app logger).
  *
@@ -15,6 +18,34 @@
 
 import { logger } from '@/lib/logger';
 import { archivedPatch } from '@/lib/wardrobe/archived-patch';
+import {
+  ForeignWardrobeImageError,
+  assertItemImageChoice,
+  cleanupItemImages,
+} from '@/lib/wardrobe/item-images';
+
+export { cleanupItemImages };
+
+/**
+ * The 400 message for a PUT whose `imageFileId` names a file that is not one
+ * of the item's own pictures, or null when the choice is fine (or absent).
+ */
+export async function imageChoiceError(
+  repos: Parameters<typeof assertItemImageChoice>[0],
+  itemId: string,
+  imageFileId: string | null | undefined,
+): Promise<string | null> {
+  try {
+    await assertItemImageChoice(repos, itemId, imageFileId);
+    return null;
+  } catch (error) {
+    if (error instanceof ForeignWardrobeImageError) {
+      logger.info('[WardrobeItem] Refused an imageFileId that is not the item\'s own', { itemId, imageFileId });
+      return 'imageFileId must name one of this item\'s own pictures';
+    }
+    throw error;
+  }
+}
 
 /**
  * The `archivedAt` patch a PUT body's `archived` flag implies for an item

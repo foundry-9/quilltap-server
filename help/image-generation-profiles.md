@@ -457,9 +457,13 @@ The notice above the composer and the toast both carry the reason verbatim, so t
 
 **Solutions:** Check error message and troubleshoot accordingly
 
+## Wardrobe Images
+
+The **Wardrobe Images** card on the same tab names the profile that draws pictures of wardrobe items and outfits; left at its default, your default image profile does the work. See [Wardrobe Images](wardrobe-images.md), or navigate there with `help_navigate(url: "/settings?tab=images&section=wardrobe-images")`.
+
 ## In-Chat Settings Access
 
-Characters with help tools enabled can read your configured image profiles and story background settings during a conversation using the `help_settings` tool with `category: "images"`. This returns each profile's name, provider, model, and default status, plus your story backgrounds configuration --- but never your API keys. Ask a help-tools-enabled character something like "What image profiles do I have?" and it will oblige.
+Characters with help tools enabled can read your configured image profiles and story background settings during a conversation using the `help_settings` tool with `category: "images"`. This returns each profile's name, provider, model, and default status, plus your story backgrounds configuration and the designated wardrobe artist --- but never your API keys. Ask a help-tools-enabled character something like "What image profiles do I have?" and it will oblige.
 
 ## In-Chat Navigation
 

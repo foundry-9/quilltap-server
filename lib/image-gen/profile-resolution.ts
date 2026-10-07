@@ -90,3 +90,54 @@ export async function resolveImageProfileForChat(
 
   return null;
 }
+
+/** Minimal repository interface for wardrobe image profile resolution */
+interface WardrobeProfileRepos<P extends ProfileResult> {
+  imageProfiles: {
+    findById(id: string): Promise<P | null>;
+    findDefault(userId: string): Promise<P | null>;
+  };
+  chatSettings: {
+    findByUserId(userId: string): Promise<Pick<ChatSettings, 'wardrobeImageSettings'> | null>;
+  };
+}
+
+/**
+ * Resolve the image profile that draws a wardrobe item's picture.
+ *
+ * Priority order:
+ * 1. The per-generation override (the editor's "▾" pick)
+ * 2. `chatSettings.wardrobeImageSettings.imageProfileId` (Settings → Images)
+ * 3. The user's default image profile
+ *
+ * Each candidate must exist, belong to the user, and carry an API key — the
+ * same three checks `resolveImageProfileForChat` makes. The Lantern's
+ * `storyBackgroundsSettings.defaultImageProfileId` is deliberately NOT
+ * consulted: the backdrop desk is chosen for landscapes, not for a garment a
+ * provider might refuse.
+ */
+export async function resolveWardrobeImageProfile<P extends ProfileResult>(
+  userId: string,
+  repos: WardrobeProfileRepos<P>,
+  override?: string | null,
+): Promise<P | null> {
+  const usable = (profile: P | null): profile is P =>
+    !!profile && profile.userId === userId && !!profile.apiKeyId;
+
+  if (override) {
+    const profile = await repos.imageProfiles.findById(override);
+    if (usable(profile)) return profile;
+  }
+
+  const settings = await repos.chatSettings.findByUserId(userId);
+  const designatedId = settings?.wardrobeImageSettings?.imageProfileId;
+  if (designatedId) {
+    const profile = await repos.imageProfiles.findById(designatedId);
+    if (usable(profile)) return profile;
+  }
+
+  const fallback = await repos.imageProfiles.findDefault(userId);
+  if (fallback && fallback.apiKeyId) return fallback;
+
+  return null;
+}

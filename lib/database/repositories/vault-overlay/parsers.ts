@@ -373,6 +373,11 @@ export function parseWardrobeItemFile(
       ? (parsed.data.migratedFromClothingRecordId as string)
       : null;
 
+  const imageFileId =
+    typeof parsed.data?.imageFileId === 'string' && parsed.data.imageFileId.length > 0
+      ? (parsed.data.imageFileId as string)
+      : null;
+
   // Raw componentItems refs (slug or UUID strings). We deliberately store
   // these as-written into componentItemIds; `resolveAndCheckComponentItems`
   // rewrites them to canonical UUIDs in a second pass once the slug/id maps
@@ -407,6 +412,7 @@ export function parseWardrobeItemFile(
     replace,
     componentItemIds: componentItemIdsRaw,
     migratedFromClothingRecordId,
+    imageFileId,
     archivedAt,
     createdAt,
     updatedAt,

@@ -12,14 +12,17 @@
  *  - `[+]` icon that adds the item to a slot. For single-slot items this
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
- *  - `⋮` kebab menu with secondary actions: Edit, toggle the default-outfit
- *    flag, Duplicate, Move, Copy, and Delete. Which of these appear is
+ *  - `⋮` kebab menu with secondary actions: Edit, Generate image, toggle the
+ *    default-outfit flag, Duplicate, Move, Copy, and Delete. Which of these appear is
  *    governed by the `canManage` predicate: items living in the container
  *    being browsed get the full set, items merged in from another shared
  *    tier keep only Move and Copy.
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
+ *
+ * When the item has a current picture, a 40 px thumbnail sits at the left of
+ * the title block; an item without one shows nothing there.
  *
  * Under the badges sits one muted line from the wear ledger (`Worn 4× · last
  * …` / `Never worn`); an item read without a `wear` annotation is never worn.
@@ -30,6 +33,7 @@ import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
 import { formatWearLine, wearOf, type WearAnnotated } from '@/lib/wardrobe/wear-display'
+import { WardrobeItemThumbnail } from './wardrobe-item-thumbnail'
 
 /** A listed item, plus the wear-ledger annotation the collection reads attach. */
 type RowItem = ListedWardrobeItem & WearAnnotated
@@ -69,6 +73,14 @@ interface WardrobeItemRowProps {
    * menu entry doesn't render.
    */
   onToggleArchived?: (item: WardrobeItem) => void
+  /**
+   * Draw a picture with the designated wardrobe profile. Optional — offered
+   * under Edit for manageable rows only; a borrowed garment is drawn by
+   * whoever manages its own wardrobe.
+   */
+  onGenerateImage?: (item: WardrobeItem) => void
+  /** True while this row's picture is being generated. */
+  isGeneratingImage?: boolean
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
   /** Nesting depth for composite components — used for indentation. */
@@ -90,6 +102,8 @@ export function WardrobeItemRow({
   onCopy,
   onDelete,
   onToggleArchived,
+  onGenerateImage,
+  isGeneratingImage = false,
   onEquip,
   onAddToSlot,
   depth = 0,
@@ -194,6 +208,8 @@ export function WardrobeItemRow({
         ) : (
           <span className="inline-block w-3" aria-hidden />
         )}
+
+        <WardrobeItemThumbnail fileId={item.imageFileId} size={40} />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -337,6 +353,22 @@ export function WardrobeItemRow({
                             Edit
                           </button>
                         </li>
+                        {onGenerateImage && (
+                          <li>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={isGeneratingImage}
+                              onClick={() => {
+                                setKebabOpen(false)
+                                onGenerateImage(item)
+                              }}
+                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted disabled:opacity-50"
+                            >
+                              {isGeneratingImage ? 'Generating image…' : 'Generate image'}
+                            </button>
+                          </li>
+                        )}
                         <li>
                           <button
                             type="button"
@@ -452,6 +484,7 @@ export function WardrobeItemRow({
                 onMove={onMove}
                 onCopy={onCopy}
                 onDelete={onDelete}
+                onGenerateImage={onGenerateImage}
                 depth={depth + 1}
               />
             ))
