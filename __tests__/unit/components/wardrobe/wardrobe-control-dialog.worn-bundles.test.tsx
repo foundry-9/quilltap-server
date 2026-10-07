@@ -1,10 +1,12 @@
 /**
- * Bug 61 regression — the Wardrobe dialog's Live tab against a slow outfit read.
+ * Wear ledger — the Wardrobe dialog's staged edits carry the outfits they put
+ * on (docs/developer/features/wardrobe-wear-ledger.md §3.3).
  *
- * The item list paints from its own request; the worn snapshot arrives after a
- * three-round-trip chain. A Wear click in between used to be overwritten by the
- * first seed and then reported as saved. These tests drive that exact window by
- * holding the `?action=outfit` response open across the click.
+ * The dialog dissolves a bundle to its leaves before staging, so the slot map
+ * it flushes cannot say an outfit was worn. The bundle ids accumulate per
+ * character beside the staged slots and travel as `wornBundleIds` on the
+ * `set_all` — from the Live tab's Done flush and from the Outfit Builder's
+ * Try on — and a gesture replayed onto a late snapshot keeps its claim.
  */
 
 import { WardrobeControlDialog } from '@/components/wardrobe/wardrobe-control-dialog'
@@ -12,7 +14,6 @@ import { WardrobeDialogProvider, useWardrobeDialog } from '@/components/provider
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import React, { useEffect } from 'react'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
-import { showConfirmation } from '@/lib/alert'
 
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),
@@ -38,8 +39,6 @@ jest.mock('@/components/wardrobe/WardrobeTransferDialog', () => ({
   WardrobeTransferDialog: () => null,
 }))
 
-const mockShowConfirmation = showConfirmation as jest.MockedFunction<typeof showConfirmation>
-
 const CHAT_ID = 'chat-1'
 const CHARACTER_ID = 'alice'
 
@@ -59,6 +58,24 @@ const ITEMS = [
     types: ['accessories'],
     isDefault: false,
     componentItemIds: [],
+    replace: false,
+    characterId: CHARACTER_ID,
+  },
+  {
+    id: 'boots',
+    title: 'Walking Boots',
+    types: ['footwear'],
+    isDefault: false,
+    componentItemIds: [],
+    replace: false,
+    characterId: CHARACTER_ID,
+  },
+  {
+    id: 'rambler',
+    title: 'Country Rambler',
+    types: ['accessories', 'footwear'],
+    isDefault: false,
+    componentItemIds: ['hat', 'boots'],
     replace: false,
     characterId: CHARACTER_ID,
   },
@@ -134,12 +151,17 @@ function renderDialog(): void {
   )
 }
 
-/** The Wear button on a given item's row (both rows carry one). */
-async function findWearButton(itemTitle: string): Promise<HTMLElement> {
+/** The primary equip button (Wear / Try on) on a given item's row. */
+async function findRowButton(itemTitle: string, name: RegExp): Promise<HTMLElement> {
   const label = await screen.findByTitle(itemTitle)
   const row = label.closest('.qt-card-interactive')
   if (!row) throw new Error(`no row for ${itemTitle}`)
-  return within(row as HTMLElement).getByRole('button', { name: /Wear/ })
+  return within(row as HTMLElement).getByRole('button', { name })
+}
+
+/** Switch the list to the Outfits tab, where bundles live. */
+function showOutfits(): void {
+  fireEvent.click(screen.getByRole('tab', { name: 'Outfits' }))
 }
 
 const stagedSlots = (): Record<string, string[]> =>
@@ -148,69 +170,84 @@ const stagedSlots = (): Record<string, string[]> =>
 beforeEach(() => {
   equipCalls = []
   releaseOutfit = null
-  mockShowConfirmation.mockReset()
 })
 
-describe('WardrobeControlDialog — staging before the worn snapshot arrives', () => {
-  it('replays a Wear clicked mid-flight onto the snapshot and commits it once', async () => {
+describe('WardrobeControlDialog — staged outfits travel with set_all', () => {
+  it('sends the bundle id with the Done flush when an outfit is worn from the list', async () => {
+    routeFetch(false)
+    renderDialog()
+    await waitFor(() => expect(stagedSlots().top).toEqual(['shirt']))
+
+    showOutfits()
+    fireEvent.click(await findRowButton('Country Rambler', /Wear/))
+    await waitFor(() => expect(stagedSlots().footwear).toEqual(['boots']))
+
+    fireEvent.click(screen.getByRole('button', { name: /Done/ }))
+    await waitFor(() => expect(equipCalls).toHaveLength(1))
+    expect(equipCalls[0]).toEqual({
+      characterId: CHARACTER_ID,
+      mode: 'set_all',
+      // Leaves only — the bundle never lands in the slots…
+      slots: { top: ['shirt'], bottom: [], footwear: ['boots'], accessories: ['hat'], hair: [] },
+      // …so its claim rides beside them.
+      wornBundleIds: ['rambler'],
+    })
+  })
+
+  it('sends no wornBundleIds for a plain garment edit', async () => {
+    routeFetch(false)
+    renderDialog()
+    await waitFor(() => expect(stagedSlots().top).toEqual(['shirt']))
+
+    fireEvent.click(await findRowButton('Straw Hat', /Wear/))
+    await waitFor(() => expect(stagedSlots().accessories).toEqual(['hat']))
+
+    fireEvent.click(screen.getByRole('button', { name: /Done/ }))
+    await waitFor(() => expect(equipCalls).toHaveLength(1))
+    expect(equipCalls[0]).not.toHaveProperty('wornBundleIds')
+  })
+
+  it('keeps the claim of an outfit worn before the snapshot arrived, rebased with its gesture', async () => {
     routeFetch(true)
     renderDialog()
 
-    // The item list paints from its own request, well before the outfit read.
-    const wear = await findWearButton('Straw Hat')
+    showOutfits()
+    const wear = await findRowButton('Country Rambler', /Wear/)
     await waitFor(() => expect(releaseOutfit).not.toBeNull())
     fireEvent.click(wear)
+    await waitFor(() => expect(stagedSlots().footwear).toEqual(['boots']))
 
-    // Painted against the empty fallback — there is nothing else to paint yet.
-    await waitFor(() => expect(stagedSlots().accessories).toEqual(['hat']))
-
-    // Now the snapshot lands. Pre-fix this seed discarded the click.
     releaseOutfit?.()
     await waitFor(() => expect(stagedSlots().top).toEqual(['shirt']))
-    expect(stagedSlots().accessories).toEqual(['hat'])
 
     fireEvent.click(screen.getByRole('button', { name: /Done/ }))
     await waitFor(() => expect(equipCalls).toHaveLength(1))
     expect(equipCalls[0]).toMatchObject({
-      characterId: CHARACTER_ID,
       mode: 'set_all',
-      slots: { top: ['shirt'], bottom: [], footwear: [], accessories: ['hat'], hair: [] },
+      slots: { top: ['shirt'], footwear: ['boots'], accessories: ['hat'] },
+      wornBundleIds: ['rambler'],
     })
   })
 
-  it('sends nothing when the snapshot arrives first and nothing is staged', async () => {
+  it('sends the bundle id with the Outfit Builder\'s Try on', async () => {
     routeFetch(false)
     renderDialog()
-
-    await findWearButton('Straw Hat')
     await waitFor(() => expect(stagedSlots().top).toEqual(['shirt']))
 
-    fireEvent.click(screen.getByRole('button', { name: /Done/ }))
-    await waitFor(() => expect(screen.queryByTestId('live-slots')).toBeNull())
-    expect(equipCalls).toHaveLength(0)
-  })
+    fireEvent.click(screen.getByRole('button', { name: 'Outfit Builder' }))
+    showOutfits()
+    fireEvent.click(await findRowButton('Country Rambler', /Try on/))
+    await waitFor(() => expect(stagedSlots().footwear).toEqual(['boots']))
 
-  it('asks before discarding an edit whose snapshot never arrived, instead of closing as if saved', async () => {
-    routeFetch(true)
-    renderDialog()
-
-    const wear = await findWearButton('Straw Hat')
-    fireEvent.click(wear)
-    await waitFor(() => expect(stagedSlots().accessories).toEqual(['hat']))
-
-    // Declining keeps the dialog open with the edit intact — the outfit read
-    // may still land, and then Done saves normally.
-    mockShowConfirmation.mockResolvedValueOnce(false)
-    fireEvent.click(screen.getByRole('button', { name: /Done/ }))
-    await waitFor(() => expect(mockShowConfirmation).toHaveBeenCalledTimes(1))
-    expect(String(mockShowConfirmation.mock.calls[0][0])).toContain('Alice')
-    expect(equipCalls).toHaveLength(0)
-    expect(screen.getByTestId('live-slots')).toBeInTheDocument()
-
-    // Confirming closes, having said plainly that the change is going.
-    mockShowConfirmation.mockResolvedValueOnce(true)
-    fireEvent.click(screen.getByRole('button', { name: /Done/ }))
-    await waitFor(() => expect(screen.queryByTestId('live-slots')).toBeNull())
-    expect(equipCalls).toHaveLength(0)
+    fireEvent.click(
+      screen.getByTitle('Replace what the character is wearing with this composition'),
+    )
+    await waitFor(() => expect(equipCalls).toHaveLength(1))
+    expect(equipCalls[0]).toMatchObject({
+      characterId: CHARACTER_ID,
+      mode: 'set_all',
+      slots: { top: ['shirt'], footwear: ['boots'], accessories: ['hat'] },
+      wornBundleIds: ['rambler'],
+    })
   })
 })

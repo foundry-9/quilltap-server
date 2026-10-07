@@ -17,6 +17,8 @@ import { validateWardrobeListInput } from '../wardrobe-list-tool';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import { findEquippedSlots } from './wardrobe-handler-shared';
+import { formatRelativeDays } from '@/lib/format-time';
+import { neverWornSummary } from '@/lib/schemas/wardrobe-wear.types';
 
 /**
  * Context required for wardrobe list tool execution
@@ -112,9 +114,13 @@ export async function executeWardrobeListTool(
     const itemsById = new Map<string, WardrobeItem>();
     for (const item of allItems) itemsById.set(item.id, item);
 
+    // One ledger read for every listed item's "last worn".
+    const wearSummaries = await repos.wardrobeWear.findSummaries(filteredItems.map((item) => item.id));
+
     // Build result list with equipped status and composite metadata.
     const resultItems: WardrobeListItemResult[] = filteredItems.map((item) => {
       const equipped = findEquippedSlots(item.id, equippedSlots);
+      const wear = wearSummaries.get(item.id) ?? neverWornSummary();
       const isComposite = (item.componentItemIds?.length ?? 0) > 0;
       const componentTitles = isComposite
         ? item.componentItemIds
@@ -134,6 +140,8 @@ export async function executeWardrobeListTool(
         // we expose the *first* slot the item appears in for back-compat,
         // and the full set on `equipped_slots`.
         equipped_slot: equipped[0] ?? null,
+        wear_count: wear.wearCount,
+        last_worn_at: wear.lastWornAt,
         ...(isComposite
           ? {
               is_composite: true,
@@ -161,6 +169,7 @@ export async function executeWardrobeListTool(
       hasAppropriatenessFilter: !!appropriateness_filter,
       includeEquipped: include_equipped !== false,
       compositeCount: finalItems.filter((i) => i.is_composite).length,
+      neverWornCount: finalItems.filter((i) => i.wear_count === 0).length,
     });
 
     return {
@@ -186,12 +195,30 @@ export async function executeWardrobeListTool(
 }
 
 /**
+ * The compact wear note a listed item carries: ` · last worn 3 days ago` or
+ * ` · never worn`. `nowMs` pins the clock (tests); it defaults to now.
+ */
+export function formatWardrobeListWearNote(
+  item: Pick<WardrobeListItemResult, 'wear_count' | 'last_worn_at'>,
+  nowMs: number = Date.now(),
+): string {
+  if (!item.wear_count || !item.last_worn_at) return ' · never worn';
+  const lastMs = Date.parse(item.last_worn_at);
+  if (Number.isNaN(lastMs)) return ' · never worn';
+  return ` · last worn ${formatRelativeDays(lastMs, nowMs)}`;
+}
+
+/**
  * Format wardrobe list results for inclusion in conversation context
  *
  * @param output - Wardrobe list tool output to format
+ * @param nowMs - Clock for the relative "last worn" dates; defaults to now
  * @returns Formatted string suitable for LLM context and display
  */
-export function formatWardrobeListResults(output: WardrobeListToolOutput): string {
+export function formatWardrobeListResults(
+  output: WardrobeListToolOutput,
+  nowMs: number = Date.now(),
+): string {
   if (!output.success) {
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
@@ -213,7 +240,9 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
       ? ` [composite: ${(item.component_titles ?? []).join(', ') || 'unresolved components'}]`
       : '';
 
-    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}`);
+    const wearTag = formatWardrobeListWearNote(item, nowMs);
+
+    lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}${wearTag}`);
   }
 
   return lines.join('\n');

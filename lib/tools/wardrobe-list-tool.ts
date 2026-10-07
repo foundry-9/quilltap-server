@@ -73,6 +73,10 @@ export interface WardrobeListItemResult {
   component_item_ids?: string[];
   /** Resolved component titles (best-effort; missing components are dropped). */
   component_titles?: string[];
+  /** Times worn, across every wearer (the wear ledger's total). 0 = never worn. */
+  wear_count: number;
+  /** When it was last put on by anyone (ISO), or null when never worn. */
+  last_worn_at: string | null;
 }
 
 /**
@@ -111,7 +115,8 @@ export const wardrobeListToolDefinition = {
       'Supports optional filtering by item type and appropriateness context. ' +
       'Each item includes its equipped status (which slot[s] it occupies, if any), ' +
       'a composite flag indicating whether it bundles other items, and an is_own ' +
-      'flag (shared archetypes can be worn but not edited). ' +
+      'flag (shared archetypes can be worn but not edited), and when it was last ' +
+      'worn (or that it never has been). ' +
       'Use wardrobe_wear to put on / layer items, wardrobe_take_off to remove them, ' +
       'and wardrobe_read for the full detail (including the Portrait Cue) of one item. ' +
       'Archived items are excluded from results.',

@@ -21,6 +21,7 @@ import {
 } from '@/lib/wardrobe/wardrobe-container'
 import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
 import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
+import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
@@ -375,6 +376,19 @@ export function WardrobeItemEditor({
     (!isBundle && selectedTypes.length === 0) ||
     (isBundle && componentItemIds.length === 0)
 
+  // The item's own route when editing — where Update PUTs and where the wear
+  // history is read. Pinned to a shared container, that container's route (an
+  // edit must never leak a project or group item into Quilltap General);
+  // otherwise the item keeps its existing tier.
+  const editItemUrl = item
+    ? sharedContainer
+      ? wardrobeItemUrl(sharedContainer, item.id)
+      : wardrobeItemUrl(
+          isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId },
+          item.id,
+        )
+    : null
+
   const handleSave = async (): Promise<void> => {
     setSubmitAttempted(true)
     if (!formData.title.trim()) {
@@ -418,15 +432,10 @@ export function WardrobeItemEditor({
       // (character view): editing keeps the item in its existing tier and
       // creating honours the chosen destination scope.
       let url: string
-      if (sharedContainer) {
-        url = isEditing
-          ? wardrobeItemUrl(sharedContainer, item.id)
-          : wardrobeCollectionUrl(sharedContainer)
-      } else if (isEditing) {
-        url = wardrobeItemUrl(
-          isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId },
-          item.id,
-        )
+      if (isEditing && editItemUrl) {
+        url = editItemUrl
+      } else if (sharedContainer) {
+        url = wardrobeCollectionUrl(sharedContainer)
       } else if (createScope === 'project' && projectId) {
         url = wardrobeCollectionUrl({ scope: 'project', id: projectId })
       } else if (createScope === 'global') {
@@ -768,6 +777,16 @@ export function WardrobeItemEditor({
                 minHeight="10rem"
               />
             </div>
+
+            {/* Wear ledger — read-only, edit mode only (a new item has none). */}
+            {item && editItemUrl && (
+              <WardrobeWearHistorySection
+                itemId={item.id}
+                itemUrl={editItemUrl}
+                createdAt={item.createdAt}
+                isComposite={(item.componentItemIds?.length ?? 0) > 0}
+              />
+            )}
           </div>
 
           {/* Footer */}

@@ -27,6 +27,7 @@ import type {
   CreateProjectWardrobeInput,
   UseProjectWardrobeReturn,
 } from '@/app/prospero/[id]/hooks/useProjectWardrobe'
+import { formatWearLine, wearOf, type WearAnnotated } from '@/lib/wardrobe/wear-display'
 
 interface ProjectWardrobeManagerProps {
   mutator: UseProjectWardrobeReturn
@@ -364,6 +365,10 @@ export function ProjectWardrobeManager({
                   {item.isDefault && <span className="qt-badge qt-badge-primary">Default</span>}
                   {item.archivedAt && <span className="qt-badge qt-text-secondary">Archived</span>}
                 </div>
+                {/* Wear ledger tally — a shared garment keeps one count across every borrower. */}
+                <p className="qt-text-xs qt-text-secondary mt-0.5" data-testid="wardrobe-wear-line">
+                  {formatWearLine(wearOf(item as WardrobeItem & WearAnnotated))}
+                </p>
                 {/* Prefer the Portrait Cue (the image-maker's view); fall back to the prose description. */}
                 {(item.imagePrompt || item.description) && (
                   <p className="qt-text-small qt-text-secondary mt-1">

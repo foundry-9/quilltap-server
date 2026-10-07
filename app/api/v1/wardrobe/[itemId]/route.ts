@@ -2,17 +2,20 @@
  * Wardrobe Archetype Item Detail API v1
  *
  * GET /api/v1/wardrobe/[itemId] - Get an archetype wardrobe item
+ * GET /api/v1/wardrobe/[itemId]?action=wear-history - Who has worn it, how
+ *   often, and the chat it was last worn in
  * PUT /api/v1/wardrobe/[itemId] - Update an archetype wardrobe item
  * DELETE /api/v1/wardrobe/[itemId] - Delete an archetype wardrobe item
  */
 
 import { NextResponse } from 'next/server';
-import { createContextParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { notFound, serverError } from '@/lib/api/responses';
+import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
 import { GENERAL_WARDROBE_ORIGIN, withOrigin } from '@/lib/wardrobe/wardrobe-container';
+import { buildWearHistoryPayload } from '@/lib/wardrobe/wear-history';
 
 // GET /api/v1/wardrobe/[itemId]
 export const GET = createContextParamsHandler<{ itemId: string }>(
@@ -24,8 +27,23 @@ export const GET = createContextParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      const [wardrobeItem] = withOrigin([item], GENERAL_WARDROBE_ORIGIN);
-      return NextResponse.json({ wardrobeItem });
+      return await dispatchAction(
+        req,
+        {
+          'wear-history': async () => {
+            const payload = await buildWearHistoryPayload(itemId, repos);
+            logger.debug('[Wardrobe Archetypes v1] Read archetype item wear history', {
+              itemId,
+              wearCount: payload.history.wearCount,
+            });
+            return successResponse(payload);
+          },
+        },
+        async () => {
+          const [wardrobeItem] = withOrigin([item], GENERAL_WARDROBE_ORIGIN);
+          return NextResponse.json({ wardrobeItem });
+        },
+      );
     } catch (error) {
       logger.error(
         '[Wardrobe Archetypes v1] Error fetching archetype item',
@@ -78,7 +96,7 @@ export const DELETE = createContextParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      await cleanupEquippedRefs(repos.chats, itemId, '[Wardrobe Archetypes v1]', { itemId });
+      await cleanupEquippedRefs(repos, itemId, '[Wardrobe Archetypes v1]', { itemId });
 
       const success = await repos.wardrobe.delete(itemId, null);
 

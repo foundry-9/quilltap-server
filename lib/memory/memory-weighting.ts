@@ -9,6 +9,7 @@
 import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { eventReferenceTimeMs } from './episodic'
+import { formatRelativeDays } from '@/lib/format-time'
 
 /**
  * Configuration for memory weight calculations.
@@ -162,16 +163,7 @@ export function defaultMinCosineForProvider(provider: string | undefined | null)
  */
 export function formatRelativeAge(memory: Memory, now: Date = new Date()): string {
   const referenceTime = eventReferenceTimeMs(memory.occurredAt, referenceTimeMs(memory))
-  const daysOld = Math.max(0, (now.getTime() - referenceTime) / 86400000)
-
-  if (daysOld < 1) return 'today'
-  if (daysOld < 2) return 'yesterday'
-  if (daysOld < 7) return `${Math.floor(daysOld)} days ago`
-  if (daysOld < 14) return 'last week'
-  if (daysOld < 30) return `${Math.floor(daysOld / 7)} weeks ago`
-  if (daysOld < 60) return 'last month'
-  if (daysOld < 365) return `${Math.floor(daysOld / 30)} months ago`
-  return `${Math.floor(daysOld / 365)} year${Math.floor(daysOld / 365) > 1 ? 's' : ''} ago`
+  return formatRelativeDays(referenceTime, now.getTime())
 }
 
 /**

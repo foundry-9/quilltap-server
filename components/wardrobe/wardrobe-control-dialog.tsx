@@ -27,6 +27,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
 import { useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provider'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { fetchJson } from '@/lib/fetch-helpers'
@@ -46,13 +48,22 @@ import {
   breakApartBundleInSlots,
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
-import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit'
 import {
+  appendWornBundleIds,
+  buildSetAllEquipBody,
   classifyStagedOutfits,
   equippedSlotsEqual,
-  rebaseStagedSlots,
+  rebaseStagedGestures,
+  wornBundleIdsFor,
   type SlotsMutator,
+  type StagedGesture,
 } from '@/lib/wardrobe/staged-live-outfits'
+import {
+  WARDROBE_LIST_SORTS,
+  sortAndFilterWardrobeItems,
+  type WardrobeListSort,
+} from '@/lib/wardrobe/wear-display'
 import { addItemToSlot, wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import {
@@ -214,6 +225,14 @@ function WardrobeControlDialogInner({
    * un-manageable rows after the merge, not asking the server for less.
    */
   const [showShared, setShowShared] = useState(true)
+  /**
+   * List ordering and the "Never worn" filter (wear ledger, §5.3). Dialog
+   * state only — like the toggles above, they are not persisted. The filter
+   * composes with any sort.
+   */
+  const [listSort, setListSort] = useState<WardrobeListSort>('title')
+  const [neverWornOnly, setNeverWornOnly] = useState(false)
+  const queryClient = useQueryClient()
   const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
     useCharacterWardrobeItems(selectedCharacterId, { chatId, includeArchived: showArchived })
   const {
@@ -264,6 +283,10 @@ function WardrobeControlDialogInner({
   const [fittingSlots, setFittingSlots] = useState<EquippedSlots>(() =>
     makeEmptyEquippedSlots(),
   )
+  // Outfits (bundles) put on in the fitting room since it was last seeded or
+  // reset, sent with "Try on" so the wear ledger can credit them. Every place
+  // that replaces the composition wholesale resets this alongside it.
+  const [fittingWornBundleIds, setFittingWornBundleIds] = useState<string[]>([])
   const isInChat = chatId !== null
   const [rightTab, setRightTab] = useState<RightTab>(
     isInChat ? 'live' : 'builder',
@@ -298,6 +321,10 @@ function WardrobeControlDialogInner({
   // baseline gets one `set_all` — so at most one announcement and one regen
   // per character per dialog session.
   const [liveStagedByChar, setLiveStagedByChar] = useState<Record<string, EquippedSlots>>({})
+  // Outfits (bundles) the staged gestures put on, per character. The staged
+  // slots hold only the dissolved leaves, so these ids ride beside them on the
+  // `set_all` flush for the wear ledger. Recomputed on rebase, cleared on commit.
+  const [liveWornBundlesByChar, setLiveWornBundlesByChar] = useState<Record<string, string[]>>({})
   const liveBaselineByCharRef = useRef<Record<string, EquippedSlots>>({})
   const liveSeededByCharRef = useRef<Set<string>>(new Set())
   // Gestures made before the worn snapshot arrived, keyed by character. In that
@@ -306,7 +333,7 @@ function WardrobeControlDialogInner({
   // real slots. Without this the fast click is either overwritten by the first
   // seed (Bug 61's silent loss) or committed against an empty base, undressing
   // everything the user never touched.
-  const pendingLiveMutatorsRef = useRef<Record<string, SlotsMutator[]>>({})
+  const pendingLiveMutatorsRef = useRef<Record<string, StagedGesture[]>>({})
 
   const characterIdsForOutfit = useMemo(
     () => (selectedCharacterId ? [selectedCharacterId] : []),
@@ -430,9 +457,10 @@ function WardrobeControlDialogInner({
     fittingSeedKeyRef.current = seedKey
 
     const seed = isInChat && wornSlots
-      ? cloneEquippedSlots(wornSlots)
-      : buildDefaultOutfit(items)
-    setFittingSlots(seed)
+      ? { slots: cloneEquippedSlots(wornSlots), wornBundles: [] }
+      : buildDefaultOutfitWithCredit(items)
+    setFittingSlots(seed.slots)
+    setFittingWornBundleIds(seed.wornBundles.map((b) => b.id))
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState, items])
 
   // Seed staged Live slots once we have a worn snapshot for this character.
@@ -453,8 +481,12 @@ function WardrobeControlDialogInner({
     liveBaselineByCharRef.current[characterId] = cloneEquippedSlots(wornSlots)
     const pending = pendingLiveMutatorsRef.current[characterId] ?? []
     delete pendingLiveMutatorsRef.current[characterId]
-    const seed = rebaseStagedSlots(wornSlots, pending)
-    setLiveStagedByChar((prev) => ({ ...prev, [characterId]: seed }))
+    // The staged slots and their bundle claims rebase together: anything
+    // accumulated against the empty fallback is replaced by what the replayed
+    // gestures put on.
+    const seed = rebaseStagedGestures(wornSlots, pending)
+    setLiveStagedByChar((prev) => ({ ...prev, [characterId]: seed.slots }))
+    setLiveWornBundlesByChar((prev) => ({ ...prev, [characterId]: seed.wornBundleIds }))
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState])
 
   // ---------------------------------------------------------------------------
@@ -480,7 +512,7 @@ function WardrobeControlDialogInner({
   )
 
   const filteredItems = useMemo(() => {
-    const sorted = [...listItems].sort((a, b) => a.title.localeCompare(b.title))
+    const sorted = sortAndFilterWardrobeItems(listItems, { sort: listSort, neverWornOnly })
     const term = titleFilter.trim().toLowerCase()
     return sorted.filter((i) => {
       // No archived filter here on purpose: the fetch already omitted them
@@ -497,7 +529,16 @@ function WardrobeControlDialogInner({
       if (term && !i.title.toLowerCase().includes(term)) return false
       return true
     })
-  }, [listItems, slotFilter, kindFilter, titleFilter, showShared, canManageItem])
+  }, [
+    listItems,
+    listSort,
+    neverWornOnly,
+    slotFilter,
+    kindFilter,
+    titleFilter,
+    showShared,
+    canManageItem,
+  ])
 
   // ---------------------------------------------------------------------------
   // Item action handlers
@@ -637,7 +678,7 @@ function WardrobeControlDialogInner({
   // Every Live-tab gesture goes through `updateLiveStaged`, which mutates the
   // staged slots for the current character. None of these touch the server.
   const updateLiveStaged = useCallback(
-    (mutator: SlotsMutator) => {
+    (mutator: SlotsMutator, wornBundleIds: readonly string[] = []) => {
       if (!selectedCharacterId) return
       const characterId = selectedCharacterId
       // Until the worn snapshot has seeded there is no honest base to stage
@@ -646,7 +687,16 @@ function WardrobeControlDialogInner({
       const seedKey = `${characterId}|${chatId ?? 'no-chat'}`
       if (isInChat && !liveSeededByCharRef.current.has(seedKey)) {
         const queued = pendingLiveMutatorsRef.current[characterId] ?? []
-        pendingLiveMutatorsRef.current[characterId] = [...queued, mutator]
+        pendingLiveMutatorsRef.current[characterId] = [
+          ...queued,
+          { mutate: mutator, wornBundleIds },
+        ]
+      }
+      if (wornBundleIds.length > 0) {
+        setLiveWornBundlesByChar((prev) => ({
+          ...prev,
+          [characterId]: appendWornBundleIds(prev[characterId], wornBundleIds),
+        }))
       }
       setLiveStagedByChar((prev) => {
         const wornFallback = outfit.outfitState[characterId]?.slots
@@ -665,7 +715,7 @@ function WardrobeControlDialogInner({
   const handleEquipItem = useCallback(
     (item: WardrobeItem) => {
       if (!isInChat) return
-      updateLiveStaged((prev) => wearItemIntoSlots(prev, item, itemsById))
+      updateLiveStaged((prev) => wearItemIntoSlots(prev, item, itemsById), wornBundleIdsFor(item))
     },
     [isInChat, itemsById, updateLiveStaged],
   )
@@ -674,7 +724,10 @@ function WardrobeControlDialogInner({
     (item: WardrobeItem, slot: WardrobeItemType) => {
       if (!isInChat) return
       if (!item.types.includes(slot)) return
-      updateLiveStaged((prev) => addItemToSlot(prev, slot, item, itemsById))
+      updateLiveStaged(
+        (prev) => addItemToSlot(prev, slot, item, itemsById),
+        wornBundleIdsFor(item),
+      )
     },
     [isInChat, itemsById, updateLiveStaged],
   )
@@ -686,12 +739,16 @@ function WardrobeControlDialogInner({
     (slot: WardrobeItemType, itemId: string) => {
       if (!isInChat) return
       const item = itemsById.get(itemId)
-      updateLiveStaged((prev) =>
-        item
-          ? wearItemIntoSlots(prev, item, itemsById)
-          : prev[slot].includes(itemId)
-            ? prev
-            : { ...prev, [slot]: [...prev[slot], itemId] },
+      // The outfit pull-down (`OutfitQuickPick`) arrives here too, so this is
+      // where a staged bundle wear is recorded for the ledger.
+      updateLiveStaged(
+        (prev) =>
+          item
+            ? wearItemIntoSlots(prev, item, itemsById)
+            : prev[slot].includes(itemId)
+              ? prev
+              : { ...prev, [slot]: [...prev[slot], itemId] },
+        item ? wornBundleIdsFor(item) : [],
       )
     },
     [isInChat, itemsById, updateLiveStaged],
@@ -722,6 +779,7 @@ function WardrobeControlDialogInner({
       if (!item) return
       // Wear it across every slot it covers, honoring the `replace` flag.
       setFittingSlots((prev) => wearItemIntoSlots(prev, item, itemsById))
+      setFittingWornBundleIds((prev) => appendWornBundleIds(prev, wornBundleIdsFor(item)))
     },
     [itemsById],
   )
@@ -747,10 +805,11 @@ function WardrobeControlDialogInner({
       return
     }
     setFittingSlots(target)
+    setFittingWornBundleIds([])
   }, [selectedCharacterId, outfit.outfitState, fittingSlots, requestConfirmation])
 
   const fittingResetToDefaults = useCallback(async () => {
-    const target = buildDefaultOutfit(items)
+    const { slots: target, wornBundles } = buildDefaultOutfitWithCredit(items)
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
       !(await requestConfirmation(
@@ -760,6 +819,7 @@ function WardrobeControlDialogInner({
       return
     }
     setFittingSlots(target)
+    setFittingWornBundleIds(wornBundles.map((b) => b.id))
   }, [items, fittingSlots, requestConfirmation])
 
   const fittingClearAll = useCallback(async () => {
@@ -770,6 +830,7 @@ function WardrobeControlDialogInner({
       return
     }
     setFittingSlots(makeEmptyEquippedSlots())
+    setFittingWornBundleIds([])
   }, [fittingSlots, requestConfirmation])
 
   /**
@@ -841,6 +902,7 @@ function WardrobeControlDialogInner({
     const { dirty, unresolved } = classifyStagedOutfits(
       liveStagedByChar,
       liveBaselineByCharRef.current,
+      liveWornBundlesByChar,
     )
 
     if (unresolved.length > 0) {
@@ -856,17 +918,13 @@ function WardrobeControlDialogInner({
     if (dirty.length === 0) return true
 
     let allOk = true
-    for (const { characterId, slots } of dirty) {
+    for (const { characterId, slots, wornBundleIds } of dirty) {
       const result = await fetchJson<{ equippedSlots: EquippedSlots }>(
         `/api/v1/chats/${chatId}?action=equip`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            characterId,
-            mode: 'set_all',
-            slots,
-          }),
+          body: JSON.stringify(buildSetAllEquipBody(characterId, slots, wornBundleIds)),
         },
       )
       if (!result.ok) {
@@ -875,11 +933,27 @@ function WardrobeControlDialogInner({
       } else {
         outfit.invalidateWardrobe(characterId)
         liveBaselineByCharRef.current[characterId] = cloneEquippedSlots(slots)
+        // Committed: the claims went with the slots, so start the next round clean.
+        setLiveWornBundlesByChar((prev) => {
+          const next = { ...prev }
+          delete next[characterId]
+          return next
+        })
       }
     }
+    // A committed outfit may have put garments on — every wear tally is stale.
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.all })
     await outfit.refreshOutfit()
     return allOk
-  }, [chatId, liveStagedByChar, outfit, characters, requestConfirmation])
+  }, [
+    chatId,
+    liveStagedByChar,
+    liveWornBundlesByChar,
+    outfit,
+    characters,
+    requestConfirmation,
+    queryClient,
+  ])
 
   const requestClose = useCallback(() => {
     void (async () => {
@@ -901,11 +975,9 @@ function WardrobeControlDialogInner({
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          characterId: selectedCharacterId,
-          mode: 'set_all',
-          slots: fittingSlots,
-        }),
+        body: JSON.stringify(
+          buildSetAllEquipBody(selectedCharacterId, fittingSlots, fittingWornBundleIds),
+        ),
       },
     )
     if (!result.ok) {
@@ -914,9 +986,18 @@ function WardrobeControlDialogInner({
     }
     showSuccessToast('Worn!')
     outfit.invalidateWardrobe(selectedCharacterId)
+    void queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.all })
     await outfit.refreshOutfit()
     onClose()
-  }, [selectedCharacterId, chatId, fittingSlots, outfit, onClose])
+  }, [
+    selectedCharacterId,
+    chatId,
+    fittingSlots,
+    fittingWornBundleIds,
+    outfit,
+    onClose,
+    queryClient,
+  ])
 
   /**
    * Add an item via the wardrobe row's primary buttons. Routes to the
@@ -932,6 +1013,7 @@ function WardrobeControlDialogInner({
         // Honor the item's `replace` flag across every slot it covers,
         // matching `wearItemIntoSlots` / the live equip path.
         setFittingSlots((prev) => wearItemIntoSlots(prev, item, itemsById))
+        setFittingWornBundleIds((prev) => appendWornBundleIds(prev, wornBundleIdsFor(item)))
         return
       }
       handleEquipItem(item)
@@ -1189,6 +1271,7 @@ function WardrobeControlDialogInner({
                 className="qt-input qt-input-sm"
                 aria-label="Search wardrobe by title"
               />
+              <div className="flex flex-wrap items-center justify-between gap-2">
               <div
                 role="tablist"
                 aria-label="Item kind"
@@ -1210,6 +1293,22 @@ function WardrobeControlDialogInner({
                     {k === 'items' ? 'Items' : 'Outfits'}
                   </button>
                 ))}
+              </div>
+                <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                  Sort
+                  <select
+                    value={listSort}
+                    onChange={(e) => setListSort(e.target.value as WardrobeListSort)}
+                    className="qt-select qt-select-sm"
+                    aria-label="Sort wardrobe"
+                  >
+                    {WARDROBE_LIST_SORTS.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <div className="flex flex-wrap gap-1">
                 {SLOT_FILTERS.map((slot) => (
@@ -1247,6 +1346,15 @@ function WardrobeControlDialogInner({
                     Show shared
                   </label>
                 )}
+                <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={neverWornOnly}
+                    onChange={(e) => setNeverWornOnly(e.target.checked)}
+                    className="qt-checkbox"
+                  />
+                  Never worn
+                </label>
               </div>
             </div>
 

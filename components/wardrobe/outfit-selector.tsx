@@ -23,7 +23,8 @@ import type {
 } from '@/lib/schemas/wardrobe.types'
 import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
-import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
+import { buildDefaultOutfit, buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit'
+import { appendWornBundleIds, wornBundleIdsFor } from '@/lib/wardrobe/staged-live-outfits'
 import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
 import {
@@ -40,6 +41,12 @@ export interface OutfitSelection {
   characterId: string
   mode: OutfitSelectionMode
   slots?: EquippedSlots
+  /**
+   * `manual` only: outfits (bundles) the composer put on — dissolved into
+   * `slots` client-side — so the wear ledger can credit them as worn. Ids
+   * only; the server validates and expands them.
+   */
+  wornBundleIds?: string[]
 }
 
 export interface OutfitSelectorCharacter {
@@ -243,9 +250,14 @@ function CharacterOutfitSection({
       seededRef.current = true
       return
     }
-    const defaults = buildDefaultOutfit(wardrobeItems)
+    const defaults = buildDefaultOutfitWithCredit(wardrobeItems)
     seededRef.current = true
-    onChange({ characterId: character.id, mode: 'manual', slots: defaults })
+    onChange({
+      characterId: character.id,
+      mode: 'manual',
+      slots: defaults.slots,
+      wornBundleIds: defaults.wornBundles.map((b) => b.id),
+    })
   }, [internalMode, wardrobeItems, selection.slots, character.id, onChange])
 
   const handleModeChange = useCallback(
@@ -261,10 +273,11 @@ function CharacterOutfitSection({
           mode === 'manual'
             ? selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
             : undefined,
+        wornBundleIds: mode === 'manual' ? selection.wornBundleIds : undefined,
       }
       onChange(updated)
     },
-    [character.id, selection.slots, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, onChange],
   )
 
   // Wearing an item from the per-slot picker fills *every* slot it covers,
@@ -278,9 +291,19 @@ function CharacterOutfitSection({
       const next = item
         ? wearItemIntoSlots(currentSlots, item, itemsById)
         : { ...currentSlots, [slot]: [...(currentSlots[slot] ?? []), itemId] }
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
+      // The outfit pull-down lands here too: a picked bundle is dissolved into
+      // the slots above, so its id is carried beside them for the wear ledger.
+      onChange({
+        characterId: character.id,
+        mode: 'manual',
+        slots: next,
+        wornBundleIds: appendWornBundleIds(
+          selection.wornBundleIds,
+          item ? wornBundleIdsFor(item) : [],
+        ),
+      })
     },
-    [character.id, selection.slots, itemsById, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, itemsById, onChange],
   )
 
   const handleRemoveFromSlot = useCallback(
@@ -290,36 +313,56 @@ function CharacterOutfitSection({
         ...currentSlots,
         [slot]: (currentSlots[slot] ?? []).filter((id) => id !== itemId),
       }
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
+      onChange({
+        characterId: character.id,
+        mode: 'manual',
+        slots: next,
+        wornBundleIds: selection.wornBundleIds,
+      })
     },
-    [character.id, selection.slots, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, onChange],
   )
 
   const handleClearSlot = useCallback(
     (slot: WardrobeItemType) => {
       const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
       const next = { ...currentSlots, [slot]: [] }
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
+      onChange({
+        characterId: character.id,
+        mode: 'manual',
+        slots: next,
+        wornBundleIds: selection.wornBundleIds,
+      })
     },
-    [character.id, selection.slots, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, onChange],
   )
 
   const handleTakeOffBundle = useCallback(
     (bundle: EquippedBundle) => {
       const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
       const next = takeOffBundleFromSlots(currentSlots, bundle)
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
+      onChange({
+        characterId: character.id,
+        mode: 'manual',
+        slots: next,
+        wornBundleIds: selection.wornBundleIds,
+      })
     },
-    [character.id, selection.slots, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, onChange],
   )
 
   const handleBreakApartBundle = useCallback(
     (bundle: EquippedBundle) => {
       const currentSlots = selection.slots ?? { ...EMPTY_EQUIPPED_SLOTS }
       const next = breakApartBundleInSlots(currentSlots, bundle, itemsById)
-      onChange({ characterId: character.id, mode: 'manual', slots: next })
+      onChange({
+        characterId: character.id,
+        mode: 'manual',
+        slots: next,
+        wornBundleIds: selection.wornBundleIds,
+      })
     },
-    [character.id, selection.slots, itemsById, onChange],
+    [character.id, selection.slots, selection.wornBundleIds, itemsById, onChange],
   )
 
   const handleClearAll = useCallback(() => {
