@@ -115,6 +115,9 @@ function ctx() {
   } as never;
 }
 
+/** The origin the project tier's reads attach. */
+const PROJECT_ORIGIN = { scope: 'project', id: 'proj-1', name: 'The Estate' };
+
 function wardrobeItem(overrides: Record<string, unknown> = {}) {
   return {
     id: 'item-1',
@@ -156,9 +159,10 @@ describe('collection GET — listing', () => {
     expect(ensureOfficialStore).toHaveBeenCalledWith('proj-1', 'The Estate');
     expect(ensureWardrobeFolder).toHaveBeenCalledWith('mount-1');
     expect(res.status).toBe(200);
+    // Every item is tagged with the wardrobe the read found it in.
     await expect(res.json()).resolves.toEqual({
       mountPointId: 'mount-1',
-      wardrobeItems: [wardrobeItem()],
+      wardrobeItems: [{ ...wardrobeItem(), origin: PROJECT_ORIGIN }],
     });
   });
 
@@ -324,7 +328,9 @@ describe('item GET', () => {
     });
 
     expect(readWardrobe).toHaveBeenCalledWith('mount-1', true);
-    await expect(res.json()).resolves.toEqual({ wardrobeItem: wardrobeItem() });
+    await expect(res.json()).resolves.toEqual({
+      wardrobeItem: { ...wardrobeItem(), origin: PROJECT_ORIGIN },
+    });
   });
 
   it('404s on an unknown item', async () => {

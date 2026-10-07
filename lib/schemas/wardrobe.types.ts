@@ -87,6 +87,17 @@ export const CLOTHING_SLOT_TYPES: readonly WardrobeItemType[] =
   WARDROBE_SLOT_TYPES.filter((s) => WARDROBE_SLOT_META[s].isClothing);
 
 /**
+ * "Top, Bottom, Footwear" — a slot list as display labels, in canonical slot
+ * order. Every garment list that prints a slot list calls this, so they agree
+ * on labels rather than raw keys. Unknown entries are ignored.
+ */
+export function formatSlotLabels(types: readonly string[]): string {
+  return WARDROBE_SLOT_TYPES.filter((s) => types.includes(s))
+    .map((s) => WARDROBE_SLOT_META[s].label)
+    .join(', ');
+}
+
+/**
  * True when an empty `slot` should still be reported (as a phrase, a label, or
  * an "(empty)" marker). False for unreported-if-blank slots — skip them.
  *

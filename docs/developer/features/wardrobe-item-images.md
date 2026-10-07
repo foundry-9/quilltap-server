@@ -1,7 +1,7 @@
 # Wardrobe item images: a picture of every garment and outfit
 
 **Status:** spec, approved for implementation. Part 3 of the wardrobe programme; do
-[wardrobe-list-legibility.md](wardrobe-list-legibility.md) first (it reshapes the row this
+[wardrobe-list-legibility.md](complete/wardrobe-list-legibility.md) first (it reshapes the row this
 spec adds a thumbnail to). Independent of [wardrobe-wear-ledger.md](wardrobe-wear-ledger.md).
 
 A wardrobe item or outfit may carry an image. It can be **generated in place** from a button

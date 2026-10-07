@@ -3,6 +3,7 @@
  */
 
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeOrigin } from '@/lib/wardrobe/wardrobe-container'
 
 /** A wardrobe item summary shape used by the components multi-select. */
 export interface CandidateItem {
@@ -10,8 +11,12 @@ export interface CandidateItem {
   title: string
   types: WardrobeItemType[]
   componentItemIds: string[]
-  /** Whether this is a shared archetype (no characterId) */
-  isShared: boolean
+  /**
+   * Where a borrowed candidate hangs, as its collection read reported it.
+   * Null for an item that lives in the wardrobe being edited (and for one that
+   * arrived without an origin) — those get no chip.
+   */
+  origin: WardrobeOrigin | null
 }
 
 export type CandidateGroup = WardrobeItemType | 'multi'

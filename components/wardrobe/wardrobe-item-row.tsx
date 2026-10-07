@@ -25,18 +25,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
+
+type RowItem = ListedWardrobeItem
 
 interface WardrobeItemRowProps {
-  item: WardrobeItem
+  item: RowItem
   /** All items in the cache (this character + shared archetypes) — used to render composite components inline. */
-  allItems: WardrobeItem[]
+  allItems: RowItem[]
   /** When set, equip controls are visible. */
   inChat: boolean
   /**
    * Whether an item can be managed (edited / starred / duplicated / deleted)
    * from the current view — true when the item lives in the container being
    * browsed, false when it was merged in from a shared tier elsewhere. Items
-   * failing this check keep only Move and Copy, and are badged `· shared`.
+   * failing this check keep only Move and Copy, and carry a chip naming the
+   * wardrobe they were borrowed from (`Project · Thornfield`).
    * Defaults to the character-view rule: manageable iff character-owned.
    */
   canManage?: (item: WardrobeItem) => boolean
@@ -90,6 +94,9 @@ export function WardrobeItemRow({
   // Without an explicit predicate, fall back to the character-view rule:
   // personal items are manageable, shared-tier items are Move/Copy only.
   const manageable = canManage ? canManage(item) : Boolean(item.characterId)
+  // "May this view edit it" and "where did it come from" are separate
+  // questions; the chip answers the second, and only for borrowed rows.
+  const originLabel = wardrobeOriginLabel(item.origin)
 
   const [slotPickerOpen, setSlotPickerOpen] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -145,7 +152,7 @@ export function WardrobeItemRow({
     const byId = new Map(allItems.map((i) => [i.id, i]))
     return item.componentItemIds
       .map((id) => byId.get(id))
-      .filter((c): c is WardrobeItem => Boolean(c))
+      .filter((c): c is RowItem => Boolean(c))
   }, [allItems, item.componentItemIds, isComposite])
 
   const handleAddClick = (): void => {
@@ -203,7 +210,6 @@ export function WardrobeItemRow({
             {isComposite && (
               <span className="qt-text-xs qt-text-secondary">· bundle</span>
             )}
-            {!manageable && <span className="qt-text-xs qt-text-secondary">· shared</span>}
             {item.isDefault && (
               <span className="qt-text-xs qt-text-secondary">· default</span>
             )}
@@ -215,6 +221,14 @@ export function WardrobeItemRow({
                 {t}
               </span>
             ))}
+            {!manageable && originLabel && (
+              <span
+                className="qt-badge qt-badge-wardrobe-shared"
+                title={`Borrowed from ${originLabel}`}
+              >
+                {originLabel}
+              </span>
+            )}
           </div>
           {item.appropriateness && (
             <div className="qt-text-xs qt-text-secondary truncate mt-0.5">

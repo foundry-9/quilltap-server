@@ -19,7 +19,8 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, created, conflict, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
+import { withOrigin } from '@/lib/wardrobe/wardrobe-container';
 import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
 import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
@@ -99,21 +100,27 @@ export const GET = createContextParamsHandler<{ id: string }>(
       const includeArchived = readIncludeArchived(req);
       const scope = new URL(req.url).searchParams.get('scope');
       if (scope === 'group') {
-        const groupMountPointIds = await resolveGroupMountPointIdsForCharacter(id);
-        const wardrobeItems = await repos.wardrobe.findArchetypesInMounts(
-          groupMountPointIds,
+        // Kept grouped so each item can say which group it hangs in; the
+        // attributed read resolves id collisions exactly as the flat one does.
+        const groups = await resolveGroupMountsForCharacter(id);
+        const wardrobeItems = await repos.wardrobe.findArchetypesInMountsAttributed(
+          groups,
           includeArchived,
         );
         logger.debug('[Wardrobe v1] Group-tier wardrobe read', {
           characterId: id,
-          groupMountCount: groupMountPointIds.length,
+          groupCount: groups.length,
+          groupMountCount: groups.reduce((n, g) => n + g.mountPointIds.length, 0),
           itemCount: wardrobeItems.length,
           context: 'wardrobe',
         });
         return NextResponse.json({ wardrobeItems });
       }
 
-      const wardrobeItems = await repos.wardrobe.findByCharacterId(id, includeArchived);
+      const wardrobeItems = withOrigin(
+        await repos.wardrobe.findByCharacterId(id, includeArchived),
+        { scope: 'character', id, name: character.name },
+      );
       return NextResponse.json({ wardrobeItems });
     } catch (error) {
       logger.error('[Wardrobe v1] Error fetching wardrobe items', { characterId: id }, error instanceof Error ? error : undefined);

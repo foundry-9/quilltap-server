@@ -16,6 +16,12 @@ import {
 } from './vault-overlay/wardrobe-writes';
 import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
+import {
+  withOrigin,
+  type WardrobeItemWithOrigin,
+  type WardrobeOrigin,
+} from '@/lib/wardrobe/wardrobe-container';
+import type { GroupMounts } from '@/lib/mount-index/tiered-mount-pool';
 import { TypedQueryFilter } from '../interfaces';
 
 /**
@@ -245,6 +251,54 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
       },
       'Error finding archetype wardrobe items in mounts',
       { mountCount: mountPointIds.length, includeArchived }
+    );
+  }
+
+  /**
+   * The group tier of a character's wardrobe with each item tagged by the
+   * group it hangs in, for the dialog's origin chip. Reads every group's
+   * mounts in the order given (resolve them with
+   * `resolveGroupMountsForCharacter`) and resolves an id collision exactly as
+   * {@link findArchetypesInMounts} does over the flattened list — a later
+   * mount's copy shadows an earlier one — so the item that wins here is the
+   * item that wins there, and it carries its own group's origin.
+   *
+   * A mount that can't be read is logged and skipped.
+   */
+  async findArchetypesInMountsAttributed(
+    groups: GroupMounts[],
+    includeArchived = false,
+  ): Promise<WardrobeItemWithOrigin[]> {
+    if (groups.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const { readSharedWardrobe } = await import('@/lib/mount-index/shared-wardrobe');
+        const byId = new Map<string, WardrobeItemWithOrigin>();
+        for (const { group, mountPointIds } of groups) {
+          const origin: WardrobeOrigin = { scope: 'group', id: group.id, name: group.name };
+          for (const mountPointId of mountPointIds) {
+            try {
+              const items = await readSharedWardrobe(mountPointId, includeArchived);
+              for (const item of withOrigin(items, origin)) byId.set(item.id, item);
+            } catch (error) {
+              logger.warn('Failed to read shared wardrobe tier; skipping', {
+                mountPointId,
+                groupId: group.id,
+                context: 'wardrobe',
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        }
+        logger.debug('Attributed group wardrobe read', {
+          groupCount: groups.length,
+          itemCount: byId.size,
+          context: 'wardrobe',
+        });
+        return Array.from(byId.values());
+      },
+      'Error finding attributed group wardrobe items',
+      { groupCount: groups.length, includeArchived }
     );
   }
 
