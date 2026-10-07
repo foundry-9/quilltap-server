@@ -846,6 +846,9 @@ export const migrations: Migration[] = [
   addChatInformsPermanentMigration,
   // Impersonated lines: impersonationVoiceRewrite (on/off) → impersonationVoiceMode (off / ask / always)
   impersonationVoiceModeMigration,
+  // Wardrobe wear ledger: the table, then a one-time seed from current outfits
+  addWardrobeWearStatsTableMigration,
+  seedWardrobeWearStatsMigration,
 ];
 
 export {
