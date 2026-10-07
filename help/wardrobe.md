@@ -188,14 +188,35 @@ There is exactly one party who is never consulted on the matter, and it is not y
 
 **Permanent deletion** removes an item entirely and cleans up references in equipped slots across all chats. Any composite that bundled the deleted item will tolerate the absence gracefully — the dangling reference is dropped at read time without disturbing the rest of the bundle.
 
+## The Ledger
+
+Every garment in the house keeps a ledger --- a discreet little tally, kept below stairs, of **how often it has been worn, when, and by whom**. Nobody need fill it in; it keeps itself.
+
+**What counts as a wear.** A garment earns a wear each time it is *put on* --- not each time an outfit is saved. Dressing a character in the Wardrobe dialog, a chat opening with them already in it, a character donning it with `wardrobe_wear`, an outfit chosen from the pull-down, a gift worn the moment it is unwrapped: each is a wear, provided the garment was not already on. Saving the very same outfit twice changes nothing and counts nothing. Taking the coat off at dinner and putting it back on for the walk home is two wears. Each character keeps their own account, so two characters sharing one Quilltap General greatcoat in the same scene each earn it a wear.
+
+**Outfits credit their garments.** Putting on an outfit (a composite) counts once for the outfit and once for each garment it actually put on. Pieces the character already had on are not counted twice, and an outfit whose every piece was already worn earns nothing at all --- nothing happened. Assembling the same ensemble one garment at a time counts the garments but not the outfit.
+
+**What does not count.** Merging two conversations changes nobody's clothes, so it counts nothing. Carrying an outfit forward into a new conversation (*Same as Last*) does count --- it is, after all, being put on afresh in a new scene. When the ledger was first opened, each conversation's current attire was entered once, dated by that conversation's last activity, so a long-established household does not begin from "never worn".
+
+**Where to read it.**
+
+- In the **Wardrobe dialog**, each row carries one quiet line beneath its badges: *Worn 4× · last Tue*, *Worn once · last 3 weeks ago*, or *Never worn*.
+- A **Sort** selector beside the Items/Outfits tabs arranges the list by **Title** (the usual order), **Recently worn**, **Most worn**, or **Newest**; under the two wear sorts, the never-worn sit at the back. A **Never worn** tickbox, beside *Show archived* and *Show shared*, shows only the garments nobody has yet had on --- it combines with any sort. Neither is remembered after the dialog closes.
+- **Editing** an existing item shows a **Wear history** section at the foot of the form: when it was created, how many times it has been worn, first and last worn (with the conversation it was last worn in, if that conversation still exists), and who has worn it, most recent first.
+- The **project wardrobe card** shows the same one-line tally on each row.
+
+**Characters may ask after it, too.** `wardrobe_list` notes beside each item when it was last worn (or that it never has been), and `wardrobe_read` gives the full account --- how often, since when, and whether it was the asking character or someone else. Nothing about the ledger is slipped into a character's prompt unbidden; they learn of it only by asking.
+
+A garment's ledger follows it when moved to another wardrobe; a *copy* is a new garment and starts its ledger afresh. Deleting a garment closes its ledger. Should a character be deleted, the wears they ran up stay on the books, merely unattributed.
+
 ## Characters and Their Wardrobe Tools
 
 During a chat, characters with the appropriate permissions may attend to their toilette by means of seven tools, each named with a tidy `wardrobe_` prefix so there is never any doubt as to whose drawer one is rummaging through. Wearing and editing are handled by altogether separate instruments — for a single garment and a whole bundled ensemble alike behave identically, the item's own *replace* setting deciding whether it layers atop what is worn or sweeps the slot clean.
 
 Throughout, a character sees not only the items in their **own** wardrobe but also any shared garments hanging in their **groups'** stores, in the **project** stores, and in the great communal cloakroom that is **Quilltap General** — though shared items, being held in common, may be *worn* but never *altered* by a single character's hand.
 
-- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of one's groups, the project, and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it.
-- **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, and the slots it presently occupies. Where `wardrobe_list` offers a glance, this offers a proper appraisal.
+- **wardrobe_list** --- Survey the available garments — one's own plus the shared finery of one's groups, the project, and Quilltap General. Composites are flagged with their components listed; each item notes whether you own it (and may thus edit it) or merely borrow it, and when it was last worn (see *The Ledger* above).
+- **wardrobe_read** --- Inspect one item in full: its Portrait Cue, its default-outfit standing, its composite particulars, the slots it presently occupies, and its wear history. Where `wardrobe_list` offers a glance, this offers a proper appraisal.
 - **wardrobe_wear** --- Put garments on. Hand it an ordered list of changes and it applies them in sequence — force-swap the coat, *then* layer a muffler over it, all in a single gesture. Per item: `wear` (don it across every slot it covers, honoring its replace setting — ordinarily a gentle layering), `replace` (clear those slots first, a decisive swap), or `add_to_slot` (tuck it into one named slot).
 - **wardrobe_take_off** --- Remove garments, or empty a slot entirely. Likewise an ordered list. Per item: `remove` (take a worn piece off across every slot it covers, leaving any other layers undisturbed — narrow it to a single slot if you wish) or `clear_slot` (sweep one slot bare).
 - **wardrobe_create** --- Invent an entirely new garment and add it to the wardrobe, OR compose a new outfit from existing items via `component_item_ids` or `component_titles` (a composite). One may furnish a **Portrait Cue** (`image_prompt`) to steer the artist's hand, and one may **gift the item to another character** in the chat.

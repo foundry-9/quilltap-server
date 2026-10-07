@@ -57,6 +57,10 @@ function buildRepos(overrides: Record<string, any> = {}) {
       removeEquippedItemFromAllChats: jest.fn().mockResolvedValue(undefined),
       ...overrides.chats,
     },
+    wardrobeWear: {
+      deleteByItemIds: jest.fn().mockResolvedValue(undefined),
+      ...overrides.wardrobeWear,
+    },
   }
 }
 
@@ -76,6 +80,7 @@ it('resolves the item via the vault-aware lookup, not the stale wardrobe_items t
   expect(repos.wardrobe.findByIdForCharacter).toHaveBeenCalledWith(CHAR_ID, ITEM_ID)
   expect(repos.wardrobe.findById).not.toHaveBeenCalled()
   expect(repos.wardrobe.delete).toHaveBeenCalledWith(ITEM_ID, CHAR_ID)
+  expect(repos.wardrobeWear.deleteByItemIds).toHaveBeenCalledWith([ITEM_ID])
   expect(res.body?.success ?? res?.success).toBe(true)
 })
 

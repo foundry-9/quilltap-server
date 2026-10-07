@@ -15,8 +15,9 @@ import {
   WardrobeDialogProvider,
   useWardrobeDialog,
 } from '@/components/providers/wardrobe-dialog-provider'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import React, { useEffect } from 'react'
+import { renderWithQuery } from '../../../helpers/renderWithQuery'
 
 jest.mock('@/lib/toast', () => ({
   showErrorToast: jest.fn(),
@@ -100,7 +101,8 @@ function Opener(): null {
 }
 
 function renderDialog(): void {
-  render(
+  // The dialog invalidates the wear-ledger queries after an equip commits.
+  renderWithQuery(
     <WardrobeDialogProvider>
       <Opener />
       <WardrobeControlDialog />

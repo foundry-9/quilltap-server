@@ -451,6 +451,65 @@ emitted only when set; vault path lookups are case-insensitive.
 | createdAt | string (ISO 8601) | Creation timestamp (falls back to the document's `createdAt`). |
 | updatedAt | string (ISO 8601) | Last-update timestamp (falls back to the document's `updatedAt`). |
 
+### wardrobe_wear_stats
+
+```sql
+CREATE TABLE "wardrobe_wear_stats" (
+  "id" TEXT PRIMARY KEY,
+  "itemId" TEXT NOT NULL,                 -- wardrobe item id (a vault file's frontmatter id); no FK, items are not rows
+  "wearerCharacterId" TEXT,               -- NULL = unattributed (wearer deleted, or import could not resolve them)
+  "wearCount" INTEGER NOT NULL DEFAULT 0,
+  "firstWornAt" TEXT NOT NULL,
+  "lastWornAt" TEXT NOT NULL,
+  "lastWornChatId" TEXT,                  -- no FK; a deleted chat leaves a dangling id the reader treats as "a chat since deleted"
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX "idx_wardrobe_wear_stats_item_wearer"
+  ON "wardrobe_wear_stats" ("itemId", COALESCE("wearerCharacterId", ''));
+CREATE INDEX "idx_wardrobe_wear_stats_wearer" ON "wardrobe_wear_stats" ("wearerCharacterId");
+```
+
+The wardrobe **wear ledger** (added 4.10 by `add-wardrobe-wear-stats-table-v1`,
+seeded once by `seed-wardrobe-wear-stats-v1` from every chat's current
+`equippedOutfit`, one wear per chat dated by the chat's `updatedAt`). One row per
+(item x wearer): how many times that character has put the item on, the first and
+last time, and the chat it was last worn in. An item's totals are sums over its
+rows. There is no per-event log.
+
+**Why not frontmatter.** Wardrobe items are markdown files in a `Wardrobe/` folder,
+not rows (see `wardrobe_items` above). Every item write re-projects the *whole*
+folder and bumps `updatedAt`, so a counter in frontmatter would rewrite every
+garment file to count one wear, turn "last edited" into "last worn", and be a
+read-modify-write the forked job child cannot perform (its reads are a stale
+snapshot; its writes are buffered). Here a wear is one atomic upsert, and a
+shared General coat worn by five characters is one file and five rows.
+
+- The only writer on the equip path is `WardrobeWearRepository.commitEquippedOutfit`
+  (`lib/database/repositories/wardrobe-wear.repository.ts`), which writes the slots
+  through `chats.setEquippedOutfit` and credits a wear to every leaf that went from
+  not-worn to worn, plus every bundle the caller says it dissolved when one of that
+  bundle's leaves transitioned. From the job child it is buffered whole and
+  replayed in the parent, so the diff is always against the true prior state.
+  `'merge'` writes slots and credits nothing.
+- The unique index is on `COALESCE("wearerCharacterId", '')` because SQLite treats
+  NULLs as distinct in a plain unique index; folding NULL to `''` makes the
+  unattributed row unique per item and lets the upsert target it.
+- No FK on `wearerCharacterId`: `ON DELETE SET NULL` would collide with the unique
+  index when two wearers of one item are deleted. Character deletion instead calls
+  `foldWearerIntoUnattributed`, which sums their counts into the item's NULL row
+  (earliest first wear, latest last wear) and deletes theirs.
+- Item deletion drops the item's rows (`deleteByItemIds`, beside
+  `cleanupEquippedRefs`). A copy transfer mints a new id and starts empty; a move
+  keeps the id and its ledger. A character-owned item shadowing a General item of
+  the same id shares one ledger key.
+- Ids that no longer resolve to an item (seeded from old outfits) are harmless
+  orphans no list ever joins.
+- Exported in `.qtap` bundles as `wardrobe_wear` records and included in backups.
+- DDL single source: `lib/database/backends/sqlite/wardrobe-wear-stats-ddl.ts`.
+  Design of record: `docs/developer/features/complete/wardrobe-wear-ledger.md`.
+
 ### outfit_presets — REMOVED in 4.5
 
 The `outfit_presets` table was eliminated; named outfit bundles are now expressed as composite `wardrobe_items` rows whose `componentItemIds` references the constituent items. Migrations `migrate-outfit-presets-to-composites-v1` and `drop-outfit-presets-table-v1` perform the fold-and-drop. A snapshot of the table content is written to `<dataDir>/backup/pre-drop-outfit-presets.json` before the drop.

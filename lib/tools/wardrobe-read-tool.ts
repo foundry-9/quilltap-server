@@ -61,7 +61,36 @@ export interface WardrobeReadToolOutput {
   is_equipped: boolean;
   /** Every slot the item currently occupies. */
   equipped_slots: string[];
+  /** The item's wear history (absent on failure). */
+  wear?: WardrobeReadWearResult;
   error?: string;
+}
+
+/**
+ * One wearer's share of an item's wear history, named for the reader.
+ */
+export interface WardrobeReadWearerResult {
+  /** null = the unattributed row (a wearer since deleted). */
+  character_id: string | null;
+  /** Display name; a placeholder label when the wearer is gone. */
+  name: string;
+  /** True when this wearer is the character calling the tool. */
+  is_you: boolean;
+  /** True when the wearer is no longer in the household (deleted, unreadable, or unattributed). */
+  departed: boolean;
+  wear_count: number;
+  first_worn_at: string;
+  last_worn_at: string;
+}
+
+/**
+ * How often an item has been worn, when, and by whom (most recent wearer first).
+ */
+export interface WardrobeReadWearResult {
+  wear_count: number;
+  first_worn_at: string | null;
+  last_worn_at: string | null;
+  wearers: WardrobeReadWearerResult[];
 }
 
 /**
@@ -75,8 +104,9 @@ export const wardrobeReadToolDefinition = {
       'Read the full detail of ONE wardrobe item by id (preferred) or title. ' +
       'Returns everything wardrobe_list omits: the Portrait Cue (image_prompt), ' +
       'default-outfit membership, composite/replace behaviour, the full ' +
-      'component list, archived status, whether you own it, and the slots it is ' +
-      'currently equipped in. Items from your own wardrobe, the project, and ' +
+      'component list, archived status, whether you own it, the slots it is ' +
+      'currently equipped in, and its wear history (how often it has been worn, ' +
+      'when, and by whom). Items from your own wardrobe, the project, and ' +
       'Quilltap General all resolve.',
     parameters: zodToOpenAISchema(wardrobeReadToolInputSchema),
   },

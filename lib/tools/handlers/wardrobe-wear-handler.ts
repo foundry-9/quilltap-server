@@ -105,16 +105,16 @@ export async function executeWardrobeWearTool(
             `Item "${item.title}" (types: ${item.types.join(', ')}) cannot be added to the "${slot}" slot`,
           );
         }
-        await addToSlot(repos, context.chatId, context.characterId, slot, item, tiers);
+        await addToSlot(repos, context.chatId, context.characterId, slot, item, tiers, 'tool');
         effect = 'layered';
         slotsAffected = [slot];
       } else if (mode === 'replace') {
-        await replaceItem(repos, context.chatId, context.characterId, item, tiers);
+        await replaceItem(repos, context.chatId, context.characterId, item, tiers, 'tool');
         effect = 'replaced';
         slotsAffected = item.types;
       } else {
         // mode === 'wear'
-        await equipItem(repos, context.chatId, context.characterId, item, tiers);
+        await equipItem(repos, context.chatId, context.characterId, item, tiers, 'tool');
         effect = item.replace ? 'replaced' : 'layered';
         slotsAffected = item.types;
       }

@@ -92,6 +92,14 @@ describe('wardrobe transfer route', () => {
           create: jest.fn(),
           delete: jest.fn().mockResolvedValue(true),
         },
+        // The wear ledger: a transfer never writes it. A move keeps the id so
+        // the ledger follows; a copy is a new garment whose ledger starts empty.
+        wardrobeWear: {
+          incrementWears: jest.fn(),
+          upsertRows: jest.fn(),
+          deleteByItemIds: jest.fn(),
+          foldWearerIntoUnattributed: jest.fn(),
+        },
       },
     }
 
@@ -106,6 +114,12 @@ describe('wardrobe transfer route', () => {
     ;(createProjectWardrobeItem as jest.Mock).mockImplementation(async (_mount: string, item: any) => item)
     ;(deleteProjectWardrobeItem as jest.Mock).mockResolvedValue(true)
   })
+
+  function expectNoLedgerWrites() {
+    for (const fn of Object.values(mockCtx.repos.wardrobeWear) as jest.Mock[]) {
+      expect(fn).not.toHaveBeenCalled()
+    }
+  }
 
   function req(body: unknown): any {
     return {
@@ -193,6 +207,8 @@ describe('wardrobe transfer route', () => {
     expect(body.wardrobeItem.id).toBe('copy-uuid-1')
     expect(body.wardrobeItem.characterId).toBe('char-dst')
     expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+    // A copy is a new garment: no ledger rows are copied to the fresh id.
+    expectNoLedgerWrites()
   })
 
   it('POST move removes source item after successful destination write', async () => {
@@ -238,6 +254,61 @@ describe('wardrobe transfer route', () => {
     expect(body.action).toBe('move')
     expect(body.wardrobeItem.id).toBe('item-1')
     expect(mockCtx.repos.wardrobe.delete).toHaveBeenCalledWith('item-1', 'char-src')
+  })
+
+  it('POST move preserves the item id at the destination, so the wear ledger follows', async () => {
+    const sourceItem = {
+      id: 'item-1',
+      characterId: 'char-src',
+      title: 'Travel boots',
+      description: null,
+      imagePrompt: null,
+      types: ['footwear'],
+      componentItemIds: [],
+      appropriateness: null,
+      isDefault: false,
+      replace: false,
+      migratedFromClothingRecordId: null,
+      archivedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    }
+
+    mockCtx.repos.characters.findById.mockImplementation(async (id: string) => {
+      if (id === 'char-src' || id === 'char-dst') return { id, userId: 'user-1' }
+      return null
+    })
+    mockCtx.repos.wardrobe.findByCharacterId.mockImplementation(async (id: string) =>
+      id === 'char-src' ? [sourceItem] : [],
+    )
+    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
+      ...sourceItem,
+      ...data,
+      id: options.id,
+      characterId: data.characterId,
+    }))
+
+    const res = await POST(req({
+      action: 'move',
+      itemId: 'item-1',
+      sourceCharacterId: 'char-src',
+      sourceProjectId: null,
+      destination: { scope: 'character', id: 'char-dst' },
+    }))
+
+    expect(res.status).toBe(200)
+    expect(mockCtx.repos.wardrobe.create).toHaveBeenCalledWith(
+      expect.objectContaining({ characterId: 'char-dst' }),
+      {
+        id: 'item-1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+    )
+    expect(randomUUID).not.toHaveBeenCalled()
+    // The ledger is keyed by item id, so nothing needs rewriting — and the
+    // source-side delete must not take the item's tally with it.
+    expectNoLedgerWrites()
   })
 
   it('POST accepts project destination when project has no userId field', async () => {

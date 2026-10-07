@@ -286,6 +286,12 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   // with zero rules.
   const textReplacementRules = await globalRepos.textReplacementRules.list();
 
+  // The wardrobe wear ledger. Global (single-user per instance, no userId),
+  // so the whole table is the user's. Keyed by item id with no FK — items are
+  // vault files, which travel with the document-store tables below.
+  const wardrobeWear = await globalRepos.wardrobeWear.findAll();
+  moduleLogger.debug('Collected wardrobe wear ledger for backup', { rowCount: wardrobeWear.length });
+
   // Scriptorium / document store tables live in a separate mount-index
   // database. We dump them with raw SELECTs because most repositories don't
   // expose a "give me everything" helper, and bulk export wants the latter.
@@ -392,6 +398,7 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     groupDocMountLinks,
     groupCharacterMembers,
     textReplacementRules,
+    wardrobeWear,
   };
 }
 
@@ -495,6 +502,7 @@ function createManifest(
       groupDocMountLinks: data.groupDocMountLinks?.length || 0,
       groupCharacterMembers: data.groupCharacterMembers?.length || 0,
       textReplacementRules: data.textReplacementRules?.length || 0,
+      wardrobeWear: data.wardrobeWear?.length || 0,
     },
   };
 }
@@ -703,6 +711,9 @@ export async function createBackup(
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'group-doc-mount-links.json'), data.groupDocMountLinks || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'group-character-members.json'), data.groupCharacterMembers || []);
     await writeJsonArrayFile(path.join(stagingDir, 'data', 'text-replacement-rules.json'), data.textReplacementRules || []);
+    // Wear ledger (4.11). Optional on the way back in, so an older restorer
+    // simply does not see it.
+    await writeJsonArrayFile(path.join(stagingDir, 'data', 'wardrobe-wear.json'), data.wardrobeWear || []);
 
     moduleLogger.debug('Wrote all JSON data files to staging directory');
 

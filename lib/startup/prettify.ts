@@ -151,6 +151,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-text-replacement-rules-table-v1': 'Building the autocorrect ledger',
   'add-chat-informs-table-v1': 'Laying out a tray for the notes you slip the cast',
   'add-chat-informs-permanent-v1': 'Pinning a place on the tray for the notes meant to stay put',
+  'add-wardrobe-wear-stats-table-v1': 'Ruling a ledger for who has worn what',
+  'seed-wardrobe-wear-stats-v1': 'Taking stock of what the cast is wearing this minute',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',
   'add-auto-scroll-on-response-complete-field-v1': 'Deciding whether the Salon should chase each reply to its end',
   'add-autonomous-rooms-fields-v1': 'Preparing the autonomous salon quarters',

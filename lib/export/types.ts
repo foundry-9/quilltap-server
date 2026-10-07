@@ -109,6 +109,8 @@ export interface QuilltapExportCounts {
   conversationAnnotations?: number;
   chatDocuments?: number;
   chatInforms?: number;
+  /** Wear-ledger rows (`wardrobe_wear_stats`) for exported wardrobe items. */
+  wardrobeWear?: number;
   files?: number;
   folders?: number;
   promptTemplates?: number;
@@ -208,6 +210,11 @@ export interface SanitizedEmbeddingProfile extends Omit<EmbeddingProfile, 'apiKe
 export interface CharactersExportData {
   characters: ExportedCharacter[];
   memories?: Memory[];
+  /**
+   * Wear-ledger rows for the exported characters' wardrobe items. Optional —
+   * bundles written before the ledger existed carry none.
+   */
+  wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];
 }
 
 /**
@@ -403,6 +410,12 @@ export interface DocumentStoresExportData {
    * compatibility with older .qtap files that predated this field.
    */
   projectLinks?: ExportedProjectDocMountLink[];
+  /**
+   * Wear-ledger rows for the shared wardrobe items riding in these stores'
+   * `Wardrobe/` folders. Optional — bundles written before the ledger
+   * existed carry none.
+   */
+  wardrobeWear?: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow[];
 }
 
 // ============================================================================
@@ -645,6 +658,21 @@ export interface QtapWardrobeItemRecord {
   data: import('@/lib/schemas/wardrobe.types').WardrobeItem;
 }
 
+/**
+ * One wear-ledger row (`wardrobe_wear_stats`): one wearer's tally for one
+ * exported wardrobe item — a character-owned item (`wardrobe_item` record) or
+ * a shared item riding as a `doc_mount_document` under a `Wardrobe/` folder.
+ * Emitted after every other entity record, so an importer has seen every item
+ * (and every chat and character) the row can point at. `itemId`,
+ * `wearerCharacterId` and `lastWornChatId` are source-instance ids; the
+ * importer remaps them, folds an unresolvable wearer into the item's
+ * unattributed row, and drops a row whose item did not come along.
+ */
+export interface QtapWardrobeWearRecord {
+  kind: 'wardrobe_wear';
+  data: import('@/lib/schemas/wardrobe-wear.types').WardrobeWearStatsRow;
+}
+
 export interface QtapCharacterPluginDataRecord {
   kind: 'character_plugin_data';
   characterId: string;
@@ -850,6 +878,7 @@ export type QtapRecord =
   | QtapGroupRecord
   | QtapCharacterRecord
   | QtapWardrobeItemRecord
+  | QtapWardrobeWearRecord
   | QtapCharacterPluginDataRecord
   | QtapChatRecord
   | QtapChatMessageRecord

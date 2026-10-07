@@ -239,6 +239,22 @@ export const queryKeys = {
     folders: (projectId?: string) => ['files', 'folders', projectId ?? null] as const,
     content: (url: string) => ['files', 'content', url] as const,
   },
+  wardrobe: {
+    /**
+     * Every wardrobe read held in the query cache. Invalidate after an equip
+     * commits — a put-on gesture moves the wear ledger's tallies.
+     */
+    all: ['wardrobe'] as const,
+    /**
+     * One item's wear-ledger breakdown (`?action=wear-history`). Keyed by item
+     * id first (the ledger's own key, so `wearHistory(id)` prefix-invalidates
+     * every route it was read through), then the item route it was read from.
+     */
+    wearHistory: (itemId: string, itemUrl?: string) =>
+      itemUrl === undefined
+        ? (['wardrobe', 'wear-history', itemId] as const)
+        : (['wardrobe', 'wear-history', itemId, itemUrl] as const),
+  },
   mailbox: {
     all: ['mailbox'] as const,
     /** Letters in a chat-participant character's Mail/ folder (Compose Mail dialog). */

@@ -401,6 +401,17 @@ export async function executeCascadeDelete(
     logger.error(`Failed to delete plugin data for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
   }
 
+  // Fold the character's wear-ledger rows into each item's unattributed row:
+  // the garments' totals survive the wearer, the attribution does not. A fold
+  // rather than SET NULL because the ledger's unique index admits only one
+  // unattributed row per item.
+  try {
+    await repos.wardrobeWear.foldWearerIntoUnattributed(characterId)
+    logger.debug('[CascadeDelete] Folded wear-ledger rows into unattributed', { context: { characterId } })
+  } catch (err) {
+    logger.error(`Failed to fold wear-ledger rows for character ${characterId}`, { context: { characterId } }, err instanceof Error ? err : undefined)
+  }
+
   // Finally delete the character
   await repos.characters.delete(characterId)
 

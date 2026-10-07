@@ -20,14 +20,19 @@
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
+ *
+ * Under the badges sits one muted line from the wear ledger (`Worn 4× · last
+ * …` / `Never worn`); an item read without a `wear` annotation is never worn.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
+import { formatWearLine, wearOf, type WearAnnotated } from '@/lib/wardrobe/wear-display'
 
-type RowItem = ListedWardrobeItem
+/** A listed item, plus the wear-ledger annotation the collection reads attach. */
+type RowItem = ListedWardrobeItem & WearAnnotated
 
 interface WardrobeItemRowProps {
   item: RowItem
@@ -229,6 +234,11 @@ export function WardrobeItemRow({
                 {originLabel}
               </span>
             )}
+          </div>
+          {/* Wear ledger tally — the count is what gets compared across rows;
+              the full breakdown is the editor's job. */}
+          <div className="qt-text-xs qt-text-secondary mt-0.5" data-testid="wardrobe-wear-line">
+            {formatWearLine(wearOf(item))}
           </div>
           {item.appropriateness && (
             <div className="qt-text-xs qt-text-secondary truncate mt-0.5">

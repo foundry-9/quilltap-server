@@ -31,6 +31,7 @@ import {
   importMemories,
 } from './import-entities';
 import { importDocumentStores } from './import-document-stores';
+import { importWardrobeWear } from './import-wardrobe-wear';
 import { importFiles } from './import-files';
 import {
   importPromptTemplates,
@@ -461,6 +462,7 @@ async function executeImportStrict(
     characterVaultMounts: new Map(),
     skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
+    wardrobeItems: new Map(),
   };
 
   // Initialize counts
@@ -885,6 +887,30 @@ async function executeImportStrict(
             }
           }
         }
+      }
+    }
+
+    // 7e. Wardrobe wear ledger. Last of the wardrobe-bearing phases: every
+    //    item (character-owned via importCharacters, shared and vault-borne
+    //    via the document-store phase), every character and every chat the
+    //    rows can point at has landed and its id map is final. A row whose
+    //    item did not come along is dropped; an unresolvable wearer folds into
+    //    the item's unattributed row.
+    if (data.wardrobeWear && data.wardrobeWear.length > 0) {
+      try {
+        imported.wardrobeWear = await importWardrobeWear(
+          data.wardrobeWear,
+          data.documents ?? [],
+          idMaps,
+          warnings
+        );
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        warnings.push(`Failed to import the wardrobe wear ledger: ${msg}`);
+        moduleLogger.warn('Failed to import wardrobe wear ledger', {
+          rowCount: data.wardrobeWear.length,
+          error: msg,
+        });
       }
     }
 

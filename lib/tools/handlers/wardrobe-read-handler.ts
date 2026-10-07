@@ -12,7 +12,11 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import type { WardrobeReadToolInput, WardrobeReadToolOutput } from '../wardrobe-read-tool';
+import type {
+  WardrobeReadToolInput,
+  WardrobeReadToolOutput,
+  WardrobeReadWearResult,
+} from '../wardrobe-read-tool';
 import { validateWardrobeReadInput } from '../wardrobe-read-tool';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
@@ -25,6 +29,8 @@ import {
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 import type { WardrobeRepos } from './wardrobe-handler-shared';
+import { resolveWearers } from '@/lib/wardrobe/wear-history';
+import { formatRelativeDays } from '@/lib/format-time';
 
 export interface WardrobeReadToolContext {
   userId: string;
@@ -57,6 +63,8 @@ export async function buildWardrobeReadOutput(
   const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
   const equipped = findEquippedSlots(item.id, equippedSlots);
 
+  const wear = await buildWardrobeReadWear(repos, characterId, item.id);
+
   return {
     success: true,
     item_id: item.id,
@@ -74,7 +82,107 @@ export async function buildWardrobeReadOutput(
     is_own: isOwnWardrobeItem(item, characterId),
     is_equipped: equipped.length > 0,
     equipped_slots: equipped,
+    wear,
   };
+}
+
+/**
+ * The item's wear history, each wearer named for the calling character:
+ * themselves flagged `is_you`, anyone the ledger can no longer name flagged
+ * `departed`. Names resolve raw (`resolveWearers`), so a broken vault costs a
+ * label rather than the whole read.
+ */
+async function buildWardrobeReadWear(
+  repos: WardrobeRepos,
+  characterId: string,
+  itemId: string,
+): Promise<WardrobeReadWearResult> {
+  const history = await repos.wardrobeWear.findHistory(itemId);
+  const resolved = await resolveWearers(history.wearers, repos);
+
+  logger.debug('Wardrobe read resolved wear history', {
+    context: 'wardrobe-read-handler',
+    characterId,
+    itemId,
+    wearCount: history.wearCount,
+    wearerCount: history.wearers.length,
+  });
+
+  return {
+    wear_count: history.wearCount,
+    first_worn_at: history.firstWornAt,
+    last_worn_at: history.lastWornAt,
+    wearers: history.wearers.map((wearer, i) => ({
+      character_id: wearer.characterId,
+      name: resolved[i]?.name ?? '',
+      is_you: wearer.characterId !== null && wearer.characterId === characterId,
+      departed: resolved[i]?.kind !== 'character',
+      wear_count: wearer.wearCount,
+      first_worn_at: wearer.firstWornAt,
+      last_worn_at: wearer.lastWornAt,
+    })),
+  };
+}
+
+/** How a wearer is named to the character reading the tool output. */
+function wearerPhrase(wearer: WardrobeReadWearResult['wearers'][number]): string {
+  if (wearer.is_you) return 'you';
+  if (wearer.departed) return 'someone no longer in the household';
+  return wearer.name;
+}
+
+/** "once", "twice", "4 times". */
+function timesPhrase(count: number): string {
+  if (count === 1) return 'once';
+  if (count === 2) return 'twice';
+  return `${count} times`;
+}
+
+/** An absolute date as "14 Mar 2026" (UTC, so a reader's locale cannot reshape it). */
+function wearDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function relativeWearDate(iso: string, nowMs: number): string {
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? iso : formatRelativeDays(ms, nowMs);
+}
+
+function joinPhrases(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * The `Wear` paragraph of `wardrobe_read`: "Worn 4 times, first 14 Mar 2026,
+ * last 3 days ago by you. Also worn by Marguerite (once)." — or "Never worn."
+ * `nowMs` pins the clock for the relative dates (tests); it defaults to now.
+ */
+export function formatWardrobeWearParagraph(
+  wear: WardrobeReadWearResult | undefined,
+  nowMs: number = Date.now(),
+): string {
+  if (!wear || wear.wear_count === 0 || wear.wearers.length === 0 || !wear.last_worn_at) {
+    return 'Never worn.';
+  }
+
+  const [latest, ...others] = wear.wearers;
+  const last = `${relativeWearDate(wear.last_worn_at, nowMs)} by ${wearerPhrase(latest)}`;
+  const head =
+    wear.wear_count === 1
+      ? `Worn once, ${last}.`
+      : `Worn ${wear.wear_count} times, first ${wearDate(wear.first_worn_at ?? wear.last_worn_at)}, last ${last}.`;
+
+  if (others.length === 0) return head;
+  const also = joinPhrases(others.map((w) => `${wearerPhrase(w)} (${timesPhrase(w.wear_count)})`));
+  return `${head} Also worn by ${also}.`;
 }
 
 export function buildWardrobeReadFailure(error: string): WardrobeReadToolOutput {
@@ -149,8 +257,13 @@ export async function executeWardrobeReadTool(
 
 /**
  * Format wardrobe read results for inclusion in conversation context
+ *
+ * @param nowMs - Clock for the relative dates in the wear paragraph; defaults to now
  */
-export function formatWardrobeReadResults(output: WardrobeReadToolOutput): string {
+export function formatWardrobeReadResults(
+  output: WardrobeReadToolOutput,
+  nowMs: number = Date.now(),
+): string {
   if (!output.success) {
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
@@ -166,6 +279,7 @@ export function formatWardrobeReadResults(output: WardrobeReadToolOutput): strin
   lines.push(`  default: ${output.is_default ? 'yes' : 'no'} | own: ${output.is_own ? 'yes' : 'no (shared — read-only)'}`);
   if (output.archived) lines.push('  archived: yes (hidden from listings, cannot be worn)');
   lines.push(`  equipped: ${output.is_equipped ? output.equipped_slots.join(', ') : 'no'}`);
+  if (output.wear) lines.push(`  wear: ${formatWardrobeWearParagraph(output.wear, nowMs)}`);
 
   return lines.join('\n');
 }

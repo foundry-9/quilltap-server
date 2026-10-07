@@ -40,6 +40,7 @@ function makeIdMaps(overrides: IdMapOverrides = {}): any {
     characterVaultMounts: new Map(),
     skippedCharacterVaults: new Set(),
     preserveIdsSkips: new Set(),
+    wardrobeItems: new Map(),
     ...overrides,
   };
 }

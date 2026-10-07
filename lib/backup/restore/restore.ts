@@ -934,6 +934,27 @@ export async function restore(
       moduleLogger.debug('Restored text replacement rules', { count: textReplacementRulesRestored });
     }
 
+    // 22n-bis. Wardrobe wear ledger (global; keyed by item id, no FKs). Written
+    // as given through the repository's import/restore path — no increment.
+    // Replace mode truncated the table first (delete-service); a collision on
+    // (item, wearer) in any other mode takes the backup's tally. The backup's
+    // rows are unique on that key already, so no pre-merge is needed.
+    let wardrobeWearRestored = 0;
+    const wardrobeWearRows = data.wardrobeWear || [];
+    if (wardrobeWearRows.length > 0) {
+      try {
+        await globalRepos.wardrobeWear.upsertRows(wardrobeWearRows);
+        wardrobeWearRestored = wardrobeWearRows.length;
+      } catch (error) {
+        warnings.push(`Failed to restore the wardrobe wear ledger: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore wardrobe wear ledger', { rowCount: wardrobeWearRows.length, error });
+      }
+    }
+    moduleLogger.debug('Restored wardrobe wear ledger', {
+      total: wardrobeWearRows.length,
+      restored: wardrobeWearRestored,
+    });
+
     // 22o. Instance settings — applied last because the mount-point keys
     // reference doc_mount_points that we just restored above. Upsert by key
     // so a fresh instance's auto-provisioned defaults get overwritten by the
@@ -1152,6 +1173,7 @@ export async function restore(
       groupDocMountLinks: groupDocMountLinksRestored,
       groupCharacterMembers: groupCharacterMembersRestored,
       textReplacementRules: textReplacementRulesRestored,
+      wardrobeWear: wardrobeWearRestored,
       embeddingReconcile: {
         targetDimensions: reconcileResult.targetDimensions,
         skippedReason: reconcileResult.skippedReason,

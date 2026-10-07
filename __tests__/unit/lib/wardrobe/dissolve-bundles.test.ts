@@ -23,6 +23,7 @@ const {
 } = require('@/lib/wardrobe/outfit-displacement')
 
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 
@@ -274,6 +275,7 @@ describe('equipItem (persisted)', () => {
         }),
       },
     }
+    repos.wardrobeWear = ledgerOver(repos.chats as { setEquippedOutfit: jest.Mock })
     if (opts.withWardrobe !== false) repos.wardrobe = { findByIdsForCharacter }
     return { repos, findByIdsForCharacter, read: () => stored }
   }

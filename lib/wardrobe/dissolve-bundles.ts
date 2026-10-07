@@ -171,6 +171,18 @@ export function dissolveBundlesInSlots(
   currentSlots: EquippedSlots,
   itemsById: WearableLookup,
 ): EquippedSlots {
+  return dissolveBundlesInSlotsWithCredit(currentSlots, itemsById).slots;
+}
+
+/**
+ * {@link dissolveBundlesInSlots}, also reporting which bundles it dissolved and
+ * the leaves each contributed — the claim the wear ledger needs to credit an
+ * outfit as worn, since the stored leaves alone cannot say one was.
+ */
+export function dissolveBundlesInSlotsWithCredit(
+  currentSlots: EquippedSlots,
+  itemsById: WearableLookup,
+): { slots: EquippedSlots; wornBundles: Array<{ id: string; leafIds: string[] }> } {
   const dissolved = new Map<string, DissolvedLeaf[]>();
   for (const slot of WARDROBE_SLOT_TYPES) {
     for (const id of currentSlots[slot] ?? []) {
@@ -182,7 +194,7 @@ export function dissolveBundlesInSlots(
     }
   }
 
-  if (dissolved.size === 0) return currentSlots;
+  if (dissolved.size === 0) return { slots: currentSlots, wornBundles: [] };
 
   const next: EquippedSlots = makeEmptyEquippedSlots();
 
@@ -213,5 +225,9 @@ export function dissolveBundlesInSlots(
     }
   }
 
-  return next;
+  const wornBundles = Array.from(dissolved, ([id, leaves]) => ({
+    id,
+    leafIds: leaves.map((leaf) => leaf.id),
+  }));
+  return { slots: next, wornBundles };
 }

@@ -21,6 +21,7 @@ import { notFound, serverError, created, conflict, successResponse } from '@/lib
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import { withOrigin } from '@/lib/wardrobe/wardrobe-container';
+import { attachWear } from '@/lib/wardrobe/wear-history';
 import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
 import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
@@ -103,9 +104,9 @@ export const GET = createContextParamsHandler<{ id: string }>(
         // Kept grouped so each item can say which group it hangs in; the
         // attributed read resolves id collisions exactly as the flat one does.
         const groups = await resolveGroupMountsForCharacter(id);
-        const wardrobeItems = await repos.wardrobe.findArchetypesInMountsAttributed(
-          groups,
-          includeArchived,
+        const wardrobeItems = await attachWear(
+          await repos.wardrobe.findArchetypesInMountsAttributed(groups, includeArchived),
+          repos,
         );
         logger.debug('[Wardrobe v1] Group-tier wardrobe read', {
           characterId: id,
@@ -117,9 +118,12 @@ export const GET = createContextParamsHandler<{ id: string }>(
         return NextResponse.json({ wardrobeItems });
       }
 
-      const wardrobeItems = withOrigin(
-        await repos.wardrobe.findByCharacterId(id, includeArchived),
-        { scope: 'character', id, name: character.name },
+      const wardrobeItems = await attachWear(
+        withOrigin(
+          await repos.wardrobe.findByCharacterId(id, includeArchived),
+          { scope: 'character', id, name: character.name },
+        ),
+        repos,
       );
       return NextResponse.json({ wardrobeItems });
     } catch (error) {

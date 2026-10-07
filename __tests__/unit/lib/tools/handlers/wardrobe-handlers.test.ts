@@ -129,6 +129,17 @@ describe('wardrobe tool handlers', () => {
           .mockImplementation(async (_chatId: string, _charId: string, slots: unknown) => slots),
         findById: jest.fn(),
       },
+      characters: {
+        findByIdRaw: jest.fn().mockResolvedValue(null),
+      },
+      wardrobeWear: {
+        findSummaries: jest.fn(async (ids: string[]) =>
+          new Map(ids.map((id) => [id, { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null }]))
+        ),
+        findHistory: jest.fn().mockResolvedValue({
+          wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null, wearers: [],
+        }),
+      },
     }
 
     mockGetRepositories.mockReturnValue(repos as any)

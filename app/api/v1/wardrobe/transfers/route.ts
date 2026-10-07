@@ -9,6 +9,12 @@
  *   (outfit), the optional `components` field brings its same-container
  *   components along — all or nothing — with the outfit's `componentItemIds`
  *   rewritten to the components' destination ids when copies mint fresh ones.
+ *
+ * The wear ledger (`wardrobe_wear_stats`) is keyed by item id and is never
+ * written here: a move keeps the id, so the tally follows the garment for
+ * free (the source-side delete goes straight to the store, not through
+ * `cleanupEquippedRefs`, so it does not drop the rows); a copy mints a fresh
+ * id and is a new garment whose ledger starts empty.
  */
 
 import { randomUUID } from 'crypto'

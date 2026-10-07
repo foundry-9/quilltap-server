@@ -2,20 +2,24 @@
  * Character Wardrobe Item Detail API v1
  *
  * GET /api/v1/characters/[id]/wardrobe/[itemId] - Get a wardrobe item
+ * GET /api/v1/characters/[id]/wardrobe/[itemId]?action=wear-history - Who has
+ *   worn it, how often, and the chat it was last worn in
  * PUT /api/v1/characters/[id]/wardrobe/[itemId] - Update a wardrobe item
  * DELETE /api/v1/characters/[id]/wardrobe/[itemId] - Delete a wardrobe item
  */
 
-import { createContextParamsHandler, exists } from '@/lib/api/middleware';
+import { createContextParamsHandler, dispatchAction, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
 import { withOrigin } from '@/lib/wardrobe/wardrobe-container';
+import { buildWearHistoryPayload } from '@/lib/wardrobe/wear-history';
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
+// GET /api/v1/characters/[id]/wardrobe/[itemId]?action=wear-history
 export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
-  async (req, { user, repos }, { id, itemId }) => {
+  async (req, { repos }, { id, itemId }) => {
     try {
       const character = await repos.characters.findById(id);
 
@@ -29,8 +33,24 @@ export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
         return notFound('Wardrobe item');
       }
 
-      const [wardrobeItem] = withOrigin([item], { scope: 'character', id, name: character.name });
-      return successResponse({ wardrobeItem });
+      return await dispatchAction(
+        req,
+        {
+          'wear-history': async () => {
+            const payload = await buildWearHistoryPayload(itemId, repos);
+            logger.debug('[Wardrobe v1] Read wardrobe item wear history', {
+              characterId: id,
+              itemId,
+              wearCount: payload.history.wearCount,
+            });
+            return successResponse(payload);
+          },
+        },
+        async () => {
+          const [wardrobeItem] = withOrigin([item], { scope: 'character', id, name: character.name });
+          return successResponse({ wardrobeItem });
+        },
+      );
     } catch (error) {
       logger.error('[Wardrobe v1] Error fetching wardrobe item', { characterId: id, itemId }, error instanceof Error ? error : undefined);
       return serverError('Failed to fetch wardrobe item');
@@ -94,7 +114,7 @@ export const DELETE = createContextParamsHandler<{ id: string; itemId: string }>
         return notFound('Wardrobe item');
       }
 
-      await cleanupEquippedRefs(repos.chats, itemId, '[Wardrobe v1]', { characterId: id, itemId });
+      await cleanupEquippedRefs(repos, itemId, '[Wardrobe v1]', { characterId: id, itemId });
 
       const success = await repos.wardrobe.delete(itemId, id);
 

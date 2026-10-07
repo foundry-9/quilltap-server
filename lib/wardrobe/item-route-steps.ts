@@ -4,8 +4,9 @@
  *
  *   - PUT: translate the request's optional `archived` boolean into an
  *     `archivedAt` patch via `archivedPatch`;
- *   - DELETE: scrub equipped references to the item from every chat before
- *     the row/file goes, logging (never failing) when that clean-up hiccups.
+ *   - DELETE: scrub equipped references to the item from every chat, and drop
+ *     its wear-ledger rows, before the row/file goes — logging (never failing)
+ *     when either clean-up hiccups.
  *
  * Server-only (logs through the app logger).
  *
@@ -29,23 +30,39 @@ export function applyArchiveFlag(
 }
 
 /**
- * Remove `itemId` from every chat's equipped slots ahead of deleting it.
+ * Remove `itemId` from every chat's equipped slots, and drop its wear-ledger
+ * rows (`wardrobe_wear_stats`), ahead of deleting it.
  * Composite items that still reference the id in `componentItemIds` are left
- * alone on purpose: `expandComposites` tolerates unknown ids. A failure here
- * is logged under `logTag` with `meta` and the delete proceeds regardless.
+ * alone on purpose: `expandComposites` tolerates unknown ids. Likewise a
+ * composite's deletion drops only its own ledger rows, never its components'.
+ * A failure in either step is logged under `logTag` with `meta` and the delete
+ * proceeds regardless.
  */
 export async function cleanupEquippedRefs(
-  chats: { removeEquippedItemFromAllChats(itemId: string): Promise<unknown> },
+  repos: {
+    chats: { removeEquippedItemFromAllChats(itemId: string): Promise<unknown> };
+    wardrobeWear: { deleteByItemIds(itemIds: string[]): Promise<unknown> };
+  },
   itemId: string,
   logTag: string,
   meta: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await chats.removeEquippedItemFromAllChats(itemId);
+    await repos.chats.removeEquippedItemFromAllChats(itemId);
   } catch (cleanupError) {
     logger.warn(`${logTag} Cleanup of equipped references had issues, proceeding with delete`, {
       ...meta,
       cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+    });
+  }
+
+  try {
+    await repos.wardrobeWear.deleteByItemIds([itemId]);
+    logger.debug(`${logTag} Dropped wear-ledger rows for deleted item`, { ...meta, itemId });
+  } catch (ledgerError) {
+    logger.warn(`${logTag} Cleanup of wear-ledger rows had issues, proceeding with delete`, {
+      ...meta,
+      ledgerError: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
     });
   }
 }

@@ -48,6 +48,7 @@ import type {
 import type { WardrobeItem, EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
 import type {
   DocMountPoint,
@@ -266,6 +267,8 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const groupDocMountLinks = await readJsonArrayFileOptional<GroupDocMountLink>(rootPath, 'data/group-doc-mount-links.json', []);
     const groupCharacterMembers = await readJsonArrayFileOptional<GroupCharacterMember>(rootPath, 'data/group-character-members.json', []);
     const textReplacementRules = await readJsonArrayFileOptional<TextReplacementRule>(rootPath, 'data/text-replacement-rules.json', []);
+    // Wear ledger (4.11) — optional, so an older archive just has none.
+    const wardrobeWear = await readJsonArrayFileOptional<WardrobeWearStatsRow>(rootPath, 'data/wardrobe-wear.json', []);
 
     moduleLogger.info('Parsed backup ZIP', {
       version: manifest.version,
@@ -314,6 +317,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
       groupDocMountLinks,
       groupCharacterMembers,
       textReplacementRules,
+      wardrobeWear,
     };
 
     return { data, extractDir, rootFolder };

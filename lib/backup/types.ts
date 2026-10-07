@@ -36,6 +36,7 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { TextReplacementRule } from '@/lib/schemas/text-replacement.types';
+import type { WardrobeWearStatsRow } from '@/lib/schemas/wardrobe-wear.types';
 import type {
   DocMountPoint,
   DocMountFolder,
@@ -239,6 +240,8 @@ export interface BackupManifest {
     groupCharacterMembers?: number;
     /** Number of TextReplacementRule entities (global find→replace rules) */
     textReplacementRules?: number;
+    /** Number of wardrobe wear-ledger rows (`wardrobe_wear_stats`) */
+    wardrobeWear?: number;
   };
 }
 
@@ -407,6 +410,13 @@ export interface BackupData {
    * is already backed up.
    */
   textReplacementRules?: TextReplacementRule[];
+
+  /**
+   * The wardrobe wear ledger (`wardrobe_wear_stats`): one row per item ×
+   * wearer. Global (no userId — single-user per instance), keyed by item id
+   * with no FK, since items are vault files rather than rows.
+   */
+  wardrobeWear?: WardrobeWearStatsRow[];
 }
 
 // ============================================================================
@@ -594,6 +604,9 @@ export interface RestoreSummary {
 
   /** Number of TextReplacementRule entities restored */
   textReplacementRules?: number;
+
+  /** Number of wardrobe wear-ledger rows restored */
+  wardrobeWear?: number;
 
   /**
    * Outcome of the post-restore embedding reconcile. A restore can land a
