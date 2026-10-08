@@ -4,6 +4,22 @@
 
 ### 4.10-dev
 
+#### Daily database optimize on startup
+
+- On the first launch of each local calendar day, startup now runs VACUUM, ANALYZE and
+  `PRAGMA optimize` on the main, LLM-logs and mount-index databases — the same steps as
+  `quilltap db optimize`. New `lib/startup/daily-db-optimize.ts`, called from `instrumentation.ts`
+  as Phase 0.75: after the version guard, before migrations.
+- Each database is backed up first through the existing 24 h-gated physical-backup functions, so
+  on that launch the daily backup is taken before the optimize (and before migrations); the
+  backend's connect-time backup then finds it and skips.
+- The gate is `data/db-optimize-state.json` (per-database local date of the last successful
+  optimize). A failed database is not stamped and retries on the next launch. Failures are logged
+  and never block startup. The main database reuses the migration layer's lock-holding handle and
+  gets a `wal_checkpoint(TRUNCATE)` afterward; the two sidecars are opened and closed for the pass.
+- Loading-screen labels `subsystem:db-optimize:start` / `:complete`. Help:
+  `help/database-protection.md` ("Daily Tidying on Startup").
+
 #### Fix bugs 179, 180 and 181: outfit writes in the job child, LLM-logs cold open, memory embeddings in backups
 
 - Bug 181 (High): a full backup wrote each memory's `Float32Array` embedding through

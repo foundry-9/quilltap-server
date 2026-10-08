@@ -127,6 +127,8 @@ npx quilltap db optimize mount-points
 
 The command refuses to proceed while a Quilltap instance still has the database in its grasp — VACUUM rewrites the entire file, an operation which brooks no concurrent writers. Stop the running instance first (or, in the case of a stale lock left behind by a previous crash, consult `quilltap db --lock-status` and `--lock-clean`).
 
+You will seldom need to, mind you: Quilltap now performs exactly this housekeeping on its own, once a day, as it starts up (see *Daily Tidying on Startup* below). The command remains for the occasion when you would rather not wait until tomorrow.
+
 ### Taking a Snapshot Without Stopping the Server
 
 When you want a frozen copy of the encrypted databases — for an off-host backup, for forensic spelunking, or simply for the comfort of having a known-good moment recorded — `quilltap db backup` will oblige without asking you to close the application:
@@ -241,6 +243,14 @@ Quilltap creates a physical copy of all three database files once per day. The c
 - 1 backup per year is kept indefinitely
 
 Old backups are automatically cleaned up according to this schedule.
+
+### Daily Tidying on Startup
+
+The first time Quilltap starts on any given day, before it does anything else with your data — before even the migrations that bring it up to date with a new version — it gives all three databases the very treatment `quilltap db optimize` would: `VACUUM` to reclaim the space left by deletions, `ANALYZE` and `PRAGMA optimize` to restore the query planner's wits. Each database is backed up first (the daily physical backup described above, taken a little earlier than it otherwise would be), so the tidying always has a fresh copy standing behind it.
+
+Later starts the same day skip the business entirely; the calendar, not the clock, decides, so a launch at a quarter to midnight and another at a quarter past both qualify. Quilltap keeps its note of the matter in `data/db-optimize-state.json`. Delete that file and the next start will tidy again; a database whose tidying failed is simply tried again on the next start, and startup continues regardless.
+
+On a large instance this adds some seconds to the day's first launch — `VACUUM` rewrites each file whole — and the loading screen will say so while it works. If your data directory lives in a cloud-synced folder, note that the rewritten files will be synced afresh each day, much as the daily backups already are.
 
 ### Durable Writes
 

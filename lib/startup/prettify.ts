@@ -26,6 +26,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'subsystem:booting': 'Stoking the boilers',
   'subsystem:locked': 'Awaiting your passphrase',
   'subsystem:unlocking': 'Receiving the passphrase',
+  'subsystem:db-optimize:start': 'Giving the ledgers their morning dusting',
+  'subsystem:db-optimize:complete': 'Ledgers dusted and squared away',
   'subsystem:migrations:start': 'Bringing the records up to date',
   'subsystem:migrations:complete': 'Records brought up to date',
   'subsystem:seeding': 'Setting out the initial furnishings',

@@ -401,6 +401,22 @@ export async function register() {
       }
 
       // ================================================================
+      // PHASE 0.75: Daily backup + optimize (before migrations)
+      // ================================================================
+      // First launch of each local day: back up (24 h gated, as ever), then
+      // VACUUM / ANALYZE / PRAGMA optimize all three databases, exactly as
+      // `quilltap db optimize` does. Never fatal.
+      try {
+        const { runDailyDbOptimize } = await import('./lib/startup/daily-db-optimize');
+        await runDailyDbOptimize();
+      } catch (optimizeErr) {
+        logger.error('Daily database optimize failed — continuing startup', {
+          context: 'instrumentation.register',
+          error: optimizeErr instanceof Error ? optimizeErr.message : String(optimizeErr),
+        });
+      }
+
+      // ================================================================
       // PHASE 1: Run Migrations FIRST - before anything else
       // ================================================================
       // This ensures data compatibility before any API requests
