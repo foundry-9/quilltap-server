@@ -4,6 +4,22 @@
 
 ### 4.10-dev
 
+#### Release checklist 2: regression tests and coverage for 4.10 work
+
+- Bug 139: the All-LLM pause dialog's Continue handler moved out of `SalonView.tsx` into
+  `continueAllLLMRoom` (`app/salon/[id]/hooks/all-llm-pause-actions.ts`) so it can be tested. New test
+  asserts it lifts the pause, awaits the persist, then requests a turn.
+- Removed the unused `handleAllLLMContinue` / `handleAllLLMStop` from `useChatControls`. Continue was
+  an empty no-op, the same shape as bug 139; `SalonView` has always passed its own handlers to the
+  dialog.
+- Bug 178: new test asserts `next.config.js` keeps `pdf-parse` in `serverExternalPackages` and traces
+  `pdf-parse`, `pdfjs-dist` and `@napi-rs/canvas` into the standalone output.
+- New tests for modules added since 4.9.2 that had no coverage: the sync engine (`walk-disk`,
+  `walk-store`, `apply-store`, orchestrator), memory consolidation (job handler, triggers),
+  `fold-other-catchup`, `daily-db-optimize`, the avatar-rolls and subprompts routes,
+  `save-attribution`, the `useConciergeRetry` / `useRegeneration` / `useSummaryActions` hooks and
+  `GroupScenariosCard`.
+
 #### Sync engine reads disk files through its disk adapter
 
 - `bytesFor` in `lib/mount-index/sync/index.ts` read target-directory bytes with a raw `fs` import.

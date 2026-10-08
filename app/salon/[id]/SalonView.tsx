@@ -78,6 +78,7 @@ import { groupToolMessagesIntoAssistants } from './group-tool-messages'
 import { retryUncensoredTurnUrl, type ConciergeRetryHandlers } from './concierge-retry'
 import { toTurnEvents } from './turn-events'
 import { appendMessageOnce } from './hooks/useSSEStreaming'
+import { continueAllLLMRoom } from './hooks/all-llm-pause-actions'
 import { buildRenderItems } from './announcement-render-items'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
@@ -1452,11 +1453,11 @@ export function SalonView({ chatId }: SalonViewProps) {
   // turn stopping dead after one reply. Resume first and await the persist: the
   // server reads `isPaused` when the continue-mode turn arrives, and would
   // otherwise grant a single turn and stop again.
-  const handleAllLLMContinue = useCallback(async () => {
-    modals.setAllLLMPauseModalOpen(false)
-    await chatControls.setPauseState(false)
-    await turnManagement.handleContinue()
-  }, [modals, chatControls, turnManagement])
+  const handleAllLLMContinue = useCallback(() => continueAllLLMRoom({
+    closeModal: () => modals.setAllLLMPauseModalOpen(false),
+    setPauseState: chatControls.setPauseState,
+    handleContinue: turnManagement.handleContinue,
+  }), [modals, chatControls, turnManagement])
 
   const handleAllLLMStop = useCallback(() => {
     modals.setAllLLMPauseModalOpen(false)

@@ -567,15 +567,6 @@ export function useChatControls({
     }, 400)
   }, [chatId, fetchChat])
 
-  // All-LLM pause handlers
-  const handleAllLLMContinue = useCallback(() => {
-    // The caller should close the modal
-  }, [])
-
-  const handleAllLLMStop = useCallback(() => {
-    setPauseState(true)
-  }, [setPauseState])
-
   return {
     documentEditingMode,
     agentModeEnabled,
@@ -608,7 +599,5 @@ export function useChatControls({
     handleSubpromptsChange,
     handleParticipantSettingsChange,
     handleTalkativenessChange,
-    handleAllLLMContinue,
-    handleAllLLMStop,
   }
 }
