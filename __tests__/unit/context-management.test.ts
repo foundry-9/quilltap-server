@@ -45,6 +45,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
+  markMemoriesAccessed: jest.fn(),
 }))
 
 const mockedSearchMemories = searchMemoriesSemantic as jest.MockedFunction<typeof searchMemoriesSemantic>

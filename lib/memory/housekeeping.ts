@@ -412,10 +412,39 @@ export async function runHousekeeping(
     }
   }
 
+  let mergesApplied = memoriesToMerge
+  let patchedSurvivors = new Set<string>()
+
+  if (!opts.dryRun && memoriesToMerge.length > 0) {
+    // Fold each merged-away row into its survivor BEFORE anything is deleted,
+    // so a failed fold costs nothing: its losers simply stay. Survivors that
+    // were patched already carry links without the doomed ids, so the delete
+    // below skips scrubbing them — in the job child that scrub is computed
+    // from the pre-merge row and would otherwise overwrite the union.
+    const fold = await foldMergedMemories(memories, memoriesToMerge, deleteSet, opts)
+    patchedSurvivors = fold.patchedSurvivors
+    if (fold.keptLoserIds.size > 0) {
+      for (const id of fold.keptLoserIds) deleteSet.delete(id)
+      mergesApplied = memoriesToMerge.filter(m => !fold.keptLoserIds.has(m.sourceId))
+      for (const detail of result.details) {
+        if (detail.action === 'merged' && fold.keptLoserIds.has(detail.memoryId)) {
+          detail.action = 'kept'
+          detail.reason = 'Merge into survivor failed; kept rather than lose its details'
+        }
+      }
+      logger.warn('[Housekeeping] Some merges failed; their memories were kept', {
+        characterId,
+        kept: fold.keptLoserIds.size,
+      })
+    }
+  }
+
   const deletedIds = Array.from(deleteSet)
 
   if (!opts.dryRun && deletedIds.length > 0) {
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds)
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds, {
+      skipScrubIds: patchedSurvivors,
+    })
 
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
@@ -427,13 +456,6 @@ export async function runHousekeeping(
       logger.warn(`[Housekeeping] Failed to clean up vector store`, { characterId, error: String(error) })
     }
 
-    // Fold each merged-away row into its survivor — AFTER the delete, so the
-    // neighbour scrub can't overwrite the survivor's unioned links (see
-    // memory-merge.ts).
-    if (memoriesToMerge.length > 0) {
-      await foldMergedMemories(memories, memoriesToMerge, deleteSet, opts)
-    }
-
     // The corpus just changed under every cached archive for this character.
     // In the parent (the Memories API path) this drops the cache directly; in
     // the job child it is a no-op on the child's own map, and the parent's
@@ -441,9 +463,9 @@ export async function runHousekeeping(
     invalidateFrozenArchive(characterId)
 
     result.deleted = deletedCount
-    result.merged = memoriesToMerge.length
+    result.merged = mergesApplied.length
     result.deletedIds = deletedIds
-    result.mergedIds = memoriesToMerge.map(m => m.sourceId)
+    result.mergedIds = mergesApplied.map(m => m.sourceId)
   } else if (opts.dryRun) {
     result.deleted = deletedIds.length
     result.merged = memoriesToMerge.length
@@ -469,7 +491,7 @@ async function foldMergedMemories(
   merges: { sourceId: string; targetId: string }[],
   deleteSet: Set<string>,
   opts: { userId?: string; embeddingProfileId?: string },
-): Promise<void> {
+): Promise<{ patchedSurvivors: Set<string>; keptLoserIds: Set<string> }> {
   const byId = new Map(memories.map(m => [m.id, m]))
   const targetOf = new Map(merges.map(m => [m.sourceId, m.targetId]))
 
@@ -493,6 +515,8 @@ async function foldMergedMemories(
     groups.set(survivorId, list)
   }
 
+  const patchedSurvivors = new Set<string>()
+  const keptLoserIds = new Set<string>()
   let folded = 0
   let skipped = 0
   for (const [survivorId, losers] of groups) {
@@ -501,19 +525,27 @@ async function foldMergedMemories(
       skipped++
       continue
     }
+    let applied: Memory | null = null
     try {
       const plan = planMemoryMerge(survivor, losers, deleteSet)
-      await applyMemoryMerge(survivor, plan, {
+      applied = await applyMemoryMerge(survivor, plan, {
         userId: opts.userId,
         embeddingProfileId: opts.embeddingProfileId,
       })
-      folded++
     } catch (error) {
       logger.warn('[Housekeeping] Failed to fold merged memories into survivor', {
         survivorId,
         losers: losers.length,
         error: error instanceof Error ? error.message : String(error),
       })
+    }
+    if (applied) {
+      patchedSurvivors.add(survivorId)
+      folded++
+    } else {
+      // Keep the losers: deleting them now would discard what the survivor
+      // failed to absorb.
+      for (const loser of losers) keptLoserIds.add(loser.id)
     }
   }
 
@@ -522,7 +554,9 @@ async function foldMergedMemories(
     survivors: groups.size,
     folded,
     skippedDeletedSurvivor: skipped,
+    keptAfterFailedFold: keptLoserIds.size,
   })
+  return { patchedSurvivors, keptLoserIds }
 }
 
 /**

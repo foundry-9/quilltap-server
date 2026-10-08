@@ -45,7 +45,9 @@ Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
   (`memory-injector.ts`): head tokens `clamp(15% of budget, 200, 1200)`, head entries
   `clamp(round(tokens/40), 5, 15)`, retrospective turns 2× (floored at the old 600 / 10, bounded by
   the budget), archive size `clamp(round((budget − head)/60), 25, 60)` from the ordinary split so it
-  stays stable across turns. The proactive pre-search now pulls 60 candidates and keeps 45.
+  stays stable across turns. The proactive pre-search now pulls and keeps
+  `PROACTIVE_RECALL_POOL_SIZE` (90 = the largest archive plus the largest retrospective head), so
+  the context builder's archive-overlap filter cannot leave the head underfilled.
   `recall-replay` takes an optional `memoryBudget` to compare the sized head against the old fixed one.
 - F8: `deleteMemoriesWithUnlinkBatch` counted `bulkDelete`'s return, which is `undefined` for a
   buffered write in the job child, so child sweeps logged `deleted: null` (NaN) and the
@@ -58,7 +60,10 @@ Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
   `lib/memory/memory-merge.ts` (`planMemoryMerge` / `applyMemoryMerge`) folds each loser into its
   survivor: capped `[+]` details, summed `reinforcementCount`, unioned `relatedMemoryIds` (minus the
   deleted set), earliest `occurredAt`, recomputed `reinforcedImportance`, re-embed on content change.
-  Losers are deleted first so the neighbour scrub cannot overwrite the survivor's links.
+  The survivor is patched before anything is deleted, and only the losers whose fold succeeded
+  are deleted; a failed fold keeps its losers. `deleteMemoriesWithUnlinkBatch` takes a new
+  `skipScrubIds` option so the patched survivors are not re-scrubbed (in the job child the scrub
+  is computed from the pre-merge row and would overwrite the union).
 - Reinforcement and merges no longer treat a buffered child write (`undefined`) as "update failed":
   new `patchMemory` returns the locally patched row, so a reinforcement with novel details in the
   extraction job now re-embeds. Re-embedding is factored into `reembedMemory`.

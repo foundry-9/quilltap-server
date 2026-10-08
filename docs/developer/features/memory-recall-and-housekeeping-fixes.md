@@ -222,7 +222,9 @@ What shipped, and where it differs from or sharpens the text above.
 - **F7** — `sizeMemoryPools` (`memory-injector.ts`). Retrospective head = max(old retro floor,
   2× ordinary), so no budget gets a smaller retro head than before. Archive size comes from the
   ordinary split even on retrospective turns, so membership is stable within a generation. The
-  proactive pre-search pulls `DYNAMIC_HEAD_MAX_SIZE × 4` and keeps `× 3`. **Not yet validated** on
+  proactive pre-search pulls and keeps `PROACTIVE_RECALL_POOL_SIZE` (archive max 60 + retro head
+  max 30 = 90): the context builder filters archive overlap out of that list and does not search
+  again, so the pool must survive a full overlap. **Not yet validated** on
   Friday probes: run `quilltap recall-replay <chatId> --memory-budget <tokens>` on the usual probe
   turns and compare `oldHeadSize`/`newHeadSize` selections and token spend.
 - **F8** — (1) `deleteMemoriesWithUnlinkBatch` counts resolved ids when `bulkDelete` returns a
@@ -235,9 +237,14 @@ What shipped, and where it differs from or sharpens the text above.
   are both in the job child, and the host keeps a single child, so the map is shared; no move to the
   parent was needed. Documented in `housekeeping-outcome-cache.ts`.
 - **F9** — `lib/memory/memory-merge.ts` (`planMemoryMerge` pure, `applyMemoryMerge` writes and
-  re-embeds). Both housekeeping pass 2 and `deduplicateCharacterMemories` call it. Losers are
-  deleted before survivors are patched: in the child the delete's neighbour scrub is computed from
-  the pre-merge row, so patching first would let the scrub overwrite the unioned links.
+  re-embeds). Both housekeeping pass 2 and `deduplicateCharacterMemories` call it. Survivors
+  are patched first and only the losers of a successful fold are deleted (a failed fold keeps its
+  losers — nothing is discarded unabsorbed). The delete gets the patched survivors as
+  `skipScrubIds`: in the child the neighbour scrub is computed from the pre-merge row and would
+  otherwise overwrite the unioned links.
+- **Not done: atomic reinforcement increments.** F1 (like the existing REINFORCE path) writes an
+  absolute count computed from the gate's snapshot, so two extraction jobs absorbing the same row
+  at the same moment can lose one observation. Left as is pending a decision; see PR 83.
   `lastReinforcedAt` takes the latest of the group. Test:
   `__tests__/unit/lib/memory/housekeeping-merge-fold.test.ts`.
 

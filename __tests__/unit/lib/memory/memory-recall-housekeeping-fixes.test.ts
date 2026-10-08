@@ -280,6 +280,25 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
     expect(Number.isFinite(deleted)).toBe(true)
   })
 
+  it('leaves skipScrubIds neighbours alone (a merge survivor already rewrote its links)', async () => {
+    dbMock.rawQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('relatedMemoryIds IS NOT NULL')) {
+        return [
+          { id: 'survivor', characterId: 'char-1', relatedMemoryIds: '["a","n1"]' },
+          { id: 'other', characterId: 'char-1', relatedMemoryIds: '["a"]' },
+        ]
+      }
+      return [{ id: 'a', characterId: 'char-1' }]
+    })
+    const bulkDelete = jest.fn(async () => 1)
+    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete } })
+
+    await gate.deleteMemoriesWithUnlinkBatch(['a'], { skipScrubIds: new Set(['survivor']) })
+
+    const scrubbed = updateForCharacter.mock.calls.map(c => c[1])
+    expect(scrubbed).toEqual(['other'])
+  })
+
   it('trusts the repository count in the parent', async () => {
     setupBatch(1)
     const deleted = await gate.deleteMemoriesWithUnlinkBatch(['a', 'b', 'c'])

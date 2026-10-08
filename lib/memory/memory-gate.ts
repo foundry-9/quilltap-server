@@ -683,7 +683,18 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
  * Returns the number of memory rows actually deleted (the LIKE-filtered
  * neighbour count is logged, not returned).
  */
-export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promise<number> {
+export async function deleteMemoriesWithUnlinkBatch(
+  memoryIds: string[],
+  options: {
+    /**
+     * Neighbours whose links the caller has ALREADY rewritten without the
+     * doomed ids (a merge survivor). Skipping them keeps this scrub — which in
+     * the job child is computed from the pre-write row — from overwriting the
+     * caller's fresher list.
+     */
+    skipScrubIds?: ReadonlySet<string>
+  } = {},
+): Promise<number> {
   if (memoryIds.length === 0) return 0
 
   const startedAt = Date.now()
@@ -702,6 +713,7 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
   let neighboursTouched = 0
   for (const candidate of candidates) {
     if (doomedSet.has(candidate.id)) continue
+    if (options.skipScrubIds?.has(candidate.id)) continue
     const current = parseRelatedIds(candidate.relatedMemoryIds)
     if (current.length === 0) continue
     const filtered = current.filter(id => !doomedSet.has(id))

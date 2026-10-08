@@ -3,8 +3,9 @@
  * (memory-recall-and-housekeeping-fixes F9), and the sweep invalidates the
  * character's frozen archives (F5).
  *
- * - losers are deleted BEFORE the survivor is patched, so the neighbour scrub
- *   inside the delete can't overwrite the survivor's unioned links;
+ * - the survivor is patched BEFORE anything is deleted, and the delete is told
+ *   to skip scrubbing it (its links already exclude the doomed ids);
+ * - a fold that fails keeps its losers instead of deleting them;
  * - all of a survivor's losers fold in through one merge;
  * - the doomed set is excluded from the survivor's links.
  */
@@ -12,14 +13,16 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals'
 
 const order: string[] = []
+const deleteCalls: Array<{ ids: string[]; skip: string[] }> = []
 
 jest.mock('@/lib/memory/memory-gate', () => {
   const actual = jest.requireActual('@/lib/memory/memory-gate') as typeof import('@/lib/memory/memory-gate')
   return {
     __esModule: true,
     occasionsAreDistinct: actual.occasionsAreDistinct,
-    deleteMemoriesWithUnlinkBatch: jest.fn(async (ids: string[]) => {
+    deleteMemoriesWithUnlinkBatch: jest.fn(async (ids: string[], options?: { skipScrubIds?: Set<string> }) => {
       order.push('delete')
+      deleteCalls.push({ ids, skip: Array.from(options?.skipScrubIds ?? []) })
       return ids.length
     }),
   }
@@ -78,6 +81,7 @@ describe('housekeeping — merge fold', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     order.length = 0
+    deleteCalls.length = 0
 
     const memories = [makeMemory('a', 0.9), makeMemory('b', 0.8), makeMemory('c', 0.7)]
     const vector = (id: string) => ({ id, embedding: new Float32Array([1, 0]) })
@@ -119,7 +123,7 @@ describe('housekeeping — merge fold', () => {
     })
   })
 
-  it('deletes first, then folds every loser into its survivor in one merge', async () => {
+  it('folds every loser into its survivor first, then deletes without re-scrubbing it', async () => {
     const result = await runHousekeeping('char-1', {
       userId: 'user-1',
       mergeSimilar: true,
@@ -128,7 +132,9 @@ describe('housekeeping — merge fold', () => {
     })
 
     expect(result.merged).toBe(2)
-    expect(order).toEqual(['delete', 'merge'])
+    expect(order).toEqual(['merge', 'delete'])
+    expect(deleteCalls[0].ids.sort()).toEqual(['b', 'c'])
+    expect(deleteCalls[0].skip).toEqual(['a'])
     expect(planMemoryMerge).toHaveBeenCalledTimes(1)
     const [survivor, losers, exclude] = planMemoryMerge.mock.calls[0] as [Memory, Memory[], Iterable<string>]
     expect(survivor.id).toBe('a')
@@ -136,6 +142,26 @@ describe('housekeeping — merge fold', () => {
     expect(new Set(exclude)).toEqual(new Set(['b', 'c']))
     expect(applyMemoryMerge).toHaveBeenCalledWith(survivor, expect.anything(), { userId: 'user-1', embeddingProfileId: undefined })
     expect(invalidateFrozenArchive).toHaveBeenCalledWith('char-1')
+  })
+
+  it('keeps the losers when the fold into their survivor fails', async () => {
+    applyMemoryMerge.mockImplementationOnce(async () => {
+      order.push('merge')
+      return null
+    })
+
+    const result = await runHousekeeping('char-1', {
+      userId: 'user-1',
+      mergeSimilar: true,
+      mergeThreshold: 0.9,
+      maxMemories: 1000,
+    })
+
+    expect(result.merged).toBe(0)
+    expect(result.deleted).toBe(0)
+    expect(result.deletedIds).toEqual([])
+    expect(deleteCalls).toHaveLength(0)
+    expect(result.details.filter(d => d.action === 'merged')).toHaveLength(0)
   })
 
   it('a dry run merges nothing and leaves the archive cache alone', async () => {

@@ -15,12 +15,13 @@
  * - `reinforcedImportance` is recomputed from the survivor's base importance
  * - the survivor is re-embedded when its content changed
  *
- * Order matters: callers delete the losers (through
- * `deleteMemoriesWithUnlinkBatch`) BEFORE applying the merge. The delete
- * scrubs doomed ids from every neighbour's `relatedMemoryIds`, including the
- * survivor's; in the job child that scrub is computed from the pre-merge row,
- * so applying the merge afterwards is what keeps the union from being
- * overwritten by the scrub.
+ * Order matters: callers apply the merge BEFORE deleting the losers, and
+ * delete only the losers whose fold succeeded — a failed fold keeps its
+ * losers rather than discarding what the survivor never absorbed. The delete
+ * (`deleteMemoriesWithUnlinkBatch`) is passed the patched survivors as
+ * `skipScrubIds`: their links already exclude every doomed id, and in the job
+ * child the scrub is computed from the pre-merge row, so letting it rewrite a
+ * survivor would overwrite the union.
  */
 
 import type { Memory } from '@/lib/schemas/types'

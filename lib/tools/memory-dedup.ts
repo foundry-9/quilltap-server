@@ -147,9 +147,10 @@ function scoreMemory(memory: Memory): number {
  * 4. Cluster via Union-Find at threshold
  * 5. Score and select survivors from each multi-member cluster
  * 6. Preview what each survivor would absorb (shared merge, memory-merge.ts)
- * 7. If not dryRun: bulk-delete discards, clean vector store, then fold each
- *    cluster into its survivor (capped [+] footnotes, summed reinforcement,
- *    unioned links, earliest occurredAt, re-embed on content change)
+ * 7. If not dryRun: fold each cluster into its survivor (capped [+]
+ *    footnotes, summed reinforcement, unioned links, earliest occurredAt,
+ *    re-embed on content change), then bulk-delete the discards of every fold
+ *    that succeeded and clean the vector store
  * 8. Invalidate the character's frozen memory archives
  * 9. Return CharacterDedupResult
  */
@@ -285,26 +286,62 @@ export async function deduplicateCharacterMemories(
     }
   }
 
-  const removedCount = allRemoveIds.length
-  const finalCount = originalCount - removedCount
+  let removeIds = allRemoveIds
 
   // Apply changes if not dry run
   if (!dryRun && allRemoveIds.length > 0) {
+    // Fold each cluster's discards into its survivor FIRST: details,
+    // reinforcement, links, earliest occurredAt; re-embedded when the content
+    // changed. A cluster whose fold fails keeps its discards rather than
+    // deleting what the survivor never absorbed.
+    const removeSet = new Set(allRemoveIds)
+    const patchedSurvivors = new Set<string>()
+    const keptIds = new Set<string>()
+    for (const { survivor, losers } of allMerges) {
+      let applied = null
+      try {
+        const plan = planMemoryMerge(survivor, losers, removeSet)
+        applied = await applyMemoryMerge(survivor, plan, { userId })
+      } catch (error) {
+        logger.warn('[MemoryDedup] Failed to fold discards into survivor', {
+          context: 'memory-dedup.deduplicateCharacterMemories',
+          characterId,
+          survivorId: survivor.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      if (applied) {
+        patchedSurvivors.add(survivor.id)
+      } else {
+        for (const loser of losers) keptIds.add(loser.id)
+      }
+    }
+    if (keptIds.size > 0) {
+      removeIds = allRemoveIds.filter(id => !keptIds.has(id))
+      logger.warn('[MemoryDedup] Some folds failed; their discards were kept', {
+        context: 'memory-dedup.deduplicateCharacterMemories',
+        characterId,
+        kept: keptIds.size,
+      })
+    }
+
     // Bulk delete discarded memories through the chokepoint so neighbours'
-    // relatedMemoryIds get scrubbed atomically. Deleted BEFORE the survivors
-    // are updated, so the scrub can't overwrite their unioned links.
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(allRemoveIds)
+    // relatedMemoryIds get scrubbed. Patched survivors already carry links
+    // without the doomed ids, so the scrub leaves them alone.
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds, {
+      skipScrubIds: patchedSurvivors,
+    })
     logger.info('[MemoryDedup] Bulk deleted memories', {
       context: 'memory-dedup.deduplicateCharacterMemories',
       characterId,
-      requested: allRemoveIds.length,
+      requested: removeIds.length,
       deleted: deletedCount,
     })
 
     // Clean up vector store
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
-      for (const id of allRemoveIds) {
+      for (const id of removeIds) {
         await vectorStore.removeVector(id)
       }
       await vectorStore.save()
@@ -316,25 +353,11 @@ export async function deduplicateCharacterMemories(
       })
     }
 
-    // Fold each cluster's discards into its survivor: details, reinforcement,
-    // links, earliest occurredAt; re-embedded when the content changed.
-    const removeSet = new Set(allRemoveIds)
-    for (const { survivor, losers } of allMerges) {
-      try {
-        const plan = planMemoryMerge(survivor, losers, removeSet)
-        await applyMemoryMerge(survivor, plan, { userId })
-      } catch (error) {
-        logger.warn('[MemoryDedup] Failed to fold discards into survivor', {
-          context: 'memory-dedup.deduplicateCharacterMemories',
-          characterId,
-          survivorId: survivor.id,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    }
-
     invalidateFrozenArchive(characterId)
   }
+
+  const removedCount = removeIds.length
+  const finalCount = originalCount - removedCount
 
   return {
     characterId,
