@@ -1501,6 +1501,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         // Assemble the full per-turn recall context — the same assembly the
         // proactive path uses (see lib/memory/recall-tags.ts) — so the dynamic
         // head reads the targeting tags back identically.
+        // Their names too: R4's entity anchors skip a name that merely names
+        // someone in the room (the participant boost already covers them).
+        const presentParticipantNames = [character.name, ...[...(participantCharacters?.values() ?? [])].map(c => c.name)]
+          .filter((name): name is string => typeof name === 'string' && name.length > 0)
         const fallbackRetro = turnRecallSignals?.retrospective === true
         const recallContext = buildTurnRecallContext({
           chat,
@@ -1509,6 +1513,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           turnTemporal,
           turnRetrospective: fallbackRetro,
           presentAboutCharacterIds,
+          presentParticipantNames,
           nowMs: Date.now(),
         })
         // Retrospective multi-probe (mirrors the proactive path).

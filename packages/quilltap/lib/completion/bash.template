@@ -76,7 +76,7 @@ _quilltap_complete() {
   local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
   local vf_memory_diff=" --concurrency --out "
-  local vf_recall_replay=" --turn --char --limit --memory-budget --port "
+  local vf_recall_replay=" --turn --char --limit --memory-budget --tuning --tuning-file --signals-from --port "
   local vf_anchor_probe=" --limit --port "
   local vf_file_verify=" --stall-ms "
 
@@ -335,7 +335,7 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
       ;;
     recall-replay)
-      local rr_flags="--turn --char --limit --memory-budget --port --json --help"
+      local rr_flags="--turn --char --limit --memory-budget --tuning --tuning-file --signals-from --as-of --port --json --help"
       COMPREPLY=($(compgen -W "$rr_flags" -- "$cur"))
       ;;
     anchor-probe)

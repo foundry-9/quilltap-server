@@ -1,11 +1,13 @@
 # Recall Multiplier Retuning — Let Relevance Lead
 
-**Status:** Proposed — spec only, no code yet
+**Status:** Implemented (2026-10-08) — R1, R2, R3, R4 and R7 in code; R5 pinned by test; R6 built but off. See [Implementation notes](#implementation-notes)
 **Owner:** Charlie
 **Drafted:** 2026-10-08
 **Follows:** [memory-recall-and-housekeeping-fixes.md](./memory-recall-and-housekeeping-fixes.md)
 ("Not in scope: retuning `RECALL_MULTIPLIERS` — do it with the replay harness after F4–F7")
 **Related:** [memory-consolidation-and-tiers.md](./memory-consolidation-and-tiers.md)
+**Validation runbook:** [recall-probe-set-runbook.md](./recall-probe-set-runbook.md)
+(the probe set, baseline, R7 and sweep, step by step, with a progress tracker)
 
 The per-turn recall ranking is a relevance blend multiplied by stacked targeting
 boosts. On Friday the boosts now decide what gets whispered, and relevance
@@ -239,3 +241,58 @@ than the default table of 25, so the table could not show where the head ended
 Recall Quietly Does") where it describes the fresh and present boosts; extend the
 `recall-tags` and `recall-replay` unit tests for R1–R7; regenerate nothing — no
 schema change.
+
+## Implementation notes
+
+Chosen on the Friday probe set; the full record (gold, baseline, every
+candidate, diagnosis) is the tracker in
+[recall-probe-set-runbook.md](./recall-probe-set-runbook.md#tracker).
+
+**Shipped defaults** (`RECALL_TUNING_DEFAULTS` and `RECALL_MULTIPLIERS` in
+`lib/memory/recall-tags.ts`; `DEFAULT_RECALL_TUNING` in
+`lib/memory/recall-tuning.ts` mirrors them):
+
+| Knob | Value |
+|---|---|
+| R1 gate | `abs` 0.45, `margin` 0.15, `ramp` 0.10 (neural embeddings; **off** for `BUILTIN` / TF-IDF until its scale is derived) |
+| R2 boost cap | 1.4 |
+| R3 fresh | 1.3 (24 h) / 1.15 (48 h) |
+| R4 anchors | `specificAnchors` on: present names dropped, rarest first, `anchorMinHits` 1 |
+| R6 background reservation | 0 (off) — no effect on any probe run |
+| Event-time gate bypasses | off |
+
+**Winning row (`cap14`)** against the pinned as-of `t0`, new path:
+
+| | A | B | C | F1 | F2 | M | O2 | O3 | O4 | Σ gold@head | Σ anti@head | Σ low@head |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `t0` | 1/5 | 0/6 | 3/6 | 0/6 | 3/4 | 2/5 | 2/5 | 0/5 | 0/5 | 11/47 | 5 | 71 |
+| `cap14` | 2/5 | 3/6 | 5/6 | 0/6 | 1/4 | 1/5 | 1/5 | 0/5 | 1/5 | 14/47 | 1 | 1 |
+
+**Accepted with a known regression.** No candidate met §3's "no turn loses a
+gold memory" (the runbook's criterion 2): every tuning that clears A and B
+loses one gold on F2, M and O2, where low-cosine cross-chat memories (0.32–0.45)
+had reached the head on the same stacked boosts the retuning removes. F2's
+fresh target also drops out of its head. Options tried: fresh outside the gate,
+both event-time boosts outside the gate, and fixed R4 anchor selection. None
+removed the regression without giving back A/B. Charlie chose `cap14`
+(2026-10-08).
+
+**Implementation:**
+- R1/R2 live in `combineRecallMultipliers`, which now takes the candidate's
+  relevance (raw cosine, and the pool's best).
+- `searchMemoriesSemantic` gates related-expansion neighbours on their own
+  cosine.
+- R4 is `selectSpecificAnchors`. Both live paths pass
+  `presentParticipantNames`: the dynamic head and proactive recall via the
+  orchestrator.
+- The pre-retuning ranking is reachable as a replay tuning:
+  `{"boostGateAbs":0,"boostGateMargin":0,"boostCap":4,"multipliers":{"freshEvent24h":1.6,"freshEvent48h":1.35},"specificAnchors":false}`.
+  With that tuning the probe set reproduces `t0`'s new-path scores exactly,
+  and with no tuning it reproduces `cap14`'s.
+
+**Left open:** the TF-IDF gate scale (`searchMemoriesSemantic` turns the gate
+off for `BUILTIN` embeddings; the cap, fresh values and R4 still apply), and
+the coverage gaps the probe
+set exposed: O3 and F1 have gold no tuning reaches (not in the top 40), and
+two "forgot" turns had no memory to find.
+

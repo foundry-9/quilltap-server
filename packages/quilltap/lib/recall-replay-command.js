@@ -33,13 +33,30 @@ Options:
       --turn <number>        1-based interchange to replay at (default: last)
       --char <characterId>   Character whose memories are searched
                              (default: first LLM-controlled participant)
-      --limit <number>       Candidate rows per path (default: 25, max: 100)
+      --limit <number>       Candidate rows per path (default: the larger of 25
+                             and the new path's head size + 10; max: 100)
       --memory-budget <tokens>
                              Memory token budget (positive integer). The new
                              path's selected rows then follow the budget-sized
                              dynamic head (the head scales with the model's
                              memory budget); the old path keeps the historical
                              fixed 5-entry head.
+      --tuning '<json>'      Retuning constants for the NEW path only, e.g.
+                             '{"boostGateAbs":0.45,"boostGateMargin":0.15,
+                             "boostGateRamp":0.1,"boostCap":1.6}'. Keys:
+                             boostGateAbs, boostGateMargin, boostGateRamp,
+                             boostCap, freshBypassesGate, windowBypassesGate,
+                             multipliers
+                             {RECALL_MULTIPLIERS key:
+                             value}, specificAnchors, anchorMinHits,
+                             anchorOrder, backgroundReserve.
+                             Unknown keys are rejected.
+      --tuning-file <path>   Read the --tuning JSON from a file
+      --signals-from <path>  Reuse the signals saved in a previous --json
+                             replay of the same chat and turn, instead of a
+                             fresh (non-deterministic) distillation
+      --as-of                Search only memories created before the turn's
+                             opening message (the corpus as it stood then)
       --port <number>        Server port for API calls (default: 3000)
       --json                 Print the raw JSON result instead of tables
   -h, --help                 Show this help
@@ -49,11 +66,17 @@ Examples:
   quilltap recall-replay <chatId> --turn 42
   quilltap recall-replay <chatId> --turn 42 --memory-budget 4000
   quilltap recall-replay <chatId> --turn 42 --json > replay.json
+  quilltap recall-replay <chatId> --turn 42 --signals-from replay.json --as-of \
+    --tuning-file tuning-r1.json
 `);
 }
 
 function parseFlags(args) {
-  const flags = { turn: undefined, char: undefined, limit: undefined, memoryBudget: undefined, port: 3000, json: false, help: false };
+  const flags = {
+    turn: undefined, char: undefined, limit: undefined, memoryBudget: undefined,
+    tuning: undefined, tuningFile: undefined, signalsFrom: undefined, asOf: false,
+    port: 3000, json: false, help: false,
+  };
   const positional = [];
   let i = 0;
   while (i < args.length) {
@@ -89,6 +112,18 @@ function parseFlags(args) {
         flags.memoryBudget = n;
         break;
       }
+      case '--tuning':
+        flags.tuning = args[++i];
+        break;
+      case '--tuning-file':
+        flags.tuningFile = args[++i];
+        break;
+      case '--signals-from':
+        flags.signalsFrom = args[++i];
+        break;
+      case '--as-of':
+        flags.asOf = true;
+        break;
       case '--port': {
         const p = parseInt(args[++i], 10);
         if (isNaN(p) || p < 1 || p > 65535) {
@@ -144,6 +179,60 @@ function printPath(label, rows, headSize) {
   }
 }
 
+function readJson(text, what) {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error(`${RED}Could not parse ${what} as JSON: ${err.message}${RESET}`);
+    process.exit(1);
+  }
+}
+
+function readJsonFile(path, what) {
+  const fs = require('fs');
+  let text;
+  try {
+    text = fs.readFileSync(path, 'utf8');
+  } catch (err) {
+    console.error(`${RED}Could not read ${what} ${path}: ${err.message}${RESET}`);
+    process.exit(1);
+  }
+  return readJson(text, `${what} ${path}`);
+}
+
+/** The tuning object from --tuning or --tuning-file (never both). */
+function loadTuning(flags) {
+  if (flags.tuning !== undefined && flags.tuningFile !== undefined) {
+    console.error('Error: pass --tuning or --tuning-file, not both');
+    process.exit(1);
+  }
+  if (flags.tuning !== undefined) return readJson(flags.tuning, '--tuning');
+  if (flags.tuningFile !== undefined) return readJsonFile(flags.tuningFile, '--tuning-file');
+  return undefined;
+}
+
+/**
+ * The signals saved in a previous --json replay. Refuses a file from another
+ * chat or turn — reusing its signals would replay a different question.
+ */
+function loadSignals(path, chatId, turn) {
+  const saved = readJsonFile(path, '--signals-from');
+  const result = saved.data ?? saved;
+  if (!result.signals) {
+    console.error(`${RED}${path} has no saved signals (its distillation failed); replay without --signals-from${RESET}`);
+    process.exit(1);
+  }
+  if (result.chatId && result.chatId !== chatId) {
+    console.error(`${RED}${path} is a replay of chat ${result.chatId}, not ${chatId}${RESET}`);
+    process.exit(1);
+  }
+  if (turn !== undefined && result.turnIndex !== undefined && result.turnIndex !== turn) {
+    console.error(`${RED}${path} is a replay of turn ${result.turnIndex}, not ${turn}${RESET}`);
+    process.exit(1);
+  }
+  return result.signals;
+}
+
 async function recallReplayCommand(args) {
   const { flags, positional } = parseFlags(args);
 
@@ -163,6 +252,10 @@ async function recallReplayCommand(args) {
   if (flags.char) body.characterId = flags.char;
   if (flags.limit !== undefined) body.limit = flags.limit;
   if (flags.memoryBudget !== undefined) body.memoryBudget = flags.memoryBudget;
+  const tuning = loadTuning(flags);
+  if (tuning !== undefined) body.tuning = tuning;
+  if (flags.signalsFrom !== undefined) body.signals = loadSignals(flags.signalsFrom, chatId, flags.turn);
+  if (flags.asOf) body.asOf = true;
 
   process.stderr.write(`${BOLD}Replaying recall${RESET} for chat ${DIM}${chatId}${RESET} via ${DIM}${url}${RESET}\n`);
 
@@ -188,6 +281,11 @@ async function recallReplayCommand(args) {
   }
   if (!res.ok || payload?.success === false) {
     console.error(`${RED}Replay failed (status ${res.status}): ${payload?.error || payload?.message || 'unknown error'}${RESET}`);
+    if (Array.isArray(payload?.details)) {
+      for (const issue of payload.details) {
+        console.error(`  ${(issue.path || []).join('.') || '(body)'}: ${issue.message}`);
+      }
+    }
     process.exit(1);
   }
 
@@ -210,6 +308,13 @@ async function recallReplayCommand(args) {
   } else {
     console.log(`${BOLD}Signals${RESET}   ${YELLOW}distillation failed — new path ran inert${RESET}`);
   }
+
+  const pinned = result.signalsPinned ? `${CYAN}pinned${RESET}` : `${DIM}fresh distillation${RESET}`;
+  const asOf = result.asOf
+    ? `${CYAN}as of ${result.asOf}${RESET} ${DIM}(${result.excludedAfterAsOf} later memories left out)${RESET}`
+    : `${DIM}whole corpus${RESET}`;
+  console.log(`${BOLD}Harness${RESET}   signals ${pinned} · ${asOf}`);
+  console.log(`${BOLD}Tuning${RESET}    ${result.tuning === 'defaults' || !result.tuning ? `${DIM}defaults${RESET}` : `${YELLOW}${result.tuning}${RESET}`} ${DIM}(new path only)${RESET}`);
 
   printPath('OLD PATH (episodic signals inert)', result.oldPath || [], result.oldHeadSize);
   printPath('NEW PATH (retrospective/window/entities live)', result.newPath || [], result.newHeadSize);

@@ -2,7 +2,12 @@
  * Chats API v1 — recall-replay action (episodic recall overhaul §3).
  *
  * POST /api/v1/chats/[id]?action=recall-replay
- * Body (all optional): { turnIndex?: number, characterId?: string, limit?: number, memoryBudget?: number }
+ * Body (all optional): { turnIndex?: number, characterId?: string, limit?: number, memoryBudget?: number,
+ *   tuning?: RecallTuningInput, signals?: <a previous replay's `signals`>, asOf?: boolean }
+ *
+ * `tuning` applies retuning constants to the new path only; `signals` skips the
+ * cheap-LLM distillation and reuses saved signals so runs are comparable;
+ * `asOf` searches only memories created before the turn's opening message.
  *
  * Reconstructs the per-turn recall distillation for the given turn and runs
  * the memory search twice — episodic signals inert (pre-overhaul path) vs.
@@ -13,8 +18,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, successResponse, errorResponse } from '@/lib/api/responses';
+import { badRequest, successResponse, errorResponse, validationError } from '@/lib/api/responses';
 import { runRecallReplay } from '@/lib/memory/recall-replay';
+import { RecallReplaySignalsSchema, RecallTuningInputSchema } from '@/lib/memory/recall-tuning';
+import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
@@ -49,6 +56,26 @@ export async function handleRecallReplay(
     typeof body.memoryBudget === 'number' && Number.isFinite(body.memoryBudget) && body.memoryBudget > 0
       ? Math.floor(body.memoryBudget)
       : undefined;
+
+  const tuningParse = RecallTuningInputSchema.optional().safeParse(body.tuning);
+  if (!tuningParse.success) {
+    return validationError(tuningParse.error);
+  }
+  const signalsParse = RecallReplaySignalsSchema.optional().safeParse(body.signals);
+  if (!signalsParse.success) {
+    return validationError(signalsParse.error);
+  }
+  if (body.asOf !== undefined && typeof body.asOf !== 'boolean') {
+    return badRequest('asOf must be a boolean');
+  }
+  const asOf = body.asOf === true;
+  logger.debug('[Chats v1] Recall replay requested', {
+    chatId,
+    turnIndex,
+    tuning: tuningParse.data ?? null,
+    signalsPinned: !!signalsParse.data,
+    asOf,
+  });
 
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
   if (!chatSettings) {
@@ -89,6 +116,9 @@ export async function handleRecallReplay(
       characterId,
       limit,
       memoryBudget,
+      tuning: tuningParse.data,
+      signals: signalsParse.data as MemorySearchExtraction | undefined,
+      asOf,
     });
     return successResponse(result);
   } catch (error) {

@@ -4,6 +4,70 @@
 
 ### 4.10-dev
 
+#### Recall multiplier retuning: chosen values in code
+
+- New defaults for per-turn memory recall (`RECALL_TUNING_DEFAULTS` in `lib/memory/recall-tags.ts`),
+  chosen on the Friday probe set (the `cap14` candidate):
+  - Boosts now scale with relevance. They apply in full at or above `max(0.45, bestCosine − 0.15)`
+    and fade to nothing 0.10 below that; penalties are unchanged (R1).
+  - The product of boosts is capped at 1.4 (R2).
+  - The fresh-event boost drops to ×1.3 (24 h) / ×1.15 (48 h) (R3).
+  - Entity anchors are chosen by rarity, skipping the names of characters in the room (R4).
+  - R6's background reservation and the event-time gate bypasses ship off.
+- The dynamic head and proactive recall pass the present characters' names (`presentParticipantNames`)
+  for R4.
+- With TF-IDF (`BUILTIN`) embeddings the relevance gate stays off; its constants are on the neural
+  cosine scale.
+- On the probe set the new path's gold@head goes from 11/47 to 14/47, off-topic rows in the head from
+  5 to 1, and head rows below cosine 0.40 from 71 to 1. Known regression, accepted: three probe turns
+  (F2, M, O2) each lose one low-cosine cross-chat memory that the stacked boosts used to carry.
+- The pre-retuning ranking is reproducible in `recall-replay` as a tuning (see the retuning spec's
+  implementation notes). Tests pinned to the old products now expect the cap.
+
+#### Recall replay: tuning overrides, pinned signals, as-of corpus (R7)
+
+- `POST /api/v1/chats/[id]?action=recall-replay` and `quilltap recall-replay` take three new inputs.
+  `tuning` (`--tuning` / `--tuning-file`) applies retuning constants to the new path only: the R1
+  relevance gate on boosts, the R2 boost cap, `RECALL_MULTIPLIERS` overrides, R4 specific entity
+  anchors, and the R6 background reservation. It is validated by a strict Zod schema in
+  `lib/memory/recall-tuning.ts`. `signals` (`--signals-from <replay.json>`) reuses a saved
+  distillation instead of a fresh cheap-LLM call. `asOf` (`--as-of`) searches only memories created
+  before the turn's opening message and decays weights against the turn's clock.
+- R1–R6 are built behind defaults that equal the old behavior (gate off, cap 4, fresh 1.6/1.35,
+  first three entity anchors, no reservation). Recall without a tuning object is unchanged; a test
+  pins this.
+- The replay memoizes embeddings by text for the server's lifetime: the provider's probe vectors
+  drifted about 1e-3 in cosine between calls, enough to move a gold memory in or out of a head.
+  With pinned signals, `asOf` and the memo, repeat runs of the probe set are byte-identical.
+- The default candidate `limit` is now the larger of 25 and the new head size + 10.
+- `searchMemoriesSemantic` gains `excludeMemoryIds` (applied inside the vector scan, entity hits and
+  related expansion), `headSize`, `weightClockMs` and `embeddingMemo`. Live recall passes none of
+  them.
+- R5: every sub-floor row in the baseline came from related-memory expansion, which skips the
+  cosine floor by design; probes and entity hits already respected it. A test now pins that.
+
+#### Runbook: recall probe set
+
+- New `docs/developer/features/recall-probe-set-runbook.md`: step-by-step spec for validating the
+  recall multiplier retuning on a local machine. Covers choosing 8–12 probe turns with gold
+  memories approved before any replay, the baseline `recall-replay` runs, building R7, a fixed
+  sweep of candidate tunings with acceptance criteria, and moving the winner into code. Has a
+  progress tracker so work can resume across sessions. Linked from the retuning spec.
+- Probe set chosen and approved (9 turns: A/B/C, two fresh-event turns, one multi-character, three
+  ordinary). Two turns where Friday forgot were dropped because the memory was never extracted.
+- Baseline recorded: Σ gold@head 3/47 old path, 8/47 new path. Found two recall-replay harness
+  issues (query distillation is nondeterministic; replays search memories created after the turn),
+  to be fixed as part of R7.
+- Sweep run (14 candidates): none passes. Gating boosts on relevance drops cross-chat fresh memories
+  with low cosine on three probe turns. Results and diagnosis in the runbook tracker.
+- Added `freshBypassesGate` to the recall tuning (fresh-event boost applied outside the R1 gate;
+  default off, so recall is unchanged). Swept as option 1: it does not pass either. Entity anchors
+  chosen by rarity (R4) drop gold memories from the pool, and F2's gold also depends on the
+  time-window boost, which stays gated.
+- Added `windowBypassesGate`, `anchorMinHits` and `anchorOrder` to the recall tuning (defaults keep
+  recall unchanged). Swept as options 1 + 2: still no pass. The R4 fix restores the right anchors;
+  the R2 cap and the gated participant boost keep three probe turns below their baseline.
+
 #### Fix order-dependent failure in the wardrobe wear repository test
 
 - `wardrobe-wear.repository.test.ts` failed "did not throw" on two rollback tests whenever another

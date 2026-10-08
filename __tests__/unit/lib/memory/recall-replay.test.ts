@@ -76,7 +76,9 @@ function hit(id: string, over: AnyRecord = {}) {
   }
 }
 
-function primeRepos(over: { chat?: AnyRecord | null; character?: AnyRecord | null; messages?: unknown[] } = {}) {
+function primeRepos(
+  over: { chat?: AnyRecord | null; character?: AnyRecord | null; messages?: unknown[]; recentMemories?: AnyRecord[] } = {},
+) {
   const chat =
     over.chat === undefined
       ? {
@@ -102,6 +104,10 @@ function primeRepos(over: { chat?: AnyRecord | null; character?: AnyRecord | nul
       findByIdRaw: jest.fn(async (id: string) =>
         over.character === undefined ? { id, name: `Name-${id}` } : over.character
       ),
+    },
+    memories: {
+      countCreatedSince: jest.fn(async () => (over.recentMemories ?? []).length),
+      findRecent: jest.fn(async () => over.recentMemories ?? []),
     },
   })
   return chat
@@ -396,6 +402,19 @@ describe('runRecallReplay — query derivation and rows', () => {
     expect((mockSearch.mock.calls[1][2] as AnyRecord).limit).toBe(25)
   })
 
+  it('widens the default table past a retrospective head', async () => {
+    mockDistill.mockResolvedValue({
+      success: true,
+      result: { paraphrase: 'the fair', keywords: ['fair'], retrospective: true, entities: [] },
+    })
+
+    // A budget-sized retrospective head (30) outgrows the old default of 25.
+    const result = await runRecallReplay(baseInput({ memoryBudget: 8000 }))
+
+    expect(result.newHeadSize).toBe(30)
+    expect((mockSearch.mock.calls[1][2] as AnyRecord).limit).toBe(40)
+  })
+
   it('excludes staff messages and events from the replay window', async () => {
     primeRepos({
       messages: [
@@ -413,5 +432,82 @@ describe('runRecallReplay — query derivation and rows', () => {
     expect(result.query).toBe('A reply.')
     const [distilled] = mockDistill.mock.calls[0]
     expect((distilled as AnyRecord[]).map((m) => m.content)).toEqual(['A question.', 'A reply.'])
+  })
+})
+
+describe('runRecallReplay — harness knobs (R7)', () => {
+  const pinned = { paraphrase: 'the pinned fair', keywords: ['fair'], retrospective: false, entities: ['Wheel'] }
+
+  it('reuses pinned signals without calling the cheap LLM', async () => {
+    const result = await runRecallReplay(baseInput({ signals: pinned }))
+
+    expect(mockDistill).not.toHaveBeenCalled()
+    expect(result.query).toBe('the pinned fair')
+    expect(result.signalsPinned).toBe(true)
+    expect(result.signals).toEqual(pinned)
+  })
+
+  it('applies tuning to the new path only', async () => {
+    const result = await runRecallReplay(baseInput({ tuning: { boostCap: 1.6 } }))
+
+    const [, , oldOptions] = mockSearch.mock.calls[0]
+    const [, , newOptions] = mockSearch.mock.calls[1]
+    expect((oldOptions as AnyRecord).recallContext).not.toHaveProperty('tuning')
+    expect(((newOptions as AnyRecord).recallContext as AnyRecord).tuning).toMatchObject({ boostCap: 1.6 })
+    expect(result.tuning).toBe('cap=1.6')
+  })
+
+  it('leaves the context untouched with no tuning, and says so', async () => {
+    const result = await runRecallReplay(baseInput())
+
+    const [, , newOptions] = mockSearch.mock.calls[1]
+    expect((newOptions as AnyRecord).recallContext).not.toHaveProperty('tuning')
+    expect((newOptions as AnyRecord).excludeMemoryIds).toBeUndefined()
+    expect((newOptions as AnyRecord).weightClockMs).toBeUndefined()
+    expect(result).toMatchObject({ tuning: 'defaults', signalsPinned: false, asOf: null, excludedAfterAsOf: 0 })
+  })
+
+  it('gives R4 the names of the characters in the room', async () => {
+    await runRecallReplay(baseInput({ tuning: { specificAnchors: true } }))
+
+    const [, , newOptions] = mockSearch.mock.calls[1]
+    expect(((newOptions as AnyRecord).recallContext as AnyRecord).presentParticipantNames).toEqual(['Name-char-1'])
+  })
+
+  it('under asOf, leaves out memories created at or after the turn opened, on both paths', async () => {
+    primeRepos({
+      recentMemories: [
+        { id: 'during', createdAt: '2026-06-10T12:00:30.000Z' },
+        { id: 'at', createdAt: '2026-06-10T12:00:00.000Z' },
+        { id: 'before', createdAt: '2026-06-10T11:59:59.000Z' },
+      ],
+    })
+
+    const result = await runRecallReplay(baseInput({ turnIndex: 1, asOf: true }))
+
+    for (const call of mockSearch.mock.calls) {
+      const options = call[2] as AnyRecord
+      expect([...(options.excludeMemoryIds as Set<string>)].sort()).toEqual(['at', 'during'])
+      // Weights decay against the replayed turn's clock, not today's.
+      expect(options.weightClockMs).toBe(Date.parse('2026-06-10T12:01:00.000Z'))
+    }
+    expect(result.asOf).toBe('2026-06-10T12:00:00.000Z')
+    expect(result.excludedAfterAsOf).toBe(2)
+  })
+
+  it('hands the new path its head size for R6', async () => {
+    await runRecallReplay(baseInput({ memoryBudget: 8000 }))
+
+    const [, , newOptions] = mockSearch.mock.calls[1]
+    expect((newOptions as AnyRecord).headSize).toBe(15)
+  })
+
+  it('shares one embedding memo between both paths and across runs', async () => {
+    await runRecallReplay(baseInput())
+    await runRecallReplay(baseInput())
+
+    const memos = mockSearch.mock.calls.map(c => (c[2] as AnyRecord).embeddingMemo)
+    expect(memos[0]).toBeInstanceOf(Map)
+    expect(new Set(memos).size).toBe(1)
   })
 })

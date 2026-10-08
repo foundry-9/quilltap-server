@@ -256,3 +256,45 @@ describe('handleRecallReplay', () => {
     await expect(res.json()).resolves.toEqual({ error: 'Recall replay failed' });
   });
 });
+
+describe('handleRecallReplay — harness knobs (R7)', () => {
+  it('passes a valid tuning, saved signals and asOf through to the replay', async () => {
+    const tuning = { boostGateAbs: 0.45, boostGateMargin: 0.15, boostGateRamp: 0.1, boostCap: 1.6 };
+    const signals = { keywords: ['fair'], paraphrase: 'the fair', retrospective: true, entities: ['Wheel'] };
+
+    const res = await handleRecallReplay(jsonReq({ tuning, signals, asOf: true }), 'chat-1', chat(), makeCtx());
+
+    expect(res.status).toBe(200);
+    expect(runReplay).toHaveBeenCalledWith(expect.objectContaining({ tuning, signals, asOf: true }));
+  });
+
+  it('400s on an unknown tuning key, naming it', async () => {
+    const res = await handleRecallReplay(jsonReq({ tuning: { boostGateMarginX: 0.1 } }), 'chat-1', chat(), makeCtx());
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain('boostGateMarginX');
+    expect(runReplay).not.toHaveBeenCalled();
+  });
+
+  it('400s on malformed signals', async () => {
+    const res = await handleRecallReplay(jsonReq({ signals: { keywords: 'fair' } }), 'chat-1', chat(), makeCtx());
+
+    expect(res.status).toBe(400);
+    expect(runReplay).not.toHaveBeenCalled();
+  });
+
+  it('400s on a non-boolean asOf', async () => {
+    const res = await handleRecallReplay(jsonReq({ asOf: 'yes' }), 'chat-1', chat(), makeCtx());
+
+    expect(res.status).toBe(400);
+    expect(runReplay).not.toHaveBeenCalled();
+  });
+
+  it('defaults asOf to false and sends no tuning or signals', async () => {
+    await handleRecallReplay(jsonReq({}), 'chat-1', chat(), makeCtx());
+
+    expect(runReplay).toHaveBeenCalledWith(
+      expect.objectContaining({ tuning: undefined, signals: undefined, asOf: false }),
+    );
+  });
+});

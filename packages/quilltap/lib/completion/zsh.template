@@ -609,6 +609,10 @@ _quilltap_recall_replay() {
     '--char[character id]:char:' \
     '--limit[rows per path]:limit:' \
     '--memory-budget[memory token budget]:tokens:' \
+    '--tuning[new-path tuning JSON]:json:' \
+    '--tuning-file[new-path tuning JSON file]:file:_files' \
+    '--signals-from[reuse signals from a saved replay]:file:_files' \
+    '--as-of[search the corpus as it stood at the turn]' \
     '--port[server port]:port:' \
     '--json[raw JSON output]' \
     '*: :'

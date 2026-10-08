@@ -313,6 +313,10 @@ complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'turn' -d
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'char' -d 'Character whose memories are searched' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'limit' -d 'Candidate rows per path' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'memory-budget' -d 'Memory token budget' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'tuning' -d 'New-path tuning JSON' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'tuning-file' -d 'New-path tuning JSON file' -r -F
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'signals-from' -d 'Reuse signals from a saved replay' -r -F
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'as-of' -d 'Search the corpus as it stood at the turn'
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'port' -d 'Server port' -x
 
 # ---------- anchor-probe flags ----------

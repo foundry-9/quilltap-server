@@ -16,6 +16,7 @@ import {
   freshEventMultiplier,
   combineRecallMultipliers,
   RECALL_MULTIPLIERS,
+  RECALL_TUNING_DEFAULTS,
   MULTIPLIER_CLAMP,
   RELATED_EXPANSION,
   DEFAULT_TEMPORAL,
@@ -279,13 +280,17 @@ describe('combineRecallMultipliers', () => {
       ctx({ turnContext: 'philosophy', presentAboutCharacterIds: [CHAR_A] }),
     )
     expect(r.exclude).toBe(false)
+    // ×1.518 stacked, held to the R2 boost cap.
     expect(r.multiplier).toBeCloseTo(
-      RECALL_MULTIPLIERS.scopeNarrowSameProject *
-        RECALL_MULTIPLIERS.contextMatch *
-        RECALL_MULTIPLIERS.participantPresent,
+      Math.min(
+        RECALL_MULTIPLIERS.scopeNarrowSameProject *
+          RECALL_MULTIPLIERS.contextMatch *
+          RECALL_MULTIPLIERS.participantPresent,
+        RECALL_TUNING_DEFAULTS.boostCap,
+      ),
       5,
     )
-    expect(r.fired).toEqual(['narrow✓', 'ctx✓', 'present↑'])
+    expect(r.fired).toEqual(['narrow✓', 'ctx✓', 'present↑', `cap${RECALL_TUNING_DEFAULTS.boostCap}`])
   })
 
   it('does not apply context/participant boosts when the turn signals are absent', () => {
@@ -331,13 +336,13 @@ describe('combineRecallMultipliers', () => {
       keywords: ['moment', 'scope: narrow', 'history'],
     }
     const r = combineRecallMultipliers(memory, ctx({ currentChatId: 'chat-current', nowMs: now }))
+    // The penalty applies in full; the boosts (×1.495) are held to the cap.
     expect(r.multiplier).toBeCloseTo(
-      RECALL_MULTIPLIERS.scopeNarrowSameProject *
-        RECALL_MULTIPLIERS.temporalMoment *
-        RECALL_MULTIPLIERS.freshEvent24h,
+      RECALL_MULTIPLIERS.temporalMoment *
+        Math.min(RECALL_MULTIPLIERS.scopeNarrowSameProject * RECALL_MULTIPLIERS.freshEvent24h, RECALL_TUNING_DEFAULTS.boostCap),
       5,
     )
-    expect(r.fired).toEqual(['narrow✓', 'moment↓', 'fresh24↑'])
+    expect(r.fired).toEqual(['narrow✓', 'moment↓', 'fresh24↑', `cap${RECALL_TUNING_DEFAULTS.boostCap}`])
   })
 
   it('leaves the fresh boost inert when the context carries no clock', () => {
@@ -352,7 +357,7 @@ describe('combineRecallMultipliers', () => {
     expect(r.fired).toEqual([])
   })
 
-  it('keeps a maximal fresh + window + retro stack decisive but under the clamp', () => {
+  it('holds a maximal fresh + window + retro stack to the boost cap', () => {
     const now = Date.parse('2026-07-29T02:44:00.000Z')
     const occurredAt = new Date(now - 3 * 60 * 60 * 1000).toISOString()
     const memory = {
@@ -374,11 +379,12 @@ describe('combineRecallMultipliers', () => {
       }),
     )
     // Every boost the recall path can fire at once: narrow-same × past-retro ×
-    // ctx × present × fresh24 × window ≈ ×3.63. Decisive against the ~×1.5
-    // evergreen stack, and still short of the clamp — so the ceiling stays a
-    // backstop rather than the value every fresh memory collapses onto.
+    // ctx × present × fresh24 × window ≈ ×2.95 stacked. The retuning (R2)
+    // caps the product of boosts, so no pile of tags can outweigh more than a
+    // moderate cosine gap.
     expect(r.fired).toContain('fresh24↑')
-    expect(r.multiplier).toBeGreaterThan(3)
+    expect(r.fired).toContain(`cap${RECALL_TUNING_DEFAULTS.boostCap}`)
+    expect(r.multiplier).toBeCloseTo(RECALL_TUNING_DEFAULTS.boostCap)
     expect(r.multiplier).toBeLessThan(MULTIPLIER_CLAMP.max)
   })
 

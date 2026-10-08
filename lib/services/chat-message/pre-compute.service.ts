@@ -63,6 +63,11 @@ export interface RunPreContextPreComputeOptions {
    * head does. Empty/undefined → no participant boost.
    */
   presentAboutCharacterIds?: readonly string[]
+  /**
+   * Display names of those same characters — R4's entity anchors skip a name
+   * that merely names someone in the room.
+   */
+  presentParticipantNames?: readonly string[]
   isContinueMode: boolean
   /** Verbatim user-message text for this turn (empty in continue mode). */
   content: string
@@ -193,7 +198,7 @@ async function proactiveRecallTask(
 ): Promise<ProactiveRecallOutcome | undefined> {
   const {
     chatId, userId, chat, character, characterParticipant,
-    presentAboutCharacterIds, isContinueMode, content, existingMessages,
+    presentAboutCharacterIds, presentParticipantNames, isContinueMode, content, existingMessages,
     cheapLLMSelection, conciergePolicy, allProfiles,
     controller, encoder,
   } = opts
@@ -308,6 +313,7 @@ async function proactiveRecallTask(
     turnTemporal: signals.temporal ?? null,
     turnRetrospective: retrospective,
     presentAboutCharacterIds,
+    presentParticipantNames,
     nowMs: Date.now(),
   })
 

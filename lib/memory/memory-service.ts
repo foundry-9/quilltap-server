@@ -8,7 +8,7 @@
 
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
-import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity } from '@/lib/embedding/embedding-service'
+import { generateEmbeddingForUser, EmbeddingError, cosineSimilarity, type EmbeddingResult } from '@/lib/embedding/embedding-service'
 import {
   applyLiteralBoost,
   containsLiteralPhrase,
@@ -31,7 +31,8 @@ import {
   computeRankingBlend,
   defaultMinCosineForProvider,
 } from './memory-weighting'
-import { combineRecallMultipliers, RELATED_EXPANSION, type RecallContext } from './recall-tags'
+import { boostGateThreshold, combineRecallMultipliers, recallTuningOf, RELATED_EXPANSION, type RecallContext } from './recall-tags'
+import { selectSpecificAnchors } from './recall-tuning'
 import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } from './episodic'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
@@ -735,6 +736,32 @@ export async function deleteMemoryWithVector(
  */
 const dimensionMismatchWarned = new Set<string>()
 
+/** Descending by post-adjustment blended score. */
+function byBlendedAfter(a: SemanticSearchResult, b: SemanticSearchResult): number {
+  return (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0)
+}
+
+/**
+ * R6 — reserve up to `fraction` of the head for qualifying background rows.
+ * The head becomes the top `headSize − k` ranked rows plus the top `k`
+ * background rows (`k` = reserve, or fewer when fewer qualify — unused slots go
+ * back to the ranked rows), each part ranked as before and the head re-sorted
+ * by score. Everything else follows in score order.
+ */
+export function reserveBackgroundSlots(
+  ranked: SemanticSearchResult[],
+  background: SemanticSearchResult[],
+  headSize: number,
+  fraction: number,
+): SemanticSearchResult[] {
+  const reserve = Math.floor(headSize * fraction)
+  const taken = Math.min(reserve, background.length)
+  if (taken === 0) return ranked
+  const head = [...ranked.slice(0, headSize - taken), ...background.slice(0, taken)].sort(byBlendedAfter)
+  const tail = [...ranked.slice(headSize - taken), ...background.slice(taken)].sort(byBlendedAfter)
+  return [...head, ...tail]
+}
+
 /**
  * Search memories using semantic similarity
  *
@@ -805,6 +832,32 @@ export async function searchMemoriesSemantic(
      * caught and logged; the search itself carries on.
      */
     captureQueryEmbedding?: (captured: SearchQueryEmbedding) => void
+    /**
+     * Memory ids to leave out of every candidate source — vector pool, extra
+     * probes, entity hits and related expansion. The recall-replay harness uses
+     * it to drop memories created after the replayed turn (`asOf`), so an old
+     * turn is searched against the corpus as it stood then. Filtered inside the
+     * vector scan, so the top-K is drawn from what remains.
+     */
+    excludeMemoryIds?: ReadonlySet<string>
+    /**
+     * The head size the caller will take from the result. Only R6's background
+     * reservation (`recallContext.tuning.backgroundReserve`) reads it.
+     */
+    headSize?: number
+    /**
+     * Clock (ms) for the recency decay in each candidate's weight. Absent → now.
+     * The recall-replay harness pins it to the replayed turn's clock under
+     * `asOf`, so an old turn is weighted as it was then, and repeat runs agree.
+     */
+    weightClockMs?: number
+    /**
+     * Reuse embeddings by text across calls (main query and extra probes). The
+     * provider's vectors for one text can differ slightly from call to call;
+     * the recall-replay harness passes one memo so every run it compares
+     * embeds the same vectors. Live recall leaves it off.
+     */
+    embeddingMemo?: Map<string, EmbeddingResult>
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -820,13 +873,19 @@ export async function searchMemoriesSemantic(
   // re-instrument after every performance change.
   const t0 = performance.now()
 
+  const embed = async (text: string): Promise<EmbeddingResult> => {
+    const memo = options.embeddingMemo
+    const key = `${options.embeddingProfileId ?? 'default'}|${text}`
+    const cached = memo?.get(key)
+    if (cached) return cached
+    const result = await generateEmbeddingForUser(text, options.userId, options.embeddingProfileId)
+    memo?.set(key, result)
+    return result
+  }
+
   // Try semantic search first
   try {
-    const embeddingResult = await generateEmbeddingForUser(
-      query,
-      options.userId,
-      options.embeddingProfileId
-    )
+    const embeddingResult = await embed(query)
     const tEmbed = performance.now()
 
     // Hand the caller the vector we just paid for, so a companion search in the
@@ -881,10 +940,27 @@ export async function searchMemoriesSemantic(
       return searchMemoriesText(characterId, query, options)
     }
 
+    const excluded = options.excludeMemoryIds
+    const vectorFilter = excluded && excluded.size > 0
+      ? (metadata: { memoryId: string }) => !excluded.has(metadata.memoryId)
+      : undefined
+    // The ranking knobs: the context's own tuning, else the retuned defaults.
+    // The R1 gate's constants are on the neural cosine scale; TF-IDF
+    // (`BUILTIN`) cosines distribute very differently, so the gate stays off
+    // there until its own scale is derived (recall-multiplier-retuning.md, R1).
+    let recallContext = options.recallContext
+    if (recallContext && !recallContext.tuning && embeddingResult.provider === 'BUILTIN') {
+      recallContext = { ...recallContext, tuning: { ...recallTuningOf(recallContext), boostGate: null } }
+      logger.debug('[Memory] TF-IDF embeddings: recall boost gate off', { characterId })
+    }
+    const tuning = recallContext ? recallTuningOf(recallContext) : undefined
+    const weightClock = options.weightClockMs !== undefined ? new Date(options.weightClockMs) : undefined
+
     // Search vectors
     let vectorResults = vectorStore.search(
       embeddingResult.embedding,
-      limit * 3 // Get more results to filter
+      limit * 3, // Get more results to filter
+      vectorFilter,
     )
 
     // Multi-probe union (retrospective turns): embed each extra probe, union
@@ -898,13 +974,9 @@ export async function searchMemoriesSemantic(
       const byId = new Map(vectorResults.map(vr => [vr.id, vr]))
       for (const probe of extraProbes) {
         try {
-          const probeResult = await generateEmbeddingForUser(
-            probe,
-            options.userId,
-            options.embeddingProfileId
-          )
+          const probeResult = await embed(probe)
           if (probeResult.embedding.length !== embeddingResult.embedding.length) continue
-          for (const vr of vectorStore.search(probeResult.embedding, limit * 3)) {
+          for (const vr of vectorStore.search(probeResult.embedding, limit * 3, vectorFilter)) {
             const existing = byId.get(vr.id)
             if (!existing || vr.score > existing.score) {
               byId.set(vr.id, vr)
@@ -937,11 +1009,34 @@ export async function searchMemoriesSemantic(
     if (literalPhrase) {
       anchorPhrases.push(query.trim())
     }
-    for (const entity of (options.entityAnchors ?? []).slice(0, 3)) {
-      const trimmed = entity?.trim()
-      if (trimmed && trimmed.length >= 2) {
-        anchorPhrases.push(trimmed)
+    const entityPhrases = (options.entityAnchors ?? [])
+      .map(entity => entity?.trim())
+      .filter((p): p is string => !!p && p.length >= 2)
+    // Content hits per phrase, fetched once and reused by the union below.
+    const contentHits = new Map<string, Memory[]>()
+    const hitsFor = async (phrase: string): Promise<Memory[]> => {
+      let hits = contentHits.get(phrase)
+      if (!hits) {
+        hits = (await repos.memories.searchByContent(characterId, phrase))
+          .filter(m => !excluded?.has(m.id))
+        contentHits.set(phrase, hits)
       }
+      return hits
+    }
+    if (tuning?.specificAnchors) {
+      // R4 — prefer the names that narrow the search over the first three.
+      const counted: { phrase: string; count: number }[] = []
+      for (const phrase of entityPhrases) {
+        counted.push({ phrase, count: (await hitsFor(phrase)).length })
+      }
+      const chosen = selectSpecificAnchors(counted, recallContext?.presentParticipantNames ?? [], 3, {
+        minHits: tuning.anchorMinHits,
+        order: tuning.anchorOrder,
+      })
+      logger.debug('[Memory] Specific entity anchors chosen', { characterId, counted, chosen })
+      anchorPhrases.push(...chosen)
+    } else {
+      anchorPhrases.push(...entityPhrases.slice(0, 3))
     }
     const literalHitIds = new Set<string>()
     let augmentedVectorResults = vectorResults
@@ -950,7 +1045,7 @@ export async function searchMemoriesSemantic(
       const directHitMemories: Memory[] = []
       const directSeen = new Set<string>()
       for (const phrase of anchorPhrases) {
-        const hits = await repos.memories.searchByContent(characterId, phrase)
+        const hits = await hitsFor(phrase)
         for (const m of hits) {
           literalHitIds.add(m.id)
           if (!directSeen.has(m.id)) {
@@ -993,6 +1088,8 @@ export async function searchMemoriesSemantic(
       const matchedIds = augmentedVectorResults.map(vr => vr.id)
       const memories = await repos.memories.findByIds(matchedIds)
       const memoryMap = new Map(memories.map(m => [m.id, m]))
+      // Raw cosine per candidate, before any literal boost — R1 gates on it.
+      const rawCosine = new Map(augmentedVectorResults.map(vr => [vr.id, vr.score]))
 
       let results: SemanticSearchResult[] = augmentedVectorResults
         .map(vr => {
@@ -1008,7 +1105,7 @@ export async function searchMemoriesSemantic(
               containsLiteralPhrase(memory.summary, literalPhrase)
             : false
           const cosineScore = literalHit ? applyLiteralBoost(vr.score) : vr.score
-          const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory)
+          const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory, undefined, weightClock)
           return {
             memory,
             score: cosineScore,
@@ -1031,13 +1128,22 @@ export async function searchMemoriesSemantic(
         results = results.filter(r => r.memory.aboutCharacterId === options.aboutCharacterId)
       }
 
+      // R1's reference point: the best raw cosine in the floor-filtered pool.
+      const bestCosine = results.reduce((best, r) => Math.max(best, rawCosine.get(r.memory.id) ?? r.score), 0)
+      const relevanceOf = (r: SemanticSearchResult) => ({
+        cosine: rawCosine.get(r.memory.id) ?? r.score,
+        bestCosine,
+      })
+      // R6 needs the out-of-window remainder when the window turns hard.
+      let outOfWindow: SemanticSearchResult[] = []
+
       // Event-time window (episodic recall) — two-stage on the injector path:
       // filter to the window first; if fewer than `limit` survive, fall back
       // to the unfiltered pool and let window hits take the bounded
       // ×occurredWithinWindow boost inside the one multiplier loop instead.
       // Never fewer results than an unwindowed search. Tool path (no
       // recallContext): a plain hard filter — the caller asked for a window.
-      let effectiveRecallContext = options.recallContext
+      let effectiveRecallContext = recallContext
       if (options.occurredWithin) {
         const from = Date.parse(options.occurredWithin.from)
         const to = Date.parse(options.occurredWithin.to)
@@ -1047,13 +1153,14 @@ export async function searchMemoriesSemantic(
             return Number.isFinite(t) && t >= from && t <= to
           }
           const windowHits = results.filter(inWindow)
-          if (!options.recallContext) {
+          if (!recallContext) {
             results = windowHits
           } else if (windowHits.length >= limit) {
+            outOfWindow = results.filter(r => !inWindow(r))
             results = windowHits
           } else {
             effectiveRecallContext = {
-              ...options.recallContext,
+              ...recallContext,
               occurredWithin: options.occurredWithin,
             }
           }
@@ -1070,20 +1177,21 @@ export async function searchMemoriesSemantic(
       // byte-for-byte.
       if (effectiveRecallContext) {
         const recallContext = effectiveRecallContext
-        const adjusted: SemanticSearchResult[] = []
-        for (const r of results) {
-          const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
-          const adj = combineRecallMultipliers(r.memory, recallContext)
-          if (adj.exclude) {
-            continue
+        const adjust = (pool: SemanticSearchResult[], extraFired: string[] = []): SemanticSearchResult[] => {
+          const out: SemanticSearchResult[] = []
+          for (const r of pool) {
+            const blendedBefore = computeRankingBlend(r.score, r.rawWeight ?? 0)
+            const adj = combineRecallMultipliers(r.memory, recallContext, relevanceOf(r))
+            if (adj.exclude) {
+              continue
+            }
+            const blendedAfter = blendedBefore * adj.multiplier
+            r.recallAdjustment = { multiplier: adj.multiplier, fired: [...adj.fired, ...extraFired], blendedBefore, blendedAfter }
+            out.push(r)
           }
-          const blendedAfter = blendedBefore * adj.multiplier
-          r.recallAdjustment = { multiplier: adj.multiplier, fired: adj.fired, blendedBefore, blendedAfter }
-          adjusted.push(r)
+          return out.sort(byBlendedAfter)
         }
-        adjusted.sort(
-          (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
-        )
+        const adjusted = adjust(results)
 
         // Item 5 — one-hop related-memory expansion. After the top hits are
         // ranked, pull each top hit's strongly-linked neighbors in as low-cost
@@ -1099,12 +1207,34 @@ export async function searchMemoriesSemantic(
             limit,
             embeddingResult.embedding,
             recallContext,
-            { minImportance: options.minImportance, source: options.source },
+            { minImportance: options.minImportance, source: options.source, excludeMemoryIds: excluded },
             characterId,
+            bestCosine,
+            weightClock,
           )
           results = expanded
         } else {
           results = adjusted
+        }
+
+        // R6 — when the window filtered hard, keep room in the head for
+        // out-of-window background that clears the gate at full strength.
+        const gate = tuning?.boostGate
+        if (gate && tuning.backgroundReserve > 0 && outOfWindow.length > 0 && options.headSize) {
+          const threshold = boostGateThreshold(gate, bestCosine)
+          // Expansion may already have pulled an out-of-window row in.
+          const present = new Set(results.map(r => r.memory.id))
+          const background = adjust(
+            outOfWindow.filter(r => !present.has(r.memory.id) && relevanceOf(r).cosine >= threshold),
+            ['bg↺'],
+          )
+          logger.debug('[Memory] Background reservation (R6)', {
+            characterId,
+            threshold,
+            qualifying: background.length,
+            reserve: Math.floor(options.headSize * tuning.backgroundReserve),
+          })
+          results = reserveBackgroundSlots(results, background, options.headSize, tuning.backgroundReserve)
         }
       } else {
         results.sort((a, b) => {
@@ -1148,8 +1278,10 @@ async function expandRelatedMemories(
   limit: number,
   queryEmbedding: ArrayLike<number>,
   recallContext: RecallContext,
-  filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL' },
+  filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL'; excludeMemoryIds?: ReadonlySet<string> },
   characterId: string,
+  bestCosine: number,
+  weightClock?: Date,
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
   const inPool = new Set(ranked.map(r => r.memory.id))
@@ -1163,6 +1295,7 @@ async function expandRelatedMemories(
       if (neighborIds.length >= RELATED_EXPANSION.maxTotal) break
       if (pulledFromSeed >= RELATED_EXPANSION.maxPerHit) break
       if (inPool.has(neighborId) || neighborSet.has(neighborId)) continue
+      if (filters.excludeMemoryIds?.has(neighborId)) continue
       neighborSet.add(neighborId)
       neighborIds.push(neighborId)
       pulledFromSeed++
@@ -1184,9 +1317,11 @@ async function expandRelatedMemories(
     if (!memory.embedding || memory.embedding.length !== queryEmbedding.length) continue
 
     const cosineScore = cosineSimilarity(queryEmbedding, memory.embedding)
-    const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory)
+    const { effectiveWeight, rawWeight } = calculateEffectiveWeight(memory, undefined, weightClock)
     const blendedBefore = computeRankingBlend(cosineScore, rawWeight ?? 0)
-    const adj = combineRecallMultipliers(memory, recallContext)
+    // Gated on its own cosine like any candidate (R1): association may earn a
+    // neighbour its place in the pool, but not a boost past better matches.
+    const adj = combineRecallMultipliers(memory, recallContext, { cosine: cosineScore, bestCosine })
     if (adj.exclude) continue
     const blendedAfter = blendedBefore * adj.multiplier
     survivors.push({
@@ -1204,9 +1339,7 @@ async function expandRelatedMemories(
   }
 
   const union = [...ranked, ...survivors]
-  union.sort(
-    (a, b) => (b.recallAdjustment?.blendedAfter ?? 0) - (a.recallAdjustment?.blendedAfter ?? 0),
-  )
+  union.sort(byBlendedAfter)
   return union
 }
 

@@ -366,9 +366,20 @@ quilltap recall-replay <chatId>                 # Replay the last turn
 quilltap recall-replay <chatId> --turn 42       # Replay at interchange 42 (its own clock)
 quilltap recall-replay <chatId> --json          # Raw JSON for scripting
 quilltap recall-replay <chatId> --memory-budget 4000  # Budget-sized dynamic head
+quilltap recall-replay <chatId> --turn 42 --json > t42.json
+quilltap recall-replay <chatId> --turn 42 --signals-from t42.json --as-of \
+  --tuning '{"boostGateAbs":0.45,"boostGateMargin":0.15,"boostGateRamp":0.1}'
 ```
 
-Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default 25), `--memory-budget <tokens>` (positive integer; the new path's selected rows then follow the budget-sized dynamic head, which scales with the model's memory budget, while the old path keeps the historical fixed 5-entry head; each path header prints its head size), `--port <n>` (default 3000), `--json`.
+Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default: the larger of 25 and the new path's head size + 10), `--memory-budget <tokens>` (positive integer; the new path's selected rows then follow the budget-sized dynamic head, which scales with the model's memory budget, while the old path keeps the historical fixed 5-entry head; each path header prints its head size), `--port <n>` (default 3000), `--json`.
+
+Tuning and comparable runs:
+
+- `--tuning '<json>'` / `--tuning-file <path>` — retuning constants for the new path only (the old path stays the reference): `boostGateAbs`, `boostGateMargin`, `boostGateRamp` (relevance gate on boosts), `boostCap`, `freshBypassesGate`, `windowBypassesGate`, `multipliers` (`{ "freshEvent24h": 1.3, … }`), `specificAnchors`, `anchorMinHits`, `anchorOrder`, `backgroundReserve`. Unknown keys are rejected. The header's `Tuning` line shows what is active.
+- `--signals-from <replay.json>` — reuse the signals saved in an earlier `--json` replay of the same chat and turn. The distillation is a cheap-LLM call and words the same turn differently each time, so runs you mean to compare should share it.
+- `--as-of` — search only memories created before the turn's opening message, with weights decayed to the turn's own clock: the corpus as it stood then. The header's `Harness` line shows the cutoff and how many later memories were left out.
+
+The server memoises the replay's embeddings by text until it restarts, so repeat runs embed identical vectors.
 
 ## Anchor Probe
 

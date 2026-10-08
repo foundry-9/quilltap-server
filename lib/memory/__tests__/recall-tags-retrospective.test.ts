@@ -13,6 +13,7 @@ import {
   occurredWithinMultiplier,
   parseTargetingTags,
   RECALL_MULTIPLIERS,
+  RECALL_TUNING_DEFAULTS,
   type RecallContext,
 } from '../recall-tags'
 
@@ -102,9 +103,12 @@ describe('combineRecallMultipliers with retrospective context', () => {
       occurredWithin: { from: '2026-07-13T00:00:00.000Z', to: '2026-07-19T23:59:59.999Z' },
     }
     const result = combineRecallMultipliers(pastMemory, ctx)
-    // past↑retro (1.15) × window↑ (1.3); repeat↓ suspended.
+    // past↑retro (1.15) × window↑ (1.3), held to the boost cap; repeat↓ suspended.
     expect(result.multiplier).toBeCloseTo(
-      RECALL_MULTIPLIERS.temporalPastRetrospective * RECALL_MULTIPLIERS.occurredWithinWindow,
+      Math.min(
+        RECALL_MULTIPLIERS.temporalPastRetrospective * RECALL_MULTIPLIERS.occurredWithinWindow,
+        RECALL_TUNING_DEFAULTS.boostCap,
+      ),
       10,
     )
     expect(result.fired).toContain('past↑retro')

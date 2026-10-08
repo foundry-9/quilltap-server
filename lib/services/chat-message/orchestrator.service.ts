@@ -1133,6 +1133,9 @@ async function processMessage(
     ),
   )
 
+  const presentParticipantNames = [character.name, ...[...participantCharacters.values()].map(c => c.name)]
+    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+
   const {
     cachedCompressionResponse,
     preSearchedMemories,
@@ -1147,6 +1150,7 @@ async function processMessage(
     characterParticipant,
     isMultiCharacter,
     presentAboutCharacterIds,
+    presentParticipantNames,
     isContinueMode,
     content,
     existingMessages,

@@ -28,7 +28,7 @@ The switch lives in the Salon: open the chat sidebar, unfold the **Chat** card, 
 
 ## For the Mechanically Inclined
 
-The `quilltap recall-replay <chatId>` command (with the dev server running) replays any turn's memory recall and prints the full ranking table — old behavior and new, side by side — so you can see precisely why a given memory surfaced or sank. See the [CLI reference](cli-memories.md) for its sibling tools.
+The `quilltap recall-replay <chatId>` command (with the dev server running) replays any turn's memory recall and prints the full ranking table — old behavior and new, side by side — so you can see precisely why a given memory surfaced or sank. For the patient tinkerer it will also try out new recall constants on the newer column alone (`--tuning`), reuse a turn's distilled question from an earlier run so two replays ask exactly the same thing (`--signals-from`), and consult only the shelves as they stood when the turn was spoken (`--as-of`). See the [CLI reference](cli-memories.md) for its sibling tools.
 
 ## In-Chat Navigation
 

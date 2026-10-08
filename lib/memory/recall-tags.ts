@@ -26,6 +26,9 @@
 
 import type { MemorySearchExtraction } from './cheap-llm-tasks/memory-tasks'
 import { recentlyWhisperedIdSet } from './recall-history'
+// Type-only: recall-tuning reads this module's constants at load time, so a
+// value import back from it would be a circular-initialisation trap.
+import type { RecallMultiplierTable, ResolvedRecallTuning } from './recall-tuning'
 
 export type TemporalTag = 'past' | 'moment' | 'present' | 'future'
 export type ScopeTag = 'narrow' | 'wide'
@@ -145,6 +148,16 @@ export interface RecallContext {
   currentChatId?: string | null
   /** Reference clock for the fresh-event boost, ms since epoch. Absent → boost disabled. */
   nowMs?: number
+  /**
+   * Retuning knobs (R1–R6, `lib/memory/recall-tuning.ts`). Absent → today's
+   * constants, byte-identical ranking. Set by the recall-replay harness.
+   */
+  tuning?: ResolvedRecallTuning
+  /**
+   * Display names of the characters present this turn — R4's specific-anchor
+   * selection drops entities that merely name someone in the room.
+   */
+  presentParticipantNames?: readonly string[]
 }
 
 /**
@@ -198,10 +211,12 @@ export const RECALL_MULTIPLIERS = {
    * than one targeting-tag multiplier — so without this, "what just happened"
    * holds no ground against evergreen present-tagged memories. Unconditional
    * (not gated on the retrospective flag) by design: it is the safety net for
-   * every turn the retrospective classifier misses.
+   * every turn the retrospective classifier misses. Lowered from 1.6 / 1.35 by
+   * the recall multiplier retuning (R3): with the relevance gate in place it
+   * breaks ties among relevant memories rather than overriding the ranking.
    */
-  freshEvent24h: 1.6,
-  freshEvent48h: 1.35,
+  freshEvent24h: 1.3,
+  freshEvent48h: 1.15,
 } as const
 
 /** Milliseconds in the two fresh-event bands. */
@@ -218,6 +233,61 @@ export const MULTIPLIER_CLAMP = { min: 0, max: 4 } as const
  * single top hit; `maxTotal` bounds the whole expansion across all hits.
  */
 export const RELATED_EXPANSION = { maxPerHit: 3, maxTotal: 10 } as const
+
+/**
+ * R1 — boosts scale with relevance. `gate = max(abs, bestCosine − margin)`, with
+ * either term left out when it is null; a candidate's boosts apply in full at
+ * `cosine ≥ gate`, fade linearly to nothing at `gate − ramp`, and penalties are
+ * untouched. `ramp: 0` makes the gate a hard step.
+ */
+export interface BoostGate {
+  abs: number | null
+  margin: number | null
+  ramp: number
+}
+
+/** The gate's cosine threshold for a pool whose best cosine is `bestCosine`. */
+export function boostGateThreshold(gate: BoostGate, bestCosine: number): number {
+  const relative = gate.margin === null ? -Infinity : bestCosine - gate.margin
+  return Math.max(gate.abs ?? -Infinity, relative)
+}
+
+/**
+ * R1 — how much of its boost a candidate keeps: 1 at or above the gate, 0 at or
+ * below `gate − ramp`, linear between. A hard step when the ramp is 0.
+ */
+export function boostGateStrength(gate: BoostGate, cosine: number, bestCosine: number): number {
+  const threshold = boostGateThreshold(gate, bestCosine)
+  if (cosine >= threshold) return 1
+  if (gate.ramp <= 0) return 0
+  return Math.min(1, Math.max(0, (cosine - (threshold - gate.ramp)) / gate.ramp))
+}
+
+/**
+ * The ranking knobs the recall multiplier retuning chose (R1, R2, R4), in force
+ * whenever a {@link RecallContext} carries no explicit `tuning`. Chosen on the
+ * Friday probe set (docs/developer/features/recall-probe-set-runbook.md, the
+ * `cap14` candidate): boosts gated on relevance (full at the gate, faded to
+ * nothing 0.10 below it), the product of boosts capped at 1.4, and entity
+ * anchors chosen by rarity among the names of people not in the room. The
+ * event-time bypasses and R6's background reservation stay off — neither
+ * improved the probe set.
+ */
+export const RECALL_TUNING_DEFAULTS = {
+  boostGate: { abs: 0.45, margin: 0.15, ramp: 0.1 } as BoostGate | null,
+  boostCap: 1.4,
+  freshBypassesGate: false,
+  windowBypassesGate: false,
+  specificAnchors: true,
+  anchorMinHits: 1,
+  anchorOrder: 'rarest' as 'rarest' | 'distiller',
+  backgroundReserve: 0,
+}
+
+/** The tuning a recall context runs under: its own, else the defaults above. */
+export function recallTuningOf(ctx: RecallContext): ResolvedRecallTuning {
+  return ctx.tuning ?? { multipliers: RECALL_MULTIPLIERS, ...RECALL_TUNING_DEFAULTS }
+}
 
 /** Result of a single adjustment: its multiplier plus a short debug label list. */
 export interface RecallMultiplier {
@@ -300,18 +370,19 @@ export function scopeProjectMultiplier(
   memoryProjectId: string | null | undefined,
   currentProjectId: string | null | undefined,
   policy: ScopePolicy,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (tags.scope !== 'narrow' || !memoryProjectId) {
     return { multiplier: 1, fired: [] }
   }
   if (currentProjectId && memoryProjectId === currentProjectId) {
-    return { multiplier: RECALL_MULTIPLIERS.scopeNarrowSameProject, fired: ['narrow✓'] }
+    return { multiplier: multipliers.scopeNarrowSameProject, fired: ['narrow✓'] }
   }
   if (policy === 'exclude') {
     return { multiplier: 0, fired: ['narrow✗-exclude'], exclude: true }
   }
   return {
-    multiplier: RECALL_MULTIPLIERS.scopeNarrowCrossProjectDownWeight,
+    multiplier: multipliers.scopeNarrowCrossProjectDownWeight,
     fired: ['narrow✗'],
   }
 }
@@ -332,16 +403,17 @@ export function scopeProjectMultiplier(
 export function temporalMultiplier(
   tags: TargetingTags,
   retrospective: boolean = false,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (tags.temporal === 'past') {
     return retrospective
-      ? { multiplier: RECALL_MULTIPLIERS.temporalPastRetrospective, fired: ['past↑retro'] }
-      : { multiplier: RECALL_MULTIPLIERS.temporalPast, fired: ['past↓'] }
+      ? { multiplier: multipliers.temporalPastRetrospective, fired: ['past↑retro'] }
+      : { multiplier: multipliers.temporalPast, fired: ['past↓'] }
   }
   if (tags.temporal === 'moment') {
     return retrospective
-      ? { multiplier: RECALL_MULTIPLIERS.temporalMomentRetrospective, fired: ['moment·retro'] }
-      : { multiplier: RECALL_MULTIPLIERS.temporalMoment, fired: ['moment↓'] }
+      ? { multiplier: multipliers.temporalMomentRetrospective, fired: ['moment·retro'] }
+      : { multiplier: multipliers.temporalMoment, fired: ['moment↓'] }
   }
   return { multiplier: 1, fired: [] }
 }
@@ -365,6 +437,7 @@ function eventTimeMs(memory: MemoryTagView): number {
 export function occurredWithinMultiplier(
   memory: MemoryTagView,
   window: { from: string; to: string } | null | undefined,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (!window) return { multiplier: 1, fired: [] }
   const t = eventTimeMs(memory)
@@ -374,7 +447,7 @@ export function occurredWithinMultiplier(
     return { multiplier: 1, fired: [] }
   }
   if (t >= from && t <= to) {
-    return { multiplier: RECALL_MULTIPLIERS.occurredWithinWindow, fired: ['window↑'] }
+    return { multiplier: multipliers.occurredWithinWindow, fired: ['window↑'] }
   }
   return { multiplier: 1, fired: [] }
 }
@@ -399,6 +472,7 @@ export function freshEventMultiplier(
   memory: MemoryTagView,
   nowMs: number | null | undefined,
   currentChatId: string | null | undefined,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (nowMs === null || nowMs === undefined || !Number.isFinite(nowMs)) {
     return { multiplier: 1, fired: [] }
@@ -412,10 +486,10 @@ export function freshEventMultiplier(
   const age = nowMs - t
   if (age < 0) return { multiplier: 1, fired: [] }
   if (age <= FRESH_24H_MS) {
-    return { multiplier: RECALL_MULTIPLIERS.freshEvent24h, fired: ['fresh24↑'] }
+    return { multiplier: multipliers.freshEvent24h, fired: ['fresh24↑'] }
   }
   if (age <= FRESH_48H_MS) {
-    return { multiplier: RECALL_MULTIPLIERS.freshEvent48h, fired: ['fresh48↑'] }
+    return { multiplier: multipliers.freshEvent48h, fired: ['fresh48↑'] }
   }
   return { multiplier: 1, fired: [] }
 }
@@ -431,9 +505,10 @@ export function freshEventMultiplier(
 export function contextMultiplier(
   tags: TargetingTags,
   turnContext: ContextTag | null | undefined,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (turnContext && tags.context === turnContext) {
-    return { multiplier: RECALL_MULTIPLIERS.contextMatch, fired: ['ctx✓'] }
+    return { multiplier: multipliers.contextMatch, fired: ['ctx✓'] }
   }
   return { multiplier: 1, fired: [] }
 }
@@ -451,13 +526,14 @@ export function contextMultiplier(
 export function participantMultiplier(
   memory: MemoryTagView,
   presentAboutCharacterIds: readonly string[] | null | undefined,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (
     memory.aboutCharacterId &&
     presentAboutCharacterIds &&
     presentAboutCharacterIds.includes(memory.aboutCharacterId)
   ) {
-    return { multiplier: RECALL_MULTIPLIERS.participantPresent, fired: ['present↑'] }
+    return { multiplier: multipliers.participantPresent, fired: ['present↑'] }
   }
   return { multiplier: 1, fired: [] }
 }
@@ -472,6 +548,7 @@ export function recentlyWhisperedMultiplier(
   memory: MemoryTagView,
   recentlyWhisperedIds: ReadonlySet<string> | null | undefined,
   suspended: boolean = false,
+  multipliers: RecallMultiplierTable = RECALL_MULTIPLIERS,
 ): RecallMultiplier {
   if (suspended) {
     // Retrospective turn: the user is deliberately re-asking. Penalizing the
@@ -479,9 +556,18 @@ export function recentlyWhisperedMultiplier(
     return { multiplier: 1, fired: [] }
   }
   if (memory.id && recentlyWhisperedIds && recentlyWhisperedIds.has(memory.id)) {
-    return { multiplier: RECALL_MULTIPLIERS.recentlyWhispered, fired: ['repeat↓'] }
+    return { multiplier: multipliers.recentlyWhispered, fired: ['repeat↓'] }
   }
   return { multiplier: 1, fired: [] }
+}
+
+/**
+ * The candidate's relevance, for R1's boost gate: its raw cosine and the best
+ * raw cosine in the same search's pool.
+ */
+export interface RecallRelevance {
+  cosine: number
+  bestCosine: number
 }
 
 /**
@@ -495,31 +581,45 @@ export function recentlyWhisperedMultiplier(
  * {@link MULTIPLIER_CLAMP} so no single memory can dominate the ranking. A
  * cross-project narrow memory under the `exclude` policy short-circuits to
  * `{ exclude: true }`.
+ *
+ * Retuning (R1/R2, {@link recallTuningOf}): factors above 1 are boosts, the
+ * rest penalties. The boost product is capped at `boostCap`, then scaled by the
+ * candidate's gate strength (given `relevance`), and penalties apply in full.
+ * With the gate off and the boosts under the cap the original product is used
+ * unchanged. Under
+ * `freshBypassesGate` / `windowBypassesGate` that event-time boost is left out
+ * of the gated part and applied in full, and the cap bounds the total.
  */
 export function combineRecallMultipliers(
   memory: MemoryTagView,
   ctx: RecallContext,
+  relevance?: RecallRelevance,
 ): CombinedRecallAdjustment {
   const tags = parseTargetingTags(memory.keywords)
+  const tuning = recallTuningOf(ctx)
+  const multipliers = tuning.multipliers
 
   const scope = scopeProjectMultiplier(
     tags,
     memory.projectId,
     ctx.currentProjectId,
     ctx.scopePolicy,
+    multipliers,
   )
   if (scope.exclude) {
     return { multiplier: 0, fired: scope.fired, exclude: true }
   }
 
   const retrospective = ctx.turnRetrospective === true
-  const temporal = temporalMultiplier(tags, retrospective)
-  const context = contextMultiplier(tags, ctx.turnContext)
-  const participant = participantMultiplier(memory, ctx.presentAboutCharacterIds)
-  const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds, retrospective)
-  const window = occurredWithinMultiplier(memory, ctx.occurredWithin)
-  const fresh = freshEventMultiplier(memory, ctx.nowMs, ctx.currentChatId)
+  const temporal = temporalMultiplier(tags, retrospective, multipliers)
+  const context = contextMultiplier(tags, ctx.turnContext, multipliers)
+  const participant = participantMultiplier(memory, ctx.presentAboutCharacterIds, multipliers)
+  const recent = recentlyWhisperedMultiplier(memory, ctx.recentlyWhisperedIds, retrospective, multipliers)
+  const window = occurredWithinMultiplier(memory, ctx.occurredWithin, multipliers)
+  const fresh = freshEventMultiplier(memory, ctx.nowMs, ctx.currentChatId, multipliers)
 
+  const parts = [scope, temporal, context, participant, recent, window, fresh]
+  const fired = parts.flatMap(p => p.fired)
   const product =
     scope.multiplier *
     temporal.multiplier *
@@ -528,14 +628,33 @@ export function combineRecallMultipliers(
     recent.multiplier *
     window.multiplier *
     fresh.multiplier
-  const clamped = Math.max(
-    MULTIPLIER_CLAMP.min,
-    Math.min(MULTIPLIER_CLAMP.max, product),
-  )
+
+  let boost = 1
+  let penalty = 1
+  for (const p of parts) {
+    if (p.multiplier > 1) boost *= p.multiplier
+    else penalty *= p.multiplier
+  }
+  const cap = tuning.boostCap
+  const gate = tuning.boostGate
+  const strength = gate && relevance ? boostGateStrength(gate, relevance.cosine, relevance.bestCosine) : 1
+  // The event-time boosts may sit outside the gate (applied in full below).
+  let ungated = 1
+  if (tuning.freshBypassesGate && fresh.multiplier > 1) ungated *= fresh.multiplier
+  if (tuning.windowBypassesGate && window.multiplier > 1) ungated *= window.multiplier
+  const gatedBoost = boost / ungated
+
+  let combined = product
+  if (boost > cap || (strength < 1 && gatedBoost > 1)) {
+    const scaled = 1 + (Math.min(gatedBoost, cap) - 1) * strength
+    combined = penalty * Math.min(scaled * ungated, cap)
+    if (boost > cap) fired.push(`cap${cap}`)
+    if (strength < 1 && gatedBoost > 1) fired.push(`gate×${strength.toFixed(2)}`)
+  }
 
   return {
-    multiplier: clamped,
-    fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired, ...window.fired, ...fresh.fired],
+    multiplier: Math.max(MULTIPLIER_CLAMP.min, Math.min(MULTIPLIER_CLAMP.max, combined)),
+    fired,
     exclude: false,
   }
 }
@@ -569,6 +688,10 @@ export interface TurnRecallContextInput {
   presentAboutCharacterIds?: readonly string[]
   /** Reference clock for the fresh-event boost, ms since epoch. */
   nowMs: number
+  /** Display names of the characters present this turn (R4). */
+  presentParticipantNames?: readonly string[]
+  /** Retuning knobs (R1–R6). Omit for today's constants. */
+  tuning?: ResolvedRecallTuning
 }
 
 /**
@@ -590,6 +713,8 @@ export function buildTurnRecallContext(input: TurnRecallContextInput): RecallCon
     nowMs: input.nowMs,
   }
   if (input.turnRetrospective !== undefined) ctx.turnRetrospective = input.turnRetrospective
+  if (input.presentParticipantNames !== undefined) ctx.presentParticipantNames = input.presentParticipantNames
+  if (input.tuning !== undefined) ctx.tuning = input.tuning
   return ctx
 }
 

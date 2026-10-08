@@ -2935,11 +2935,22 @@ Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Reconstruc
   "turnIndex": 42,
   "characterId": "char-uuid",
   "limit": 25,
-  "memoryBudget": 8000
+  "memoryBudget": 8000,
+  "tuning": { "boostGateAbs": 0.45, "boostGateMargin": 0.15, "boostGateRamp": 0.1, "boostCap": 1.6 },
+  "signals": { "keywords": ["fair"], "paraphrase": "…", "retrospective": false, "entities": [] },
+  "asOf": true
 }
 ```
 
-`turnIndex` is the 1-based interchange to replay at (default: last); `characterId` defaults to the first LLM-controlled participant; `limit` caps candidate rows per path (max 100). `memoryBudget` (tokens) sizes the new path's `selected` rows from the budget-scaled dynamic head (`sizeMemoryPools`); the old path keeps the historical fixed 5-entry head. The result carries `oldHeadSize` / `newHeadSize`.
+`turnIndex` is the 1-based interchange to replay at (default: last); `characterId` defaults to the first LLM-controlled participant; `limit` caps candidate rows per path (max 100; default the larger of 25 and the new path's head size + 10). `memoryBudget` (tokens) sizes the new path's `selected` rows from the budget-scaled dynamic head (`sizeMemoryPools`); the old path keeps the historical fixed 5-entry head. The result carries `oldHeadSize` / `newHeadSize`.
+
+Harness knobs (recall multiplier retuning, R7):
+
+- `tuning` — retuning constants for the **new path only**; the old path stays the reference. Validated by `RecallTuningInputSchema` (`lib/memory/recall-tuning.ts`), and unknown keys are a 400. Keys: `boostGateAbs` / `boostGateMargin` / `boostGateRamp` (R1 relevance gate; 0 or null turns a term off), `boostCap` (R2), `freshBypassesGate` / `windowBypassesGate` (apply that event-time boost outside the R1 gate), `multipliers` (any `RECALL_MULTIPLIERS` key, fresh-event values included), `specificAnchors` with `anchorMinHits` and `anchorOrder` (`rarest` | `distiller`) (R4), `backgroundReserve` (R6, 0–0.5 of the head). Omitted → today's constants, byte-identical ranking.
+- `signals` — a previous replay's `signals`, reused instead of a fresh cheap-LLM distillation (which is not deterministic). Validated by `RecallReplaySignalsSchema`.
+- `asOf` — search only memories created before the turn's opening message, and decay weights against the turn's clock: the corpus as it stood then. Applies to both paths.
+
+The replay memoises embeddings by text for the life of the server process, so repeat runs embed identical vectors. The result also carries `tuning` (a summary, `"defaults"` when none), `signalsPinned`, `asOf` (the cutoff, or null) and `excludedAfterAsOf`.
 
 #### `POST /api/v1/chats/[id]?action=toggle-agent-mode`
 
