@@ -27,6 +27,7 @@ import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
+import { calculateReinforcedImportance } from './reinforced-importance'
 
 // =============================================================================
 // Constants
@@ -120,12 +121,9 @@ export interface MemoryGateOutcome {
 // Reinforced Importance Formula
 // =============================================================================
 
-/**
- * Calculate reinforced importance: importance + log2(count + 1) * 0.05, capped at 1.0
- */
-export function calculateReinforcedImportance(baseImportance: number, reinforcementCount: number): number {
-  return Math.min(1.0, baseImportance + Math.log2(reinforcementCount + 1) * 0.05)
-}
+// The formula lives in its own module so the memories repository's atomic
+// reinforcement write can compute it without importing the gate (bug 182).
+export { calculateReinforcedImportance }
 
 // =============================================================================
 // Gate Core
@@ -517,6 +515,39 @@ export async function reembedMemory(
 }
 
 /**
+ * Count one more observation of `memory` and return the row's reinforcement
+ * fields as they now stand.
+ *
+ * The count is incremented atomically against the row at write time
+ * (`MemoriesRepository.incrementReinforcement`), never written as an absolute
+ * value from the gate's snapshot — two jobs reinforcing the same row would
+ * otherwise both write N+1 (bug 182). Returns null when the row is missing. In
+ * the job child the write is buffered and replayed by the parent, so the
+ * caller gets the snapshot's count plus one as its local view.
+ */
+export async function countReinforcement(
+  memory: Memory,
+): Promise<Pick<Memory, 'reinforcementCount' | 'lastReinforcedAt' | 'reinforcedImportance'> | null> {
+  const repos = getRepositories()
+  const at = new Date().toISOString()
+  const counted = await repos.memories.incrementReinforcement(memory.characterId, memory.id, at)
+  if (counted === null) return null
+  if (counted === undefined) {
+    const reinforcementCount = (memory.reinforcementCount ?? 1) + 1
+    logger.debug('[MemoryGate] Reinforcement buffered (job child); using local view', {
+      memoryId: memory.id,
+      reinforcementCount,
+    })
+    return {
+      reinforcementCount,
+      lastReinforcedAt: at,
+      reinforcedImportance: calculateReinforcedImportance(memory.importance, reinforcementCount),
+    }
+  }
+  return { ...counted, lastReinforcedAt: at }
+}
+
+/**
  * Count a near-duplicate re-observation (SKIP_NEAR_DUPLICATE) as reinforcement.
  *
  * The candidate restates the existing memory almost verbatim, so nothing about
@@ -525,15 +556,8 @@ export async function reembedMemory(
  * reinforcedImportance — which is what protection and ranking read.
  */
 export async function absorbNearDuplicate(existingMemory: Memory): Promise<Memory> {
-  const newCount = (existingMemory.reinforcementCount ?? 1) + 1
-  const patch: Partial<Memory> = {
-    reinforcementCount: newCount,
-    lastReinforcedAt: new Date().toISOString(),
-    reinforcedImportance: calculateReinforcedImportance(existingMemory.importance, newCount),
-  }
-
-  const updated = await patchMemory(existingMemory, patch)
-  if (!updated) {
+  const counted = await countReinforcement(existingMemory)
+  if (!counted) {
     logger.warn('[MemoryGate] Failed to reinforce near-duplicate memory', {
       memoryId: existingMemory.id,
       characterId: existingMemory.characterId,
@@ -543,10 +567,10 @@ export async function absorbNearDuplicate(existingMemory: Memory): Promise<Memor
 
   logger.debug('[MemoryGate] Near-duplicate absorbed as reinforcement', {
     memoryId: existingMemory.id,
-    reinforcementCount: newCount,
-    reinforcedImportance: patch.reinforcedImportance,
+    reinforcementCount: counted.reinforcementCount,
+    reinforcedImportance: counted.reinforcedImportance,
   })
-  return updated
+  return { ...existingMemory, ...counted }
 }
 
 /**
@@ -573,10 +597,6 @@ export async function reinforceMemory(
   const allNovelDetails = extractNovelDetails(candidateContent, existingMemory.content)
   const atCap = countReinforcementFootnotes(existingMemory.content) >= MAX_REINFORCEMENT_FOOTNOTES
 
-  const newCount = (existingMemory.reinforcementCount ?? 1) + 1
-  const now = new Date().toISOString()
-  const newReinforcedImportance = calculateReinforcedImportance(existingMemory.importance, newCount)
-
   const { content: newContent, appended: novelDetails } = appendCappedFootnotes(
     existingMemory.content,
     allNovelDetails,
@@ -592,11 +612,9 @@ export async function reinforceMemory(
 
   const contentChanged = newContent !== existingMemory.content
 
-  const updateData: Partial<Memory> = {
-    reinforcementCount: newCount,
-    lastReinforcedAt: now,
-    reinforcedImportance: newReinforcedImportance,
-  }
+  // The count, lastReinforcedAt and reinforcedImportance are NOT in this
+  // patch: they move only through countReinforcement's atomic increment.
+  const updateData: Partial<Memory> = {}
 
   if (contentChanged) {
     updateData.content = newContent
@@ -634,14 +652,26 @@ export async function reinforceMemory(
     }
   }
 
-  const updatedMemory = await patchMemory(existingMemory, updateData)
-
-  if (!updatedMemory) {
+  const counted = await countReinforcement(existingMemory)
+  if (!counted) {
     logger.warn('[MemoryGate] Failed to update memory during reinforcement', {
       memoryId: existingMemory.id,
       characterId: existingMemory.characterId,
     })
     return { memory: existingMemory, novelDetails }
+  }
+
+  let updatedMemory: Memory = { ...existingMemory, ...counted }
+  if (Object.keys(updateData).length > 0) {
+    const patched = await patchMemory(updatedMemory, updateData)
+    if (!patched) {
+      logger.warn('[MemoryGate] Failed to update memory during reinforcement', {
+        memoryId: existingMemory.id,
+        characterId: existingMemory.characterId,
+      })
+      return { memory: updatedMemory, novelDetails }
+    }
+    updatedMemory = { ...patched, ...counted }
   }
 
   // Re-embed if content or anchors changed (the anchor line is embedded text).

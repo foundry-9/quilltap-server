@@ -40,8 +40,8 @@ stopped.
 - **What blocks the code:** its §3 asks for the constants to be chosen against a
   probe set of real turns with the right answers written down in advance. That
   probe set doesn't exist yet. This runbook builds it.
-- **Open but separate:** bug 182 (the reinforcement-count race). Not part of
-  this work.
+- **Separate:** bug 182 (the reinforcement-count race), fixed 2026-10-08. Not
+  part of this work.
 
 ## 2. Ground rules
 

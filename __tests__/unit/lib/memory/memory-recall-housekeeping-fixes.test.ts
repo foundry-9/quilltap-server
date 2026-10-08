@@ -91,12 +91,19 @@ function makeVectorStore() {
 }
 
 let updateForCharacter: jest.Mock<any>
+let incrementReinforcement: jest.Mock<any>
 let vectorStore: ReturnType<typeof makeVectorStore>
 
 beforeEach(() => {
   jest.clearAllMocks()
   updateForCharacter = jest.fn(async (characterId: string, id: string, patch: Partial<Memory>) => ({ ...makeMemory({ id, characterId }), ...patch }))
-  factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter } })
+  // Stands in for the atomic write: the count it returns is the committed row's,
+  // here 7 → 8, deliberately not the snapshot's, so tests can tell them apart.
+  incrementReinforcement = jest.fn(async () => ({
+    reinforcementCount: 8,
+    reinforcedImportance: gate.calculateReinforcedImportance(0.6, 8),
+  }))
+  factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, incrementReinforcement } })
   vectorStore = makeVectorStore()
   vectorMock.getCharacterVectorStore.mockResolvedValue(vectorStore)
   embedMock.generateEmbeddingForUser.mockResolvedValue({ embedding: EMBEDDING, model: 'test', dimensions: 2 })
@@ -107,27 +114,28 @@ beforeEach(() => {
 // =============================================================================
 
 describe('F1 — absorbNearDuplicate', () => {
-  it('bumps count and reinforcedImportance, leaves content and embedding alone', async () => {
+  it('counts through the atomic increment, writes no patch, leaves content and embedding alone', async () => {
     const existing = makeMemory({ reinforcementCount: 1, importance: 0.6 })
 
     const result = await gate.absorbNearDuplicate(existing)
 
-    expect(updateForCharacter).toHaveBeenCalledTimes(1)
-    const [charId, memId, patch] = updateForCharacter.mock.calls[0] as [string, string, Partial<Memory>]
+    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
+    const [charId, memId, at] = incrementReinforcement.mock.calls[0] as [string, string, string]
     expect(charId).toBe('char-1')
     expect(memId).toBe('mem-1')
-    expect(patch.reinforcementCount).toBe(2)
-    expect(patch.reinforcedImportance).toBeCloseTo(gate.calculateReinforcedImportance(0.6, 2))
-    expect(typeof patch.lastReinforcedAt).toBe('string')
-    expect(patch).not.toHaveProperty('content')
-    expect(patch).not.toHaveProperty('embedding')
+    expect(typeof at).toBe('string')
+    // Bug 182: no absolute count from the snapshot ever reaches a patch.
+    expect(updateForCharacter).not.toHaveBeenCalled()
     expect(embedMock.generateEmbeddingForUser).not.toHaveBeenCalled()
-    expect(result.reinforcementCount).toBe(2)
+    // The committed row's count wins over snapshot + 1.
+    expect(result.reinforcementCount).toBe(8)
+    expect(result.reinforcedImportance).toBeCloseTo(gate.calculateReinforcedImportance(0.6, 8))
+    expect(result.lastReinforcedAt).toBe(at)
     expect(result.content).toBe(existing.content)
   })
 
-  it('returns the locally patched row when the write is buffered (job child returns undefined)', async () => {
-    updateForCharacter.mockResolvedValue(undefined)
+  it('returns the snapshot + 1 as its local view when the write is buffered (job child returns undefined)', async () => {
+    incrementReinforcement.mockResolvedValue(undefined)
     const existing = makeMemory({ reinforcementCount: 4 })
 
     const result = await gate.absorbNearDuplicate(existing)
@@ -137,7 +145,7 @@ describe('F1 — absorbNearDuplicate', () => {
   })
 
   it('returns the original row when the memory is gone (repository null)', async () => {
-    updateForCharacter.mockResolvedValue(null)
+    incrementReinforcement.mockResolvedValue(null)
     const existing = makeMemory()
 
     const result = await gate.absorbNearDuplicate(existing)
@@ -181,8 +189,11 @@ describe('F3 — reinforcement footnote cap', () => {
     )
 
     expect(novelDetails).toEqual([])
+    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
     const patch = updateForCharacter.mock.calls[0][2] as Partial<Memory>
-    expect(patch.reinforcementCount).toBe(4)
+    expect(patch).not.toHaveProperty('reinforcementCount')
+    expect(patch).not.toHaveProperty('reinforcedImportance')
+    expect(patch).not.toHaveProperty('lastReinforcedAt')
     expect(patch).not.toHaveProperty('content')
     expect(patch.entities).toEqual(['Friday', 'Marguerite'])
     expect(embedMock.generateEmbeddingForUser).not.toHaveBeenCalled()
@@ -199,6 +210,7 @@ describe('F3 — reinforcement footnote cap', () => {
     )
 
     expect(novelDetails).toContain('Marguerite')
+    expect(incrementReinforcement).toHaveBeenCalledTimes(1)
     const patch = updateForCharacter.mock.calls[0][2] as Partial<Memory>
     expect(patch.content).toContain('[+] Marguerite')
     expect(embedMock.generateEmbeddingForUser).toHaveBeenCalledTimes(1)

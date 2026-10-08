@@ -14,6 +14,8 @@ import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
+import { getRawDatabase } from '../backends/sqlite/client';
+import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
 
 /**
  * Input to {@link MemoriesRepository.create}. The tier fields are optional
@@ -547,6 +549,58 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         return await this.update(memoryId, data);
       },
       'Error updating memory for character',
+      { characterId, memoryId }
+    );
+  }
+
+  /**
+   * Count one more observation of a memory: `reinforcementCount + 1`, a fresh
+   * `lastReinforcedAt`, and `reinforcedImportance` recomputed from the new
+   * count — all from the row as it stands at write time, in one synchronous
+   * transaction, so two jobs reinforcing the same row both count (bug 182).
+   *
+   * Callers must not write these three fields through `updateForCharacter`:
+   * an absolute count taken from an earlier read is exactly the lost update
+   * this method exists to prevent. In the forked job child this is a buffered
+   * write (`increment*` prefix) and returns nothing there; the parent replays
+   * it against the committed row.
+   *
+   * @returns the new count and importance, or null when the memory does not
+   *   exist or belongs to another character
+   */
+  async incrementReinforcement(
+    characterId: string,
+    memoryId: string,
+    at: string,
+  ): Promise<{ reinforcementCount: number; reinforcedImportance: number } | null> {
+    return this.safeQuery(
+      async () => {
+        const db = getRawDatabase();
+        if (!db) {
+          throw new Error('Memory reinforcement: the main database is not initialized');
+        }
+        const now = this.getCurrentTimestamp();
+        const result = db.transaction(() => {
+          const row = db
+            .prepare('SELECT "importance", "reinforcementCount" FROM "memories" WHERE "id" = ? AND "characterId" = ?')
+            .get(memoryId, characterId) as { importance: number | null; reinforcementCount: number | null } | undefined;
+          if (!row) return null;
+          const reinforcementCount = (row.reinforcementCount ?? 1) + 1;
+          const reinforcedImportance = calculateReinforcedImportance(row.importance ?? 0.5, reinforcementCount);
+          db.prepare(
+            'UPDATE "memories" SET "reinforcementCount" = ?, "reinforcedImportance" = ?, "lastReinforcedAt" = ?, "updatedAt" = ? WHERE "id" = ?'
+          ).run(reinforcementCount, reinforcedImportance, at, now, memoryId);
+          return { reinforcementCount, reinforcedImportance };
+        })();
+
+        if (!result) {
+          logger.warn('Memory not found for reinforcement', { memoryId, characterId });
+          return null;
+        }
+        logger.debug('Memory reinforcement counted', { memoryId, characterId, ...result });
+        return result;
+      },
+      'Error reinforcing memory',
       { characterId, memoryId }
     );
   }

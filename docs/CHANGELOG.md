@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Fix bug 182: concurrent memory reinforcements lose a count
+
+- Two extraction jobs reinforcing the same memory at once both wrote `reinforcementCount = N + 1` from
+  their snapshot, so one observation was lost. New `MemoriesRepository.incrementReinforcement`
+  increments the count and recomputes `reinforcedImportance` and `lastReinforcedAt` from the row at
+  write time, in one transaction. In the job child it is buffered as an increment and replayed by the
+  parent.
+- `absorbNearDuplicate` and `reinforceMemory` count through it (`countReinforcement` in
+  `lib/memory/memory-gate.ts`); `reinforceMemory` still patches content and anchors through
+  `patchMemory`, without the reinforcement fields.
+- `calculateReinforcedImportance` moved to `lib/memory/reinforced-importance.ts`; `memory-gate.ts`
+  re-exports it.
+
 #### Memory consolidation and tiers
 
 Implements `docs/developer/features/memory-consolidation-and-tiers.md` (workstreams A–D).

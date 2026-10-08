@@ -246,10 +246,11 @@ What shipped, and where it differs from or sharpens the text above.
   row would overwrite the union). Housekeeping's cap pass never deletes a merge survivor.
   `lastReinforcedAt` takes the latest of the group. Test:
   `__tests__/unit/lib/memory/housekeeping-merge-fold.test.ts`.
-- **Not done: atomic reinforcement increments.** F1 (like the existing REINFORCE path) writes an
-  absolute count computed from the gate's snapshot, so two extraction jobs absorbing the same row
-  at the same moment can lose one observation. Filed as
-  [bug 182](../bugs/bug-182-reinforcement-count-race.md).
+- **Atomic reinforcement increments (done later, as bug 182).** F1 (like the existing REINFORCE
+  path) originally wrote an absolute count computed from the gate's snapshot, so two extraction
+  jobs absorbing the same row at the same moment could lose one observation. Filed and fixed
+  (2026-10-08) as [bug 182](../bugs/fixed/bug-182-reinforcement-count-race.md): both paths now
+  count through `MemoriesRepository.incrementReinforcement`.
 
 ## F2 result (2026-10-08)
 

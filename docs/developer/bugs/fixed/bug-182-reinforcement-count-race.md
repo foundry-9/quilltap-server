@@ -2,18 +2,34 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **FIXED in v4 (2026-10-08)** |
 | **Found** | 2026-10-08, Copilot review of PR 83 (memory-recall-and-housekeeping-fixes, F1) |
-| **Fixed** | — |
+| **Fixed** | 2026-10-08, v4.10-dev |
 | **Severity** | **Low.** One lost observation per collision: `reinforcementCount` ends one short and `reinforcedImportance` a hair low. No text, vector or link damage |
 | **Who it bites** | characters whose memory extraction runs more than one job at a time (a raised `MEMORY_EXTRACTION` concurrency cap, or several chats feeding one character) when two jobs restate the same fact in the same moment |
 | **Provenance** | v4 review finding; not from the v5 port |
 | **Defect site** | `absorbNearDuplicate` (`lib/memory/memory-gate.ts:412-420`) and `reinforceMemory` (`:450-522`) compute `newCount = (existingMemory.reinforcementCount ?? 1) + 1` from the gate's snapshot of the row and persist it as an absolute value through `patchMemory` → `MemoriesRepository.updateForCharacter` |
-| **Fix site** | not chosen — see "Fix" |
+| **Fix site** | new `MemoriesRepository.incrementReinforcement` (`lib/database/repositories/memories.repository.ts`) + `countReinforcement` in `lib/memory/memory-gate.ts`, called by `absorbNearDuplicate` and `reinforceMemory`; the formula moved to `lib/memory/reinforced-importance.ts` |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-08).** The first option below. `MemoriesRepository.incrementReinforcement(characterId,
+memoryId, at)` reads the row's `importance` and `reinforcementCount` and writes the incremented count,
+the recomputed `reinforcedImportance` and `lastReinforcedAt` in one synchronous better-sqlite3
+transaction on the main connection, so no other write interleaves and the count is always taken from
+the row at write time. The importance is computed in JS from the committed count, so SQLite's math
+functions are not needed. Its `increment*` prefix already classifies it as a write in the child
+proxy; the buffered payload is `(characterId, memoryId, at)` — an increment, not a value — and the
+parent replays it against the committed row. Both gate paths now count through `countReinforcement`
+(`memory-gate.ts`); `reinforceMemory` patches only `content` and the episodic anchors through
+`patchMemory`, never the three reinforcement fields. In the child the caller's local view is the
+snapshot's count plus one, as before.
+
+Not in scope: two concurrent `REINFORCE`s that both append `[+]` footnotes still compute content
+from the same snapshot, and the later patch wins. That loses prose, not a count, and needs two jobs
+adding *different* novel details to one row in the same moment.
 
 ## Symptom
 
@@ -50,6 +66,10 @@ Not done in PR 83 by decision of the owner (2026-10-08). Options:
 - A compare-and-set on the old count, retried on a miss.
 
 ## Verify
+
+`__tests__/unit/lib/background-jobs/child-proxy-memory-housekeeping.test.ts` ("bug 182") does this:
+two job scopes absorb the same count-2 snapshot, the buffered batches are replayed against a real
+SQLite row, and the row ends at 4 with `reinforcedImportance` recomputed for 4. The original plan:
 
 A test that runs two `absorbNearDuplicate` calls against one row through the child proxy, applies
 both buffered batches in the parent, and expects `reinforcementCount` to rise by two.
