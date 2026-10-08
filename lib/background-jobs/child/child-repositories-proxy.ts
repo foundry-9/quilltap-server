@@ -27,6 +27,8 @@ import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { ChildWritePayload } from '../ipc-types';
 import { logger } from '@/lib/logger';
 import { runWithJobFolderCache } from './job-folder-cache';
+import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 
 const log = logger.child({ module: 'jobs:child:proxy' });
 
@@ -53,6 +55,14 @@ interface JobScope {
    * Surfaced once per job in {@link flushPendingWrites} for observability.
    */
   sanitizedArgs: number;
+  /**
+   * Read-your-writes overlay for equipped outfits, keyed `chatId:characterId`.
+   * Each buffered outfit write records the slots it will leave behind, and
+   * `chats.getEquippedOutfitForCharacter` answers from here before the
+   * snapshot — otherwise two outfit changes in one job compute from the same
+   * stale baseline and the parent's replay keeps only the last (bug 179).
+   */
+  equippedOutfits: Map<string, EquippedSlots>;
 }
 
 const jobScopeStore = new AsyncLocalStorage<JobScope>();
@@ -64,6 +74,7 @@ export function runWithJobScope<T>(jobId: string, fn: () => Promise<T>): Promise
     recentlyWrittenKeys: new Set(),
     warnedReads: new Set(),
     sanitizedArgs: 0,
+    equippedOutfits: new Map(),
   };
   // Nest a fresh per-job folder-ensure memo. It lives in its own
   // dependency-free module so lib/mount-index/folder-paths can read it via
@@ -157,6 +168,40 @@ export function appendWrite(method: string, args: unknown[]): void {
 }
 
 // ============================================================================
+// Equipped-outfit read-your-writes overlay (bug 179)
+// ============================================================================
+
+function equippedOutfitKey(chatId: unknown, characterId: unknown): string | null {
+  return typeof chatId === 'string' && typeof characterId === 'string'
+    ? `${chatId}:${characterId}`
+    : null;
+}
+
+/**
+ * Record the slots a buffered `wardrobeWear.commitEquippedOutfit` leaves
+ * behind, so later reads in the same job see them. The chokepoint is the only
+ * slot writer (the equip-chokepoint fence enforces it), so it is the only
+ * write this overlay needs to follow.
+ */
+function recordBufferedOutfitWrite(scope: JobScope, fqn: string, args: unknown[]): void {
+  if (fqn !== 'wardrobeWear.commitEquippedOutfit') return;
+  const input = args[0] as { chatId?: unknown; characterId?: unknown; nextSlots?: unknown } | undefined;
+  const key = equippedOutfitKey(input?.chatId, input?.characterId);
+  const slots = input?.nextSlots;
+  if (!key || !slots || typeof slots !== 'object') return;
+  scope.equippedOutfits.set(key, cloneEquippedSlots(slots as EquippedSlots));
+  log.debug('Recorded buffered outfit write for in-job reads', { jobId: scope.jobId, key });
+}
+
+/** The job's own buffered slots for a character, or undefined to read the snapshot. */
+function bufferedOutfitFor(scope: JobScope | undefined, args: unknown[]): EquippedSlots | undefined {
+  if (!scope || scope.equippedOutfits.size === 0) return undefined;
+  const key = equippedOutfitKey(args[0], args[1]);
+  const slots = key ? scope.equippedOutfits.get(key) : undefined;
+  return slots ? cloneEquippedSlots(slots) : undefined;
+}
+
+// ============================================================================
 // Method classification
 // ============================================================================
 
@@ -200,7 +245,9 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   // diffing against the prior slots. Buffered whole so the parent replays it
   // on its RW connection, where the prior state is true — the child's
   // snapshot is stale within a job and blind to its own earlier writes, so a
-  // child-side diff would double-count. Callers discard the return.
+  // child-side diff would double-count. Callers discard the return. The slots
+  // it carries feed the job's equipped-outfit overlay, so a later
+  // `chats.getEquippedOutfitForCharacter` in the same job sees them (bug 179).
   'wardrobeWear.commitEquippedOutfit': 'write',
   // Character-delete cleanup: folds rows into the unattributed row. Not
   // reached from a job today; classified so it can never be mistaken for a read.
@@ -431,6 +478,10 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
         // table rather than the repository object.
         return (...args: unknown[]) => {
           const scope = jobScopeStore.getStore();
+          if (repoKey === 'chats' && key === 'getEquippedOutfitForCharacter') {
+            const buffered = bufferedOutfitFor(scope, args);
+            if (buffered) return Promise.resolve(buffered);
+          }
           if (scope && scope.recentlyWrittenKeys.size > 0) {
             const readKey = `${repoKey}.${key}`;
             if (!scope.warnedReads.has(readKey)) {
@@ -461,6 +512,8 @@ function wrapRepo<T extends object>(repoKey: string, instance: T): T {
           // caller now has.
           const result = syntheticWriteResult(key, args);
           appendWrite(`${repoKey}.${key}`, args);
+          const scope = jobScopeStore.getStore();
+          if (scope) recordBufferedOutfitWrite(scope, `${repoKey}.${key}`, args);
           // Real repository write methods are async; mirror that here so
           // callers that chain `.then` / `.catch` / `Promise.all` against
           // the proxy don't trip on a synchronous `undefined`.

@@ -2,18 +2,32 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | **FIXED in v4 (2026-10-07)** |
 | **Found** | 2026-10-07, by the v5 port (P4.159, dogfood #150 — porting v4's degraded sibling open) |
-| **Fixed** | — |
+| **Fixed** | 2026-10-07, v4.10-dev |
 | **Severity** | Low. Nothing is lost on disk, but every LLM call made until the next restart goes unlogged (each logs `Failed to log LLM call`), the LLM Inspector shows nothing new, and `/api/health` answers `degraded` with `LLM logs database unavailable: LLM logs database is in degraded mode` |
 | **Who it bites** | the deployment the mount-index retry ladder was written for: a data directory on a bind-mounted iCloud Drive / VirtioFS volume (Docker), where a cold open can read incomplete page-1 bytes once and succeed a moment later. `quilltap-llm-logs.db` sits in the same `data/` directory as `quilltap-mount-index.db` and is exposed to the same flake |
 | **Provenance** | **Faithful.** v5 ports the asymmetry exactly: one attempt and one ERROR for the LLM logs, the four-attempt ladder for the mount index |
 | **Defect site** | `lib/database/backends/sqlite/llm-logs-client.ts:49-98` (`getLLMLogsSQLiteClient`: one `new Database` + key + pragmas inside a single `try`; the `catch` logs ERROR `Failed to initialize LLM logs database — entering degraded mode` at `:91` and sets the degraded flag for the life of the process) |
-| **Fix site** | not yet fixed — `llm-logs-client.ts`, given the open-verify-retry structure `mount-index-client.ts:43-149` uses (ideally one shared helper both clients call) |
-| **v5 status** | Faithful (P4.159). Two v5 pins trip when v4 adds the ladder: `degraded_sibling_open_equivalence`'s `llmLogs/garbage` row (driven through v4's REAL client) and `host_boot_hardness`'s `a_garbage_llm_logs_file_degrades_with_one_error_and_boots` (asserts NO `cold-open failed` WARN) |
-| **Index** | [bugs.md](../bugs.md) |
+| **Fix site** | new `lib/database/backends/sqlite/cold-open-retry.ts` (`openWithColdOpenRetry`, the one ladder) called by `llm-logs-client.ts` (new `attemptOpenLLMLogs` with the verify probe) and `mount-index-client.ts` |
+| **v5 status** | Faithful (P4.159) — v4 now has the ladder; the two v5 pins (`degraded_sibling_open_equivalence`'s `llmLogs/garbage` row and `host_boot_hardness`'s `a_garbage_llm_logs_file_degrades_with_one_error_and_boots`) should trip and converge |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-07).** The ladder moved out of the mount-index client into
+`openWithColdOpenRetry(label, path, logger, attempt)` (`cold-open-retry.ts`): four attempts,
+`[200, 600, 1500]` ms backoff, a WARN `<label> cold-open failed — retrying {path, attempt,
+maxAttempts, backoffMs, error}` per failed attempt, and a result the caller turns into its own
+success INFO or degraded-mode ERROR (both now carry `attempts`). The LLM-logs client gained
+`attemptOpenLLMLogs` — open, key, text codec, the `SELECT count(*) FROM sqlite_master` verify
+probe, pragmas, closing the connection on any failure — and both clients call the shared
+ladder, so they cannot drift again. Messages match the mount index's: `LLM logs cold-open
+failed — retrying`, then `Failed to initialize LLM logs database — entering degraded mode`
+with `attempts: 4`. Pinned by
+`__tests__/unit/lib/database/backends/sqlite/cold-open-retry.test.ts`. The two v5 pins named
+in the table above (`llmLogs/garbage`, `a_garbage_llm_logs_file_degrades_with_one_error_and_boots`) should
+now trip.
 
 ## Symptom
 

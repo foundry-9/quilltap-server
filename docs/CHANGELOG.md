@@ -4,6 +4,32 @@
 
 ### 4.10-dev
 
+#### Fix bugs 179, 180 and 181: outfit writes in the job child, LLM-logs cold open, memory embeddings in backups
+
+- Bug 181 (High): a full backup wrote each memory's `Float32Array` embedding through
+  `JSON.stringify`, producing an index-keyed object (`{"0":…}`) that `MemorySchema` refuses, so
+  restore skipped every embedded memory. `createBackup` now writes memory embeddings through
+  `encodeEmbedding` as `number[]`. For existing backups, the restore's memory phase runs new
+  `decodeIndexKeyedEmbedding` (`lib/backup/restore/index-keyed-embedding.ts`), which converts an
+  object with exactly the keys `"0"…"n-1"` and finite number values to a `number[]` and passes
+  anything else through. The restore summary's `memories` count is now the rows written, not the
+  archive's row count.
+- Bug 180 (Low): the LLM-logs database opened with one attempt, so a transient cold-open read
+  failure degraded it until restart. New `openWithColdOpenRetry`
+  (`lib/database/backends/sqlite/cold-open-retry.ts`) holds the four-attempt, 200/600/1500 ms
+  ladder that the mount-index client had inline; both clients now use it. The LLM-logs open
+  gained the `sqlite_master` verify probe and closes the connection on a failed attempt. New WARN
+  `LLM logs cold-open failed — retrying`; the success INFO and degraded ERROR now carry
+  `attempts`.
+- Bug 179 (Low): in the job child, outfit reads came from the readonly snapshot, so two outfit
+  changes in one job computed from the same baseline and the parent's replay kept only the last.
+  The child repository proxy now records the `nextSlots` of each buffered
+  `wardrobeWear.commitEquippedOutfit` in a per-job overlay keyed `chatId:characterId`, and
+  `chats.getEquippedOutfitForCharacter` returns a copy from it before reading the snapshot.
+- Docs: `docs/developer/BACKGROUND_JOBS_CHILD.md` (the outfit overlay),
+  `features/complete/wardrobe-wear-ledger.md` §3.5, bug files moved to
+  `docs/developer/bugs/fixed/`, index updated.
+
 #### Wardrobe tools: pictures and picture ids
 
 - New setting `chatSettings.wardrobeImageSettings.generateFromTools` (default false; no migration,

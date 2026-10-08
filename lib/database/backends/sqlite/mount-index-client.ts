@@ -17,11 +17,11 @@
  */
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
-import { sleepSync } from '@/lib/utils/sleep';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
 import { registerTextCodecFunction } from './text-codec-function';
+import { openWithColdOpenRetry } from './cold-open-retry';
 import { stopMountIndexPeriodicCheckpoints, runMountIndexShutdownCheckpoint } from './mount-index-protection';
 
 const moduleLogger = logger.child({ module: 'database:mount-index-client' });
@@ -38,9 +38,6 @@ declare global {
 // ============================================================================
 // Client Management
 // ============================================================================
-
-/** Retry budget for cold-open of the mount-index DB. See attemptOpen() below. */
-const OPEN_RETRY_BACKOFF_MS = [200, 600, 1500];
 
 /**
  * One attempt to open + key + verify the mount-index DB. Throws on any
@@ -109,40 +106,25 @@ export function getMountIndexSQLiteClient(config: SQLiteConfig): DatabaseType | 
     walMode: config.walMode,
   });
 
-  let lastError: unknown;
-  const maxAttempts = OPEN_RETRY_BACKOFF_MS.length + 1;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const db = attemptOpenMountIndex(config);
-      globalThis.__quilltapMountIndexDatabase = db;
-      globalThis.__quilltapMountIndexDegraded = false;
+  const result = openWithColdOpenRetry('Mount index', config.path, moduleLogger, () =>
+    attemptOpenMountIndex(config),
+  );
+  if (result.ok) {
+    globalThis.__quilltapMountIndexDatabase = result.value;
+    globalThis.__quilltapMountIndexDegraded = false;
 
-      moduleLogger.info('Mount index database connection established', {
-        path: config.path,
-        attempts: attempt + 1,
-      });
+    moduleLogger.info('Mount index database connection established', {
+      path: config.path,
+      attempts: result.attempts,
+    });
 
-      return db;
-    } catch (error) {
-      lastError = error;
-      const backoff = OPEN_RETRY_BACKOFF_MS[attempt];
-      if (backoff !== undefined) {
-        moduleLogger.warn('Mount index cold-open failed — retrying', {
-          path: config.path,
-          attempt: attempt + 1,
-          maxAttempts,
-          backoffMs: backoff,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        sleepSync(backoff);
-      }
-    }
+    return result.value;
   }
 
   moduleLogger.error('Failed to initialize mount index database — entering degraded mode', {
     path: config.path,
-    attempts: maxAttempts,
-    error: lastError instanceof Error ? lastError.message : String(lastError),
+    attempts: result.attempts,
+    error: result.error instanceof Error ? result.error.message : String(result.error),
   });
   globalThis.__quilltapMountIndexDegraded = true;
   return null;

@@ -44,6 +44,7 @@ import { planWardrobeImagePointerFixes, remapBackupData, type WardrobeImagePoint
 import { updateProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
+import { decodeIndexKeyedEmbedding } from './index-keyed-embedding';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
 
@@ -258,13 +259,24 @@ export async function restore(
     // with `id` for new-account restores. Letting the repository mint a fresh id
     // here would leave every one of those edges pointing at a memory that no longer
     // exists, quietly flattening the Commonplace Book's graph on restore.
+    let memoriesRestored = 0;
     for (const memory of data.memories) {
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
 
         // Strip legacy personaId from old backups (column no longer exists)
         const { personaId: _legacyPersonaId, ...cleanMemoryData } = memoryData as Record<string, unknown>;
+        // Pre-fix backups wrote embeddings as index-keyed objects (bug 181).
+        const decodedEmbedding = decodeIndexKeyedEmbedding(cleanMemoryData.embedding);
+        if (decodedEmbedding !== cleanMemoryData.embedding) {
+          moduleLogger.debug('Decoded index-keyed memory embedding', {
+            memoryId: id,
+            dimensions: (decodedEmbedding as number[]).length,
+          });
+          cleanMemoryData.embedding = decodedEmbedding;
+        }
         await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0], { id });
+        memoriesRestored++;
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore memory', { memoryId: memory.id, error });
@@ -1170,7 +1182,7 @@ export async function restore(
       messages: messagesRestored,
       tags: data.tags.length,
       files: filesRestored,
-      memories: data.memories.length,
+      memories: memoriesRestored,
       profiles: {
         connection: data.connectionProfiles.length,
         image: data.imageProfiles.length,

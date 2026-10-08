@@ -20,6 +20,7 @@ import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
 import { applySqlcipherKey } from './sqlcipher-key';
 import { registerTextCodecFunction } from './text-codec-function';
+import { openWithColdOpenRetry } from './cold-open-retry';
 import { stopLLMLogsPeriodicCheckpoints, runLLMLogsShutdownCheckpoint } from './llm-logs-protection';
 
 const moduleLogger = logger.child({ module: 'database:llm-logs-client' });
@@ -38,32 +39,23 @@ declare global {
 // ============================================================================
 
 /**
- * Initialize and return the LLM logs database connection.
- *
- * Uses the same pragma set as the main DB except foreign keys are disabled
- * (the logs DB has no inter-table relationships).
- *
- * @param config - SQLite config (path should point to quilltap-llm-logs.db)
- * @returns The database instance, or null if opening failed (degraded mode)
+ * One attempt to open + key + verify the LLM logs DB. Throws on any failure
+ * (closing the connection first) so the caller can retry. On success, returns
+ * a fully configured connection.
  */
-export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | null {
-  if (globalThis.__quilltapLLMLogsDatabase) {
-    return globalThis.__quilltapLLMLogsDatabase;
-  }
-
-  moduleLogger.info('Initializing LLM logs database connection', {
-    path: config.path,
-    walMode: config.walMode,
-  });
-
+function attemptOpenLLMLogs(config: SQLiteConfig): DatabaseType {
+  const db = new Database(config.path);
+  let configured = false;
   try {
-    const db = new Database(config.path);
-
     // SQLCipher key MUST be the first pragma before any other operations.
     if (applySqlcipherKey(db)) {
       moduleLogger.debug('SQLCipher key set on LLM logs database');
     }
     registerTextCodecFunction(db);
+
+    // Verify probe — forces SQLCipher to decrypt page 1 and parse the header,
+    // which is where a flaky iCloud Drive / VirtioFS cold read fails.
+    db.prepare('SELECT count(*) AS cnt FROM sqlite_master').get();
 
     // Configure pragmas (no foreign keys for the logs DB).
     // Journal mode defaults to a single-file mode (truncate) for safety on
@@ -79,22 +71,58 @@ export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | nul
     db.pragma('mmap_size = 268435456'); // 256MB
     db.pragma('temp_store = MEMORY');
 
-    globalThis.__quilltapLLMLogsDatabase = db;
+    configured = true;
+    return db;
+  } finally {
+    if (!configured) {
+      try { db.close(); } catch { /* ignore */ }
+    }
+  }
+}
+
+/**
+ * Initialize and return the LLM logs database connection.
+ *
+ * Uses the same pragma set as the main DB except foreign keys are disabled
+ * (the logs DB has no inter-table relationships). Opens through the shared
+ * cold-open retry ladder, as the mount index does, so one transient read
+ * failure doesn't degrade the logs for the whole process (bug 180).
+ *
+ * @param config - SQLite config (path should point to quilltap-llm-logs.db)
+ * @returns The database instance, or null if opening failed (degraded mode)
+ */
+export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | null {
+  if (globalThis.__quilltapLLMLogsDatabase) {
+    return globalThis.__quilltapLLMLogsDatabase;
+  }
+
+  moduleLogger.info('Initializing LLM logs database connection', {
+    path: config.path,
+    walMode: config.walMode,
+  });
+
+  const result = openWithColdOpenRetry('LLM logs', config.path, moduleLogger, () =>
+    attemptOpenLLMLogs(config),
+  );
+  if (result.ok) {
+    globalThis.__quilltapLLMLogsDatabase = result.value;
     globalThis.__quilltapLLMLogsDegraded = false;
 
     moduleLogger.info('LLM logs database connection established', {
       path: config.path,
+      attempts: result.attempts,
     });
 
-    return db;
-  } catch (error) {
-    moduleLogger.error('Failed to initialize LLM logs database — entering degraded mode', {
-      path: config.path,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    globalThis.__quilltapLLMLogsDegraded = true;
-    return null;
+    return result.value;
   }
+
+  moduleLogger.error('Failed to initialize LLM logs database — entering degraded mode', {
+    path: config.path,
+    attempts: result.attempts,
+    error: result.error instanceof Error ? result.error.message : String(result.error),
+  });
+  globalThis.__quilltapLLMLogsDegraded = true;
+  return null;
 }
 
 /**

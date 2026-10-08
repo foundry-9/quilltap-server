@@ -20,6 +20,7 @@ import type {
   InstanceSettingRow,
   SerializedVectorEntry,
   SerializedConversationChunk,
+  SerializedMemory,
   SerializedDocMountChunk,
 } from '../types';
 import type {
@@ -29,7 +30,6 @@ import type {
   ConnectionProfile,
   ImageProfile,
   EmbeddingProfile,
-  Memory,
   FileEntry,
   Folder,
   PromptTemplate,
@@ -187,7 +187,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
     const connectionProfiles = await readJsonArrayFile<ConnectionProfile>(rootPath, 'data/connection-profiles.json');
     const imageProfiles = await readJsonArrayFile<ImageProfile>(rootPath, 'data/image-profiles.json');
     const embeddingProfiles = await readJsonArrayFile<EmbeddingProfile>(rootPath, 'data/embedding-profiles.json');
-    const memories = await readJsonArrayFile<Memory>(rootPath, 'data/memories.json');
+    const memories = await readJsonArrayFile<SerializedMemory>(rootPath, 'data/memories.json');
     const files = await readJsonArrayFile<FileEntry>(rootPath, 'data/files.json');
     // Templates are optional for backwards compatibility with older backups
     const promptTemplates = await readJsonArrayFileOptional<PromptTemplate>(rootPath, 'data/prompt-templates.json', []);

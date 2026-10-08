@@ -283,6 +283,12 @@ overwrite; the fix (make the primitives take the prior slots from the previous o
 within a tool call, or move the whole op list into one `commitEquippedOutfit`) is outside this
 spec.
 
+**Filed as [bug 179](../../bugs/fixed/bug-179-buffered-outfit-overwrite.md) and fixed
+2026-10-07** — neither of the two fixes above: the job child's repository proxy now keeps a
+per-job overlay of the slots each buffered `commitEquippedOutfit` leaves behind, and answers
+`chats.getEquippedOutfitForCharacter` from it, so every reader in the job (not only the
+primitives) sees the job's own outfit changes.
+
 ## 4. Lifecycle hygiene
 
 ### 4.1 Item deleted

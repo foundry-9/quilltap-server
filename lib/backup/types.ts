@@ -73,6 +73,13 @@ export interface SerializedVectorEntry {
 }
 
 /**
+ * A memory whose embedding has been encoded as a plain number array so it
+ * survives JSON serialisation (bug 181: a raw Float32Array becomes an
+ * index-keyed object MemorySchema refuses). Other fields match Memory.
+ */
+export type SerializedMemory = Omit<Memory, 'embedding'> & { embedding: number[] | null };
+
+/**
  * A conversation chunk whose embedding has been encoded as a plain number
  * array so it can survive JSON serialisation. Other fields match
  * ConversationChunk verbatim.
@@ -278,8 +285,8 @@ export interface BackupData {
   /** Array of EmbeddingProfile entities */
   embeddingProfiles: EmbeddingProfile[];
 
-  /** Array of Memory entities */
-  memories: Memory[];
+  /** Array of Memory entities, embeddings encoded as number[] */
+  memories: SerializedMemory[];
 
   /** Array of FileEntry entities (metadata only, not actual file contents) */
   files: FileEntry[];

@@ -704,4 +704,60 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     expect(memoriesCreate.mock.calls[0][1]).toEqual({ id: 'mem-1' })
     expect(memoriesCreate.mock.calls[1][1]).toEqual({ id: 'mem-2' })
   })
+
+  it('decodes an index-keyed embedding from a pre-fix backup (bug 181)', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    // Backups written before the fix serialised a Float32Array embedding with
+    // JSON.stringify, which yields an index-keyed object. MemorySchema refuses
+    // that shape, so without the decode every embedded memory was skipped.
+    primeArchive(
+      makeBackupData({
+        memories: [
+          {
+            id: 'mem-1',
+            characterId: 'char-1',
+            content: 'Embedded.',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            tags: [],
+            keywords: [],
+            relatedMemoryIds: [],
+            embedding: { '0': 0.25, '1': -0.5 },
+          },
+        ],
+      })
+    )
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate).toHaveBeenCalledTimes(1)
+    expect(memoriesCreate.mock.calls[0][0].embedding).toEqual([0.25, -0.5])
+    expect(summary.memories).toBe(1)
+  })
+
+  it('counts restored memories from the rows written, not the archive', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    memoriesCreate
+      .mockRejectedValueOnce(new Error('invalid_union'))
+      .mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
+        Promise.resolve({ ...data, id: opts?.id ?? 'generated-memory-id' })
+      )
+    const row = (id: string) => ({
+      id,
+      characterId: 'char-1',
+      content: id,
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      tags: [],
+      keywords: [],
+      relatedMemoryIds: [],
+    })
+    primeArchive(makeBackupData({ memories: [row('mem-1'), row('mem-2')] }))
+
+    const summary = await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate).toHaveBeenCalledTimes(2)
+    expect(summary.memories).toBe(1)
+    expect(summary.warnings.some((w: string) => w.startsWith('Failed to restore memory'))).toBe(true)
+  })
 })

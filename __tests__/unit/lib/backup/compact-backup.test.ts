@@ -218,6 +218,12 @@ describe('createBackup — compact mode', () => {
     const { memories } = await runBackup();
 
     expect(memories).toHaveLength(1);
-    expect(memories[0].embedding).not.toBeNull();
+    // A number[] — not JSON.stringify's index-keyed object, which the
+    // restore's MemorySchema refuses (bug 181).
+    const embedding = memories[0].embedding as number[];
+    expect(Array.isArray(embedding)).toBe(true);
+    expect(embedding).toHaveLength(3);
+    expect(embedding[0]).toBeCloseTo(0.1);
+    expect(embedding[2]).toBeCloseTo(0.3);
   });
 });

@@ -207,7 +207,13 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
   const memoriesArrays = await Promise.all(
     characters.map((char) => repos.memories.findByCharacterId(char.id))
   );
-  const memories = memoriesArrays.flat();
+  // A repository-read memory carries its embedding as a Float32Array, which
+  // JSON.stringify writes as an index-keyed object that MemorySchema refuses
+  // on restore (bug 181). Encode it as number[] like the chunk embeddings.
+  const memories = memoriesArrays.flat().map((memory) => ({
+    ...memory,
+    embedding: encodeEmbedding(memory.embedding ?? null),
+  }));
 
   // Collect character plugin data for all characters
   const characterPluginDataArrays = await Promise.all(

@@ -19,6 +19,7 @@ import type {
   ChatWithMessages,
   SerializedVectorEntry,
   SerializedConversationChunk,
+  SerializedMemory,
   SerializedDocMountChunk,
 } from '../types';
 import type {
@@ -28,7 +29,6 @@ import type {
   ConnectionProfile,
   ImageProfile,
   EmbeddingProfile,
-  Memory,
   FileEntry,
   Folder,
   ChatParticipantBase,
@@ -334,7 +334,7 @@ export function remapBackupData(
       remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId']),
       ['tags', 'relatedMemoryIds']
     ),
-  })) as Memory[];
+  })) as SerializedMemory[];
 
   // Remap prompt templates
   const remappedPromptTemplates = data.promptTemplates.map((template) => ({
