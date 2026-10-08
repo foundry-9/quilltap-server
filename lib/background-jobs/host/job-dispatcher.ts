@@ -253,6 +253,7 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     for (const hint of topicsForCompletedJob(job?.type, job?.payload as Record<string, unknown> | undefined)) {
       publishRealtime(hint.topic, hint.id);
     }
+    void invalidateFrozenArchivesForCompletedJob(job);
   } catch (err) {
     const errorMessage = getErrorMessage(err);
     log.error('Failed to apply child writes; marking job failed', {
@@ -630,6 +631,42 @@ async function applyFolderCreateIdempotent(
       path: data.path,
       bufferedId,
       existingId: existing.id,
+    });
+  }
+}
+
+/**
+ * Corpus-wide memory jobs change what a character's frozen memory archive
+ * should hold. The archive cache lives here in the parent (the context builder
+ * runs here), so a sweep that ran in the child is announced at this, its
+ * commit moment. Ordinary per-turn memory writes deliberately do NOT
+ * invalidate — that would rebuild the archive every turn and defeat the
+ * prefix cache it exists for.
+ */
+const JOBS_INVALIDATING_FROZEN_ARCHIVE = new Set<string>(['MEMORY_HOUSEKEEPING']);
+
+export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob | undefined): Promise<void> {
+  if (!job || !JOBS_INVALIDATING_FROZEN_ARCHIVE.has(job.type)) return;
+  const payload = job.payload as Record<string, unknown> | undefined;
+  if (payload?.dryRun === true) return;
+  try {
+    const mod = await import('@/lib/memory/frozen-archive-cache');
+    const characterId = typeof payload?.characterId === 'string' ? payload.characterId : null;
+    if (characterId) {
+      mod.invalidateFrozenArchive(characterId);
+    } else {
+      // A user-wide sweep touched every character.
+      mod.invalidateAllFrozenArchives();
+    }
+    log.debug('Invalidated frozen memory archives after job', {
+      jobId: job.id,
+      type: job.type,
+      characterId: characterId ?? 'all',
+    });
+  } catch (err) {
+    log.warn('Failed to invalidate frozen memory archives after job', {
+      jobId: job.id,
+      error: getErrorMessage(err),
     });
   }
 }

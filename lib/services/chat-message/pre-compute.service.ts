@@ -34,6 +34,7 @@ import {
   type SearchQueryEmbedding,
 } from '@/lib/memory/memory-service'
 import { buildRetrospectiveProbes, buildTurnRecallContext } from '@/lib/memory/recall-tags'
+import { DYNAMIC_HEAD_MAX_SIZE } from '@/lib/chat/context/memory-injector'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
@@ -321,7 +322,10 @@ async function proactiveRecallTask(
       searchQuery,
       {
         userId,
-        limit: 20,
+        // Sized for the largest head the context builder can ask for (a
+        // retrospective turn on a big memory budget), plus room for the
+        // frozen-archive overlap it filters out.
+        limit: DYNAMIC_HEAD_MAX_SIZE * 4,
         captureQueryEmbedding: captured => {
           queryEmbedding = captured
         },
@@ -343,7 +347,7 @@ async function proactiveRecallTask(
     )
 
     if (memoryResults.length > 0) {
-      return { memories: memoryResults.slice(0, 10), signals, queryEmbedding }
+      return { memories: memoryResults.slice(0, DYNAMIC_HEAD_MAX_SIZE * 3), signals, queryEmbedding }
     }
   } catch (error) {
     logger.warn('Proactive memory recall: memory search failed, falling back to default', {

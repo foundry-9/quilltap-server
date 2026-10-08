@@ -34,6 +34,12 @@ Options:
       --char <characterId>   Character whose memories are searched
                              (default: first LLM-controlled participant)
       --limit <number>       Candidate rows per path (default: 25, max: 100)
+      --memory-budget <tokens>
+                             Memory token budget (positive integer). The new
+                             path's selected rows then follow the budget-sized
+                             dynamic head (the head scales with the model's
+                             memory budget); the old path keeps the historical
+                             fixed 5-entry head.
       --port <number>        Server port for API calls (default: 3000)
       --json                 Print the raw JSON result instead of tables
   -h, --help                 Show this help
@@ -41,12 +47,13 @@ Options:
 Examples:
   quilltap recall-replay <chatId>
   quilltap recall-replay <chatId> --turn 42
+  quilltap recall-replay <chatId> --turn 42 --memory-budget 4000
   quilltap recall-replay <chatId> --turn 42 --json > replay.json
 `);
 }
 
 function parseFlags(args) {
-  const flags = { turn: undefined, char: undefined, limit: undefined, port: 3000, json: false, help: false };
+  const flags = { turn: undefined, char: undefined, limit: undefined, memoryBudget: undefined, port: 3000, json: false, help: false };
   const positional = [];
   let i = 0;
   while (i < args.length) {
@@ -71,6 +78,15 @@ function parseFlags(args) {
           process.exit(1);
         }
         flags.limit = n;
+        break;
+      }
+      case '--memory-budget': {
+        const n = Number(args[++i]);
+        if (!Number.isInteger(n) || n < 1) {
+          console.error('Error: --memory-budget must be a positive integer');
+          process.exit(1);
+        }
+        flags.memoryBudget = n;
         break;
       }
       case '--port': {
@@ -106,8 +122,9 @@ function fmt(n, digits = 3) {
   return n.toFixed(digits);
 }
 
-function printPath(label, rows) {
-  console.log(`\n${BOLD}${label}${RESET} (${rows.length} candidates)`);
+function printPath(label, rows, headSize) {
+  const head = typeof headSize === 'number' ? `, head ${headSize}` : '';
+  console.log(`\n${BOLD}${label}${RESET} (${rows.length} candidates${head})`);
   if (rows.length === 0) {
     console.log(`  ${DIM}(none)${RESET}`);
     return;
@@ -145,6 +162,7 @@ async function recallReplayCommand(args) {
   if (flags.turn !== undefined) body.turnIndex = flags.turn;
   if (flags.char) body.characterId = flags.char;
   if (flags.limit !== undefined) body.limit = flags.limit;
+  if (flags.memoryBudget !== undefined) body.memoryBudget = flags.memoryBudget;
 
   process.stderr.write(`${BOLD}Replaying recall${RESET} for chat ${DIM}${chatId}${RESET} via ${DIM}${url}${RESET}\n`);
 
@@ -193,8 +211,8 @@ async function recallReplayCommand(args) {
     console.log(`${BOLD}Signals${RESET}   ${YELLOW}distillation failed — new path ran inert${RESET}`);
   }
 
-  printPath('OLD PATH (episodic signals inert)', result.oldPath || []);
-  printPath('NEW PATH (retrospective/window/entities live)', result.newPath || []);
+  printPath('OLD PATH (episodic signals inert)', result.oldPath || [], result.oldHeadSize);
+  printPath('NEW PATH (retrospective/window/entities live)', result.newPath || [], result.newHeadSize);
   console.log('');
 }
 

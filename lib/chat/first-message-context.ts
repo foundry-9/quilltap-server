@@ -6,7 +6,7 @@
  */
 
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
 import { logger } from '@/lib/logger'
 import type { ChatParticipantBaseInput } from '@/lib/schemas/chat.types'
 
@@ -205,11 +205,14 @@ async function loadMemoriesForParticipant(
   }
 
   // 4. Sort by importance and take top N
-  const memories = Array.from(memoryMap.values())
-    .sort((a, b) => b.importance - a.importance)
+  const selected = Array.from(memoryMap.entries())
+    .sort((a, b) => b[1].importance - a[1].importance)
     .slice(0, limit)
 
-  return memories
+  // The greeting is composed from exactly these — they count as accessed.
+  markMemoriesAccessed(speakingCharacterId, selected.map(([id]) => id))
+
+  return selected.map(([, memory]) => memory)
 }
 
 // ============================================================================

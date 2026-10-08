@@ -103,6 +103,7 @@ Subcommands:
   file-verify                   Force-download cloud-evicted data files (iCloud, etc.)
   memory-diff <chatId>          Dump existing memories and dry-run re-extraction for a chat
   recall-replay <chatId>        Replay a turn's memory recall, old vs episodic ranking
+  anchor-probe <characterId>    Probe whether episodic anchor lines suppress Memory Gate reinforcement
   completion <shell>            Generate a shell completion script (bash / zsh / fish)
 
 Options:
@@ -1170,7 +1171,7 @@ async function dbCommand(args) {
 // to the subcommand. Each subcommand parses these flags position-independently,
 // so they behave the same before or after the verb.
 const SUBCOMMANDS = new Set([
-  'db', 'themes', 'docs', 'sync', 'memories', 'instances', 'memory-diff', 'recall-replay', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
+  'db', 'themes', 'docs', 'sync', 'memories', 'instances', 'memory-diff', 'recall-replay', 'anchor-probe', 'completion', 'logs', 'migrations', 'maintenance', 'file-verify',
 ]);
 // Global flags that consume the following token as their value.
 const GLOBAL_VALUE_FLAGS = new Set(['-p', '--port', '-d', '--data-dir', '-i', '--instance', '--passphrase']);
@@ -1239,6 +1240,12 @@ if (subName === 'db') {
 } else if (subName === 'recall-replay') {
   const { recallReplayCommand } = require('../lib/recall-replay-command');
   recallReplayCommand(subArgs).catch(err => {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  });
+} else if (subName === 'anchor-probe') {
+  const { anchorProbeCommand } = require('../lib/anchor-probe-command');
+  anchorProbeCommand(subArgs).catch(err => {
     console.error(`Error: ${err.message}`);
     process.exit(1);
   });

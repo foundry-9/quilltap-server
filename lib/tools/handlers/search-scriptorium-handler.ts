@@ -6,7 +6,7 @@
  * merging and ranking results by relevance.
  */
 
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { searchConversationChunks } from '@/lib/scriptorium/conversation-search'
 import { searchDocumentChunks, type DocumentSearchResult } from '@/lib/mount-index/document-search'
@@ -520,6 +520,16 @@ export async function executeSearchScriptoriumTool(
     // Sort all results by relevance score and limit
     results.sort((a, b) => b.relevanceScore - a.relevanceScore)
     const limitedResults = results.slice(0, limit)
+
+    // Only the memories that survived the cross-source cut reach the model;
+    // those, and only those, count as accessed.
+    if (context.characterId) {
+      const returnedMemoryIds = limitedResults
+        .filter(r => r.sourceType === 'memory')
+        .map(r => r.metadata.memoryId)
+        .filter((id): id is string => typeof id === 'string')
+      markMemoriesAccessed(context.characterId, returnedMemoryIds)
+    }
 
     logger.info('Search scriptorium completed', {
       context: 'search-scriptorium-handler',

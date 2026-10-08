@@ -18,6 +18,7 @@ import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib
 import { getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, resolveContextWindow, type ContextWindowSource, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import {
   searchMemoriesSemantic,
+  markMemoriesAccessed,
   type SemanticSearchResult,
   type SearchQueryEmbedding,
 } from '@/lib/memory/memory-service'
@@ -138,10 +139,7 @@ import {
   formatFrozenMemoryArchive,
   formatDynamicMemoryHead,
   formatCurrentSceneState,
-  DYNAMIC_HEAD_TOKEN_BUDGET,
-  DYNAMIC_HEAD_DEFAULT_SIZE,
-  RETRO_HEAD_TOKEN_BUDGET,
-  RETRO_HEAD_SIZE,
+  sizeMemoryPools,
   type DebugMemoryInfo,
   type DebugInterCharacterMemoryInfo,
   type SceneStateEmissionEntry,
@@ -1390,7 +1388,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       // so the LLM doesn't see the same memory twice.
       const compactionGen = chat.compactionGeneration ?? 0
 
-      const frozenArchive = await getOrComputeFrozenArchive(character.id, compactionGen)
+      // Pool sizes scale with the memory budget (F7). The archive's size is
+      // fixed by the ordinary (non-retrospective) split so its membership stays
+      // stable across turns; the head is resized once the turn's signals are
+      // known, below. The search limit uses the ordinary head size until then —
+      // a retrospective fallback turn bumps it once the distillation says so.
+      const ordinarySizing = sizeMemoryPools(budget.memoryBudget, false)
+      const retroSizing = sizeMemoryPools(budget.memoryBudget, true)
+
+      const frozenArchive = await getOrComputeFrozenArchive(character.id, chat.id, compactionGen, {
+        size: ordinarySizing.archiveSize,
+      })
       const archiveIds = new Set(frozenArchive.map(m => m.id))
       let dynamicHeadResults: SemanticSearchResult[] = []
 
@@ -1517,7 +1525,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             // Pull a few more than the head size so the archive-overlap filter
             // still leaves enough candidates to fill the head. Retrospective
             // turns run the enlarged head, so pull proportionally more.
-            limit: (fallbackRetro ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE) * 3,
+            limit: (fallbackRetro ? retroSizing.headEntries : ordinarySizing.headEntries) * 3,
             minImportance: minMemoryImportance,
             recallContext,
             entityAnchors: turnRecallSignals?.entities,
@@ -1538,11 +1546,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       // the turn that otherwise gets the smallest window. Budgets decided
       // here, AFTER the signals are known, so the archive takes what's left.
       const isRetrospectiveTurn = turnRecallSignals?.retrospective === true
-      const dynamicHeadBudget = Math.min(
-        isRetrospectiveTurn ? RETRO_HEAD_TOKEN_BUDGET : DYNAMIC_HEAD_TOKEN_BUDGET,
-        budget.memoryBudget,
-      )
-      const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
+      const turnSizing = isRetrospectiveTurn ? retroSizing : ordinarySizing
+      const dynamicHeadBudget = turnSizing.headTokenBudget
+      const archiveBudget = turnSizing.archiveTokenBudget
 
       // Both pools below are keyed on `characterId` alone, so each carries this
       // character's memories ABOUT other people alongside their own — and both
@@ -1565,15 +1571,37 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
       const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, memorySubject, {
         maxTokens: dynamicHeadBudget,
-        maxEntries: isRetrospectiveTurn ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE,
+        maxEntries: turnSizing.headEntries,
       })
       dynamicHeadCount = headFormatted.memoriesUsed
+      logger.debug('[ContextManager] Memory pools sized', {
+        chatId: chat.id,
+        characterId: character.id,
+        memoryBudget: budget.memoryBudget,
+        retrospective: isRetrospectiveTurn,
+        headTokenBudget: dynamicHeadBudget,
+        headEntries: turnSizing.headEntries,
+        archiveTokenBudget: archiveBudget,
+        archiveSize: ordinarySizing.archiveSize,
+        headUsed: headFormatted.memoriesUsed,
+        archiveUsed: archiveFormatted.memoriesUsed,
+      })
 
       // The IDs actually whispered this turn (those that cleared the head's
       // token budget), recorded for anti-repetition (item F4).
       whisperedMemoryIds = headFormatted.debugMemories
         .map(d => d.memoryId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
+
+      // Only what cleared the token budgets reached the model — those, and
+      // only those, count as accessed (F6). Search no longer stamps its
+      // over-fetched candidates.
+      markMemoriesAccessed(
+        character.id,
+        [...archiveFormatted.debugMemories, ...headFormatted.debugMemories]
+          .map(d => d.memoryId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      )
 
       const sections: string[] = []
       if (archiveFormatted.content) sections.push(archiveFormatted.content)
@@ -1793,6 +1821,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           interCharacterMemoryTokens = formatted.tokenCount
           interCharacterMemoriesIncluded = formatted.memoriesUsed
           debugInterCharacterMemories = formatted.debugMemories
+          markMemoriesAccessed(
+            character.id,
+            formatted.debugMemories
+              .map(d => d.memoryId)
+              .filter((id): id is string => typeof id === 'string' && id.length > 0),
+          )
 
         }
       }

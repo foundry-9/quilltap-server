@@ -3,7 +3,7 @@
 **The full command reference lives in [`packages/quilltap/README.md`](../../packages/quilltap/README.md).** That is the file an
 `npm install -g quilltap` user actually gets, and it is the single comprehensive reference: every
 namespace (`db`, `docs`, `sync`, `memories`, `logs`, `migrations`, `maintenance`, `file-verify`,
-`memory-diff`, `recall-replay`, `themes`, `instances`, `completion`), instance resolution, the
+`memory-diff`, `recall-replay`, `anchor-probe`, `themes`, `instances`, `completion`), instance resolution, the
 `qtap://` addressing scheme, locking, and shell-completion installation. Add new commands and flags
 there.
 

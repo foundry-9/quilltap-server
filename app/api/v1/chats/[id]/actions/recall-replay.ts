@@ -2,7 +2,7 @@
  * Chats API v1 — recall-replay action (episodic recall overhaul §3).
  *
  * POST /api/v1/chats/[id]?action=recall-replay
- * Body (all optional): { turnIndex?: number, characterId?: string, limit?: number }
+ * Body (all optional): { turnIndex?: number, characterId?: string, limit?: number, memoryBudget?: number }
  *
  * Reconstructs the per-turn recall distillation for the given turn and runs
  * the memory search twice — episodic signals inert (pre-overhaul path) vs.
@@ -45,6 +45,11 @@ export async function handleRecallReplay(
       ? Math.min(body.limit, 100)
       : undefined;
 
+  const memoryBudget =
+    typeof body.memoryBudget === 'number' && Number.isFinite(body.memoryBudget) && body.memoryBudget > 0
+      ? Math.floor(body.memoryBudget)
+      : undefined;
+
   const chatSettings = await repos.chatSettings.findByUserId(user.id);
   if (!chatSettings) {
     return badRequest('Chat settings not found.');
@@ -83,6 +88,7 @@ export async function handleRecallReplay(
       turnIndex,
       characterId,
       limit,
+      memoryBudget,
     });
     return successResponse(result);
   } catch (error) {

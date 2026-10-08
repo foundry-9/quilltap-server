@@ -61,6 +61,14 @@ A happy consequence is that the Book has learned the art of holding its tongue. 
 
 And it keeps a short memory of its own recent remarks, so as not to repeat itself. A recollection it has pressed upon you these last few turns is gently set aside to let another have its say — never barred outright, for a thing that remains the single most pertinent memory will still win out, but no longer permitted to become that tiresome guest who tells the same anecdote at every turn of the conversation.
 
+## How Much the Book Whispers
+
+Each turn the Commonplace Book hands a character two bundles of recollection: a steady shelf of its most weighty memories (the same from turn to turn, so the provider can keep it warm in its cache), and a short list of the memories most pertinent to *this* moment. Both are now sized to the room the model has to spare. A model with a modest context window still receives the familiar handful — five or so pertinent memories and a shelf of twenty-five — but a model with a generous window is given proportionately more: up to fifteen pertinent memories a turn (thirty when the conversation is reaching back into shared history) and a shelf of up to sixty. The Book was, frankly, leaving most of its allowance in the envelope; it now spends it.
+
+The weighty shelf is chosen by how firmly a memory has been *established* — its importance together with how often it has been observed again — with the most recently re-observed winning any tie, and each conversation keeps its own shelf rather than borrowing whichever one an earlier conversation happened to leave lying about. When housekeeping or deduplication tidies a character's memories, every shelf for that character is rebuilt on the next turn.
+
+A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence housekeeping relies on honest.
+
 ## Whose Life Is It, Anyway?
 
 A character's Commonplace Book keeps two sorts of entry side by side: what the character recalls of *themselves*, and what they have observed of *everybody else*. The two have always been filed apart — but for a time the Book, in its haste to be helpful, read out both sorts in the same breath, without troubling to say which was which. The effect, upon a character of long acquaintance and many entries, was much as you would expect: handed a page of another's doings under the heading *you remember*, it took the page at its word and answered in that person's voice, with that person's history, entirely convinced.

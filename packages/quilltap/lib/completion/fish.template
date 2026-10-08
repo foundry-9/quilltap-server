@@ -19,7 +19,7 @@ function __quilltap_no_subcommand
   end
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs sync themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
+      case db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion
         return 1
     end
   end
@@ -31,7 +31,7 @@ function __quilltap_using_subcommand
   set -l cmd (commandline -opc)
   for i in (seq 2 (count $cmd))
     switch $cmd[$i]
-      case db docs sync themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion
+      case db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion
         test "$cmd[$i]" = "$target"
         return $status
     end
@@ -61,6 +61,7 @@ complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'instances' -d 'Registe
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memories' -d 'Search and browse memories'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'memory-diff' -d 'Memory extraction dry-run'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'recall-replay' -d 'Replay memory recall for a turn'
+complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'anchor-probe' -d 'Probe anchor-line effect on Memory Gate'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'logs' -d 'Tail or print log files'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'migrations' -d 'Inspect migration status'
 complete -c quilltap -n '__quilltap_no_subcommand' -f -a 'maintenance' -d 'Run retention/cleanup sweeps'
@@ -311,7 +312,13 @@ complete -c quilltap -n '__quilltap_using_subcommand memory-diff' -l 'out' -d 'O
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'turn' -d 'Interchange to replay (1-based)' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'char' -d 'Character whose memories are searched' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'limit' -d 'Candidate rows per path' -x
+complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'memory-budget' -d 'Memory token budget' -x
 complete -c quilltap -n '__quilltap_using_subcommand recall-replay' -l 'port' -d 'Server port' -x
+
+# ---------- anchor-probe flags ----------
+complete -c quilltap -n '__quilltap_using_subcommand anchor-probe' -l 'limit' -d 'Recent memories to sample' -x
+complete -c quilltap -n '__quilltap_using_subcommand anchor-probe' -l 'port' -d 'Server port' -x
+complete -c quilltap -n '__quilltap_using_subcommand anchor-probe' -l 'json' -d 'Raw JSON output'
 
 # ---------- file-verify flags ----------
 complete -c quilltap -n '__quilltap_using_subcommand file-verify' -l 'all' -d 'Read every top-level file, not just dataless ones'

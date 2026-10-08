@@ -25,7 +25,9 @@ Housekeeping is conservative by design. A memory you typed yourself — one whos
 
 The scoring stream worth dwelling on is the content component. The LLM's importance rating is time-decayed with a **thirty-day half-life**, and — crucially — its contribution to the protection score is **capped** so that importance alone can never make a memory permanent. A fresh fact the LLM rated 0.9 contributes the same 0.40 to its protection score as a fresh fact the LLM rated 0.4; to cross the protection threshold, the memory must also earn some evidence of use. At least one reinforcement, one related-memory link, or one recent access, combined with the capped content contribution and the small default reinforcement bonus, is typically enough. Without those signals, the LLM's one-shot importance rating is simply insufficient evidence for permanent protection — which is the whole point of the blend. The reference clock is reset every time the memory is reinforced with new details, so a fact that remains relevant — revisited, reinforced, linked, accessed — stays protected, while one the chats have genuinely moved on from becomes eligible for the cap-enforcement sweep. This replaces the earlier rule in which any memory rated 0.7 or higher was immortal regardless of age or usage, which — in practice — turned the housekeeper into a doorman who waved almost everyone through.
 
-Reinforcement and graph degree both saturate logarithmically: the first few reinforcements matter more than the next ten, and the first few related-memory links matter more than the next handful. Recent access is a flat bonus awarded to memories read within the last 90 days. All four signals combine into a single number used by the protection gate.
+A re-observation counts as reinforcement however faithfully it restates the original. A retelling close enough to be a near-copy writes no new memory and changes none of the existing one's words, but it still adds to that memory's reinforcement tally — so the facts a character is told most consistently are no longer, absurdly, the ones that look least established.
+
+Reinforcement and graph degree both saturate logarithmically: the first few reinforcements matter more than the next ten, and the first few related-memory links matter more than the next handful. Recent access is a flat bonus awarded to memories read within the last 90 days — "read" meaning the memory actually reached a character (whispered into a turn, returned by a search the character ran), not merely that a search glanced at it on the way past. All four signals combine into a single number used by the protection gate.
 
 The conservative first-pass retention rule still applies: a memory is *also* only eligible for the slow sweep when it is old (more than 6 months), low-importance (below 0.3 after reinforcement), and either never accessed or inactive for 6+ months. The blended score changes what the cap-enforcement sweep can touch; it does not change the first pass.
 
@@ -46,6 +48,10 @@ If you want a different cap for a particular character, that's what the per-char
 ### Also merge semantically similar memories during the sweep
 
 When ticked, the sweep performs an extra pass that looks for pairs of memories whose cosine similarity to each other is at least **0.90** (configurable through the API) and collapses the lower-weighted member into the higher-weighted one. Off by default — the pre-write gate already catches most near-duplicates, and this pass is slower. Turning it on is useful after importing legacy memories that predate the stricter gate.
+
+Collapsing is a proper merge, not a quiet disposal. Before the lesser memory goes, the survivor takes on whatever it knew that the survivor did not — new names, dates and figures appended as `[+]` notes — along with its tally of re-observations, its links to related memories, and the earlier of the two dates on which the thing happened. **Memory Deduplication** merges in exactly the same way.
+
+A memory carries at most eight of those `[+]` notes. Past that, a re-observation still counts — the tally rises, and so does the memory's standing — but no further notes are appended, so a much-repeated fact does not slowly turn into a list of proper nouns.
 
 ## Running Housekeeping on Demand
 

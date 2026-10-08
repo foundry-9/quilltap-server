@@ -52,7 +52,7 @@ import {
   type StreamController,
 } from '@/lib/services/chat-message/tool-execution.service';
 import { supportsCapability } from '@/lib/plugins/provider-registry';
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
+import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service';
 import { findCharactersByName } from '@/lib/services/character-resolver';
 import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
 import { buildMemorySubjectContext } from '@/lib/memory/memory-subject';
@@ -239,6 +239,10 @@ async function loadCarinaMemoryRecall(
     );
     if (!formatted.content || formatted.memoriesUsed === 0) return null;
 
+    markMemoriesAccessed(
+      characterId,
+      formatted.debugMemories.map(d => d.memoryId).filter((id): id is string => !!id),
+    );
     return buildCommonplaceLLMContext({ relevant: formatted.content });
   } catch (error) {
     logger.warn('[Carina] Memory recall failed; answering without it', {

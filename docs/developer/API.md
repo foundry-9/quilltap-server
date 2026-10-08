@@ -2934,11 +2934,12 @@ Episodic-recall tuning harness (wrapped by `quilltap recall-replay`). Reconstruc
 {
   "turnIndex": 42,
   "characterId": "char-uuid",
-  "limit": 25
+  "limit": 25,
+  "memoryBudget": 8000
 }
 ```
 
-`turnIndex` is the 1-based interchange to replay at (default: last); `characterId` defaults to the first LLM-controlled participant; `limit` caps candidate rows per path (max 100).
+`turnIndex` is the 1-based interchange to replay at (default: last); `characterId` defaults to the first LLM-controlled participant; `limit` caps candidate rows per path (max 100). `memoryBudget` (tokens) sizes the new path's `selected` rows from the budget-scaled dynamic head (`sizeMemoryPools`); the old path keeps the historical fixed 5-entry head. The result carries `oldHeadSize` / `newHeadSize`.
 
 #### `POST /api/v1/chats/[id]?action=toggle-agent-mode`
 
@@ -4244,6 +4245,19 @@ Embedding coverage for one character.
 Rebuild the vector index for one character. `PUT` without `?action=embeddings` is a `400`.
 
 **Request Body**: `{ "characterId": "char-uuid" }`
+
+#### `POST /api/v1/memories?action=anchor-gate-probe`
+
+Measurement-only developer tool (wrapped by `quilltap anchor-probe`). Re-embeds a character's most
+recent memories with and without the episodic anchor line, scores each against older rows both
+ways, and reports how many would reach the Memory Gate's reinforce (0.85) and near-duplicate (0.90)
+thresholds. Writes nothing; costs roughly up to 7 embedding calls per sampled row.
+
+**Request Body**: `{ "characterId": "char-uuid", "limit": 50 }` (`limit` 1–200, default 50)
+
+**Response**: `200 OK` — `{ success, data: { characterId, sampled, anchoredRows, thresholds,
+anchored: { reinforce, nearDuplicate }, anchorFree: { reinforce, nearDuplicate },
+crossedOnlyWithoutAnchors, embeddingsGenerated, rows[] } }`
 
 #### `POST /api/v1/memories?action=housekeep-sweep`
 
