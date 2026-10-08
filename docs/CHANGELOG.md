@@ -4,6 +4,14 @@
 
 ### 4.10-dev
 
+#### Sync engine reads disk files through its disk adapter
+
+- `bytesFor` in `lib/mount-index/sync/index.ts` read target-directory bytes with a raw `fs` import.
+  It now calls the new `readDiskFile` in `apply-disk.ts`, which resolves the path through
+  `resolveInTarget` and refuses escapes. Found by release checklist 1 (file provider).
+- New `disk-boundary.test.ts` fails if any sync module other than `apply-disk.ts`, `walk-disk.ts` or
+  `manifest.ts` imports `fs`.
+
 #### Fix bug 182: concurrent memory reinforcements lose a count
 
 - Two extraction jobs reinforcing the same memory at once both wrote `reinforcementCount = N + 1` from

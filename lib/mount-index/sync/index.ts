@@ -25,6 +25,7 @@ import {
   applyDiskAction,
   birthtimeIsSettable,
   ensureTargetDirectory,
+  readDiskFile,
   targetExists,
 } from './apply-disk';
 import { applyStoreAction, readStoreBytes } from './apply-store';
@@ -274,9 +275,7 @@ async function bytesFor(
     return bytes;
   }
 
-  const { promises: fs } = await import('fs');
-  const { resolveInTarget } = await import('./apply-disk');
-  return fs.readFile(resolveInTarget(targetPath, action.relativePath));
+  return readDiskFile(targetPath, action.relativePath);
 }
 
 // ============================================================================

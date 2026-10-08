@@ -52,6 +52,13 @@ export async function ensureTargetDirectory(targetPath: string): Promise<void> {
   if (!stat) await fs.mkdir(targetPath, { recursive: true });
 }
 
+/** Read one file's bytes from the target, refusing a path that escapes it. */
+export async function readDiskFile(targetPath: string, relativePath: string): Promise<Buffer> {
+  const absolute = resolveInTarget(targetPath, relativePath);
+  logger.debug('[Sync] Reading disk file', { relativePath });
+  return fs.readFile(absolute);
+}
+
 /** Write bytes atomically and stamp the file's clocks. */
 export async function writeDiskFile(
   targetPath: string,
