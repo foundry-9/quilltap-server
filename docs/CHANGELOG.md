@@ -4,6 +4,14 @@
 
 ### 4.10-dev
 
+#### Fix order-dependent failure in the wardrobe wear repository test
+
+- `wardrobe-wear.repository.test.ts` failed "did not throw" on two rollback tests whenever another
+  test file in the same jest worker had loaded the real better-sqlite3 binding first (seen on
+  `main` at `06a70a7` and on PR 83). The native module is loaded once per worker, so its
+  `SqliteError` belongs to the first file's context and fails `rejects.toThrow()`'s Error check in
+  later files. The two assertions now match the rejection's message with `rejects.toMatchObject`.
+
 #### Memory recall and housekeeping fixes (F1–F9)
 
 Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
