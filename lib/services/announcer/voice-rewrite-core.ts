@@ -23,7 +23,7 @@ import type { Character, ConnectionProfile } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
-import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
+import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
 import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
 import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
@@ -85,6 +85,10 @@ export async function recallForSeed(
       maxEntries: RECALL_MAX_ENTRIES,
     })
     if (!formatted.content) return ''
+    markMemoriesAccessed(
+      character.id,
+      formatted.debugMemories.map(d => d.memoryId).filter((id): id is string => !!id),
+    )
     return buildCommonplaceLLMContext({ relevant: formatted.content })
   } catch (err) {
     logger.warn(`${logContext} Memory recall failed; proceeding without`, {

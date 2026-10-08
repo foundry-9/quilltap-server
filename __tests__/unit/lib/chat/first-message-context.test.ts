@@ -47,6 +47,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 jest.mock('@/lib/memory/memory-service', () => ({
   __esModule: true,
   searchMemoriesSemantic: jest.fn().mockImplementation((...args: unknown[]) => mockSearchMemoriesSemantic(...args)),
+  markMemoriesAccessed: jest.fn(),
 }))
 
 // Import after mocks are set up

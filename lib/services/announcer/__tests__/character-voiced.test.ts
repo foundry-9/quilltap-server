@@ -17,6 +17,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks/core-execution', () => ({
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn(async () => []),
+  markMemoriesAccessed: jest.fn(),
 }))
 
 jest.mock('@/lib/memory/memory-subject', () => ({
@@ -24,7 +25,7 @@ jest.mock('@/lib/memory/memory-subject', () => ({
 }))
 
 jest.mock('@/lib/chat/context/memory-injector', () => ({
-  formatDynamicMemoryHead: jest.fn(() => ({ content: 'REMEMBERED' })),
+  formatDynamicMemoryHead: jest.fn(() => ({ content: 'REMEMBERED', debugMemories: [] })),
 }))
 
 jest.mock('@/lib/services/commonplace-notifications/writer', () => ({

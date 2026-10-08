@@ -11,7 +11,9 @@
 
 import { Memory } from '@/lib/schemas/types'
 import { cosineSimilarity } from '@/lib/embedding/embedding-service'
-import { extractNovelDetails, deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
+import { planMemoryMerge, applyMemoryMerge } from '@/lib/memory/memory-merge'
+import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
@@ -144,16 +146,20 @@ function scoreMemory(memory: Memory): number {
  * 3. Compute pairwise cosine similarity within each dimension group
  * 4. Cluster via Union-Find at threshold
  * 5. Score and select survivors from each multi-member cluster
- * 6. Extract novel details from discarded memories
- * 7. Append to survivors as [+] footnotes
- * 8. If not dryRun: update survivors, bulk-delete discards, clean vector store
+ * 6. Preview what each survivor would absorb (shared merge, memory-merge.ts)
+ * 7. If not dryRun: fold each cluster into its survivor (capped [+]
+ *    footnotes, summed reinforcement, unioned links, earliest occurredAt,
+ *    re-embed on content change), then bulk-delete the discards of every fold
+ *    that succeeded and clean the vector store
+ * 8. Invalidate the character's frozen memory archives
  * 9. Return CharacterDedupResult
  */
 export async function deduplicateCharacterMemories(
   characterId: string,
   characterName: string,
   threshold: number,
-  dryRun: boolean
+  dryRun: boolean,
+  userId?: string
 ): Promise<CharacterDedupResult> {
   const repos = getRepositories()
 
@@ -212,7 +218,7 @@ export async function deduplicateCharacterMemories(
 
   // Process each dimension group
   const allClusters: DedupClusterResult[] = []
-  const allSurvivorUpdates: Array<{ memoryId: string; newContent: string }> = []
+  const allMerges: Array<{ survivor: Memory; losers: Memory[] }> = []
   const allRemoveIds: string[] = []
   let totalMergedDetails = 0
 
@@ -255,32 +261,13 @@ export async function deduplicateCharacterMemories(
       const survivor = scored[0]
       const discards = scored.slice(1)
 
-      // Extract novel details from discards and merge into survivor
-      const allNovelDetails: string[] = []
-      const seenDetails = new Set<string>()
-
-      for (const discard of discards) {
-        const novelDetails = extractNovelDetails(discard.memory.content, survivor.memory.content)
-        for (const detail of novelDetails) {
-          const key = detail.toLowerCase().trim()
-          if (!seenDetails.has(key)) {
-            seenDetails.add(key)
-            allNovelDetails.push(detail)
-          }
-        }
-      }
-
-      totalMergedDetails += allNovelDetails.length
-
-      // Build updated survivor content with [+] footnotes
-      if (allNovelDetails.length > 0) {
-        const footnotes = allNovelDetails.map(d => `[+] ${d}`).join('\n')
-        const newContent = `${survivor.memory.content}\n${footnotes}`
-        allSurvivorUpdates.push({
-          memoryId: survivor.memory.id,
-          newContent,
-        })
-      }
+      // Preview the fold: which novel details the discards would add to the
+      // survivor. The real plan is recomputed against the full removal set
+      // once every cluster is known (so links never point at a doomed row).
+      const preview = planMemoryMerge(survivor.memory, discards.map(d => d.memory))
+      const mergedDetailCount = preview.mergedDetails.length
+      totalMergedDetails += mergedDetailCount
+      allMerges.push({ survivor: survivor.memory, losers: discards.map(d => d.memory) })
 
       // Collect discard IDs
       for (const discard of discards) {
@@ -294,52 +281,87 @@ export async function deduplicateCharacterMemories(
         survivorImportance: survivor.memory.importance,
         removedCount: discards.length,
         removedSummaries: discards.slice(0, 3).map(d => (d.memory.summary || '').slice(0, 100)),
-        mergedDetailCount: allNovelDetails.length,
+        mergedDetailCount,
       })
     }
   }
 
-  const removedCount = allRemoveIds.length
-  const finalCount = originalCount - removedCount
+  let removeIds = allRemoveIds
 
   // Apply changes if not dry run
-  if (!dryRun && (allSurvivorUpdates.length > 0 || allRemoveIds.length > 0)) {
-    // Update survivors with merged content
-    for (const update of allSurvivorUpdates) {
-      const now = new Date().toISOString()
-      await repos.memories.updateForCharacter(characterId, update.memoryId, {
-        content: update.newContent,
-        updatedAt: now,
+  if (!dryRun && allRemoveIds.length > 0) {
+    // Fold each cluster's discards into its survivor FIRST: details,
+    // reinforcement, links, earliest occurredAt; re-embedded when the content
+    // changed. A cluster whose fold fails keeps its discards rather than
+    // deleting what the survivor never absorbed.
+    // Links are unioned minus only the cluster itself; the delete then scrubs
+    // whatever is actually removed (from these fresh lists, not the database
+    // row), so links to a failed cluster's kept discards survive.
+    const survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
+    const keptIds = new Set<string>()
+    for (const { survivor, losers } of allMerges) {
+      let applied = null
+      try {
+        const plan = planMemoryMerge(survivor, losers)
+        applied = await applyMemoryMerge(survivor, plan, { userId })
+      } catch (error) {
+        logger.warn('[MemoryDedup] Failed to fold discards into survivor', {
+          context: 'memory-dedup.deduplicateCharacterMemories',
+          characterId,
+          survivorId: survivor.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      if (applied) {
+        survivorLinks.set(survivor.id, {
+          characterId: applied.characterId,
+          relatedMemoryIds: applied.relatedMemoryIds ?? [],
+        })
+      } else {
+        for (const loser of losers) keptIds.add(loser.id)
+      }
+    }
+    if (keptIds.size > 0) {
+      removeIds = allRemoveIds.filter(id => !keptIds.has(id))
+      logger.warn('[MemoryDedup] Some folds failed; their discards were kept', {
+        context: 'memory-dedup.deduplicateCharacterMemories',
+        characterId,
+        kept: keptIds.size,
       })
     }
 
     // Bulk delete discarded memories through the chokepoint so neighbours'
-    // relatedMemoryIds get scrubbed atomically.
-    if (allRemoveIds.length > 0) {
-      const deletedCount = await deleteMemoriesWithUnlinkBatch(allRemoveIds)
-      logger.info('[MemoryDedup] Bulk deleted memories', {
+    // relatedMemoryIds get scrubbed, the survivors from their new link lists.
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds, {
+      currentLinks: survivorLinks,
+    })
+    logger.info('[MemoryDedup] Bulk deleted memories', {
+      context: 'memory-dedup.deduplicateCharacterMemories',
+      characterId,
+      requested: removeIds.length,
+      deleted: deletedCount,
+    })
+
+    // Clean up vector store
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      for (const id of removeIds) {
+        await vectorStore.removeVector(id)
+      }
+      await vectorStore.save()
+    } catch (error) {
+      logger.warn('[MemoryDedup] Failed to clean up vector store', {
         context: 'memory-dedup.deduplicateCharacterMemories',
         characterId,
-        requested: allRemoveIds.length,
-        deleted: deletedCount,
+        error: String(error),
       })
-
-      // Clean up vector store
-      try {
-        const vectorStore = await getCharacterVectorStore(characterId)
-        for (const id of allRemoveIds) {
-          await vectorStore.removeVector(id)
-        }
-        await vectorStore.save()
-      } catch (error) {
-        logger.warn('[MemoryDedup] Failed to clean up vector store', {
-          context: 'memory-dedup.deduplicateCharacterMemories',
-          characterId,
-          error: String(error),
-        })
-      }
     }
+
+    invalidateFrozenArchive(characterId)
   }
+
+  const removedCount = removeIds.length
+  const finalCount = originalCount - removedCount
 
   return {
     characterId,
@@ -389,7 +411,8 @@ export async function deduplicateAllMemories(
         character.id,
         character.name,
         threshold,
-        dryRun
+        dryRun,
+        userId
       )
       characterResults.push(result)
       totalOriginal += result.originalCount

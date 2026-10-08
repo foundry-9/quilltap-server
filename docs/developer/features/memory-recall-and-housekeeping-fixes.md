@@ -1,6 +1,8 @@
 # Memory Recall and Housekeeping Fixes — The Small Repairs
 
-**Status:** Proposed — spec only, no code yet
+**Status:** Implemented 2026-10-08 (F1–F9). Two items still wait on live data: the F2 decision
+(run the probe, then decide whether the gate compares anchor-free text) and the F7 before/after
+replay on Friday probes. See [Implementation notes](#implementation-notes).
 **Owner:** Charlie
 **Drafted:** 2026-10-08
 **Companion:** [memory-consolidation-and-tiers.md](./memory-consolidation-and-tiers.md)
@@ -185,6 +187,68 @@ housekeeping call one function. Once the consolidation spec's tiers land,
 pass 2 is retired.
 
 ---
+
+## Implementation notes
+
+What shipped, and where it differs from or sharpens the text above.
+
+- **F1** — `absorbNearDuplicate` (`memory-gate.ts`), called from the `SKIP_NEAR_DUPLICATE` case of
+  `createMemoryWithGate`. Writes through `updateForCharacter` with the existing row's
+  `characterId`. Test: `__tests__/unit/lib/memory/memory-recall-housekeeping-fixes.test.ts`.
+- **Job-child writes.** In the forked child, `updateForCharacter` is a buffered write and returns
+  `undefined`; `reinforceMemory` read that as "update failed" and returned before re-embedding, so a
+  reinforcement with novel details never re-embedded when it ran in the extraction job. `patchMemory`
+  now tells `null` (row missing) from `undefined` (buffered) and returns the locally patched row.
+- **F2** — measurement tool only: `runAnchorGateProbe` (`lib/memory/anchor-gate-probe.ts`),
+  `POST /api/v1/memories?action=anchor-gate-probe`, `quilltap anchor-probe <characterId>`. It
+  samples the character's most recent rows (every row there survived the gate as a new row), scores
+  each against OLDER rows anchored and anchor-free, and reports crossings and
+  `crossedOnlyWithoutAnchors`. The gate is unchanged pending the numbers.
+- **F3** — `MAX_REINFORCEMENT_FOOTNOTES = 8`, `appendCappedFootnotes`. A row already at the cap is
+  not re-embedded at all, even if an anchor (occurredAt / narrativeTime) fills in; the anchors are
+  still written to the row.
+- **F4** — `findMostImportant` drops to `rawQuery` for the `COALESCE` tiebreak (shared row hydration
+  with `findByCharacterAboutCharacters`). The archive is its only caller, so no other semantics move.
+- **F5** — key `(characterId, chatId)`, archive size in the freshness check (the size now scales
+  with the budget), LRU at 64. Invalidation: `runHousekeeping` and deduplication call
+  `invalidateFrozenArchive` directly (effective in the parent; a no-op in the child), and the
+  dispatcher's completion hook `invalidateFrozenArchivesForCompletedJob` handles
+  `MEMORY_HOUSEKEEPING` jobs (one character, or all for a user-wide sweep; dry runs skipped). Test:
+  `lib/background-jobs/host/__tests__/job-dispatcher-frozen-archive.test.ts`.
+- **F6** — `markMemoriesAccessed` (exported from `memory-service.ts`). Beyond the three consumers
+  listed, Carina recall, the first-message context and the voice-rewrite recall also deliver memories
+  to a model, so they stamp what they format. The Memories API search action and the recall-replay
+  harness stamp nothing.
+- **F7** — `sizeMemoryPools` (`memory-injector.ts`). Retrospective head = max(old retro floor,
+  2× ordinary), so no budget gets a smaller retro head than before. Archive size comes from the
+  ordinary split even on retrospective turns, so membership is stable within a generation. The
+  proactive pre-search pulls and keeps `PROACTIVE_RECALL_POOL_SIZE` (archive max 60 + retro head
+  max 30 = 90): the context builder filters archive overlap out of that list and does not search
+  again, so the pool must survive a full overlap. **Not yet validated** on
+  Friday probes: run `quilltap recall-replay <chatId> --memory-budget <tokens>` on the usual probe
+  turns and compare `oldHeadSize`/`newHeadSize` selections and token spend.
+- **F8** — (1) `deleteMemoriesWithUnlinkBatch` counts resolved ids when `bulkDelete` returns a
+  non-number, with a debug `countSource`; the handler and `recordHousekeepingOutcome` also refuse
+  NaN. (2) The buffered `memories.bulkDelete` is applied by the dispatcher's generic repository
+  apply with the same `(characterId, ids)` args — pinned by
+  `__tests__/unit/lib/background-jobs/child-proxy-memory-housekeeping.test.ts`. The live check
+  remains manual: after a sweep, `npx quilltap db memories --character <name>` (or a count query
+  through the CLI) should match the logged `totalAfter`. (3) Writer and reader of the outcome cache
+  are both in the job child, and the host keeps a single child, so the map is shared; no move to the
+  parent was needed. Documented in `housekeeping-outcome-cache.ts`.
+- **F9** — `lib/memory/memory-merge.ts` (`planMemoryMerge` pure, `applyMemoryMerge` writes and
+  re-embeds). Both housekeeping pass 2 and `deduplicateCharacterMemories` call it. Survivors
+  are patched first and only the losers of a successful fold are deleted (a failed fold keeps its
+  losers — nothing is discarded unabsorbed). A plan's links exclude only its own group; the
+  delete gets each patched survivor's new list as `currentLinks` and scrubs only what is actually
+  deleted from it (in the child the database still holds the pre-merge row, so scrubbing from the
+  row would overwrite the union). Housekeeping's cap pass never deletes a merge survivor.
+  `lastReinforcedAt` takes the latest of the group. Test:
+  `__tests__/unit/lib/memory/housekeeping-merge-fold.test.ts`.
+- **Not done: atomic reinforcement increments.** F1 (like the existing REINFORCE path) writes an
+  absolute count computed from the gate's snapshot, so two extraction jobs absorbing the same row
+  at the same moment can lose one observation. Filed as
+  [bug 182](../bugs/bug-182-reinforcement-count-race.md).
 
 ## Not in scope here
 

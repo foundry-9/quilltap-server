@@ -5,6 +5,14 @@
  * sweep for each character. Used to short-circuit watermark-triggered
  * enqueues that would otherwise produce another 15-minute no-op sweep.
  *
+ * Process ownership: both sides run in the forked job child. The record is
+ * written by the MEMORY_HOUSEKEEPING handler and read by
+ * `maybeEnqueueHousekeeping`, which runs inside the memory-extraction job —
+ * and the processor host keeps a single child, so writer and reader share
+ * this map. (The Memories API's manual sweep runs in the parent and records
+ * nothing here; it is not watermark-triggered.) A child restart empties the
+ * map; the durable DB throttle in `maybeEnqueueHousekeeping` covers that gap.
+ *
  * In-memory is deliberate: losing this on restart means one extra sweep
  * attempt per character after a boot, which is cheap compared to the
  * complexity of a persistent per-character outcome row. The scheduled
@@ -40,7 +48,10 @@ export function recordHousekeepingOutcome(
   totalBefore: number,
   cap: number,
 ): void {
-  outcomes.set(characterId, { completedAt: Date.now(), deleted, totalBefore, cap })
+  // A non-finite count would make every "ineffective?" comparison false and
+  // silently disarm the backoff; treat it as nothing deleted.
+  const safeDeleted = Number.isFinite(deleted) ? deleted : 0
+  outcomes.set(characterId, { completedAt: Date.now(), deleted: safeDeleted, totalBefore, cap })
 }
 
 /**

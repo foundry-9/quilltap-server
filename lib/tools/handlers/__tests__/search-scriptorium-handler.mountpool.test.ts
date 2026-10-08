@@ -23,6 +23,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn(),
+  markMemoriesAccessed: jest.fn(),
 }))
 
 jest.mock('@/lib/embedding/embedding-service', () => ({

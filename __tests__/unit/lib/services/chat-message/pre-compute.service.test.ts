@@ -367,9 +367,9 @@ describe('pre-compute.service', () => {
       expect(result.preSearchedMemories).toBeUndefined()
     })
 
-    it('caps the returned memory list at 10', async () => {
+    it('returns the whole proactive pool so archive overlap cannot starve the head', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({ success: true, result: { keywords: ['k'] } })
-      const many = Array.from({ length: 15 }, (_, i) => ({ id: `m${i}`, content: `c${i}`, importance: 0.5 }))
+      const many = Array.from({ length: 90 }, (_, i) => ({ id: `m${i}`, content: `c${i}`, importance: 0.5 }))
       ;(mockSearchMemoriesSemantic as jest.Mock).mockResolvedValue(many)
 
       const result = await runPreContextPreCompute(baseOptions({
@@ -380,7 +380,12 @@ describe('pre-compute.service', () => {
         ],
       }))
 
-      expect(result.preSearchedMemories).toHaveLength(10)
+      expect(result.preSearchedMemories).toHaveLength(90)
+      expect(mockSearchMemoriesSemantic).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ limit: 90 }),
+      )
     })
   })
 

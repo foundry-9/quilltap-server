@@ -47,6 +47,7 @@ jest.mock('../writer', () => ({
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn(),
+  markMemoriesAccessed: jest.fn(),
 }));
 
 jest.mock('@/lib/chat/context/memory-injector', () => ({

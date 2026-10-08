@@ -22,7 +22,7 @@ import { extractMemorySearchKeywords, stripToolArtifacts, type MemorySearchExtra
 import { searchMemoriesSemantic, type SemanticSearchResult } from './memory-service'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { partitionMessagesIntoTurns } from '@/lib/chat/context-summary'
-import { DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE } from '@/lib/chat/context/memory-injector'
+import { DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE, sizeMemoryPools } from '@/lib/chat/context/memory-injector'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { buildRetrospectiveProbes, buildTurnRecallContext } from './recall-tags'
 import type { MessageEvent } from '@/lib/schemas/types'
@@ -65,6 +65,10 @@ export interface RecallReplayResult {
   oldPath: RecallReplayRow[]
   /** Overhaul path: retrospective flip, window, entity anchors, multi-probe. */
   newPath: RecallReplayRow[]
+  /** Head size the old path's `selected` flags were cut at. */
+  oldHeadSize: number
+  /** Head size the new path's `selected` flags were cut at. */
+  newHeadSize: number
 }
 
 export interface RunRecallReplayInput {
@@ -77,6 +81,13 @@ export interface RunRecallReplayInput {
   characterId?: string
   /** Candidate table size per path. */
   limit?: number
+  /**
+   * The responding model's memory budget in tokens. When given, the new path's
+   * `selected` rows follow the budget-sized head (`sizeMemoryPools`) — the old
+   * path keeps the historical fixed head — so the replay shows what the larger
+   * head adds. Absent → both paths use the fixed historical sizes.
+   */
+  memoryBudget?: number
 }
 
 function toRows(results: SemanticSearchResult[], headSize: number): RecallReplayRow[] {
@@ -99,8 +110,8 @@ function toRows(results: SemanticSearchResult[], headSize: number): RecallReplay
 }
 
 /**
- * Run the replay. Read-only against the chat and memory corpus (the one side
- * effect is `lastAccessedAt` bumps from the search path, which are harmless).
+ * Run the replay. Read-only against the chat and memory corpus — search does
+ * not stamp `lastAccessedAt`; only consumers that deliver memories do.
  */
 export async function runRecallReplay(input: RunRecallReplayInput): Promise<RecallReplayResult> {
   const repos = getRepositories()
@@ -209,6 +220,11 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     extraProbes,
   })
 
+  const newHeadSize =
+    typeof input.memoryBudget === 'number' && input.memoryBudget > 0
+      ? sizeMemoryPools(input.memoryBudget, retrospective).headEntries
+      : retrospective ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE
+
   logger.info('Recall replay complete', {
     chatId: input.chatId,
     characterId: character.id,
@@ -216,6 +232,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     retrospective,
     oldCandidates: oldResults.length,
     newCandidates: newResults.length,
+    newHeadSize,
   })
 
   return {
@@ -228,6 +245,8 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     query,
     clockIso,
     oldPath: toRows(oldResults, DYNAMIC_HEAD_DEFAULT_SIZE),
-    newPath: toRows(newResults, retrospective ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE),
+    newPath: toRows(newResults, newHeadSize),
+    oldHeadSize: DYNAMIC_HEAD_DEFAULT_SIZE,
+    newHeadSize,
   }
 }

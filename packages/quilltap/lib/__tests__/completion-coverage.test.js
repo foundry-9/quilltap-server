@@ -118,6 +118,7 @@ const HELP_SOURCES = {
   'file-verify': ['lib/file-verify-commands.js', 'printHelp'],
   'memory-diff': ['lib/memory-diff-command.js', 'printMemoryDiffHelp'],
   'recall-replay': ['lib/recall-replay-command.js', 'printRecallReplayHelp'],
+  'anchor-probe': ['lib/anchor-probe-command.js', 'printAnchorProbeHelp'],
   completion: ['lib/completion-commands.js', 'printCompletionHelp'],
 };
 

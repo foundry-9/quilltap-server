@@ -61,7 +61,7 @@ _quilltap_complete() {
   local global_opts="-d --data-dir -i --instance -p --port -o --open -v --version -h --help --update --passphrase"
 
   # Top-level subcommands
-  local top_cmds="db docs sync themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
+  local top_cmds="db docs sync themes instances memories memory-diff recall-replay anchor-probe logs migrations maintenance file-verify completion"
 
   # Flags that swallow the word after them. A flat list will not do: -o is the
   # valueless global --open but themes' valued --output, and `memories`
@@ -76,7 +76,8 @@ _quilltap_complete() {
   local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
   local vf_memory_diff=" --concurrency --out "
-  local vf_recall_replay=" --turn --char --limit --port "
+  local vf_recall_replay=" --turn --char --limit --memory-budget --port "
+  local vf_anchor_probe=" --limit --port "
   local vf_file_verify=" --stall-ms "
 
   # Get the subcommand (first non-option word after quilltap)
@@ -100,6 +101,7 @@ _quilltap_complete() {
       logs)          valued="$vf_global$vf_logs" ;;
       memory-diff)   valued="$vf_global$vf_memory_diff" ;;
       recall-replay) valued="$vf_global$vf_recall_replay" ;;
+      anchor-probe)  valued="$vf_global$vf_anchor_probe" ;;
       file-verify)   valued="$vf_global$vf_file_verify" ;;
     esac
 
@@ -333,8 +335,12 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "$md_flags" -- "$cur"))
       ;;
     recall-replay)
-      local rr_flags="--turn --char --limit --port --json --help"
+      local rr_flags="--turn --char --limit --memory-budget --port --json --help"
       COMPREPLY=($(compgen -W "$rr_flags" -- "$cur"))
+      ;;
+    anchor-probe)
+      local ap_flags="--limit --port --json --help"
+      COMPREPLY=($(compgen -W "$ap_flags" -- "$cur"))
       ;;
     logs)
       local logs_flags="--stream --tail -f --follow --grep \

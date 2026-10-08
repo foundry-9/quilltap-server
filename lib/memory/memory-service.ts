@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger'
 import {
   runMemoryGate,
   reinforceMemory,
+  absorbNearDuplicate,
   linkRelatedMemories,
   calculateReinforcedImportance,
   deleteMemoryWithUnlink,
@@ -87,11 +88,10 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
       return
     }
 
-    // Durable cross-process / post-restart throttle. The in-memory cache above
-    // is process-local, but watermark enqueues fire from forked job children
-    // (memory extraction) while sweeps complete in *other* children — so that
-    // signal is frequently invisible across the pool, and it's wiped on every
-    // restart. The result is a storm of redundant (often expensive, because
+    // Durable post-restart throttle. The in-memory cache above lives in the
+    // job child (the extraction job reads it, the housekeeping job writes it,
+    // and the host keeps one child), but it is wiped whenever that child or
+    // the server restarts. The result is a storm of redundant (often expensive, because
     // mergeSimilar compares embeddings) sweeps when a room sits right at its
     // cap. Back it with a DB floor: if a sweep for this character already
     // completed or is running within the throttle window, don't pile on
@@ -417,9 +417,13 @@ export async function createMemoryWithGate(
   switch (decision.action) {
     case 'SKIP_NEAR_DUPLICATE': {
       // Candidate is essentially identical to an existing memory; do not write
-      // a new row and do not reinforce — just absorb the observation silently.
+      // a new row or touch its text — but the re-observation still counts as
+      // reinforcement (count, lastReinforcedAt, reinforcedImportance). The
+      // action stays SKIP_NEAR_DUPLICATE so callers can tell "absorbed" from
+      // "reinforced with novel detail".
+      const absorbed = await absorbNearDuplicate(decision.existingMemory)
       return {
-        memory: decision.existingMemory,
+        memory: absorbed,
         action: 'SKIP_NEAR_DUPLICATE',
         similarity: decision.similarity,
       }
@@ -1112,18 +1116,14 @@ export async function searchMemoriesSemantic(
 
       const tDone = performance.now()
 
-      const finalResults = results.slice(0, limit)
-      bumpAccessTimes(characterId, finalResults.map(r => r.memory.id))
-      return finalResults
+      return results.slice(0, limit)
     }
   } catch (error) {
     logger.warn(`[Memory] Semantic search failed, falling back to text search`, { characterId, query: query.substring(0, 100), userId: options.userId, error: String(error) })
   }
 
   // Fallback to text-based search
-  const textResults = await searchMemoriesText(characterId, query, options)
-  bumpAccessTimes(characterId, textResults.map(r => r.memory.id))
-  return textResults
+  return searchMemoriesText(characterId, query, options)
 }
 
 /**
@@ -1211,23 +1211,26 @@ async function expandRelatedMemories(
 }
 
 /**
- * Fire-and-forget bulk update of lastAccessedAt for memories returned from a
- * retrieval path. The recent-access component of the blended protection score
- * is otherwise starved of signal — on a 17k-memory corpus we were seeing 13
- * rows with a non-null lastAccessedAt because only the Memories API route
- * called updateAccessTime, and the chat context path never did.
+ * Fire-and-forget bulk update of lastAccessedAt for memories a consumer
+ * actually USED — whispered into a prompt, handed to a model as tool output,
+ * shown to an answerer. Search itself no longer stamps anything: the dynamic
+ * head over-fetches ~3× what it shows, and stamping every candidate left 83%
+ * of a corpus "recently accessed", so the recent-access protection bonus no
+ * longer discriminated.
  *
  * Character-scoped bulk update so a stale id list cannot affect other
  * characters. Errors are swallowed at warn level — a missed access bump
  * shouldn't fail a chat turn.
  */
-function bumpAccessTimes(characterId: string, memoryIds: string[]): void {
-  if (memoryIds.length === 0) return
+export function markMemoriesAccessed(characterId: string, memoryIds: string[]): void {
+  const ids = Array.from(new Set(memoryIds.filter(id => typeof id === 'string' && id.length > 0)))
+  if (ids.length === 0) return
+  logger.debug('[Memory] Marking memories accessed', { characterId, count: ids.length })
   const repos = getRepositories()
-  repos.memories.updateAccessTimeBulk(characterId, memoryIds).catch(err => {
-    logger.warn('[Memory] Failed to bump lastAccessedAt for retrieved memories', {
+  repos.memories.updateAccessTimeBulk(characterId, ids).catch(err => {
+    logger.warn('[Memory] Failed to bump lastAccessedAt for used memories', {
       characterId,
-      count: memoryIds.length,
+      count: ids.length,
       error: err instanceof Error ? err.message : String(err),
     })
   })

@@ -38,20 +38,100 @@ function sceneHash(input: string): string {
   return createHash('sha256').update(input).digest('hex').slice(0, SCENE_HASH_LENGTH)
 }
 
-/** Phase 3b: hard cap on the dynamic-head rank instruction. */
+/** Phase 3b: floor on the dynamic-head token budget (see {@link sizeMemoryPools}). */
 export const DYNAMIC_HEAD_TOKEN_BUDGET = 200
-/** Phase 3b: how many rank-instruction entries to attempt. */
+/** Phase 3b: floor on the dynamic-head entry count (see {@link sizeMemoryPools}). */
 export const DYNAMIC_HEAD_DEFAULT_SIZE = 5
 
 /**
  * Recall-on-reference (episodic overhaul): a retrospective turn — the user is
  * invoking past shared events — gets an enlarged head, because that is
- * exactly the turn that needs rich recall. Tuning knobs; validate against
- * real chats via the recall-replay harness before tightening.
+ * exactly the turn that needs rich recall. These are floors; the sized head
+ * is twice the ordinary one. Validate against real chats via the
+ * recall-replay harness before tightening.
  */
 export const RETRO_HEAD_TOKEN_BUDGET = 600
-/** Enlarged entry count for retrospective turns. */
+/** Floor on the entry count for retrospective turns. */
 export const RETRO_HEAD_SIZE = 10
+
+/** Share of the memory budget the per-turn relevance head may spend. */
+export const DYNAMIC_HEAD_BUDGET_RATIO = 0.15
+/** Ceiling on the ordinary dynamic-head token budget. */
+export const DYNAMIC_HEAD_MAX_TOKEN_BUDGET = 1200
+/** Ceiling on the ordinary dynamic-head entry count. */
+export const DYNAMIC_HEAD_MAX_SIZE = 15
+/** Rough tokens per head line (id tag + age + summary + meta), for sizing. */
+const HEAD_TOKENS_PER_ENTRY = 40
+
+/** Floor on the frozen-archive entry count (the historical fixed size). */
+export const FROZEN_ARCHIVE_MIN_SIZE = 25
+/** Ceiling on the frozen-archive entry count. */
+export const FROZEN_ARCHIVE_MAX_SIZE = 60
+/** Rough tokens per archive line (summary + meta), for sizing. */
+const ARCHIVE_TOKENS_PER_ENTRY = 60
+
+export interface MemoryPoolSizing {
+  /** Token cap for this turn's dynamic head. */
+  headTokenBudget: number
+  /** Entry cap for this turn's dynamic head. */
+  headEntries: number
+  /** Token cap for formatting the frozen archive this turn. */
+  archiveTokenBudget: number
+  /**
+   * How many memories the frozen archive holds. Derived from the ORDINARY
+   * head budget even on retrospective turns, so the archive's membership —
+   * and its bytes — stay stable across turns within a compaction generation.
+   */
+  archiveSize: number
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+/**
+ * Split a turn's memory budget between the dynamic head and the frozen
+ * archive. The memory budget is `max(2000, 4% of context)` — about 8k tokens
+ * on a 200k model — so fixed 200-token / 5-entry heads left most of it unspent.
+ *
+ * - head tokens   = clamp(15% of memoryBudget, 200, 1200)
+ * - head entries  = clamp(round(headTokens / 40), 5, 15)
+ * - retrospective = 2× both (floored at the historical retro sizes), with
+ *   tokens bounded by memoryBudget
+ * - archive size  = clamp(round((memoryBudget − ordinary head tokens) / 60), 25, 60)
+ */
+export function sizeMemoryPools(memoryBudget: number, retrospective: boolean): MemoryPoolSizing {
+  const budget = Math.max(0, Math.floor(memoryBudget))
+  const baseHeadTokens = Math.min(
+    budget,
+    clamp(Math.round(budget * DYNAMIC_HEAD_BUDGET_RATIO), DYNAMIC_HEAD_TOKEN_BUDGET, DYNAMIC_HEAD_MAX_TOKEN_BUDGET),
+  )
+  const baseHeadEntries = clamp(
+    Math.round(baseHeadTokens / HEAD_TOKENS_PER_ENTRY),
+    DYNAMIC_HEAD_DEFAULT_SIZE,
+    DYNAMIC_HEAD_MAX_SIZE,
+  )
+
+  const headTokenBudget = retrospective
+    ? Math.min(budget, Math.max(RETRO_HEAD_TOKEN_BUDGET, baseHeadTokens * 2))
+    : baseHeadTokens
+  const headEntries = retrospective
+    ? Math.max(RETRO_HEAD_SIZE, baseHeadEntries * 2)
+    : baseHeadEntries
+
+  const archiveSize = clamp(
+    Math.round(Math.max(0, budget - baseHeadTokens) / ARCHIVE_TOKENS_PER_ENTRY),
+    FROZEN_ARCHIVE_MIN_SIZE,
+    FROZEN_ARCHIVE_MAX_SIZE,
+  )
+
+  return {
+    headTokenBudget,
+    headEntries,
+    archiveTokenBudget: Math.max(0, budget - headTokenBudget),
+    archiveSize,
+  }
+}
 
 /**
  * Build the trailing metadata tag appended to a delivered memory line so the
@@ -181,6 +261,8 @@ export interface DebugMemoryInfo {
  * Debug info for inter-character memories
  */
 export interface DebugInterCharacterMemoryInfo {
+  /** The memory's id — lets callers mark the entries actually delivered as accessed. */
+  memoryId?: string
   aboutCharacterName: string
   summary: string
   importance: number
@@ -365,6 +447,7 @@ export function formatMemoriesForContext(
     currentTokens += lineTokens
     memoriesUsed++
     debugMemories.push({
+      memoryId: memory.id,
       summary: memory.summary,
       importance: memory.importance,
       score,
@@ -495,6 +578,7 @@ export function formatInterCharacterMemoriesForContext(
       currentTokens += lineTokens
       memoriesUsed++
       debugMemories.push({
+        memoryId: memory.id,
         aboutCharacterName: characterName,
         summary: memory.summary,
         importance: memory.importance,
@@ -566,6 +650,7 @@ export function formatFrozenMemoryArchive(
     currentTokens += lineTokens
     memoriesUsed++
     debugMemories.push({
+      memoryId: memory.id,
       summary: memory.summary,
       importance: memory.importance,
       score: 0,

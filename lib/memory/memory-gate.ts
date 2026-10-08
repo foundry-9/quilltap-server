@@ -34,8 +34,11 @@ import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
 
 /**
  * Near-duplicate threshold — at or above this, the candidate is considered an
- * exact-or-near-exact restatement of an existing memory and is skipped entirely
- * (not even reinforced) so piles of identical rephrasings stop accumulating.
+ * exact-or-near-exact restatement of an existing memory. No new row is
+ * written and the existing text is left alone, but the observation still
+ * counts: {@link absorbNearDuplicate} bumps the row's reinforcement count, so
+ * the facts restated most faithfully are not the ones that never accrue
+ * reinforcement.
  */
 export const NEAR_DUPLICATE_THRESHOLD = 0.90
 
@@ -44,6 +47,14 @@ export const MERGE_THRESHOLD = 0.85
 
 /** Related-but-distinct threshold — memories in this band get linked. */
 export const RELATED_THRESHOLD = 0.70
+
+/**
+ * Most `[+]` footnote lines a memory may carry. Past this, reinforcement still
+ * bumps count/importance and unions entities, but appends no more prose and
+ * skips the re-embed — an unbounded tail drifts the row's vector toward a bag
+ * of proper nouns.
+ */
+export const MAX_REINFORCEMENT_FOOTNOTES = 8
 
 /** Top-K results to fetch from vector store during gate check */
 const GATE_TOP_K = 5
@@ -298,16 +309,142 @@ async function runMemoryGateInner(
 // Reinforcement
 // =============================================================================
 
+/** Number of `[+]` footnote lines already appended to a memory's content. */
+export function countReinforcementFootnotes(content: string): number {
+  let count = 0
+  for (const line of content.split('\n')) {
+    if (line.startsWith('[+] ')) count++
+  }
+  return count
+}
+
+/**
+ * Append novel details to `content` as `[+]` footnotes, stopping at
+ * {@link MAX_REINFORCEMENT_FOOTNOTES}. Returns the new content and the details
+ * actually appended (a prefix of `details`, possibly empty).
+ */
+export function appendCappedFootnotes(
+  content: string,
+  details: string[],
+): { content: string; appended: string[] } {
+  const room = Math.max(0, MAX_REINFORCEMENT_FOOTNOTES - countReinforcementFootnotes(content))
+  const appended = details.slice(0, room)
+  if (appended.length === 0) return { content, appended }
+  return { content: `${content}\n${appended.map(d => `[+] ${d}`).join('\n')}`, appended }
+}
+
+/**
+ * Persist a patch to a memory and return the row as it now stands.
+ *
+ * Returns null only when the row is genuinely missing (the repository's
+ * not-found answer). In the job child a buffered write returns `undefined` —
+ * the row is fine, the write simply lands at commit — so the caller gets the
+ * patch applied to its own copy instead of a false "update failed".
+ */
+export async function patchMemory(memory: Memory, patch: Partial<Memory>): Promise<Memory | null> {
+  const repos = getRepositories()
+  const updated = await repos.memories.updateForCharacter(memory.characterId, memory.id, patch)
+  if (updated === null) return null
+  if (updated === undefined) {
+    logger.debug('[MemoryGate] Memory patch buffered (job child); using local view', {
+      memoryId: memory.id,
+      fields: Object.keys(patch),
+    })
+    return { ...memory, ...patch }
+  }
+  return updated
+}
+
+/**
+ * Regenerate a memory's embedding from its current summary/content/anchors and
+ * write it to both the row and the character's vector store. Best-effort:
+ * failures warn and leave the old vector in place.
+ */
+export async function reembedMemory(
+  memory: Memory,
+  userId: string,
+  embeddingProfileId?: string,
+): Promise<boolean> {
+  const repos = getRepositories()
+  try {
+    const embeddingResult = await generateEmbeddingForUser(
+      buildMemoryEmbeddingText(memory.summary, memory.content, memory),
+      userId,
+      embeddingProfileId,
+      { priority: 'background' }
+    )
+
+    await repos.memories.updateForCharacter(
+      memory.characterId,
+      memory.id,
+      { embedding: embeddingResult.embedding }
+    )
+
+    const vectorStore = await getCharacterVectorStore(memory.characterId)
+    if (vectorStore.hasVector(memory.id)) {
+      await vectorStore.updateVector(memory.id, embeddingResult.embedding)
+    } else {
+      await vectorStore.addVector(memory.id, embeddingResult.embedding, {
+        memoryId: memory.id,
+        characterId: memory.characterId,
+      })
+    }
+    await vectorStore.save()
+    logger.debug('[MemoryGate] Re-embedded memory', { memoryId: memory.id })
+    return true
+  } catch (error) {
+    logger.warn('[MemoryGate] Failed to re-embed memory', {
+      memoryId: memory.id,
+      error: String(error),
+    })
+    return false
+  }
+}
+
+/**
+ * Count a near-duplicate re-observation (SKIP_NEAR_DUPLICATE) as reinforcement.
+ *
+ * The candidate restates the existing memory almost verbatim, so nothing about
+ * the row's text or vector changes: no footnotes, no anchor upgrades, no
+ * re-embed. Only the reinforcement signal moves — count, lastReinforcedAt,
+ * reinforcedImportance — which is what protection and ranking read.
+ */
+export async function absorbNearDuplicate(existingMemory: Memory): Promise<Memory> {
+  const newCount = (existingMemory.reinforcementCount ?? 1) + 1
+  const patch: Partial<Memory> = {
+    reinforcementCount: newCount,
+    lastReinforcedAt: new Date().toISOString(),
+    reinforcedImportance: calculateReinforcedImportance(existingMemory.importance, newCount),
+  }
+
+  const updated = await patchMemory(existingMemory, patch)
+  if (!updated) {
+    logger.warn('[MemoryGate] Failed to reinforce near-duplicate memory', {
+      memoryId: existingMemory.id,
+      characterId: existingMemory.characterId,
+    })
+    return existingMemory
+  }
+
+  logger.debug('[MemoryGate] Near-duplicate absorbed as reinforcement', {
+    memoryId: existingMemory.id,
+    reinforcementCount: newCount,
+    reinforcedImportance: patch.reinforcedImportance,
+  })
+  return updated
+}
+
 /**
  * Reinforce an existing memory with new observations.
  *
  * 1. Extract novel details from candidate not present in existing memory.
- * 2. Append novel details as footnotes.
+ * 2. Append novel details as footnotes, up to {@link MAX_REINFORCEMENT_FOOTNOTES}.
  * 3. Increment reinforcementCount, update lastReinforcedAt.
  * 4. Recalculate reinforcedImportance.
  * 5. Upgrade episodic anchors when the retelling supplies better ones
  *    (fills a null occurredAt/narrativeTime; unions new entities).
- * 6. Re-embed if content or anchors changed.
+ * 6. Re-embed if content or the anchor line changed — unless the row was
+ *    already at the footnote cap, in which case it is not re-embedded.
  * 7. Return updated memory.
  */
 export async function reinforceMemory(
@@ -318,17 +455,24 @@ export async function reinforceMemory(
   embeddingProfileId?: string,
   candidateAnchors?: EpisodicAnchorView
 ): Promise<{ memory: Memory; novelDetails: string[] }> {
-  const repos = getRepositories()
-  const novelDetails = extractNovelDetails(candidateContent, existingMemory.content)
+  const allNovelDetails = extractNovelDetails(candidateContent, existingMemory.content)
+  const atCap = countReinforcementFootnotes(existingMemory.content) >= MAX_REINFORCEMENT_FOOTNOTES
 
   const newCount = (existingMemory.reinforcementCount ?? 1) + 1
   const now = new Date().toISOString()
   const newReinforcedImportance = calculateReinforcedImportance(existingMemory.importance, newCount)
 
-  let newContent = existingMemory.content
-  if (novelDetails.length > 0) {
-    const footnotes = novelDetails.map(d => `[+] ${d}`).join('\n')
-    newContent = `${existingMemory.content}\n${footnotes}`
+  const { content: newContent, appended: novelDetails } = appendCappedFootnotes(
+    existingMemory.content,
+    allNovelDetails,
+  )
+  if (novelDetails.length < allNovelDetails.length) {
+    logger.debug('[MemoryGate] Reinforcement footnote cap reached; dropping extra details', {
+      memoryId: existingMemory.id,
+      offered: allNovelDetails.length,
+      appended: novelDetails.length,
+      cap: MAX_REINFORCEMENT_FOOTNOTES,
+    })
   }
 
   const contentChanged = newContent !== existingMemory.content
@@ -366,17 +510,16 @@ export async function reinforceMemory(
       const existingLower = new Set(existingEntities.map(e => e.toLowerCase()))
       const fresh = candidateEntities.filter(e => !existingLower.has(e.toLowerCase()))
       if (fresh.length > 0) {
-        updateData.entities = [...existingEntities, ...fresh].slice(0, 12)
-        anchorsChanged = true
+        const merged = [...existingEntities, ...fresh].slice(0, 12)
+        if (merged.length > existingEntities.length) {
+          updateData.entities = merged
+          anchorsChanged = true
+        }
       }
     }
   }
 
-  const updatedMemory = await repos.memories.updateForCharacter(
-    existingMemory.characterId,
-    existingMemory.id,
-    updateData
-  )
+  const updatedMemory = await patchMemory(existingMemory, updateData)
 
   if (!updatedMemory) {
     logger.warn('[MemoryGate] Failed to update memory during reinforcement', {
@@ -386,38 +529,11 @@ export async function reinforceMemory(
     return { memory: existingMemory, novelDetails }
   }
 
-  // Re-embed if content or anchors changed (the anchor line is embedded text)
-  if (contentChanged || anchorsChanged) {
-    try {
-      const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(updatedMemory.summary, updatedMemory.content, updatedMemory),
-        userId,
-        embeddingProfileId,
-        { priority: 'background' }
-      )
-
-      await repos.memories.updateForCharacter(
-        existingMemory.characterId,
-        existingMemory.id,
-        { embedding: embeddingResult.embedding }
-      )
-
-      const vectorStore = await getCharacterVectorStore(existingMemory.characterId)
-      if (vectorStore.hasVector(existingMemory.id)) {
-        await vectorStore.updateVector(existingMemory.id, embeddingResult.embedding)
-      } else {
-        await vectorStore.addVector(existingMemory.id, embeddingResult.embedding, {
-          memoryId: existingMemory.id,
-          characterId: existingMemory.characterId,
-        })
-      }
-      await vectorStore.save()
-    } catch (error) {
-      logger.warn('[MemoryGate] Failed to re-embed reinforced memory', {
-        memoryId: existingMemory.id,
-        error: String(error),
-      })
-    }
+  // Re-embed if content or anchors changed (the anchor line is embedded text).
+  // Past the footnote cap the row's vector is frozen until consolidation
+  // rewrites it — anchors still land on the row, they just don't re-embed.
+  if (!atCap && (contentChanged || anchorsChanged)) {
+    await reembedMemory(updatedMemory, userId, embeddingProfileId)
   }
 
   return { memory: updatedMemory, novelDetails }
@@ -567,7 +683,19 @@ export async function deleteMemoryWithUnlink(memoryId: string): Promise<boolean>
  * Returns the number of memory rows actually deleted (the LIKE-filtered
  * neighbour count is logged, not returned).
  */
-export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promise<number> {
+export async function deleteMemoriesWithUnlinkBatch(
+  memoryIds: string[],
+  options: {
+    /**
+     * Rows whose links the caller has just rewritten in this same operation
+     * (a merge survivor), keyed by id. The scrub reads these lists instead of
+     * the database row: in the job child the database still holds the
+     * pre-write row, and scrubbing from it would overwrite the caller's
+     * fresher list.
+     */
+    currentLinks?: ReadonlyMap<string, { characterId: string; relatedMemoryIds: string[] }>
+  } = {},
+): Promise<number> {
   if (memoryIds.length === 0) return 0
 
   const startedAt = Date.now()
@@ -577,16 +705,25 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
   // One-pass scan of every row with a non-empty links array. The OR-of-LIKEs
   // approach grows ugly past ~50 IDs and the in-JS filter keeps the query
   // shape stable regardless of batch size.
-  const candidates = await rawQuery<NeighbourRow[]>(
+  const dbCandidates = await rawQuery<NeighbourRow[]>(
     "SELECT id, characterId, relatedMemoryIds FROM memories WHERE relatedMemoryIds IS NOT NULL AND relatedMemoryIds != '[]'",
     []
   )
+  const overrides = options.currentLinks
+  const candidates: Array<{ id: string; characterId: string; links: string[] }> = dbCandidates
+    .filter(row => !overrides?.has(row.id))
+    .map(row => ({ id: row.id, characterId: row.characterId, links: parseRelatedIds(row.relatedMemoryIds) }))
+  if (overrides) {
+    for (const [id, entry] of overrides) {
+      candidates.push({ id, characterId: entry.characterId, links: entry.relatedMemoryIds })
+    }
+  }
 
   const charactersAffected = new Set<string>()
   let neighboursTouched = 0
   for (const candidate of candidates) {
     if (doomedSet.has(candidate.id)) continue
-    const current = parseRelatedIds(candidate.relatedMemoryIds)
+    const current = candidate.links
     if (current.length === 0) continue
     const filtered = current.filter(id => !doomedSet.has(id))
     if (filtered.length === current.length) continue
@@ -615,14 +752,27 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
     }
   }
 
+  // In the job child, `bulkDelete` is a buffered write and returns nothing —
+  // the rows go at commit. Counting `undefined` produced NaN (logged as
+  // `deleted: null`), which also disarmed the ineffective-sweep backoff. The
+  // ids were resolved against the database just above, so their count is what
+  // the commit will remove.
   let deleted = 0
+  let countSource: 'repository' | 'resolved-ids' = 'repository'
   for (const [characterId, ids] of idsByCharacter) {
-    deleted += await repos.memories.bulkDelete(characterId, ids)
+    const result: unknown = await repos.memories.bulkDelete(characterId, ids)
+    if (typeof result === 'number' && Number.isFinite(result)) {
+      deleted += result
+    } else {
+      deleted += ids.length
+      countSource = 'resolved-ids'
+    }
   }
 
   const logFields = {
     requested: memoryIds.length,
     deleted,
+    countSource,
     neighboursTouched,
     charactersAffected: charactersAffected.size,
     durationMs: Date.now() - startedAt,

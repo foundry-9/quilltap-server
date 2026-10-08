@@ -31,6 +31,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
+  markMemoriesAccessed: jest.fn(),
 }))
 
 jest.mock('@/lib/repositories/factory', () => ({

@@ -14,6 +14,8 @@ import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
 import { deleteMemoriesWithUnlinkBatch, occasionsAreDistinct } from './memory-gate'
+import { planMemoryMerge, applyMemoryMerge } from './memory-merge'
+import { invalidateFrozenArchive } from './frozen-archive-cache'
 
 import { logger } from '@/lib/logger'
 
@@ -370,6 +372,7 @@ export async function runHousekeeping(
   // skip every candidate and score + sort 19k entries for nothing. Do a
   // cheap pre-check first: when no unprotected-and-undeleted memory exists,
   // skip the entire scoring pass.
+  const mergeTargetIds = new Set(memoriesToMerge.map(m => m.targetId))
   const remainingAfterDeletion = memories.filter(m => !deleteSet.has(m.id))
   const hasDeletionCandidate =
     remainingAfterDeletion.length > opts.maxMemories &&
@@ -390,6 +393,9 @@ export async function runHousekeeping(
       const { memory } = scoredMemories[i]
 
       if (deleteSet.has(memory.id)) continue
+      // A merge survivor is about to absorb its losers; deleting it would
+      // take their details with it. Spare it and cut the next one instead.
+      if (mergeTargetIds.has(memory.id)) continue
       // Reuse protection result from pass 1 instead of recomputing.
       const isProtected = protectedMap.get(memory.id) ?? isProtectedMemory(memory, now)
       if (isProtected) continue
@@ -410,10 +416,39 @@ export async function runHousekeeping(
     }
   }
 
+  let mergesApplied = memoriesToMerge
+  let survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
+
+  if (!opts.dryRun && memoriesToMerge.length > 0) {
+    // Fold each merged-away row into its survivor BEFORE anything is deleted,
+    // so a failed fold costs nothing: its losers simply stay. The delete below
+    // scrubs the patched survivors from their new link lists rather than the
+    // database row — in the job child that row is still the pre-merge one,
+    // and scrubbing from it would overwrite the union.
+    const fold = await foldMergedMemories(memories, memoriesToMerge, deleteSet, opts)
+    survivorLinks = fold.survivorLinks
+    if (fold.keptLoserIds.size > 0) {
+      for (const id of fold.keptLoserIds) deleteSet.delete(id)
+      mergesApplied = memoriesToMerge.filter(m => !fold.keptLoserIds.has(m.sourceId))
+      for (const detail of result.details) {
+        if (detail.action === 'merged' && fold.keptLoserIds.has(detail.memoryId)) {
+          detail.action = 'kept'
+          detail.reason = 'Merge into survivor failed; kept rather than lose its details'
+        }
+      }
+      logger.warn('[Housekeeping] Some merges failed; their memories were kept', {
+        characterId,
+        kept: fold.keptLoserIds.size,
+      })
+    }
+  }
+
   const deletedIds = Array.from(deleteSet)
 
   if (!opts.dryRun && deletedIds.length > 0) {
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds)
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds, {
+      currentLinks: survivorLinks,
+    })
 
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
@@ -425,10 +460,16 @@ export async function runHousekeeping(
       logger.warn(`[Housekeeping] Failed to clean up vector store`, { characterId, error: String(error) })
     }
 
+    // The corpus just changed under every cached archive for this character.
+    // In the parent (the Memories API path) this drops the cache directly; in
+    // the job child it is a no-op on the child's own map, and the parent's
+    // job-completion hook does the real invalidation.
+    invalidateFrozenArchive(characterId)
+
     result.deleted = deletedCount
-    result.merged = memoriesToMerge.length
+    result.merged = mergesApplied.length
     result.deletedIds = deletedIds
-    result.mergedIds = memoriesToMerge.map(m => m.sourceId)
+    result.mergedIds = mergesApplied.map(m => m.sourceId)
   } else if (opts.dryRun) {
     result.deleted = deletedIds.length
     result.merged = memoriesToMerge.length
@@ -440,6 +481,98 @@ export async function runHousekeeping(
   result.totalAfter = result.kept
 
   return result
+}
+
+/**
+ * Apply pass 2's merges: group every merged-away row under its survivor and
+ * fold each group in through the shared merge. Pass 2 walks best-first, so a
+ * survivor should never later become a loser; the chain walk below is a guard
+ * in case that ordering ever changes. The cap pass spares merge targets; if a
+ * survivor is nonetheless gone, its losers are kept rather than deleted.
+ */
+async function foldMergedMemories(
+  memories: Memory[],
+  merges: { sourceId: string; targetId: string }[],
+  deleteSet: Set<string>,
+  opts: { userId?: string; embeddingProfileId?: string },
+): Promise<{
+  survivorLinks: Map<string, { characterId: string; relatedMemoryIds: string[] }>
+  keptLoserIds: Set<string>
+}> {
+  const byId = new Map(memories.map(m => [m.id, m]))
+  const targetOf = new Map(merges.map(m => [m.sourceId, m.targetId]))
+
+  const finalTarget = (id: string): string => {
+    let current = id
+    const seen = new Set<string>()
+    while (targetOf.has(current) && !seen.has(current)) {
+      seen.add(current)
+      current = targetOf.get(current)!
+    }
+    return current
+  }
+
+  const groups = new Map<string, Memory[]>()
+  for (const { sourceId } of merges) {
+    const survivorId = finalTarget(sourceId)
+    const loser = byId.get(sourceId)
+    if (!loser || survivorId === sourceId) continue
+    const list = groups.get(survivorId) ?? []
+    list.push(loser)
+    groups.set(survivorId, list)
+  }
+
+  const survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
+  const keptLoserIds = new Set<string>()
+  let folded = 0
+  let skipped = 0
+  for (const [survivorId, losers] of groups) {
+    const survivor = byId.get(survivorId)
+    if (!survivor || deleteSet.has(survivorId)) {
+      // The cap pass spares merge targets, so this should not happen; if it
+      // does, keep the losers rather than delete what nothing absorbed.
+      for (const loser of losers) keptLoserIds.add(loser.id)
+      skipped++
+      continue
+    }
+    let applied: Memory | null = null
+    try {
+      // Links are unioned minus only this group; the delete then scrubs
+      // whatever else is actually removed, so links to anything that is kept
+      // (a failed group's losers) survive.
+      const plan = planMemoryMerge(survivor, losers)
+      applied = await applyMemoryMerge(survivor, plan, {
+        userId: opts.userId,
+        embeddingProfileId: opts.embeddingProfileId,
+      })
+    } catch (error) {
+      logger.warn('[Housekeeping] Failed to fold merged memories into survivor', {
+        survivorId,
+        losers: losers.length,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    if (applied) {
+      survivorLinks.set(survivorId, {
+        characterId: applied.characterId,
+        relatedMemoryIds: applied.relatedMemoryIds ?? [],
+      })
+      folded++
+    } else {
+      // Keep the losers: deleting them now would discard what the survivor
+      // failed to absorb.
+      for (const loser of losers) keptLoserIds.add(loser.id)
+    }
+  }
+
+  logger.debug('[Housekeeping] Folded merged memories', {
+    merges: merges.length,
+    survivors: groups.size,
+    folded,
+    skippedDeletedSurvivor: skipped,
+    keptAfterFailedFold: keptLoserIds.size,
+  })
+  return { survivorLinks, keptLoserIds }
 }
 
 /**

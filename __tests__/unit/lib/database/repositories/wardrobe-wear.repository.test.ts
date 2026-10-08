@@ -36,6 +36,12 @@ const { getRawDatabase } = jest.requireMock('@/lib/database/backends/sqlite/clie
 // Real binding by absolute root path — a bare require resolves to the mock.
 const Database = require(path.join(process.cwd(), 'node_modules', 'better-sqlite3'))
 
+// The native binding is loaded once per jest worker, so its SqliteError class
+// belongs to whichever test file in the worker loaded it first. Errors from it
+// then fail `toThrow()`'s Error check in every later file ("did not throw")
+// even though the operation rejected. Match on the message instead.
+const rejectsWithMessage = (pattern: RegExp) => ({ message: expect.stringMatching(pattern) })
+
 const CHAR_A = '11111111-1111-4111-8111-111111111111'
 const CHAR_B = '22222222-2222-4222-8222-222222222222'
 const CHAT_1 = '33333333-3333-4333-8333-333333333333'
@@ -115,7 +121,7 @@ describe('WardrobeWearRepository', () => {
           { itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' },
           { itemId: null as unknown as string, wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' },
         ]),
-      ).rejects.toThrow()
+      ).rejects.toMatchObject(rejectsWithMessage(/NOT NULL/))
       expect(rows()).toHaveLength(0)
     })
 
@@ -193,7 +199,7 @@ describe('WardrobeWearRepository', () => {
     await repo.incrementWears([{ itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' }])
     db.exec(`CREATE TRIGGER "no_delete" BEFORE DELETE ON "wardrobe_wear_stats" BEGIN SELECT RAISE(ABORT, 'nope'); END`)
 
-    await expect(repo.foldWearerIntoUnattributed(CHAR_A)).rejects.toThrow(/nope/)
+    await expect(repo.foldWearerIntoUnattributed(CHAR_A)).rejects.toMatchObject(rejectsWithMessage(/nope/))
 
     // No unattributed copy was left beside the original: nothing double-counts.
     expect(rows()).toEqual([expect.objectContaining({ itemId: 'coat', wearerCharacterId: CHAR_A, wearCount: 1 })])

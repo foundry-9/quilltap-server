@@ -43,6 +43,7 @@ _quilltap() {
     'memories:Search, browse, and graph memories'
     'memory-diff:Dump existing memories and dry-run re-extraction'
     'recall-replay:Replay a turn'\''s memory recall, old vs episodic ranking'
+    'anchor-probe:Probe whether episodic anchor lines suppress Memory Gate reinforcement'
     'logs:Tail or print an instance log file'
     'migrations:Inspect migration status'
     'maintenance:Run retention/cleanup sweeps'
@@ -98,6 +99,9 @@ _quilltap_subcommand() {
       ;;
     recall-replay)
       _quilltap_recall_replay
+      ;;
+    anchor-probe)
+      _quilltap_anchor_probe
       ;;
     logs)
       _quilltap_logs
@@ -604,6 +608,19 @@ _quilltap_recall_replay() {
     '--turn[interchange to replay]:turn:' \
     '--char[character id]:char:' \
     '--limit[rows per path]:limit:' \
+    '--memory-budget[memory token budget]:tokens:' \
+    '--port[server port]:port:' \
+    '--json[raw JSON output]' \
+    '*: :'
+}
+
+_quilltap_anchor_probe() {
+  _arguments \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '(-i --instance)'{-i,--instance}'[Use instance]:instance:_quilltap_instance_names' \
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories' \
+    '--passphrase[Database passphrase]:passphrase:' \
+    '--limit[recent memories to sample]:limit:' \
     '--port[server port]:port:' \
     '--json[raw JSON output]' \
     '*: :'

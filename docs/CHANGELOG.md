@@ -4,6 +4,75 @@
 
 ### 4.10-dev
 
+#### Fix order-dependent failure in the wardrobe wear repository test
+
+- `wardrobe-wear.repository.test.ts` failed "did not throw" on two rollback tests whenever another
+  test file in the same jest worker had loaded the real better-sqlite3 binding first (seen on
+  `main` at `06a70a7` and on PR 83). The native module is loaded once per worker, so its
+  `SqliteError` belongs to the first file's context and fails `rejects.toThrow()`'s Error check in
+  later files. The two assertions now match the rejection's message with `rejects.toMatchObject`.
+
+#### Memory recall and housekeeping fixes (F1–F9)
+
+Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
+
+- F1: a Memory Gate `SKIP_NEAR_DUPLICATE` (cosine ≥ 0.90) now counts as reinforcement. New
+  `absorbNearDuplicate` (`memory-gate.ts`) bumps `reinforcementCount`, `lastReinforcedAt` and
+  `reinforcedImportance`; no footnotes, no re-embed, text untouched. The date guard still runs first
+  and the action is still reported as `SKIP_NEAR_DUPLICATE`.
+- F2: new measurement tool for the anchor-line hypothesis. `runAnchorGateProbe`
+  (`lib/memory/anchor-gate-probe.ts`) re-embeds a character's recent rows with and without the
+  anchor line and counts crossings of 0.85 / 0.90 each way. `POST /api/v1/memories?action=anchor-gate-probe`,
+  CLI `quilltap anchor-probe <characterId>`. The gate itself is unchanged.
+- F3: reinforcement footnotes are capped at `MAX_REINFORCEMENT_FOOTNOTES` (8). Past the cap a
+  reinforcement still bumps count/importance and unions entities, but appends nothing and does not
+  re-embed.
+- F4: `MemoriesRepository.findMostImportant` (the frozen archive's pool) now orders by
+  `reinforcedImportance DESC, COALESCE(lastReinforcedAt, createdAt) DESC, id ASC` instead of raw
+  `importance` with no tiebreak. The archive is its only caller.
+- F5: the frozen archive cache is keyed by `(characterId, chatId)` instead of `characterId`, so a
+  new chat no longer reuses another chat's generation-0 archive. LRU-bounded at 64 entries; size is
+  part of the freshness check. `invalidateFrozenArchive(characterId)` now has callers: housekeeping
+  (`runHousekeeping`), deduplication, and the job dispatcher's completion hook for
+  `MEMORY_HOUSEKEEPING` (`invalidateFrozenArchivesForCompletedJob`), since the cache lives in the
+  parent. Per-turn writes do not invalidate.
+- F6: `searchMemoriesSemantic` no longer stamps `lastAccessedAt` on everything it returns. New
+  `markMemoriesAccessed` is called by consumers for what they actually deliver: the context builder
+  (archive, dynamic head and inter-character entries that cleared the token budget), the `search`
+  tool (results returned to the model), Carina recall, the first-message context, and the
+  voice-rewrite recall.
+- F7: the dynamic head and frozen archive are sized from the memory budget by `sizeMemoryPools`
+  (`memory-injector.ts`): head tokens `clamp(15% of budget, 200, 1200)`, head entries
+  `clamp(round(tokens/40), 5, 15)`, retrospective turns 2× (floored at the old 600 / 10, bounded by
+  the budget), archive size `clamp(round((budget − head)/60), 25, 60)` from the ordinary split so it
+  stays stable across turns. The proactive pre-search now pulls and keeps
+  `PROACTIVE_RECALL_POOL_SIZE` (90 = the largest archive plus the largest retrospective head), so
+  the context builder's archive-overlap filter cannot leave the head underfilled.
+  `recall-replay` takes an optional `memoryBudget` to compare the sized head against the old fixed one.
+- F8: `deleteMemoriesWithUnlinkBatch` counted `bulkDelete`'s return, which is `undefined` for a
+  buffered write in the job child, so child sweeps logged `deleted: null` (NaN) and the
+  ineffective-sweep backoff never tripped. It now counts the resolved ids when the return is not a
+  finite number (debug log names which count was used); the housekeeping handler and
+  `recordHousekeepingOutcome` also guard against non-finite counts. The outcome cache's writer
+  (housekeeping job) and reader (extraction job) both run in the single job child; documented in
+  `housekeeping-outcome-cache.ts`.
+- F9: housekeeping's similarity pass and Memory Deduplication now merge instead of discarding. New
+  `lib/memory/memory-merge.ts` (`planMemoryMerge` / `applyMemoryMerge`) folds each loser into its
+  survivor: capped `[+]` details, summed `reinforcementCount`, unioned `relatedMemoryIds` (minus the
+  deleted set), earliest `occurredAt`, recomputed `reinforcedImportance`, re-embed on content change.
+  The survivor is patched before anything is deleted, and only the losers whose fold succeeded
+  are deleted; a failed fold keeps its losers. A plan's links exclude only its own group;
+  `deleteMemoriesWithUnlinkBatch` takes a new `currentLinks` option and scrubs the patched
+  survivors from their new link lists instead of the database row (in the job child that row is
+  still the pre-merge one). Links to kept memories survive. Housekeeping's cap pass never deletes a
+  merge survivor.
+- Reinforcement and merges no longer treat a buffered child write (`undefined`) as "update failed":
+  new `patchMemory` returns the locally patched row, so a reinforcement with novel details in the
+  extraction job now re-embeds. Re-embedding is factored into `reembedMemory`.
+- Filed bug 182 (open, Low): concurrent reinforcements of one memory can lose a count.
+- Help: `help/memory-recall-relevance.md` ("How Much the Book Whispers"),
+  `help/memory-housekeeping.md`.
+
 #### Daily database optimize on startup
 
 - On the first launch of each local calendar day, startup now runs VACUUM, ANALYZE and

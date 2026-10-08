@@ -34,6 +34,7 @@ import {
   type SearchQueryEmbedding,
 } from '@/lib/memory/memory-service'
 import { buildRetrospectiveProbes, buildTurnRecallContext } from '@/lib/memory/recall-tags'
+import { DYNAMIC_HEAD_MAX_SIZE, FROZEN_ARCHIVE_MAX_SIZE } from '@/lib/chat/context/memory-injector'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
@@ -42,6 +43,9 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { ChatEvent } from '@/lib/schemas/chat.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
+
+/** Archive overlap (≤ FROZEN_ARCHIVE_MAX_SIZE) plus the largest retrospective head. */
+export const PROACTIVE_RECALL_POOL_SIZE = FROZEN_ARCHIVE_MAX_SIZE + DYNAMIC_HEAD_MAX_SIZE * 2
 
 const logger = createServiceLogger('PreContextPreCompute')
 
@@ -321,7 +325,11 @@ async function proactiveRecallTask(
       searchQuery,
       {
         userId,
-        limit: 20,
+        // The context builder drops every candidate already in the frozen
+        // archive, then fills the head from what is left — and does not search
+        // again. Pull enough that a full archive overlap still leaves the
+        // largest head it can ask for (a retrospective turn: 2 × max).
+        limit: PROACTIVE_RECALL_POOL_SIZE,
         captureQueryEmbedding: captured => {
           queryEmbedding = captured
         },
@@ -343,7 +351,7 @@ async function proactiveRecallTask(
     )
 
     if (memoryResults.length > 0) {
-      return { memories: memoryResults.slice(0, 10), signals, queryEmbedding }
+      return { memories: memoryResults, signals, queryEmbedding }
     }
   } catch (error) {
     logger.warn('Proactive memory recall: memory search failed, falling back to default', {

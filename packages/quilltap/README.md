@@ -365,9 +365,22 @@ Needs a running server (`--port`, default 3000) to reach the extraction pipeline
 quilltap recall-replay <chatId>                 # Replay the last turn
 quilltap recall-replay <chatId> --turn 42       # Replay at interchange 42 (its own clock)
 quilltap recall-replay <chatId> --json          # Raw JSON for scripting
+quilltap recall-replay <chatId> --memory-budget 4000  # Budget-sized dynamic head
 ```
 
-Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default 25), `--port <n>` (default 3000), `--json`.
+Flags: `--turn <n>` (default: last), `--char <characterId>` (default: first LLM-controlled participant), `--limit <n>` (default 25), `--memory-budget <tokens>` (positive integer; the new path's selected rows then follow the budget-sized dynamic head, which scales with the model's memory budget, while the old path keeps the historical fixed 5-entry head; each path header prints its head size), `--port <n>` (default 3000), `--json`.
+
+## Anchor Probe
+
+`quilltap anchor-probe <characterId>` measures whether the episodic anchor line embedded with each memory suppresses Memory Gate reinforcement. It re-embeds the character's most recent memories with and without the anchor line, compares each against older rows, and reports how many would cross the reinforce (0.85) and near-duplicate (0.90) thresholds each way, plus a per-row table (rows that cross 0.85 only without anchors are highlighted). Read-only, but it costs embedding calls (roughly up to 7 per sampled row).
+
+```bash
+quilltap anchor-probe <characterId>             # Sample the 50 most recent memories
+quilltap anchor-probe <characterId> --limit 20  # Smaller, cheaper sample
+quilltap anchor-probe <characterId> --json      # Raw JSON for scripting
+```
+
+Flags: `--limit <n>` (1–200, default 50), `--port <n>` (default 3000), `--json`.
 
 ## Maintenance & Cleanup
 

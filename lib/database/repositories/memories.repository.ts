@@ -322,27 +322,76 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Find the most important memories for a character
+   * Find the most important memories for a character — the frozen archive's
+   * candidate pool.
+   *
+   * Ranked on `reinforcedImportance` (importance plus the reinforcement
+   * signal), then `COALESCE(lastReinforcedAt, createdAt)` so a recently
+   * re-observed memory beats a stale one of equal score, then `id` so ties
+   * resolve the same way every time. Raw `importance` alone left most of a
+   * large corpus tied near 0.9, and the pool became whatever order SQLite
+   * returned ties in.
+   *
    * @param characterId The character ID
    * @param limit Maximum number of memories to return (default: 10)
-   * @returns Promise<Memory[]> Array of important memories, sorted by importance (highest first)
+   * @returns Promise<Memory[]> Array of memories, best first
    */
   async findMostImportant(characterId: string, limit: number = 10): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
-        const memories = await this.findByFilter(
-          { characterId },
-          {
-            sort: { importance: -1 },
-            limit,
-          }
+        if (limit <= 0) return [];
+        const rows = await rawQuery<Record<string, unknown>[]>(
+          `SELECT * FROM memories
+            WHERE characterId = ?
+            ORDER BY reinforcedImportance DESC,
+                     COALESCE(lastReinforcedAt, createdAt) DESC,
+                     id ASC
+            LIMIT ?`,
+          [characterId, limit],
         );
+        const memories = this.hydrateRawRows(rows, 'most-important fetch');
+        logger.debug('Fetched most important memories', {
+          characterId,
+          limit,
+          returned: memories.length,
+        });
         return memories;
       },
       'Error finding most important memories',
       { characterId, limit },
       []
     );
+  }
+
+  /**
+   * Validate rows read through `rawQuery`. SQLiteCollection hydrates the
+   * JSON-encoded array columns for us; a raw query has to do it by hand.
+   */
+  private hydrateRawRows(rows: Record<string, unknown>[], context: string): Memory[] {
+    const memories: Memory[] = [];
+    for (const row of rows) {
+      for (const col of ['keywords', 'tags', 'relatedMemoryIds', 'entities']) {
+        const val = row[col];
+        if (typeof val === 'string') {
+          try {
+            row[col] = JSON.parse(val);
+          } catch {
+            row[col] = [];
+          }
+        }
+      }
+
+      const validation = MemorySchema.safeParse(row);
+      if (validation.success) {
+        memories.push(validation.data);
+      } else {
+        logger.warn(`Memory failed validation in ${context}`, {
+          memoryId: row.id,
+          error: validation.error.message,
+        });
+      }
+    }
+    return memories;
   }
 
   /**
@@ -754,36 +803,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
         const rows = await rawQuery<Record<string, unknown>[]>(sql, params);
 
-        const memories: Memory[] = [];
-        for (const row of rows) {
-          // rn is a synthetic column; strip it before validation
-          delete row.rn;
-
-          // Hydrate JSON-encoded array columns. SQLiteCollection does this for
-          // us via getCollection(); when we drop down to rawQuery to use the
-          // window function, we have to do it by hand.
-          for (const col of ['keywords', 'tags', 'relatedMemoryIds', 'entities']) {
-            const val = row[col];
-            if (typeof val === 'string') {
-              try {
-                row[col] = JSON.parse(val);
-              } catch {
-                row[col] = [];
-              }
-            }
-          }
-
-          const validation = MemorySchema.safeParse(row);
-          if (validation.success) {
-            memories.push(validation.data);
-          } else {
-            logger.warn('Memory failed validation in partition fetch', {
-              memoryId: row.id,
-              error: validation.error.message,
-            });
-          }
-        }
-        return memories;
+        // rn is a synthetic column; strip it before validation
+        for (const row of rows) delete row.rn;
+        return this.hydrateRawRows(rows, 'partition fetch');
       },
       'Error finding memories about characters',
       { characterId, aboutCharacterCount: aboutCharacterIds.length, limitPerCharacter },

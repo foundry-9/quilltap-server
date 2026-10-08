@@ -18,6 +18,7 @@
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
  * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
+ * - POST ?action=anchor-gate-probe - Measure whether the embedded anchor line suppresses gate reinforcement (read-only dev tool; characterId in body)
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
@@ -38,6 +39,7 @@ import {
 } from '@/lib/api/middleware';
 import { createMemoryWithEmbedding, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
+import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
@@ -52,7 +54,7 @@ import {
 } from '@/lib/instance-settings';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, validationError, successResponse } from '@/lib/api/responses';
 import type { ChatEvent, MessageEvent, ChatMetadata } from '@/lib/schemas/types';
 import { readConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 
@@ -216,6 +218,7 @@ export const POST = createContextHandler(async (req, { user, repos }) =>
       'backfill-embeddings': () => handleBackfillStart(req, { user, repos }),
       'regenerate-all': () => handleRegenerateAll(req, { user, repos }),
       'extraction-concurrency': () => handleWriteExtractionConcurrency(req, { user, repos }),
+      'anchor-gate-probe': () => handleAnchorGateProbe(req, { user, repos }),
     },
     () => handleCreateMemory(req, { user, repos })
   )
@@ -535,6 +538,52 @@ async function handleSearch(
     query,
     usedEmbedding: searchResults.length > 0 ? searchResults[0].usedEmbedding : false,
   });
+}
+
+const anchorGateProbeSchema = z.object({
+  characterId: z.string().uuid(),
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
+/**
+ * POST ?action=anchor-gate-probe — re-embed a character's most recent rows with
+ * and without the episodic anchor line and report how many would have crossed
+ * the gate's reinforce / near-duplicate thresholds each way. Read-only; costs
+ * up to ~(limit × 7) embedding calls. Wrapped by `quilltap anchor-probe`.
+ */
+async function handleAnchorGateProbe(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = anchorGateProbeSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+
+  const character = await repos.characters.findById(parsed.data.characterId);
+  if (!character) {
+    return notFound('Character');
+  }
+
+  logger.debug('[Memories API] Running anchor gate probe', {
+    characterId: parsed.data.characterId,
+    limit: parsed.data.limit,
+  });
+  try {
+    const result = await runAnchorGateProbe({
+      characterId: parsed.data.characterId,
+      userId: user.id,
+      limit: parsed.data.limit,
+    });
+    return successResponse(result);
+  } catch (error) {
+    logger.error('[Memories API] Anchor gate probe failed', {
+      characterId: parsed.data.characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return serverError('Anchor gate probe failed');
+  }
 }
 
 async function handleHousekeep(
