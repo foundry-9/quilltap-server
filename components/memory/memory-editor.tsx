@@ -22,7 +22,7 @@ interface Memory {
   tags: string[]
   tagDetails?: Tag[]
   importance: number
-  source: 'AUTO' | 'MANUAL'
+  source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
   createdAt: string
   updatedAt: string
 }

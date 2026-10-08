@@ -15,6 +15,9 @@
  * - POST ?action=housekeeping-config - Update auto-housekeeping settings
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
  * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy, related-memory expansion)
+ * - POST ?action=consolidate - Fold clusters of hot memories into digests (characterId, dryRun?, maxClustersPerRun?, clusterThreshold? in body). dryRun runs in-process and returns the report; otherwise enqueues a job and returns { jobId }
+ * - POST ?action=consolidation-config - Update consolidation settings (instance-wide)
+ * - POST ?action=extraction-mode-config - Update the extraction grain of the OTHER pass (instance-wide)
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
  * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
@@ -25,6 +28,8 @@
  * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
  * - GET ?action=recall-config - Read current recall relevance settings
+ * - GET ?action=consolidation-config - Read consolidation settings
+ * - GET ?action=extraction-mode-config - Read the extraction grain settings
  * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
  * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
  * - GET ?action=extraction-concurrency - Read current MEMORY_EXTRACTION concurrency cap
@@ -42,7 +47,7 @@ import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
-import { enqueueEmbeddingGenerate, enqueueMemoryHousekeeping, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
+import { enqueueEmbeddingGenerate, enqueueMemoryConsolidation, enqueueMemoryHousekeeping, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
 import { setMemoryExtractionConcurrencyOverride } from '@/lib/background-jobs/processor';
 import {
   getMemoryExtractionConcurrency,
@@ -51,7 +56,13 @@ import {
   setMemoryExtractionLimits,
   getMemoryRecallSettings,
   setMemoryRecallSettings,
+  getMemoryConsolidationSettings,
+  setMemoryConsolidationSettings,
+  getMemoryExtractionModeSettings,
+  setMemoryExtractionModeSettings,
 } from '@/lib/instance-settings';
+import { runConsolidation } from '@/lib/memory/consolidation';
+import { MemoryConsolidationSettingsSchema, MemoryExtractionModeSettingsSchema } from '@/lib/schemas/settings.types';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { notFound, badRequest, serverError, validationError, successResponse } from '@/lib/api/responses';
@@ -82,7 +93,7 @@ const searchMemorySchema = z.object({
   limit: z.number().min(1).max(100).prefault(20),
   minImportance: z.number().min(0).max(1).optional(),
   minScore: z.number().min(0).max(1).optional(),
-  source: z.enum(['AUTO', 'MANUAL']).optional(),
+  source: z.enum(['AUTO', 'MANUAL', 'CONSOLIDATED']).optional(),
 });
 
 const housekeepingOptionsSchema = z.object({
@@ -129,6 +140,23 @@ const recallConfigSchema = z.object({
   perTurnConversationSummaries: z.boolean().optional(),
 });
 
+/** Consolidation settings: every field optional on write; null clears nullable ones. */
+const consolidationConfigSchema = MemoryConsolidationSettingsSchema.partial();
+
+const extractionModeConfigSchema = MemoryExtractionModeSettingsSchema.partial();
+
+/** Dry-run clusters are bounded: each cluster is one model call, in-process. */
+const CONSOLIDATE_DRY_RUN_DEFAULT_CLUSTERS = 10;
+const CONSOLIDATE_DRY_RUN_MAX_CLUSTERS = 40;
+const CONSOLIDATE_DRY_RUN_TIME_BUDGET_MS = 120_000;
+
+const consolidateSchema = z.object({
+  characterId: z.uuid('Character ID is required'),
+  dryRun: z.boolean().optional(),
+  maxClustersPerRun: z.number().int().min(1).max(1000).optional(),
+  clusterThreshold: z.number().min(0).max(1).optional(),
+});
+
 const backfillStartSchema = z.object({
   /** Restrict backfill to one character; omit to backfill all of user's characters. */
   characterId: z.uuid().optional(),
@@ -158,6 +186,8 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
       'housekeeping-config': () => handleReadHousekeepingConfig(req, { user, repos }),
       'extraction-limits-config': () => handleReadExtractionLimitsConfig(req, { user, repos }),
       'recall-config': () => handleReadRecallConfig(req, { user, repos }),
+      'consolidation-config': () => handleReadConsolidationConfig(),
+      'extraction-mode-config': () => handleReadExtractionModeConfig(),
       'backfill-embeddings': () => handleBackfillProgress(req, { user, repos }),
       'character-memory-counts': () => handleCharacterMemoryCounts(req, { user, repos }),
       'extraction-concurrency': () => handleReadExtractionConcurrency(req, { user, repos }),
@@ -215,6 +245,9 @@ export const POST = createContextHandler(async (req, { user, repos }) =>
       'housekeeping-config': () => handleWriteHousekeepingConfig(req, { user, repos }),
       'extraction-limits-config': () => handleWriteExtractionLimitsConfig(req, { user, repos }),
       'recall-config': () => handleWriteRecallConfig(req, { user, repos }),
+      'consolidation-config': () => handleWriteConsolidationConfig(req),
+      'extraction-mode-config': () => handleWriteExtractionModeConfig(req),
+      consolidate: () => handleConsolidate(req, { user, repos }),
       'backfill-embeddings': () => handleBackfillStart(req, { user, repos }),
       'regenerate-all': () => handleRegenerateAll(req, { user, repos }),
       'extraction-concurrency': () => handleWriteExtractionConcurrency(req, { user, repos }),
@@ -265,7 +298,9 @@ async function listMemoriesByCharacter(
   const { searchParams } = req.nextUrl;
   const search = searchParams.get('search') || undefined;
   const minImportanceParam = searchParams.get('minImportance');
-  const source = searchParams.get('source') as 'AUTO' | 'MANUAL' | null;
+  const source = searchParams.get('source') as 'AUTO' | 'MANUAL' | 'CONSOLIDATED' | null;
+  const tierParam = searchParams.get('tier');
+  const tier: 'hot' | 'cold' | undefined = tierParam === 'hot' || tierParam === 'cold' ? tierParam : undefined;
   const sortBy = searchParams.get('sortBy') || 'createdAt';
   const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
 
@@ -286,8 +321,9 @@ async function listMemoriesByCharacter(
       sortBy,
       sortOrder,
       search,
-      source: source && (source === 'AUTO' || source === 'MANUAL') ? source : undefined,
+      source: source && (source === 'AUTO' || source === 'MANUAL' || source === 'CONSOLIDATED') ? source : undefined,
       minImportance: minImportance !== undefined && !isNaN(minImportance) ? minImportance : undefined,
+      tier,
     });
 
     // Enrich with tag names
@@ -323,8 +359,12 @@ async function listMemoriesByCharacter(
     memories = memories.filter((m: any) => m.importance >= minImportance);
   }
 
-  if (source && (source === 'AUTO' || source === 'MANUAL')) {
+  if (source && (source === 'AUTO' || source === 'MANUAL' || source === 'CONSOLIDATED')) {
     memories = memories.filter((m: any) => m.source === source);
+  }
+
+  if (tier) {
+    memories = memories.filter((m: any) => (m.tier ?? 'hot') === tier);
   }
 
   // Sort
@@ -516,6 +556,8 @@ async function handleSearch(
     minScore,
     minImportance,
     source,
+    // The Commonplace Book browses the whole archive, cold rows included.
+    includeCold: true,
   });
 
   // Enrich with tag names
@@ -621,11 +663,14 @@ async function handleHousekeep(
     success: true,
     dryRun: !!options.dryRun,
     result: {
+      demoted: result.demoted,
       deleted: result.deleted,
       merged: result.merged,
       kept: result.kept,
       totalBefore: result.totalBefore,
       totalAfter: result.totalAfter,
+      coldCount: result.coldCount,
+      demotedIds: result.demotedIds,
       deletedIds: result.deletedIds,
       mergedIds: result.mergedIds,
       details: options.dryRun ? result.details : undefined,
@@ -704,11 +749,13 @@ async function handleHousekeepPreview(
   return NextResponse.json({
     success: true,
     preview: {
+      wouldDemote: preview.demoted,
       wouldDelete: preview.deleted,
       wouldMerge: preview.merged,
       wouldKeep: preview.kept,
       totalBefore: preview.totalBefore,
       totalAfter: preview.totalAfter,
+      coldCount: preview.coldCount,
       details: preview.details,
     },
   });
@@ -840,6 +887,109 @@ async function handleWriteRecallConfig(
   });
 
   return NextResponse.json({ success: true, settings: merged });
+}
+
+async function handleReadConsolidationConfig() {
+  const settings = await getMemoryConsolidationSettings();
+  return NextResponse.json({ success: true, settings });
+}
+
+async function handleWriteConsolidationConfig(req: NextRequest) {
+  const body = await req.json();
+  const parsed = consolidationConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  // Drop undefined keys so a partial write never clobbers stored values.
+  const patch = Object.fromEntries(
+    Object.entries(parsed.data).filter(([, v]) => v !== undefined)
+  );
+  await setMemoryConsolidationSettings(patch);
+  const settings = await getMemoryConsolidationSettings();
+  logger.info('[Memories API] Consolidation settings updated (instance-wide)', {
+    enabled: settings.enabled,
+    fields: Object.keys(patch),
+  });
+  return NextResponse.json({ success: true, settings });
+}
+
+async function handleReadExtractionModeConfig() {
+  const settings = await getMemoryExtractionModeSettings();
+  return NextResponse.json({ success: true, settings });
+}
+
+async function handleWriteExtractionModeConfig(req: NextRequest) {
+  const body = await req.json();
+  const parsed = extractionModeConfigSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const patch = Object.fromEntries(
+    Object.entries(parsed.data).filter(([, v]) => v !== undefined)
+  );
+  await setMemoryExtractionModeSettings(patch);
+  const settings = await getMemoryExtractionModeSettings();
+  logger.info('[Memories API] Extraction-mode settings updated (instance-wide)', {
+    otherPass: settings.otherPass,
+    fields: Object.keys(patch),
+  });
+  return NextResponse.json({ success: true, settings });
+}
+
+async function handleConsolidate(
+  req: NextRequest,
+  { user, repos }: { user: { id: string }; repos: any }
+) {
+  const body = await req.json().catch(() => ({}));
+  const parsed = consolidateSchema.safeParse(body);
+  if (!parsed.success) {
+    return validationError(parsed.error);
+  }
+  const { characterId, dryRun, maxClustersPerRun, clusterThreshold } = parsed.data;
+
+  const character = await repos.characters.findById(characterId);
+  if (!character) {
+    return notFound('Character');
+  }
+
+  if (dryRun) {
+    const maxClusters = Math.min(
+      maxClustersPerRun ?? CONSOLIDATE_DRY_RUN_DEFAULT_CLUSTERS,
+      CONSOLIDATE_DRY_RUN_MAX_CLUSTERS
+    );
+    logger.debug('[Memories API] Consolidation dry run (in-process)', {
+      characterId,
+      maxClusters,
+      clusterThreshold,
+    });
+    try {
+      const report = await runConsolidation(characterId, {
+        dryRun: true,
+        maxClustersPerRun: maxClusters,
+        settings: clusterThreshold !== undefined ? { clusterThreshold } : undefined,
+        userId: user.id,
+        timeBudgetMs: CONSOLIDATE_DRY_RUN_TIME_BUDGET_MS,
+        trigger: 'manual',
+      });
+      return NextResponse.json({ success: true, dryRun: true, report });
+    } catch (error) {
+      logger.error('[Memories API] Consolidation dry run failed', { characterId }, error instanceof Error ? error : undefined);
+      return serverError('Consolidation dry run failed');
+    }
+  }
+
+  try {
+    const jobId = await enqueueMemoryConsolidation(user.id, {
+      characterId,
+      maxClustersPerRun,
+      trigger: 'manual',
+    });
+    logger.info('[Memories API] Consolidation job enqueued', { characterId, jobId });
+    return NextResponse.json({ success: true, dryRun: false, jobId });
+  } catch (error) {
+    logger.error('[Memories API] Failed to enqueue consolidation', { characterId }, error instanceof Error ? error : undefined);
+    return serverError('Failed to enqueue consolidation');
+  }
 }
 
 async function handleCharacterMemoryCounts(

@@ -835,3 +835,85 @@ describe('wardrobe item pictures in a new-account restore', () => {
   })
 })
 
+describe('remapBackupData() - consolidation references', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  const emptyBackup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+  })
+
+  it('remaps supersededById and consolidatedFrom in lockstep with the memory ids', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      memories: [
+        { id: 'digest-old', characterId: 'c', source: 'CONSOLIDATED', tier: 'hot', consolidatedFrom: ['m1-old', 'm2-old'], supersededById: null },
+        { id: 'm1-old', characterId: 'c', tier: 'cold', supersededById: 'digest-old', consolidatedFrom: [] },
+        { id: 'm2-old', characterId: 'c', tier: 'cold', supersededById: 'digest-old', consolidatedFrom: [] },
+      ] as unknown as BackupData['memories'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const map = remapper.getMapping()
+    const [digest, m1, m2] = result.memories
+
+    expect(digest.id).toBe(map['digest-old'])
+    expect(digest.consolidatedFrom).toEqual([map['m1-old'], map['m2-old']])
+    expect(digest.supersededById).toBeNull()
+    expect(m1.supersededById).toBe(map['digest-old'])
+    expect(m2.supersededById).toBe(map['digest-old'])
+    expect(m1.id).toBe(map['m1-old'])
+  })
+
+  it('leaves a pre-tier memory without consolidation fields untouched', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      memories: [{ id: 'old', characterId: 'c' }] as unknown as BackupData['memories'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    expect(result.memories[0]).not.toHaveProperty('supersededById')
+    expect(result.memories[0]).not.toHaveProperty('consolidatedFrom')
+  })
+
+  it('remaps a chat\'s otherExtractionWatermarkMessageId to the new id of its message', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      chats: [
+        {
+          id: 'chat-old',
+          participants: [],
+          tags: [],
+          otherExtractionWatermarkMessageId: 'msg-old',
+          messages: [{ id: 'msg-old', type: 'message' }],
+        },
+      ] as unknown as BackupData['chats'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const chat = result.chats[0] as unknown as { otherExtractionWatermarkMessageId: string; messages: Array<{ id: string }> }
+
+    expect(chat.messages[0].id).toBe(remapper.getMapping()['msg-old'])
+    expect(chat.otherExtractionWatermarkMessageId).toBe(chat.messages[0].id)
+  })
+})

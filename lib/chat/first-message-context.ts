@@ -108,10 +108,16 @@ async function loadMemoriesForParticipant(
   const memoryMap = new Map<string, ParticipantMemory>()
 
   // 1. Get recent memories specifically about this participant (sorted by importance, then recency)
-  const recentMemories = await repos.memories.findByCharacterAboutCharacter(
+  // Hot tier only; consolidated digests lead (stable partition keeps the
+  // repository's importance/recency order within each group).
+  const allAbout = (await repos.memories.findByCharacterAboutCharacter(
     speakingCharacterId,
     participant.characterId
-  )
+  )).filter(m => m.tier !== 'cold')
+  const recentMemories = [
+    ...allAbout.filter(m => m.source === 'CONSOLIDATED'),
+    ...allAbout.filter(m => m.source !== 'CONSOLIDATED'),
+  ]
 
   // Take up to 3 from recent inter-character memories
   const recentCount = Math.min(3, recentMemories.length)
@@ -184,6 +190,7 @@ async function loadMemoriesForParticipant(
 
       // Add text search results (general memories that mention this character)
       for (const memory of textSearchResults) {
+        if (memory.tier === 'cold') continue
         if (!memoryMap.has(memory.id)) {
           memoryMap.set(memory.id, {
             aboutCharacterId: participant.characterId,

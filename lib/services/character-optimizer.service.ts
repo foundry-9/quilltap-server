@@ -32,7 +32,7 @@ import {
 } from '@/lib/services/character-field-semantics';
 import { sanitizeGeneratedWardrobeItems, type GeneratedWardrobeItem } from '@/lib/wardrobe/generated-items';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
-import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
+import { getCharacterVectorStore, isHotVector } from '@/lib/embedding/vector-store';
 import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -735,7 +735,7 @@ export async function runCharacterOptimizer(
           if (embeddingAvailable) {
             const embeddingResult = await generateEmbeddingForUser(searchQuery, userId, undefined, { priority: 'background' });
             const vectorStore = await getCharacterVectorStore(characterId);
-            const results = vectorStore.search(embeddingResult.embedding, 500);
+            const results = vectorStore.search(embeddingResult.embedding, 500, isHotVector);
             const matchedIds = new Set(results.map(r => r.id));
             const aboutSelf = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
             candidateMemories = aboutSelf.filter(m => matchedIds.has(m.id));
@@ -758,6 +758,9 @@ export async function runCharacterOptimizer(
       // No search query — load all about-self memories
       candidateMemories = await repos.memories.findByCharacterAboutCharacter(characterId, characterId);
     }
+
+    // Hot tier only: archived shards were folded into digests.
+    candidateMemories = candidateMemories.filter(m => m.tier !== 'cold');
 
     // Apply date filters
     if (sinceDate) {

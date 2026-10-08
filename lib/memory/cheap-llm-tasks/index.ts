@@ -36,6 +36,7 @@ export {
 export {
   extractSelfMemoriesFromTurn,
   extractOtherMemoriesFromTurn,
+  extractOtherMemoriesFromFold,
   batchExtractMemories,
   extractMemorySearchKeywords,
   summarizeMemoryRecap,
@@ -48,6 +49,7 @@ export type {
   ExtractionClock,
   FoldEpisode,
   FoldEpisodeMessage,
+  FoldOtherMessage,
   MemorySearchExtraction,
 } from './memory-tasks'
 
@@ -56,11 +58,36 @@ export {
   renderSelfCanonBlock,
   renderOtherCanonBlock,
   loadCanonForSelf,
+  loadCanonForSelfWithCommonplace,
   loadCanonForObserverAboutSubject,
+  loadCommonplaceCanon,
   NO_CANON_FALLBACK,
+  CANON_BLOCK_TOKEN_CAP,
   type CanonSource,
   type SelfCanon,
 } from './canon'
+
+// Consolidation (one call per memory cluster — see lib/memory/consolidation.ts)
+export {
+  consolidateMemoryCluster,
+  validateConsolidationOutput,
+  parseConsolidationResponse,
+  buildConsolidationUserMessage,
+  ConsolidationOutputSchema,
+  ConsolidationDigestSchema,
+  ConsolidationContradictionSchema,
+  CONSOLIDATION_SYSTEM_PROMPT,
+  CONSOLIDATION_TASK_TYPE,
+} from './consolidation-tasks'
+export type {
+  ConsolidationOutput,
+  ConsolidationDigestOutput,
+  ConsolidationContradiction,
+  ConsolidationValidation,
+  ValidatedConsolidation,
+  ConsolidationCallInput,
+  ConsolidationMemberInput,
+} from './consolidation-tasks'
 
 // Chat tasks
 export {

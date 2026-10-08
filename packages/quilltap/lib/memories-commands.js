@@ -12,6 +12,7 @@ const {
   resolveProject,
 } = require('./db-helpers');
 const { scanDanglingEdges } = require('./graph-integrity');
+const { cmdConsolidate } = require('./memories-consolidate-command');
 
 // ---------- colour & marker helpers ----------
 
@@ -93,6 +94,8 @@ function parseFlags(args) {
     top: 0,
     threshold: -1,
     port: 3000,
+    // consolidate
+    dryRun: false,
   };
   const positional = [];
   let i = 0;
@@ -108,6 +111,7 @@ function parseFlags(args) {
       case '--character': flags.character = args[++i]; break;
       case '--about': flags.about = args[++i]; break;
       case '--source': flags.source = args[++i]; break;
+      case '--tier': flags.tier = args[++i]; break;
       case '--chat': flags.chat = args[++i]; break;
       case '--project': flags.project = args[++i]; break;
       case '--since': flags.since = args[++i]; break;
@@ -136,6 +140,7 @@ function parseFlags(args) {
       case '--list': flags.list = true; break;
 
       case '--semantic': flags.semantic = true; break;
+      case '--dry-run': flags.dryRun = true; break;
       case '--top': flags.top = parseInt(args[++i], 10) || 0; break;
       case '--threshold': {
         const v = parseFloat(args[++i]);
@@ -220,11 +225,20 @@ function buildWhereClause(db, flags, openMounts = null) {
 
   if (flags.source) {
     const s = String(flags.source).toUpperCase();
-    if (s !== 'AUTO' && s !== 'MANUAL') {
-      throw new Error(`--source must be AUTO or MANUAL (got '${flags.source}')`);
+    if (s !== 'AUTO' && s !== 'MANUAL' && s !== 'CONSOLIDATED') {
+      throw new Error(`--source must be AUTO, MANUAL or CONSOLIDATED (got '${flags.source}')`);
     }
     clauses.push('m.source = ?');
     params.push(s);
+  }
+
+  if (flags.tier) {
+    const t = String(flags.tier).toLowerCase();
+    if (t !== 'hot' && t !== 'cold') {
+      throw new Error(`--tier must be hot or cold (got '${flags.tier}')`);
+    }
+    // Legacy instances without the column read every row as hot.
+    clauses.push(t === 'hot' ? "COALESCE(m.tier, 'hot') = 'hot'" : "m.tier = 'cold'");
   }
 
   if (flags.chat) {
@@ -313,7 +327,7 @@ function buildOrderBy(sortFlag, reverse) {
 // SELECT fragment that pulls every column the renderers need, including the
 // joined-in character / chat names. `m.*` is followed by aliases for the joins
 // so callers don't have to re-resolve UUIDs.
-const SELECT_BASE = `
+const SELECT_BASE_TEMPLATE = `
   SELECT
     m.id,
     m.characterId,
@@ -331,6 +345,7 @@ const SELECT_BASE = `
     m.lastReinforcedAt,
     m.lastAccessedAt,
     m.source,
+    __TIER_COLUMNS__
     m.relatedMemoryIds,
     m.createdAt,
     m.updatedAt,
@@ -345,6 +360,20 @@ const SELECT_BASE = `
   LEFT JOIN chats ON chats.id = m.chatId
   LEFT JOIN projects ON projects.id = m.projectId
 `;
+
+// Instances that haven't yet run add-memory-tiers-v1 lack the tier columns;
+// substitute constants so the CLI still reads them (rows read as hot).
+function selectBase(db) {
+  let hasTier = false;
+  try {
+    hasTier = db.prepare("PRAGMA table_info('memories')").all().some((c) => c.name === 'tier');
+  } catch { /* fall through: treat as legacy */ }
+  const cols = hasTier
+    ? 'm.tier, m.supersededById, m.consolidatedFrom, m.consolidatedAt,'
+    : "'hot' AS tier, NULL AS supersededById, '[]' AS consolidatedFrom, NULL AS consolidatedAt,";
+  return SELECT_BASE_TEMPLATE.replace('__TIER_COLUMNS__', cols);
+}
+
 
 // ---------- output helpers ----------
 
@@ -404,7 +433,7 @@ async function cmdLs(flags) {
     const { where, params, meta } = buildWhereClause(db, flags, openMounts);
     const { order, impField } = buildOrderBy(flags.sort, flags.reverse);
     const limit = flags.limit > 0 ? flags.limit : 50;
-    const sql = `${SELECT_BASE} ${where} ORDER BY ${order} LIMIT ?`;
+    const sql = `${selectBase(db)} ${where} ORDER BY ${order} LIMIT ?`;
     const rows = db.prepare(sql).all(...params, limit);
 
     if (flags.json) {
@@ -441,6 +470,10 @@ function rowToJson(row) {
     projectName: row.projectName,
     sourceMessageId: row.sourceMessageId,
     source: row.source,
+    tier: row.tier || 'hot',
+    supersededById: row.supersededById || null,
+    consolidatedFrom: (() => { try { return JSON.parse(row.consolidatedFrom || '[]'); } catch { return []; } })(),
+    consolidatedAt: row.consolidatedAt || null,
     importance: row.importance,
     reinforcedImportance: row.reinforcedImportance,
     reinforcementCount: row.reinforcementCount,
@@ -469,7 +502,7 @@ function renderTable(rows, { showHolder, impField, fullTitles }) {
     showHolder ? 'holder'.padEnd(14) : null,
     impHeader.padStart(4),
     'rein'.padStart(4),
-    'src'.padEnd(6),
+    'src'.padEnd(7),
     'about'.padEnd(20),
     'chat'.padEnd(fullTitles ? 24 : 32),
     'links'.padStart(5),
@@ -483,7 +516,7 @@ function renderTable(rows, { showHolder, impField, fullTitles }) {
     const impVal = impField === 'importance' ? row.importance : row.reinforcedImportance;
     const impStr = colorize(formatImportance(impVal), importanceColor(impVal));
     const rein = String(row.reinforcementCount ?? 0).padStart(4);
-    const src = (row.source || '').padEnd(6);
+    const src = ((row.source || '') + (row.tier === 'cold' ? '*' : '')).padEnd(7);
     const about = truncate(aboutLabel(row), 20).padEnd(20);
     const chat = truncate(chatLabel(row, fullTitles), fullTitles ? 24 : 32).padEnd(fullTitles ? 24 : 32);
     const links = String(linkCount(row)).padStart(5);
@@ -556,7 +589,7 @@ async function cmdFind(flags, positional) {
 
     const limit = flags.limit > 0 ? flags.limit : 50;
     const fullWhere = where ? `${where} AND ${matchSql}` : `WHERE ${matchSql}`;
-    const sql = `${SELECT_BASE} ${fullWhere} ORDER BY ${order} LIMIT ?`;
+    const sql = `${selectBase(db)} ${fullWhere} ORDER BY ${order} LIMIT ?`;
     const allParams = [...params, ...matchParams, ...orderParams, limit];
     const rows = db.prepare(sql).all(...allParams);
 
@@ -691,7 +724,7 @@ async function cmdGrep(flags, positional) {
     const fullWhere = where ? `${where} AND ${contentClause}` : `WHERE ${contentClause}`;
 
     const limit = flags.limit > 0 ? flags.limit : 50;
-    const sql = `${SELECT_BASE} ${fullWhere}
+    const sql = `${selectBase(db)} ${fullWhere}
                  ORDER BY m.reinforcedImportance DESC, m.createdAt DESC
                  LIMIT ?`;
     const rows = db.prepare(sql).all(...params, likeNeedle, limit);
@@ -805,7 +838,7 @@ async function cmdShow(flags, positional) {
   const { db } = await openDb(flags);
   try {
     const id = resolveMemoryId(db, idArg);
-    const row = db.prepare(`${SELECT_BASE} WHERE m.id = ?`).get(id);
+    const row = db.prepare(`${selectBase(db)} WHERE m.id = ?`).get(id);
     if (!row) {
       throw new Error(`Memory ${id} not found`);
     }
@@ -878,6 +911,7 @@ function renderShowText(row, graph, depth) {
   console.log(`  Holder:        ${holderName}    (${shortId(row.characterId)})`);
   console.log(`  About:         ${aboutName}${row.aboutCharacterId && row.aboutCharacterId !== row.characterId ? `    (${shortId(row.aboutCharacterId)})` : ''}`);
   console.log(`  Source:        ${row.source || '(?)'}`);
+  console.log(`  Tier:          ${row.tier || 'hot'}${row.supersededById ? `    (superseded by ${shortId(row.supersededById)})` : ''}`);
   const reinf = row.reinforcedImportance != null ? Number(row.reinforcedImportance).toFixed(2) : '?';
   const baseImp = row.importance != null ? Number(row.importance).toFixed(2) : '?';
   console.log(`  Importance:    ${reinf} (reinforced from ${baseImp}, count: ${row.reinforcementCount ?? 0})`);
@@ -1115,6 +1149,19 @@ function computeHolderStats(db, characterId) {
     WHERE characterId = ?
   `).get(characterId);
 
+  // Tier rollup — guarded so pre-tier instances still report.
+  let tiers = { hot: counts.total || 0, cold: 0, consolidated: 0 };
+  try {
+    const t = db.prepare(`
+      SELECT
+        SUM(CASE WHEN COALESCE(tier, 'hot') = 'hot' THEN 1 ELSE 0 END) AS hot,
+        SUM(CASE WHEN tier = 'cold' THEN 1 ELSE 0 END) AS cold,
+        SUM(CASE WHEN source = 'CONSOLIDATED' THEN 1 ELSE 0 END) AS consolidated
+      FROM memories WHERE characterId = ?
+    `).get(characterId);
+    tiers = { hot: t.hot || 0, cold: t.cold || 0, consolidated: t.consolidated || 0 };
+  } catch { /* tier column absent: everything is hot */ }
+
   const graph = scanDanglingEdges(db, { characterId });
 
   const topMemories = db.prepare(`
@@ -1131,6 +1178,7 @@ function computeHolderStats(db, characterId) {
       auto: counts.auto || 0,
       manual: counts.manual || 0,
     },
+    tiers,
     aboutDistribution: {
       selfReferential: counts.selfRef || 0,
       aboutOthers: counts.aboutOthers || 0,
@@ -1156,6 +1204,10 @@ function renderStatusBlock(holder, stats) {
   console.log(`  Total memories:        ${stats.counts.total}`);
   console.log(`    AUTO:                ${stats.counts.auto}`);
   console.log(`    MANUAL:              ${stats.counts.manual}`);
+  console.log(`  Tiers:`);
+  console.log(`    hot:                 ${stats.tiers.hot}`);
+  console.log(`    cold:                ${stats.tiers.cold}`);
+  console.log(`    digests (CONSOLIDATED): ${stats.tiers.consolidated}`);
   console.log(`  About-distribution:`);
   console.log(`    self-referential:    ${stats.aboutDistribution.selfReferential}`);
   console.log(`    about-others:        ${stats.aboutDistribution.aboutOthers}`);
@@ -1292,11 +1344,19 @@ Subcommands:
   validate [--character <name|id>] [--list]  Read-only memory-graph health
                                   [--json]   check. Exits 1 if any
                                              dangling edges remain.
+  consolidate --character <name|id> [--dry-run] [--max N] [--threshold 0..1]
+                                  [--port N] Fold clusters of hot memories
+                                             into digests (cold originals).
+                                             Asks the running server: a dry
+                                             run prints the proposed digests
+                                             and writes nothing; otherwise a
+                                             background job is queued.
 
 Shared filter flags:
   --character <name|id|all>   Holder. Default: all.
   --about <name|id|self|none> Subject (aboutCharacterId).
-  --source AUTO|MANUAL        Restrict by source.
+  --source AUTO|MANUAL|CONSOLIDATED  Restrict by source.
+  --tier hot|cold             Restrict by recall tier (default: both).
   --chat <id|title|none>      Source chat ('none' for manual memories).
   --project <id|name>         Project context.
   --since <date>              ISO date floor on createdAt.
@@ -1324,7 +1384,8 @@ Note: -i is reserved here for 'grep --ignore-case'. Use the long --instance
 form to target a registered instance.
 
 All memories verbs are read-only. They open the main encrypted database
-(quilltap.db) and never write to it.
+(quilltap.db) and never write to it; 'consolidate' leaves the writing to the
+running server.
 
 Examples:
   quilltap memories ls
@@ -1337,10 +1398,22 @@ Examples:
   quilltap memories status --character Ariadne
   quilltap memories validate
   quilltap memories validate --list
+  quilltap memories consolidate --instance Friday --character Friday --dry-run
+  quilltap memories consolidate --instance Friday --character Friday --max 100
 `);
 }
 
 // ---------- dispatcher ----------
+
+/** Resolve --character locally to a UUID, for verbs that call the running server. */
+async function resolveCharacterIdForServer(flags) {
+  const { db, openMounts } = await openDb(flags);
+  try {
+    return resolveCharacter(db, flags.character, openMounts).id;
+  } finally {
+    db.close();
+  }
+}
 
 async function memoriesCommand(args) {
   if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
@@ -1365,6 +1438,7 @@ async function memoriesCommand(args) {
     case 'tree': await cmdTree(flags, positional); break;
     case 'status': await cmdStatus(flags); break;
     case 'validate': await cmdValidate(flags); break;
+    case 'consolidate': await cmdConsolidate(flags, resolveCharacterIdForServer); break;
     default:
       console.error(`Unknown memories subcommand: ${verb}`);
       console.error("Run 'quilltap memories --help' for a list.");
@@ -1376,6 +1450,7 @@ module.exports = {
   memoriesCommand,
   // Exported for unit tests:
   parseFlags,
+  resolveCharacterIdForServer,
   buildWhereClause,
   buildOrderBy,
   traverseMemoryGraph,

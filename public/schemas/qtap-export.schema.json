@@ -550,6 +550,10 @@
           "minimum": 1,
           "description": "Per-chat override of the global coreWhisper.interval setting (assistant turns between periodic whispers). Null = inherit."
         },
+        "otherExtractionWatermarkMessageId": {
+          "type": ["string", "null"],
+          "description": "Message id up to which the other-subject (fold) extraction pass has covered this chat. Absent/null = never. A message-id reference, remapped with the messages."
+        },
         "timelineMode": {
           "type": ["string", "null"],
           "enum": ["realtime", "narrative", null],
@@ -984,7 +988,25 @@
         "projectId": { "$ref": "#/$defs/UUID" },
         "importance": { "type": "number" },
         "keywords": { "type": "array", "items": { "type": "string" } },
-        "source": { "type": "string" },
+        "source": { "type": "string", "description": "AUTO | MANUAL | CONSOLIDATED (a digest written by the consolidator)." },
+        "tier": {
+          "type": "string",
+          "enum": ["hot", "cold"],
+          "description": "Recall tier. Absent reads as 'hot'. Cold rows are consolidated members (or cap-pressure demotions): hidden from ordinary recall, still visible to the gate, search tool and UI."
+        },
+        "supersededById": {
+          "anyOf": [{ "$ref": "#/$defs/UUID" }, { "type": "null" }],
+          "description": "Memory id of the CONSOLIDATED digest that replaced this cold row. Null/absent when not superseded. Remapped with the memory ids on import."
+        },
+        "consolidatedFrom": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/UUID" },
+          "description": "On a CONSOLIDATED digest: memory ids of the cold members it folds. Absent reads as []. Remapped with the memory ids on import."
+        },
+        "consolidatedAt": {
+          "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
+          "description": "Last time the consolidator considered this row. Null/absent when never considered."
+        },
         "occurredAt": {
           "anyOf": [{ "$ref": "#/$defs/Timestamp" }, { "type": "null" }],
           "description": "ISO wall-clock time of the EVENT the memory records (episodic spine) — distinct from createdAt, the write clock. Durable data; always exported."

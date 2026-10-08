@@ -203,6 +203,67 @@ export const MemoryRecallSettingsSchema = z.object({
 export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
 
 // ============================================================================
+// MEMORY CONSOLIDATION (Commonplace Book — digests and tiers)
+// ============================================================================
+
+/**
+ * Controls for the consolidation job, which folds clusters of hot memories
+ * into digest rows and sends the members cold (see
+ * docs/developer/features/memory-consolidation-and-tiers.md, §4).
+ *
+ * Stored instance-wide in `instance_settings['memoryConsolidation']` (same
+ * class as `memoryRecall`), so adding it needs no migration. Accessors:
+ * `getMemoryConsolidationSettings` / `setMemoryConsolidationSettings` in
+ * `lib/instance-settings`.
+ */
+export const MemoryConsolidationSettingsSchema = z.object({
+  /** Master switch for the scheduled sweep and the watermark trigger. Manual runs ignore it. */
+  enabled: z.boolean().default(false),
+  /** Connection profile for the consolidation call. Null → the cheap LLM. */
+  connectionProfileId: z.string().nullable().default(null),
+  /** Cosine similarity at which two memories join a cluster. */
+  clusterThreshold: z.number().min(0).max(1).default(0.72),
+  /** Smallest cluster worth a digest (drops to 2 when any member is older than `matureAfterDays`). */
+  minClusterSize: z.number().int().min(2).default(3),
+  /** Largest cluster handed to one consolidation call. */
+  maxClusterSize: z.number().int().min(2).default(30),
+  /** Rows younger than this many days are left alone. */
+  matureAfterDays: z.number().min(0).default(7),
+  /** Upper bound on consolidation calls per run; the backlog drains over runs. */
+  maxClustersPerRun: z.number().int().positive().default(40),
+  /** Enqueue a run for a character once this many hot rows have never been considered. */
+  watermark: z.number().int().positive().default(150),
+  /** Delete superseded cold AUTO rows older than this many days. Null → never delete. */
+  coldRetentionDays: z.number().int().positive().nullable().default(null),
+});
+
+export type MemoryConsolidationSettings = z.infer<typeof MemoryConsolidationSettingsSchema>;
+
+// ============================================================================
+// MEMORY EXTRACTION MODE (Commonplace Book — grain of the OTHER pass)
+// ============================================================================
+
+/**
+ * Where the extractor's OTHER pass (observations of other characters) runs:
+ *  - 'turn': every turn, as before.
+ *  - 'fold': only at context-summary folds (and the idle-chat catch-up sweep).
+ *  - 'hybrid' (default): at folds, plus per turn for candidates at or above
+ *    `perTurnOtherFloor` (commitments, agreements, new standing facts).
+ *
+ * Stored instance-wide in `instance_settings['memoryExtractionMode']`. Accessors:
+ * `getMemoryExtractionModeSettings` / `setMemoryExtractionModeSettings`.
+ */
+export const MemoryExtractionModeSettingsSchema = z.object({
+  otherPass: z.enum(['turn', 'fold', 'hybrid']).default('hybrid'),
+  /** Per-turn OTHER candidates below this importance are dropped in 'hybrid'. */
+  perTurnOtherFloor: z.number().min(0).max(1).default(0.75),
+  /** Fold-grain OTHER pass: candidates kept per (observer, subject). */
+  foldCandidatesPerSubject: z.number().int().positive().default(3),
+});
+
+export type MemoryExtractionModeSettings = z.infer<typeof MemoryExtractionModeSettingsSchema>;
+
+// ============================================================================
 // MEMORY EXTRACTION RATE LIMITS (Commonplace Book)
 // ============================================================================
 

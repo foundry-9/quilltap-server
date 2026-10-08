@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.10.0--dev.137-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.10.0--dev.138-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
@@ -232,7 +232,7 @@ When you *do* need verbatim recall, the search bar at the top of every screen pr
 
 A character's vault also keeps a summary of every conversation it has taken part in, and the Commonplace Book searches that shelf to build the "Relevant Past Conversations" a character sees. By default that list refreshes at the opening recap, at each summary fold, and on turns that reach for the past explicitly; **Consult past conversations every turn** (Settings → Memory → Recall Relevance) re-runs the search every turn instead, at no extra embedding cost — it reuses the vector the turn's memory search already embedded, and sits out any turn where there isn't one.
 
-Proactive recall lets characters analyze recent conversation for relevant memories without being asked. Memory recap at chat start generates a first-person narrative summary from each character's memory, including a Recent Conversations block listing the title and summary of up to twenty prior chats with the same character. Built-in memory housekeeping handles deduplication and cleanup, paginated and event-loop-safe even on characters carrying nearly 20,000 memories. Context compression manages long conversations, and the AI can request full context reload when needed.
+Proactive recall lets characters analyze recent conversation for relevant memories without being asked. Memory recap at chat start generates a first-person narrative summary from each character's memory, including a Recent Conversations block listing the title and summary of up to twenty prior chats with the same character. Memory consolidation folds clusters of related memories into digests that recall prefers, and keeps the originals in a searchable archive; built-in housekeeping archives rather than deletes when a character passes their cap, paginated and event-loop-safe even on characters carrying nearly 20,000 memories. Observations of other characters are gathered over stretches of conversation rather than every turn, so the Book grows several times more slowly. Context compression manages long conversations, and the AI can request full context reload when needed.
 
 ### Multi-Character & Roleplay
 

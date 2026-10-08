@@ -37,6 +37,13 @@ jest.mock('@/lib/database/repositories/vector-indices.repository', () => ({
   getVectorIndicesRepository: () => mockRepo,
 }))
 
+const mockColdIds: string[] = []
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: () => ({
+    memories: { findColdIdsByCharacterId: jest.fn(async () => [...mockColdIds]) },
+  }),
+}))
+
 // Override the global mock from jest.setup.ts so we test the real implementation
 jest.mock('@/lib/embedding/vector-store', () => {
   return jest.requireActual('@/lib/embedding/vector-store')
@@ -130,6 +137,30 @@ describe('CharacterVectorStore', () => {
       expect(store.getDimensions()).toBe(3)
       expect(store.hasVector('v1')).toBe(true)
       expect(store.hasVector('v2')).toBe(true)
+    })
+
+    it('stamps tier metadata from the cold ids, and search can filter on it', async () => {
+      mockColdIds.splice(0, mockColdIds.length, 'v2')
+      mockRepo.findMetaByCharacterId.mockResolvedValue(makeMeta('char-1', 3))
+      mockRepo.findEntriesByCharacterId.mockResolvedValue(
+        makeEntryRows('char-1', [
+          { id: 'v1', embedding: [1, 0, 0] },
+          { id: 'v2', embedding: [1, 0.1, 0] },
+        ]),
+      )
+
+      const store = new CharacterVectorStore('char-1')
+      await store.load()
+      mockColdIds.splice(0, mockColdIds.length)
+
+      const { isHotVector } = vectorStoreModule
+      const query = new Float32Array([1, 0, 0])
+      expect(store.search(query, 5).map((r: { id: string }) => r.id).sort()).toEqual(['v1', 'v2'])
+      expect(store.search(query, 5, isHotVector).map((r: { id: string }) => r.id)).toEqual(['v1'])
+
+      store.setTier(['v2'], 'hot')
+      store.setTier(['v1'], 'cold')
+      expect(store.search(query, 5, isHotVector).map((r: { id: string }) => r.id)).toEqual(['v2'])
     })
 
     it('starts fresh when no index exists in database', async () => {

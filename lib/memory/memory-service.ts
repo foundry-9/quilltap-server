@@ -14,7 +14,7 @@ import {
   containsLiteralPhrase,
   getLiteralPhrase,
 } from '@/lib/embedding/literal-boost'
-import { getCharacterVectorStore, getVectorStoreManager } from '@/lib/embedding/vector-store'
+import { getCharacterVectorStore, getVectorStoreManager, isHotVector, type VectorMetadata } from '@/lib/embedding/vector-store'
 import { logger } from '@/lib/logger'
 import {
   runMemoryGate,
@@ -74,7 +74,8 @@ async function maybeEnqueueHousekeeping(characterId: string, userId: string): Pr
       autoSettings.perCharacterCap ??
       2000
 
-    const count = await repos.memories.countByCharacterId(characterId)
+    // The cap measures the hot tier; the cold archive never counts against it.
+    const count = await repos.memories.countHotByCharacterId(characterId)
     if (count < Math.floor(cap * HOUSEKEEPING_WATERMARK)) {
       return
     }
@@ -256,7 +257,7 @@ export interface CreateMemoryOptions {
    */
   projectId?: string | null
   /** How the memory was created */
-  source?: 'AUTO' | 'MANUAL'
+  source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
   /** Source message ID for auto-created memories */
   sourceMessageId?: string | null
   /** Override createdAt/updatedAt with source message timestamp (for batch extraction) */
@@ -774,7 +775,7 @@ export async function searchMemoriesSemantic(
     limit?: number
     minScore?: number
     minImportance?: number
-    source?: 'AUTO' | 'MANUAL'
+    source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
     /**
      * When true and the trimmed query is ≥ LITERAL_BOOST_MIN_PHRASE_LENGTH,
      * memories whose content or summary contains the query verbatim
@@ -858,6 +859,12 @@ export async function searchMemoriesSemantic(
      * embeds the same vectors. Live recall leaves it off.
      */
     embeddingMemo?: Map<string, EmbeddingResult>
+    /**
+     * Include cold-tier (archived, superseded) memories. Default false: every
+     * recall path reads hot rows only (memory-consolidation-and-tiers.md B2).
+     * The `search` tool and the Commonplace Book UI pass true.
+     */
+    includeCold?: boolean
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -941,8 +948,14 @@ export async function searchMemoriesSemantic(
     }
 
     const excluded = options.excludeMemoryIds
-    const vectorFilter = excluded && excluded.size > 0
-      ? (metadata: { memoryId: string }) => !excluded.has(metadata.memoryId)
+    const includeCold = options.includeCold === true
+    const hasExclusions = !!excluded && excluded.size > 0
+    // Hot-only unless the caller asked for the archive: cold rows are filtered
+    // inside the (brute-force) vector scan, so the top-K is drawn from hot rows.
+    const vectorFilter = hasExclusions || !includeCold
+      ? (metadata: VectorMetadata) =>
+          (!hasExclusions || !excluded!.has(metadata.memoryId)) &&
+          (includeCold || isHotVector(metadata))
       : undefined
     // The ranking knobs: the context's own tuning, else the retuned defaults.
     // The R1 gate's constants are on the neural cosine scale; TF-IDF
@@ -1018,7 +1031,7 @@ export async function searchMemoriesSemantic(
       let hits = contentHits.get(phrase)
       if (!hits) {
         hits = (await repos.memories.searchByContent(characterId, phrase))
-          .filter(m => !excluded?.has(m.id))
+          .filter(m => !excluded?.has(m.id) && (includeCold || m.tier !== 'cold'))
         contentHits.set(phrase, hits)
       }
       return hits
@@ -1095,6 +1108,7 @@ export async function searchMemoriesSemantic(
         .map(vr => {
           const memory = memoryMap.get(vr.id)
           if (!memory) return null
+          if (!includeCold && memory.tier === 'cold') return null
           // Boost the cosine score (BEFORE the importance/recency blend) for
           // any memory that scored a literal-phrase hit. We re-check the body
           // here on top of literalHitIds so memories already in the vector
@@ -1207,7 +1221,7 @@ export async function searchMemoriesSemantic(
             limit,
             embeddingResult.embedding,
             recallContext,
-            { minImportance: options.minImportance, source: options.source, excludeMemoryIds: excluded },
+            { minImportance: options.minImportance, source: options.source, excludeMemoryIds: excluded, includeCold },
             characterId,
             bestCosine,
             weightClock,
@@ -1278,7 +1292,7 @@ async function expandRelatedMemories(
   limit: number,
   queryEmbedding: ArrayLike<number>,
   recallContext: RecallContext,
-  filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL'; excludeMemoryIds?: ReadonlySet<string> },
+  filters: { minImportance?: number; source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'; excludeMemoryIds?: ReadonlySet<string>; includeCold?: boolean },
   characterId: string,
   bestCosine: number,
   weightClock?: Date,
@@ -1312,6 +1326,7 @@ async function expandRelatedMemories(
   for (const memory of neighbors) {
     // Character-scope + filter guards mirror the main pool.
     if (memory.characterId !== characterId) continue
+    if (!filters.includeCold && memory.tier === 'cold') continue
     if (filters.minImportance !== undefined && memory.importance < filters.minImportance) continue
     if (filters.source && memory.source !== filters.source) continue
     if (!memory.embedding || memory.embedding.length !== queryEmbedding.length) continue
@@ -1383,8 +1398,9 @@ async function searchMemoriesText(
   options: {
     limit?: number
     minImportance?: number
-    source?: 'AUTO' | 'MANUAL'
+    source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
     aboutCharacterId?: string
+    includeCold?: boolean
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -1428,6 +1444,9 @@ async function searchMemoriesText(
   }
 
   // Apply filters
+  if (!options.includeCold) {
+    memories = memories.filter(m => m.tier !== 'cold')
+  }
   if (options.minImportance !== undefined) {
     memories = memories.filter(m => m.importance >= options.minImportance!)
   }

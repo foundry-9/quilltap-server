@@ -16,6 +16,7 @@
 import { cosineSimilarity } from './embedding-service'
 import { getVectorIndicesRepository } from '@/lib/database/repositories/vector-indices.repository'
 import { logger } from '@/lib/logger'
+import { getRepositories } from '@/lib/repositories/factory'
 
 /**
  * Metadata associated with a vector entry
@@ -25,6 +26,12 @@ export interface VectorMetadata {
   memoryId: string
   /** Character ID for filtering */
   characterId: string
+  /**
+   * Memory tier. Not persisted with the index: stamped from the memories
+   * table at {@link CharacterVectorStore.load} and kept in step by
+   * {@link CharacterVectorStore.setTier}. Absent reads as hot.
+   */
+  tier?: 'hot' | 'cold'
   /** Additional metadata */
   [key: string]: unknown
 }
@@ -70,6 +77,17 @@ export interface ICharacterVectorStore {
   search(queryEmbedding: Float32Array, limit?: number, filter?: (metadata: VectorMetadata) => boolean): VectorSearchResult[]
   getAllEntries(): VectorEntry[]
   clear(): void
+  /** Re-stamp the tier of entries already in the store (in-memory only). */
+  setTier(ids: readonly string[], tier: 'hot' | 'cold'): void
+}
+
+/**
+ * Search predicate for recall paths that must only see hot memories (frozen
+ * archive, dynamic head, proactive search, inter-character). The memory gate
+ * and the `search` tool search both tiers and pass no predicate.
+ */
+export function isHotVector(metadata: VectorMetadata): boolean {
+  return metadata.tier !== 'cold'
 }
 
 /**
@@ -96,6 +114,7 @@ export class CharacterVectorStore implements ICharacterVectorStore {
       const repo = getVectorIndicesRepository()
       const meta = await repo.findMetaByCharacterId(this.characterId)
       const entryRows = await repo.findEntriesByCharacterId(this.characterId)
+      const coldIds = await this.loadColdIds()
 
       this.entries.clear()
       for (const row of entryRows) {
@@ -105,11 +124,18 @@ export class CharacterVectorStore implements ICharacterVectorStore {
           metadata: {
             memoryId: row.id,
             characterId: row.characterId,
+            tier: coldIds.has(row.id) ? 'cold' : 'hot',
           },
           createdAt: row.createdAt,
         })
       }
 
+      logger.debug('Loaded vector index', {
+        context: 'CharacterVectorStore.load',
+        characterId: this.characterId,
+        entries: entryRows.length,
+        cold: coldIds.size,
+      })
 
 
       if (meta) {
@@ -459,6 +485,42 @@ export class CharacterVectorStore implements ICharacterVectorStore {
   /**
    * Get all entries (for debugging/export)
    */
+  /**
+   * Ids of this character's cold memories, for stamping tier metadata. A
+   * failed lookup degrades to "everything hot" — recall then sees archived
+   * rows until the next load — rather than costing the whole index.
+   */
+  private async loadColdIds(): Promise<Set<string>> {
+    try {
+      return new Set(await getRepositories().memories.findColdIdsByCharacterId(this.characterId))
+    } catch (error) {
+      logger.warn('Could not read cold memory ids; treating every vector as hot', {
+        context: 'CharacterVectorStore.load',
+        characterId: this.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return new Set()
+    }
+  }
+
+  setTier(ids: readonly string[], tier: 'hot' | 'cold'): void {
+    let changed = 0
+    for (const id of ids) {
+      const entry = this.entries.get(id)
+      if (entry && entry.metadata.tier !== tier) {
+        entry.metadata = { ...entry.metadata, tier }
+        changed++
+      }
+    }
+    logger.debug('Re-stamped vector tiers', {
+      context: 'CharacterVectorStore.setTier',
+      characterId: this.characterId,
+      tier,
+      requested: ids.length,
+      changed,
+    })
+  }
+
   getAllEntries(): VectorEntry[] {
     return Array.from(this.entries.values())
   }

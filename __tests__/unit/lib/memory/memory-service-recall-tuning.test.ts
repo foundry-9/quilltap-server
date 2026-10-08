@@ -21,6 +21,7 @@ jest.mock('@/lib/embedding/embedding-service', () => ({
 jest.mock('@/lib/embedding/vector-store', () => ({
   getCharacterVectorStore: jest.fn(),
   getVectorStoreManager: jest.fn(),
+  isHotVector: (metadata: { tier?: string }) => metadata.tier !== 'cold',
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -138,12 +139,14 @@ describe('excludeMemoryIds', () => {
     expect(results.map(r => r.memory.id)).toEqual(['old'])
   })
 
-  it('passes no filter when nothing is excluded', async () => {
+  it('passes only the hot-tier filter when nothing is excluded', async () => {
     prime([memory('a', 0.6)])
 
     await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
 
-    expect(vectorSearch.mock.calls[0][2]).toBeUndefined()
+    const filter = vectorSearch.mock.calls[0][2] as (m: Record<string, unknown>) => boolean
+    expect(filter({ memoryId: 'a', tier: 'hot' })).toBe(true)
+    expect(filter({ memoryId: 'a', tier: 'cold' })).toBe(false)
   })
 })
 

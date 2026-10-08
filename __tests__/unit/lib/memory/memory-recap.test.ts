@@ -137,6 +137,24 @@ describe('Memory Recap Service', () => {
   })
 
   describe('generateMemoryRecap', () => {
+    it('puts consolidated digests ahead of loose shards in the high bucket', async () => {
+      mockFindRecentByImportanceTier.mockResolvedValue({
+        high: [
+          makeMemory({ id: 'a', summary: 'shard A' }),
+          makeMemory({ id: 'd', summary: 'digest D', source: 'CONSOLIDATED' } as Partial<Memory>),
+          makeMemory({ id: 'b', summary: 'shard B' }),
+        ],
+        medium: [],
+        low: [],
+      })
+      mockSummarizeMemoryRecap.mockResolvedValue({ success: true, result: 'Narrative.' })
+
+      await generateMemoryRecap(testCharacterId, testCharacterName, testSelection, testUserId, testChatId)
+
+      const tiers = mockSummarizeMemoryRecap.mock.calls[0][1] as { high: { summary: string }[] }
+      expect(tiers.high.map(m => m.summary)).toEqual(['digest D', 'shard A', 'shard B'])
+    })
+
     it('should return empty result when no memories exist', async () => {
       mockFindRecentByImportanceTier.mockResolvedValue({
         high: [],

@@ -26,7 +26,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import {
   extractSelfMemoriesFromTurn,
   extractOtherMemoriesFromTurn,
-  loadCanonForSelf,
+  loadCanonForSelfWithCommonplace,
   loadCanonForObserverAboutSubject,
   renderSelfCanonBlock,
   renderOtherCanonBlock,
@@ -46,14 +46,15 @@ import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-mes
 import { createMemoryWithGate } from './memory-service'
 import { resolveEpisodicAnchors } from './episodic-anchors'
 import type { MemoryGateOutcome } from './memory-gate'
+import { getMemoryExtractionModeSettings } from '@/lib/instance-settings'
 import { logger } from '@/lib/logger'
 
-type RateLimitDecision =
+export type RateLimitDecision =
   | { mode: 'allow' }
   | { mode: 'throttle'; floor: number; recentCount: number; cap: number }
   | { mode: 'skip'; recentCount: number; cap: number }
 
-async function resolveExtractionRateLimit(
+export async function resolveExtractionRateLimit(
   characterId: string,
   limits: MemoryExtractionLimits | undefined
 ): Promise<RateLimitDecision> {
@@ -89,7 +90,7 @@ async function resolveExtractionRateLimit(
   return { mode: 'allow' }
 }
 
-function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): MemoryCandidate[] {
+export function applyImportanceFloor(candidates: MemoryCandidate[], floor: number): MemoryCandidate[] {
   return candidates.filter(c => (c.importance ?? 0.5) >= floor)
 }
 
@@ -215,7 +216,24 @@ function toCheapLLMConfig(settings: CheapLLMSettings): CheapLLMConfig {
   }
 }
 
-interface WriteOptions {
+/**
+ * The slice of an extraction context the candidate writer needs. A per-turn
+ * `TurnMemoryExtractionContext` satisfies it, and so does the fold-grain OTHER
+ * pass, which has no turn transcript — the one write path serves both, so
+ * witnessedContext / occurredAt stamping cannot drift between them.
+ */
+export interface CandidateWriteContext {
+  chatId: string
+  userId: string
+  projectId?: string | null
+  sourceMessageTimestamp?: string
+  timelineMode?: 'realtime' | 'narrative' | null
+  dryRun?: boolean
+  inAutonomousRoom?: boolean
+  transcript?: { turnTimestamp?: string | null }
+}
+
+export interface WriteOptions {
   characterId: string
   characterName: string
   aboutCharacterId: string
@@ -223,7 +241,7 @@ interface WriteOptions {
   pass: 'SELF' | 'OTHER'
   candidate: MemoryCandidate
   passLabel: string
-  ctx: TurnMemoryExtractionContext
+  ctx: CandidateWriteContext
   sourceMessageId: string | null
   /** `createdAt` of the source message — the wall-clock anchor for `occurredAt`. */
   sourceMessageCreatedAt: string | null
@@ -234,12 +252,12 @@ interface WriteOptions {
 }
 
 
-async function writeCandidate(opts: WriteOptions): Promise<void> {
+export async function writeCandidate(opts: WriteOptions): Promise<void> {
   const timelineMode = opts.ctx.timelineMode ?? 'realtime'
   const anchorIso =
     opts.sourceMessageCreatedAt ??
     opts.ctx.sourceMessageTimestamp ??
-    opts.ctx.transcript.turnTimestamp ??
+    opts.ctx.transcript?.turnTimestamp ??
     new Date().toISOString()
   // Episodic spine: `occurredAt` defaults to the source message timestamp
   // (authoritative from the transcript — never asked of the model); a retold
@@ -500,13 +518,16 @@ export async function processTurnForMemory(
     for (const slice of allowedSlices) {
       const rl = rateLimits.get(slice.characterId)!
       const observerCharacter = ctx.participantCharacters.get(slice.characterId)
-      const selfCanonBlock = renderSelfCanonBlock(loadCanonForSelf({
+      // Card fields, then the character's own Commonplace digest (Self.md):
+      // once a fact is digested the extractor sees it as already established.
+      const selfCanonBlock = renderSelfCanonBlock(await loadCanonForSelfWithCommonplace({
         id: slice.characterId,
         name: slice.characterName,
         manifesto: observerCharacter?.manifesto ?? null,
         personality: observerCharacter?.personality ?? null,
         description: observerCharacter?.description ?? null,
         identity: observerCharacter?.identity ?? null,
+        mountPointId: observerCharacter?.characterDocumentMountPointId ?? null,
       }))
 
       const selfResult = await extractSelfMemoriesFromTurn(
@@ -574,6 +595,33 @@ export async function processTurnForMemory(
       }
     }
 
+    // Where does the OTHER pass live? 'turn' = here, as ever; 'hybrid' = here
+    // but only for what clears the high floor (commitments, agreements, new
+    // standing facts), the rest being left to the fold-grain pass; 'fold' =
+    // nowhere here at all. A failed settings read falls back to today's
+    // behaviour ('turn') rather than silently going quiet.
+    let otherPassMode: 'turn' | 'fold' | 'hybrid' = 'turn'
+    let perTurnOtherFloor = 0
+    try {
+      const modeSettings = await getMemoryExtractionModeSettings()
+      otherPassMode = modeSettings.otherPass
+      perTurnOtherFloor = modeSettings.perTurnOtherFloor
+    } catch (error) {
+      logger.warn('[Memory] Extraction-mode lookup failed; keeping per-turn OTHER pass', {
+        chatId: ctx.chatId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    logger.debug('[Memory] OTHER pass mode resolved', {
+      chatId: ctx.chatId,
+      otherPassMode,
+      perTurnOtherFloor: otherPassMode === 'hybrid' ? perTurnOtherFloor : null,
+    })
+    const runPerTurnOther = otherPassMode !== 'fold'
+    if (!runPerTurnOther) {
+      debugLogs.push('[Memory] OTHER pass runs at fold grain only (otherPass=fold); skipping per-turn OTHER')
+    }
+
     // ---------------------------------------------------------------------
     // Pass 2: OTHER memories (one multi-subject call per observer; the
     // call covers every other allowed character and the user-controlled
@@ -582,7 +630,7 @@ export async function processTurnForMemory(
     // first, then falls back to the subject's own identity property; the
     // canon source is preserved per subject so debug logs can attribute it.
     // ---------------------------------------------------------------------
-    for (const observer of allowedSlices) {
+    for (const observer of runPerTurnOther ? allowedSlices : []) {
       const rl = rateLimits.get(observer.characterId)!
       const observerCharacter = ctx.participantCharacters.get(observer.characterId)
       const observerVault = {
@@ -648,12 +696,23 @@ export async function processTurnForMemory(
       const candidatesBySubject = otherResult.result ?? new Map<string, MemoryCandidate[]>()
       for (const subject of resolvedSubjects) {
         const rawCandidates = candidatesBySubject.get(subject.id) ?? []
+        let flooredCandidates = rawCandidates
+        if (otherPassMode === 'hybrid') {
+          flooredCandidates = applyImportanceFloor(rawCandidates, perTurnOtherFloor)
+          if (flooredCandidates.length < rawCandidates.length) {
+            debugLogs.push(
+              `[Memory] Hybrid floor dropped ${rawCandidates.length - flooredCandidates.length} OTHER candidate(s) ` +
+              `for ${observer.characterName} about ${subject.subjectName} below importance ${perTurnOtherFloor} ` +
+              `(left to the fold-grain pass)`
+            )
+          }
+        }
         const candidates = rl.mode === 'throttle'
-          ? applyImportanceFloor(rawCandidates, rl.floor)
-          : rawCandidates
-        if (rl.mode === 'throttle' && candidates.length < rawCandidates.length) {
+          ? applyImportanceFloor(flooredCandidates, rl.floor)
+          : flooredCandidates
+        if (rl.mode === 'throttle' && candidates.length < flooredCandidates.length) {
           debugLogs.push(
-            `[Memory] Throttle dropped ${rawCandidates.length - candidates.length} OTHER candidate(s) ` +
+            `[Memory] Throttle dropped ${flooredCandidates.length - candidates.length} OTHER candidate(s) ` +
             `for ${observer.characterName} about ${subject.subjectName} below importance ${rl.floor}`
           )
         }

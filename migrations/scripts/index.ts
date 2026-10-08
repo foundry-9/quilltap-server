@@ -419,6 +419,8 @@ import { addWardrobeWearStatsTableMigration } from './add-wardrobe-wear-stats-ta
 import { seedWardrobeWearStatsMigration } from './seed-wardrobe-wear-stats-v1';
 // Wardrobe item images: chat_settings.wardrobeImageSettings (the designated image profile)
 import { addWardrobeImageSettingsFieldMigration } from './add-wardrobe-image-settings-field-v1';
+// Memory consolidation and tiers: hot/cold tier + digest bookkeeping on memories, fold-grain OTHER watermark on chats
+import { addMemoryTiersMigration } from './add-memory-tiers-v1';
 
 /**
  * All available migrations.
@@ -853,6 +855,8 @@ export const migrations: Migration[] = [
   seedWardrobeWearStatsMigration,
   // Wardrobe item images: chat_settings.wardrobeImageSettings
   addWardrobeImageSettingsFieldMigration,
+  // Memory consolidation and tiers: hot/cold tier + digest bookkeeping
+  addMemoryTiersMigration,
 ];
 
 export {
@@ -1265,5 +1269,7 @@ export {
   seedWardrobeWearStatsMigration,
   // Wardrobe item images: chat_settings.wardrobeImageSettings
   addWardrobeImageSettingsFieldMigration,
+  // Memory consolidation and tiers: hot/cold tier + digest bookkeeping
+  addMemoryTiersMigration,
 };
 

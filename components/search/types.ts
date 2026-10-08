@@ -64,7 +64,7 @@ export interface MemorySearchResult extends BaseSearchResult {
   characterId: string
   characterName?: string
   importance: number
-  source: 'AUTO' | 'MANUAL'
+  source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
 }
 
 export interface MessageSearchResult extends BaseSearchResult {

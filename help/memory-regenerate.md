@@ -17,6 +17,7 @@ When you press the lever — and confirm — three things happen, in order, for 
 1. **The chat's memories are wiped.** Every Commonplace Book entry tied to that chat is deleted, and its trace is removed from the character's vector store so it cannot resurface in semantic searches.
 2. **The chat is broken back into turns.** Each user message marks the opening of a turn; the assistant replies that follow it, up to the next user message, are the body. A greeting-only chat (no user messages yet) is treated as a single turn.
 3. **One extraction job is enqueued per turn.** The current pipeline, with whatever gates and importance signals are presently in force, runs against each turn and writes new entries.
+4. **Observations of other characters are gathered again in one sweep.** Under the default extraction setting most of what a character notices about the others in a conversation is collected over stretches of conversation rather than turn by turn (see [Memory Consolidation](memory-consolidation.md#memories-about-others)). The regenerate resets that bookmark for the chat and queues one pass over its most recent sixty messages, so those observations are rebuilt along with everything else.
 
 Manual memories — the ones you typed in yourself, with **MANUAL** as their source — are scoped out of the operation entirely. So are project notes and any other memories that were never tied to a specific chat. They stay exactly as they were.
 

@@ -45,6 +45,7 @@ import { cleanupFinishedJobs } from './queue-service';
 import { collapseStaleChatAssets } from './maintenance/collapse-stale-chat-assets';
 import { collapseStaleChatCaches } from './maintenance/collapse-stale-chat-caches';
 import { sweepOrphanedThumbnails } from './maintenance/sweep-orphaned-thumbnails';
+import { enqueueFoldOtherCatchups } from './maintenance/fold-other-catchup';
 import { CLOSED_TERMINAL_RETENTION_DAYS, retentionCutoff } from './maintenance/retention-constants';
 
 const moduleLogger = logger.child({ module: 'scheduled-maintenance' });
@@ -78,6 +79,7 @@ export interface MaintenanceSweepSummary {
   orphanedStoreChildrenSwept: { links: number; folders: number; documents: number };
   terminals: { rows: number; transcripts: number };
   orphanedThumbnailsSwept: { scanned: number; deleted: number; unparseable: number };
+  foldOtherCatchup: { enqueued: number; deferred: number };
   /** Sweeps that threw (and were swallowed so the rest could run). */
   failures: string[];
 }
@@ -194,6 +196,7 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
     orphanedStoreChildrenSwept: { links: 0, folders: 0, documents: 0 },
     terminals: { rows: 0, transcripts: 0 },
     orphanedThumbnailsSwept: { scanned: 0, deleted: 0, unparseable: 0 },
+    foldOtherCatchup: { enqueued: 0, deferred: 0 },
     failures: [],
   };
 
@@ -249,6 +252,12 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   await runSweep(summary, 'orphan-thumbnails', 'Orphaned-thumbnail sweep failed — continuing',
     () => sweepOrphanedThumbnails(),
     (result) => { summary.orphanedThumbnailsSwept = result; });
+
+  // 8. Fold-grain OTHER catch-up: enqueue a MEMORY_EXTRACTION job for each chat
+  //    idle > 2 h whose tail is past the OTHER watermark (short chats never fold).
+  await runSweep(summary, 'fold-other-catchup', 'Fold-grain OTHER catch-up failed — continuing',
+    () => enqueueFoldOtherCatchups(),
+    (result) => { summary.foldOtherCatchup = result; });
 
   try {
     await setLastMaintenanceSweepAt();

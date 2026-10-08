@@ -941,6 +941,7 @@ describe('Context Manager', () => {
       const repoMock = {
         memories: {
           findByCharacterAboutCharacters: jest.fn().mockResolvedValue([memory]),
+          findHotDigests: jest.fn().mockResolvedValue([]),
         },
         // buildContext always asks for this seat's pending informs; an empty
         // answer is what "no inform block this turn" looks like.
@@ -1127,6 +1128,7 @@ describe('Context Manager', () => {
         },
         memories: {
           findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+          findHotDigests: jest.fn().mockResolvedValue([]),
         },
       }
       mockedGetRepositories.mockReturnValue(repoMock as any)
@@ -1208,6 +1210,7 @@ describe('Context Manager', () => {
         },
         memories: {
           findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
+          findHotDigests: jest.fn().mockResolvedValue([]),
         },
       })
 

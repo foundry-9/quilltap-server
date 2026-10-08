@@ -20,8 +20,11 @@ export {
   renderSelfCanonBlock,
   renderOtherCanonBlock,
   loadCanonForSelf,
+  loadCanonForSelfWithCommonplace,
   loadCanonForObserverAboutSubject,
+  loadCommonplaceCanon,
   NO_CANON_FALLBACK,
+  CANON_BLOCK_TOKEN_CAP,
   type MemoryCandidate,
   type ChatMessage,
   type Attachment,
@@ -73,3 +76,21 @@ export {
   generateMemoryRecap,
   type MemoryRecapResult,
 } from './memory-recap'
+
+// Memory Consolidation (digests + hot/cold tiers)
+export {
+  runConsolidation,
+  CONSOLIDATION_LOAD_PAGE_SIZE,
+  CONSOLIDATION_MAX_BUCKET_ROWS,
+  type RunConsolidationOptions,
+  type ConsolidationReport,
+  type ConsolidationClusterReport,
+  type ConsolidationDigestReport,
+  type ConsolidationBucketRef,
+  type ConsolidationStats,
+} from './consolidation'
+export {
+  maybeEnqueueConsolidationForCharacters,
+  maybeEnqueueConsolidationAfterCommit,
+  runScheduledConsolidation,
+} from './consolidation-triggers'

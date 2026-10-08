@@ -26,6 +26,16 @@ jest.mock('@/lib/logger', () => ({
   },
 }))
 
+// These regressions pin the per-turn OTHER pass itself, so run it in 'turn'
+// mode (no hybrid floor); the mode switch has its own test file.
+jest.mock('@/lib/instance-settings', () => ({
+  getMemoryExtractionModeSettings: jest.fn(async () => ({
+    otherPass: 'turn',
+    perTurnOtherFloor: 0.75,
+    foldCandidatesPerSubject: 3,
+  })),
+}))
+
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
   resolveUncensoredCheapLLMSelection: jest.fn((selection: unknown) => selection),
@@ -38,7 +48,7 @@ jest.mock('@/lib/llm/model-context-data', () => ({
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   extractSelfMemoriesFromTurn: jest.fn(),
   extractOtherMemoriesFromTurn: jest.fn(),
-  loadCanonForSelf: jest.fn(() => ({
+  loadCanonForSelfWithCommonplace: jest.fn(() => ({
     characterId: 'noop',
     characterName: 'noop',
     body: null,
@@ -68,7 +78,7 @@ const { resolveMaxTokens } = jest.requireMock('@/lib/llm/model-context-data') as
 const tasks = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
   extractSelfMemoriesFromTurn: jest.Mock
   extractOtherMemoriesFromTurn: jest.Mock
-  loadCanonForSelf: jest.Mock
+  loadCanonForSelfWithCommonplace: jest.Mock
   loadCanonForObserverAboutSubject: jest.Mock
   renderSelfCanonBlock: jest.Mock
   renderOtherCanonBlock: jest.Mock
@@ -170,7 +180,7 @@ describe('processTurnForMemory regressions', () => {
     } as any)
     resolveUncensoredCheapLLMSelection.mockImplementation((selection: unknown) => selection as any)
     resolveMaxTokens.mockReturnValue(2048)
-    tasks.loadCanonForSelf.mockReturnValue({
+    tasks.loadCanonForSelfWithCommonplace.mockResolvedValue({
       characterId: 'noop',
       characterName: 'noop',
       body: null,

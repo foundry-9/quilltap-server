@@ -73,6 +73,20 @@ export interface MemoryExtractionPayload {
    */
   extractionAnchorMessageId?: string | null;
   connectionProfileId: string;
+  /**
+   * When true this is not a per-turn extraction but the idle catch-up for the
+   * fold-grain OTHER pass: the handler runs `runFoldOtherCatchup` over the
+   * chat's messages past `otherExtractionWatermarkMessageId`. Enqueued by the
+   * daily maintenance sweep; `extractionAnchorMessageId` carries the chat's
+   * last message id so each catch-up dedupes on its own tail.
+   */
+  foldOtherCatchup?: boolean;
+  /**
+   * With `foldOtherCatchup`: run even if the chat is not idle. Set by the
+   * chat memory regenerate, which has just reset the watermark and wants the
+   * fold-grain observations rebuilt now rather than at the next daily sweep.
+   */
+  foldOtherIgnoreIdle?: boolean;
 }
 
 /**
@@ -525,7 +539,8 @@ export async function enqueueMemoryExtraction(
       const existingAnchor = existingPayload.extractionAnchorMessageId ?? null;
       return existingPayload.chatId === payload.chatId
         && existingPayload.turnOpenerMessageId === payload.turnOpenerMessageId
-        && existingAnchor === incomingAnchor;
+        && existingAnchor === incomingAnchor
+        && (existingPayload.foldOtherCatchup ?? false) === (payload.foldOtherCatchup ?? false);
     });
     if (existing) {
       return existing.id;
@@ -623,6 +638,72 @@ export async function enqueueMemoryHousekeeping(
   return enqueueJob(
     userId,
     'MEMORY_HOUSEKEEPING',
+    payload as unknown as Record<string, unknown>,
+    { ...options, maxAttempts: options?.maxAttempts ?? 1 },
+  );
+}
+
+/**
+ * Payload for a memory-consolidation job (memory-consolidation-and-tiers.md §C1).
+ * One job per character.
+ */
+export interface MemoryConsolidationPayload {
+  characterId: string;
+  /** Run clustering and the model calls, write nothing, log the report. */
+  dryRun?: boolean;
+  /** Override `memoryConsolidation.maxClustersPerRun` for this run. */
+  maxClustersPerRun?: number;
+  /** Why the job was enqueued. Automatic triggers bail when consolidation is disabled. */
+  trigger: 'scheduled' | 'watermark' | 'manual';
+}
+
+/**
+ * Enqueue a memory-consolidation job for one character.
+ *
+ * Dedupes: a PENDING or PROCESSING MEMORY_CONSOLIDATION job for the same
+ * character (and the same dry-run flag — a dry run never stands in for a real
+ * run, or vice versa) makes this a no-op returning the existing job id.
+ *
+ * Retry-hostile like housekeeping: a rerun redoes every model call, and the
+ * next scheduled or watermark pass picks up whatever this one left, so
+ * attempts default to 1.
+ */
+export async function enqueueMemoryConsolidation(
+  userId: string,
+  payload: MemoryConsolidationPayload,
+  options?: EnqueueJobOptions
+): Promise<string> {
+  const repos = getRepositories();
+  const dryRun = payload.dryRun === true;
+
+  try {
+    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+    const existing = [...pending, ...processing].find(j => {
+      if (j.type !== 'MEMORY_CONSOLIDATION') return false;
+      const p = j.payload as Record<string, unknown>;
+      return p.characterId === payload.characterId && (p.dryRun === true) === dryRun;
+    });
+    if (existing) {
+      logger.debug('[Consolidation] Job already in flight for character; not enqueuing another', {
+        characterId: payload.characterId,
+        existingJobId: existing.id,
+        trigger: payload.trigger,
+        dryRun,
+      });
+      return existing.id;
+    }
+  } catch (error) {
+    logger.warn('[Consolidation] Failed to check for existing jobs during enqueue', {
+      characterId: payload.characterId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through — a duplicate run is wasteful, not harmful.
+  }
+
+  return enqueueJob(
+    userId,
+    'MEMORY_CONSOLIDATION',
     payload as unknown as Record<string, unknown>,
     { ...options, maxAttempts: options?.maxAttempts ?? 1 },
   );

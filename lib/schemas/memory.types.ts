@@ -18,7 +18,15 @@ import {
 // MEMORY ENUMS
 // ============================================================================
 
-export const MemorySourceEnum = z.enum(['AUTO', 'MANUAL']);
+/**
+ * How a memory came to exist:
+ *  - 'AUTO': extracted from conversation by the memory pipeline.
+ *  - 'MANUAL': written by hand (UI, CLI, import of hand-made rows).
+ *  - 'CONSOLIDATED': a digest written by the consolidation job, folding
+ *    several hot rows into one (see `lib/memory/consolidation.ts`). Its
+ *    members go cold with `supersededById` pointing back at it.
+ */
+export const MemorySourceEnum = z.enum(['AUTO', 'MANUAL', 'CONSOLIDATED']);
 export type MemorySource = z.infer<typeof MemorySourceEnum>;
 
 /**
@@ -46,6 +54,18 @@ export type WitnessedContext = z.infer<typeof WitnessedContextEnum>;
  */
 export const MemoryKindEnum = z.enum(['semantic', 'episodic']);
 export type MemoryKind = z.infer<typeof MemoryKindEnum>;
+
+/**
+ * Storage tier of a memory (memory consolidation and tiers):
+ *  - 'hot': eligible for every recall path (frozen archive, dynamic head,
+ *    inter-character, recap). Counts against the housekeeping cap.
+ *  - 'cold': kept, but seen only by the memory gate (so it still blocks
+ *    re-insertion), the `search` tool, and the Commonplace Book UI / CLI.
+ *    Rows go cold when a digest supersedes them or when cap pressure demotes
+ *    them — never deleted by policy unless `coldRetentionDays` says so.
+ */
+export const MemoryTierEnum = z.enum(['hot', 'cold']);
+export type MemoryTier = z.infer<typeof MemoryTierEnum>;
 
 // ============================================================================
 // MEMORY
@@ -112,6 +132,15 @@ export const MemorySchema = z.object({
   lastReinforcedAt: TimestampSchema.nullable().optional(),  // Null until first reinforcement
   relatedMemoryIds: z.array(UUIDSchema).default([]),       // Bidirectional links to related memories
   reinforcedImportance: z.number().min(0).max(1).default(0.5), // importance + log2(count+1)*0.05, capped at 1.0
+  // ── Tiers and consolidation ─────────────────────────────────────────────────
+  /** Storage tier — see {@link MemoryTierEnum}. */
+  tier: MemoryTierEnum.default('hot'),
+  /** The digest that replaced this row when it went cold. Null otherwise. */
+  supersededById: UUIDSchema.nullable().optional(),
+  /** Digest rows only: ids of the member memories folded into it. */
+  consolidatedFrom: z.array(UUIDSchema).default([]),
+  /** Last time the consolidator considered this row (clustered or not). */
+  consolidatedAt: TimestampSchema.nullable().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

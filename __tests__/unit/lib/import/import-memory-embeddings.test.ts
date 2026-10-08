@@ -126,6 +126,60 @@ describe('import → memory re-embedding', () => {
     expect(enqueueEmbeddingReindexAll).not.toHaveBeenCalled();
   });
 
+  it('imports a digest and its cold members with links remapped to the new ids', async () => {
+    const character = createMockCharacter();
+    configureFindById(mockUserRepos.characters.findById, []);
+    (getDefaultEmbeddingProfile as jest.Mock).mockResolvedValue({ id: 'profile-1', provider: 'OPENAI' });
+
+    const exportData = buildExport(character, 0);
+    const digestId = generateId();
+    const memberId = generateId();
+    // Member listed first: the digest it points at appears later in the bundle.
+    (exportData.data as { memories: unknown[] }).memories = [
+      createMockMemory({ id: memberId, characterId: character.id, tier: 'cold', supersededById: digestId }),
+      createMockMemory({
+        id: digestId,
+        characterId: character.id,
+        source: 'CONSOLIDATED',
+        consolidatedFrom: [memberId],
+        relatedMemoryIds: [memberId],
+      }),
+    ];
+
+    await executeImport(testUserId, exportData as never, importOptions);
+
+    const calls = (mockUserRepos.memories.create as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(2);
+    const [memberData, memberOpts] = calls[0] as [Record<string, unknown>, { id: string }];
+    const [digestData, digestOpts] = calls[1] as [Record<string, unknown>, { id: string }];
+
+    expect(memberOpts.id).not.toBe(memberId);
+    expect(digestOpts.id).not.toBe(digestId);
+    expect(memberData.tier).toBe('cold');
+    expect(memberData.supersededById).toBe(digestOpts.id);
+    expect(digestData.source).toBe('CONSOLIDATED');
+    expect(digestData.consolidatedFrom).toEqual([memberOpts.id]);
+    expect(digestData.relatedMemoryIds).toEqual([memberOpts.id]);
+  });
+
+  it('imports a bundle memory lacking tier fields as hot, unlinked', async () => {
+    const character = createMockCharacter();
+    configureFindById(mockUserRepos.characters.findById, []);
+    (getDefaultEmbeddingProfile as jest.Mock).mockResolvedValue({ id: 'profile-1', provider: 'OPENAI' });
+
+    const exportData = buildExport(character, 1);
+    const legacy = exportData.data.memories[0] as Record<string, unknown>;
+    for (const key of ['tier', 'supersededById', 'consolidatedFrom', 'consolidatedAt']) delete legacy[key];
+
+    await executeImport(testUserId, exportData as never, importOptions);
+
+    const created = (mockUserRepos.memories.create as jest.Mock).mock.calls[0][0] as Record<string, unknown>;
+    expect(created.tier).toBe('hot');
+    expect(created.supersededById).toBeNull();
+    expect(created.consolidatedFrom).toEqual([]);
+    expect(created.consolidatedAt).toBeNull();
+  });
+
   it('creates memories with no embedding at all', async () => {
     const character = createMockCharacter();
     configureFindById(mockUserRepos.characters.findById, []);

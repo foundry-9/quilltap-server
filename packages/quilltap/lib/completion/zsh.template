@@ -151,7 +151,7 @@ _quilltap_db() {
     '--character[Character name or id]:character:'
     '--project[Project name or id]:project:'
     '--about[Subject character]:character:'
-    '--source[Memory source]:source:(AUTO MANUAL)'
+    '--source[Memory source]:source:(AUTO MANUAL CONSOLIDATED)'
     '--chat[Chat name or id]:chat:'
     '--message[Message id]:id:'
     '--rendered[Render rich content]'
@@ -538,6 +538,7 @@ _quilltap_memories() {
     'tree:ASCII walk of graph'
     'status:Per-character rollup'
     'validate:Health check'
+    'consolidate:Fold memory clusters into digests'
   )
 
   mem_opts=(
@@ -548,7 +549,9 @@ _quilltap_memories() {
     '--json[JSON output]'
     '--character[Character name or id]:character:'
     '--about[Subject of memory]:character:'
-    '--source[Memory source]:source:(AUTO MANUAL)'
+    '--source[Memory source]:source:(AUTO MANUAL CONSOLIDATED)'
+    '--tier[Memory tier]:tier:(hot cold)'
+    '--dry-run[Consolidate: rehearse and print the report, write nothing]'
     '--chat[Chat id or title]:chat:'
     '--project[Project name or id]:project:'
     '--since[Since timestamp]:date:'

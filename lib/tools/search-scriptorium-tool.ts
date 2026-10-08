@@ -98,7 +98,9 @@ export interface SearchScriptoriumResult {
     importance?: number
     effectiveWeight?: number
     createdAt?: string
-    source?: 'AUTO' | 'MANUAL'
+    source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
+    /** Set on a cold-tier memory: '(archived — superseded by <digest id>)' or '(archived)'. */
+    archivedLabel?: string
     /** When the remembered EVENT happened (episodic spine) — distinct from createdAt (write time). */
     occurredAt?: string | null
     /** In-story time phrase, for fictional-timeline chats. */

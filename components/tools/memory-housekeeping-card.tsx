@@ -116,12 +116,6 @@ export function MemoryHousekeepingCard() {
     void saveConfig({ perCharacterCap: Math.floor(value) })
   }
 
-  const handleToggleMergeSimilar = () => {
-    const next = !config.mergeSimilar
-    setConfig(c => ({ ...c, mergeSimilar: next }))
-    void saveConfig({ mergeSimilar: next })
-  }
-
   const handleOverrideBlur = (characterId: string, rawValue: string) => {
     const trimmed = rawValue.trim()
     const nextOverrides: Record<string, number> = { ...config.perCharacterCapOverrides }
@@ -181,7 +175,7 @@ export function MemoryHousekeepingCard() {
   return (
     <div className="space-y-4">
       <p className="qt-text-small qt-text-muted">
-        Automatic housekeeping prunes low-importance, stale memories once a character approaches its cap. High-importance, manually added, recently accessed, and well-reinforced memories are never touched. Off by default — toggle on once you&rsquo;ve reviewed the limits below.
+        Automatic housekeeping retires low-importance, stale memories to the archive (the cold tier) once a character&rsquo;s active memories approach the cap. Nothing is destroyed: archived memories stay on the shelf, still guard against repeats, and return to active duty if they are observed again. High-importance, manually added, consolidated, recently accessed, and well-reinforced memories are never moved. Off by default — toggle on once you&rsquo;ve reviewed the limits below.
       </p>
 
       <label className="flex items-center gap-3 qt-body">
@@ -213,7 +207,7 @@ export function MemoryHousekeepingCard() {
           onBlur={(e) => handleCapBlur(Number(e.target.value))}
           className="qt-input w-32"
         />
-        <span className="qt-text-small qt-text-muted">memories per character</span>
+        <span className="qt-text-small qt-text-muted">active memories per character</span>
       </div>
 
       {characters.length > 0 && (
@@ -275,17 +269,6 @@ export function MemoryHousekeepingCard() {
           )}
         </div>
       )}
-
-      <label className="flex items-center gap-3 qt-body">
-        <input
-          type="checkbox"
-          checked={config.mergeSimilar}
-          disabled={saving}
-          onChange={handleToggleMergeSimilar}
-          className="qt-checkbox"
-        />
-        <span>Also merge semantically similar memories during the sweep</span>
-      </label>
 
       <div className="flex items-center gap-3">
         <button

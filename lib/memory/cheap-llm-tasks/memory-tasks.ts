@@ -449,8 +449,22 @@ ${canonBlock}`
  * parenthetical label so the model can distinguish the user-controlled
  * character from AI characters without branching the stable prompt body.
  */
-function otherBodyForCap(perSubjectCap: number): string {
-  return `You produce memory entries that the observer would retain about
+/**
+ * Prepended to the OTHER body when the extractor is reading a folded stretch
+ * of conversation rather than one turn. A turn shows one beat of a thread and
+ * yields fragments; a stretch shows the whole thread, so the model is told to
+ * state each thread once, as its settled outcome.
+ */
+const FOLD_GRAIN_OTHER_BLOCK = `GRAIN — READ THIS FIRST
+What follows is a STRETCH of conversation spanning many turns, not a single
+exchange. State each thread ONCE, as it stands at the end of the stretch:
+the settled outcome, not each beat on the way there. If a subject changed
+their mind mid-stretch, record where they landed. Where the instructions
+below say "this exchange" or "this turn", read "this stretch".`
+
+function otherBodyForCap(perSubjectCap: number, grain: 'turn' | 'fold' = 'turn'): string {
+  const grainBlock = grain === 'fold' ? `${FOLD_GRAIN_OTHER_BLOCK}\n\n` : ''
+  return `${grainBlock}You produce memory entries that the observer would retain about
 each of multiple subjects after this exchange. One LLM call covers every
 subject the observer interacted with this turn — extract per subject,
 return a single flat array tagged by subjectIndex.
@@ -623,6 +637,7 @@ function getOtherMemoryExtractionPrompt(
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
   clock?: ExtractionClock,
+  grain: 'turn' | 'fold' = 'turn',
 ): string {
   const subjectsBlock = subjects.map((s, i) => {
     const label = formatNameWithPronouns(s.name, s.pronouns)
@@ -633,7 +648,7 @@ function getOtherMemoryExtractionPrompt(
   const preamble = inAutonomousRoom ? AUTONOMOUS_ROOM_USER_ABSENCE_CLAUSE : ''
   const orientingBlock = renderOrientingContext(orienting)
   const clockBlock = renderClockBlock(clock)
-  return `${preamble}${otherBodyForCap(perSubjectCap)}
+  return `${preamble}${otherBodyForCap(perSubjectCap, grain)}
 
 ${clockBlock}${orientingBlock}CONTEXT
 OBSERVER: ${observerName}
@@ -1022,6 +1037,73 @@ export async function extractOtherMemoriesFromTurn(
     uncensoredFallback,
     resolvedMaxTokens,
     observerCharacterId
+  )
+}
+
+/** One message of a folded stretch, speaker-labelled and dated. */
+export type FoldOtherMessage = FoldEpisodeMessage
+
+/**
+ * Fold-grain OTHER pass: what one OBSERVER would retain about each SUBJECT
+ * after a whole stretch of conversation (the just-folded window, or the
+ * un-covered tail of an idle chat). Same prompt family as the per-turn OTHER
+ * pass, told it is reading a stretch and should state each thread once.
+ *
+ * `perSubjectCap` is the caller's cap (`foldCandidatesPerSubject`); unlike the
+ * per-turn call it is not clamped by the token budget.
+ */
+export async function extractOtherMemoriesFromFold(
+  windowMessages: ReadonlyArray<FoldOtherMessage>,
+  observer: { id: string; name: string; pronouns: Pronouns | null },
+  subjects: ReadonlyArray<OtherSubjectInput>,
+  perSubjectCap: number,
+  selection: CheapLLMSelection,
+  userId: string,
+  uncensoredFallback?: UncensoredFallbackOptions,
+  chatId?: string,
+  resolvedMaxTokens?: number,
+  inAutonomousRoom: boolean = false,
+  orienting?: OrientingContext,
+  clock?: ExtractionClock,
+): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
+  if (windowMessages.length === 0 || subjects.length === 0) {
+    const empty = new Map<string, MemoryCandidate[]>()
+    for (const s of subjects) empty.set(s.id, [])
+    return { success: true, result: empty, usage: undefined }
+  }
+
+  const cap = Math.max(1, perSubjectCap)
+  const observerLabel = formatNameWithPronouns(observer.name, observer.pronouns)
+  const rendered = windowMessages
+    .map(m => {
+      const stamp = m.createdAt ? `[${m.createdAt.slice(0, 16).replace('T', ' ')}] ` : ''
+      const content = m.content.length > 1500 ? `${m.content.slice(0, 1500)}…` : m.content
+      return `${stamp}${m.speaker}: ${content}`
+    })
+    .join('\n\n')
+
+  const messages: LLMMessage[] = [
+    {
+      role: 'system',
+      content: getOtherMemoryExtractionPrompt(cap, observerLabel, subjects, inAutonomousRoom, orienting, clock, 'fold'),
+    },
+    {
+      role: 'user',
+      content: `CONVERSATION STRETCH (${windowMessages.length} messages, in the order spoken):\n\n${rendered}`,
+    },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    messages,
+    userId,
+    (content: string) => parseOtherCandidatesBySubject(content, subjects, cap),
+    'memory-extraction-other',
+    chatId,
+    undefined,
+    uncensoredFallback,
+    resolvedMaxTokens,
+    observer.id,
   )
 }
 

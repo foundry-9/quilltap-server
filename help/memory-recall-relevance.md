@@ -73,6 +73,14 @@ The weighty shelf is chosen by how firmly a memory has been *established* — it
 
 A memory now counts as *recently consulted* only when it actually reached the character — whispered into the turn, returned by a search the character ran, or set before an answerer — and not merely because a search happened to look at it on the way past. That keeps the "recently used" evidence housekeeping relies on honest.
 
+## Digests First, Fragments After
+
+Once [Memory Consolidation](memory-consolidation.md) has been at work, a character's active memories include *digests*: single entries that each stand for a whole cluster of related observations. Recall leans on them. The steady shelf now opens with the best digests about each person present this turn (three apiece) and the best digests about the character themselves (five), and only then fills the rest of its room with the most firmly established single memories. What one character recalls of another starts with digests about that person too, and the recap that opens a chat puts digests first among its weighty memories.
+
+A digest whispered into a turn carries a short note of where it came from, such as *(from 14 notes)*, so the character knows it is reading a summary of many observations rather than one remembered moment.
+
+Recall only ever draws on **active** memories. The originals a digest replaced, and anything housekeeping has moved to the archive, are not whispered. They have not been lost: when a character searches its own memory with the `search` tool, archived entries come back too, marked *(archived)* or *(archived — superseded by …)*, so a character digging into the past can still find the details.
+
 ## Whose Life Is It, Anyway?
 
 A character's Commonplace Book keeps two sorts of entry side by side: what the character recalls of *themselves*, and what they have observed of *everybody else*. The two have always been filed apart — but for a time the Book, in its haste to be helpful, read out both sorts in the same breath, without troubling to say which was which. The effect, upon a character of long acquaintance and many entries, was much as you would expect: handed a page of another's doings under the heading *you remember*, it took the page at its word and answered in that person's voice, with that person's history, entirely convinced.
@@ -91,6 +99,7 @@ Characters with help tools enabled can navigate directly to this page:
 
 - [The Book Remembers When and Where](episodic-memory.md) — dated, placed memories and the retrospective turn
 - [When You Take the Reins Yourself](memory-playing-a-character.md) — how a character you play forms its own memories
-- [Memory Housekeeping](memory-housekeeping.md) — prunes the shelves once a character's memories grow numerous
+- [Memory Consolidation](memory-consolidation.md) — combines clusters of memories into the digests recall prefers
+- [Memory Housekeeping](memory-housekeeping.md) — archives the least-used memories once a character's memories grow numerous
 - [Embedding Profiles](embedding-profiles.md) — the semantic match that recall ranks on top of
 - [The Command Line and the Commonplace Book](cli-memories.md) — survey and search the memories themselves

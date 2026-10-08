@@ -103,6 +103,7 @@ const NEW_CHAT_FIELDS = {
   commonplaceRecallHistory: { turns: [['mem-1']] },
   timelineMode: 'narrative',
   turnSkippingEnabled: true,
+  otherExtractionWatermarkMessageId: 'msg-1',
 }
 
 const NEW_MESSAGE_FIELDS = {
@@ -119,6 +120,10 @@ const NEW_MEMORY_FIELDS = {
   narrativeTime: 'the second evening',
   entities: ['Lorian', 'the conservatory'],
   kind: 'episodic',
+  tier: 'cold',
+  supersededById: 'mem-digest',
+  consolidatedFrom: ['mem-a', 'mem-b'],
+  consolidatedAt: '2026-10-01T00:00:00.000Z',
 }
 
 const NEW_CHAT_SETTINGS_FIELDS = {
@@ -703,6 +708,59 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
     // relatedMemoryIds above dangle and the memory graph is lost on restore.
     expect(memoriesCreate.mock.calls[0][1]).toEqual({ id: 'mem-1' })
     expect(memoriesCreate.mock.calls[1][1]).toEqual({ id: 'mem-2' })
+  })
+
+  it('restores a CONSOLIDATED digest and its cold members under their own ids, links intact', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    const base = {
+      characterId: 'char-1',
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      tags: [],
+      keywords: [],
+      relatedMemoryIds: [],
+    }
+    primeArchive(
+      makeBackupData({
+        memories: [
+          { ...base, id: 'mem-digest', content: 'Digest.', source: 'CONSOLIDATED', tier: 'hot', consolidatedFrom: ['mem-a'] },
+          { ...base, id: 'mem-a', content: 'Member.', source: 'AUTO', tier: 'cold', supersededById: 'mem-digest' },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(memoriesCreate).toHaveBeenCalledTimes(2)
+    expect(memoriesCreate.mock.calls[0][0]).toMatchObject({ source: 'CONSOLIDATED', consolidatedFrom: ['mem-a'] })
+    expect(memoriesCreate.mock.calls[1][0]).toMatchObject({ tier: 'cold', supersededById: 'mem-digest' })
+    expect(memoriesCreate.mock.calls[1][1]).toEqual({ id: 'mem-a' })
+  })
+
+  it('restores a pre-tier backup memory without inventing tier fields (repository defaults to hot)', async () => {
+    const { memoriesCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        memories: [
+          {
+            id: 'mem-old',
+            characterId: 'char-1',
+            content: 'Old.',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            tags: [],
+            keywords: [],
+            relatedMemoryIds: [],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    const data = memoriesCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(data.tier).toBeUndefined()
+    expect(data.supersededById).toBeUndefined()
   })
 
   it('decodes an index-keyed embedding from a pre-fix backup (bug 181)', async () => {

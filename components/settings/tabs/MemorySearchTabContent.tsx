@@ -5,6 +5,8 @@ import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import EmbeddingProfilesTab from '@/components/settings/embedding-profiles-tab'
 import { MemoryDedupCard } from '@/components/tools/memory-dedup-card'
 import { MemoryHousekeepingCard } from '@/components/tools/memory-housekeeping-card'
+import { MemoryConsolidationCard } from '@/components/tools/memory-consolidation-card'
+import { MemoryExtractionGrainCard } from '@/components/tools/memory-extraction-grain-card'
 import { MemoryRecallCard } from '@/components/tools/memory-recall-card'
 import { MemoryBackfillCard } from '@/components/tools/memory-backfill-card'
 import { MemoryRegenerateCard } from '@/components/tools/memory-regenerate-card'
@@ -28,8 +30,16 @@ export function MemorySearchTabContent() {
           <MemoryBackfillCard />
         </CollapsibleCard>
 
-        <CollapsibleCard title="Memory Housekeeping" description="Automatically prune stale, low-importance memories as characters approach their cap" sectionId="memory-housekeeping" forceOpen={activeSection === 'memory-housekeeping'}>
+        <CollapsibleCard title="Memory Housekeeping" description="Retire stale, low-importance memories to the archive as characters approach their cap" sectionId="memory-housekeeping" forceOpen={activeSection === 'memory-housekeeping'}>
           <MemoryHousekeepingCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Consolidation" description="Fold clusters of near-duplicate memories into digests, and shelve the originals in the archive" sectionId="memory-consolidation" forceOpen={activeSection === 'memory-consolidation'}>
+          <MemoryConsolidationCard />
+        </CollapsibleCard>
+
+        <CollapsibleCard title="Extraction Grain" description="Choose how often a character's observations of other characters are noted" sectionId="memory-extraction-grain" forceOpen={activeSection === 'memory-extraction-grain'}>
+          <MemoryExtractionGrainCard />
         </CollapsibleCard>
 
         <CollapsibleCard title="Recall Relevance" description="Keep project-specific memories from wandering into unrelated chats" sectionId="memory-recall" forceOpen={activeSection === 'memory-recall'}>

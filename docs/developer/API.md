@@ -4119,6 +4119,14 @@ Get memories with filtering.
 - `chatId` - Filter by chat
 - `messageId` - Filter by message
 
+With `characterId` (and `limit`, which switches on pagination) these narrow the list:
+`source` (`AUTO` | `MANUAL` | `CONSOLIDATED` — digests), `tier` (`hot` | `cold`; omitted lists both,
+an unknown value is ignored), `search`, `minImportance`, `sortBy`, `sortOrder`, `offset`.
+
+Every row also carries `tier` (`hot` active / `cold` archived), `supersededById` (the digest that
+replaced an archived row, else `null`), `consolidatedFrom` (the member ids a digest was folded from)
+and `consolidatedAt`.
+
 **Response**: `200 OK`
 
 ```json
@@ -4308,6 +4316,43 @@ return `{ success, settings }`.
 **Settings**: `scopePolicy`, `expandRelated`, `perTurnConversationSummaries` (the Settings →
 Memory → Recall Relevance switch that re-runs the past-conversation search every turn, reusing the
 vector the turn's memory search already embedded).
+
+#### `POST /api/v1/memories?action=consolidate`
+
+Fold clusters of one character's hot memories into digest rows and send the originals cold (see
+`docs/developer/features/memory-consolidation-and-tiers.md`). Manual runs ignore the
+`memoryConsolidation.enabled` master switch.
+
+**Request Body**: `{ characterId, dryRun?, maxClustersPerRun?, clusterThreshold? }`. `characterId`
+is a UUID; `clusterThreshold` is 0–1 and applies to dry runs only (a real run uses the stored
+settings).
+
+- `dryRun: true` runs **in-process** (dry-run jobs only log, so the report is returned directly),
+  writes nothing, and is bounded: `maxClustersPerRun` defaults to 10 and is capped at 40, with a
+  120 s time budget. **Response**: `200 OK` — `{ success, dryRun: true, report }`, where `report` is a
+  `ConsolidationReport` (`clusters[]` with `bucket`, `memberIds`, `memberContents`, `digests`,
+  `keepStandalone`, `contradictions`, `status`; plus `stats`, `settings`, `skippedReason`).
+- otherwise a `MEMORY_CONSOLIDATION` job is enqueued (deduped per character while in flight).
+  **Response**: `200 OK` — `{ success, dryRun: false, jobId }`.
+
+`404` for an unknown character; `400` for a malformed body.
+
+#### `GET` / `POST /api/v1/memories?action=consolidation-config`
+
+Read and write the **instance-wide** consolidation settings (`instance_settings['memoryConsolidation']`).
+`POST` merges a partial patch over the stored values; both return `{ success, settings }`.
+
+**Settings**: `enabled` (default false), `connectionProfileId` (null → cheap LLM), `clusterThreshold`
+(0–1, 0.72), `minClusterSize` (3), `maxClusterSize` (30), `matureAfterDays` (7), `maxClustersPerRun`
+(40), `watermark` (150), `coldRetentionDays` (null → never delete cold rows).
+
+#### `GET` / `POST /api/v1/memories?action=extraction-mode-config`
+
+Read and write the **instance-wide** grain of the extractor's OTHER pass
+(`instance_settings['memoryExtractionMode']`). Same merge semantics; returns `{ success, settings }`.
+
+**Settings**: `otherPass` (`turn` | `fold` | `hybrid`, default `hybrid`), `perTurnOtherFloor` (0–1,
+0.75), `foldCandidatesPerSubject` (3).
 
 #### `GET /api/v1/memories?action=backfill-embeddings`
 

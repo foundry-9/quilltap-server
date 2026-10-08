@@ -103,7 +103,7 @@ describe('AbstractBaseRepository._update — patch-only fields', () => {
 describe('ChatsRepository — the Concierge state columns are patch-only', () => {
   it('declares conciergeMode, conciergeModeSetBy and conciergeModeReason', () => {
     const repo = new ChatsRepository() as unknown as { patchOnlyFields(): readonly string[] }
-    expect([...repo.patchOnlyFields()].sort()).toEqual(['conciergeMode', 'conciergeModeReason', 'conciergeModeSetBy'])
+    expect([...repo.patchOnlyFields()].sort()).toEqual(['conciergeMode', 'conciergeModeReason', 'conciergeModeSetBy', 'otherExtractionWatermarkMessageId'])
   })
 })
 

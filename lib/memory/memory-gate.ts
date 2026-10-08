@@ -169,6 +169,96 @@ export async function runMemoryGate(
   )
 }
 
+/** Longest supersession chain the gate will follow to a live digest. */
+const MAX_DIGEST_HOPS = 3
+
+/**
+ * Gate-side handling of COLD matches (tiers, spec B3).
+ *
+ * The gate searches both tiers so a cold row still stops re-insertion. What it
+ * does with a cold best match depends on why the row is cold:
+ * - superseded (`supersededById`): the observation belongs to the digest that
+ *   replaced it, so absorption is redirected there. Returns the digest, flagged
+ *   `redirected`. A vanished digest falls back to the cold row (today's
+ *   behaviour), which is then treated as a non-superseded cold row.
+ * - demoted by cap pressure (no `supersededById`): the world asked for it
+ *   again, so it is promoted back to hot. Returns the row as it now stands.
+ * Hot rows pass through untouched.
+ */
+async function resolveColdForAbsorb(
+  memory: Memory,
+  debugInfo: string[],
+): Promise<{ memory: Memory; redirected: boolean }> {
+  if (memory.tier !== 'cold') return { memory, redirected: false }
+
+  const repos = getRepositories()
+  let current = memory
+  let redirected = false
+  for (let hop = 0; hop < MAX_DIGEST_HOPS && current.tier === 'cold' && current.supersededById; hop++) {
+    const [digest] = await repos.memories.findByIds([current.supersededById])
+    if (!digest) {
+      debugInfo.push(`[Gate] Cold match ${current.id} names missing digest ${current.supersededById}; treating as cold row`)
+      logger.debug('[MemoryGate] Superseding digest missing; falling back to cold row', {
+        memoryId: current.id,
+        supersededById: current.supersededById,
+      })
+      break
+    }
+    debugInfo.push(`[Gate] Cold match ${current.id} superseded by digest ${digest.id} → redirecting`)
+    current = digest
+    redirected = true
+  }
+
+  if (current.tier === 'cold' && !current.supersededById) {
+    const promoted = await promoteColdMemory(current)
+    debugInfo.push(`[Gate] Cold match ${current.id} re-observed → promoted to hot`)
+    return { memory: promoted, redirected }
+  }
+  return { memory: current, redirected }
+}
+
+/**
+ * Move a cold, non-superseded memory back to the hot tier. In the parent the
+ * write lands immediately and the in-memory vector store is re-stamped; in the
+ * job child it buffers, and the dispatcher invalidates the parent's store when
+ * it commits.
+ */
+async function promoteColdMemory(memory: Memory): Promise<Memory> {
+  const repos = getRepositories()
+  await repos.memories.updateTierBulk(memory.characterId, [memory.id], 'hot', { supersededById: null })
+  try {
+    const store = await getCharacterVectorStore(memory.characterId)
+    store.setTier([memory.id], 'hot')
+  } catch (error) {
+    logger.warn('[MemoryGate] Failed to re-stamp vector tier after promotion', {
+      memoryId: memory.id,
+      error: String(error),
+    })
+  }
+  logger.debug('[MemoryGate] Promoted cold memory to hot on re-observation', {
+    memoryId: memory.id,
+    characterId: memory.characterId,
+  })
+  return { ...memory, tier: 'hot', supersededById: null }
+}
+
+/**
+ * INSERT_RELATED target for a match: a cold, superseded member is replaced by
+ * its live digest; anything else (hot, cold-unsuperseded, digest gone) links
+ * as-is. Never writes — linking a new row to a cold row is not a promotion.
+ */
+async function redirectColdLink(memory: Memory, debugInfo: string[]): Promise<Memory> {
+  let current = memory
+  const repos = getRepositories()
+  for (let hop = 0; hop < MAX_DIGEST_HOPS && current.tier === 'cold' && current.supersededById; hop++) {
+    const [digest] = await repos.memories.findByIds([current.supersededById])
+    if (!digest) break
+    debugInfo.push(`[Gate] Linking to digest ${digest.id} instead of cold member ${current.id}`)
+    current = digest
+  }
+  return current
+}
+
 async function runMemoryGateInner(
   characterId: string,
   candidateContent: string,
@@ -250,10 +340,11 @@ async function runMemoryGateInner(
       `[Gate] Score ${bestResult.score.toFixed(3)} but occurredAt differs by > ${DATE_GUARD_DAYS} days ` +
       `(candidate ${candidateAnchors?.occurredAt}, existing ${bestMemory.occurredAt}) → INSERT_RELATED (date guard)`
     )
+    const linkTarget = await redirectColdLink(bestMemory, debugInfo)
     return {
       decision: {
         action: 'INSERT_RELATED',
-        relatedMemories: [{ memory: bestMemory, similarity: bestResult.score }],
+        relatedMemories: [{ memory: linkTarget, similarity: bestResult.score }],
       },
       embedding,
       debugInfo,
@@ -262,10 +353,11 @@ async function runMemoryGateInner(
 
   if (bestResult.score >= NEAR_DUPLICATE_THRESHOLD && bestMemory) {
     debugInfo.push(`[Gate] Score >= ${NEAR_DUPLICATE_THRESHOLD} → SKIP_NEAR_DUPLICATE`)
+    const { memory: target } = await resolveColdForAbsorb(bestMemory, debugInfo)
     return {
       decision: {
         action: 'SKIP_NEAR_DUPLICATE',
-        existingMemory: bestMemory,
+        existingMemory: target,
         similarity: bestResult.score,
       },
       embedding,
@@ -275,10 +367,22 @@ async function runMemoryGateInner(
 
   if (bestResult.score >= MERGE_THRESHOLD && bestMemory) {
     debugInfo.push(`[Gate] Score >= ${MERGE_THRESHOLD} → REINFORCE`)
+    const { memory: target, redirected } = await resolveColdForAbsorb(bestMemory, debugInfo)
+    if (redirected) {
+      // A digest is reinforced by count only: no [+] footnote (the next
+      // consolidation folds any novel detail in). SKIP_NEAR_DUPLICATE is the
+      // count-only absorption path.
+      debugInfo.push('[Gate] Reinforcement redirected to digest → count-only absorption')
+      return {
+        decision: { action: 'SKIP_NEAR_DUPLICATE', existingMemory: target, similarity: bestResult.score },
+        embedding,
+        debugInfo,
+      }
+    }
     return {
       decision: {
         action: 'REINFORCE',
-        existingMemory: bestMemory,
+        existingMemory: target,
         similarity: bestResult.score,
       },
       embedding,
@@ -287,10 +391,21 @@ async function runMemoryGateInner(
   }
 
   // Check for related memories in the band
-  const relatedMatches = results
+  const rawRelated = results
     .filter(r => r.score >= RELATED_THRESHOLD && r.score < MERGE_THRESHOLD)
     .map(r => ({ memory: memoryMap.get(r.id)!, similarity: r.score }))
     .filter(r => r.memory)
+  // A cold, superseded member is linked via its digest; collapse duplicates
+  // (several members of one cluster) onto the digest's best similarity.
+  const relatedById = new Map<string, { memory: Memory; similarity: number }>()
+  for (const match of rawRelated) {
+    const target = await redirectColdLink(match.memory, debugInfo)
+    const prior = relatedById.get(target.id)
+    if (!prior || match.similarity > prior.similarity) {
+      relatedById.set(target.id, { memory: target, similarity: match.similarity })
+    }
+  }
+  const relatedMatches = Array.from(relatedById.values())
 
   if (relatedMatches.length > 0) {
     debugInfo.push(`[Gate] ${relatedMatches.length} match(es) in ${RELATED_THRESHOLD}–${MERGE_THRESHOLD} band → INSERT_RELATED`)

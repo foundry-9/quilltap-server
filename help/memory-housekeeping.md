@@ -6,9 +6,18 @@ url: /settings?tab=memory&section=memory-housekeeping
 
 > **[Open this page in Quilltap](/settings?tab=memory&section=memory-housekeeping)**
 
-The Commonplace Book grows. Every conversation adds entries, reinforces old ones, and links related observations together. Left entirely to its own devices, a much-loved character's memory shelves can run to tens of thousands of items — a splendid predicament, but rather a heavy one for a local machine to lift at every turn. *Memory Housekeeping* is the invisible hand that sweeps, dusts, and composts the forgotten corners, so the character's living memory stays sharp rather than sprawling.
+The Commonplace Book grows. Every conversation adds entries, reinforces old ones, and links related observations together. Left entirely to its own devices, a much-loved character's memory shelves can run to tens of thousands of items — a splendid predicament, but rather a heavy one for a local machine to lift at every turn. *Memory Housekeeping* is the invisible hand that sweeps and dusts the forgotten corners and carries what nobody has asked after lately down to the cellar, so the character's living memory stays sharp rather than sprawling.
 
-Housekeeping is **off by default**. Quilltap will not delete your memories unless you explicitly turn it on.
+Housekeeping is **off by default**, and even when it is on it does not destroy anything an extraction wrote. It *archives*.
+
+## The Archive (Active and Archived Memories)
+
+Every memory lives on one of two shelves:
+
+- **Active** (internally, *hot*) memories are the ones a character can actually recall: the standing archive in every prompt, the handful of memories surfaced fresh each turn, what one character remembers of another, the recap at the start of a chat.
+- **Archived** (internally, *cold*) memories are kept, but no longer whispered. They still stop the same fact from being written down twice, the character can still find them by searching their own memory (they come back marked *archived*), and you can still browse them in the Commonplace Book, where a filter separates the two shelves.
+
+A memory goes to the archive in one of two ways: housekeeping moves it there under cap pressure, or [Memory Consolidation](memory-consolidation.md) folds it into a digest and files the original away behind it. If the world brings up an archived memory again — and it was archived by housekeeping, not replaced by a digest — it is promoted straight back to the active shelf. Re-observing something a digest has absorbed reinforces the digest instead.
 
 ## What Housekeeping Does
 
@@ -21,7 +30,7 @@ You can also run it on demand with the **Run housekeeping now** button — handy
 
 ## What Housekeeping Protects
 
-Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never deleted, no matter what. Everything else is protected by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. A memory whose blended score sits above the protection threshold stays. A memory whose score falls below the threshold becomes eligible for deletion — but only the cap-enforcement sweep actually removes those, and only when the character is over the configured cap.
+Housekeeping is conservative by design. A memory you typed yourself — one whose source is **MANUAL** — is never archived or deleted, no matter what, and neither is a digest written by [Memory Consolidation](memory-consolidation.md). Everything else is protected by a **blended score** that combines four streams of evidence: the LLM's importance rating (content), the reinforcement count (how many times the memory has been re-observed), the graph degree (how many related memories link to it), and whether it has been accessed recently. A memory whose blended score sits above the protection threshold stays. A memory whose score falls below the threshold becomes eligible for the archive — but only the cap-enforcement sweep actually moves those, and only when the character is over the configured cap.
 
 The scoring stream worth dwelling on is the content component. The LLM's importance rating is time-decayed with a **thirty-day half-life**, and — crucially — its contribution to the protection score is **capped** so that importance alone can never make a memory permanent. A fresh fact the LLM rated 0.9 contributes the same 0.40 to its protection score as a fresh fact the LLM rated 0.4; to cross the protection threshold, the memory must also earn some evidence of use. At least one reinforcement, one related-memory link, or one recent access, combined with the capped content contribution and the small default reinforcement bonus, is typically enough. Without those signals, the LLM's one-shot importance rating is simply insufficient evidence for permanent protection — which is the whole point of the blend. The reference clock is reset every time the memory is reinforced with new details, so a fact that remains relevant — revisited, reinforced, linked, accessed — stays protected, while one the chats have genuinely moved on from becomes eligible for the cap-enforcement sweep. This replaces the earlier rule in which any memory rated 0.7 or higher was immortal regardless of age or usage, which — in practice — turned the housekeeper into a doorman who waved almost everyone through.
 
@@ -31,7 +40,7 @@ Reinforcement and graph degree both saturate logarithmically: the first few rein
 
 The conservative first-pass retention rule still applies: a memory is *also* only eligible for the slow sweep when it is old (more than 6 months), low-importance (below 0.3 after reinforcement), and either never accessed or inactive for 6+ months. The blended score changes what the cap-enforcement sweep can touch; it does not change the first pass.
 
-Once the retention-policy sweep is complete, if the character is still over their cap, housekeeping prunes the lowest-weighted remaining memories until the count is back inside the cap. Weighting uses the same formula the chat prompt uses for retrieval, so the memories that survive are the ones your characters would have reached for anyway.
+Both sweeps *archive* rather than delete. Once the retention-policy sweep is complete, if the character still has more active memories than their cap, housekeeping archives the lowest-weighted remaining active memories until the count is back inside the cap. Weighting uses the same formula the chat prompt uses for retrieval, so the memories that survive are the ones your characters would have reached for anyway.
 
 ## Settings
 
@@ -41,25 +50,25 @@ Turns the feature on. When off, no sweeps happen automatically — though the **
 
 ### Per-character cap
 
-The number of memories a character is allowed to carry before housekeeping engages. Default **2000**. Acceptable range 100 – 100,000. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
+The number of **active** memories a character is allowed to carry before housekeeping engages. Archived memories do not count against it. Default **2000**. Acceptable range 100 – 100,000. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
 
 If you want a different cap for a particular character, that's what the per-character override is for (set programmatically through the API today; a UI for it is on the roadmap). The override takes precedence over the global cap, and any character without an override uses the global one.
 
-### Also merge semantically similar memories during the sweep
+### Merging similar memories (retired)
 
-When ticked, the sweep performs an extra pass that looks for pairs of memories whose cosine similarity to each other is at least **0.90** (configurable through the API) and collapses the lower-weighted member into the higher-weighted one. Off by default — the pre-write gate already catches most near-duplicates, and this pass is slower. Turning it on is useful after importing legacy memories that predate the stricter gate.
+Earlier versions offered a tick-box to merge near-identical memories during the sweep. That job now belongs to [Memory Consolidation](memory-consolidation.md), which combines whole clusters of related memories into digests and keeps the originals in the archive. The old setting is still read from saved configuration, but the sweep ignores it. **Memory Deduplication**, further down this tab, still merges pairs on demand.
 
-Collapsing is a proper merge, not a quiet disposal. Before the lesser memory goes, the survivor takes on whatever it knew that the survivor did not — new names, dates and figures appended as `[+]` notes — along with its tally of re-observations, its links to related memories, and the earlier of the two dates on which the thing happened. **Memory Deduplication** merges in exactly the same way.
+### Deleting archived memories
 
-A memory carries at most eight of those `[+]` notes. Past that, a re-observation still counts — the tally rises, and so does the memory's standing — but no further notes are appended, so a much-repeated fact does not slowly turn into a list of proper nouns.
+Nothing is ever deleted by policy unless you ask for it. The Consolidation card's **cold retention** setting (blank by default, meaning *never*) lets the sweep delete archived memories that a digest has replaced and that have sat in the archive longer than the number of days you give. Archived memories housekeeping moved there by itself, and anything you wrote by hand, are never deleted this way.
 
 ## Running Housekeeping on Demand
 
-The **Run housekeeping now** button enqueues a MEMORY_HOUSEKEEPING background job that sweeps every character owned by your user. It will use whatever cap and merge settings you have currently configured. The job runs in the background; successful completion appears in the server log as `[Housekeeping] Job complete`.
+The **Run housekeeping now** button enqueues a MEMORY_HOUSEKEEPING background job that sweeps every character owned by your user. It will use whatever cap you have currently configured. The job runs in the background; successful completion appears in the server log as `[Housekeeping] Job complete`.
 
 ## A Note on Trust
 
-Housekeeping will never touch memories that are (a) manually created, (b) important, (c) recent, or (d) stably reinforced and still useful. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
+Housekeeping will never touch memories that are (a) manually created, (b) consolidation digests, (c) important, (d) recent, or (e) stably reinforced and still useful — and what it does touch goes to the archive, not the bin. That said — before you turn it on for the first time on an instance with a long chat history, it is worth running **Memory Deduplication** first to collapse the worst near-duplicates (the old, lax gate let more of them through). That tool is in the same tab, right below this one.
 
 If your instance was created before Quilltap 4.3, it is also worth running **Repair Missing Embeddings** first. Older gate fallbacks were known to write memories without embeddings when the embedding provider was briefly unavailable; those memories are invisible to the deduplication gate and to semantic search, and the deduplication tool can't see them either. The repair card is the second entry in this tab.
 
@@ -79,5 +88,6 @@ Characters with help tools enabled can navigate directly to this page:
 
 ## Related Settings
 
-- [Embedding Profiles](embedding-profiles.md) — Housekeeping's merge pass uses the same embeddings the gate uses
+- [Memory Consolidation](memory-consolidation.md) — Combines clusters of memories into digests and archives the originals
+- [Embedding Profiles](embedding-profiles.md) — The gate and consolidation both cluster on these embeddings
 - [Chat Settings — The Staff Behind the Scenes](chat-settings-ai-services.md) — Memory cascade preferences for message deletion

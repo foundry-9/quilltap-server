@@ -21,7 +21,7 @@
  */
 const INEFFECTIVE_BACKOFF_MS = 60 * 60 * 1000 // 1 hour
 
-/** A sweep counts as "effective" when it deleted at least this many rows.
+/** A sweep counts as "effective" when it demoted (or deleted) at least this many rows.
  * On a character whose cap is, say, 5k and corpus is 17k, the excess is
  * 12k and a sweep that trims 1–6 rows is practically a no-op — but the
  * initial design that keyed off `deleted === 0` didn't catch it, so the

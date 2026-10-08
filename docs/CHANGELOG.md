@@ -4,6 +4,82 @@
 
 ### 4.10-dev
 
+#### Memory consolidation and tiers
+
+Implements `docs/developer/features/memory-consolidation-and-tiers.md` (workstreams A–D).
+
+- **Tiers.** Memories now have a `tier`: `hot` (recalled) or `cold` (kept, but only seen by the memory
+  gate, the `search` tool, the Commonplace Book UI and the CLI). New columns `memories.tier`,
+  `supersededById`, `consolidatedFrom`, `consolidatedAt` and index `idx_memories_character_tier`;
+  new column `chats.otherExtractionWatermarkMessageId` (patch-only). Migration `add-memory-tiers-v1`
+  marks every existing memory hot. `MemorySource` gains `CONSOLIDATED` (digest rows).
+- **Housekeeping archives instead of deleting.** The cap counts hot rows only. Pass 1 (old,
+  low-importance, inactive) and pass 3 (cap) move rows to cold. Pass 2 (`mergeSimilar`) is retired;
+  the setting is still read but ignored. MANUAL rows and digests are never archived. The only
+  deletion is of superseded cold AUTO rows older than `memoryConsolidation.coldRetentionDays`
+  (default `null`, never). Housekeeping results and the preview report `demoted` / `wouldDemote` and
+  `coldCount`; `merged` is always 0. The housekeeping dialog and card say "archive" rather than
+  "delete".
+- **Memory gate vs. cold rows.** The gate still searches both tiers. A match on a cold row that a
+  digest superseded reinforces the digest instead (count only, no `[+]` note); an `INSERT_RELATED`
+  links to the digest. A cold row with no `supersededById` that is re-observed at or above the merge
+  threshold is promoted back to hot.
+- **Consolidation job.** New `MEMORY_CONSOLIDATION` job (`lib/memory/consolidation.ts`). Per character
+  and subject bucket (about another character, self, none), it clusters mature hot rows by embedding
+  (average linkage at `clusterThreshold`, default 0.72; episodic rows only with episodic rows within
+  one day), sends each cluster to one LLM call with a Zod-validated JSON answer, writes digest rows
+  (`source: 'CONSOLIDATED'`, skipping the gate), and sends the members cold with `supersededById`.
+  Inbound links are rewritten to the digest; contradicted older rows go cold. Triggers: a daily sweep
+  enqueued before housekeeping (housekeeping now runs 30 minutes later when consolidation runs were
+  enqueued), and a watermark check after extraction commits (`countUnconsideredHot > watermark`,
+  default 150). Both are off unless `memoryConsolidation.enabled` (default false). Manual runs always
+  work. Settings live in `instance_settings['memoryConsolidation']`.
+- **Commonplace files in the vault.** After a run, each subject's hot digests are written to the
+  holder's vault as `Commonplace/<Subject>.md` (and `Commonplace/Self.md`), separate from the
+  hand-written `Others/` folder. Archived characters are skipped. Writes from the job child go
+  through the new `writeCommonplaceDigestsToVault` host-RPC method.
+- **Canon feedback.** Extraction canon now includes those files: OTHER canon is `Others/<name>.md`
+  then `Commonplace/<name>.md`; SELF canon appends `Commonplace/Self.md` after the card fields. The
+  combined block is capped at 2,500 tokens (only the digest is trimmed). The extractor therefore
+  treats digested facts as already established.
+- **Recall reads hot rows and prefers digests.** The frozen archive, dynamic head, proactive search,
+  inter-character recall, recap, first-message context and recall replay read hot rows only (vector
+  searches use the new `isHotVector` predicate; the vector store stamps each entry's tier at load).
+  The frozen archive is now composed of the top 3 hot digests per character present, then the top 5
+  self digests, then the most important hot rows; a change in who is present rebuilds it.
+  Inter-character recall puts digests about that character first (2 each); the recap puts digests
+  first in its high tier. Digests are shown with a `(from N notes)` suffix.
+- **`search` tool** returns cold rows too, labelled `(archived)` or `(archived — superseded by <id>)`.
+  The Commonplace Book search API passes `includeCold: true`. `searchMemoriesSemantic` /
+  `searchMemoriesText` take `includeCold` (default false).
+- **Memories about other characters are extracted at fold grain.** New setting
+  `memoryExtractionMode.otherPass`: `hybrid` (default), `fold` or `turn` (the old behavior). In
+  `hybrid`, the per-turn OTHER pass keeps only candidates with importance ≥ `perTurnOtherFloor`
+  (0.75), and a new fold-grain OTHER pass (`lib/memory/fold-other-pass.ts`) runs at each
+  context-summary fold, up to `foldCandidatesPerSubject` (3) per observer–subject pair, told to state
+  each thread once. The daily maintenance sweep enqueues a catch-up pass (a `MEMORY_EXTRACTION` job
+  with `foldOtherCatchup`) for chats idle more than 2 hours whose last message is past the watermark,
+  at most 50 per sweep. The chat memory regenerate resets the watermark and enqueues one catch-up.
+- **Portability.** `.qtap` export/import and backup/restore carry the new fields; `supersededById`
+  and `consolidatedFrom` are remapped with memory ids, and the chat watermark with message ids. Old
+  bundles import as hot. `.qtap` import now also remaps `relatedMemoryIds`, which previously dangled
+  on a non-preserve import. Export schema and `DDL.md` updated.
+- **API.** `POST /api/v1/memories?action=consolidate` (`{ characterId, dryRun?, maxClustersPerRun?,
+  clusterThreshold? }`): a dry run calls `runConsolidation` in-process (10 clusters by default, at
+  most 40, 2-minute budget) and returns the report; otherwise it enqueues the job and returns
+  `jobId`. `GET`/`POST ?action=consolidation-config` and `?action=extraction-mode-config` read and
+  patch the two new settings. The memory list accepts `tier=hot|cold` and `source=CONSOLIDATED`.
+- **UI.** Settings → Memory gains a Consolidation card (settings, cold retention, Consolidate now
+  with a dry-run report dialog) and an Extraction Grain card. The Commonplace Book memory list gains
+  a tier filter, a Consolidated source option, Archived and Digest badges, and a link from a
+  superseded row to its digest.
+- **CLI.** `quilltap db memories` gains `--tier hot|cold` and `--source CONSOLIDATED`; cold rows are
+  starred in listings; `show` prints the tier and superseding digest; `status` shows hot / cold /
+  digest counts. New `quilltap memories consolidate --character <name> [--dry-run] [--max N]
+  [--threshold X]`, which calls the running server. Completion templates updated.
+- **Help.** New `help/memory-consolidation.md`; housekeeping, recall relevance, regenerate and CLI
+  pages updated.
+
 #### Recall multiplier retuning: chosen values in code
 
 - New defaults for per-turn memory recall (`RECALL_TUNING_DEFAULTS` in `lib/memory/recall-tags.ts`),

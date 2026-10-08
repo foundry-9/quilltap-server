@@ -442,6 +442,16 @@ export async function importMemories(
   let skipped = 0;
   const createdIds: Array<{ id: string; characterId: string }> = [];
 
+  // Memory ids are minted up front so digest <-> cold-member references
+  // (`supersededById`, `consolidatedFrom`) can follow their targets even when
+  // the target appears later in the bundle. With `preserveIds` the source id
+  // is kept, so the map is the identity.
+  const memoryIdMap = new Map<string, string>();
+  for (const memory of memories) {
+    memoryIdMap.set(memory.id, options.preserveIds ? memory.id : randomUUID());
+  }
+  const remapMemoryRef = (ref: string): string => memoryIdMap.get(ref) ?? ref;
+
   for (const memory of memories) {
     try {
       // Skip-if-present rehydrate (spec §6/F4): the memory is already back —
@@ -496,10 +506,20 @@ export async function importMemories(
       // than discarding it. Import time is the only correct place to drop it.
       // The orchestrator enqueues an EMBEDDING_GENERATE per created row.
       const { id: _, createdAt, updatedAt, embedding: _embedding, ...memoryData } = memory;
+      const newMemoryId = memoryIdMap.get(memory.id) ?? memory.id;
       const createData = options.preserveIds ? { ...memoryData, id: memory.id } : memoryData;
-      const createOptions = getPreserveIdsCreateOptions(memory.id, options);
+      // Always create under the pre-minted id so consolidation references line up.
+      const createOptions = { id: newMemoryId };
+      // Consolidation fields: bundles from before tiers lack them and read as
+      // hot / null / []; a CONSOLIDATED digest and its cold members keep their
+      // links, remapped through the same id map.
       const payload = {
         ...createData,
+        relatedMemoryIds: (memory.relatedMemoryIds ?? []).map(remapMemoryRef),
+        tier: memory.tier ?? 'hot',
+        supersededById: memory.supersededById ? remapMemoryRef(memory.supersededById) : null,
+        consolidatedFrom: (memory.consolidatedFrom ?? []).map(remapMemoryRef),
+        consolidatedAt: memory.consolidatedAt ?? null,
         characterId: newCharacterId,
         aboutCharacterId: newAboutCharacterId,
         chatId: newChatId,
@@ -508,6 +528,7 @@ export async function importMemories(
       };
       const created = await repos.memories.create(payload, createOptions);
       createdIds.push({ id: created.id, characterId: newCharacterId });
+      moduleLogger.debug('Imported memory', { memoryId: created.id, tier: payload.tier, source: memory.source });
       imported++;
     } catch (error) {
       warnings.push(

@@ -1,6 +1,6 @@
 # Memory Consolidation and Tiers — Let the Commonplace Book Forget Gracefully
 
-**Status:** Proposed — spec only, no code yet
+**Status:** Implemented 2026-10-08 (workstreams A–D, E4 chores). E2 Friday backfill and E3 measurement not yet run — see §9.
 **Owner:** Charlie
 **Drafted:** 2026-10-08
 **Companion:** [memory-recall-and-housekeeping-fixes.md](./memory-recall-and-housekeeping-fixes.md)
@@ -463,3 +463,45 @@ redirect, demotion-not-deletion, and canon loading order.
 - **v5.** Every schema move here is a D23 follow for quilltap-v5; the
   consolidation job is a new Phase-3-style service with its own differential
   corpus when v5 ports it.
+
+---
+
+## 9. Implementation notes (2026-10-08)
+
+Built as specified, with these decisions and deviations:
+
+- **B4.** Pass 2 (`mergeSimilar`) is retired outright; the setting is read but ignored. Digests
+  (`CONSOLIDATED`) are fully protected from both demotion passes, like MANUAL rows, rather than
+  being demotable by the cap as a last resort.
+- **B3.** A redirected REINFORCE against a superseded cold row is reported as
+  `SKIP_NEAR_DUPLICATE` on the digest (that path updates count / `lastReinforcedAt` /
+  `reinforcedImportance` without a `[+]` footnote). Superseded chains are followed up to 3 hops. A
+  cold row seen only in the related band is linked to, never promoted.
+- **B2.** The vector index does not persist metadata, so `tier` is stamped at
+  `CharacterVectorStore.load` from `findColdIdsByCharacterId`; a failed lookup degrades to "all
+  hot". `isHotVector` is the recall predicate.
+- **C3.** "`minClusterSize` drops to 2 when any member is > `matureAfterDays` old" would always apply
+  (every candidate is already that old), so the drop applies when a member is older than
+  2 × `matureAfterDays`. Only hot AUTO rows are consolidation candidates (MANUAL never). Buckets are
+  capped at 2,000 rows per run. Members are handed to the model as `m1…mN` handles, not UUIDs.
+- **C5.** Concierge policy is inherited from the members' chats: any Locked chat wins, then
+  Unmoderated (uncensored desk), then the global policy. A digest whose embedding fails drops its
+  whole cluster from the batch.
+- **C1.** Watermark checks run in the dispatcher's post-commit hook for memory-writing jobs,
+  debounced to one count per character per 10 minutes, and skip a character consolidated in the last
+  6 hours. When the daily sweep enqueues any consolidation, housekeeping is scheduled 30 minutes
+  later. Job runs get a 7-minute time budget (the dispatcher's stuck-job sweep is 10). Dry-run *jobs*
+  only log their report; the API dry run calls `runConsolidation` in-process.
+- **C6.** From the job child, the vault mirror is written via host-RPC at the end of the handler,
+  slightly before the parent commits the batch (same as `writeConversationSummaryToVaults`). The
+  no-subject bucket gets no mirror file. Combined canon is capped at 2,500 tokens; only the digest is
+  trimmed.
+- **D.** Inter-character recall prepends 2 digests per character (not 3). Provenance is the count
+  only (`(from N notes)`), so the frozen archive stays byte-stable.
+- **A1.** The fold-grain pass reuses the per-turn OTHER task type and writer. Catch-up windows are
+  the newest 60 messages past the watermark; chats active in the last 30 days only. The chat memory
+  regenerate resets the watermark and enqueues one catch-up (idle check skipped).
+
+Not done yet: **E2** (Friday backfill — dry-run review of ~20 digests, then real runs with a capable
+profile) and **E3** (fact probes, composition and growth measurement).
+

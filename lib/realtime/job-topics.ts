@@ -88,6 +88,14 @@ export function topicsForCompletedJob(
       // the hint is collection-wide by necessity.
       return [{ topic: 'memories' }];
 
+    case 'MEMORY_CONSOLIDATION':
+      // Character-scoped like housekeeping: digests replace rows across every
+      // chat the character was in. The Commonplace/ mirror files land in the
+      // character's vault, which the Scriptorium watches. A dry run changed
+      // nothing.
+      if (payload?.dryRun === true) return [];
+      return [{ topic: 'memories' }, { topic: 'mountPoints' }];
+
     case 'CONVERSATION_RENDER':
       // A rendered conversation lands in a document store; the Scriptorium and
       // the character conversations tab both watch that.

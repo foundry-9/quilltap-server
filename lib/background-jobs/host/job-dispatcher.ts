@@ -254,6 +254,9 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
       publishRealtime(hint.topic, hint.id);
     }
     void invalidateFrozenArchivesForCompletedJob(job);
+    // Consolidation watermark (memory-consolidation-and-tiers.md §C1): the
+    // count must see the rows this batch just committed, so it runs here.
+    void checkConsolidationWatermarkAfterCommit(job, msg.writes);
   } catch (err) {
     const errorMessage = getErrorMessage(err);
     log.error('Failed to apply child writes; marking job failed', {
@@ -643,7 +646,27 @@ async function applyFolderCreateIdempotent(
  * invalidate — that would rebuild the archive every turn and defeat the
  * prefix cache it exists for.
  */
-const JOBS_INVALIDATING_FROZEN_ARCHIVE = new Set<string>(['MEMORY_HOUSEKEEPING']);
+const JOBS_INVALIDATING_FROZEN_ARCHIVE = new Set<string>(['MEMORY_HOUSEKEEPING', 'MEMORY_CONSOLIDATION']);
+
+/**
+ * After a batch commits, let the consolidation watermark look at every
+ * character the batch wrote memories for. Best-effort and off the result path:
+ * the helper reads one setting and returns at once when consolidation is off.
+ */
+async function checkConsolidationWatermarkAfterCommit(
+  job: BackgroundJob | undefined,
+  writes: ChildWritePayload[],
+): Promise<void> {
+  try {
+    const mod = await import('@/lib/memory/consolidation-triggers');
+    await mod.maybeEnqueueConsolidationAfterCommit(job?.type, writes);
+  } catch (err) {
+    log.debug('Consolidation watermark check skipped after job', {
+      jobId: job?.id,
+      error: getErrorMessage(err),
+    });
+  }
+}
 
 export async function invalidateFrozenArchivesForCompletedJob(job: BackgroundJob | undefined): Promise<void> {
   if (!job || !JOBS_INVALIDATING_FROZEN_ARCHIVE.has(job.type)) return;
@@ -745,6 +768,8 @@ const WRITES_INVALIDATING_VECTOR_STORE = new Set<string>([
   'memories.delete',
   'memories.create',
   'memories.upsert',
+  // Tier moves change the vector store's hot-only metadata (stamped at load).
+  'memories.updateTierBulk',
 ]);
 
 const WRITES_INVALIDATING_MOUNT_CACHE = new Set<string>([

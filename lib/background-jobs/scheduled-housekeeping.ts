@@ -5,6 +5,13 @@
  * autoHousekeepingSettings.enabled is true. The job handler decides whether
  * to actually do anything per character (based on cap + retention rules);
  * this driver only decides *who* gets a job enqueued.
+ *
+ * Memory consolidation rides the same daily tick and goes FIRST: folding
+ * clusters into digests lowers each character's hot count before the cap pass
+ * looks at it, so housekeeping demotes less. When any consolidation run was
+ * enqueued, the housekeeping job is scheduled
+ * {@link HOUSEKEEPING_AFTER_CONSOLIDATION_DELAY_MS} later so the two do not
+ * race through the job pool side by side.
  */
 
 import { logger } from '@/lib/logger';
@@ -29,6 +36,9 @@ const STARTUP_GRACE_MS = 5 * 60 * 1000;
  *  this window. Prevents dev-restart thrashing from running a full sweep on
  *  every boot. */
 const RECENT_RUN_WINDOW_MS = 20 * 60 * 60 * 1000;
+
+/** How long housekeeping waits behind a freshly enqueued consolidation pass. */
+export const HOUSEKEEPING_AFTER_CONSOLIDATION_DELAY_MS = 30 * 60 * 1000;
 
 /**
  * Start the scheduled memory-housekeeping driver.
@@ -123,6 +133,26 @@ export function isHousekeepingSchedulerRunning(): boolean {
 export async function runScheduledHousekeeping(): Promise<{ usersProcessed: number; jobsEnqueued: number }> {
   moduleLogger.info('Starting scheduled memory housekeeping pass');
 
+  // Consolidation first (its own enabled switch; never blocks housekeeping).
+  let consolidationEnqueued = 0;
+  try {
+    const { runScheduledConsolidation } = await import('@/lib/memory/consolidation-triggers');
+    consolidationEnqueued = (await runScheduledConsolidation()).charactersEnqueued;
+  } catch (error) {
+    moduleLogger.warn('Scheduled consolidation pass failed; housekeeping continues', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const housekeepingOptions = consolidationEnqueued > 0
+    ? { scheduledAt: new Date(Date.now() + HOUSEKEEPING_AFTER_CONSOLIDATION_DELAY_MS) }
+    : undefined;
+  if (housekeepingOptions) {
+    moduleLogger.debug('Housekeeping deferred behind consolidation', {
+      consolidationEnqueued,
+      delayMs: HOUSEKEEPING_AFTER_CONSOLIDATION_DELAY_MS,
+    });
+  }
+
   try {
     const repos = getRepositories();
     const allChatSettings = await repos.chatSettings.findAll();
@@ -138,7 +168,7 @@ export async function runScheduledHousekeeping(): Promise<{ usersProcessed: numb
       try {
         await enqueueMemoryHousekeeping(settings.userId, {
           reason: 'scheduled',
-        });
+        }, housekeepingOptions);
         jobsEnqueued++;
         usersProcessed++;
       } catch (error) {

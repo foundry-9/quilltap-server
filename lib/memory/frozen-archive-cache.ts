@@ -3,9 +3,11 @@
  *
  * Per-character memory pool that stays byte-stable across turns within a
  * single `compactionGeneration`. The archive is the cache-friendly bulk of
- * what a character "remembers" generally — the top N memories ranked by
- * effective weight at generation start, then sorted by memory id so the
- * formatted output is deterministic.
+ * what a character "remembers" generally. Composition (consolidation spec §5):
+ * the top hot digests about each *other* character present this turn, the top
+ * self digests, then a fill of the highest effective-weight hot rows up to the
+ * budget-sized N — finally sorted by memory id so the formatted output is
+ * deterministic. Cold rows never enter (the repository reads are hot-only).
  *
  * Cache key: `(characterId, chatId)`, with the chat's `compactionGeneration`
  * (and the archive size) as the freshness check. Keying on the chat matters:
@@ -41,6 +43,12 @@ export const FROZEN_ARCHIVE_SIZE = 25
 /** Most (character, chat) archives held at once. */
 export const FROZEN_ARCHIVE_CACHE_MAX_ENTRIES = 64
 
+/** Digests drawn per other character present this turn. */
+export const FROZEN_ARCHIVE_DIGESTS_PER_PRESENT = 3
+
+/** Self digests drawn. */
+export const FROZEN_ARCHIVE_SELF_DIGESTS = 5
+
 /** Pool size to draw from when ranking. Higher than the archive size so the
  *  effective-weight re-rank has room to surface long-tail high-importance
  *  rows that fell below the reinforced-importance cutoff. */
@@ -50,6 +58,8 @@ interface CacheEntry {
   characterId: string
   generation: number
   size: number
+  /** Sorted, joined ids of the other characters present when computed. */
+  presence: string
   memories: Memory[]
 }
 
@@ -70,22 +80,30 @@ export async function getOrComputeFrozenArchive(
   characterId: string,
   chatId: string,
   compactionGeneration: number,
-  options: { size?: number } = {},
+  options: {
+    size?: number
+    /** Characters present this turn (the responder is ignored if listed). */
+    presentCharacterIds?: readonly string[]
+  } = {},
 ): Promise<Memory[]> {
   const size = options.size ?? FROZEN_ARCHIVE_SIZE
+  const present = [...new Set(options.presentCharacterIds ?? [])]
+    .filter(id => id && id !== characterId)
+    .sort()
+  const presence = present.join(',')
   const key = cacheKey(characterId, chatId)
   const cached = cache.get(key)
 
-  if (cached && cached.generation === compactionGeneration && cached.size === size) {
+  if (cached && cached.generation === compactionGeneration && cached.size === size && cached.presence === presence) {
     // Refresh recency.
     cache.delete(key)
     cache.set(key, cached)
     return cached.memories
   }
 
-  const memories = await computeFrozenArchive(characterId, size)
+  const memories = await computeFrozenArchive(characterId, size, present)
   cache.delete(key)
-  cache.set(key, { characterId, generation: compactionGeneration, size, memories })
+  cache.set(key, { characterId, generation: compactionGeneration, size, presence, memories })
   while (cache.size > FROZEN_ARCHIVE_CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value
     if (oldest === undefined) break
@@ -97,6 +115,7 @@ export async function getOrComputeFrozenArchive(
     chatId,
     compactionGeneration,
     size,
+    presentCharacters: present.length,
     returned: memories.length,
     cacheEntries: cache.size,
   })
@@ -138,26 +157,51 @@ export function resetFrozenArchiveCacheForTests(): void {
 async function computeFrozenArchive(
   characterId: string,
   size: number,
+  presentCharacterIds: readonly string[],
 ): Promise<Memory[]> {
   const repos = getRepositories()
   const poolSize = Math.max(size, size * FROZEN_ARCHIVE_POOL_FACTOR)
 
-  // Top-N by reinforced importance (with a deterministic tiebreak) is the
-  // cheap pull; we then re-rank by effective weight (importance × time decay)
-  // and slice to the final archive size, then sort by id so ordering is
-  // stable across turns.
-  const candidates = await repos.memories.findMostImportant(characterId, poolSize)
-  if (candidates.length === 0) return []
+  // 1 + 2: digests first — what the character knows about each person in the
+  // room, then about themself. Each fetch is hot-only and ordered by
+  // reinforced importance, so membership is deterministic.
+  const chosen = new Map<string, Memory>()
+  const take = (memories: Memory[]) => {
+    for (const m of memories) {
+      if (chosen.size >= size) return
+      if (!chosen.has(m.id)) chosen.set(m.id, m)
+    }
+  }
+  for (const otherId of presentCharacterIds) {
+    take(await repos.memories.findHotDigests(characterId, otherId, FROZEN_ARCHIVE_DIGESTS_PER_PRESENT))
+  }
+  take(await repos.memories.findHotDigests(characterId, 'self', FROZEN_ARCHIVE_SELF_DIGESTS))
+  const digestCount = chosen.size
 
-  const ranked = candidates
-    .map(memory => ({
-      memory,
-      effectiveWeight: calculateEffectiveWeight(memory).effectiveWeight,
-    }))
-    .sort((a, b) => b.effectiveWeight - a.effectiveWeight)
-    .slice(0, size)
-    .map(({ memory }) => memory)
+  // 3: fill with the cheap top-by-reinforced-importance pull, re-ranked by
+  // effective weight (importance x time decay), skipping what is already in.
+  if (chosen.size < size) {
+    const candidates = await repos.memories.findMostImportant(characterId, poolSize)
+    const ranked = candidates
+      .filter(memory => !chosen.has(memory.id))
+      .map(memory => ({
+        memory,
+        effectiveWeight: calculateEffectiveWeight(memory).effectiveWeight,
+      }))
+      .sort((a, b) => b.effectiveWeight - a.effectiveWeight)
+      .map(({ memory }) => memory)
+    take(ranked)
+  }
 
-  ranked.sort((a, b) => a.id.localeCompare(b.id))
-  return ranked
+  logger.debug('[FrozenArchive] Composed archive', {
+    characterId,
+    size,
+    presentCharacters: presentCharacterIds.length,
+    digests: digestCount,
+    filled: chosen.size - digestCount,
+  })
+
+  const result = [...chosen.values()]
+  result.sort((a, b) => a.id.localeCompare(b.id))
+  return result
 }

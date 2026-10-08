@@ -73,7 +73,7 @@ _quilltap_complete() {
   local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes --format "
   local vf_sync=" --direction --prefer "
   local vf_themes=" -o --output -k --key -n --name "
-  local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
+  local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --tier --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
   local vf_memory_diff=" --concurrency --out "
   local vf_recall_replay=" --turn --char --limit --memory-budget --tuning --tuning-file --signals-from --port "
@@ -178,7 +178,11 @@ _quilltap_complete() {
       return
       ;;
     --source)
-      COMPREPLY=($(compgen -W "AUTO MANUAL" -- "$cur"))
+      COMPREPLY=($(compgen -W "AUTO MANUAL CONSOLIDATED" -- "$cur"))
+      return
+      ;;
+    --tier)
+      COMPREPLY=($(compgen -W "hot cold" -- "$cur"))
       return
       ;;
     --sort)
@@ -313,12 +317,12 @@ _quilltap_complete() {
       fi
       ;;
     memories)
-      local mem_verbs="ls find grep show tree status validate"
-      local mem_flags="--character --about --source --chat --project --since --until \
+      local mem_verbs="ls find grep show tree status validate consolidate"
+      local mem_flags="--character --about --source --tier --chat --project --since --until \
         --min-importance --min-reinforced --has-embedding --no-embedding \
         --sort -r --reverse --limit --full-titles --in --no-related --list \
         --ignore-case -i --paths-only -l --max --context --depth --max-nodes \
-        --semantic --top --threshold \
+        --semantic --top --threshold --dry-run \
         --instance --data-dir --passphrase --port --json --help"
       if [[ -z "$subverb" ]]; then
         if [[ "$cur" == -* ]]; then

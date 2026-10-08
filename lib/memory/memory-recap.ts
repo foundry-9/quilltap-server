@@ -242,6 +242,16 @@ export interface MemoryRecapResult {
 }
 
 /**
+ * Stable partition: consolidated digests first, everything else after, each
+ * group keeping the repository's order.
+ */
+export function digestsFirst(memories: Memory[]): Memory[] {
+  const digests = memories.filter(m => m.source === 'CONSOLIDATED')
+  if (digests.length === 0 || digests.length === memories.length) return memories
+  return [...digests, ...memories.filter(m => m.source !== 'CONSOLIDATED')]
+}
+
+/**
  * Generate a memory recap for a character at the start of a conversation.
  *
  * Fetches recent memories across importance tiers (limits defined in
@@ -288,7 +298,10 @@ export async function generateMemoryRecap(
     const repos = getRepositories()
 
     // Fetch memories across all three importance tiers
-    const tiered = await repos.memories.findRecentByImportanceTier(characterId)
+    const fetched = await repos.memories.findRecentByImportanceTier(characterId)
+    // Hot rows only (the repo guarantees it); digests lead the high bucket so
+    // the narrative is built on consolidated knowledge before loose shards.
+    const tiered = { ...fetched, high: digestsFirst(fetched.high) }
 
     const totalCount = tiered.high.length + tiered.medium.length + tiered.low.length
 

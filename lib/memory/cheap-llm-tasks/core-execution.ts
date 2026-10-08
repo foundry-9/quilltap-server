@@ -261,6 +261,7 @@ export function mapTaskTypeToLogType(taskType?: string): LLMLogType {
     'memory-extraction-other': 'MEMORY_EXTRACTION',
     'batch-memory-extraction': 'MEMORY_EXTRACTION',
     'memory-keyword-extraction': 'MEMORY_EXTRACTION',
+    'memory-consolidation': 'MEMORY_EXTRACTION',
     'title-chat': 'TITLE_GENERATION',
     'title-from-summary': 'TITLE_GENERATION',
     'consider-title-update': 'TITLE_GENERATION',
@@ -462,6 +463,7 @@ const TASK_TYPE_ACTIVITY: Record<string, ActivityKind> = {
   'batch-memory-extraction': 'memory',
   'fold-episode-extraction': 'memory',
   'memory-keyword-extraction': 'memory',
+  'memory-consolidation': 'memory',
   'memory-recap-summarization': 'memory',
 
   // Summarization and post-turn processing

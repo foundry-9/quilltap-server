@@ -187,6 +187,18 @@ export function formatMemoryMetadataTag(opts: {
 }
 
 /**
+ * Provenance suffix for a consolidated digest: ` (from 14 notes)`. Empty for
+ * every other memory. Derived only from the digest's own static fields, so it
+ * is safe on the byte-stable frozen archive.
+ */
+export function formatDigestProvenance(memory: Pick<Memory, 'source' | 'consolidatedFrom'>): string {
+  if (memory.source !== 'CONSOLIDATED') return ''
+  const count = memory.consolidatedFrom?.length ?? 0
+  if (count <= 0) return ''
+  return ` (from ${count} ${count === 1 ? 'note' : 'notes'})`
+}
+
+/**
  * Whose life a memory line describes, for the SELF-facing memory blocks.
  *
  * A character's memory store is keyed on `characterId` alone: the same store
@@ -547,7 +559,12 @@ export function formatInterCharacterMemoriesForContext(
         weight: calculateEffectiveWeight(m).effectiveWeight,
         relevance: null as number | null,
       }))
-      .sort((a, b) => b.weight - a.weight)
+      // Consolidated digests lead, then effective weight.
+      .sort((a, b) => {
+        const da = a.memory.source === 'CONSOLIDATED' ? 1 : 0
+        const db = b.memory.source === 'CONSOLIDATED' ? 1 : 0
+        return db - da || b.weight - a.weight
+      })
 
     // Interleave relevance-first so the per-character block stays ~half/half.
     const ordered: Array<{ memory: Memory; weight: number; relevance: number | null }> = []
@@ -567,7 +584,7 @@ export function formatInterCharacterMemoriesForContext(
         weight,
         keywords: memory.keywords,
       })
-      const memoryLine = `- About ${characterName}: [${age}] ${body}${meta}`
+      const memoryLine = `- About ${characterName}: [${age}] ${body}${formatDigestProvenance(memory)}${meta}`
       const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
       if (currentTokens + lineTokens > maxTokens) {
@@ -640,7 +657,7 @@ export function formatFrozenMemoryArchive(
     // both of which are stable within a compaction generation — so it costs the
     // archive none of its byte-stability.
     const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
-    const memoryLine = `- ${prefix}${summary}${meta}`
+    const memoryLine = `- ${prefix}${summary}${formatDigestProvenance(memory)}${meta}`
     const lineTokens = estimateTokens(`${memoryLine}\n`, provider)
     if (currentTokens + lineTokens > maxTokens) {
       break
@@ -740,7 +757,7 @@ export function formatDynamicMemoryHead(
       adjustments: recallAdjustment?.fired,
     })
     const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
-    const entry = `${idTag} ${whenTag} ${prefix}${summary}${meta}`
+    const entry = `${idTag} ${whenTag} ${prefix}${summary}${formatDigestProvenance(memory)}${meta}`
     const candidateTokens = estimateTokens(`${entry}\n`, provider)
     if (currentTokens + candidateTokens > maxTokens) {
       break

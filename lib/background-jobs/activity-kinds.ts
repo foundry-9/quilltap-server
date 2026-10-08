@@ -42,6 +42,7 @@ export const JOB_TYPE_ACTIVITY: Record<BackgroundJobType, ActivityKind | null> =
   MEMORY_REGENERATE_CHAT: 'memory',
   MEMORY_REGENERATE_ALL: 'memory',
   MEMORY_HOUSEKEEPING: 'memory',
+  MEMORY_CONSOLIDATION: 'memory',
   CARINA_MEMORY_EXTRACTION: 'memory',
 
   // ── Emb ──────────────────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ export const ACTIVITY_CHIPS: readonly {
   {
     kind: 'memory',
     label: 'Mem',
-    title: 'Memory work (extraction, regeneration, housekeeping)',
+    title: 'Memory work (extraction, regeneration, consolidation, housekeeping)',
     badgeClass: 'qt-queue-badge-memory',
   },
   {

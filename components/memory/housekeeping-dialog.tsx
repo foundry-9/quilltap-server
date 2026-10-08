@@ -6,14 +6,15 @@ import { showErrorToast, showSuccessToast } from '@/lib/toast'
 
 interface HousekeepingDetail {
   memoryId: string
-  action: 'deleted' | 'merged' | 'kept'
+  action: 'deleted' | 'demoted' | 'merged' | 'kept'
   reason: string
   summary?: string
 }
 
 interface HousekeepingPreview {
+  wouldDemote: number
   wouldDelete: number
-  wouldMerge: number
+  coldCount?: number
   wouldKeep: number
   totalBefore: number
   totalAfter: number
@@ -36,7 +37,6 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
   const [maxMemories, setMaxMemories] = useState(1000)
   const [maxAgeMonths, setMaxAgeMonths] = useState(6)
   const [minImportance, setMinImportance] = useState(0.3)
-  const [mergeSimilar, setMergeSimilar] = useState(false)
 
   // Fetch preview when options change
   useEffect(() => {
@@ -48,7 +48,6 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           maxMemories: maxMemories.toString(),
           maxAgeMonths: maxAgeMonths.toString(),
           minImportance: minImportance.toString(),
-          mergeSimilar: mergeSimilar.toString(),
         })
 
         const res = await fetch(`/api/v1/memories?characterId=${characterId}&action=housekeep&${params}`)
@@ -65,7 +64,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
 
     const debounce = setTimeout(fetchPreview, 300)
     return () => clearTimeout(debounce)
-  }, [characterId, maxMemories, maxAgeMonths, minImportance, mergeSimilar])
+  }, [characterId, maxMemories, maxAgeMonths, minImportance])
 
   const handleRun = async () => {
     setRunning(true)
@@ -78,7 +77,6 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           maxMemories,
           maxAgeMonths,
           minImportance,
-          mergeSimilar,
           dryRun: false,
         }),
       })
@@ -86,7 +84,12 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
       if (!res.ok) throw new Error('Failed to run housekeeping')
 
       const data = await res.json()
-      showSuccessToast(`Cleaned up ${data.result.deleted} memories`)
+      const moved = data.result.demoted ?? 0
+      showSuccessToast(
+        moved === 1
+          ? 'One memory has been shown to the archive, where it will keep.'
+          : `${moved} memories have been shown to the archive, where they will keep.`
+      )
       onComplete()
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to run cleanup')
@@ -120,7 +123,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
             </button>
           </div>
           <p className="qt-dialog-description">
-            Clean up old and low-importance memories to stay within limits.
+            Old and low-importance memories are retired to the archive, never destroyed. They stay searchable by the gate and can return should the world ask for them again.
           </p>
         </div>
 
@@ -140,7 +143,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 className="qt-input"
               />
               <div className="mt-1 qt-text-xs space-y-0.5">
-                <p>Not deleting memories that are:</p>
+                <p>Never archiving memories that are:</p>
                 <ul className="list-disc pl-4">
                   <li>Importance &ge; 70%</li>
                   <li>Reinforced 5+ times</li>
@@ -163,7 +166,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 className="qt-input"
               />
               <p className="mt-1 qt-text-xs">
-                Delete old low-importance memories
+                Archive old low-importance memories
               </p>
             </div>
           </div>
@@ -183,22 +186,9 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
             />
             <div className="flex justify-between qt-text-xs mt-1">
               <span>0%</span>
-              <span>Threshold for deletion</span>
+              <span>Threshold for archiving</span>
               <span>70%</span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="mergeSimilar"
-              checked={mergeSimilar}
-              onChange={(e) => setMergeSimilar(e.target.checked)}
-              className="w-4 h-4 text-primary rounded focus:ring-ring"
-            />
-            <label htmlFor="mergeSimilar" className="text-sm text-foreground">
-              Merge similar memories (requires embeddings)
-            </label>
           </div>
         </div>
 
@@ -230,14 +220,14 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 </div>
                 <div className="qt-bg-warning/10 border qt-border-warning/30 rounded-lg p-4 text-center">
                   <p className="text-2xl font-bold qt-text-warning">
-                    {preview.wouldMerge}
+                    {preview.wouldDemote}
                   </p>
-                  <p className="text-sm qt-text-warning">Merge</p>
+                  <p className="text-sm qt-text-warning">Archive</p>
                 </div>
               </div>
 
               {/* Details */}
-              {preview.wouldDelete > 0 || preview.wouldMerge > 0 ? (
+              {preview.wouldDelete > 0 || preview.wouldDemote > 0 ? (
                 <div>
                   <h3 className="text-sm qt-text-primary mb-2">
                     Changes Preview
@@ -266,7 +256,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
                 </div>
               ) : (
                 <div className="text-center py-8 qt-text-small">
-                  <p>No memories to clean up with current settings.</p>
+                  <p>Nothing to send to the archive with current settings.</p>
                   <p className="qt-text-xs mt-1">All memories are within retention policy.</p>
                 </div>
               )}
@@ -286,10 +276,10 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
           <button
             type="button"
             onClick={handleRun}
-            disabled={running || loading || !preview || (preview.wouldDelete === 0 && preview.wouldMerge === 0)}
-            className="qt-button qt-button-destructive"
+            disabled={running || loading || !preview || (preview.wouldDelete === 0 && preview.wouldDemote === 0)}
+            className="qt-button qt-button-primary"
           >
-            {running ? 'Running...' : `Delete ${preview?.wouldDelete || 0} Memories`}
+            {running ? 'Running...' : `Archive ${(preview?.wouldDemote || 0) + (preview?.wouldDelete || 0)} Memories`}
           </button>
         </div>
       </div>

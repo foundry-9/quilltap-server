@@ -336,7 +336,7 @@ class UserScopedMemoriesRepository {
     return this.baseRepo.findByImportance(characterId, minImportance);
   }
 
-  async findBySource(characterId: string, source: 'AUTO' | 'MANUAL'): Promise<Memory[]> {
+  async findBySource(characterId: string, source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'): Promise<Memory[]> {
     const character = await this.charactersRepo.findById(characterId);
     if (!character) return [];
     return this.baseRepo.findBySource(characterId, source);

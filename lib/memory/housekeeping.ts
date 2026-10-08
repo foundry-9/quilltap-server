@@ -13,8 +13,8 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { calculateEffectiveWeight, calculateProtectionScore } from './memory-weighting'
-import { deleteMemoriesWithUnlinkBatch, occasionsAreDistinct } from './memory-gate'
-import { planMemoryMerge, applyMemoryMerge } from './memory-merge'
+import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
+import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 
 import { logger } from '@/lib/logger'
@@ -37,7 +37,7 @@ export interface HousekeepingOptions {
   maxInactiveMonths?: number
   /** Delete memories below this importance threshold (default: 0.3) */
   minImportance?: number
-  /** Merge semantically similar memories (default: false) */
+  /** Retired in favour of consolidation: accepted, ignored (default: false) */
   mergeSimilar?: boolean
   /** Similarity threshold for merging (default: 0.9) */
   mergeThreshold?: number
@@ -53,16 +53,20 @@ export interface HousekeepingOptions {
  * Result of a housekeeping operation
  */
 export interface HousekeepingResult {
-  /** Number of memories deleted */
+  /** Number of memories deleted (retention sweep only: expired, superseded cold rows) */
   deleted: number
-  /** Number of memories merged */
+  /** Number of hot memories moved to the cold tier */
+  demoted: number
+  /** Retired: always 0. Kept so older callers keep reading a number. */
   merged: number
   /** Number of memories kept */
   kept: number
-  /** Total memories before cleanup */
+  /** Hot memories before the sweep (the number the cap is measured against) */
   totalBefore: number
-  /** Total memories after cleanup */
+  /** Hot memories after the sweep */
   totalAfter: number
+  /** Cold (archived) memories the character holds, untouched by demotion */
+  coldCount: number
   /** The effective cap used for this sweep — either the per-character
    * override, the user's global cap, or the housekeeping default. Returned
    * so callers (e.g. the outcome cache) can evaluate effectiveness
@@ -70,9 +74,11 @@ export interface HousekeepingResult {
   capUsed: number
   /** IDs of deleted memories */
   deletedIds: string[]
-  /** IDs of merged memories (source memories that were merged into others) */
+  /** IDs of memories moved to the cold tier */
+  demotedIds: string[]
+  /** Retired: always empty */
   mergedIds: string[]
-  /** Reasons for each deletion/merge */
+  /** Reasons for each demotion/deletion */
   details: HousekeepingDetail[]
 }
 
@@ -81,7 +87,7 @@ export interface HousekeepingResult {
  */
 export interface HousekeepingDetail {
   memoryId: string
-  action: 'deleted' | 'merged' | 'kept'
+  action: 'deleted' | 'demoted' | 'merged' | 'kept'
   reason: string
   summary?: string
 }
@@ -115,7 +121,9 @@ const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingP
  * See `calculateProtectionScore` in memory-weighting.ts for the full formula.
  */
 function isProtectedMemory(memory: Memory, now: Date): boolean {
-  if (memory.source === 'MANUAL') {
+  // MANUAL is explicit user intent; CONSOLIDATED digests are the surviving
+  // record of their archived members. Neither is ever demoted by policy.
+  if (memory.source === 'MANUAL' || memory.source === 'CONSOLIDATED') {
     return true
   }
   const { score } = calculateProtectionScore(memory, undefined, now)
@@ -169,8 +177,20 @@ function shouldDeleteMemory(
 /**
  * Run housekeeping on a character's memories
  *
- * This function cleans up old, low-importance, and duplicate memories
- * based on the configured retention policy.
+ * Housekeeping keeps the HOT tier within its cap by moving the least valuable
+ * rows to the COLD tier (the archive). It never destroys history by policy:
+ * the only deletion is the retention sweep, which removes cold rows that a
+ * digest has superseded once they are older than
+ * `memoryConsolidation.coldRetentionDays` (default: never).
+ *
+ * - Pass 1 demotes low-importance, old, inactive rows.
+ * - Pass 2 (`mergeSimilar`) is retired in favour of consolidation; the option is
+ *   still accepted for back-compat but does nothing.
+ * - Pass 3 demotes the lowest-weighted unprotected rows until the hot tier
+ *   fits the cap.
+ * - Retention deletes expired, superseded, cold AUTO rows.
+ *
+ * MANUAL rows and CONSOLIDATED digests are never demoted or deleted here.
  */
 export async function runHousekeeping(
   characterId: string,
@@ -192,387 +212,227 @@ export async function runHousekeeping(
   // keeps each synchronous chunk small enough (~50–150 ms of Zod work) that
   // Next.js dev-server request handling doesn't starve during a sweep.
   const LOAD_BATCH_SIZE = 250
-  const memories: Memory[] = []
+  const allMemories: Memory[] = []
   for await (const batch of repos.memories.findByCharacterIdInBatches(characterId, LOAD_BATCH_SIZE)) {
-    for (const memory of batch) memories.push(memory)
+    for (const memory of batch) allMemories.push(memory)
     await new Promise<void>(resolve => setImmediate(resolve))
   }
+  // The cap, the passes and the counts below all speak of the hot tier; cold
+  // rows are the archive and are only touched by the retention sweep.
+  const memories = allMemories.filter(m => m.tier !== 'cold')
+  const coldCount = allMemories.length - memories.length
   const totalBefore = memories.length
 
   const result: HousekeepingResult = {
     deleted: 0,
+    demoted: 0,
     merged: 0,
     kept: 0,
     totalBefore,
     totalAfter: totalBefore,
+    coldCount,
     capUsed: opts.maxMemories,
     deletedIds: [],
+    demotedIds: [],
     mergedIds: [],
     details: [],
   }
 
-  if (memories.length === 0) {
-    return result
-  }
-
-  // Sort memories by importance (descending) then by creation date (ascending)
-  // This ensures we keep the most important and newest memories
-  const sortedMemories = [...memories].sort((a, b) => {
-    if (b.importance !== a.importance) {
-      return b.importance - a.importance
-    }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  logger.debug('[Housekeeping] Starting sweep', {
+    characterId,
+    hot: totalBefore,
+    cold: coldCount,
+    cap: opts.maxMemories,
+    dryRun: opts.dryRun,
   })
 
-  const deleteSet = new Set<string>()
-  const memoriesToMerge: { sourceId: string; targetId: string }[] = []
-  const mergeSourceSet = new Set<string>()
-  // Protection is expensive to compute (blended multi-signal score).
-  // Cache pass-1 results so the cap-enforcement pass can reuse them.
-  const protectedMap = new Map<string, boolean>()
-
-  // Yield to the event loop every YIELD_INTERVAL items in the two big loops so
-  // a 19k-memory character doesn't block HTTP and other jobs.
-  const YIELD_INTERVAL = 500
-  const yieldTick = () => new Promise<void>(resolve => setImmediate(resolve))
-
-  // First pass: identify memories to delete based on retention policy
-  for (let i = 0; i < sortedMemories.length; i++) {
-    const memory = sortedMemories[i]
-    const isProtected = isProtectedMemory(memory, now)
-    protectedMap.set(memory.id, isProtected)
-
-    const { shouldDelete, reason } = shouldDeleteMemory(memory, now, opts, isProtected)
-
-    if (shouldDelete) {
-      deleteSet.add(memory.id)
-      result.details.push({
-        memoryId: memory.id,
-        action: 'deleted',
-        reason,
-        summary: memory.summary,
-      })
-    } else {
-      result.details.push({
-        memoryId: memory.id,
-        action: 'kept',
-        reason,
-        summary: memory.summary,
-      })
-    }
-
-    if ((i + 1) % YIELD_INTERVAL === 0) {
-      await yieldTick()
-    }
-  }
-
-  // Second pass: check for duplicates/similar memories if merge is enabled
-  // Uses already-stored embeddings from the vector store — no API calls needed.
   if (opts.mergeSimilar) {
-    const remainingMemories = sortedMemories.filter(m => !deleteSet.has(m.id))
-    const memoryMap = new Map(remainingMemories.map(m => [m.id, m]))
-
-    try {
-      const vectorStore = await getCharacterVectorStore(characterId)
-      const entryById = new Map(vectorStore.getAllEntries().map(e => [e.id, e]))
-      const storeDimensions = vectorStore.getDimensions()
-      let nonconformingSkipped = 0
-
-      for (let i = 0; i < remainingMemories.length; i++) {
-        const memory = remainingMemories[i]
-
-        if (deleteSet.has(memory.id)) {
-          continue
-        }
-
-        const entry = entryById.get(memory.id)
-        if (!entry) {
-          continue
-        }
-
-        // A stored vector from a previous embedding profile can't be compared
-        // against the index (and would warn on every search call). It's dead
-        // weight until the reindex re-embeds it — skip quietly here.
-        if (storeDimensions !== null && entry.embedding.length !== storeDimensions) {
-          nonconformingSkipped++
-          continue
-        }
-
-        const searchResults = vectorStore.search(entry.embedding, 10)
-
-        for (const match of searchResults) {
-          if (match.id === memory.id) continue
-          if (match.score < opts.mergeThreshold) continue
-          if (deleteSet.has(match.id)) continue
-          if (mergeSourceSet.has(match.id)) continue
-
-          const matchMemory = memoryMap.get(match.id)
-          if (!matchMemory) continue
-
-          // Episodic date guard (mirrors the write-side memory gate): two
-          // memories of the same activity on occasions > 7 days apart are
-          // distinct events — never merge them, however similar the prose.
-          if (occasionsAreDistinct(memory.occurredAt, matchMemory.occurredAt)) continue
-
-          const keepCurrent =
-            memory.importance > matchMemory.importance ||
-            (memory.importance === matchMemory.importance &&
-              new Date(memory.createdAt) > new Date(matchMemory.createdAt))
-
-          if (keepCurrent) {
-            memoriesToMerge.push({
-              sourceId: matchMemory.id,
-              targetId: memory.id,
-            })
-            mergeSourceSet.add(matchMemory.id)
-            deleteSet.add(matchMemory.id)
-            result.details.push({
-              memoryId: matchMemory.id,
-              action: 'merged',
-              reason: `Similar to memory ${memory.id} (${(match.score * 100).toFixed(0)}% similarity)`,
-              summary: matchMemory.summary,
-            })
-          } else {
-            memoriesToMerge.push({
-              sourceId: memory.id,
-              targetId: matchMemory.id,
-            })
-            mergeSourceSet.add(memory.id)
-            deleteSet.add(memory.id)
-            result.details.push({
-              memoryId: memory.id,
-              action: 'merged',
-              reason: `Similar to memory ${matchMemory.id} (${(match.score * 100).toFixed(0)}% similarity)`,
-              summary: memory.summary,
-            })
-            break
-          }
-        }
-
-        if ((i + 1) % YIELD_INTERVAL === 0) {
-          await yieldTick()
-        }
-      }
-
-      if (nonconformingSkipped > 0) {
-        logger.info('[Housekeeping] Skipped non-conforming vectors in merge pass — awaiting re-embed', {
-          characterId,
-          nonconformingSkipped,
-          storeDimensions,
-        })
-      }
-    } catch (error) {
-      logger.warn('[Housekeeping] Failed to run similarity merge pass', { characterId, error: String(error) })
-    }
+    logger.debug('[Housekeeping] mergeSimilar is retired in favour of consolidation; skipping the merge pass', {
+      characterId,
+    })
   }
 
-  // Third pass: enforce hard cap if still over limit.
-  //
-  // If every remaining memory is protected, the deletion loop below would
-  // skip every candidate and score + sort 19k entries for nothing. Do a
-  // cheap pre-check first: when no unprotected-and-undeleted memory exists,
-  // skip the entire scoring pass.
-  const mergeTargetIds = new Set(memoriesToMerge.map(m => m.targetId))
-  const remainingAfterDeletion = memories.filter(m => !deleteSet.has(m.id))
-  const hasDeletionCandidate =
-    remainingAfterDeletion.length > opts.maxMemories &&
-    remainingAfterDeletion.some(m => !(protectedMap.get(m.id) ?? isProtectedMemory(m, now)))
-  if (hasDeletionCandidate) {
-    const scoredMemories = remainingAfterDeletion.map(m => {
-      const { effectiveWeight } = calculateEffectiveWeight(m, undefined, now)
-      return { memory: m, score: effectiveWeight }
+  const demoteSet = new Set<string>()
+
+  if (memories.length > 0) {
+    // Sort memories by importance (descending) then by creation date (ascending)
+    // This ensures we keep the most important and newest memories
+    const sortedMemories = [...memories].sort((a, b) => {
+      if (b.importance !== a.importance) {
+        return b.importance - a.importance
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
 
-    scoredMemories.sort((a, b) => b.score - a.score)
+    // Protection is expensive to compute (blended multi-signal score).
+    // Cache pass-1 results so the cap-enforcement pass can reuse them.
+    const protectedMap = new Map<string, boolean>()
 
-    const excessCount = remainingAfterDeletion.length - opts.maxMemories
-    let deletedForLimit = 0
-    let iterations = 0
+    // Yield to the event loop every YIELD_INTERVAL items in the two big loops so
+    // a 19k-memory character doesn't block HTTP and other jobs.
+    const YIELD_INTERVAL = 500
+    const yieldTick = () => new Promise<void>(resolve => setImmediate(resolve))
 
-    for (let i = scoredMemories.length - 1; i >= 0 && deletedForLimit < excessCount; i--) {
-      const { memory } = scoredMemories[i]
+    // First pass: identify memories to demote based on retention policy
+    for (let i = 0; i < sortedMemories.length; i++) {
+      const memory = sortedMemories[i]
+      const isProtected = isProtectedMemory(memory, now)
+      protectedMap.set(memory.id, isProtected)
 
-      if (deleteSet.has(memory.id)) continue
-      // A merge survivor is about to absorb its losers; deleting it would
-      // take their details with it. Spare it and cut the next one instead.
-      if (mergeTargetIds.has(memory.id)) continue
-      // Reuse protection result from pass 1 instead of recomputing.
-      const isProtected = protectedMap.get(memory.id) ?? isProtectedMemory(memory, now)
-      if (isProtected) continue
+      const { shouldDelete: shouldDemote, reason } = shouldDeleteMemory(memory, now, opts, isProtected)
 
-      deleteSet.add(memory.id)
-      result.details.push({
-        memoryId: memory.id,
-        action: 'deleted',
-        reason: `Exceeded memory limit (${opts.maxMemories})`,
-        summary: memory.summary,
-      })
-      deletedForLimit++
-      iterations++
+      if (shouldDemote) {
+        demoteSet.add(memory.id)
+        result.details.push({
+          memoryId: memory.id,
+          action: 'demoted',
+          reason,
+          summary: memory.summary,
+        })
+      } else {
+        result.details.push({
+          memoryId: memory.id,
+          action: 'kept',
+          reason,
+          summary: memory.summary,
+        })
+      }
 
-      if (iterations % YIELD_INTERVAL === 0) {
+      if ((i + 1) % YIELD_INTERVAL === 0) {
         await yieldTick()
       }
     }
-  }
 
-  let mergesApplied = memoriesToMerge
-  let survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
+    // Third pass: enforce the hot-tier cap if still over limit.
+    //
+    // If every remaining memory is protected, the demotion loop below would
+    // skip every candidate and score + sort 19k entries for nothing. Do a
+    // cheap pre-check first: when no unprotected-and-undemoted memory exists,
+    // skip the entire scoring pass.
+    const remainingAfterDemotion = memories.filter(m => !demoteSet.has(m.id))
+    const hasDemotionCandidate =
+      remainingAfterDemotion.length > opts.maxMemories &&
+      remainingAfterDemotion.some(m => !(protectedMap.get(m.id) ?? isProtectedMemory(m, now)))
+    if (hasDemotionCandidate) {
+      const scoredMemories = remainingAfterDemotion.map(m => {
+        const { effectiveWeight } = calculateEffectiveWeight(m, undefined, now)
+        return { memory: m, score: effectiveWeight }
+      })
 
-  if (!opts.dryRun && memoriesToMerge.length > 0) {
-    // Fold each merged-away row into its survivor BEFORE anything is deleted,
-    // so a failed fold costs nothing: its losers simply stay. The delete below
-    // scrubs the patched survivors from their new link lists rather than the
-    // database row — in the job child that row is still the pre-merge one,
-    // and scrubbing from it would overwrite the union.
-    const fold = await foldMergedMemories(memories, memoriesToMerge, deleteSet, opts)
-    survivorLinks = fold.survivorLinks
-    if (fold.keptLoserIds.size > 0) {
-      for (const id of fold.keptLoserIds) deleteSet.delete(id)
-      mergesApplied = memoriesToMerge.filter(m => !fold.keptLoserIds.has(m.sourceId))
-      for (const detail of result.details) {
-        if (detail.action === 'merged' && fold.keptLoserIds.has(detail.memoryId)) {
-          detail.action = 'kept'
-          detail.reason = 'Merge into survivor failed; kept rather than lose its details'
+      scoredMemories.sort((a, b) => b.score - a.score)
+
+      const excessCount = remainingAfterDemotion.length - opts.maxMemories
+      let demotedForLimit = 0
+      let iterations = 0
+
+      for (let i = scoredMemories.length - 1; i >= 0 && demotedForLimit < excessCount; i--) {
+        const { memory } = scoredMemories[i]
+
+        if (demoteSet.has(memory.id)) continue
+        // Reuse protection result from pass 1 instead of recomputing.
+        const isProtected = protectedMap.get(memory.id) ?? isProtectedMemory(memory, now)
+        if (isProtected) continue
+
+        demoteSet.add(memory.id)
+        const existing = result.details.find(d => d.memoryId === memory.id)
+        if (existing) {
+          existing.action = 'demoted'
+          existing.reason = `Exceeded hot-memory limit (${opts.maxMemories})`
+        } else {
+          result.details.push({
+            memoryId: memory.id,
+            action: 'demoted',
+            reason: `Exceeded hot-memory limit (${opts.maxMemories})`,
+            summary: memory.summary,
+          })
+        }
+        demotedForLimit++
+        iterations++
+
+        if (iterations % YIELD_INTERVAL === 0) {
+          await yieldTick()
         }
       }
-      logger.warn('[Housekeeping] Some merges failed; their memories were kept', {
-        characterId,
-        kept: fold.keptLoserIds.size,
+    }
+  }
+
+  const demotedIds = Array.from(demoteSet)
+
+  // Retention: the only deletion. Cold, superseded AUTO rows past the window.
+  let expiredIds: string[] = []
+  const retentionDays = (await getMemoryConsolidationSettings()).coldRetentionDays
+  if (retentionDays !== null && retentionDays !== undefined && retentionDays > 0) {
+    const cutoff = new Date(now.getTime() - retentionDays * 86_400_000).toISOString()
+    expiredIds = await repos.memories.findExpiredColdIds(characterId, cutoff)
+    for (const id of expiredIds) {
+      result.details.push({
+        memoryId: id,
+        action: 'deleted',
+        reason: `Superseded archive row older than the ${retentionDays}-day retention window`,
       })
     }
   }
 
-  const deletedIds = Array.from(deleteSet)
+  let vectorStoreDirty = false
+  if (!opts.dryRun && demotedIds.length > 0) {
+    await repos.memories.updateTierBulk(characterId, demotedIds, 'cold')
+    try {
+      const vectorStore = await getCharacterVectorStore(characterId)
+      vectorStore.setTier(demotedIds, 'cold')
+    } catch (error) {
+      logger.warn('[Housekeeping] Failed to re-stamp vector tier after demotion', {
+        characterId,
+        error: String(error),
+      })
+    }
+    result.demoted = demotedIds.length
+    result.demotedIds = demotedIds
+    vectorStoreDirty = true
+  } else if (opts.dryRun) {
+    result.demoted = demotedIds.length
+    result.demotedIds = demotedIds
+  }
 
-  if (!opts.dryRun && deletedIds.length > 0) {
-    const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds, {
-      currentLinks: survivorLinks,
-    })
+  if (!opts.dryRun && expiredIds.length > 0) {
+    const deletedCount = await deleteMemoriesWithUnlinkBatch(expiredIds)
 
     try {
       const vectorStore = await getCharacterVectorStore(characterId)
-      for (const id of deletedIds) {
+      for (const id of expiredIds) {
         await vectorStore.removeVector(id)
       }
       await vectorStore.save()
     } catch (error) {
       logger.warn(`[Housekeeping] Failed to clean up vector store`, { characterId, error: String(error) })
     }
+    result.deleted = deletedCount
+    result.deletedIds = expiredIds
+    vectorStoreDirty = true
+  } else if (opts.dryRun) {
+    result.deleted = expiredIds.length
+    result.deletedIds = expiredIds
+  }
 
+  if (vectorStoreDirty) {
     // The corpus just changed under every cached archive for this character.
     // In the parent (the Memories API path) this drops the cache directly; in
     // the job child it is a no-op on the child's own map, and the parent's
     // job-completion hook does the real invalidation.
     invalidateFrozenArchive(characterId)
-
-    result.deleted = deletedCount
-    result.merged = mergesApplied.length
-    result.deletedIds = deletedIds
-    result.mergedIds = mergesApplied.map(m => m.sourceId)
-  } else if (opts.dryRun) {
-    result.deleted = deletedIds.length
-    result.merged = memoriesToMerge.length
-    result.deletedIds = deletedIds
-    result.mergedIds = memoriesToMerge.map(m => m.sourceId)
   }
 
-  result.kept = totalBefore - deletedIds.length
+  result.kept = totalBefore - demotedIds.length
   result.totalAfter = result.kept
 
-  return result
-}
-
-/**
- * Apply pass 2's merges: group every merged-away row under its survivor and
- * fold each group in through the shared merge. Pass 2 walks best-first, so a
- * survivor should never later become a loser; the chain walk below is a guard
- * in case that ordering ever changes. The cap pass spares merge targets; if a
- * survivor is nonetheless gone, its losers are kept rather than deleted.
- */
-async function foldMergedMemories(
-  memories: Memory[],
-  merges: { sourceId: string; targetId: string }[],
-  deleteSet: Set<string>,
-  opts: { userId?: string; embeddingProfileId?: string },
-): Promise<{
-  survivorLinks: Map<string, { characterId: string; relatedMemoryIds: string[] }>
-  keptLoserIds: Set<string>
-}> {
-  const byId = new Map(memories.map(m => [m.id, m]))
-  const targetOf = new Map(merges.map(m => [m.sourceId, m.targetId]))
-
-  const finalTarget = (id: string): string => {
-    let current = id
-    const seen = new Set<string>()
-    while (targetOf.has(current) && !seen.has(current)) {
-      seen.add(current)
-      current = targetOf.get(current)!
-    }
-    return current
-  }
-
-  const groups = new Map<string, Memory[]>()
-  for (const { sourceId } of merges) {
-    const survivorId = finalTarget(sourceId)
-    const loser = byId.get(sourceId)
-    if (!loser || survivorId === sourceId) continue
-    const list = groups.get(survivorId) ?? []
-    list.push(loser)
-    groups.set(survivorId, list)
-  }
-
-  const survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
-  const keptLoserIds = new Set<string>()
-  let folded = 0
-  let skipped = 0
-  for (const [survivorId, losers] of groups) {
-    const survivor = byId.get(survivorId)
-    if (!survivor || deleteSet.has(survivorId)) {
-      // The cap pass spares merge targets, so this should not happen; if it
-      // does, keep the losers rather than delete what nothing absorbed.
-      for (const loser of losers) keptLoserIds.add(loser.id)
-      skipped++
-      continue
-    }
-    let applied: Memory | null = null
-    try {
-      // Links are unioned minus only this group; the delete then scrubs
-      // whatever else is actually removed, so links to anything that is kept
-      // (a failed group's losers) survive.
-      const plan = planMemoryMerge(survivor, losers)
-      applied = await applyMemoryMerge(survivor, plan, {
-        userId: opts.userId,
-        embeddingProfileId: opts.embeddingProfileId,
-      })
-    } catch (error) {
-      logger.warn('[Housekeeping] Failed to fold merged memories into survivor', {
-        survivorId,
-        losers: losers.length,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-    if (applied) {
-      survivorLinks.set(survivorId, {
-        characterId: applied.characterId,
-        relatedMemoryIds: applied.relatedMemoryIds ?? [],
-      })
-      folded++
-    } else {
-      // Keep the losers: deleting them now would discard what the survivor
-      // failed to absorb.
-      for (const loser of losers) keptLoserIds.add(loser.id)
-    }
-  }
-
-  logger.debug('[Housekeeping] Folded merged memories', {
-    merges: merges.length,
-    survivors: groups.size,
-    folded,
-    skippedDeletedSurvivor: skipped,
-    keptAfterFailedFold: keptLoserIds.size,
+  logger.debug('[Housekeeping] Sweep computed', {
+    characterId,
+    dryRun: opts.dryRun,
+    demoted: result.demoted,
+    deleted: result.deleted,
+    hotAfter: result.totalAfter,
   })
-  return { survivorLinks, keptLoserIds }
+
+  return result
 }
 
 /**
@@ -589,8 +449,8 @@ export async function getHousekeepingPreview(
  * Check if housekeeping is needed for a character
  *
  * Returns true if:
- * - Memory count exceeds 80% of the limit
- * - There are memories matching deletion criteria
+ * - Hot memory count exceeds 80% of the limit
+ * - There are memories matching demotion or retention criteria
  */
 export async function needsHousekeeping(
   characterId: string,
@@ -600,7 +460,7 @@ export async function needsHousekeeping(
   const maxMemories = options.maxMemories ?? DEFAULT_OPTIONS.maxMemories
 
   // Quick check: memory count
-  const count = await repos.memories.countByCharacterId(characterId)
+  const count = await repos.memories.countHotByCharacterId(characterId)
   if (count >= maxMemories * 0.8) {
     return true
   }
@@ -608,7 +468,7 @@ export async function needsHousekeeping(
   // More thorough check: preview housekeeping
   if (count > 0) {
     const preview = await getHousekeepingPreview(characterId, options)
-    return preview.deleted > 0
+    return preview.demoted + preview.deleted > 0
   }
 
   return false

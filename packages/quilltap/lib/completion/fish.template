@@ -113,7 +113,7 @@ complete -c quilltap -n '__quilltap_using_subcommand db' -l 'grep' -d 'Substring
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'character' -d 'Character name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'project' -d 'Project name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'about' -d 'Subject character' -x
-complete -c quilltap -n '__quilltap_using_subcommand db' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL'
+complete -c quilltap -n '__quilltap_using_subcommand db' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL CONSOLIDATED'
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'chat' -d 'Chat name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'message' -d 'Message id' -x
 complete -c quilltap -n '__quilltap_using_subcommand db' -l 'rendered' -d 'Render rich content'
@@ -272,11 +272,14 @@ complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'show' -d '
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'tree' -d 'Graph walk'
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'status' -d 'Memory status'
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'validate' -d 'Health check'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'consolidate' -d 'Fold memory clusters into digests'
 
 # memories flags
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'character' -d 'Character name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'about' -d 'Subject of memory' -x
-complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'source' -d 'Memory source' -x -a 'AUTO MANUAL CONSOLIDATED'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'tier' -d 'Memory tier' -x -a 'hot cold'
+complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'dry-run' -d 'Consolidate: rehearse and print the report, write nothing'
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'chat' -d 'Chat id or title' -x
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'project' -d 'Project name or id' -x
 complete -c quilltap -n '__quilltap_using_subcommand memories' -l 'since' -d 'Since timestamp' -x

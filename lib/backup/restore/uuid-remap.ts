@@ -301,6 +301,9 @@ export function remapBackupData(
           'projectId',
           'storyBackgroundImageId',
           'imageProfileId',
+          // Message-id reference: messages are remapped below, so the
+          // "other-subject" extraction watermark must follow its message.
+          'otherExtractionWatermarkMessageId',
         ]),
         ['tags', 'impersonatingParticipantIds']
       ),
@@ -331,8 +334,12 @@ export function remapBackupData(
   // Remap memories
   const remappedMemories = data.memories.map((memory) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId']),
-      ['tags', 'relatedMemoryIds']
+      // `supersededById` and `consolidatedFrom` are memory-id references (digest
+      // <-> cold members), remapped in lockstep with `id` exactly like
+      // `relatedMemoryIds`. Old backups lack them; remapFields/remapArrayFields
+      // skip absent or null values.
+      remapper.remapFields(memory, ['id', 'characterId', 'aboutCharacterId', 'chatId', 'sourceMessageId', 'projectId', 'supersededById']),
+      ['tags', 'relatedMemoryIds', 'consolidatedFrom']
     ),
   })) as SerializedMemory[];
 

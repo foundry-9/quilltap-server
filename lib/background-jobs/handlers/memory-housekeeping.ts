@@ -56,6 +56,7 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
     payload.mergeThreshold ?? autoSettings?.autoMergeSimilarThreshold;
   const mergeSimilar = payload.mergeSimilar ?? autoSettings?.mergeSimilar;
 
+  let totalDemoted = 0;
   let totalDeleted = 0;
   let totalMerged = 0;
 
@@ -88,6 +89,7 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
         result.deleted = result.deletedIds.length;
       }
 
+      totalDemoted += result.demoted;
       totalDeleted += result.deleted;
       totalMerged += result.merged;
 
@@ -98,7 +100,7 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
       if (!payload.dryRun) {
         recordHousekeepingOutcome(
           characterId,
-          result.deleted,
+          result.demoted + result.deleted,
           result.totalBefore,
           result.capUsed,
         );
@@ -112,7 +114,9 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
         dryRun: payload.dryRun ?? false,
         totalBefore: result.totalBefore,
         totalAfter: result.totalAfter,
+        demoted: result.demoted,
         deleted: result.deleted,
+        cold: result.coldCount,
         merged: result.merged,
         kept: result.kept,
       });
@@ -131,6 +135,7 @@ export async function handleMemoryHousekeeping(job: BackgroundJob): Promise<void
     jobId: job.id,
     userId: job.userId,
     charactersSwept: targetCharacterIds.length,
+    totalDemoted,
     totalDeleted,
     totalMerged,
     reason: payload.reason ?? 'unknown',

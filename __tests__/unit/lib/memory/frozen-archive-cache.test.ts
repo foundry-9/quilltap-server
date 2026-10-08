@@ -9,9 +9,10 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 
 const findMostImportant = jest.fn<(...args: any[]) => any>()
+const findHotDigests = jest.fn<(...args: any[]) => any>()
 
 jest.mock('@/lib/repositories/factory', () => ({
-  getRepositories: () => ({ memories: { findMostImportant } }),
+  getRepositories: () => ({ memories: { findMostImportant, findHotDigests } }),
 }))
 
 jest.mock('@/lib/logger', () => ({
@@ -51,6 +52,8 @@ describe('frozen-archive-cache', () => {
   beforeEach(() => {
     resetFrozenArchiveCacheForTests()
     findMostImportant.mockReset()
+    findHotDigests.mockReset()
+    findHotDigests.mockResolvedValue([])
   })
 
   it('hits cache when called twice with same generation', async () => {
@@ -181,5 +184,72 @@ describe('frozen-archive-cache', () => {
 
     await getOrComputeFrozenArchive('char-1', 'chat-1', 0)
     expect(findMostImportant.mock.calls.length).toBe(callsBefore + 1)
+  })
+
+  describe('digest composition', () => {
+    function digest(id: string): Memory {
+      return { ...memory(id, 0.9), source: 'CONSOLIDATED', consolidatedFrom: ['x', 'y'] } as unknown as Memory
+    }
+
+    it('takes digests per present character, then self digests, then fills', async () => {
+      findHotDigests.mockImplementation(async (_cid: string, subject: string) => {
+        if (subject === 'laura') return [digest('d-laura-1'), digest('d-laura-2')]
+        if (subject === 'self') return [digest('d-self-1')]
+        return []
+      })
+      findMostImportant.mockResolvedValue([memory('m-1', 0.9), memory('m-2', 0.8)])
+
+      const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0, {
+        size: 10,
+        presentCharacterIds: ['laura'],
+      })
+
+      expect(findHotDigests).toHaveBeenCalledWith('char-1', 'laura', 3)
+      expect(findHotDigests).toHaveBeenCalledWith('char-1', 'self', 5)
+      expect(archive.map(m => m.id)).toEqual(['d-laura-1', 'd-laura-2', 'd-self-1', 'm-1', 'm-2'])
+    })
+
+    it('dedupes a digest that also appears in the fill pool', async () => {
+      findHotDigests.mockImplementation(async (_cid: string, subject: string) =>
+        subject === 'self' ? [digest('dup-1')] : [])
+      findMostImportant.mockResolvedValue([memory('dup-1', 0.95), memory('m-1', 0.5)])
+
+      const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { size: 10 })
+      expect(archive.map(m => m.id)).toEqual(['dup-1', 'm-1'])
+    })
+
+    it('caps the whole archive at size with digests taking priority', async () => {
+      findHotDigests.mockImplementation(async (_cid: string, subject: string) =>
+        subject === 'self' ? [digest('s-1'), digest('s-2'), digest('s-3')] : [])
+      findMostImportant.mockResolvedValue([memory('m-1'), memory('m-2')])
+
+      const archive = await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { size: 4 })
+      expect(archive.map(m => m.id)).toEqual(['m-1', 's-1', 's-2', 's-3'])
+    })
+
+    it('is deterministic regardless of present-id order and ignores the responder', async () => {
+      findHotDigests.mockImplementation(async (_cid: string, subject: string) =>
+        subject === 'self' ? [] : [digest(`d-${subject}`)])
+      findMostImportant.mockResolvedValue([])
+
+      const a = await getOrComputeFrozenArchive('char-1', 'chat-a', 0, {
+        size: 10,
+        presentCharacterIds: ['zed', 'amy', 'char-1'],
+      })
+      const b = await getOrComputeFrozenArchive('char-1', 'chat-b', 0, {
+        size: 10,
+        presentCharacterIds: ['amy', 'zed'],
+      })
+      expect(a.map(m => m.id)).toEqual(['d-amy', 'd-zed'])
+      expect(b.map(m => m.id)).toEqual(a.map(m => m.id))
+    })
+
+    it('recomputes when the set of present characters changes', async () => {
+      findMostImportant.mockResolvedValue([])
+      await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { presentCharacterIds: ['amy'] })
+      await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { presentCharacterIds: ['amy'] })
+      await getOrComputeFrozenArchive('char-1', 'chat-1', 0, { presentCharacterIds: ['amy', 'bob'] })
+      expect(findMostImportant).toHaveBeenCalledTimes(2)
+    })
   })
 })

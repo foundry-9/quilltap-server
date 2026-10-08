@@ -1074,6 +1074,16 @@ export const ChatMetadataSchema = z.object({
    */
   timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
 
+  /**
+   * The Commonplace Book — the last message a fold-grain OTHER extraction pass
+   * has covered (memory consolidation and tiers, workstream A). Advanced by
+   * every fold-grain pass; the daily maintenance sweep runs a catch-up pass
+   * for idle chats whose last message sits past it, so short chats that never
+   * fold still get their observations of others extracted. Null until the
+   * first fold-grain pass.
+   */
+  otherExtractionWatermarkMessageId: z.string().nullable().optional(),
+
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling
   // Populated only when chatType === 'autonomous'; null/zero on other chats.
@@ -1409,6 +1419,9 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Timeline clock ('realtime' | 'narrative'; NULL = realtime). See ChatMetadataSchema for the contract. */
   timelineMode: z.enum(['realtime', 'narrative']).nullable().optional(),
+
+  /** Fold-grain OTHER extraction watermark. See ChatMetadataSchema for the contract. */
+  otherExtractionWatermarkMessageId: z.string().nullable().optional(),
 
   // ==========================================================================
   // 4.6 Private Character Rooms — autonomous-room runtime + scheduling.

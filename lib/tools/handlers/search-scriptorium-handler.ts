@@ -272,6 +272,10 @@ export async function executeSearchScriptoriumTool(
                   // recallContext, so no soft fallback — the caller asked
                   // for a window).
                   occurredWithin: timeWindow,
+                  // The drill-down tool sees the archive too: cold shards are
+                  // returned labelled, so a character can find what a digest
+                  // replaced.
+                  includeCold: true,
                 }
               )
 
@@ -287,6 +291,7 @@ export async function executeSearchScriptoriumTool(
                 effectiveWeight: mr.effectiveWeight,
                 createdAt: mr.memory.createdAt,
                 source: mr.memory.source,
+                archivedLabel: memoryArchivedLabel(mr.memory),
                 occurredAt: mr.memory.occurredAt ?? null,
                 narrativeTime: mr.memory.narrativeTime ?? null,
                 kind: mr.memory.kind ?? 'semantic',
@@ -572,6 +577,18 @@ export async function executeSearchScriptoriumTool(
 }
 
 /**
+ * Label for a cold-tier memory in `search` results: `(archived — superseded by
+ * <digest id>)` when a digest replaced it, `(archived)` otherwise. Hot rows get
+ * no label.
+ */
+export function memoryArchivedLabel(memory: { tier?: string; supersededById?: string | null }): string | undefined {
+  if (memory.tier !== 'cold') return undefined
+  return memory.supersededById
+    ? `(archived — superseded by ${memory.supersededById})`
+    : '(archived)'
+}
+
+/**
  * Format search scriptorium results for inclusion in conversation context
  */
 export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[]): string {
@@ -594,7 +611,8 @@ export function formatSearchScriptoriumResults(results: SearchScriptoriumResult[
         ? `\nSource conversation: ${result.metadata.conversationId} (readable via read_conversation)`
         : ''
 
-      return `[Result ${index + 1} - Memory] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
+      const archived = result.metadata.archivedLabel ? ` ${result.metadata.archivedLabel}` : ''
+      return `[Result ${index + 1} - Memory${archived}] (Importance: ${importanceLabel}, Relevance: ${(result.relevanceScore * 100).toFixed(0)}%)
 Summary: ${result.metadata.summary || 'No summary'}${whenLine}${sourceLine}
 Details: ${result.content}`
     } else if (result.sourceType === 'conversation') {

@@ -11,6 +11,11 @@
  * one job per user message exactly tiles the chat into the same turns
  * the live pipeline produces. Greeting-only chats (no user messages) get
  * a single null-opener extraction instead.
+ *
+ * Observations of other characters are no longer (only) per-turn: in the
+ * `fold` / `hybrid` extraction modes most of them come from the fold-grain
+ * OTHER pass. The regenerate resets the chat's fold-grain watermark and
+ * enqueues one fold-grain catch-up so those rows are rebuilt too.
  */
 
 import { BackgroundJob, MessageEvent } from '@/lib/schemas/types';
@@ -18,6 +23,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
 import { enqueueMemoryExtraction } from '../queue-service';
 import { logger } from '@/lib/logger';
+import { getMemoryExtractionModeSettings } from '@/lib/instance-settings';
 import type { MemoryRegenerateChatPayload } from '../queue-service';
 
 export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<void> {
@@ -47,6 +53,7 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
   }
 
   const wipeResult = await deleteMemoriesByChatIdWithVectors(payload.chatId);
+  await rebuildFoldGrainObservations(job, payload, chat.otherExtractionWatermarkMessageId ?? null);
 
   const allRawMessages = await repos.chats.getMessages(payload.chatId);
   const messageEvents = allRawMessages.filter(
@@ -108,5 +115,50 @@ export async function handleMemoryRegenerateChat(job: BackgroundJob): Promise<vo
     deleted: wipeResult.deleted,
     vectorsRemoved: wipeResult.vectorsRemoved,
     extractionsEnqueued: turnOpenerIds.length,
+  });
+}
+
+/**
+ * Reset the fold-grain OTHER watermark and enqueue one catch-up pass, so a
+ * regenerate rebuilds the observations of others that the per-turn pass no
+ * longer writes. No-op in `turn` mode, where the per-turn pass still writes
+ * them all. The catch-up covers the chat's newest
+ * `FOLD_OTHER_MAX_WINDOW_MESSAGES` messages, as the daily sweep does.
+ */
+async function rebuildFoldGrainObservations(
+  job: BackgroundJob,
+  payload: MemoryRegenerateChatPayload,
+  previousWatermark: string | null,
+): Promise<void> {
+  const mode = await getMemoryExtractionModeSettings();
+  if (mode.otherPass === 'turn') {
+    logger.debug('[MemoryRegenerateChat] Extraction mode is per-turn; no fold-grain rebuild', {
+      jobId: job.id,
+      chatId: payload.chatId,
+    });
+    return;
+  }
+
+  const repos = getRepositories();
+  if (previousWatermark) {
+    await repos.chats.update(payload.chatId, { otherExtractionWatermarkMessageId: null });
+  }
+  await enqueueMemoryExtraction(
+    job.userId,
+    {
+      chatId: payload.chatId,
+      turnOpenerMessageId: null,
+      extractionAnchorMessageId: `regenerate:${job.id}`,
+      connectionProfileId: payload.connectionProfileId,
+      foldOtherCatchup: true,
+      foldOtherIgnoreIdle: true,
+    },
+    { skipDedupCheck: true },
+  );
+  logger.debug('[MemoryRegenerateChat] Reset fold-grain watermark and enqueued catch-up', {
+    jobId: job.id,
+    chatId: payload.chatId,
+    previousWatermark,
+    otherPass: mode.otherPass,
   });
 }

@@ -87,6 +87,7 @@ beforeEach(() => {
   jest.mocked(getRepositories).mockReturnValue({
     memories: {
       findMostImportant: jest.fn().mockResolvedValue([]),
+      findHotDigests: jest.fn().mockResolvedValue([]),
       findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]),
     },
     characters: { findByUserId: jest.fn().mockResolvedValue([characterA]) },

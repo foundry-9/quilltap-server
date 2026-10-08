@@ -24,8 +24,12 @@ import {
   type BrahmaConsoleSettings,
   DataRetentionSettingsSchema,
   type DataRetentionSettings,
+  MemoryConsolidationSettingsSchema,
+  type MemoryConsolidationSettings,
   MemoryExtractionLimitsSchema,
   type MemoryExtractionLimits,
+  MemoryExtractionModeSettingsSchema,
+  type MemoryExtractionModeSettings,
   MemoryRecallSettingsSchema,
   type MemoryRecallSettings,
   TabooSettingsSchema,
@@ -36,6 +40,8 @@ const KEY_MAX_CONCURRENT_JOBS = 'maxConcurrentJobs';
 const KEY_MEMORY_EXTRACTION_CONCURRENCY = 'memoryExtractionConcurrency';
 const KEY_MEMORY_EXTRACTION_LIMITS = 'memoryExtractionLimits';
 const KEY_MEMORY_RECALL = 'memoryRecall';
+const KEY_MEMORY_CONSOLIDATION = 'memoryConsolidation';
+const KEY_MEMORY_EXTRACTION_MODE = 'memoryExtractionMode';
 const KEY_LANTERN_BACKGROUNDS_MOUNT_POINT_ID = 'lanternBackgroundsMountPointId';
 const KEY_USER_UPLOADS_MOUNT_POINT_ID = 'userUploadsMountPointId';
 const KEY_GENERAL_MOUNT_POINT_ID = 'generalMountPointId';
@@ -87,6 +93,10 @@ const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
   expandRelated: false,
   perTurnConversationSummaries: false,
 };
+const DEFAULT_MEMORY_CONSOLIDATION_SETTINGS: MemoryConsolidationSettings =
+  MemoryConsolidationSettingsSchema.parse({});
+const DEFAULT_MEMORY_EXTRACTION_MODE_SETTINGS: MemoryExtractionModeSettings =
+  MemoryExtractionModeSettingsSchema.parse({});
 const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
   staleChatDays: 30,
 };
@@ -226,6 +236,50 @@ export async function getMemoryRecallSettings(): Promise<MemoryRecallSettings> {
 
 export async function setMemoryRecallSettings(value: MemoryRecallSettings): Promise<void> {
   await writeJsonSetting(KEY_MEMORY_RECALL, MemoryRecallSettingsSchema, value);
+}
+
+/**
+ * Read the consolidation job's settings (`instance_settings['memoryConsolidation']`).
+ * Partial stored values are filled from the schema defaults.
+ */
+export async function getMemoryConsolidationSettings(): Promise<MemoryConsolidationSettings> {
+  return readJsonSetting(
+    KEY_MEMORY_CONSOLIDATION,
+    MemoryConsolidationSettingsSchema,
+    DEFAULT_MEMORY_CONSOLIDATION_SETTINGS,
+  );
+}
+
+export async function setMemoryConsolidationSettings(
+  value: Partial<MemoryConsolidationSettings>,
+): Promise<MemoryConsolidationSettings> {
+  const current = await getMemoryConsolidationSettings();
+  return writeJsonSetting(KEY_MEMORY_CONSOLIDATION, MemoryConsolidationSettingsSchema, {
+    ...current,
+    ...value,
+  });
+}
+
+/**
+ * Read the OTHER-pass grain setting (`instance_settings['memoryExtractionMode']`).
+ * Defaults to 'hybrid'.
+ */
+export async function getMemoryExtractionModeSettings(): Promise<MemoryExtractionModeSettings> {
+  return readJsonSetting(
+    KEY_MEMORY_EXTRACTION_MODE,
+    MemoryExtractionModeSettingsSchema,
+    DEFAULT_MEMORY_EXTRACTION_MODE_SETTINGS,
+  );
+}
+
+export async function setMemoryExtractionModeSettings(
+  value: Partial<MemoryExtractionModeSettings>,
+): Promise<MemoryExtractionModeSettings> {
+  const current = await getMemoryExtractionModeSettings();
+  return writeJsonSetting(KEY_MEMORY_EXTRACTION_MODE, MemoryExtractionModeSettingsSchema, {
+    ...current,
+    ...value,
+  });
 }
 
 /**
@@ -426,14 +480,18 @@ export async function writeInstanceSetting(key: string, value: string): Promise<
 export {
   BrahmaConsoleSettingsSchema,
   DataRetentionSettingsSchema,
+  MemoryConsolidationSettingsSchema,
   MemoryExtractionLimitsSchema,
+  MemoryExtractionModeSettingsSchema,
   MemoryRecallSettingsSchema,
   TabooSettingsSchema,
 };
 export type {
   BrahmaConsoleSettings,
   DataRetentionSettings,
+  MemoryConsolidationSettings,
   MemoryExtractionLimits,
+  MemoryExtractionModeSettings,
   MemoryRecallSettings,
   TabooSettings,
 };

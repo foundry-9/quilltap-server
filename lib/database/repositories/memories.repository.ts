@@ -8,12 +8,27 @@
  * Each memory is stored as a document in the 'memories' collection/table.
  */
 
-import { Memory, MemorySchema } from '@/lib/schemas/types';
+import { Memory, MemorySchema, MemoryTier } from '@/lib/schemas/types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
+
+/**
+ * Input to {@link MemoriesRepository.create}. The tier fields are optional
+ * here — a new row is hot with no consolidation history unless the caller
+ * (the consolidation job, an import) says otherwise.
+ */
+export type MemoryCreateInput = Omit<Memory, 'id' | 'createdAt' | 'updatedAt' | 'tier' | 'consolidatedFrom'> &
+  Partial<Pick<Memory, 'tier' | 'consolidatedFrom'>>;
+
+/**
+ * SQL predicate for "this row is in the hot tier". A NULL tier (a row written
+ * before `add-memory-tiers-v1`, or by a path that bypassed `create`) reads as
+ * hot, never cold.
+ */
+const HOT_TIER_SQL = `COALESCE(tier, 'hot') = 'hot'`;
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
 const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -173,13 +188,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       sortBy?: string
       sortOrder?: 'asc' | 'desc'
       search?: string
-      source?: 'AUTO' | 'MANUAL'
+      source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
       minImportance?: number
+      /** Restrict to one tier; omitted lists both. */
+      tier?: MemoryTier
     }
   ): Promise<{ memories: Memory[]; totalCount: number }> {
     return this.safeQuery(
       async () => {
-        const { limit, offset, sortBy = 'createdAt', sortOrder = 'desc', search, source, minImportance } = options;
+        const { limit, offset, sortBy = 'createdAt', sortOrder = 'desc', search, source, minImportance, tier } = options;
 
         // Build filter
         const filter: TypedQueryFilter<Memory> = { characterId };
@@ -188,6 +205,9 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         }
         if (minImportance !== undefined) {
           (filter as any).importance = { $gte: minImportance };
+        }
+        if (tier) {
+          (filter as any).tier = tier;
         }
 
         // Get total count before pagination (but after filtering except search,
@@ -282,7 +302,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @param source Source type ('AUTO' or 'MANUAL')
    * @returns Promise<Memory[]> Array of memories with the specified source
    */
-  async findBySource(characterId: string, source: 'AUTO' | 'MANUAL'): Promise<Memory[]> {
+  async findBySource(characterId: string, source: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'): Promise<Memory[]> {
     return this.safeQuery(
       async () => {
         const memories = await this.findByFilter({
@@ -343,6 +363,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const rows = await rawQuery<Record<string, unknown>[]>(
           `SELECT * FROM memories
             WHERE characterId = ?
+              AND ${HOT_TIER_SQL}
             ORDER BY reinforcedImportance DESC,
                      COALESCE(lastReinforcedAt, createdAt) DESC,
                      id ASC
@@ -370,7 +391,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   private hydrateRawRows(rows: Record<string, unknown>[], context: string): Memory[] {
     const memories: Memory[] = [];
     for (const row of rows) {
-      for (const col of ['keywords', 'tags', 'relatedMemoryIds', 'entities']) {
+      for (const col of ['keywords', 'tags', 'relatedMemoryIds', 'entities', 'consolidatedFrom']) {
         const val = row[col];
         if (typeof val === 'string') {
           try {
@@ -416,7 +437,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       this.safeQuery(
         async () => {
           const memories = await this.findByFilter(
-            { characterId, importance: { $gte: 0.7 } },
+            { characterId, tier: 'hot', importance: { $gte: 0.7 } } as TypedQueryFilter<Memory>,
             { sort: { createdAt: -1 }, limit: highLimit }
           );
           return memories;
@@ -429,7 +450,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         async () => {
           // Medium tier: importance >= 0.3 AND < 0.7
           const allAboveLow = await this.findByFilter(
-            { characterId, importance: { $gte: 0.3 } },
+            { characterId, tier: 'hot', importance: { $gte: 0.3 } } as TypedQueryFilter<Memory>,
             { sort: { createdAt: -1 } }
           );
           // Filter out high-importance memories and apply limit
@@ -444,7 +465,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
       this.safeQuery(
         async () => {
           const memories = await this.findByFilter(
-            { characterId, importance: { $lt: 0.3 } },
+            { characterId, tier: 'hot', importance: { $lt: 0.3 } } as TypedQueryFilter<Memory>,
             { sort: { createdAt: -1 }, limit: lowLimit }
           );
           return memories;
@@ -465,12 +486,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * @returns Promise<Memory> The created memory with generated id and timestamps
    */
   async create(
-    data: Omit<Memory, 'id' | 'createdAt' | 'updatedAt'>,
+    data: MemoryCreateInput,
     options?: CreateOptions
   ): Promise<Memory> {
     return this.safeQuery(
       async () => {
-        const memory = await this._create(data, options);
+        const memory = await this._create(
+          { ...data, tier: data.tier ?? 'hot', consolidatedFrom: data.consolidatedFrom ?? [] },
+          options,
+        );
         return memory;
       },
       'Error creating memory',
@@ -669,6 +693,223 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
     );
   }
 
+  // ==========================================================================
+  // Tiers and consolidation (memory-consolidation-and-tiers.md, workstream B)
+  // ==========================================================================
+
+  /**
+   * Count a character's hot memories — the number the housekeeping cap and
+   * the consolidation watermark are measured against.
+   */
+  async countHotByCharacterId(characterId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const rows = await rawQuery<Array<{ n: number | bigint }>>(
+          `SELECT COUNT(*) AS n FROM memories WHERE characterId = ? AND ${HOT_TIER_SQL}`,
+          [characterId],
+        );
+        return Number(rows[0]?.n ?? 0);
+      },
+      'Error counting hot memories for character',
+      { characterId },
+      0,
+    );
+  }
+
+  /**
+   * Count a character's hot, non-digest memories the consolidator has never
+   * considered (`consolidatedAt IS NULL`). Drives the watermark trigger.
+   */
+  async countUnconsideredHot(characterId: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const rows = await rawQuery<Array<{ n: number | bigint }>>(
+          `SELECT COUNT(*) AS n FROM memories
+            WHERE characterId = ?
+              AND ${HOT_TIER_SQL}
+              AND consolidatedAt IS NULL
+              AND source != 'CONSOLIDATED'`,
+          [characterId],
+        );
+        return Number(rows[0]?.n ?? 0);
+      },
+      'Error counting unconsidered hot memories',
+      { characterId },
+      0,
+    );
+  }
+
+  /**
+   * Ids of a character's cold memories. The vector store reads this at load
+   * time to stamp `tier` into each entry's metadata (the index itself does not
+   * persist metadata), so recall's hot-only predicate costs nothing per search.
+   */
+  async findColdIdsByCharacterId(characterId: string): Promise<string[]> {
+    return this.safeQuery(
+      async () => {
+        const rows = await rawQuery<Array<{ id: string }>>(
+          `SELECT id FROM memories WHERE characterId = ? AND tier = 'cold'`,
+          [characterId],
+        );
+        return rows.map((r) => r.id);
+      },
+      'Error finding cold memory ids',
+      { characterId },
+      [],
+    );
+  }
+
+  /**
+   * A character's hot digests (`source = 'CONSOLIDATED'`), best first by
+   * `reinforcedImportance` then recency then id.
+   *
+   * `subject` selects the bucket: a character id → digests about that
+   * character; `'self'` → digests about the holder (`aboutCharacterId =
+   * characterId`); `'any'` → every hot digest. `limit <= 0` returns [].
+   */
+  async findHotDigests(
+    characterId: string,
+    subject: string | 'self' | 'any',
+    limit: number,
+  ): Promise<Memory[]> {
+    return this.safeQuery(
+      async () => {
+        if (limit <= 0) return [];
+        const params: unknown[] = [characterId];
+        let subjectSql = '';
+        if (subject === 'self') {
+          subjectSql = 'AND aboutCharacterId = ?';
+          params.push(characterId);
+        } else if (subject !== 'any') {
+          subjectSql = 'AND aboutCharacterId = ?';
+          params.push(subject);
+        }
+        params.push(limit);
+        const rows = await rawQuery<Record<string, unknown>[]>(
+          `SELECT * FROM memories
+            WHERE characterId = ?
+              AND source = 'CONSOLIDATED'
+              AND ${HOT_TIER_SQL}
+              ${subjectSql}
+            ORDER BY reinforcedImportance DESC,
+                     COALESCE(lastReinforcedAt, createdAt) DESC,
+                     id ASC
+            LIMIT ?`,
+          params,
+        );
+        return this.hydrateRawRows(rows, 'hot digest fetch');
+      },
+      'Error finding hot digests',
+      { characterId, subject, limit },
+      [],
+    );
+  }
+
+  /**
+   * Move a set of a character's memories to `tier`. `extra` rides along on the
+   * same write — `supersededById` / `consolidatedAt` when the consolidator
+   * sends members cold, `supersededById: null` when a demoted row is promoted
+   * back. Scoped by `characterId` so a stray id can never touch another
+   * character's store. Returns the number of rows changed (0 in the job
+   * child, where the write is buffered).
+   *
+   * Callers must keep the character's vector store metadata in step (see
+   * `CharacterVectorStore.setTier`); the parent's post-job invalidation
+   * reloads it for writes made from the child.
+   */
+  async updateTierBulk(
+    characterId: string,
+    memoryIds: string[],
+    tier: MemoryTier,
+    extra: Partial<Pick<Memory, 'supersededById' | 'consolidatedAt'>> = {},
+  ): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        if (memoryIds.length === 0) return 0;
+        const now = new Date().toISOString();
+        let changed = 0;
+        for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
+          const result = await this.updateMany(
+            { characterId, id: { $in: chunk } } as TypedQueryFilter<Memory>,
+            { tier, ...extra, updatedAt: now } as Partial<Memory>,
+          );
+          changed += typeof result === 'number' ? result : 0;
+        }
+        logger.debug('Moved memories between tiers', {
+          characterId,
+          tier,
+          requested: memoryIds.length,
+          changed,
+          supersededById: extra.supersededById ?? undefined,
+        });
+        return changed;
+      },
+      'Error moving memories between tiers',
+      { characterId, tier, count: memoryIds.length },
+      0,
+    );
+  }
+
+  /**
+   * Stamp `consolidatedAt` on rows the consolidator looked at but did not
+   * fold (cluster too small), so they are not re-scanned every run.
+   */
+  async markConsidered(characterId: string, memoryIds: string[], when: string): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        if (memoryIds.length === 0) return 0;
+        let changed = 0;
+        for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
+          const result = await this.updateMany(
+            { characterId, id: { $in: chunk } } as TypedQueryFilter<Memory>,
+            { consolidatedAt: when } as Partial<Memory>,
+          );
+          changed += typeof result === 'number' ? result : 0;
+        }
+        return changed;
+      },
+      'Error marking memories considered',
+      { characterId, count: memoryIds.length },
+      0,
+    );
+  }
+
+  /**
+   * Find the cold rows a given digest superseded.
+   */
+  async findSupersededBy(digestId: string): Promise<Memory[]> {
+    return this.safeQuery(
+      async () => this.findByFilter({ supersededById: digestId } as TypedQueryFilter<Memory>),
+      'Error finding memories superseded by digest',
+      { digestId },
+      [],
+    );
+  }
+
+  /**
+   * Ids of a character's superseded, cold, non-MANUAL memories last touched
+   * before `olderThan` — the only rows `coldRetentionDays` may delete.
+   */
+  async findExpiredColdIds(characterId: string, olderThan: string): Promise<string[]> {
+    return this.safeQuery(
+      async () => {
+        const rows = await rawQuery<Array<{ id: string }>>(
+          `SELECT id FROM memories
+            WHERE characterId = ?
+              AND tier = 'cold'
+              AND supersededById IS NOT NULL
+              AND source != 'MANUAL'
+              AND updatedAt < ?`,
+          [characterId, olderThan],
+        );
+        return rows.map((r) => r.id);
+      },
+      'Error finding expired cold memories',
+      { characterId, olderThan },
+      [],
+    );
+  }
+
   /**
    * Count memories created for a character at or after the given ISO timestamp.
    * Used by the extraction rate-limiter.
@@ -796,6 +1037,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
             FROM memories
             WHERE characterId = ?
               AND aboutCharacterId IN (${placeholders})
+              AND ${HOT_TIER_SQL}
           )
           SELECT * FROM ranked WHERE rn <= ?
         `;

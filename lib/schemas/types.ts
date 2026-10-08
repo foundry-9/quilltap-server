@@ -240,6 +240,7 @@ export type {
 // ============================================================================
 export {
   MemorySourceEnum,
+  MemoryTierEnum,
   MemorySchema,
   MemoriesFileSchema,
   WitnessedContextEnum,
@@ -247,6 +248,7 @@ export {
 
 export type {
   MemorySource,
+  MemoryTier,
   Memory,
   MemoriesFile,
   WitnessedContext,

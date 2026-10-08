@@ -12,6 +12,7 @@ import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpCha
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent, isHelpLikeChatType } from '@/lib/schemas/types'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
+import { resolveMaxTokens } from '@/lib/llm/model-context-data'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -20,6 +21,7 @@ import { postLibrarianSummaryAnnouncement, SUMMARY_CONTENT_PREFIX } from '@/lib/
 import { writeConversationSummaryToVaults, computeConversationStats } from '@/lib/file-storage/conversation-summary-vault-bridge'
 import { refreshRelevantConversationsOnFold } from '@/lib/services/commonplace-notifications/relevant-conversations-refresh'
 import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
+import { runFoldOtherPass } from '@/lib/memory/fold-other-pass'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import { applyAutoTitle } from '@/lib/chat/auto-title'
 
@@ -562,6 +564,33 @@ export async function generateContextSummary(
       })
     } catch (e) {
       logger.error('[Context Summary] Fold episode pass failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
+    }
+
+    // Fold-grain OTHER pass: what each present character took away about the
+    // others across the folded window, one candidate set per (observer,
+    // subject), each thread stated once. Runs in 'fold' and 'hybrid' modes
+    // (the pass checks), advances the chat's OTHER watermark, and inherits the
+    // Concierge policy exactly as the per-turn pass does. Best-effort.
+    try {
+      const windowMessages = turnsToFold.flatMap(t => t.messages)
+      const chatSettingsForOther = await repos.chatSettings.findByUserId(userId)
+      const otherPolicy = resolveConciergeSettings(chatSettingsForOther, chat)
+      await runFoldOtherPass({
+        chatId,
+        userId,
+        windowMessages,
+        cheapLLM,
+        cheapMaxTokens: resolveMaxTokens(connectionProfile),
+        uncensoredFallback: availableProfiles
+          ? { conciergePolicy: otherPolicy, availableProfiles }
+          : undefined,
+        timelineMode: chat.timelineMode ?? 'realtime',
+        projectId: chat.projectId ?? null,
+        inAutonomousRoom: chat.chatType === 'autonomous',
+        chatContextSummary: newSummary,
+      })
+    } catch (e) {
+      logger.error('[Context Summary] Fold OTHER pass failed:', { chatId }, e instanceof Error ? e : new Error(String(e)))
     }
 
     if (result.usage && (result.usage.promptTokens > 0 || result.usage.completionTokens > 0)) {

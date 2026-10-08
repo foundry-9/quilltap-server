@@ -34,6 +34,7 @@ quilltap memories show     <id|prefix> [--depth N] [--no-related]        # Full 
 quilltap memories tree     <id|prefix> [--depth N] [--max-nodes N]       # ASCII walk of the graph
 quilltap memories status   [--character <name|id>]                       # Per-holder rollup
 quilltap memories validate [--character <name|id>] [--list]              # Read-only health check
+quilltap memories consolidate --character <name|id> [--dry-run] [--max N] [--threshold X]  # Ask the running server to consolidate
 ```
 
 All verbs accept `--json` for piping, `--limit N` (default 50), and the shared filter vocabulary described below.
@@ -46,7 +47,8 @@ The same filter flags apply to `ls`, `find`, `grep`, and (where they make sense)
 | --- | --- |
 | `--character <name\|id\|all>` | The *holder* of the memory. Default: `all`. |
 | `--about <name\|id\|self\|none>` | The *subject*. `self` shorthand for self-referential memories; `none` for legacy memories whose `aboutCharacterId` is null. |
-| `--source AUTO\|MANUAL` | Auto-extracted vs. manually entered. |
+| `--source AUTO\|MANUAL\|CONSOLIDATED` | Auto-extracted, manually entered, or a digest written by [Memory Consolidation](memory-consolidation.md). |
+| `--tier hot\|cold` | Active (`hot`) memories only, or archived (`cold`) ones. Without it, both. Archived rows are marked with `*` in the `src` column. |
 | `--chat <id\|title\|none>` | The source chat. `none` restricts to manual memories. |
 | `--project <id\|name>` | Project context. |
 | `--since <date>` / `--until <date>` | ISO date floor / ceiling on `createdAt`. |
@@ -175,7 +177,7 @@ quilltap memories status --character Ariadne      # one holder
 quilltap memories status --json                   # structured
 ```
 
-Each holder block reports total counts, the AUTO/MANUAL split, the about-distribution (self-referential vs. inter-character vs. legacy-null), embedding presence, several graph statistics (nodes with links, isolated nodes, average and maximum degree), and a top-five list ranked by reinforced importance.
+Each holder block reports total counts, the AUTO/MANUAL split, the active / archived / digest split, the about-distribution (self-referential vs. inter-character vs. legacy-null), embedding presence, several graph statistics (nodes with links, isolated nodes, average and maximum degree), and a top-five list ranked by reinforced importance.
 
 The `dangling edges` count is worth its weight. Since `relatedMemoryIds` is a JSON array of UUIDs rather than a foreign key constraint, a deleted memory could once leave stale pointers in its former neighbours. The deletion chokepoint introduced in version 4.5 scrubs neighbours' arrays whenever a memory is removed, and the `repair-dangling-related-memory-edges` migration swept up the historical drift. The `dangling edges` value should now sit at zero forever; if it climbs, run `validate` (see below) for the offending IDs.
 
@@ -194,6 +196,16 @@ A dangling edge is a UUID in `relatedMemoryIds` that no longer resolves to a row
 
 The verb intentionally does not offer a `--fix` flag. Repair runs through the migration system so it is recorded, idempotent, and ordered with the rest of the schema evolution. If `validate` ever surfaces a non-zero count after the v4.5 chokepoint shipped, the right response is to identify the new leaking deletion path, plug it at the source, and write a new repair migration — not to bolt another knob onto the CLI.
 
+## `consolidate` — Fold Clusters into Digests
+
+```bash
+quilltap memories consolidate --instance Friday --character Friday --dry-run           # show what would change
+quilltap memories consolidate --instance Friday --character Friday --dry-run --max 20 --threshold 0.75
+quilltap memories consolidate --instance Friday --character Friday                     # do it (background job)
+```
+
+Unlike its read-only siblings, `consolidate` does real work, and so it does not touch the database itself: it asks the **running** Quilltap server (on `--port`, default 3000) to do it, exactly as the *Consolidate now* buttons in **Settings → Memory → Consolidation** do. A `--dry-run` writes nothing and prints each proposed cluster: the notes it would fold, the digest it would write, the notes kept standalone, and any contradictions. `--max` caps the number of clusters (default 10, at most 40 for a dry run) and `--threshold` overrides the similarity a note needs to join a cluster, for a dry run only. Without `--dry-run`, the server queues a consolidation job and the CLI prints its id. See [Memory Consolidation](memory-consolidation.md).
+
 ## Common Flags
 
 | Flag | Purpose |
@@ -206,7 +218,7 @@ The verb intentionally does not offer a `--fix` flag. Repair runs through the mi
 | `--full-titles` | Don't truncate chat titles in column output |
 | `-h, --help` | Per-subcommand help text |
 
-All `memories` verbs are read-only. They open the main encrypted database (`quilltap.db`) directly and never write to it.
+All `memories` verbs except `consolidate` are read-only. They open the main encrypted database (`quilltap.db`) directly and never write to it; `consolidate` goes through the running server instead.
 
 ## See Also
 

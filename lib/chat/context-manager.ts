@@ -247,6 +247,8 @@ export {
 // character's block. Halved from 10 so the freed budget goes to the relevance
 // half below.
 const INTER_CHAR_PER_CHARACTER_LIMIT = 5
+/** Hot digests about each other character fetched ahead of the partition query. */
+const INTER_CHAR_DIGEST_LIMIT = 2
 // Per-character cap on the relevance half: memories the responding character
 // holds about a present character that score highly for the current moment.
 const INTER_CHAR_RELEVANCE_PER_CHARACTER_LIMIT = 5
@@ -1398,6 +1400,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
       const frozenArchive = await getOrComputeFrozenArchive(character.id, chat.id, compactionGen, {
         size: ordinarySizing.archiveSize,
+        // Digests about the people in the room ride in the archive.
+        presentCharacterIds: [...(participantCharacters?.keys() ?? [])].filter(id => id !== character.id),
       })
       const archiveIds = new Set(frozenArchive.map(m => m.id))
       let dynamicHeadResults: SemanticSearchResult[] = []
@@ -1776,11 +1780,24 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
 
       if (otherCharacterIds.length > 0 && interCharacterBudget > 0) {
         // Importance/recency half — direct DB query, top-N per other character.
-        const interCharacterMemories = await repos.memories.findByCharacterAboutCharacters(
+        // Hot digests about each other character lead (consolidation spec §5),
+        // then the ordinary partition query; both are hot-only, deduped by id.
+        const digestLists = await Promise.all(
+          otherCharacterIds.map(otherId =>
+            repos.memories.findHotDigests(character.id!, otherId, INTER_CHAR_DIGEST_LIMIT),
+          ),
+        )
+        const partitionMemories = await repos.memories.findByCharacterAboutCharacters(
           character.id,
           otherCharacterIds,
           INTER_CHAR_PER_CHARACTER_LIMIT,
         )
+        const interSeen = new Set<string>()
+        const interCharacterMemories = [...digestLists.flat(), ...partitionMemories].filter(m => {
+          if (interSeen.has(m.id)) return false
+          interSeen.add(m.id)
+          return true
+        })
 
         // Relevance half — semantic search per other character filtered by
         // aboutCharacterId, ranking by relevance to the current moment. Skipped

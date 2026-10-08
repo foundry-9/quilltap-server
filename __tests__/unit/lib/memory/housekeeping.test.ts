@@ -18,6 +18,10 @@ jest.mock('@/lib/memory/memory-gate', () => ({
   __esModule: true,
   deleteMemoriesWithUnlinkBatch: jest.fn(),
 }))
+jest.mock('@/lib/instance-settings', () => ({
+  __esModule: true,
+  getMemoryConsolidationSettings: jest.fn(async () => ({ coldRetentionDays: null })),
+}))
 
 import type { Memory } from '@/lib/schemas/types'
 
@@ -59,6 +63,8 @@ describe('housekeeping', () => {
     findByCharacterId: jest.Mock
     findByCharacterIdInBatches: jest.Mock
     bulkDelete: jest.Mock
+    updateTierBulk: jest.Mock
+    findExpiredColdIds: jest.Mock
   }
 
   beforeEach(() => {
@@ -77,6 +83,8 @@ describe('housekeeping', () => {
       findByCharacterId: jest.fn(),
       findByCharacterIdInBatches: jest.fn(),
       bulkDelete: jest.fn(),
+      updateTierBulk: jest.fn(),
+      findExpiredColdIds: jest.fn().mockResolvedValue([]),
     }
     // Bridge the legacy mock so tests can keep calling
     // `findByCharacterId.mockResolvedValue(memories)` and have the batched
@@ -97,6 +105,7 @@ describe('housekeeping', () => {
       addVector: jest.fn(),
       updateVector: jest.fn(),
       removeVector: jest.fn(),
+      setTier: jest.fn(),
       hasVector: jest.fn().mockReturnValue(false),
       save: jest.fn(),
     })
@@ -177,15 +186,16 @@ describe('housekeeping', () => {
 
       const result = await runHousekeeping('char-1')
 
-      expect(result.deleted).toBe(1)
-      expect(result.deletedIds).toContain('reinforced-but-stale')
+      expect(result.demoted).toBe(1)
+      expect(result.demotedIds).toContain('reinforced-but-stale')
+      expect(result.deleted).toBe(0)
     })
 
-    it('lets the cap pass delete old high-importance memories without usage evidence', async () => {
+    it('lets the cap pass demote old high-importance memories without usage evidence', async () => {
       // Under the previous gate, importance >= 0.7 was permanent immunity and
       // the cap pass couldn't touch these rows. Under the blended score, a
       // 400-day-old 0.8-importance memory with reinforcementCount=1 and no
-      // access has a protection score below 0.5, so the cap pass can delete
+      // access has a protection score below 0.5, so the cap pass can demote
       // it when over the limit.
       const ancient = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString()
       const staleHigh = Array.from({ length: 10 }, (_, i) =>
@@ -203,7 +213,7 @@ describe('housekeeping', () => {
       // Tight cap so the third pass kicks in
       const result = await runHousekeeping('char-1', { maxMemories: 3 })
 
-      expect(result.deleted).toBeGreaterThan(0)
+      expect(result.demoted).toBeGreaterThan(0)
     })
   })
 

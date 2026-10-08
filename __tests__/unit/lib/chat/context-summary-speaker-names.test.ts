@@ -71,6 +71,10 @@ jest.mock('@/lib/services/commonplace-notifications/relevant-conversations-refre
   refreshRelevantConversationsOnFold: jest.fn(),
 }))
 
+jest.mock('@/lib/memory/fold-other-pass', () => ({
+  runFoldOtherPass: jest.fn(async () => ({})),
+}))
+
 jest.mock('@/lib/memory/fold-episode-pass', () => ({
   runFoldEpisodePass: jest.fn(),
 }))

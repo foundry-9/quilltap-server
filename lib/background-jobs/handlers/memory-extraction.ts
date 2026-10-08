@@ -11,6 +11,7 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
+import { runFoldOtherCatchup } from '@/lib/memory/fold-other-pass';
 import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
 import {
   buildTurnTranscript,
@@ -38,6 +39,36 @@ export async function handleMemoryExtraction(job: BackgroundJob): Promise<void> 
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
   if (!chatSettings) {
     throw new Error(`Chat settings not found for user: ${job.userId}`);
+  }
+
+  // Idle catch-up for the fold-grain OTHER pass (enqueued by the daily
+  // maintenance sweep): not a turn at all, so it never builds a transcript.
+  if (payload.foldOtherCatchup) {
+    const availableProfiles = await repos.connections.findByUserId(job.userId);
+    const catchup = await runFoldOtherCatchup({
+      chatId: payload.chatId,
+      userId: job.userId,
+      connectionProfile,
+      cheapLLMSettings: chatSettings.cheapLLMSettings,
+      availableProfiles,
+      ignoreIdle: payload.foldOtherIgnoreIdle === true,
+    });
+    logger.info('[MemoryExtraction] Fold-grain OTHER catch-up processed', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      skippedReason: catchup.skippedReason ?? null,
+      observers: catchup.observers,
+      created: catchup.memoriesWritten,
+      reinforced: catchup.memoriesReinforced,
+      watermarkAdvancedTo: catchup.watermarkAdvancedTo,
+    });
+    // A pass lost to a timeout never happened and the watermark did not move:
+    // fail the job so it retries (bug 107), rather than reporting a clean
+    // finish over the hole.
+    if (catchup.passesLostToTimeout > 0) {
+      throw new CheapLLMTaskLostError('fold-other-catchup', `${catchup.passesLostToTimeout} pass(es) timed out`);
+    }
+    return;
   }
 
   const chat = await repos.chats.findById(payload.chatId);
