@@ -280,11 +280,12 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
     expect(Number.isFinite(deleted)).toBe(true)
   })
 
-  it('leaves skipScrubIds neighbours alone (a merge survivor already rewrote its links)', async () => {
+  it('scrubs a merge survivor from its new links (currentLinks), not the stale row', async () => {
     dbMock.rawQuery.mockImplementation(async (sql: string) => {
       if (sql.includes('relatedMemoryIds IS NOT NULL')) {
+        // The database still holds the survivor's pre-merge row.
         return [
-          { id: 'survivor', characterId: 'char-1', relatedMemoryIds: '["a","n1"]' },
+          { id: 'survivor', characterId: 'char-1', relatedMemoryIds: '["a"]' },
           { id: 'other', characterId: 'char-1', relatedMemoryIds: '["a"]' },
         ]
       }
@@ -293,10 +294,14 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
     const bulkDelete = jest.fn(async () => 1)
     factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete } })
 
-    await gate.deleteMemoriesWithUnlinkBatch(['a'], { skipScrubIds: new Set(['survivor']) })
+    await gate.deleteMemoriesWithUnlinkBatch(['a'], {
+      currentLinks: new Map([['survivor', { characterId: 'char-1', relatedMemoryIds: ['a', 'n1', 'kept'] }]]),
+    })
 
-    const scrubbed = updateForCharacter.mock.calls.map(c => c[1])
-    expect(scrubbed).toEqual(['other'])
+    const writes = Object.fromEntries(updateForCharacter.mock.calls.map(c => [c[1], (c[2] as Partial<Memory>).relatedMemoryIds]))
+    expect(writes.other).toEqual([])
+    // Union kept (n1, and a kept loser); only the deleted id is removed.
+    expect(writes.survivor).toEqual(['n1', 'kept'])
   })
 
   it('trusts the repository count in the parent', async () => {

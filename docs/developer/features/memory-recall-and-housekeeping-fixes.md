@@ -239,14 +239,16 @@ What shipped, and where it differs from or sharpens the text above.
 - **F9** — `lib/memory/memory-merge.ts` (`planMemoryMerge` pure, `applyMemoryMerge` writes and
   re-embeds). Both housekeeping pass 2 and `deduplicateCharacterMemories` call it. Survivors
   are patched first and only the losers of a successful fold are deleted (a failed fold keeps its
-  losers — nothing is discarded unabsorbed). The delete gets the patched survivors as
-  `skipScrubIds`: in the child the neighbour scrub is computed from the pre-merge row and would
-  otherwise overwrite the unioned links.
-- **Not done: atomic reinforcement increments.** F1 (like the existing REINFORCE path) writes an
-  absolute count computed from the gate's snapshot, so two extraction jobs absorbing the same row
-  at the same moment can lose one observation. Left as is pending a decision; see PR 83.
+  losers — nothing is discarded unabsorbed). A plan's links exclude only its own group; the
+  delete gets each patched survivor's new list as `currentLinks` and scrubs only what is actually
+  deleted from it (in the child the database still holds the pre-merge row, so scrubbing from the
+  row would overwrite the union). Housekeeping's cap pass never deletes a merge survivor.
   `lastReinforcedAt` takes the latest of the group. Test:
   `__tests__/unit/lib/memory/housekeeping-merge-fold.test.ts`.
+- **Not done: atomic reinforcement increments.** F1 (like the existing REINFORCE path) writes an
+  absolute count computed from the gate's snapshot, so two extraction jobs absorbing the same row
+  at the same moment can lose one observation. Filed as
+  [bug 182](../bugs/bug-182-reinforcement-count-race.md).
 
 ## Not in scope here
 

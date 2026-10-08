@@ -3,8 +3,9 @@
  * (memory-recall-and-housekeeping-fixes F9), and the sweep invalidates the
  * character's frozen archives (F5).
  *
- * - the survivor is patched BEFORE anything is deleted, and the delete is told
- *   to skip scrubbing it (its links already exclude the doomed ids);
+ * - the survivor is patched BEFORE anything is deleted, and the delete scrubs
+ *   it from its new link list (`currentLinks`), not the pre-merge row;
+ * - the cap pass never deletes a merge target;
  * - a fold that fails keeps its losers instead of deleting them;
  * - all of a survivor's losers fold in through one merge;
  * - the doomed set is excluded from the survivor's links.
@@ -20,15 +21,15 @@ jest.mock('@/lib/memory/memory-gate', () => {
   return {
     __esModule: true,
     occasionsAreDistinct: actual.occasionsAreDistinct,
-    deleteMemoriesWithUnlinkBatch: jest.fn(async (ids: string[], options?: { skipScrubIds?: Set<string> }) => {
+    deleteMemoriesWithUnlinkBatch: jest.fn(async (ids: string[], options?: { currentLinks?: Map<string, unknown> }) => {
       order.push('delete')
-      deleteCalls.push({ ids, skip: Array.from(options?.skipScrubIds ?? []) })
+      deleteCalls.push({ ids, skip: Array.from(options?.currentLinks?.keys() ?? []) })
       return ids.length
     }),
   }
 })
 
-const planMemoryMerge = jest.fn((survivor: { id: string }, losers: Array<{ id: string }>, exclude: Iterable<string>) => ({
+const planMemoryMerge = jest.fn((survivor: { id: string }, losers: Array<{ id: string }>, exclude: Iterable<string> = []) => ({
   survivorId: survivor.id,
   patch: { reinforcementCount: 1 + losers.length },
   mergedDetails: [],
@@ -123,7 +124,7 @@ describe('housekeeping — merge fold', () => {
     })
   })
 
-  it('folds every loser into its survivor first, then deletes without re-scrubbing it', async () => {
+  it('folds every loser into its survivor first, then deletes, scrubbing the survivor from its new links', async () => {
     const result = await runHousekeeping('char-1', {
       userId: 'user-1',
       mergeSimilar: true,
@@ -139,7 +140,7 @@ describe('housekeeping — merge fold', () => {
     const [survivor, losers, exclude] = planMemoryMerge.mock.calls[0] as [Memory, Memory[], Iterable<string>]
     expect(survivor.id).toBe('a')
     expect(losers.map(l => l.id).sort()).toEqual(['b', 'c'])
-    expect(new Set(exclude)).toEqual(new Set(['b', 'c']))
+    expect(Array.from(exclude ?? [])).toEqual([])
     expect(applyMemoryMerge).toHaveBeenCalledWith(survivor, expect.anything(), { userId: 'user-1', embeddingProfileId: undefined })
     expect(invalidateFrozenArchive).toHaveBeenCalledWith('char-1')
   })
@@ -162,6 +163,31 @@ describe('housekeeping — merge fold', () => {
     expect(result.deletedIds).toEqual([])
     expect(deleteCalls).toHaveLength(0)
     expect(result.details.filter(d => d.action === 'merged')).toHaveLength(0)
+  })
+
+  it('never cuts a merge survivor in the cap pass', async () => {
+    // Cap of 1 with all three unprotected: b and c are merge losers already,
+    // and a is their survivor — the cap pass must not delete it.
+    const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock<any> }
+    const auto = (id: string, importance: number) => ({ ...makeMemory(id, importance), source: 'AUTO' }) as Memory
+    const memories = [auto('a', 0.9), auto('b', 0.8), auto('c', 0.7)]
+    repositoriesMock.getRepositories.mockReturnValue({
+      memories: {
+        findByCharacterIdInBatches: async function* () {
+          yield memories
+        },
+      },
+    })
+
+    await runHousekeeping('char-1', {
+      userId: 'user-1',
+      mergeSimilar: true,
+      mergeThreshold: 0.9,
+      maxMemories: 0,
+    })
+
+    expect(deleteCalls[0].ids).not.toContain('a')
+    expect(applyMemoryMerge).toHaveBeenCalledTimes(1)
   })
 
   it('a dry run merges nothing and leaves the archive cache alone', async () => {

@@ -61,12 +61,15 @@ Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
   survivor: capped `[+]` details, summed `reinforcementCount`, unioned `relatedMemoryIds` (minus the
   deleted set), earliest `occurredAt`, recomputed `reinforcedImportance`, re-embed on content change.
   The survivor is patched before anything is deleted, and only the losers whose fold succeeded
-  are deleted; a failed fold keeps its losers. `deleteMemoriesWithUnlinkBatch` takes a new
-  `skipScrubIds` option so the patched survivors are not re-scrubbed (in the job child the scrub
-  is computed from the pre-merge row and would overwrite the union).
+  are deleted; a failed fold keeps its losers. A plan's links exclude only its own group;
+  `deleteMemoriesWithUnlinkBatch` takes a new `currentLinks` option and scrubs the patched
+  survivors from their new link lists instead of the database row (in the job child that row is
+  still the pre-merge one). Links to kept memories survive. Housekeeping's cap pass never deletes a
+  merge survivor.
 - Reinforcement and merges no longer treat a buffered child write (`undefined`) as "update failed":
   new `patchMemory` returns the locally patched row, so a reinforcement with novel details in the
   extraction job now re-embeds. Re-embedding is factored into `reembedMemory`.
+- Filed bug 182 (open, Low): concurrent reinforcements of one memory can lose a count.
 - Help: `help/memory-recall-relevance.md` ("How Much the Book Whispers"),
   `help/memory-housekeeping.md`.
 

@@ -17,11 +17,12 @@
  *
  * Order matters: callers apply the merge BEFORE deleting the losers, and
  * delete only the losers whose fold succeeded — a failed fold keeps its
- * losers rather than discarding what the survivor never absorbed. The delete
- * (`deleteMemoriesWithUnlinkBatch`) is passed the patched survivors as
- * `skipScrubIds`: their links already exclude every doomed id, and in the job
- * child the scrub is computed from the pre-merge row, so letting it rewrite a
- * survivor would overwrite the union.
+ * losers rather than discarding what the survivor never absorbed. A plan's
+ * links exclude only its own group; callers pass each patched survivor's new
+ * list to `deleteMemoriesWithUnlinkBatch` as `currentLinks`, which scrubs the
+ * ids actually deleted from that fresh list (in the job child the database
+ * still holds the pre-merge row, and scrubbing from it would overwrite the
+ * union). Links to anything that is kept survive.
  */
 
 import type { Memory } from '@/lib/schemas/types'

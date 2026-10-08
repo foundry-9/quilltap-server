@@ -294,13 +294,15 @@ export async function deduplicateCharacterMemories(
     // reinforcement, links, earliest occurredAt; re-embedded when the content
     // changed. A cluster whose fold fails keeps its discards rather than
     // deleting what the survivor never absorbed.
-    const removeSet = new Set(allRemoveIds)
-    const patchedSurvivors = new Set<string>()
+    // Links are unioned minus only the cluster itself; the delete then scrubs
+    // whatever is actually removed (from these fresh lists, not the database
+    // row), so links to a failed cluster's kept discards survive.
+    const survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
     const keptIds = new Set<string>()
     for (const { survivor, losers } of allMerges) {
       let applied = null
       try {
-        const plan = planMemoryMerge(survivor, losers, removeSet)
+        const plan = planMemoryMerge(survivor, losers)
         applied = await applyMemoryMerge(survivor, plan, { userId })
       } catch (error) {
         logger.warn('[MemoryDedup] Failed to fold discards into survivor', {
@@ -311,7 +313,10 @@ export async function deduplicateCharacterMemories(
         })
       }
       if (applied) {
-        patchedSurvivors.add(survivor.id)
+        survivorLinks.set(survivor.id, {
+          characterId: applied.characterId,
+          relatedMemoryIds: applied.relatedMemoryIds ?? [],
+        })
       } else {
         for (const loser of losers) keptIds.add(loser.id)
       }
@@ -326,10 +331,9 @@ export async function deduplicateCharacterMemories(
     }
 
     // Bulk delete discarded memories through the chokepoint so neighbours'
-    // relatedMemoryIds get scrubbed. Patched survivors already carry links
-    // without the doomed ids, so the scrub leaves them alone.
+    // relatedMemoryIds get scrubbed, the survivors from their new link lists.
     const deletedCount = await deleteMemoriesWithUnlinkBatch(removeIds, {
-      skipScrubIds: patchedSurvivors,
+      currentLinks: survivorLinks,
     })
     logger.info('[MemoryDedup] Bulk deleted memories', {
       context: 'memory-dedup.deduplicateCharacterMemories',

@@ -372,6 +372,7 @@ export async function runHousekeeping(
   // skip every candidate and score + sort 19k entries for nothing. Do a
   // cheap pre-check first: when no unprotected-and-undeleted memory exists,
   // skip the entire scoring pass.
+  const mergeTargetIds = new Set(memoriesToMerge.map(m => m.targetId))
   const remainingAfterDeletion = memories.filter(m => !deleteSet.has(m.id))
   const hasDeletionCandidate =
     remainingAfterDeletion.length > opts.maxMemories &&
@@ -392,6 +393,9 @@ export async function runHousekeeping(
       const { memory } = scoredMemories[i]
 
       if (deleteSet.has(memory.id)) continue
+      // A merge survivor is about to absorb its losers; deleting it would
+      // take their details with it. Spare it and cut the next one instead.
+      if (mergeTargetIds.has(memory.id)) continue
       // Reuse protection result from pass 1 instead of recomputing.
       const isProtected = protectedMap.get(memory.id) ?? isProtectedMemory(memory, now)
       if (isProtected) continue
@@ -413,16 +417,16 @@ export async function runHousekeeping(
   }
 
   let mergesApplied = memoriesToMerge
-  let patchedSurvivors = new Set<string>()
+  let survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
 
   if (!opts.dryRun && memoriesToMerge.length > 0) {
     // Fold each merged-away row into its survivor BEFORE anything is deleted,
-    // so a failed fold costs nothing: its losers simply stay. Survivors that
-    // were patched already carry links without the doomed ids, so the delete
-    // below skips scrubbing them — in the job child that scrub is computed
-    // from the pre-merge row and would otherwise overwrite the union.
+    // so a failed fold costs nothing: its losers simply stay. The delete below
+    // scrubs the patched survivors from their new link lists rather than the
+    // database row — in the job child that row is still the pre-merge one,
+    // and scrubbing from it would overwrite the union.
     const fold = await foldMergedMemories(memories, memoriesToMerge, deleteSet, opts)
-    patchedSurvivors = fold.patchedSurvivors
+    survivorLinks = fold.survivorLinks
     if (fold.keptLoserIds.size > 0) {
       for (const id of fold.keptLoserIds) deleteSet.delete(id)
       mergesApplied = memoriesToMerge.filter(m => !fold.keptLoserIds.has(m.sourceId))
@@ -443,7 +447,7 @@ export async function runHousekeeping(
 
   if (!opts.dryRun && deletedIds.length > 0) {
     const deletedCount = await deleteMemoriesWithUnlinkBatch(deletedIds, {
-      skipScrubIds: patchedSurvivors,
+      currentLinks: survivorLinks,
     })
 
     try {
@@ -483,15 +487,18 @@ export async function runHousekeeping(
  * Apply pass 2's merges: group every merged-away row under its survivor and
  * fold each group in through the shared merge. Pass 2 walks best-first, so a
  * survivor should never later become a loser; the chain walk below is a guard
- * in case that ordering ever changes. Groups whose survivor was itself
- * deleted (by the cap pass) are skipped; there is nothing left to fold into.
+ * in case that ordering ever changes. The cap pass spares merge targets; if a
+ * survivor is nonetheless gone, its losers are kept rather than deleted.
  */
 async function foldMergedMemories(
   memories: Memory[],
   merges: { sourceId: string; targetId: string }[],
   deleteSet: Set<string>,
   opts: { userId?: string; embeddingProfileId?: string },
-): Promise<{ patchedSurvivors: Set<string>; keptLoserIds: Set<string> }> {
+): Promise<{
+  survivorLinks: Map<string, { characterId: string; relatedMemoryIds: string[] }>
+  keptLoserIds: Set<string>
+}> {
   const byId = new Map(memories.map(m => [m.id, m]))
   const targetOf = new Map(merges.map(m => [m.sourceId, m.targetId]))
 
@@ -515,19 +522,25 @@ async function foldMergedMemories(
     groups.set(survivorId, list)
   }
 
-  const patchedSurvivors = new Set<string>()
+  const survivorLinks = new Map<string, { characterId: string; relatedMemoryIds: string[] }>()
   const keptLoserIds = new Set<string>()
   let folded = 0
   let skipped = 0
   for (const [survivorId, losers] of groups) {
     const survivor = byId.get(survivorId)
     if (!survivor || deleteSet.has(survivorId)) {
+      // The cap pass spares merge targets, so this should not happen; if it
+      // does, keep the losers rather than delete what nothing absorbed.
+      for (const loser of losers) keptLoserIds.add(loser.id)
       skipped++
       continue
     }
     let applied: Memory | null = null
     try {
-      const plan = planMemoryMerge(survivor, losers, deleteSet)
+      // Links are unioned minus only this group; the delete then scrubs
+      // whatever else is actually removed, so links to anything that is kept
+      // (a failed group's losers) survive.
+      const plan = planMemoryMerge(survivor, losers)
       applied = await applyMemoryMerge(survivor, plan, {
         userId: opts.userId,
         embeddingProfileId: opts.embeddingProfileId,
@@ -540,7 +553,10 @@ async function foldMergedMemories(
       })
     }
     if (applied) {
-      patchedSurvivors.add(survivorId)
+      survivorLinks.set(survivorId, {
+        characterId: applied.characterId,
+        relatedMemoryIds: applied.relatedMemoryIds ?? [],
+      })
       folded++
     } else {
       // Keep the losers: deleting them now would discard what the survivor
@@ -556,7 +572,7 @@ async function foldMergedMemories(
     skippedDeletedSurvivor: skipped,
     keptAfterFailedFold: keptLoserIds.size,
   })
-  return { patchedSurvivors, keptLoserIds }
+  return { survivorLinks, keptLoserIds }
 }
 
 /**

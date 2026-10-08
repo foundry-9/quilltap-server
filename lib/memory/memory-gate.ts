@@ -687,12 +687,13 @@ export async function deleteMemoriesWithUnlinkBatch(
   memoryIds: string[],
   options: {
     /**
-     * Neighbours whose links the caller has ALREADY rewritten without the
-     * doomed ids (a merge survivor). Skipping them keeps this scrub — which in
-     * the job child is computed from the pre-write row — from overwriting the
-     * caller's fresher list.
+     * Rows whose links the caller has just rewritten in this same operation
+     * (a merge survivor), keyed by id. The scrub reads these lists instead of
+     * the database row: in the job child the database still holds the
+     * pre-write row, and scrubbing from it would overwrite the caller's
+     * fresher list.
      */
-    skipScrubIds?: ReadonlySet<string>
+    currentLinks?: ReadonlyMap<string, { characterId: string; relatedMemoryIds: string[] }>
   } = {},
 ): Promise<number> {
   if (memoryIds.length === 0) return 0
@@ -704,17 +705,25 @@ export async function deleteMemoriesWithUnlinkBatch(
   // One-pass scan of every row with a non-empty links array. The OR-of-LIKEs
   // approach grows ugly past ~50 IDs and the in-JS filter keeps the query
   // shape stable regardless of batch size.
-  const candidates = await rawQuery<NeighbourRow[]>(
+  const dbCandidates = await rawQuery<NeighbourRow[]>(
     "SELECT id, characterId, relatedMemoryIds FROM memories WHERE relatedMemoryIds IS NOT NULL AND relatedMemoryIds != '[]'",
     []
   )
+  const overrides = options.currentLinks
+  const candidates: Array<{ id: string; characterId: string; links: string[] }> = dbCandidates
+    .filter(row => !overrides?.has(row.id))
+    .map(row => ({ id: row.id, characterId: row.characterId, links: parseRelatedIds(row.relatedMemoryIds) }))
+  if (overrides) {
+    for (const [id, entry] of overrides) {
+      candidates.push({ id, characterId: entry.characterId, links: entry.relatedMemoryIds })
+    }
+  }
 
   const charactersAffected = new Set<string>()
   let neighboursTouched = 0
   for (const candidate of candidates) {
     if (doomedSet.has(candidate.id)) continue
-    if (options.skipScrubIds?.has(candidate.id)) continue
-    const current = parseRelatedIds(candidate.relatedMemoryIds)
+    const current = candidate.links
     if (current.length === 0) continue
     const filtered = current.filter(id => !doomedSet.has(id))
     if (filtered.length === current.length) continue
