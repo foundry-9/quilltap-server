@@ -18,7 +18,9 @@
   recall replays show stacked boosts (up to ×2.43, mostly the fresh-event boost) putting
   cosine-0.31–0.40 memories ahead of the turn's best matches (0.51–0.64). Proposes gating boosts on
   relevance, capping the stacked boost, lowering the fresh boost, choosing entity anchors by
-  specificity, closing a floor leak, and `tuning` overrides for `recall-replay`.
+  specificity, closing a floor leak, and `tuning` overrides for `recall-replay`. A third replay
+  (a retrospective turn with uniform boosts and no fresh boost) is the control: its head is good.
+  It adds reserving head slots for out-of-window background when the time window is a hard filter.
 
 #### F2 result recorded: anchor line does not suppress reinforcement
 

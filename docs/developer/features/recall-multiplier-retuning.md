@@ -21,7 +21,8 @@ constants can be tuned against real turns without a code change per attempt.
 
 ## 1. Evidence (recall-replay, Friday, 2026-10-08)
 
-Both runs: `quilltap recall-replay <chatId> --memory-budget 8000` (head 15).
+All runs: `quilltap recall-replay <chatId> --memory-budget 8000` (head 15; 30 on
+a retrospective turn).
 
 ### Turn A — chat `6cc92fb7…`, turn 11/11
 
@@ -57,6 +58,29 @@ and one more wardrobe memory.
 - A row at cosine **0.281** appears in the new path, below
   `DEFAULT_MIN_COSINE_NEURAL` (0.30).
 
+### Turn C — chat `0826c0f8…`, turn 21/21 (the control)
+
+> *Query:* They are untangling the confusion over the four planned weddings and
+> who gets which dress … *Signals:* retrospective, window 2026-10-06 → 2026-10-06
+
+This head is **good**: 30 entries, nearly all from this conversation and on
+topic, led by the highest cosines (0.52–0.62: "split four weddings, set order",
+"apologized for stale wedding plan", "asked for wedding name and date"). Two
+things make it different from A and B:
+
+- **The multipliers are uniform.** Almost every row carries the same ×1.52
+  (narrow × context × present, or the retrospective equivalents), so the ranking
+  falls back to blend order — that is, to relevance.
+- **No fresh boost fires.** `freshEventMultiplier` skips memories from the
+  current chat by design, and the window filter kept only today's memories,
+  which here are this chat's.
+
+It also shows a cost of the hard window. With enough same-day hits the window
+is a hard filter, and older on-topic background is gone: "declared desire for
+all four" (09-22, cosine 0.484) and "honeymoon deferred to all four" (09-21,
+0.494) were in the old path and are absent from the new one, while same-day rows
+down to cosine 0.317 fill the head.
+
 ### What the numbers say
 
 - **Cosine spread vs. multiplier spread.** Candidates span roughly 0.30–0.65
@@ -64,12 +88,19 @@ and one more wardrobe memory.
   0.25. The multipliers then range from ~1.0 to 2.43 — a ×2.4 swing applied on
   top. A 0.35-cosine memory with every tag beats a 0.64-cosine memory with most
   of them.
-- **The fresh-event boost is the tie-breaker that isn't.** ×1.6 (24 h) / ×1.35
-  (48 h) is applied to anything recent, whatever it is about. On a chat where
-  most of yesterday's memories are about one subject, that subject wins every
-  turn. Its stated purpose — "what just happened holds ground against evergreen
-  present-tagged memories" — is right for a turn that is *about* what just
-  happened, and wrong for every other turn.
+- **The fresh-event boost is the tie-breaker that isn't, and it boosts *other
+  conversations*.** ×1.6 (24 h) / ×1.35 (48 h) is applied to anything recent,
+  whatever it is about — and because the current chat is excluded, everything it
+  lifts comes from a different conversation. On A the boosted rows are from the
+  wardrobe chat; on B from the Marie chat. Turn C, where it never fires, has the
+  best head of the three. Its stated purpose — "what just happened holds ground
+  against evergreen present-tagged memories" — is right for a turn that is
+  *about* something that happened elsewhere yesterday, and wrong for every other
+  turn.
+- **Uniform boosts are harmless; uneven boosts are not.** On C the boost is the
+  same for almost every row, so it changes nothing. The damage on A and B comes
+  from rows carrying *one more* boost than their neighbours (fresh), which is
+  worth more than a large cosine gap.
 - **The tags stack freely.** narrow 1.15 × context 1.10 × present 1.20 ×
   fresh 1.60 = 2.43, under a `MULTIPLIER_CLAMP.max` of 4. No individual tag is
   large; the product is.
@@ -130,7 +161,9 @@ With R1 in place the fresh boost only acts on relevant memories, which is its
 intent. Lower it to **×1.3 (24 h) / ×1.15 (48 h)** so it breaks ties among
 relevant memories rather than overriding the ranking. Keep it unconditional (not
 gated on the retrospective flag) — R1 already supplies the condition that
-matters.
+matters. Keep the current-chat exclusion: Turn C shows the head is better
+without the boost, and every row it would lift there is already in the
+transcript.
 
 ### R4. Choose entity anchors by how specific they are
 
@@ -154,21 +187,35 @@ probes, entity hits or related-expansion, which deliberately skips `minScore`)
 and make the intended exemption explicit: expansion may stay exempt by design,
 but nothing else should be.
 
-### R6. Tuning in the harness, not in code
+### R6. Keep room for background when the time window is hard
+
+When the window filter is hard (enough in-window hits survive), reserve up to a
+third of the head for **out-of-window** candidates that clear the R1 gate at full
+strength (cosine ≥ the gate). They are ranked among themselves exactly as today
+and fill their slots only if they qualify; unused slots go back to in-window
+rows. On Turn C this would bring back the 09-21 / 09-22 wedding commitments
+(0.48–0.49 cosine, gate 0.472) in place of the weakest same-day rows. Soft-window
+turns (too few hits) are unchanged — they already mix both.
+
+### R7. Tuning in the harness, not in code
 
 Extend `POST /api/v1/chats/[id]?action=recall-replay` (and `quilltap
 recall-replay`) with an optional `tuning` object — the R1 gate constants, the R2
 cap, and any `RECALL_MULTIPLIERS` overrides — applied to the **new** path only.
 The old path stays the reference. Print the active tuning in the CLI header.
 This lets each constant be tried on the same turn in seconds; the chosen values
-then go into code once.
+then go into code once. Also default the candidate table's `limit` to at least
+the new path's head size plus ten: Turn C's retrospective head of 30 was larger
+than the default table of 25, so the table could not show where the head ended
+(pass `--limit 40` until then).
 
 ## 3. Validation
 
 1. Build a **probe set** of 8–12 Friday turns, each with the memories that should
-   be in the head written down beforehand ("gold"). Include Turns A and B, at
-   least two "what just happened" turns where the fresh memory **is** the right
-   answer, one retrospective turn, and one multi-character turn.
+   be in the head written down beforehand ("gold"). Include Turns A and B, Turn C
+   as the control (its head must not get worse), at least two "what just
+   happened" turns where a fresh memory from **another** conversation is the
+   right answer, and one multi-character turn.
 2. For each candidate tuning, record per turn: gold memories in the head of 15,
    off-topic memories in the head, and the head's token spend.
 3. Accept when gold recall improves on the set as a whole, the "what just
@@ -190,5 +237,5 @@ then go into code once.
 
 `docs/CHANGELOG.md` entry; update `help/memory-recall-relevance.md` ("What Else
 Recall Quietly Does") where it describes the fresh and present boosts; extend the
-`recall-tags` and `recall-replay` unit tests for R1–R6; regenerate nothing — no
+`recall-tags` and `recall-replay` unit tests for R1–R7; regenerate nothing — no
 schema change.
