@@ -12,6 +12,14 @@
   `SqliteError` belongs to the first file's context and fails `rejects.toThrow()`'s Error check in
   later files. The two assertions now match the rejection's message with `rejects.toMatchObject`.
 
+#### Spec: recall multiplier retuning
+
+- New `docs/developer/features/recall-multiplier-retuning.md` (proposed, no code). Two Friday
+  recall replays show stacked boosts (up to ×2.43, mostly the fresh-event boost) putting
+  cosine-0.31–0.40 memories ahead of the turn's best matches (0.51–0.64). Proposes gating boosts on
+  relevance, capping the stacked boost, lowering the fresh boost, choosing entity anchors by
+  specificity, closing a floor leak, and `tuning` overrides for `recall-replay`.
+
 #### F2 result recorded: anchor line does not suppress reinforcement
 
 - Ran `quilltap anchor-probe` on Friday's 50 most recent memories. No row reached 0.85 or 0.90

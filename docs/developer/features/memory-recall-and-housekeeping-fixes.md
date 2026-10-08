@@ -289,7 +289,8 @@ carry an anchor line; 309 embeddings).
 
 - Anything needing a schema change (tiers, digests, extraction watermarks) — see
   the companion spec.
-- Retuning `RECALL_MULTIPLIERS` — do it with the replay harness after F4–F7.
+- Retuning `RECALL_MULTIPLIERS` — do it with the replay harness after F4–F7. Now specified in
+  [recall-multiplier-retuning.md](./recall-multiplier-retuning.md), from the F7 replays.
 
 ## Chores
 
