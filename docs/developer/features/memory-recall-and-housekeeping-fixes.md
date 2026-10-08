@@ -1,8 +1,8 @@
 # Memory Recall and Housekeeping Fixes — The Small Repairs
 
-**Status:** Implemented 2026-10-08 (F1–F9). Two items still wait on live data: the F2 decision
-(run the probe, then decide whether the gate compares anchor-free text) and the F7 before/after
-replay on Friday probes. See [Implementation notes](#implementation-notes).
+**Status:** Implemented 2026-10-08 (F1–F9). F2 is decided: no gate change (see
+[F2 result](#f2-result-2026-10-08)). One item still waits on live data: the F7 before/after replay
+on Friday probes. See [Implementation notes](#implementation-notes).
 **Owner:** Charlie
 **Drafted:** 2026-10-08
 **Companion:** [memory-consolidation-and-tiers.md](./memory-consolidation-and-tiers.md)
@@ -203,7 +203,8 @@ What shipped, and where it differs from or sharpens the text above.
   `POST /api/v1/memories?action=anchor-gate-probe`, `quilltap anchor-probe <characterId>`. It
   samples the character's most recent rows (every row there survived the gate as a new row), scores
   each against OLDER rows anchored and anchor-free, and reports crossings and
-  `crossedOnlyWithoutAnchors`. The gate is unchanged pending the numbers.
+  `crossedOnlyWithoutAnchors`. Run on Friday 2026-10-08; the gate stays as it is — see
+  [F2 result](#f2-result-2026-10-08).
 - **F3** — `MAX_REINFORCEMENT_FOOTNOTES = 8`, `appendCappedFootnotes`. A row already at the cap is
   not re-embedded at all, even if an anchor (occurredAt / narrativeTime) fills in; the anchors are
   still written to the row.
@@ -249,6 +250,40 @@ What shipped, and where it differs from or sharpens the text above.
   absolute count computed from the gate's snapshot, so two extraction jobs absorbing the same row
   at the same moment can lose one observation. Filed as
   [bug 182](../bugs/bug-182-reinforcement-count-race.md).
+
+## F2 result (2026-10-08)
+
+**Decision: no change to the gate.** The anchor line does not suppress reinforcement; it helps it.
+
+**Run:** `quilltap anchor-probe <Friday> --limit 50` against Friday's 50 most recent rows (all 50
+carry an anchor line; 309 embeddings).
+
+| | anchored | anchor-free |
+|---|---|---|
+| best match ≥ 0.85 (reinforce) | 0 | 0 |
+| best match ≥ 0.90 (near-duplicate) | 0 | 0 |
+| crossed 0.85 only without anchors | — | 0 |
+
+- **Anchor-free scores are lower, not higher.** In 45 of 50 rows the anchor-free best match is
+  below the anchored one — typically by about 0.03, at most by 0.088 (4 rose, by ≤ 0.022; 1 was unchanged).
+  Shared dates and entities pull related tellings together; comparing on anchor-free text would
+  make reinforcement rarer. The hypothesis is refuted for this sample.
+- **The real finding: restatements score well below the bands.** The sample contains obvious
+  re-tellings of one fact — four "Sunday grandma call" rows (*committed to*, *agreed to*, *inked …
+  plan*, *invited Friday to*) at anchored 0.655–0.728, two "memory system audit" rows (*agreed to*,
+  *commissioned*) at 0.656–0.669. Restatements of one fact land around **0.65–0.73** with this
+  embedding model and embedded text, well under `MERGE_THRESHOLD` (0.85) and
+  `NEAR_DUPLICATE_THRESHOLD` (0.90). They become separate rows (linked when ≥ 0.70), which is why
+  96% of Friday's rows sit at `reinforcementCount` 1.
+- **Caveats.** The sample is survivors by construction — anything that reinforced was absorbed and
+  is not in it — which cannot change the direction of the result. The probe does not show which row
+  produced each best score; confirm the clusters with `--json` (`anchoredBestId`) before leaning on
+  the pairings.
+- **What follows.** Do not lower the global thresholds to catch these: the 0.65–0.73 band also holds
+  genuinely distinct facts, and a blind drop would merge them. Gathering restatements is the job of
+  the companion spec's LLM-judged consolidation
+  ([memory-consolidation-and-tiers.md](./memory-consolidation-and-tiers.md)); these numbers are its
+  evidence.
 
 ## Not in scope here
 

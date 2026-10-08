@@ -12,6 +12,13 @@
   `SqliteError` belongs to the first file's context and fails `rejects.toThrow()`'s Error check in
   later files. The two assertions now match the rejection's message with `rejects.toMatchObject`.
 
+#### F2 result recorded: anchor line does not suppress reinforcement
+
+- Ran `quilltap anchor-probe` on Friday's 50 most recent memories. No row reached 0.85 or 0.90
+  either way; anchor-free scores were lower in 45 of 50 rows. The gate is unchanged. Restatements
+  of one fact scored about 0.65–0.73, well below the reinforce threshold; that is left to the
+  consolidation spec. Recorded in `memory-recall-and-housekeeping-fixes.md` ("F2 result").
+
 #### Memory recall and housekeeping fixes (F1–F9)
 
 Spec: `docs/developer/features/memory-recall-and-housekeeping-fixes.md`.
