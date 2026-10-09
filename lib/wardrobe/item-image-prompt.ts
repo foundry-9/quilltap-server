@@ -26,7 +26,7 @@ import {
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
 import { resolveAesthetic } from '@/lib/image-gen/aesthetic';
-import { buildFigureIdentityBlock } from '@/lib/wardrobe/avatar-prompt';
+import { buildFigureIdentityBlock, soloFigureIntro, withArtDirection } from '@/lib/image-gen/avatar-prompt';
 import {
   buildOutfitSlotValues,
   decorateOutfitItems,
@@ -51,9 +51,6 @@ export interface WardrobeItemImagePrompt {
   orientation: WardrobeImageOrientation;
   subject: WardrobeImageSubject;
 }
-
-/** Cap for the aesthetic preamble — matches the avatar portrait's. */
-const AESTHETIC_MAX_CHARS = 600;
 
 /** The first canonical slot an item covers — where it is listed in an outfit cue. */
 function primarySlot(item: Pick<WardrobeItem, 'types'>): WardrobeItemType {
@@ -106,7 +103,7 @@ export async function buildWardrobeItemImagePrompt(
     const framing = hairOnly
       ? 'Head-and-shoulders portrait, facing the viewer, showing the hairstyle clearly'
       : 'Full-length, standing, facing the viewer, head to toe in frame';
-    const intro = `Solo picture of a single ${figure.subjectNoun}: ${owner.name}. Show exactly one figure. ${framing}.`;
+    const intro = `${soloFigureIntro('picture', figure.subjectNoun, owner.name)}. ${framing}.`;
     const physBlock = figure.physBlock ? ` ${figure.physBlock}` : '';
     const wearing = hairOnly ? `Wearing their hair as ${cueInline}` : `Wearing ${cueInline}`;
     const rest = hairOnly
@@ -126,14 +123,11 @@ export async function buildWardrobeItemImagePrompt(
       : `Product photograph of ${cue}, ${display}, no person, neutral ground, even light. The garment is the subject.`;
   }
 
-  const aesthetic = (await resolveAesthetic({
+  // The same capped art-direction preamble the avatar portrait carries.
+  prompt = withArtDirection(prompt, await resolveAesthetic({
     kind: 'aurora',
     projectOfficialMountPointId: input.projectOfficialMountPointId ?? undefined,
-  }))?.trim();
-  if (aesthetic) {
-    const capped = aesthetic.length > AESTHETIC_MAX_CHARS ? aesthetic.slice(0, AESTHETIC_MAX_CHARS) : aesthetic;
-    prompt = `Art direction (apply this overall style): ${capped}\n\n${prompt}`;
-  }
+  }));
 
   return { prompt: prompt.trim(), orientation, subject };
 }

@@ -6,7 +6,7 @@
  * `backfillCharacterVaults()`.
  *
  * For each project:
- *   1. Ensure `officialMountPointId` points at a real store (`ensureProjectOfficialStore`).
+ *   1. Ensure `officialMountPointId` points at a real store (`ensureOwnerOfficialStore`).
  *   2. If the store has no `properties.json`, populate all four overlay files
  *      (`description.md` / `instructions.md` / `state.json` / `properties.json`)
  *      from the raw row via `writeProjectStoreManagedFields`.
@@ -36,7 +36,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import {
   writeProjectStoreManagedFields,
   readProjectStoreProperties,
@@ -79,7 +79,7 @@ export async function backfillProjectStores(): Promise<ProjectStoreBackfillResul
       { current: index, total: projects.length, unit: 'projects' },
     ]);
     try {
-      const ensured = await ensureProjectOfficialStore(project.id, project.name);
+      const ensured = await ensureOwnerOfficialStore('project', project.id, project.name);
       if (!ensured) {
         result.errors++;
         logger.warn('Project store backfill: could not ensure store', {
@@ -100,7 +100,7 @@ export async function backfillProjectStores(): Promise<ProjectStoreBackfillResul
       if (existingProps) {
         result.alreadyPopulated++;
       } else {
-        // Populate from the raw row. ensureProjectOfficialStore may have just
+        // Populate from the raw row. ensureOwnerOfficialStore may have just
         // set officialMountPointId on the row, so point the writer at it.
         await writeProjectStoreManagedFields(mountPointId, {
           ...project,

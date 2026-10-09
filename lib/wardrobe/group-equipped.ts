@@ -8,6 +8,10 @@
  * in the slot row (rendering them as a separate card adds visual weight
  * without information).
  *
+ * This is the legacy whole-composite-id path: since 4.8.1 a worn composite
+ * dissolves into its leaves, so only an outfit equipped before then still
+ * produces a card here. See `bundle-mutations.ts` for its actions.
+ *
  * @module lib/wardrobe/group-equipped
  */
 
@@ -16,7 +20,7 @@ import type {
   WardrobeItem,
   WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types'
-import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES, isComposite, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 
 export interface EquippedBundle {
   /** The composite item's id. */
@@ -70,7 +74,7 @@ export function groupEquippedSlots(
     const ids = slots[slot] ?? []
     for (const id of ids) {
       const item = itemsById.get(id)
-      if (!item || item.componentItemIds.length === 0) continue
+      if (!item || !isComposite(item)) continue
       const list = compositeSlots.get(id) ?? []
       if (!list.includes(slot)) list.push(slot)
       compositeSlots.set(id, list)

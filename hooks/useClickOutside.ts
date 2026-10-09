@@ -22,6 +22,15 @@ export interface UseClickOutsideOptions {
    * If provided, will add a keydown listener for Escape.
    */
   onEscape?: () => void;
+
+  /**
+   * Listen for Escape in the capture phase and swallow it (`stopPropagation`
+   * + `preventDefault`) after calling `onEscape`. For popovers inside a modal:
+   * Escape closes the popover without also reaching — and dismissing — the
+   * enclosing dialog. Ignored without `onEscape`.
+   * @default false
+   */
+  escapeCapture?: boolean;
 }
 
 /**
@@ -53,7 +62,7 @@ export function useClickOutside(
   onClickOutside: () => void,
   options: UseClickOutsideOptions = {}
 ): void {
-  const { enabled = true, excludeRefs = [], onEscape } = options;
+  const { enabled = true, excludeRefs = [], onEscape, escapeCapture = false } = options;
 
   useEffect(() => {
     if (!enabled) {
@@ -82,6 +91,10 @@ export function useClickOutside(
     const handleKeyDown = onEscape
       ? (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
+            if (escapeCapture) {
+              event.stopPropagation();
+              event.preventDefault();
+            }
             onEscape();
           }
         }
@@ -89,14 +102,14 @@ export function useClickOutside(
 
     document.addEventListener('mousedown', handleClickOutside);
     if (handleKeyDown) {
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown, escapeCapture);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       if (handleKeyDown) {
-        document.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleKeyDown, escapeCapture);
       }
     };
-  }, [ref, onClickOutside, enabled, excludeRefs, onEscape]);
+  }, [ref, onClickOutside, enabled, excludeRefs, onEscape, escapeCapture]);
 }

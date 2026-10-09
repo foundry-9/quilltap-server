@@ -23,7 +23,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import {
   ensureGroupScenariosFolder,
   listGroupScenarios,
@@ -79,7 +79,7 @@ export const GET = createContextHandler(
         const group = await repos.groups.findByIdRaw(groupId);
         if (!group) continue;
 
-        const ensured = await ensureGroupOfficialStore(group.id, group.name);
+        const ensured = await ensureOwnerOfficialStore('group', group.id, group.name);
         if (!ensured) continue;
         await ensureGroupScenariosFolder(ensured.mountPointId);
 

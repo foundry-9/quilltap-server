@@ -16,16 +16,19 @@ import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
+import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
 import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }))
+// The real wearable pool runs; only the tier resolution it leans on is stubbed.
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
-  resolveGroupMountPointIdsForCharacter: jest.fn(),
+  resolveGroupMountsForCharacter: jest.fn(),
   resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
-  resolveProjectMountPointIdsForChat: jest.fn().mockResolvedValue([]),
+}))
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: jest.fn().mockResolvedValue('general-mp'),
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks/outfit-selection', () => ({
   chooseLLMOutfit: jest.fn(),
@@ -45,11 +48,12 @@ const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof choose
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
   typeof resolveEquippedOutfitForCharacter
 >
-const mockGroupMounts = resolveGroupMountPointIdsForCharacter as jest.MockedFunction<
-  typeof resolveGroupMountPointIdsForCharacter
+const mockGroupMounts = resolveGroupMountsForCharacter as jest.MockedFunction<
+  typeof resolveGroupMountsForCharacter
 >
 
 const CHAR_ID = 'c1c1c1c1-0000-0000-0000-000000000001'
+const GENERAL_MP = 'general-mp'
 
 let clock = 0
 
@@ -74,17 +78,44 @@ function item(
   } as WardrobeItem
 }
 
+/**
+ * Repos over a fake store layout. `mounts` maps a mount-point id to the items
+ * in its `Wardrobe/` folder; Quilltap General is `GENERAL_MP`. `own` is keyed
+ * by character (or a flat list for `CHAR_ID`). `readSharedTiers` behaves like
+ * the real one: every listed mount, later mounts shadowing earlier on id, each
+ * item tagged with `originOf(mount)`.
+ */
 function makeRepos(
-  opts: { own?: WardrobeItem[]; shared?: WardrobeItem[]; group?: WardrobeItem[] } = {},
+  opts: {
+    own?: WardrobeItem[] | Record<string, WardrobeItem[]>
+    mounts?: Record<string, WardrobeItem[]>
+  } = {},
 ) {
   const setEquippedOutfit = jest.fn().mockResolvedValue(undefined)
-  const findArchetypes = jest.fn().mockResolvedValue(opts.shared ?? [])
-  const findArchetypesInMounts = jest.fn().mockResolvedValue(opts.group ?? [])
-  const findByCharacterId = jest.fn().mockResolvedValue(opts.own ?? [])
+  const mounts = opts.mounts ?? {}
+  const readSharedTiers = jest.fn(
+    async (
+      mountPointIds: readonly string[],
+      includeArchived: boolean,
+      originOf: (mp: string) => unknown,
+    ) => {
+      const byId = new Map<string, WardrobeItem & { origin: unknown }>()
+      for (const mp of mountPointIds) {
+        for (const it of mounts[mp] ?? []) {
+          if (!includeArchived && it.archivedAt) continue
+          byId.set(it.id, { ...it, origin: originOf(mp) })
+        }
+      }
+      return Array.from(byId.values())
+    },
+  )
+  const own = opts.own ?? []
+  const findByCharacterId = jest.fn(async (characterId: string) =>
+    Array.isArray(own) ? (characterId === CHAR_ID ? own : []) : own[characterId] ?? [],
+  )
   return {
     setEquippedOutfit,
-    findArchetypes,
-    findArchetypesInMounts,
+    readSharedTiers,
     findByCharacterId,
     repos: {
       characters: {
@@ -96,12 +127,7 @@ function makeRepos(
           manifesto: 'm',
         }),
       },
-      wardrobe: {
-        findByCharacterId,
-        findArchetypes,
-        findArchetypesInMounts,
-        findWearablePoolForCharacter: jest.fn().mockResolvedValue([]),
-      },
+      wardrobe: { findByCharacterId, readSharedTiers },
       connections: {
         findAll: jest.fn().mockResolvedValue([{ id: 'p1', isDefault: true }]),
       },
@@ -119,6 +145,11 @@ function equippedFor(setEquippedOutfit: jest.Mock, characterId = CHAR_ID) {
   return call?.[2] as Record<string, string[]> | undefined
 }
 
+/** Every mount list `readSharedTiers` was asked for. */
+function readsOf(readSharedTiers: jest.Mock): string[][] {
+  return readSharedTiers.mock.calls.map((c) => Array.from(c[0] as string[]))
+}
+
 const EMPTY_RESOLVED = {
   outfitValues: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
   leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
@@ -129,24 +160,27 @@ beforeEach(() => {
   jest.clearAllMocks()
   clock = 0
   mockGroupMounts.mockResolvedValue([])
-  mockResolve.mockResolvedValue(
-    EMPTY_RESOLVED as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>,
+  mockResolve.mockReturnValue(
+    EMPTY_RESOLVED as unknown as ReturnType<typeof resolveEquippedOutfitForCharacter>,
   )
 })
 
 describe('applyOutfitSelections — shared wardrobe tiers', () => {
-  it('equips a Quilltap General default when the character vault is empty', async () => {
-    const { repos, setEquippedOutfit } = makeRepos({
-      own: [],
-      shared: [item('general-coat', ['top'], { isDefault: true })],
-    })
-
-    await applyOutfitSelections(
+  const dressDefault = (repos: unknown, projectMountPointIds: string[] = []) =>
+    applyOutfitSelections(
       'chat-1',
       [{ characterId: CHAR_ID, mode: 'default' }],
       repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
+      { userId: 'u1', projectMountPointIds },
     )
+
+  it('equips a Quilltap General default when the character vault is empty', async () => {
+    const { repos, setEquippedOutfit } = makeRepos({
+      own: [],
+      mounts: { [GENERAL_MP]: [item('general-coat', ['top'], { isDefault: true })] },
+    })
+
+    await dressDefault(repos)
 
     expect(equippedFor(setEquippedOutfit)).toEqual({
       top: ['general-coat'],
@@ -165,16 +199,10 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
 
     const { repos, setEquippedOutfit } = makeRepos({
       own: [personal],
-      // The repository hands back one merged shared list (project over general).
-      shared: [general, project],
+      mounts: { [GENERAL_MP]: [general], 'mp-project': [project] },
     })
 
-    await applyOutfitSelections(
-      'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
-      repos as never,
-      { userId: 'u1', projectMountPointIds: ['mp-project'] },
-    )
+    await dressDefault(repos, ['mp-project'])
 
     expect(equippedFor(setEquippedOutfit)?.top).toEqual([
       'general-shirt',
@@ -185,16 +213,11 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
 
   it('does not equip a shared default the character shadows with isDefault:false', async () => {
     const { repos, setEquippedOutfit } = makeRepos({
-      shared: [item('livery', ['top'], { isDefault: true })],
+      mounts: { [GENERAL_MP]: [item('livery', ['top'], { isDefault: true })] },
       own: [item('livery', ['top'], { isDefault: false, characterId: CHAR_ID })],
     })
 
-    await applyOutfitSelections(
-      'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
-      repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
-    )
+    await dressDefault(repos)
 
     expect(equippedFor(setEquippedOutfit)).toEqual({
       top: [],
@@ -207,37 +230,29 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
 
   it('equips an item the character marks default even when the shared copy does not', async () => {
     const { repos, setEquippedOutfit } = makeRepos({
-      shared: [item('livery', ['top'], { isDefault: false })],
+      mounts: { [GENERAL_MP]: [item('livery', ['top'], { isDefault: false })] },
       own: [item('livery', ['top'], { isDefault: true, characterId: CHAR_ID })],
     })
 
-    await applyOutfitSelections(
-      'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
-      repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
-    )
+    await dressDefault(repos)
 
     expect(equippedFor(setEquippedOutfit)?.top).toEqual(['livery'])
   })
 
   it('excludes an archived shared default', async () => {
     const { repos, setEquippedOutfit } = makeRepos({
-      shared: [
-        item('archived-cloak', ['top'], {
-          isDefault: true,
-          archivedAt: '2026-02-02T00:00:00.000Z',
-        }),
-        item('live-cloak', ['top'], { isDefault: true }),
-      ],
+      mounts: {
+        [GENERAL_MP]: [
+          item('archived-cloak', ['top'], {
+            isDefault: true,
+            archivedAt: '2026-02-02T00:00:00.000Z',
+          }),
+          item('live-cloak', ['top'], { isDefault: true }),
+        ],
+      },
     })
 
-    await applyOutfitSelections(
-      'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
-      repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
-    )
+    await dressDefault(repos)
 
     expect(equippedFor(setEquippedOutfit)?.top).toEqual(['live-cloak'])
   })
@@ -253,7 +268,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
 
     const { repos, setEquippedOutfit } = makeRepos({
       own: [],
-      shared: [item('general-coat', ['top'])],
+      mounts: { [GENERAL_MP]: [item('general-coat', ['top'])] },
     })
 
     await applyOutfitSelections(
@@ -278,9 +293,9 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
 
-    const { repos, setEquippedOutfit } = makeRepos({
+    const { repos, setEquippedOutfit, readSharedTiers, findByCharacterId } = makeRepos({
       own: [],
-      shared: [item('general-coat', ['top'], { isDefault: true })],
+      mounts: { [GENERAL_MP]: [item('general-coat', ['top'], { isDefault: true })] },
     })
 
     await applyOutfitSelections(
@@ -291,59 +306,81 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
     )
 
     expect(equippedFor(setEquippedOutfit)?.top).toEqual(['general-coat'])
+    // The fallback reuses the memoised pool rather than reading anything again.
+    expect(findByCharacterId).toHaveBeenCalledTimes(1)
+    expect(readSharedTiers).toHaveBeenCalledTimes(1)
   })
 
   it('equips a group default when the character vault and the batch tiers are empty', async () => {
-    mockGroupMounts.mockResolvedValue(['grp-mount'])
-    const { repos, setEquippedOutfit, findArchetypesInMounts } = makeRepos({
+    mockGroupMounts.mockResolvedValue([
+      { group: { id: 'grp-1', name: 'The Drones' }, mountPointIds: ['grp-mount'] },
+    ])
+    const { repos, setEquippedOutfit, readSharedTiers } = makeRepos({
       own: [],
-      shared: [],
-      group: [item('house-livery', ['top'], { isDefault: true })],
+      mounts: { 'grp-mount': [item('house-livery', ['top'], { isDefault: true })] },
     })
 
-    await applyOutfitSelections(
-      'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
-      repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
-    )
+    await dressDefault(repos)
 
-    expect(findArchetypesInMounts).toHaveBeenCalledWith(['grp-mount'], false)
+    expect(mockGroupMounts).toHaveBeenCalledWith(CHAR_ID)
+    expect(readsOf(readSharedTiers)).toContainEqual(['grp-mount'])
     expect(equippedFor(setEquippedOutfit)?.top).toEqual(['house-livery'])
   })
 
   it('lets a group item shadow the project/general copy of the same id', async () => {
-    mockGroupMounts.mockResolvedValue(['grp-mount'])
+    mockGroupMounts.mockResolvedValue([
+      { group: { id: 'grp-1', name: 'The Drones' }, mountPointIds: ['grp-mount'] },
+    ])
+    const groupLivery = item('livery', ['top'], { isDefault: true, title: 'group livery' })
     const { repos, setEquippedOutfit } = makeRepos({
       own: [],
-      shared: [item('livery', ['top'], { isDefault: true, title: 'shared livery' })],
-      group: [item('livery', ['top'], { isDefault: true, title: 'group livery' })],
+      mounts: {
+        [GENERAL_MP]: [item('livery', ['top'], { isDefault: true, title: 'general livery' })],
+        'mp-a': [item('livery', ['top'], { isDefault: true, title: 'project livery' })],
+        'grp-mount': [groupLivery],
+      },
     })
+    const progress = {
+      status: jest.fn(),
+      log: jest.fn(),
+      wardrobeStart: jest.fn(),
+      wardrobeResult: jest.fn(),
+      finish: jest.fn(),
+      fail: jest.fn(),
+    }
+    mockChooseLLMOutfit.mockResolvedValue({
+      success: true,
+      result: {
+        slots: { top: ['livery'], bottom: [], footwear: [], accessories: [], hair: [] },
+        deliberatelyUnclothed: false,
+      },
+    } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
 
+    await dressDefault(repos, ['mp-a'])
+    expect(equippedFor(setEquippedOutfit)?.top).toEqual(['livery'])
+
+    // The model is shown one livery — the group's — tagged with its group.
     await applyOutfitSelections(
       'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
+      [{ characterId: CHAR_ID, mode: 'llm_choose' }],
       repos as never,
-      { userId: 'u1', projectMountPointIds: ['mp-a'] },
+      { userId: 'u1', projectMountPointIds: ['mp-a'], progress: progress as never },
     )
-
-    expect(equippedFor(setEquippedOutfit)?.top).toEqual(['livery'])
+    const passed = mockChooseLLMOutfit.mock.calls[0][4] as Array<WardrobeItem & { origin: { scope: string; id: string | null } }>
+    expect(passed).toHaveLength(1)
+    expect(passed[0]).toMatchObject({ title: 'group livery', origin: { scope: 'group', id: 'grp-1' } })
   })
 
   it('skips the group read entirely for a character with no memberships', async () => {
-    const { repos, findArchetypesInMounts } = makeRepos({
+    const { repos, readSharedTiers } = makeRepos({
       own: [],
-      shared: [item('general-coat', ['top'], { isDefault: true })],
+      mounts: { [GENERAL_MP]: [item('general-coat', ['top'], { isDefault: true })] },
     })
 
-    await applyOutfitSelections(
-      'chat-1',
-      [{ characterId: CHAR_ID, mode: 'default' }],
-      repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
-    )
+    await dressDefault(repos)
 
-    expect(findArchetypesInMounts).not.toHaveBeenCalled()
+    // General is the only shared read; no group (and no empty project) read.
+    expect(readsOf(readSharedTiers)).toEqual([[GENERAL_MP]])
   })
 
   it('threads both shared tiers into the pool fetch and the preview resolve', async () => {
@@ -364,9 +401,9 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       fail: jest.fn(),
     }
 
-    const { repos, findArchetypes } = makeRepos({
+    const { repos, readSharedTiers } = makeRepos({
       own: [],
-      shared: [item('project-coat', ['top'])],
+      mounts: { 'mp-b': [item('project-coat', ['top'])] },
     })
 
     await applyOutfitSelections(
@@ -376,22 +413,23 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       { userId: 'u1', projectMountPointIds: ['mp-a', 'mp-b'], progress: progress as never },
     )
 
-    expect(findArchetypes).toHaveBeenCalledWith(false, {
-      projectMountPointIds: ['mp-a', 'mp-b'],
-    })
-    expect(mockResolve).toHaveBeenCalledWith(
-      expect.anything(),
-      CHAR_ID,
-      expect.anything(),
-      { groupMountPointIds: [], projectMountPointIds: ['mp-a', 'mp-b'] },
-    )
+    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-a', 'mp-b']]))
+    expect(mockResolve).toHaveBeenCalledTimes(1)
+    const [pool, slots] = mockResolve.mock.calls[0]
+    expect(pool.characterId).toBe(CHAR_ID)
+    expect(pool.tiers).toEqual({ groupMountPointIds: [], projectMountPointIds: ['mp-a', 'mp-b'] })
+    expect(pool.get('project-coat')?.origin.scope).toBe('project')
+    expect(slots.top).toEqual(['project-coat'])
   })
 
   it('reads the shared tiers once for a batch of selections', async () => {
     const other = 'c1c1c1c1-0000-0000-0000-000000000002'
-    const { repos, findArchetypes, findByCharacterId } = makeRepos({
+    const { repos, readSharedTiers, findByCharacterId } = makeRepos({
       own: [],
-      shared: [item('general-coat', ['top'], { isDefault: true })],
+      mounts: {
+        [GENERAL_MP]: [item('general-coat', ['top'], { isDefault: true })],
+        'mp-a': [item('project-hat', ['accessories'], { isDefault: true })],
+      },
     })
 
     await applyOutfitSelections(
@@ -401,11 +439,52 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
         { characterId: other, mode: 'default' },
       ],
       repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
+      { userId: 'u1', projectMountPointIds: ['mp-a'] },
     )
 
-    expect(findArchetypes).toHaveBeenCalledTimes(1)
+    // General and the project stores: one read each for the whole batch.
+    expect(readsOf(readSharedTiers)).toEqual(expect.arrayContaining([[GENERAL_MP], ['mp-a']]))
+    expect(readSharedTiers).toHaveBeenCalledTimes(2)
     // Each character's own vault is still read once apiece.
     expect(findByCharacterId).toHaveBeenCalledTimes(2)
+  })
+
+  it('a batch shares project + General but gives each character only their own groups', async () => {
+    const other = 'c1c1c1c1-0000-0000-0000-000000000002'
+    mockGroupMounts.mockImplementation(async (characterId) =>
+      characterId === CHAR_ID
+        ? [{ group: { id: 'grp-1', name: 'The Drones' }, mountPointIds: ['grp-drones'] }]
+        : [{ group: { id: 'grp-2', name: 'The Aunts' }, mountPointIds: ['grp-aunts'] }],
+    )
+    const { repos, setEquippedOutfit, readSharedTiers } = makeRepos({
+      own: { [CHAR_ID]: [], [other]: [] },
+      mounts: {
+        [GENERAL_MP]: [item('general-coat', ['top'], { isDefault: true })],
+        'mp-a': [item('project-hat', ['accessories'], { isDefault: true })],
+        'grp-drones': [item('spats', ['footwear'], { isDefault: true })],
+        'grp-aunts': [item('pince-nez', ['accessories'], { isDefault: true })],
+      },
+    })
+
+    await applyOutfitSelections(
+      'chat-1',
+      [
+        { characterId: CHAR_ID, mode: 'default' },
+        { characterId: other, mode: 'default' },
+      ],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: ['mp-a'] },
+    )
+
+    const reads = readsOf(readSharedTiers)
+    expect(reads.filter((r) => r.includes(GENERAL_MP))).toHaveLength(1)
+    expect(reads.filter((r) => r.includes('mp-a'))).toHaveLength(1)
+    expect(reads).toEqual(expect.arrayContaining([['grp-drones'], ['grp-aunts']]))
+
+    const bertie = equippedFor(setEquippedOutfit, CHAR_ID)
+    const gussie = equippedFor(setEquippedOutfit, other)
+    expect(bertie).toMatchObject({ top: ['general-coat'], footwear: ['spats'], accessories: ['project-hat'] })
+    expect(gussie).toMatchObject({ top: ['general-coat'], footwear: [] })
+    expect(gussie?.accessories.sort()).toEqual(['pince-nez', 'project-hat'])
   })
 })

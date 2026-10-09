@@ -6,8 +6,10 @@
  *
  * Slots hold arrays of wardrobe item IDs — multiple items per slot are allowed
  * (e.g. a t-shirt under a sweater). Wardrobe items can also be composites
- * (referencing other items via `componentItemIds`); composites are stored
- * as their own ID in equipped state and expanded only at read time.
+ * ("outfits" to the user — items referencing other items via
+ * `componentItemIds`). A composite dissolves into its leaves as it goes on,
+ * so equipped state holds garments; an outfit worn before 4.8.1 may still
+ * sit there as its own id, which read-time expansion covers.
  *
  * @module schemas/wardrobe.types
  */
@@ -134,7 +136,7 @@ export const wardrobeItemFieldsSchema = z.object({
   isDefault: z.boolean().optional(),
   /** IDs of other items this composite bundles. Empty/omitted = leaf item. */
   componentItemIds: z.array(z.string()).optional(),
-  /** Composite-only: clear the designated slots on equip instead of layering. */
+  /** Clear the designated slots on wear instead of layering (composites and leaves alike). */
   replace: z.boolean().optional(),
 });
 
@@ -181,7 +183,8 @@ export const WardrobeItemSchema = z.object({
   /**
    * Other wardrobe items this item is composed of. Empty = leaf item.
    * Cycles (direct or transitive self-reference) are rejected at save time
-   * by `WardrobeRepository.create`/`update` and the vault overlay materializer.
+   * by the folder writer (`wardrobe-writes.ts`) and dropped at read time by
+   * the vault parser.
    */
   componentItemIds: z.array(UUIDSchema).default([]),
   /** Context tags for when this item is appropriate (e.g., "casual", "formal", "intimate") */
@@ -189,12 +192,11 @@ export const WardrobeItemSchema = z.object({
   /** Whether this item is part of the character's default outfit */
   isDefault: z.boolean().default(false),
   /**
-   * Composite behaviour on equip. `false`/absent (the default) = additive:
-   * the composite's components layer onto whatever already occupies the slots
-   * it designates, clearing nothing. `true` = the composite clears every slot
-   * it designates (its `types`) and then places only its own components — used
-   * for full-outfit swaps and "clear everything" composites like Naked. Has no
-   * effect on leaf (non-composite) items, which always replace their slots.
+   * Behaviour on wear. `false`/absent (the default) = additive: the item (or
+   * a composite's components) layers onto whatever already occupies its
+   * slots, clearing nothing. `true` = the item clears every slot it
+   * designates (its `types`) first — a full-outfit swap, a "clear everything"
+   * composite like Naked, or a leaf that always replaces what's there.
    */
   replace: z.boolean().default(false),
   /** Provenance tracking for items migrated from legacy clothingRecords */
@@ -220,8 +222,9 @@ export type WardrobeItem = z.infer<typeof WardrobeItemSchema>;
 
 /**
  * Per-character equipped slots. Each slot holds an array of wardrobe item IDs;
- * multiple items per slot represent layering (t-shirt + sweater). Composite
- * items appear as a single ID and are expanded at read time.
+ * multiple items per slot represent layering (t-shirt + sweater). Composites
+ * dissolve into their leaves as they go on; a legacy composite id is expanded
+ * at read time.
  */
 const equippedSlotArray = () => z.array(UUIDSchema).default([]);
 
@@ -319,3 +322,40 @@ export function normalizeEquippedSlots(raw: unknown): EquippedSlots {
   });
 }
 
+
+/**
+ * True when the item is a composite (an outfit): it gathers other items via
+ * `componentItemIds`. The one spelling of the check — client and server.
+ */
+export function isComposite(item: { componentItemIds?: readonly string[] | null }): boolean {
+  return (item.componentItemIds?.length ?? 0) > 0;
+}
+
+/**
+ * A copy of `slots` with `itemId` appended to `slot` (layering). No-op copy
+ * when the id is already there.
+ */
+export function addIdToSlot(slots: EquippedSlots, slot: WardrobeItemType, itemId: string): EquippedSlots {
+  const next = cloneEquippedSlots(slots);
+  if (!next[slot].includes(itemId)) next[slot] = [...next[slot], itemId];
+  return next;
+}
+
+/**
+ * A copy of `slots` with `itemId` filtered out of `slot`; with `itemId`
+ * omitted, the slot is cleared.
+ */
+export function removeIdFromSlot(slots: EquippedSlots, slot: WardrobeItemType, itemId?: string): EquippedSlots {
+  const next = cloneEquippedSlots(slots);
+  next[slot] = itemId === undefined ? [] : next[slot].filter((id) => id !== itemId);
+  return next;
+}
+
+/** True when two slot bags hold the same ids in the same order, slot by slot. */
+export function equippedSlotsEqual(a: EquippedSlots, b: EquippedSlots): boolean {
+  return WARDROBE_SLOT_TYPES.every((slot) => {
+    const x = a[slot] ?? [];
+    const y = b[slot] ?? [];
+    return x.length === y.length && x.every((id, i) => id === y[i]);
+  });
+}

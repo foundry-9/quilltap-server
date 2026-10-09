@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-09)** |
-| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/wardrobe-refactor.md) |
+| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/complete/wardrobe-refactor.md) |
 | **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | **High** (silent data loss) — the stripped reference is written back to disk by the next write of any item in the same vault |
 | **Who it bites** | anyone who builds a composite in a character's own wardrobe from parts that hang in a group or project store, whether through `wardrobe_create` (which resolves components across every tier) or the item editor (whose candidate list includes the project tier) |

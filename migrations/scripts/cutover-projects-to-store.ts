@@ -260,7 +260,7 @@ function loadLegacyProjectRows(db: DatabaseType): Project[] {
  * Resolve (or create) the official store for a legacy project WITHOUT going
  * through the schema-validating / overlay project read.
  *
- * `ensureProjectOfficialStore` re-reads the project via `repos.projects.*`,
+ * `ensureOwnerOfficialStore` re-reads the project via `repos.projects.*`,
  * which can't handle a legacy wide row mid-migration (boolean-coercion metadata
  * isn't applied this early, so the row fails validation). Like the character
  * cutover, we operate on the raw-loaded row instead.

@@ -1,32 +1,26 @@
 /**
  * Tests for the wardrobe image bridge: the `Wardrobe/images/<itemId>/…webp`
- * path shape, the job-child refusal, and the document-written event.
+ * path shape over `storeMountFile` (unique-suffix for a fresh picture, an
+ * upsert at the exact leaf for a transfer), the job-child host-RPC shim, and
+ * link deletion.
  *
  * `@/lib/repositories/factory` is mocked app-wide in jest.setup.ts and
- * configured per test here; folder creation, unique-path resolution and the
- * store events are mocked locally. `sanitizeLeafName` stays real (pure).
+ * configured per test here; `storeMountFile` and the store events are mocked
+ * locally. `sanitizeLeafName` stays real (pure).
  */
 
 jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({
   callHost: jest.fn(),
 }));
 
-jest.mock('@/lib/mount-index/folder-paths', () => ({
-  ensureFolderPath: jest.fn().mockResolvedValue('folder-id'),
+jest.mock('@/lib/mount-index/store-file', () => ({
+  storeMountFile: jest.fn(),
 }));
 
 jest.mock('@/lib/mount-index/db-store-events', () => ({
   emitDocumentWritten: jest.fn(),
   emitDocumentDeleted: jest.fn(),
 }));
-
-jest.mock('@/lib/file-storage/bridge-path-helpers', () => {
-  const actual = jest.requireActual('@/lib/file-storage/bridge-path-helpers');
-  return {
-    ...actual,
-    resolveUniqueRelativePath: jest.fn(async (_mount: string, relativePath: string) => relativePath),
-  };
-});
 
 import {
   deleteWardrobeItemImageLink,
@@ -35,20 +29,16 @@ import {
 } from '@/lib/file-storage/wardrobe-image-bridge';
 import { getRepositories } from '@/lib/repositories/factory';
 import { callHost } from '@/lib/background-jobs/child/host-rpc-client';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { emitDocumentDeleted, emitDocumentWritten } from '@/lib/mount-index/db-store-events';
-import { resolveUniqueRelativePath } from '@/lib/file-storage/bridge-path-helpers';
+import { storeMountFile } from '@/lib/mount-index/store-file';
+import { emitDocumentDeleted } from '@/lib/mount-index/db-store-events';
 
 const mockGetRepositories = jest.mocked(getRepositories);
-const mockEnsureFolderPath = jest.mocked(ensureFolderPath);
-const mockEmitWritten = jest.mocked(emitDocumentWritten);
+const mockStore = jest.mocked(storeMountFile);
 const mockEmitDeleted = jest.mocked(emitDocumentDeleted);
-const mockResolveUnique = jest.mocked(resolveUniqueRelativePath);
 
 const ORIGINAL_ENV = process.env.QUILLTAP_JOB_CHILD;
 const ITEM_ID = '11111111-1111-4111-8111-111111111111';
 
-let linkBlobContent: jest.Mock;
 let findByMountPointAndPath: jest.Mock;
 let deleteWithGC: jest.Mock;
 let refreshStats: jest.Mock;
@@ -57,13 +47,17 @@ beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.QUILLTAP_JOB_CHILD;
 
-  linkBlobContent = jest.fn(async (args: { relativePath: string; data: Buffer }) => ({
-    link: {
-      id: 'link-1',
-      relativePath: args.relativePath,
-      sha256: 'sha-abc',
-      fileSizeBytes: args.data.length,
-    },
+  mockStore.mockImplementation(async (input) => ({
+    mountPointId: input.mountPointId,
+    relativePath: input.relativePath,
+    kind: 'blob',
+    fileType: 'blob',
+    sha256: 'sha-abc',
+    sizeBytes: input.data.length,
+    storedMimeType: 'image/webp',
+    mtime: 0,
+    fileId: 'file-1',
+    linkId: 'link-1',
     blobId: 'blob-1',
   }));
   findByMountPointAndPath = jest.fn();
@@ -71,8 +65,7 @@ beforeEach(() => {
   refreshStats = jest.fn().mockResolvedValue(undefined);
 
   mockGetRepositories.mockReturnValue({
-    docMountFileLinks: { linkBlobContent, findByMountPointAndPath, deleteWithGC },
-    docMountBlobs: { findById: jest.fn().mockResolvedValue({ id: 'blob-1', storedMimeType: 'image/webp' }) },
+    docMountFileLinks: { findByMountPointAndPath, deleteWithGC },
     docMountPoints: { refreshStats },
   } as unknown as ReturnType<typeof getRepositories>);
 });
@@ -83,23 +76,30 @@ afterAll(() => {
 });
 
 describe('writeWardrobeItemImage', () => {
-  it('writes to Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>-<8 hex>.webp', async () => {
+  it('writes Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>.webp through storeMountFile, unique-suffix', async () => {
     const result = await writeWardrobeItemImage({
       mountPointId: 'vault-1',
       itemId: ITEM_ID,
       kind: 'generated',
       content: Buffer.from('webp-bytes'),
       contentType: 'image/webp',
+      description: 'caption',
     });
 
-    const pattern = new RegExp(`^Wardrobe/images/${ITEM_ID}/\\d{8}-\\d{6}-generated-[0-9a-f]{8}\\.webp$`);
+    const pattern = new RegExp(`^Wardrobe/images/${ITEM_ID}/\\d{8}-\\d{6}-generated\\.webp$`);
     expect(result.relativePath).toMatch(pattern);
-    expect(result.leafName).toMatch(/^\d{8}-\d{6}-generated-[0-9a-f]{8}\.webp$/);
-    expect(mockResolveUnique).toHaveBeenCalledWith('vault-1', expect.stringMatching(pattern));
-    expect(mockEnsureFolderPath).toHaveBeenCalledWith('vault-1', `Wardrobe/images/${ITEM_ID}`);
-    expect(linkBlobContent).toHaveBeenCalledWith(
-      expect.objectContaining({ mountPointId: 'vault-1', folderId: 'folder-id', originalMimeType: 'image/webp' }),
-    );
+    expect(result.leafName).toMatch(/^\d{8}-\d{6}-generated\.webp$/);
+    expect(mockStore).toHaveBeenCalledWith(expect.objectContaining({
+      mountPointId: 'vault-1',
+      relativePath: expect.stringMatching(pattern),
+      originalMimeType: 'image/webp',
+      description: 'caption',
+      collisionStrategy: 'unique-suffix',
+      assetStorage: 'database',
+      treatNativeTextAsDocument: false,
+      extractText: false,
+      enqueueEmbedding: false,
+    }));
     expect(result).toMatchObject({
       storageKey: 'mount-blob:vault-1:blob-1',
       blobId: 'blob-1',
@@ -110,7 +110,19 @@ describe('writeWardrobeItemImage', () => {
     });
   });
 
-  it('uses the kind in the minted leaf name', async () => {
+  it('reports the leaf the pipeline actually landed on after a collision bump', async () => {
+    mockStore.mockImplementationOnce(async (input) => ({
+      mountPointId: input.mountPointId,
+      relativePath: input.relativePath.replace(/\.webp$/, ' (2).webp'),
+      kind: 'blob',
+      fileType: 'blob',
+      sha256: 's',
+      sizeBytes: 1,
+      storedMimeType: 'image/webp',
+      mtime: 0,
+      linkId: 'link-2',
+      blobId: 'blob-2',
+    }));
     const result = await writeWardrobeItemImage({
       mountPointId: 'vault-1',
       itemId: ITEM_ID,
@@ -118,10 +130,11 @@ describe('writeWardrobeItemImage', () => {
       content: Buffer.from('x'),
       contentType: 'image/webp',
     });
-    expect(result.leafName).toMatch(/-uploaded-[0-9a-f]{8}\.webp$/);
+    expect(result.leafName).toMatch(/-uploaded \(2\)\.webp$/);
+    expect(result.storageKey).toBe('mount-blob:vault-1:blob-2');
   });
 
-  it('keeps an exact leaf name when given one, without collision bumping', async () => {
+  it('keeps an exact leaf name when given one, upserting there', async () => {
     const result = await writeWardrobeItemImage({
       mountPointId: 'vault-2',
       itemId: ITEM_ID,
@@ -131,19 +144,7 @@ describe('writeWardrobeItemImage', () => {
       leafName: '20260101-120000-generated.webp',
     });
     expect(result.relativePath).toBe(`Wardrobe/images/${ITEM_ID}/20260101-120000-generated.webp`);
-    expect(mockResolveUnique).not.toHaveBeenCalled();
-  });
-
-  it('emits emitDocumentWritten for the written link', async () => {
-    const result = await writeWardrobeItemImage({
-      mountPointId: 'vault-1',
-      itemId: ITEM_ID,
-      kind: 'generated',
-      content: Buffer.from('x'),
-      contentType: 'image/webp',
-    });
-    expect(mockEmitWritten).toHaveBeenCalledWith({ mountPointId: 'vault-1', relativePath: result.relativePath });
-    expect(refreshStats).toHaveBeenCalledWith('vault-1');
+    expect(mockStore).toHaveBeenCalledWith(expect.objectContaining({ collisionStrategy: 'overwrite' }));
   });
 
   it('routes to the parent over host-RPC in the job child', async () => {
@@ -160,8 +161,7 @@ describe('writeWardrobeItemImage', () => {
 
     await expect(writeWardrobeItemImage(input)).resolves.toBe(hostResult);
     expect(callHost).toHaveBeenCalledWith('writeWardrobeItemImage', input);
-    expect(linkBlobContent).not.toHaveBeenCalled();
-    expect(mockEmitWritten).not.toHaveBeenCalled();
+    expect(mockStore).not.toHaveBeenCalled();
   });
 });
 

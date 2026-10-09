@@ -33,6 +33,7 @@ import {
   HEAD_AND_SHOULDERS_PHYSICAL_PROMPT,
 } from '@/lib/services/character-wizard.service';
 import type { CharacterHeadShouldersBackfillPayload } from '../queue-service';
+import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 const CONTEXT = 'background-jobs.headshoulders-backfill';
 
@@ -63,14 +64,7 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
   // Seed text the generator grounds the head-and-shoulders prompt in. Prefer
   // the most portrait-relevant existing variant; fall through to any appearance
   // text. (Same ordering the avatar builder falls through, minus the new field.)
-  const seedText = (
-    pd.mediumPrompt ||
-    pd.shortPrompt ||
-    pd.longPrompt ||
-    pd.completePrompt ||
-    pd.fullDescription ||
-    ''
-  ).trim();
+  const seedText = pickPhysicalDescription(pd, 'scene');
   if (!seedText) {
     return;
   }

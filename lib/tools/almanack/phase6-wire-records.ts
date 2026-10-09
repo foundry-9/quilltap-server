@@ -20,6 +20,7 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getErrorMessage } from '@/lib/error-utils';
+import { IMAGE_SPEND_LOG_TYPES } from '@/lib/schemas/llm-log.types';
 import { mainRows, num } from './db';
 import type { CacheRow, ProfileLifetimeRow, ProfileWindowRow, WireRecordsInfo } from './types';
 
@@ -136,7 +137,8 @@ export async function collectWireRecords(userId: string): Promise<WireRecordsInf
     collectProfileLifetime(userId),
     repos.getStatsByProfile(connectionGroupBy),
     repos.getMedianDurationByProfile(connectionGroupBy),
-    repos.getStatsByProfile(imageGroupBy, { type: 'IMAGE_GENERATION' }),
+    // Every image-provider call counts, wardrobe pictures included (bug 196).
+    repos.getStatsByProfile(imageGroupBy, { type: IMAGE_SPEND_LOG_TYPES }),
     repos.getMedianDurationByProfile(imageGroupBy),
     repos.getCacheStats('provider'),
     exactAttribution

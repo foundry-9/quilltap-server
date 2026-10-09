@@ -1,66 +1,85 @@
-import { describe, expect, it, jest, beforeEach } from '@jest/globals'
+/**
+ * What still lives in lib/tools/handlers/wardrobe-handler-shared.ts: the
+ * equipped-state read and the coverage summary built from the wearable pool.
+ * (The announcement / notify helpers moved to lib/wardrobe/outfit-change-effects.ts
+ * and are tested in __tests__/unit/lib/wardrobe/outfit-change-effects.test.ts.)
+ */
 
-jest.mock('@/lib/logger', () => ({
-  logger: {
-    warn: jest.fn(),
-  },
-}))
-
-jest.mock('@/lib/background-jobs/queue-service', () => ({
-  enqueueWardrobeOutfitAnnouncement: jest.fn(),
-}))
-
-const { logger } = require('@/lib/logger')
-const { enqueueWardrobeOutfitAnnouncement } = require('@/lib/background-jobs/queue-service')
 const {
   buildWardrobeCoverageSummaryFromState,
-  emptyEquippedState,
   loadCurrentWardrobeState,
-  scheduleWardrobeAnnouncement,
-  recordPendingWardrobeAnnouncement,
-  flushPendingWardrobeAnnouncements,
+  normalizeNoItemSentinel,
 } = require('@/lib/tools/handlers/wardrobe-handler-shared')
 
-describe('wardrobe-handler-shared', () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
+jest.mock('@/lib/logger', () => ({
+  logger: { warn: jest.fn(), debug: jest.fn(), info: jest.fn(), error: jest.fn() },
+}))
 
+jest.mock('@/lib/wardrobe/outfit-change-effects', () => ({
+  notifyWardrobeChanged: jest.fn(),
+}))
+
+jest.mock('@/lib/repositories/factory', () => ({
+  getRepositories: jest.fn(),
+}))
+
+const { buildWearablePool } = require('@/lib/wardrobe/pool')
+const { makeEmptyEquippedSlots } = require('@/lib/schemas/wardrobe.types')
+
+const OWN_ORIGIN = { scope: 'character', id: 'char-1', name: '' }
+
+function item(id: string, title: string, types: string[], componentItemIds: string[] = []) {
+  return {
+    id,
+    characterId: 'char-1',
+    title,
+    types,
+    componentItemIds,
+    appropriateness: null,
+    description: null,
+    isDefault: false,
+    replace: false,
+    archivedAt: null,
+    origin: OWN_ORIGIN,
+  }
+}
+
+function poolOf(items: any[]) {
+  return buildWearablePool(
+    'char-1',
+    { groupMountPointIds: [], projectMountPointIds: [] },
+    { own: items, group: [], project: [], general: [] },
+  )
+}
+
+describe('wardrobe-handler-shared', () => {
   it('returns an empty equipped state when no outfit is stored', async () => {
     const repos = {
-      chats: {
-        getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null),
-      },
-      wardrobe: {
-        findByIds: jest.fn().mockResolvedValue([]),
-      },
+      chats: { getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null) },
     }
-
     const state = await loadCurrentWardrobeState(repos as any, 'chat-1', 'char-1')
-    expect(state).toEqual(emptyEquippedState())
+    expect(state).toEqual(makeEmptyEquippedSlots())
   })
 
-  it('builds coverage summary using expanded composite leaves loaded via findByCharacterId', async () => {
-    // Production reality: equipped state stores only the composite ID, so
-    // findByIds([composite_id]) wouldn't return the children. Components must
-    // come back via findByCharacterId so the resolver can expand the composite.
-    const allItems = [
-      { id: 'rain-outfit', characterId: 'char-1', title: 'Rain Outfit', types: ['top', 'bottom', 'footwear'], componentItemIds: ['raincoat-1', 'jeans-1', 'wellies-1'] },
-      { id: 'raincoat-1', characterId: 'char-1', title: 'Raincoat', types: ['top'], componentItemIds: [] },
-      { id: 'jeans-1', characterId: 'char-1', title: 'Blue Jeans', types: ['bottom'], componentItemIds: [] },
-      { id: 'wellies-1', characterId: 'char-1', title: 'Wellies', types: ['footwear'], componentItemIds: [] },
-    ]
-    const repos = {
-      chats: {
-        getEquippedOutfitForCharacter: jest.fn(),
-      },
-      wardrobe: {
-        findByCharacterId: jest.fn().mockResolvedValue(allItems),
-        findByIds: jest.fn().mockResolvedValue([]),
-      },
-    }
+  it('treats LLM "no item" sentinels as undefined', () => {
+    expect(normalizeNoItemSentinel('none')).toBeUndefined()
+    expect(normalizeNoItemSentinel(' NULL ')).toBeUndefined()
+    expect(normalizeNoItemSentinel('')).toBeUndefined()
+    expect(normalizeNoItemSentinel('raincoat-1')).toBe('raincoat-1')
+    expect(normalizeNoItemSentinel(undefined)).toBeUndefined()
+  })
 
-    const summary = await buildWardrobeCoverageSummaryFromState(repos as any, 'char-1', {
+  it('builds the coverage summary from expanded composite leaves in the pool', () => {
+    // Equipped state stores only the composite id; the summary must still
+    // expand its components from the pool.
+    const pool = poolOf([
+      item('rain-outfit', 'Rain Outfit', ['top', 'bottom', 'footwear'], ['raincoat-1', 'jeans-1', 'wellies-1']),
+      item('raincoat-1', 'Raincoat', ['top']),
+      item('jeans-1', 'Blue Jeans', ['bottom']),
+      item('wellies-1', 'Wellies', ['footwear']),
+    ])
+
+    const summary = buildWardrobeCoverageSummaryFromState(pool, {
       top: ['rain-outfit'],
       bottom: ['rain-outfit'],
       footwear: ['rain-outfit'],
@@ -75,33 +94,24 @@ describe('wardrobe-handler-shared', () => {
     expect(summary).not.toContain('completely naked')
   })
 
-  it('renders a composite equipped to all four slots with components loaded from the wardrobe (Friday regression)', async () => {
-    // This mirrors what Friday hit: wardrobe_wear puts a composite ID
-    // in all four equipped slots, and the prior implementation only fetched
-    // by equipped IDs, so child items vanished and the summary read
-    // "completely naked and unadorned".
-    const allItems = [
-      {
-        id: 'working-outfit',
-        characterId: 'char-1',
-        title: 'Working Outfit — Composed',
-        types: ['top', 'bottom', 'footwear', 'accessories'],
-        componentItemIds: ['sweater-1', 'jeans-1', 'boots-1', 'ring-1'],
-      },
-      { id: 'sweater-1', characterId: 'char-1', title: 'Navy Sweater', types: ['top'], componentItemIds: [] },
-      { id: 'jeans-1', characterId: 'char-1', title: 'Dark Jeans', types: ['bottom'], componentItemIds: [] },
-      { id: 'boots-1', characterId: 'char-1', title: 'Brown Boots', types: ['footwear'], componentItemIds: [] },
-      { id: 'ring-1', characterId: 'char-1', title: 'Wedding Ring', types: ['accessories'], componentItemIds: [] },
-    ]
-    const repos = {
-      chats: { getEquippedOutfitForCharacter: jest.fn() },
-      wardrobe: {
-        findByCharacterId: jest.fn().mockResolvedValue(allItems),
-        findByIds: jest.fn().mockResolvedValue([]),
-      },
-    }
+  it('renders a composite equipped to all four slots via its components (Friday regression)', () => {
+    // Friday: wardrobe_wear put a composite id in all four slots and the
+    // summary read "completely naked and unadorned" because the children were
+    // never loaded.
+    const pool = poolOf([
+      item(
+        'working-outfit',
+        'Working Outfit — Composed',
+        ['top', 'bottom', 'footwear', 'accessories'],
+        ['sweater-1', 'jeans-1', 'boots-1', 'ring-1'],
+      ),
+      item('sweater-1', 'Navy Sweater', ['top']),
+      item('jeans-1', 'Dark Jeans', ['bottom']),
+      item('boots-1', 'Brown Boots', ['footwear']),
+      item('ring-1', 'Wedding Ring', ['accessories']),
+    ])
 
-    const summary = await buildWardrobeCoverageSummaryFromState(repos as any, 'char-1', {
+    const summary = buildWardrobeCoverageSummaryFromState(pool, {
       top: ['working-outfit'],
       bottom: ['working-outfit'],
       footwear: ['working-outfit'],
@@ -115,104 +125,5 @@ describe('wardrobe-handler-shared', () => {
     expect(summary).toContain('Wedding Ring')
     expect(summary).not.toContain('completely naked')
     expect(summary).not.toContain('Working Outfit — Composed')
-  })
-
-  it('logs a warning when announcement enqueue fails', async () => {
-    enqueueWardrobeOutfitAnnouncement.mockRejectedValueOnce(new Error('queue unavailable'))
-
-    await scheduleWardrobeAnnouncement('wardrobe-test', {
-      userId: 'user-1',
-      chatId: 'chat-1',
-      characterId: 'char-1',
-      extraLogFields: { slot: 'top' },
-    })
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      'Failed to schedule wardrobe outfit announcement',
-      expect.objectContaining({
-        context: 'wardrobe-test',
-        chatId: 'chat-1',
-        characterId: 'char-1',
-        slot: 'top',
-      }),
-    )
-  })
-
-  describe('recordPendingWardrobeAnnouncement', () => {
-    it('adds to the per-turn Set without enqueuing immediately when one is present', async () => {
-      const pending = new Set<string>()
-      await recordPendingWardrobeAnnouncement(
-        { userId: 'user-1', chatId: 'chat-1', pendingWardrobeAnnouncements: pending },
-        { sourceContext: 'wardrobe-test', characterId: 'char-1' },
-      )
-      expect(pending.has('char-1')).toBe(true)
-      expect(enqueueWardrobeOutfitAnnouncement).not.toHaveBeenCalled()
-    })
-
-    it('falls back to immediate enqueue when no per-turn Set is present', async () => {
-      await recordPendingWardrobeAnnouncement(
-        { userId: 'user-1', chatId: 'chat-1' },
-        { sourceContext: 'wardrobe-test', characterId: 'char-1' },
-      )
-      expect(enqueueWardrobeOutfitAnnouncement).toHaveBeenCalledWith('user-1', {
-        chatId: 'chat-1',
-        characterId: 'char-1',
-      })
-    })
-
-    it('coalesces multiple records for the same character into a single Set entry', async () => {
-      const pending = new Set<string>()
-      const ctx = { userId: 'user-1', chatId: 'chat-1', pendingWardrobeAnnouncements: pending }
-      for (let i = 0; i < 6; i++) {
-        await recordPendingWardrobeAnnouncement(ctx, {
-          sourceContext: 'wardrobe-test',
-          characterId: 'char-1',
-        })
-      }
-      expect(pending.size).toBe(1)
-      expect(enqueueWardrobeOutfitAnnouncement).not.toHaveBeenCalled()
-    })
-
-    it('keeps separate entries for different characters', async () => {
-      const pending = new Set<string>()
-      const ctx = { userId: 'user-1', chatId: 'chat-1', pendingWardrobeAnnouncements: pending }
-      await recordPendingWardrobeAnnouncement(ctx, { sourceContext: 's', characterId: 'char-1' })
-      await recordPendingWardrobeAnnouncement(ctx, { sourceContext: 's', characterId: 'char-2' })
-      expect(pending.size).toBe(2)
-    })
-  })
-
-  describe('flushPendingWardrobeAnnouncements', () => {
-    it('enqueues one announcement per character and clears the Set', async () => {
-      const pending = new Set<string>(['char-1', 'char-2'])
-      await flushPendingWardrobeAnnouncements({
-        userId: 'user-1',
-        chatId: 'chat-1',
-        pendingWardrobeAnnouncements: pending,
-      })
-      expect(enqueueWardrobeOutfitAnnouncement).toHaveBeenCalledTimes(2)
-      expect(enqueueWardrobeOutfitAnnouncement).toHaveBeenCalledWith('user-1', {
-        chatId: 'chat-1',
-        characterId: 'char-1',
-      })
-      expect(enqueueWardrobeOutfitAnnouncement).toHaveBeenCalledWith('user-1', {
-        chatId: 'chat-1',
-        characterId: 'char-2',
-      })
-      expect(pending.size).toBe(0)
-    })
-
-    it('is a no-op when the Set is missing', async () => {
-      await flushPendingWardrobeAnnouncements({ userId: 'user-1', chatId: 'chat-1' })
-      expect(enqueueWardrobeOutfitAnnouncement).not.toHaveBeenCalled()
-    })
-
-    it('is idempotent across repeated calls', async () => {
-      const pending = new Set<string>(['char-1'])
-      const ctx = { userId: 'user-1', chatId: 'chat-1', pendingWardrobeAnnouncements: pending }
-      await flushPendingWardrobeAnnouncements(ctx)
-      await flushPendingWardrobeAnnouncements(ctx)
-      expect(enqueueWardrobeOutfitAnnouncement).toHaveBeenCalledTimes(1)
-    })
   })
 })

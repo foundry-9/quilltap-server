@@ -5,7 +5,7 @@
  * An **avatar roll** is one plate the house has already developed for a
  * character: the image the wardrobe avatar job stored for a particular
  * configuration of outfit, provider, profile and model. The cache
- * (`lib/wardrobe/avatar-cache.ts`) looks those up by key so a character
+ * (`lib/image-gen/avatar-cache.ts`) looks those up by key so a character
  * putting the same coat back on costs nothing; this module looks them up by
  * *character*, so the operator can see the collection, promote a plate to the
  * character's portrait, copy one into the photo album, or throw one away.

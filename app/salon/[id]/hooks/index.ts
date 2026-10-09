@@ -24,7 +24,5 @@ export type { ImpersonationVoiceState, RehearsalSeat, RehearsalTarget } from './
 export { useChatControls } from './useChatControls'
 export { useSSEStreaming, parseSSEData } from './useSSEStreaming'
 export type { PendingToolCall, ToolExecutionStatus, ResponseStatus } from './useSSEStreaming'
-export { useOutfit } from './useOutfit'
-export type { WardrobeItemSummary, CharacterOutfitState, OutfitState, WardrobeCache } from './useOutfit'
 export { useChatGallery } from './useChatGallery'
 export type { ChatGalleryEntry, ChatGallerySource, ChatGalleryResponse } from './useChatGallery'

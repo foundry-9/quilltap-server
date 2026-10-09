@@ -29,7 +29,7 @@ export function wearOf(item: WearAnnotated): WardrobeWearSummary {
 }
 
 /** True when the ledger has no wear on record for this item. */
-export function isNeverWorn(item: WearAnnotated): boolean {
+function isNeverWorn(item: WearAnnotated): boolean {
   return wearOf(item).wearCount <= 0
 }
 
@@ -127,7 +127,7 @@ function compareDescNullsLast(a: number | null, b: number | null): number {
  *  - `most-worn` — highest `wearCount` first; never-worn items last.
  *  - `newest` — most recent `createdAt` first.
  */
-export function sortWardrobeItems<T extends SortableWardrobeItem>(
+function sortWardrobeItems<T extends SortableWardrobeItem>(
   items: readonly T[],
   sort: WardrobeListSort,
 ): T[] {

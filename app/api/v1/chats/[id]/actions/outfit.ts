@@ -5,10 +5,12 @@
  * GET /api/v1/chats/[id]?action=outfit-summary — Per-character resolved title summary
  * POST /api/v1/chats/[id]?action=equip         — Mutate equipped state
  *
- * The POST body uses the same `mode` enum as the `wardrobe_wear`/`wardrobe_take_off` LLM
- * tool: `equip`, `add_to_slot`, `remove_from_slot`, `clear_slot`. Internally
- * each mode dispatches to the matching primitive in
- * `lib/wardrobe/outfit-displacement.ts`.
+ * The POST body's put-on modes go through `lib/wardrobe/wear-ops.ts` — the
+ * same resolution and refusals as the `wardrobe_wear` tool (an archived item
+ * is never put on, bug 191) — and every mode commits through
+ * `applyDisplacement`. `remove_from_slot` takes one item out of ONE slot; the
+ * `wardrobe_take_off` tool's `remove` loops it over every slot the item covers.
+ * The operator is dressing the character, so the project roster doesn't apply.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,26 +18,14 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { serverError, notFound, badRequest } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
-import {
-  equipItem,
-  replaceItem,
-  addToSlot,
-  removeFromSlot,
-  wornBundlesFor,
-} from '@/lib/wardrobe/outfit-displacement';
-import type { WornBundle } from '@/lib/wardrobe/outfit-displacement';
-import { loadBundleLookup } from '@/lib/wardrobe/hydrate-components';
-import { isBundle } from '@/lib/wardrobe/dissolve-bundles';
-import { expandComposites } from '@/lib/wardrobe/expand-composites';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
-import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, EquippedSlotsSchema, WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
-import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
-import {
-  resolveGroupMountPointIdsForCharacter,
-  resolveProjectMountPointIds,
-} from '@/lib/mount-index/tiered-mount-pool';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import { isComposite, WARDROBE_SLOT_TYPES, EquippedSlotsSchema, WardrobeItemTypeEnum, bySlot } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { loadCastPools, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
+import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { wornBundlesFor, type WornBundle } from '@/lib/wardrobe/slot-ops';
+import { resolveWearable, wearItem, type PutOnMode } from '@/lib/wardrobe/wear-ops';
 import { newlyWornArchivedItems, wearRefusal } from '@/lib/wardrobe/wearable';
 
 const equipBodySchema = z
@@ -112,8 +102,10 @@ export async function handleGetOutfit(
 
 /**
  * GET ?action=outfit-summary — Return per-character equipped outfit with
- * resolved item titles. Each slot is an array of items (composites are
- * expanded to their leaves before mapping). Shape:
+ * resolved item titles. Each character's slots resolve against their own
+ * wearable pool (the project and General tiers read once for the cast) by the
+ * canonical rule: composites expanded, each leaf routed into every slot its
+ * own `types` cover. Shape:
  *
  *   { summary: { [characterId]: { [slot]: [{ itemId, title }, ...] } } }
  */
@@ -122,89 +114,35 @@ export async function handleGetOutfitSummary(
   { repos }: RequestContext
 ): Promise<NextResponse> {
   try {
-
     const chat = await repos.chats.findById(chatId);
     if (!chat) {
       return notFound('Chat');
     }
 
     const equippedOutfit = (await repos.chats.getEquippedOutfit(chatId)) ?? {};
-
-    // Collect every itemId across all characters/slots, then bulk-resolve.
-    const allItemIds = new Set<string>();
-    for (const slots of Object.values(equippedOutfit)) {
-      if (!slots) continue;
-      for (const slotKey of WARDROBE_SLOT_TYPES) {
-        for (const id of slots[slotKey] ?? []) {
-          if (typeof id === 'string' && id.length > 0) allItemIds.add(id);
-        }
-      }
-    }
-
-    const itemsById = new Map<string, WardrobeItem>();
-    if (allItemIds.size > 0) {
-      // No global wardrobe table post-cutover: seed shared items (Quilltap
-      // General + the chat project's stores + every participant's group stores)
-      // so composite components that are shared items resolve, then layer each
-      // participant character's own vault wardrobe on top.
-      //
-      // This summary spans the whole cast, so the group tier is the *union* of
-      // the participants' memberships — unlike the per-character equip paths
-      // below, where each character sees only their own groups.
-      const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
-      const characterIds = Object.keys(equippedOutfit);
-      const groupMountPointIds = Array.from(
-        new Set(
-          (
-            await Promise.all(
-              characterIds.map((id) => resolveGroupMountPointIdsForCharacter(id)),
-            )
-          ).flat(),
-        ),
-      );
-      for (const arche of await repos.wardrobe.findArchetypes(true, {
-        groupMountPointIds,
-        projectMountPointIds,
-      })) {
-        itemsById.set(arche.id, arche);
-      }
-      for (const characterId of characterIds) {
-        for (const item of await repos.wardrobe.findByCharacterId(characterId, true)) {
-          itemsById.set(item.id, item);
-        }
-      }
-    }
+    const characterIds = Object.keys(equippedOutfit);
+    const pools = await loadCastPools(repos, chat.projectId, characterIds);
 
     type SummaryEntry = { itemId: string; title: string };
     const summary: Record<string, Record<string, SummaryEntry[]>> = {};
 
     for (const [characterId, slots] of Object.entries(equippedOutfit)) {
-      const slotMap: Record<string, SummaryEntry[]> = Object.fromEntries(
-        WARDROBE_SLOT_TYPES.map((slot) => [slot, [] as SummaryEntry[]]),
-      );
-
-      if (slots) {
-        for (const slotKey of WARDROBE_SLOT_TYPES) {
-          const equippedIds = slots[slotKey] ?? [];
-          if (equippedIds.length === 0) continue;
-
-          const { leafIds } = expandComposites(equippedIds, itemsById);
-          const seen = new Set<string>();
-          for (const leafId of leafIds) {
-            if (seen.has(leafId)) continue;
-            const leaf = itemsById.get(leafId);
-            if (!leaf) continue;
-            // Only project the leaf into slots its own types cover.
-            if (!leaf.types.includes(slotKey)) continue;
-            slotMap[slotKey].push({ itemId: leaf.id, title: leaf.title });
-            seen.add(leafId);
-          }
-        }
+      const pool = pools.get(characterId);
+      if (!slots || !pool) {
+        summary[characterId] = bySlot<SummaryEntry[]>(() => []);
+        continue;
       }
-
-      summary[characterId] = slotMap;
+      const { leafItemsBySlot } = resolveEquippedOutfitForCharacter(pool, slots);
+      summary[characterId] = bySlot((slot) =>
+        leafItemsBySlot[slot].map((leaf) => ({ itemId: leaf.id, title: leaf.title })),
+      );
     }
 
+    logger.debug('[Chats v1] Built outfit summary', {
+      chatId,
+      characterCount: characterIds.length,
+      context: 'wardrobe',
+    });
     return NextResponse.json({ summary });
   } catch (error) {
     logger.error('[Chats v1] Error fetching equipped outfit summary', { chatId }, error instanceof Error ? error : undefined);
@@ -213,28 +151,21 @@ export async function handleGetOutfitSummary(
 }
 
 /**
- * Turn a `set_all` request's `wornBundleIds` into the ledger's bundle credit.
- * Ids the character cannot reach, and items that are not bundles, are dropped
- * (a client cannot credit a garment it cannot see); each survivor is expanded
- * to its leaves server-side.
+ * Turn a `set_all` request's `wornBundleIds` into the ledger's composite
+ * credit. Ids the character cannot reach, and items that are not composites,
+ * are dropped (a client cannot credit a garment it cannot see); each survivor
+ * is expanded to its leaves over the pool.
  */
-async function resolveWornBundles(
-  { repos }: RequestContext,
-  characterId: string,
-  wornBundleIds: string[],
-  tiers: Awaited<ReturnType<typeof resolveSharedWardrobeTiersForChat>>,
-): Promise<WornBundle[]> {
+function resolveWornBundles(pool: WearablePool, wornBundleIds: string[]): WornBundle[] {
   const ids = Array.from(new Set(wornBundleIds));
   if (ids.length === 0) return [];
-  const bundles = (await repos.wardrobe.findByIdsForCharacter(characterId, ids, tiers)).filter(isBundle);
-  const result: WornBundle[] = [];
-  for (const bundle of bundles) {
-    const lookup = await loadBundleLookup(repos, characterId, bundle.componentItemIds, tiers);
-    result.push(...wornBundlesFor(bundle, lookup));
-  }
+  const result = pool
+    .getMany(ids)
+    .filter(isComposite)
+    .flatMap((bundle) => wornBundlesFor(bundle, pool.byId));
   if (result.length !== ids.length) {
     logger.debug('[Chats v1] Some claimed worn bundles were not credited', {
-      characterId,
+      characterId: pool.characterId,
       claimed: ids.length,
       resolved: result.length,
       context: 'wardrobe',
@@ -243,11 +174,52 @@ async function resolveWornBundles(
   return result;
 }
 
+/** Commit a whole fitting at once (the dialog's Done / "Wear this fitting"). */
+async function setAll(
+  { repos }: RequestContext,
+  chatId: string,
+  pool: WearablePool,
+  slots: EquippedSlots,
+  wornBundleIds: string[],
+): Promise<NextResponse | EquippedSlots> {
+  const characterId = pool.characterId;
+  // Every id must be something this character can reach, and none may be an
+  // archived item being newly put on.
+  const allIds = Array.from(new Set(WARDROBE_SLOT_TYPES.flatMap((key) => slots[key])));
+  const found = pool.getMany(allIds);
+  if (found.length !== allIds.length) {
+    const foundIds = new Set(found.map((i) => i.id));
+    const missing = allIds.find((id) => !foundIds.has(id));
+    return badRequest(`Wardrobe item ${missing} not available to this character`);
+  }
+  const current = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+  const archived = newlyWornArchivedItems(found, current);
+  if (archived.length > 0) {
+    logger.info('[Chats v1] Refused a fitting that puts on an archived item', {
+      chatId, characterId, itemIds: archived.map((i) => i.id), context: 'wardrobe',
+    });
+    return badRequest(wearRefusal(archived[0])!);
+  }
+  const wornBundles = resolveWornBundles(pool, wornBundleIds);
+  await repos.wardrobeWear.commitEquippedOutfit({
+    chatId,
+    characterId,
+    nextSlots: slots,
+    wornBundles,
+    source: 'ui',
+  });
+  logger.info('[Chats v1] Equipped outfit replaced (set_all)', {
+    chatId, characterId, wornBundleCount: wornBundles.length, context: 'wardrobe',
+  });
+  return slots;
+}
+
 /**
  * POST ?action=equip — Mutate equipped state for a character in this chat.
  *
- * Body: `{ characterId, mode, slot?, itemId? }` — same `mode` semantics as
- * the `wardrobe_wear`/`wardrobe_take_off` LLM tools.
+ * Body: `{ characterId, mode, slot?, itemId? }` — `wear` (alias `equip`),
+ * `replace` and `add_to_slot` put an item on; `remove_from_slot` and
+ * `clear_slot` take off; `set_all` commits a whole fitting.
  */
 export async function handleEquipSlot(
   req: NextRequest,
@@ -259,163 +231,46 @@ export async function handleEquipSlot(
     const body = await req.json();
     const { characterId, mode, slot, itemId, slots: bodySlots, wornBundleIds } = equipBodySchema.parse(body);
 
-    // Project tier for tri-tier wardrobe resolution — lets a chat equip items
-    // that live in the project's document store, not just the character vault
-    // or Quilltap General.
-    // The operator is dressing the character, so the project roster does not apply.
-    const tiers = await resolveSharedWardrobeTiersForChat(chatId, characterId, { operator: true });
+    let updatedSlots: EquippedSlots;
 
-    let updatedSlots;
-
-    if (mode === 'set_all') {
-      // Atomic replace — used by the dialog's "Wear this fitting" button to
-      // commit a fitting-room composition all at once. Validate every id
-      // resolves to an item in this character's wardrobe before persisting,
-      // and that none is an archived item being newly put on.
-      const allIds = new Set<string>();
-      for (const key of WARDROBE_SLOT_TYPES) {
-        for (const id of bodySlots![key]) allIds.add(id);
-      }
-      if (allIds.size > 0) {
-        const found = await repos.wardrobe.findByIdsForCharacter(characterId, Array.from(allIds), tiers);
-        const foundIds = new Set(found.map((i) => i.id));
-        for (const id of allIds) {
-          if (!foundIds.has(id)) {
-            return badRequest(`Wardrobe item ${id} not available to this character`);
-          }
-        }
-        const current = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
-        const archived = newlyWornArchivedItems(found, current);
-        if (archived.length > 0) {
-          logger.info('[Chats v1] Refused a fitting that puts on an archived item', {
-            chatId, characterId, itemIds: archived.map((i) => i.id), context: 'wardrobe',
-          });
-          return badRequest(wearRefusal(archived[0])!);
-        }
-      }
-      const wornBundles = await resolveWornBundles(ctx, characterId, wornBundleIds ?? [], tiers);
-      await repos.wardrobeWear.commitEquippedOutfit({
-        chatId,
-        characterId,
-        nextSlots: bodySlots!,
-        wornBundles,
-        source: 'ui',
+    if (mode === 'remove_from_slot' || mode === 'clear_slot') {
+      updatedSlots = await applyDisplacement(repos, chatId, characterId, {
+        mode,
+        slot: slot as WardrobeItemType,
+        itemId: mode === 'remove_from_slot' ? itemId ?? undefined : undefined,
       });
-      updatedSlots = bodySlots!;
-      logger.info('[Chats v1] Equipped outfit replaced (set_all)', {
-        chatId, characterId, wornBundleCount: wornBundles.length, context: 'wardrobe',
-      });
-    } else if (mode === 'wear' || mode === 'equip') {
-      // itemId guaranteed by schema. Validate the item resolves and covers
-      // at least one slot we recognize.
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
-      if (!item) {
-        return notFound('Wardrobe item');
-      }
-      const refusal = wearRefusal(item);
-      if (refusal) {
-        logger.info('[Chats v1] Refused to wear an archived item', {
-          chatId, characterId, mode, itemId: item.id, context: 'wardrobe',
-        });
-        return badRequest(refusal);
-      }
-      updatedSlots = await equipItem(repos, chatId, characterId, item, tiers);
-      logger.info('[Chats v1] Wardrobe item worn', {
-        chatId, characterId, itemId: item.id, slotsAffected: item.types,
-        effect: item.replace ? 'replaced' : 'layered',
-        context: 'wardrobe',
-      });
-    } else if (mode === 'replace') {
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
-      if (!item) {
-        return notFound('Wardrobe item');
-      }
-      const refusal = wearRefusal(item);
-      if (refusal) {
-        logger.info('[Chats v1] Refused to wear an archived item', {
-          chatId, characterId, mode, itemId: item.id, context: 'wardrobe',
-        });
-        return badRequest(refusal);
-      }
-      updatedSlots = await replaceItem(repos, chatId, characterId, item, tiers);
-      logger.info('[Chats v1] Wardrobe item force-replaced', {
-        chatId, characterId, itemId: item.id, slotsAffected: item.types,
-        effect: 'replaced',
-        context: 'wardrobe',
-      });
-    } else if (mode === 'add_to_slot') {
-      const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
-      if (!item) {
-        return notFound('Wardrobe item');
-      }
-      const refusal = wearRefusal(item);
-      if (refusal) {
-        logger.info('[Chats v1] Refused to wear an archived item', {
-          chatId, characterId, mode, itemId: item.id, context: 'wardrobe',
-        });
-        return badRequest(refusal);
-      }
-      if (!item.types.includes(slot as WardrobeItemType)) {
-        return badRequest(
-          `Wardrobe item "${item.title}" does not cover the ${slot} slot`,
-        );
-      }
-      updatedSlots = await addToSlot(
-        repos,
-        chatId,
-        characterId,
-        slot as WardrobeItemType,
-        item,
-        tiers,
-      );
-      logger.info('[Chats v1] Wardrobe item layered into slot', {
-        chatId, characterId, slot, itemId: item.id, context: 'wardrobe',
-      });
-    } else if (mode === 'remove_from_slot') {
-      updatedSlots = await removeFromSlot(
-        repos,
-        chatId,
-        characterId,
-        slot as WardrobeItemType,
-        itemId ?? undefined,
-      );
-      logger.info('[Chats v1] Wardrobe item removed from slot', {
-        chatId, characterId, slot, itemId: itemId ?? null, context: 'wardrobe',
+      logger.info('[Chats v1] Wardrobe slot changed', {
+        chatId, characterId, mode, slot, itemId: itemId ?? null, context: 'wardrobe',
       });
     } else {
-      // mode === 'clear_slot'
-      updatedSlots = await removeFromSlot(
-        repos,
-        chatId,
-        characterId,
-        slot as WardrobeItemType,
-      );
-      logger.info('[Chats v1] Wardrobe slot cleared', {
-        chatId, characterId, slot, context: 'wardrobe',
-      });
+      const pool = await loadWearablePool(repos, characterId, undefined, { chatId, operator: true });
+      if (mode === 'set_all') {
+        const outcome = await setAll(ctx, chatId, pool, bodySlots!, wornBundleIds ?? []);
+        if (outcome instanceof NextResponse) return outcome;
+        updatedSlots = outcome;
+      } else {
+        const putOn: PutOnMode = mode === 'equip' ? 'wear' : mode;
+        const resolved = resolveWearable(pool, { itemId }, putOn, slot);
+        if (!resolved.ok) {
+          logger.info('[Chats v1] Refused to put on a wardrobe item', {
+            chatId, characterId, mode, itemId, reason: resolved.reason, context: 'wardrobe',
+          });
+          return resolved.reason === 'not_found' ? notFound('Wardrobe item') : badRequest(resolved.message);
+        }
+        const outcome = await wearItem(repos, chatId, pool, resolved.item, putOn, slot, 'ui');
+        updatedSlots = outcome.slots;
+        logger.info('[Chats v1] Wardrobe item put on', {
+          chatId, characterId, mode: putOn, itemId: resolved.item.id,
+          slotsAffected: outcome.slotsAffected, effect: outcome.effect, context: 'wardrobe',
+        });
+      }
     }
 
-    if (!updatedSlots) {
-      return serverError('Failed to update equipped slot');
-    }
-
-    // Trigger avatar generation if enabled for this chat
-    await triggerAvatarGenerationIfEnabled(repos, {
-      userId: ctx.user.id,
-      chatId,
-      characterId,
-      callerContext: '[Chats v1] outfit-equip',
-    });
-
-    // Schedule a debounced Aurora announcement (or push back the existing one)
-    try {
-      await enqueueWardrobeOutfitAnnouncement(ctx.user.id, { chatId, characterId });
-    } catch (announceError) {
-      logger.warn('[Chats v1] Failed to schedule outfit announcement', {
-        chatId, characterId,
-        error: announceError instanceof Error ? announceError.message : String(announceError),
-      });
-    }
+    await notifyWardrobeChanged(
+      repos,
+      { userId: ctx.user.id, chatId, characterId },
+      '[Chats v1] outfit-equip',
+    );
 
     return NextResponse.json({ equippedSlots: updatedSlots });
   } catch (error) {

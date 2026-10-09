@@ -15,9 +15,14 @@
  *      renders as a gap rather than an error.
  */
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook as rtlRenderHook, waitFor } from '@testing-library/react'
+import { createQueryWrapper } from '../../../helpers/renderWithQuery'
 
 import { useWardrobeContainerItems } from '@/lib/hooks/use-wardrobe-container-items'
+
+/** Every hook here reads through TanStack Query; each render gets a fresh client. */
+const renderHook = ((callback: never, options?: object) =>
+  rtlRenderHook(callback, { wrapper: createQueryWrapper().wrapper, ...options })) as typeof rtlRenderHook
 
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>
 

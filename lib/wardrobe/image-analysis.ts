@@ -3,19 +3,17 @@
  *
  * Analyzes an uploaded image using a vision-capable LLM to propose
  * wardrobe items (clothing, accessories) that can be added to a character's
- * wardrobe. Finds a suitable vision provider from the user's configured
- * connection profiles, following the same pattern as file-attachment-fallback.ts.
+ * wardrobe. The profile and the request are the shared vision path
+ * (`lib/llm/vision-request.ts`) the describe-fallback uses: a profile that
+ * can actually receive the image, the bytes shrunk for transport, and the
+ * answer believed only once the image is known to have arrived (bug 197).
  *
  * @module wardrobe/image-analysis
  */
 
-import { createLLMProvider } from '@/lib/llm'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
-import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
-import { logLLMCall } from '@/lib/services/llm-logging.service'
-import { profileParams } from '@/lib/llm/cheap-llm'
+import { resolveVisionProfile, sendVisionRequest } from '@/lib/llm/vision-request'
 import { logger } from '@/lib/logger'
-import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
@@ -68,63 +66,6 @@ export interface ImageAnalysisParams {
   mimeType: string
   /** Optional user guidance text */
   guidance?: string
-}
-
-// ============================================================================
-// VISION PROVIDER RESOLUTION
-// ============================================================================
-
-/**
- * Find a vision-capable connection profile for image analysis.
- * Uses the same resolution strategy as file-attachment-fallback.ts:
- * 1. Check for a configured imageDescriptionProfileId in chat settings
- * 2. Fall back to any vision-capable profile (prefer cheap ones)
- */
-async function findVisionProfile(
-  repos: RepositoryContainer,
-  userId: string
-): Promise<ConnectionProfile | null> {
-  // Check if user has a dedicated image description profile configured
-  const chatSettings = await repos.chatSettings.findByUserId(userId)
-  const imageDescriptionProfileId = chatSettings?.imageDescriptionProfileId
-
-  if (imageDescriptionProfileId) {
-    const profile = await repos.connections.findById(imageDescriptionProfileId)
-    if (profile && profileSupportsMimeType(profile, 'image/jpeg')) {
-      moduleLogger.debug('[Wardrobe Image Analysis] Using configured image description profile', {
-        profileId: profile.id,
-        provider: profile.provider,
-        model: profile.modelName,
-      })
-      return profile
-    }
-  }
-
-  // Fall back to any vision-capable profile
-  const availableProfiles = await repos.connections.findAll()
-
-  const visionProfiles = availableProfiles.filter((p: ConnectionProfile) =>
-    profileSupportsMimeType(p, 'image/jpeg')
-  )
-
-  if (visionProfiles.length === 0) {
-    moduleLogger.warn('[Wardrobe Image Analysis] No vision-capable profiles found')
-    return null
-  }
-
-  // Prefer non-cheap profiles for better quality analysis (unlike fallback which prefers cheap)
-  // But still use cheap if that's all that's available
-  const nonCheapVisionProfile = visionProfiles.find((p: ConnectionProfile) => !p.isCheap)
-  const selectedProfile = nonCheapVisionProfile || visionProfiles[0]
-
-  moduleLogger.debug('[Wardrobe Image Analysis] Using vision-capable profile', {
-    profileId: selectedProfile.id,
-    provider: selectedProfile.provider,
-    model: selectedProfile.modelName,
-    isCheap: selectedProfile.isCheap,
-  })
-
-  return selectedProfile
 }
 
 // ============================================================================
@@ -296,6 +237,16 @@ export async function analyzeImageForWardrobeItems(
   return trackActivity('image', () => runAnalyzeImageForWardrobeItems(params, repos, userId))
 }
 
+/** Generous: a detailed multi-item analysis on a slow vision model takes a while. */
+const ANALYSIS_TIMEOUT_MS = 120_000
+const ANALYSIS_TEMPERATURE = 0.5
+const ANALYSIS_MAX_TOKENS = 4000
+
+const NO_VISION_PROFILE_MESSAGE =
+  'No vision-capable provider is configured. This feature requires a provider that supports ' +
+  'image analysis (e.g., Anthropic Claude, OpenAI GPT-4o, Google Gemini). ' +
+  'Configure one in your provider settings, or set an Image Description Profile in Chat settings.'
+
 async function runAnalyzeImageForWardrobeItems(
   params: ImageAnalysisParams,
   repos: RepositoryContainer,
@@ -307,147 +258,88 @@ async function runAnalyzeImageForWardrobeItems(
     hasGuidance: !!params.guidance,
   })
 
-  // 1. Find a vision-capable profile
-  const profile = await findVisionProfile(repos, userId)
+  // 1. The shared vision resolver: the configured Image Description profile
+  // when it can actually receive an image (bug 91's predicate), else any
+  // profile that can, a non-cheap one first — quality is the point here.
+  const profile = await resolveVisionProfile(repos, userId, {
+    prefer: 'capable',
+    configured: 'skip-incapable',
+  })
   if (!profile) {
-    throw new Error(
-      'No vision-capable provider is configured. This feature requires a provider that supports ' +
-      'image analysis (e.g., Anthropic Claude, OpenAI GPT-4o, Google Gemini). ' +
-      'Configure one in your provider settings, or set an Image Description Profile in Chat settings.'
-    )
+    throw new Error(NO_VISION_PROFILE_MESSAGE)
   }
-
-  // 2. Get API key
-  let apiKeyValue = ''
-  if (profile.apiKeyId) {
-    const apiKey = await repos.connections.findApiKeyByIdAndUserId(profile.apiKeyId, userId)
-    if (apiKey) {
-      apiKeyValue = apiKey.key_value
-    }
-  }
-
-  if (!apiKeyValue && profile.provider !== 'OLLAMA') {
-    throw new Error(
-      `API key not found for provider ${profile.provider}. Check your connection profile settings.`
-    )
-  }
-
-  // 3. Create provider and send message
-  const provider = await createLLMProvider(
-    profile.provider as any,
-    profile.baseUrl || undefined
-  )
 
   const userContent = buildUserPrompt(params.guidance)
 
-  const startTime = Date.now()
-
-  moduleLogger.debug('[Wardrobe Image Analysis] Sending image to LLM', {
-    provider: profile.provider,
-    model: profile.modelName,
-    userContentLength: userContent.length,
-  })
-
+  // 2. The shared vision request: transport shrink, logging, and the
+  // arrival check before the answer is believed (bug 197).
+  let sent
   try {
-    const response = await provider.sendMessage(
-      {
-        model: profile.modelName,
-        messages: [
-          {
-            role: 'system',
-            content: SYSTEM_PROMPT,
-          },
-          {
-            role: 'user',
-            content: userContent,
-            attachments: [
-              {
-                id: 'wardrobe-analysis-image',
-                filename: `analysis.${params.mimeType.split('/')[1] || 'jpg'}`,
-                mimeType: params.mimeType,
-                size: Math.ceil(params.image.length * 0.75), // Approximate decoded size
-                data: params.image,
-              },
-            ],
-          },
-        ],
-        maxTokens: 4000,
-        temperature: 0.5,
-        // Forward the profile's provider params (e.g. DeepSeek thinking mode)
-        // so a "reasoning off" setting on the analysis profile takes effect.
-        profileParameters: profileParams(profile),
-      },
-      apiKeyValue
-    )
-
-    const durationMs = Date.now() - startTime
-
-    moduleLogger.debug('[Wardrobe Image Analysis] LLM response received', {
-      provider: profile.provider,
-      model: profile.modelName,
-      contentLength: response.content.length,
-      durationMs,
-      usage: response.usage,
-    })
-
-    // Log the LLM call
-    logLLMCall({
+    sent = await sendVisionRequest({
+      profile,
+      repos,
       userId,
-      type: 'WARDROBE_IMAGE_ANALYSIS',
-      provider: profile.provider,
-      modelName: profile.modelName,
-      request: {
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userContent, attachments: [{ type: 'image', mimeType: params.mimeType }] },
-        ],
-        temperature: 0.5,
-        maxTokens: 4000,
+      attachment: {
+        id: 'wardrobe-analysis-image',
+        filename: `analysis.${params.mimeType.split('/')[1] || 'jpg'}`,
+        mimeType: params.mimeType,
+        size: Math.ceil(params.image.length * 0.75), // Approximate decoded size
+        data: params.image,
       },
-      response: {
-        content: response.content,
-      },
-      usage: response.usage,
-      durationMs,
-    }).catch(err => {
-      moduleLogger.warn('[Wardrobe Image Analysis] Failed to log LLM call', {
-        error: err instanceof Error ? err.message : String(err),
-      })
+      systemPrompt: SYSTEM_PROMPT,
+      instruction: userContent,
+      sampling: { temperature: ANALYSIS_TEMPERATURE, maxTokens: ANALYSIS_MAX_TOKENS },
+      timeoutMs: ANALYSIS_TIMEOUT_MS,
+      logType: 'WARDROBE_IMAGE_ANALYSIS',
+      requireApiKey: true,
     })
-
-    // 4. Parse the response
-    const { proposedItems, proposedOutfit } = parseAnalysisResponse(response.content)
-
-    moduleLogger.info('[Wardrobe Image Analysis] Analysis complete', {
-      itemCount: proposedItems.length,
-      hasOutfit: proposedOutfit !== null,
-      provider: profile.provider,
-      model: profile.modelName,
-      durationMs,
-    })
-
-    return {
-      proposedItems,
-      proposedOutfit,
-      provider: profile.provider,
-      model: profile.modelName,
-    }
   } catch (error) {
-    const durationMs = Date.now() - startTime
-
     moduleLogger.error('[Wardrobe Image Analysis] LLM call failed', {
       provider: profile.provider,
       model: profile.modelName,
-      durationMs,
     }, error instanceof Error ? error : new Error(String(error)))
-
-    // Re-throw with user-friendly message if it's not already one
-    if (error instanceof Error && error.message.includes('The AI returned')) {
-      throw error
-    }
     throw new Error(
       `Image analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
       'Please try again or use a different provider.'
     )
+  }
+
+  if (!sent.ok) {
+    moduleLogger.warn('[Wardrobe Image Analysis] Vision request refused', {
+      provider: profile.provider,
+      model: profile.modelName,
+      refusal: sent.refusal,
+      detail: sent.detail,
+    })
+    switch (sent.refusal) {
+      case 'missing-api-key':
+        throw new Error(
+          `API key not found for provider ${profile.provider}. Check your connection profile settings.`
+        )
+      case 'image-not-received':
+        throw new Error(
+          `The AI returned an answer without seeing the image (${sent.detail}). ` +
+          'Pick a vision profile on a model that genuinely reads images.'
+        )
+      default:
+        throw new Error(NO_VISION_PROFILE_MESSAGE)
+    }
+  }
+
+  // 3. Parse the response
+  const { proposedItems, proposedOutfit } = parseAnalysisResponse(sent.response.content)
+
+  moduleLogger.info('[Wardrobe Image Analysis] Analysis complete', {
+    itemCount: proposedItems.length,
+    hasOutfit: proposedOutfit !== null,
+    provider: profile.provider,
+    model: profile.modelName,
+  })
+
+  return {
+    proposedItems,
+    proposedOutfit,
+    provider: profile.provider,
+    model: profile.modelName,
   }
 }

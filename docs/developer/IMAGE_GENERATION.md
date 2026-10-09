@@ -812,7 +812,7 @@ Two aesthetic domains, two files, resolved **independently** and **project-overr
 Weaving differs by pipeline:
 
 - **Backgrounds / ad-hoc** (cheap-LLM rewrite): `craftStoryBackgroundPrompt` / `craftImagePrompt` (`lib/memory/cheap-llm-tasks/image-scene-tasks.ts`) append labelled blocks (`buildAestheticSection`) to the user message — scene aesthetic, character aesthetic, and a `MANDATORY` per-character depiction block. Both system prompts instruct the model to treat depiction guidelines as binding. Context types `StoryBackgroundPromptContext` / `ImagePromptExpansionContext` carry `sceneAesthetic` / `characterAesthetic` / `depictionGuidelines`.
-- **Avatars** (no LLM step): `buildCharacterAvatarPrompt` (`lib/wardrobe/avatar-prompt.ts`) prepends the aurora aesthetic as a capped (600-char) preamble. No depiction guidelines.
+- **Avatars** (no LLM step): `buildCharacterAvatarPrompt` (`lib/image-gen/avatar-prompt.ts`) prepends the aurora aesthetic as a capped (600-char) preamble. No depiction guidelines.
 
 **Editors** (all via the shared `components/settings/AestheticEditorField.tsx`, empty save deletes the file):
 

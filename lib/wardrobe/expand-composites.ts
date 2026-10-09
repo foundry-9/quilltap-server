@@ -3,18 +3,22 @@
  *
  * Wardrobe items can reference other items via `componentItemIds`, building
  * up layered or themed outfits ("nice jewelry" = locket + earrings + ring;
- * "rain outfit" = raincoat + jeans + boots). Equipped state stores the
- * composite's own ID; expansion to leaves happens at read time.
+ * "rain outfit" = raincoat + jeans + boots). Wearing one dissolves it into
+ * its leaves (`slot-ops.ts`); expansion here is the shared walk behind that,
+ * behind read-time resolution, and behind a legacy composite id still sitting
+ * in equipped state.
  *
  * Expansion is cycle-tolerant — vault files are user-editable, and a malformed
  * cycle must never break a chat. Cycles are logged and the offending branch
  * is truncated. Save-time validation (`detectComponentCycles`) is the place
  * to reject cycles before they land.
  *
+ * Pure and client-safe: no logger. Cycles and depth truncation come back in
+ * the result for the caller to log.
+ *
  * @module wardrobe/expand-composites
  */
 
-import { logger } from '@/lib/logger';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /**
@@ -90,12 +94,6 @@ export function expandComposites(
 
     if (depth >= maxDepth) {
       truncated = true;
-      logger.warn('[expandComposites] Max depth reached, treating as leaf', {
-        context: 'wardrobe',
-        itemId: id,
-        depth,
-        maxDepth,
-      });
       emitLeaf(id);
       return;
     }

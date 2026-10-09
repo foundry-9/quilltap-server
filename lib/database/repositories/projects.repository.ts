@@ -28,7 +28,7 @@ import {
   applyProjectStoreWriteOverlay,
   writeProjectStoreManagedFields,
 } from '@/lib/projects/project-store/write-overlay';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 
 /**
  * Projects Repository
@@ -48,7 +48,7 @@ export class ProjectsRepository extends AbstractStoreBackedRepository<Project> {
     applyOverlayOne: applyProjectStoreOverlayOne,
     applyWriteOverlay: applyProjectStoreWriteOverlay,
     writeManagedFields: writeProjectStoreManagedFields,
-    ensureOfficialStore: ensureProjectOfficialStore,
+    ensureOfficialStore: (id, name) => ensureOwnerOfficialStore('project', id, name),
   };
 
   /** Seed the roster defaults a fresh project needs before its row is written. */

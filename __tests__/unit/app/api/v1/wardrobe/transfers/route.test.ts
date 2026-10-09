@@ -1,4 +1,9 @@
 // Use global `jest` so module mocks are hoisted before route import.
+//
+// The transfer route addresses every tier through `resolveWardrobeLocation`
+// (real here). Only the folder I/O, store provisioning and the instance
+// setting are mocked: each mount's `Wardrobe/` folder is an in-memory list in
+// `folders`, keyed by mount id.
 
 let mockCtx: any
 
@@ -22,86 +27,149 @@ jest.mock('@/lib/api/middleware', () => ({
   },
 }))
 
-jest.mock('@/lib/mount-index/ensure-project-store', () => ({
-  ensureProjectOfficialStore: jest.fn(),
-}))
-
-jest.mock('@/lib/mount-index/ensure-group-store', () => ({
-  ensureGroupOfficialStore: jest.fn(),
-}))
-
-jest.mock('@/lib/mount-index/project-wardrobe', () => ({
-  ensureProjectWardrobeFolder: jest.fn(),
-  readProjectWardrobe: jest.fn(),
-}))
-
-jest.mock('@/lib/mount-index/group-wardrobe', () => ({
-  ensureGroupWardrobeFolder: jest.fn(),
-  readGroupWardrobe: jest.fn(),
-}))
-
-jest.mock('@/lib/mount-index/general-wardrobe', () => ({
-  readGeneralWardrobe: jest.fn(),
-}))
-
-jest.mock('@/lib/mount-index/folder-paths', () => ({
-  ensureFolderPath: jest.fn(),
-}))
-
 jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
-  createProjectWardrobeItem: jest.fn(),
-  deleteProjectWardrobeItem: jest.fn(),
+  WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
+  readMountItems: jest.fn(),
+  createInMount: jest.fn(),
+  updateInMount: jest.fn(),
+  deleteInMount: jest.fn(),
+  resolveWardrobeMount: jest.fn(),
 }))
+
+jest.mock('@/lib/database/repositories/characters.repository', () => ({
+  CharacterArchivedError: class CharacterArchivedError extends Error {
+    constructor(id: string) {
+      super(`Character ${id} is archived`)
+      this.name = 'CharacterArchivedError'
+    }
+  },
+}))
+
+jest.mock('@/lib/instance-settings', () => ({ getGeneralMountPointId: jest.fn() }))
+jest.mock('@/lib/mount-index/ensure-owner-store', () => ({ ensureOwnerOfficialStore: jest.fn() }))
+jest.mock('@/lib/mount-index/shared-wardrobe', () => ({ ensureSharedWardrobeFolder: jest.fn() }))
+jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({ resolveGroupMountsForCharacter: jest.fn() }))
+jest.mock('@/lib/wardrobe/pool', () => ({ loadWearablePool: jest.fn() }))
+
+// Spy on the location resolver (the real one runs) so a test can see which
+// lookups asked to provision.
+jest.mock('@/lib/wardrobe/location', () => {
+  const actual = jest.requireActual('@/lib/wardrobe/location')
+  return { ...actual, resolveWardrobeLocation: jest.fn(actual.resolveWardrobeLocation) }
+})
 
 // Pictures: the transfer carries each traveller's images through
 // lib/wardrobe/item-images; here they are stubbed so the item plumbing is
 // what these tests exercise (item-images has its own suite).
 jest.mock('@/lib/wardrobe/item-images', () => ({
-  resolveContainerMountPointId: jest.fn(),
   carryItemImages: jest.fn(),
   commitMovedImages: jest.fn(),
 }))
 
 import { randomUUID } from 'crypto'
 import { GET, POST } from '@/app/api/v1/wardrobe/transfers/route'
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store'
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store'
-import { ensureProjectWardrobeFolder, readProjectWardrobe } from '@/lib/mount-index/project-wardrobe'
-import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
-import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe'
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
-import { createProjectWardrobeItem, deleteProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
-import { carryItemImages, commitMovedImages, resolveContainerMountPointId } from '@/lib/wardrobe/item-images'
+import {
+  createInMount,
+  deleteInMount,
+  readMountItems,
+  resolveWardrobeMount,
+} from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
+import { getGeneralMountPointId } from '@/lib/instance-settings'
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store'
+import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe'
+import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
+import { resolveWardrobeLocation } from '@/lib/wardrobe/location'
+import { carryItemImages, commitMovedImages } from '@/lib/wardrobe/item-images'
+
+const GENERAL_MOUNT = 'general-mount'
+
+/** Each mount's `Wardrobe/` folder, in memory. */
+let folders: Map<string, any[]>
+
+function vaultOf(characterId: string) {
+  return `vault-${characterId}`
+}
+
+function vaultMount(characterId: string) {
+  return { mountPointId: vaultOf(characterId), scope: 'character', characterId }
+}
+
+function seed(mountPointId: string, items: any[]) {
+  folders.set(mountPointId, [...items])
+}
+
+function folder(mountPointId: string): any[] {
+  return folders.get(mountPointId) ?? []
+}
+
+/** Mount ids that `deleteInMount` was called against, with the item id. */
+function deletes(): Array<[string, string]> {
+  return (deleteInMount as jest.Mock).mock.calls.map(([mount, id]: [any, string]) => [mount.mountPointId, id])
+}
+
+/** Items written at a mount, in call order. */
+function created(mountPointId?: string): any[] {
+  return (createInMount as jest.Mock).mock.calls
+    .filter(([mount]: [any]) => mountPointId === undefined || mount.mountPointId === mountPointId)
+    .map(([, item]: [any, any]) => item)
+}
+
+function makeItem(overrides: Record<string, any>) {
+  return {
+    id: 'item-x',
+    characterId: 'char-src',
+    title: 'Item',
+    description: null,
+    imagePrompt: null,
+    types: ['top'],
+    componentItemIds: [],
+    appropriateness: null,
+    isDefault: false,
+    replace: false,
+    migratedFromClothingRecordId: null,
+    archivedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
 
 describe('wardrobe transfer route', () => {
+  let characters: Record<string, any>
+  let projects: Record<string, any>
+  let groups: Record<string, any>
+
   beforeEach(() => {
     jest.clearAllMocks()
+    folders = new Map()
 
     // Sequential fake UUIDs so multi-item transfers (outfit + components) get
-    // distinct ids; the first minted id stays 'copy-uuid-1' for older tests.
+    // distinct ids; the first minted id stays 'copy-uuid-1'.
     let uuidCounter = 0
     ;(randomUUID as jest.Mock).mockImplementation(() => `copy-uuid-${++uuidCounter}`)
+
+    characters = {
+      'char-src': { id: 'char-src', name: 'Vivienne', userId: 'user-1', characterDocumentMountPointId: vaultOf('char-src') },
+      'char-dst': { id: 'char-dst', name: 'Bertie', userId: 'user-1', characterDocumentMountPointId: vaultOf('char-dst') },
+    }
+    projects = {}
+    groups = {}
 
     mockCtx = {
       user: { id: 'user-1' },
       repos: {
         projects: {
           findAll: jest.fn().mockResolvedValue([]),
-          findById: jest.fn().mockResolvedValue(null),
+          findById: jest.fn(async (id: string) => projects[id] ?? null),
         },
         groups: {
           findAll: jest.fn().mockResolvedValue([]),
-          findById: jest.fn().mockResolvedValue(null),
+          findById: jest.fn(async (id: string) => groups[id] ?? null),
         },
         characters: {
           findByUserId: jest.fn().mockResolvedValue([]),
-          findById: jest.fn().mockResolvedValue(null),
-        },
-        wardrobe: {
-          findByCharacterId: jest.fn().mockResolvedValue([]),
-          create: jest.fn(),
-          delete: jest.fn().mockResolvedValue(true),
+          findByIdRaw: jest.fn(async (id: string) => characters[id] ?? null),
         },
         // The wear ledger: a transfer never writes it. A move keeps the id so
         // the ledger follows; a copy is a new garment whose ledger starts empty.
@@ -114,17 +182,30 @@ describe('wardrobe transfer route', () => {
       },
     }
 
-    ;(ensureProjectOfficialStore as jest.Mock).mockResolvedValue({ mountPointId: 'project-mount-1' })
-    ;(ensureGroupOfficialStore as jest.Mock).mockResolvedValue({ mountPointId: 'group-mount-1' })
-    ;(ensureProjectWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
-    ;(readProjectWardrobe as jest.Mock).mockResolvedValue([])
-    ;(ensureGroupWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
-    ;(readGroupWardrobe as jest.Mock).mockResolvedValue([])
-    ;(readGeneralWardrobe as jest.Mock).mockResolvedValue([])
-    ;(ensureFolderPath as jest.Mock).mockResolvedValue('folder-1')
-    ;(createProjectWardrobeItem as jest.Mock).mockImplementation(async (_mount: string, item: any) => item)
-    ;(deleteProjectWardrobeItem as jest.Mock).mockResolvedValue(true)
-    ;(resolveContainerMountPointId as jest.Mock).mockResolvedValue('dest-mount-1')
+    ;(getGeneralMountPointId as jest.Mock).mockResolvedValue(GENERAL_MOUNT)
+    ;(ensureOwnerOfficialStore as jest.Mock).mockImplementation(async (kind: string, id: string) => ({
+      mountPointId: `${kind}-mount-${id}`,
+    }))
+    ;(ensureSharedWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
+    ;(resolveGroupMountsForCharacter as jest.Mock).mockResolvedValue([])
+    ;(resolveWardrobeMount as jest.Mock).mockImplementation(async (characterId: string) => {
+      const character = characters[characterId]
+      if (character?.archivedAt) throw new CharacterArchivedError(characterId)
+      return character ? vaultMount(characterId) : null
+    })
+    ;(readMountItems as jest.Mock).mockImplementation(async (mount: any) =>
+      folder(mount.mountPointId).map((item) => ({ ...item })),
+    )
+    ;(createInMount as jest.Mock).mockImplementation(async (mount: any, item: any) => {
+      folders.set(mount.mountPointId, [...folder(mount.mountPointId), item])
+      return item
+    })
+    ;(deleteInMount as jest.Mock).mockImplementation(async (mount: any, id: string) => {
+      const before = folder(mount.mountPointId)
+      const after = before.filter((item) => item.id !== id)
+      folders.set(mount.mountPointId, after)
+      return after.length !== before.length
+    })
     ;(carryItemImages as jest.Mock).mockResolvedValue({ fileIdMap: new Map(), pendingMove: { repoints: [] } })
     ;(commitMovedImages as jest.Mock).mockResolvedValue(undefined)
   })
@@ -173,39 +254,7 @@ describe('wardrobe transfer route', () => {
   })
 
   it('POST copy regenerates UUID for destination item', async () => {
-    const sourceItem = {
-      id: 'item-1',
-      characterId: 'char-src',
-      title: 'Evening coat',
-      description: 'black wool coat',
-      imagePrompt: null,
-      types: ['top'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
-
-    mockCtx.repos.characters.findById.mockImplementation(async (id: string) => {
-      if (id === 'char-src' || id === 'char-dst') return { id, userId: 'user-1' }
-      return null
-    })
-    mockCtx.repos.wardrobe.findByCharacterId.mockImplementation(async (id: string) => {
-      if (id === 'char-src') return [sourceItem]
-      return []
-    })
-    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
-      ...sourceItem,
-      ...data,
-      id: options.id,
-      createdAt: options.createdAt,
-      updatedAt: options.updatedAt,
-      characterId: data.characterId,
-    }))
+    seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Evening coat', description: 'black wool coat' })])
 
     const res = await POST(req({
       action: 'copy',
@@ -220,40 +269,14 @@ describe('wardrobe transfer route', () => {
     expect(body.action).toBe('copy')
     expect(body.wardrobeItem.id).toBe('copy-uuid-1')
     expect(body.wardrobeItem.characterId).toBe('char-dst')
-    expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+    expect(created(vaultOf('char-dst'))).toEqual([expect.objectContaining({ id: 'copy-uuid-1' })])
+    expect(deleteInMount).not.toHaveBeenCalled()
     // A copy is a new garment: no ledger rows are copied to the fresh id.
     expectNoLedgerWrites()
   })
 
   it('POST move removes source item after successful destination write', async () => {
-    const sourceItem = {
-      id: 'item-1',
-      characterId: 'char-src',
-      title: 'Travel boots',
-      description: null,
-      imagePrompt: null,
-      types: ['footwear'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
-
-    mockCtx.repos.characters.findById.mockImplementation(async (id: string) => {
-      if (id === 'char-src') return { id, userId: 'user-1' }
-      return null
-    })
-    mockCtx.repos.wardrobe.findByCharacterId.mockResolvedValue([sourceItem])
-    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
-      ...sourceItem,
-      ...data,
-      id: options.id,
-      characterId: data.characterId,
-    }))
+    seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Travel boots', types: ['footwear'] })])
 
     const res = await POST(req({
       action: 'move',
@@ -267,40 +290,21 @@ describe('wardrobe transfer route', () => {
     expect(res.status).toBe(200)
     expect(body.action).toBe('move')
     expect(body.wardrobeItem.id).toBe('item-1')
-    expect(mockCtx.repos.wardrobe.delete).toHaveBeenCalledWith('item-1', 'char-src')
+    expect(body.wardrobeItem.characterId).toBeNull()
+    expect(created(GENERAL_MOUNT)).toHaveLength(1)
+    expect(deletes()).toEqual([[vaultOf('char-src'), 'item-1']])
+    const createOrder = (createInMount as jest.Mock).mock.invocationCallOrder[0]
+    const deleteOrder = (deleteInMount as jest.Mock).mock.invocationCallOrder[0]
+    expect(deleteOrder).toBeGreaterThan(createOrder)
   })
 
-  it('POST move preserves the item id at the destination, so the wear ledger follows', async () => {
-    const sourceItem = {
+  it('POST move preserves the item id and history at the destination, so the wear ledger follows', async () => {
+    seed(vaultOf('char-src'), [makeItem({
       id: 'item-1',
-      characterId: 'char-src',
       title: 'Travel boots',
-      description: null,
-      imagePrompt: null,
       types: ['footwear'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
-    }
-
-    mockCtx.repos.characters.findById.mockImplementation(async (id: string) => {
-      if (id === 'char-src' || id === 'char-dst') return { id, userId: 'user-1' }
-      return null
-    })
-    mockCtx.repos.wardrobe.findByCharacterId.mockImplementation(async (id: string) =>
-      id === 'char-src' ? [sourceItem] : [],
-    )
-    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
-      ...sourceItem,
-      ...data,
-      id: options.id,
-      characterId: data.characterId,
-    }))
+    })])
 
     const res = await POST(req({
       action: 'move',
@@ -311,13 +315,14 @@ describe('wardrobe transfer route', () => {
     }))
 
     expect(res.status).toBe(200)
-    expect(mockCtx.repos.wardrobe.create).toHaveBeenCalledWith(
-      expect.objectContaining({ characterId: 'char-dst' }),
-      {
+    expect(createInMount).toHaveBeenCalledWith(
+      vaultMount('char-dst'),
+      expect.objectContaining({
         id: 'item-1',
+        characterId: 'char-dst',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-02T00:00:00.000Z',
-      },
+      }),
     )
     expect(randomUUID).not.toHaveBeenCalled()
     // The ledger is keyed by item id, so nothing needs rewriting — and the
@@ -325,28 +330,39 @@ describe('wardrobe transfer route', () => {
     expectNoLedgerWrites()
   })
 
-  it('POST accepts project destination when project has no userId field', async () => {
-    const sourceItem = {
-      id: 'item-1',
-      characterId: 'char-src',
-      title: 'Travel cloak',
-      description: null,
-      imagePrompt: null,
-      types: ['top'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
+  it('POST refuses a transfer onto the same folder', async () => {
+    seed(vaultOf('char-src'), [makeItem({ id: 'item-1' })])
 
-    mockCtx.repos.characters.findById.mockResolvedValue({ id: 'char-src', userId: 'user-1' })
-    mockCtx.repos.wardrobe.findByCharacterId.mockResolvedValue([sourceItem])
+    const res = await POST(req({
+      action: 'move',
+      itemId: 'item-1',
+      sourceCharacterId: 'char-src',
+      destination: { scope: 'character', id: 'char-src' },
+    }))
+
+    expect(res.status).toBe(400)
+    expect(createInMount).not.toHaveBeenCalled()
+  })
+
+  it('POST 404s when the source character is not the user\'s', async () => {
+    characters['char-src'].userId = 'someone-else'
+    seed(vaultOf('char-src'), [makeItem({ id: 'item-1' })])
+
+    const res = await POST(req({
+      action: 'copy',
+      itemId: 'item-1',
+      sourceCharacterId: 'char-src',
+      destination: { scope: 'general' },
+    }))
+
+    expect(res.status).toBe(404)
+    expect(createInMount).not.toHaveBeenCalled()
+  })
+
+  it('POST provisions a project destination store (projects carry no userId)', async () => {
+    seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Travel cloak' })])
     // Project rows in this codebase don't include userId.
-    mockCtx.repos.projects.findById.mockResolvedValue({ id: 'project-1', name: 'Campaign' })
+    projects['project-1'] = { id: 'project-1', name: 'Campaign' }
 
     const res = await POST(req({
       action: 'copy',
@@ -359,39 +375,16 @@ describe('wardrobe transfer route', () => {
 
     expect(res.status).toBe(200)
     expect(body.action).toBe('copy')
-    expect(createProjectWardrobeItem).toHaveBeenCalledWith(
-      'project-mount-1',
-      expect.objectContaining({ id: 'copy-uuid-1' }),
-    )
+    expect(ensureOwnerOfficialStore).toHaveBeenCalledWith('project', 'project-1', 'Campaign')
+    expect(ensureSharedWardrobeFolder).toHaveBeenCalledWith('project-mount-project-1')
+    expect(created('project-mount-project-1')).toEqual([
+      expect.objectContaining({ id: 'copy-uuid-1', characterId: null }),
+    ])
   })
 
   it('POST resolves an explicit group source without any character probing', async () => {
-    const groupItem = {
-      id: 'item-g1',
-      characterId: null,
-      title: 'Regimental sash',
-      description: null,
-      imagePrompt: null,
-      types: ['accessories'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
-
-    mockCtx.repos.groups.findById.mockResolvedValue({ id: 'group-1', name: 'Main Cast' })
-    mockCtx.repos.characters.findById.mockResolvedValue({ id: 'char-dst', userId: 'user-1' })
-    ;(readGroupWardrobe as jest.Mock).mockResolvedValue([groupItem])
-    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
-      ...groupItem,
-      ...data,
-      id: options.id,
-      characterId: data.characterId,
-    }))
+    groups['group-1'] = { id: 'group-1', name: 'Main Cast', officialMountPointId: 'group-mount-1' }
+    seed('group-mount-1', [makeItem({ id: 'item-g1', characterId: null, title: 'Regimental sash', types: ['accessories'] })])
 
     const res = await POST(req({
       action: 'move',
@@ -404,32 +397,14 @@ describe('wardrobe transfer route', () => {
     expect(res.status).toBe(200)
     expect(body.action).toBe('move')
     expect(body.wardrobeItem.characterId).toBe('char-dst')
-    // The item was resolved straight from the named group's mount.
-    expect(readGroupWardrobe).toHaveBeenCalledWith('group-mount-1', true)
+    expect(resolveGroupMountsForCharacter).not.toHaveBeenCalled()
     // The move deletes from the group's mount folder.
-    expect(deleteProjectWardrobeItem).toHaveBeenCalledWith('group-mount-1', 'item-g1')
+    expect(deletes()).toEqual([['group-mount-1', 'item-g1']])
   })
 
   it('POST resolves an explicit general source and copies into a project', async () => {
-    const generalItem = {
-      id: 'item-gen',
-      characterId: null,
-      title: 'House cloak',
-      description: null,
-      imagePrompt: null,
-      types: ['top'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
-
-    ;(readGeneralWardrobe as jest.Mock).mockResolvedValue([generalItem])
-    mockCtx.repos.projects.findById.mockResolvedValue({ id: 'project-1', name: 'Campaign' })
+    seed(GENERAL_MOUNT, [makeItem({ id: 'item-gen', characterId: null, title: 'House cloak' })])
+    projects['project-1'] = { id: 'project-1', name: 'Campaign' }
 
     const res = await POST(req({
       action: 'copy',
@@ -441,12 +416,11 @@ describe('wardrobe transfer route', () => {
 
     expect(res.status).toBe(200)
     expect(body.action).toBe('copy')
-    expect(createProjectWardrobeItem).toHaveBeenCalledWith(
-      'project-mount-1',
+    expect(created('project-mount-project-1')).toEqual([
       expect.objectContaining({ id: 'copy-uuid-1', characterId: null }),
-    )
+    ])
     // Copy leaves the general original in place.
-    expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+    expect(deleteInMount).not.toHaveBeenCalled()
   })
 
   it('POST rejects a body naming neither sourceCharacterId nor source', async () => {
@@ -460,35 +434,149 @@ describe('wardrobe transfer route', () => {
   })
 
   // -------------------------------------------------------------------------
-  // Composite (outfit) transfers with components
+  // Bug 192: source probing order and side effects
   // -------------------------------------------------------------------------
 
-  function makeItem(overrides: Record<string, any>) {
-    return {
-      id: 'item-x',
-      characterId: 'char-src',
-      title: 'Item',
-      description: null,
-      imagePrompt: null,
-      types: ['top'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      ...overrides,
+  describe('source probing (bug 192)', () => {
+    function probe(body: Record<string, unknown> = {}) {
+      return POST(req({
+        action: 'move',
+        itemId: 'item-1',
+        sourceCharacterId: 'char-src',
+        destination: { scope: 'character', id: 'char-dst' },
+        ...body,
+      }))
     }
-  }
+
+    function wireGroups() {
+      ;(resolveGroupMountsForCharacter as jest.Mock).mockResolvedValue([
+        { group: { id: 'group-1', name: 'Main Cast' }, mountPointIds: ['group-mount-1'] },
+        { group: { id: 'group-2', name: 'Understudies' }, mountPointIds: ['group-mount-2'] },
+      ])
+    }
+
+    it('the vault wins over every shared tier', async () => {
+      wireGroups()
+      seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Vault copy' })])
+      seed('group-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'Group copy' })])
+      seed(GENERAL_MOUNT, [makeItem({ id: 'item-1', characterId: null, title: 'General copy' })])
+
+      const res = await probe()
+
+      expect(res.status).toBe(200)
+      expect(deletes()).toEqual([[vaultOf('char-src'), 'item-1']])
+    })
+
+    it('a group copy wins over General', async () => {
+      wireGroups()
+      seed('group-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'Group copy' })])
+      seed(GENERAL_MOUNT, [makeItem({ id: 'item-1', characterId: null, title: 'General copy' })])
+
+      const res = await probe()
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.wardrobeItem.title).toBe('Group copy')
+      expect(deletes()).toEqual([['group-mount-1', 'item-1']])
+    })
+
+    it('a group copy wins over the project — groups are probed before the project', async () => {
+      wireGroups()
+      projects['project-1'] = { id: 'project-1', name: 'Campaign', officialMountPointId: 'project-mount-1' }
+      seed('group-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'Group copy' })])
+      seed('project-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'Project copy' })])
+
+      const res = await probe({ sourceProjectId: 'project-1' })
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.wardrobeItem.title).toBe('Group copy')
+      expect(deletes()).toEqual([['group-mount-1', 'item-1']])
+    })
+
+    it('the later group shadows the earlier one, so it is probed first', async () => {
+      wireGroups()
+      seed('group-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'First group' })])
+      seed('group-mount-2', [makeItem({ id: 'item-1', characterId: null, title: 'Second group' })])
+
+      const body = await (await probe()).json()
+
+      expect(body.wardrobeItem.title).toBe('Second group')
+      expect(deletes()).toEqual([['group-mount-2', 'item-1']])
+    })
+
+    it('the project wins over General', async () => {
+      projects['project-1'] = { id: 'project-1', name: 'Campaign', officialMountPointId: 'project-mount-1' }
+      seed('project-mount-1', [makeItem({ id: 'item-1', characterId: null, title: 'Project copy' })])
+      seed(GENERAL_MOUNT, [makeItem({ id: 'item-1', characterId: null, title: 'General copy' })])
+
+      const body = await (await probe({ sourceProjectId: 'project-1' })).json()
+
+      expect(body.wardrobeItem.title).toBe('Project copy')
+      expect(deletes()).toEqual([['project-mount-1', 'item-1']])
+    })
+
+    it('falls through to General when no nearer tier holds the item', async () => {
+      wireGroups()
+      projects['project-1'] = { id: 'project-1', name: 'Campaign', officialMountPointId: 'project-mount-1' }
+      seed(GENERAL_MOUNT, [makeItem({ id: 'item-1', characterId: null, title: 'General copy' })])
+
+      const body = await (await probe({ sourceProjectId: 'project-1' })).json()
+
+      expect(body.wardrobeItem.title).toBe('General copy')
+      expect(deletes()).toEqual([[GENERAL_MOUNT, 'item-1']])
+    })
+
+    it('probing never provisions: a project with no store is skipped, not created', async () => {
+      wireGroups()
+      // The project exists but its official store has not been made yet.
+      projects['project-1'] = { id: 'project-1', name: 'Campaign', officialMountPointId: null }
+      seed(GENERAL_MOUNT, [makeItem({ id: 'item-1', characterId: null, title: 'General copy' })])
+
+      const res = await probe({ action: 'copy', sourceProjectId: 'project-1' })
+
+      expect(res.status).toBe(200)
+      // The destination is a character vault, which provisions nothing — so
+      // any provisioning call would have come from the source probe.
+      expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
+      expect(ensureSharedWardrobeFolder).not.toHaveBeenCalled()
+
+      const calls = (resolveWardrobeLocation as jest.Mock).mock.calls
+      const probes = calls.filter(([scope, id]: [string, string]) => !(scope === 'character' && id === 'char-dst'))
+      expect(probes.map(([scope]: [string]) => scope)).toEqual(['character', 'project', 'general'])
+      for (const call of probes) expect(call[4]?.ensure ?? false).toBe(false)
+      // Only the destination asks to provision.
+      expect(calls.filter((call: any[]) => call[4]?.ensure === true)).toEqual([
+        ['character', 'char-dst', mockCtx.repos, 'user-1', { ensure: true }],
+      ])
+    })
+
+    it('an explicit source is resolved without provisioning either', async () => {
+      projects['project-1'] = { id: 'project-1', name: 'Campaign', officialMountPointId: null }
+
+      const res = await POST(req({
+        action: 'copy',
+        itemId: 'item-1',
+        source: { scope: 'project', id: 'project-1' },
+        destination: { scope: 'character', id: 'char-dst' },
+      }))
+
+      expect(res.status).toBe(404)
+      expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
+      expect(ensureSharedWardrobeFolder).not.toHaveBeenCalled()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Composite (outfit) transfers with components
+  // -------------------------------------------------------------------------
 
   /**
    * Fixture: outfit-1 bundles comp-a and comp-b; comp-b is itself a composite
    * bundling comp-c plus shared-gen (which lives in General, NOT the source
    * container, so it must never travel or be remapped).
    */
-  function compositeFixture() {
+  function wireCompositeTransfer() {
     const compA = makeItem({ id: 'comp-a', title: 'Coat', types: ['top'] })
     const compC = makeItem({ id: 'comp-c', title: 'Cufflinks', types: ['accessories'] })
     const compB = makeItem({
@@ -503,30 +591,12 @@ describe('wardrobe transfer route', () => {
       types: ['top', 'accessories'],
       componentItemIds: ['comp-a', 'comp-b'],
     })
-    return { outfit, containerItems: [outfit, compA, compB, compC] }
-  }
-
-  /** Wire a character source and a General destination that remembers writes. */
-  function wireCompositeTransfer() {
-    const { outfit, containerItems } = compositeFixture()
-    mockCtx.repos.characters.findById.mockResolvedValue({ id: 'char-src', userId: 'user-1' })
-    mockCtx.repos.wardrobe.findByCharacterId.mockResolvedValue(containerItems)
-
-    // The General destination: created items land here so the post-write
-    // verification pass (a second readGeneralWardrobe) can see them.
-    const createdAtGeneral: any[] = []
-    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => {
-      const stored = { ...data, id: options.id, createdAt: options.createdAt, updatedAt: options.updatedAt }
-      createdAtGeneral.push(stored)
-      return stored
-    })
-    ;(readGeneralWardrobe as jest.Mock).mockImplementation(async () => [...createdAtGeneral])
-
-    return { outfit, createdAtGeneral }
+    seed(vaultOf('char-src'), [outfit, compA, compB, compC])
+    return { outfit }
   }
 
   it('POST copy with components: components get fresh ids and the outfit is rewired to them', async () => {
-    const { createdAtGeneral } = wireCompositeTransfer()
+    wireCompositeTransfer()
 
     const res = await POST(req({
       action: 'copy',
@@ -543,7 +613,7 @@ describe('wardrobe transfer route', () => {
 
     // Components minted ids in closure order (comp-a, comp-b, comp-c), the
     // outfit last.
-    const byTitle = Object.fromEntries(createdAtGeneral.map((i) => [i.title, i]))
+    const byTitle = Object.fromEntries(created(GENERAL_MOUNT).map((i) => [i.title, i]))
     expect(byTitle['Coat'].id).toBe('copy-uuid-1')
     expect(byTitle['Formal set'].id).toBe('copy-uuid-2')
     expect(byTitle['Cufflinks'].id).toBe('copy-uuid-3')
@@ -556,11 +626,11 @@ describe('wardrobe transfer route', () => {
     expect(byTitle['Formal set'].componentItemIds).toEqual(['copy-uuid-3', 'shared-gen'])
 
     // Copy leaves the source untouched.
-    expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+    expect(deleteInMount).not.toHaveBeenCalled()
   })
 
   it('POST move with components moved: every id is kept and every piece leaves the source', async () => {
-    const { createdAtGeneral } = wireCompositeTransfer()
+    wireCompositeTransfer()
 
     const res = await POST(req({
       action: 'move',
@@ -575,12 +645,13 @@ describe('wardrobe transfer route', () => {
     expect(body.componentsTransferred).toBe(3)
     expect(body.wardrobeItem.id).toBe('outfit-1')
     expect(body.wardrobeItem.componentItemIds).toEqual(['comp-a', 'comp-b'])
-    const byTitle = Object.fromEntries(createdAtGeneral.map((i) => [i.title, i]))
+    const byTitle = Object.fromEntries(created(GENERAL_MOUNT).map((i) => [i.title, i]))
     expect(byTitle['Formal set'].componentItemIds).toEqual(['comp-c', 'shared-gen'])
 
     // The outfit and all three components were removed from the character.
-    const deletedIds = mockCtx.repos.wardrobe.delete.mock.calls.map((c: any[]) => c[0])
+    const deletedIds = deletes().map(([, id]) => id)
     expect(deletedIds.sort()).toEqual(['comp-a', 'comp-b', 'comp-c', 'outfit-1'])
+    expect(folder(vaultOf('char-src'))).toEqual([])
   })
 
   it('POST move with components copied: the moved outfit points at the fresh copies, originals stay', async () => {
@@ -601,7 +672,7 @@ describe('wardrobe transfer route', () => {
     expect(body.wardrobeItem.id).toBe('outfit-1')
     expect(body.wardrobeItem.componentItemIds).toEqual(['copy-uuid-1', 'copy-uuid-2'])
     // Only the outfit left the source — the component originals stay.
-    expect(mockCtx.repos.wardrobe.delete.mock.calls).toEqual([['outfit-1', 'char-src']])
+    expect(deletes()).toEqual([[vaultOf('char-src'), 'outfit-1']])
   })
 
   it('POST refuses copying an outfit while moving its components', async () => {
@@ -616,13 +687,13 @@ describe('wardrobe transfer route', () => {
     }))
 
     expect(res.status).toBe(400)
-    expect(mockCtx.repos.wardrobe.create).not.toHaveBeenCalled()
+    expect(createInMount).not.toHaveBeenCalled()
   })
 
   it('POST refuses the whole transfer before writing when a component id is taken at the destination', async () => {
     wireCompositeTransfer()
     // The destination already holds an item with comp-b's id.
-    ;(readGeneralWardrobe as jest.Mock).mockResolvedValue([makeItem({ id: 'comp-b', characterId: null })])
+    seed(GENERAL_MOUNT, [makeItem({ id: 'comp-b', characterId: null })])
 
     const res = await POST(req({
       action: 'move',
@@ -634,12 +705,12 @@ describe('wardrobe transfer route', () => {
 
     expect(res.status).toBe(400)
     // All-or-nothing: nothing was created and nothing was deleted.
-    expect(mockCtx.repos.wardrobe.create).not.toHaveBeenCalled()
-    expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+    expect(createInMount).not.toHaveBeenCalled()
+    expect(deleteInMount).not.toHaveBeenCalled()
   })
 
   it('POST with components omitted transfers the outfit alone with references untouched', async () => {
-    const { createdAtGeneral } = wireCompositeTransfer()
+    wireCompositeTransfer()
 
     const res = await POST(req({
       action: 'copy',
@@ -652,41 +723,12 @@ describe('wardrobe transfer route', () => {
     expect(res.status).toBe(200)
     expect(body.componentsTransferred).toBe(0)
     expect(body.wardrobeItem.componentItemIds).toEqual(['comp-a', 'comp-b'])
-    expect(createdAtGeneral).toHaveLength(1)
+    expect(created(GENERAL_MOUNT)).toHaveLength(1)
   })
-  describe('pictures travel with the item', () => {
-    const pictured = {
-      id: 'item-1',
-      characterId: 'char-src',
-      title: 'Linen shirt',
-      description: null,
-      imagePrompt: null,
-      types: ['top'],
-      componentItemIds: [],
-      appropriateness: null,
-      isDefault: false,
-      replace: false,
-      migratedFromClothingRecordId: null,
-      imageFileId: 'file-old',
-      archivedAt: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }
 
+  describe('pictures travel with the item', () => {
     beforeEach(() => {
-      mockCtx.repos.characters.findById.mockImplementation(async (id: string) => {
-        if (id === 'char-src' || id === 'char-dst') return { id, userId: 'user-1' }
-        return null
-      })
-      mockCtx.repos.wardrobe.findByCharacterId.mockImplementation(async (id: string) =>
-        id === 'char-src' ? [pictured] : [],
-      )
-      mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
-        ...pictured,
-        ...data,
-        id: options.id,
-        characterId: data.characterId,
-      }))
+      seed(vaultOf('char-src'), [makeItem({ id: 'item-1', title: 'Linen shirt', imageFileId: 'file-old' })])
     })
 
     it('a copy carries the pictures under the new id and points imageFileId at its own copy', async () => {
@@ -709,16 +751,16 @@ describe('wardrobe transfer route', () => {
         mode: 'copy',
         sourceItemId: 'item-1',
         destinationItemId: 'copy-uuid-1',
-        destinationMountPointId: 'dest-mount-1',
+        destinationMountPointId: vaultOf('char-dst'),
         userId: 'user-1',
       })
-      expect(mockCtx.repos.wardrobe.create.mock.calls[0][0].imageFileId).toBe('file-new')
+      expect(created(vaultOf('char-dst'))[0].imageFileId).toBe('file-new')
       expect(body.wardrobeItem.imageFileId).toBe('file-new')
       expect(commitMovedImages).not.toHaveBeenCalled()
     })
 
     it('a move from an archived source is refused (409) before anything is written', async () => {
-      ;(resolveContainerMountPointId as jest.Mock).mockRejectedValueOnce(new CharacterArchivedError('char-src'))
+      characters['char-src'].archivedAt = '2026-09-01T00:00:00.000Z'
 
       const res = await POST(req({
         action: 'move',
@@ -730,16 +772,31 @@ describe('wardrobe transfer route', () => {
 
       expect(res.status).toBe(409)
       expect(carryItemImages).not.toHaveBeenCalled()
-      expect(mockCtx.repos.wardrobe.create).not.toHaveBeenCalled()
-      expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+      expect(createInMount).not.toHaveBeenCalled()
+      expect(deleteInMount).not.toHaveBeenCalled()
+    })
+
+    it('a copy into an archived character is refused (409) before anything is written', async () => {
+      characters['char-dst'].archivedAt = '2026-09-01T00:00:00.000Z'
+
+      const res = await POST(req({
+        action: 'copy',
+        itemId: 'item-1',
+        sourceCharacterId: 'char-src',
+        destination: { scope: 'character', id: 'char-dst' },
+      }))
+
+      expect(res.status).toBe(409)
+      expect(carryItemImages).not.toHaveBeenCalled()
+      expect(createInMount).not.toHaveBeenCalled()
     })
 
     it('a move re-links the pictures and commits the repoints only after the source item is gone', async () => {
       const pending = {
         repoints: [{
           fileId: 'file-old',
-          storageKey: 'mount-blob:dest-mount-1:blob-1',
-          sourceLink: { mountPointId: 'vault-src', leafName: '20261007-120000-generated-abcd1234.webp' },
+          storageKey: `mount-blob:${GENERAL_MOUNT}:blob-1`,
+          sourceLink: { mountPointId: vaultOf('char-src'), leafName: '20261007-120000-generated-abcd1234.webp' },
         }],
       }
       ;(carryItemImages as jest.Mock).mockResolvedValue({
@@ -760,10 +817,11 @@ describe('wardrobe transfer route', () => {
         mode: 'move',
         sourceItemId: 'item-1',
         destinationItemId: 'item-1',
+        destinationMountPointId: GENERAL_MOUNT,
       })
-      expect(mockCtx.repos.wardrobe.create.mock.calls[0][0].imageFileId).toBe('file-old')
+      expect(created(GENERAL_MOUNT)[0].imageFileId).toBe('file-old')
       expect(commitMovedImages).toHaveBeenCalledWith(mockCtx.repos, 'item-1', pending)
-      const deleteOrder = mockCtx.repos.wardrobe.delete.mock.invocationCallOrder[0]
+      const deleteOrder = (deleteInMount as jest.Mock).mock.invocationCallOrder[0]
       const dropOrder = (commitMovedImages as jest.Mock).mock.invocationCallOrder[0]
       expect(dropOrder).toBeGreaterThan(deleteOrder)
     })

@@ -14,9 +14,9 @@
  * the garments actually meant for the slot.
  *
  * The component is controlled — the parent owns the slots state and
- * provides callbacks for mutation. Bundle actions (Take off / Break apart)
- * can be hidden via `showBundleActions={false}` (used at chat start where
- * there's no live state to manipulate, only a target snapshot to set).
+ * provides the callbacks (every caller builds them with `useComposerHandlers`).
+ * Bundle cards (Take off / Break apart) appear only for a legacy outfit still
+ * worn as its own id.
  *
  * @module components/wardrobe/outfit-composer
  */
@@ -33,10 +33,6 @@ import { EquippedSlotRow } from './equipped-slot-row'
 import { EquippedBundleCard } from './equipped-bundle-card'
 import { OutfitQuickPick } from './outfit-quick-pick'
 
-const noopBundle = (_b: EquippedBundle): void => {
-  /* used when showBundleActions=false */
-}
-
 export interface OutfitComposerProps {
   /** All wardrobe items available to the character (personal + archetypes). */
   items: WardrobeItem[]
@@ -51,13 +47,8 @@ export interface OutfitComposerProps {
   onAddToSlot: (slot: WardrobeItemType, itemId: string) => void
   onRemoveFromSlot: (slot: WardrobeItemType, itemId: string) => void
   onClearSlot: (slot: WardrobeItemType) => void
-  /**
-   * When true, bundle cards expose `Take off bundle` and `Break apart`
-   * actions. When false, bundle cards render as display-only.
-   */
-  showBundleActions: boolean
-  onTakeOffBundle?: (bundle: EquippedBundle) => void
-  onBreakApartBundle?: (bundle: EquippedBundle) => void
+  onTakeOffBundle: (bundle: EquippedBundle) => void
+  onBreakApartBundle: (bundle: EquippedBundle) => void
 }
 
 export function OutfitComposer({
@@ -66,7 +57,6 @@ export function OutfitComposer({
   onAddToSlot,
   onRemoveFromSlot,
   onClearSlot,
-  showBundleActions,
   onTakeOffBundle,
   onBreakApartBundle,
 }: OutfitComposerProps) {
@@ -87,9 +77,8 @@ export function OutfitComposer({
           key={bundle.compositeId}
           bundle={bundle}
           itemsById={itemsById}
-          onTakeOff={onTakeOffBundle ?? noopBundle}
-          onBreakApart={onBreakApartBundle ?? noopBundle}
-          showActions={showBundleActions}
+          onTakeOff={onTakeOffBundle}
+          onBreakApart={onBreakApartBundle}
         />
       ))}
       {WARDROBE_SLOT_TYPES.map((slot) => (

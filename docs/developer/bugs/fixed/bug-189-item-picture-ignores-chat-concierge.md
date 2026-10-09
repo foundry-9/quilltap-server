@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-09)** |
-| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/wardrobe-refactor.md) |
+| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/complete/wardrobe-refactor.md) |
 | **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | High — a **Locked** chat's picture can be rerouted to the uncensored desk after a refusal, which Locked exists to forbid; and an Unmoderated chat's `routeDirect`, the refusal ledger and the Concierge's announcement are all skipped |
 | **Who it bites** | any chat where a character creates or redraws a garment through `wardrobe_create` / `wardrobe_update` with image generation on |

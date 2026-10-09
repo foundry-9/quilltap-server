@@ -71,11 +71,9 @@ jest.mock('@/lib/services/dangerous-content/image-failover', () => {
 jest.mock('@/lib/mount-index/general-wardrobe', () => ({
   readGeneralWardrobe: jest.fn(async () => []),
 }))
-jest.mock('@/lib/wardrobe/hydrate-components', () => ({
-  hydrateComponentGraph: jest.fn(async () => undefined),
-}))
-jest.mock('@/lib/wardrobe/shared-tiers', () => ({
-  sharedWardrobeTiersForCharacter: jest.fn(async () => []),
+jest.mock('@/lib/wardrobe/pool', () => ({
+  loadWearablePool: jest.fn(async () => ({})),
+  componentGraph: jest.fn(() => new Map()),
 }))
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),

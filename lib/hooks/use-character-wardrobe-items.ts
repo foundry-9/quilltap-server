@@ -3,157 +3,138 @@
 /**
  * Unified character wardrobe loader.
  *
- * Loads a character's wearable garments across every wardrobe tier and merges
- * them (de-duped by id, nearer tier winning on collision):
+ * A character's wearable garments across every wardrobe tier, as N tier
+ * queries (`useWardrobeTier`) merged by the server's rule
+ * (`mergeWearableTiers`, `lib/wardrobe/wearable-pool.ts`):
  *   1. the character's personal vault items
  *   2. the shared wardrobe of every group the character belongs to
  *   3. the active project's shared wardrobe (when a `projectId`/`chatId` is given)
- *   4. the Quilltap General shared archetype library
+ *   4. the Quilltap General shared library
  *
- * Mirrors the server-side precedence in `wardrobe.repository.findArchetypes`:
- * **character > group > project > general**.
+ * Precedence is **character > group > project > general**. Without
+ * `includeArchived`, archived items leave each tier before the shadowing, so
+ * an archived personal copy never hides a live shared item with the same id.
+ * With it, the full per-tier lists are shadowed as they stand
+ * (`mergeWardrobeTiers`).
  *
- * Used by:
- *  - The global wardrobe dialog (`WardrobeControlDialogInner`) — passes `chatId`,
- *    from which the project tier is resolved.
- *  - The chat-start outfit composer (`OutfitSelector`'s `manual` mode) — passes
- *    `projectId` directly when the new chat belongs to a project.
+ * Used by the wardrobe dialog's character view, the chat-start outfit
+ * composer (`OutfitSelector`), and the item editor's component candidates.
  *
  * @module lib/hooks/use-character-wardrobe-items
  */
 
-import { useCallback, useEffect, useState } from 'react'
-import {
-  GENERAL_CONTAINER,
-  wardrobeCollectionUrl,
-  withWardrobeArchivedParam,
-  type WardrobeItemWithOrigin,
-} from '@/lib/wardrobe/wardrobe-container'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
+import { apiFetch } from '@/lib/query/fetcher'
+import { GENERAL_CONTAINER, mergeWardrobeTiers } from '@/lib/wardrobe/wardrobe-container'
+import { mergeWearableTiers } from '@/lib/wardrobe/wearable-pool'
+import { useWardrobeTier, type TierItem } from '@/lib/hooks/use-wardrobe-tier'
 
 export interface UseCharacterWardrobeItemsResult {
   /**
    * The merged pool. Each item carries the `origin` its endpoint attached;
-   * de-duplication keeps the first (winning) copy, so the origin is the
-   * winning tier's.
+   * the winning tier's copy (and origin) is the one kept.
    */
-  items: WardrobeItemWithOrigin[]
+  items: TierItem[]
+  /** True while any needed tier is on its first read. */
   loading: boolean
   /**
-   * True once at least one fetch has completed for the current character —
-   * even when it resolved to an empty list. Distinct from `!loading`, which is
-   * also true in the initial pre-fetch tick. Lets callers tell "no items yet
-   * because we haven't looked" apart from "looked, found none".
+   * True once every needed tier has settled for the current character — even
+   * when they resolved to nothing. Lets callers tell "no items yet because we
+   * haven't looked" apart from "looked, found none".
    */
   fetched: boolean
   /**
    * The project tier this loader resolved (from an explicit `projectId` or
-   * derived from `chatId`), or null when there is none. Lets callers offer a
-   * "create in this project" affordance without re-resolving the chat.
+   * derived from `chatId`), or null when there is none.
    */
   projectId: string | null
-  /** Re-fetch personal + group + project + archetype items. */
-  reload: () => Promise<void>
 }
 
 export interface UseCharacterWardrobeItemsOptions {
   /** Project whose shared wardrobe should be folded in (the project tier). */
   projectId?: string | null
-  /**
-   * Chat to derive the project tier from when `projectId` isn't known directly
-   * (the in-chat wardrobe dialog has a chat id but not the project id).
-   */
+  /** Chat to derive the project tier from when `projectId` isn't known directly. */
   chatId?: string | null
   /**
    * Fold archived garments into the result, flagged rather than hidden. Every
-   * tier honours it; flipping it re-fetches all four. Default false, so a
-   * caller that doesn't ask can't accidentally surface archived items.
+   * tier honours it. Default false.
    */
   includeArchived?: boolean
+}
+
+const EMPTY: TierItem[] = []
+
+/**
+ * The project a chat belongs to — the one field the wardrobe needs from it.
+ * Null while unknown or when the chat has no project.
+ */
+export function useChatProjectId(chatId: string | null | undefined, enabled = true): {
+  projectId: string | null
+  settled: boolean
+} {
+  const active = Boolean(chatId) && enabled
+  const query = useQuery({
+    queryKey: queryKeys.chats.project(chatId ?? 'none'),
+    queryFn: async ({ signal }) => {
+      const data = await apiFetch<{ chat?: { projectId?: string | null } }>(
+        `/api/v1/chats/${chatId}`,
+        { signal },
+      )
+      return data?.chat?.projectId ?? null
+    },
+    enabled: active,
+    staleTime: Infinity,
+  })
+  return { projectId: query.data ?? null, settled: !active || query.isFetched }
 }
 
 export function useCharacterWardrobeItems(
   characterId: string | null | undefined,
   opts?: UseCharacterWardrobeItemsOptions,
 ): UseCharacterWardrobeItemsResult {
-  const projectId = opts?.projectId ?? null
-  const chatId = opts?.chatId ?? null
+  const explicitProjectId = opts?.projectId ?? null
   const includeArchived = opts?.includeArchived === true
-  const [items, setItems] = useState<WardrobeItemWithOrigin[]>([])
-  const [loading, setLoading] = useState(false)
-  const [fetched, setFetched] = useState(false)
-  const [resolvedProjectId, setResolvedProjectId] = useState<string | null>(projectId)
+  const active = Boolean(characterId)
 
-  const reload = useCallback(async (): Promise<void> => {
-    if (!characterId) {
-      setItems([])
-      setFetched(false)
-      return
-    }
-    setLoading(true)
-    try {
-      // Resolve the project tier: an explicit projectId wins; otherwise derive
-      // it from the chat (the dialog only carries a chat id).
-      let projectTierId = projectId
-      if (!projectTierId && chatId) {
-        try {
-          const chatRes = await fetch(`/api/v1/chats/${chatId}`)
-          if (chatRes.ok) {
-            const data = (await chatRes.json()) as { chat?: { projectId?: string | null } }
-            projectTierId = data.chat?.projectId ?? null
-          }
-        } catch {
-          /* project tier simply won't be folded in */
-        }
-      }
-      setResolvedProjectId(projectTierId)
+  // Resolve the project tier: an explicit projectId wins; otherwise derive it
+  // from the chat (the dialog only carries a chat id).
+  const chatProject = useChatProjectId(opts?.chatId ?? null, active && !explicitProjectId)
+  const projectId = explicitProjectId ?? chatProject.projectId
 
-      const personalUrl = wardrobeCollectionUrl({ scope: 'character', id: characterId })
-      const [personalRes, groupRes, projectRes, archetypeRes] = await Promise.all([
-        fetch(withWardrobeArchivedParam(personalUrl, includeArchived)),
-        fetch(withWardrobeArchivedParam(`${personalUrl}?scope=group`, includeArchived)),
-        projectTierId
-          ? fetch(wardrobeCollectionUrl({ scope: 'project', id: projectTierId }, { includeArchived }))
-          : Promise.resolve(null),
-        fetch(wardrobeCollectionUrl(GENERAL_CONTAINER, { includeArchived })),
+  const tierOpts = { includeArchived, enabled: active }
+  const character = characterId ? { scope: 'character' as const, id: characterId } : null
+  const personal = useWardrobeTier(character ? { container: character } : null, tierOpts)
+  const groups = useWardrobeTier(character ? { container: character, groups: true } : null, tierOpts)
+  const project = useWardrobeTier(
+    projectId ? { container: { scope: 'project', id: projectId } } : null,
+    tierOpts,
+  )
+  const general = useWardrobeTier({ container: GENERAL_CONTAINER }, tierOpts)
+
+  const items = useMemo(() => {
+    if (!active) return EMPTY
+    // The wearable view is the server's own rule (archived dropped per tier,
+    // then shadowed); "Show archived" shadows the full per-tier lists.
+    if (!includeArchived) {
+      return mergeWearableTiers([
+        general.items ?? EMPTY,
+        project.items ?? EMPTY,
+        groups.items ?? EMPTY,
+        personal.items ?? EMPTY,
       ])
-
-      // Merge with precedence: personal > group > project > general.
-      const collected: WardrobeItemWithOrigin[] = []
-      const push = (list: WardrobeItemWithOrigin[] | undefined) => {
-        for (const w of list ?? []) {
-          if (!collected.some((c) => c.id === w.id)) collected.push(w)
-        }
-      }
-      if (personalRes.ok) {
-        const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
-        push(data.wardrobeItems)
-      }
-      if (groupRes.ok) {
-        const data = (await groupRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
-        push(data.wardrobeItems)
-      }
-      if (projectRes && projectRes.ok) {
-        const data = (await projectRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
-        push(data.wardrobeItems)
-      }
-      if (archetypeRes.ok) {
-        const data = (await archetypeRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
-        push(data.wardrobeItems)
-      }
-      setItems(collected)
-    } catch (err) {
-      console.warn('[useCharacterWardrobeItems] Failed to load wardrobe', err)
-      setItems([])
-    } finally {
-      setLoading(false)
-      setFetched(true)
     }
-  }, [characterId, projectId, chatId, includeArchived])
+    return mergeWardrobeTiers([personal.items, groups.items, project.items, general.items], {
+      includeArchived: true,
+    })
+  },
+    [active, personal.items, groups.items, project.items, general.items, includeArchived],
+  )
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reload wraps an async fetch; the setState lands well after this effect tick
-    void reload()
-  }, [reload])
+  const tiers = [personal, groups, general, ...(projectId ? [project] : [])]
+  const loading = active && tiers.some((t) => t.loading)
+  const fetched = active && chatProject.settled && tiers.every((t) => t.fetched)
 
-  return { items, loading, fetched, projectId: resolvedProjectId, reload }
+  return { items, loading, fetched, projectId }
 }

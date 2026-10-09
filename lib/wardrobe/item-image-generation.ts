@@ -13,23 +13,21 @@
  *      the chat it was asked for in, and that chat's Concierge state governs
  *      it (bug 189): Locked never fails over, Unmoderated routes direct to
  *      the uncensored desk, and a refusal is ledgered and announced there.
- *   4. `convertToWebP` → `addWardrobeItemImage` (bridge write, `files` row,
- *      `imageFileId` update).
+ *   4. `decodeProviderImage` → `addWardrobeItemImage` (bridge write, `files`
+ *      row, `imageFileId` update).
  *
- * The preview-avatar route bypasses the failover on purpose; this does not
- * copy it. The attempt closure is the shape of `character-avatar.ts`'s.
+ * The attempt closure is `makeLoggedImageAttempt`'s, shared with the avatar
+ * and Lantern jobs; its log rows are `WARDROBE_ITEM_IMAGE`, which the Almanack
+ * counts as image spend (bug 196).
  *
  * @module lib/wardrobe/item-image-generation
  */
 
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { logLLMCall } from '@/lib/services/llm-logging.service';
-import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
 import { resolveWardrobeImageProfile } from '@/lib/image-gen/profile-resolution';
-import { convertToWebP } from '@/lib/files/webp-conversion';
+import { decodeProviderImage, makeLoggedImageAttempt } from '@/lib/image-gen/image-attempt';
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import {
@@ -38,8 +36,7 @@ import {
 } from '@/lib/services/dangerous-content/image-failover';
 import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe';
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
-import { hydrateComponentGraph } from '@/lib/wardrobe/hydrate-components';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
+import { componentGraph, loadWearablePool } from '@/lib/wardrobe/pool';
 import {
   buildWardrobeItemImagePrompt,
   type WardrobeImageSubject,
@@ -121,15 +118,23 @@ async function resolveComponentLeaves(
     }
   }
   if (home.scope === 'character' && home.characterId) {
-    await hydrateComponentGraph(
-      repos,
-      home.characterId,
-      itemsById,
-      await sharedWardrobeTiersForCharacter(home.characterId, []),
-    );
+    // Every tier the character can reach (group stores included), walked from
+    // this outfit's parts only.
+    const pool = await loadWearablePool(repos, home.characterId, []);
+    for (const [id, part] of componentGraph(pool, home.item.componentItemIds)) {
+      if (!itemsById.has(id)) itemsById.set(id, part);
+    }
   }
 
-  const { leafIds } = expandComposites([home.item.id], itemsById);
+  const { leafIds, cycles, truncated } = expandComposites([home.item.id], itemsById);
+  if ((cycles?.length ?? 0) > 0 || truncated) {
+    logger.debug('[WardrobeItemImage] Outfit expansion stopped short', {
+      context: LOG_CONTEXT,
+      itemId: home.item.id,
+      cycles,
+      truncated,
+    });
+  }
   return leafIds
     .map((id) => itemsById.get(id))
     .filter((i): i is WardrobeItem => !!i && i.id !== home.item.id);
@@ -281,48 +286,21 @@ export async function generateWardrobeItemImage(
     });
   }
 
-  const attempt = async (attemptProfile: ImageProfile, key: string) => {
-    const provider = createImageProvider(attemptProfile.provider);
-    const { params } = buildImageGenParams({
-      profile: attemptProfile,
-      prompt,
+  // Wardrobe pictures keep their own log type; the Almanack counts it as
+  // image spend all the same (bug 196, `IMAGE_SPEND_LOG_TYPES`).
+  const attempt = makeLoggedImageAttempt({
+    userId,
+    logType: 'WARDROBE_ITEM_IMAGE',
+    prompt,
+    primaryProfileId: profile.id,
+    chatId,
+    characterId: home.characterId ?? null,
+    params: {
       overrides: { n: 1, style: 'natural' },
       orientation,
-      logContext: { context: LOG_CONTEXT, itemId: home.item.id, profileId: attemptProfile.id },
-    });
-    const callStartedAt = Date.now();
-    try {
-      const response = await provider.generateImage(params, key);
-      await logLLMCall({
-        userId,
-        type: 'WARDROBE_ITEM_IMAGE',
-        characterId: home.characterId ?? undefined,
-        provider: attemptProfile.provider,
-        modelName: attemptProfile.modelName,
-        imageProfileId: attemptProfile.id,
-        request: { messages: [{ role: 'user', content: prompt }] },
-        response: {
-          content: response.images?.[0]?.revisedPrompt
-            || `Generated ${response.images?.length ?? 0} image(s)${attemptProfile.id !== profile.id ? ' (Concierge reroute)' : ''}`,
-        },
-        durationMs: Date.now() - callStartedAt,
-      });
-      return response;
-    } catch (error) {
-      await logLLMCall({
-        userId,
-        type: 'WARDROBE_ITEM_IMAGE',
-        characterId: home.characterId ?? undefined,
-        provider: attemptProfile.provider,
-        modelName: attemptProfile.modelName,
-        imageProfileId: attemptProfile.id,
-        request: { messages: [{ role: 'user', content: prompt }] },
-        response: { content: '', error: getErrorMessage(error) },
-        durationMs: Date.now() - callStartedAt,
-      });
-      throw error;
-    }
-  };
+      logContext: { context: LOG_CONTEXT, itemId: home.item.id },
+    },
+  });
 
   let failover;
   try {
@@ -351,29 +329,21 @@ export async function generateWardrobeItemImage(
     throw new WardrobeImageGenerationError(getErrorMessage(error), trail, refused);
   }
 
-  const imageData = failover.result.images?.[0];
-  const rawData = imageData?.data || imageData?.b64Json;
-  if (!imageData || !rawData) {
+  const decoded = await decodeProviderImage(failover.result, 'wardrobe');
+  if (!decoded) {
     throw new WardrobeImageGenerationError('The image provider returned no picture', failover.trail.length ? failover.trail : null, false);
   }
-
-  const providerMimeType = imageData.mimeType || 'image/png';
-  const converted = await convertToWebP(
-    Buffer.from(rawData, 'base64'),
-    providerMimeType,
-    `wardrobe.${providerMimeType.split('/')[1] || 'png'}`,
-  );
 
   const { file, item } = await addWardrobeItemImage(repos, home, {
     userId,
     kind: 'generated',
-    content: converted.buffer,
-    contentType: converted.mimeType,
-    width: converted.width ?? null,
-    height: converted.height ?? null,
+    content: decoded.buffer,
+    contentType: decoded.mimeType,
+    width: decoded.width,
+    height: decoded.height,
     generationPrompt: prompt,
     generationModel: failover.profile.modelName,
-    generationRevisedPrompt: imageData.revisedPrompt || null,
+    generationRevisedPrompt: decoded.revisedPrompt,
   });
 
   logger.info('[WardrobeItemImage] Wardrobe item image generated', {

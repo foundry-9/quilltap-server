@@ -42,14 +42,20 @@ export function sanitizeLeafName(filename: string): string {
  * Find a free relative path under a mount point. If `desired` is already
  * taken, bumps with `(2)`, `(3)`, … up to 999; falls back to a sha-tagged
  * suffix if everything in that range collides.
+ *
+ * `isReserved` marks paths another in-flight write has already claimed but
+ * not yet written; they count as taken. This only checks — `storeMountFile`
+ * is what reserves.
  */
 export async function resolveUniqueRelativePath(
   mountPointId: string,
-  desired: string
+  desired: string,
+  isReserved: (candidate: string) => boolean = () => false,
 ): Promise<string> {
   const repos = getRepositories();
-  const existing = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, desired);
-  if (!existing) return desired;
+  const taken = async (candidate: string): Promise<boolean> =>
+    isReserved(candidate) || !!(await repos.docMountBlobs.findByMountPointAndPath(mountPointId, candidate));
+  if (!(await taken(desired))) return desired;
 
   const dir = path.posix.dirname(desired);
   const ext = path.extname(desired);
@@ -58,8 +64,7 @@ export async function resolveUniqueRelativePath(
 
   for (let attempt = 2; attempt <= 999; attempt++) {
     const candidate = `${prefix}${stem} (${attempt})${ext}`;
-    const collision = await repos.docMountBlobs.findByMountPointAndPath(mountPointId, candidate);
-    if (!collision) return candidate;
+    if (!(await taken(candidate))) return candidate;
   }
   const hash = createHash('sha1').update(`${desired}:${Date.now()}`).digest('hex').slice(0, 8);
   return `${prefix}${stem}-${hash}${ext}`;

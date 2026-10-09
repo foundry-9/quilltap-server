@@ -48,12 +48,15 @@ let posted: Record<string, unknown>[] = []
 
 /** Picture uploads, in order: the item id, the query, and the multipart fields. */
 let uploads: { itemId: string; query: URLSearchParams; kind: unknown; file: unknown }[] = []
+/** Picture links (`?action=link-image`): the item id, the query, and the linked file id. */
+let links: { itemId: string; query: URLSearchParams; fileId: string }[] = []
 
 const UPLOAD_RE = /\/api\/v1\/wardrobe\/([^/?]+)\/images\?(.*)$/
 
 function routeFetch(analysis: unknown = ANALYSIS, options: { failUploads?: boolean } = {}): void {
   posted = []
   uploads = []
+  links = []
   let nextId = 0
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
@@ -68,6 +71,15 @@ function routeFetch(analysis: unknown = ANALYSIS, options: { failUploads?: boole
     }
     const upload = UPLOAD_RE.exec(url)
     if (upload && init?.method === 'POST') {
+      if (typeof init.body === 'string') {
+        // ?action=link-image — the photograph, already uploaded, linked by id.
+        links.push({
+          itemId: decodeURIComponent(upload[1]),
+          query: new URLSearchParams(upload[2]),
+          fileId: (JSON.parse(init.body) as { fileId: string }).fileId,
+        })
+        return jsonResponse({ image: { fileId: `link-${links.length}` }, current: `link-${links.length}` }, 201)
+      }
       const form = init.body as FormData
       uploads.push({
         itemId: decodeURIComponent(upload[1]),
@@ -175,20 +187,27 @@ describe('ImportFromImageModal — keeping the photograph', () => {
     expect(keepOffer().checked).toBe(true)
   })
 
-  it('attaches the photograph once to each created piece and once to the outfit', async () => {
+  it('uploads the photograph once and links it to every other piece and the outfit', async () => {
     routeFetch()
     await analyzeAnImage()
 
     fireEvent.click(screen.getByText('Import 2 Items + Outfit'))
-    await waitFor(() => expect(uploads).toHaveLength(3))
+    await waitFor(() => expect(links).toHaveLength(2))
 
-    expect(uploads.map((u) => u.itemId)).toEqual(['item-1', 'item-2', 'item-3'])
-    for (const u of uploads) {
-      expect(u.query.get('scope')).toBe('character')
-      expect(u.query.get('id')).toBe(CHARACTER_ID)
-      expect(u.query.get('action')).toBe('upload')
-      expect(u.kind).toBe('imported')
-      expect((u.file as File).name).toBe('look.png')
+    // One upload, with the first piece…
+    expect(uploads).toHaveLength(1)
+    expect(uploads[0].itemId).toBe('item-1')
+    expect(uploads[0].query.get('scope')).toBe('character')
+    expect(uploads[0].query.get('id')).toBe(CHARACTER_ID)
+    expect(uploads[0].query.get('action')).toBe('upload')
+    expect(uploads[0].kind).toBe('imported')
+    expect((uploads[0].file as File).name).toBe('look.png')
+    // …and the second piece and the outfit link that picture by id.
+    expect(links.map((l) => l.itemId)).toEqual(['item-2', 'item-3'])
+    for (const l of links) {
+      expect(l.query.get('action')).toBe('link-image')
+      expect(l.query.get('id')).toBe(CHARACTER_ID)
+      expect(l.fileId).toBe('file-1')
     }
     // The outfit (item-3) was created from the two pieces, after them.
     expect(posted[2].componentItemIds).toEqual(['item-1', 'item-2'])
@@ -204,6 +223,7 @@ describe('ImportFromImageModal — keeping the photograph', () => {
     fireEvent.click(screen.getByText('Import 2 Items + Outfit'))
     await waitFor(() => expect(posted).toHaveLength(3))
     expect(uploads).toHaveLength(0)
+    expect(links).toHaveLength(0)
   })
 
   it('carries on with the import when an attachment fails, and says so softly', async () => {

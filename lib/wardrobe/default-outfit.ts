@@ -8,7 +8,7 @@
  * @module lib/wardrobe/default-outfit
  */
 
-import { dissolveBundlesInSlotsWithCredit } from '@/lib/wardrobe/dissolve-bundles'
+import { dissolveCompositesInSlots } from '@/lib/wardrobe/slot-ops'
 import { makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
@@ -20,7 +20,7 @@ import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
  * same slot — slot arrays are read inner-to-outer. Both sides of the wire apply
  * this so the composer's preview and the chat that opens agree.
  */
-export function sortForDefaultOutfit(items: WardrobeItem[]): WardrobeItem[] {
+function sortForDefaultOutfit(items: WardrobeItem[]): WardrobeItem[] {
   return [...items].sort((a, b) => {
     const aTime = a.createdAt ? Date.parse(a.createdAt) : Number.POSITIVE_INFINITY
     const bTime = b.createdAt ? Date.parse(b.createdAt) : Number.POSITIVE_INFINITY
@@ -47,5 +47,5 @@ export function buildDefaultOutfitWithCredit(
   }
   // A bundle marked default goes on as its parts, like every other put-on
   // gesture — the wardrobe should never open onto a card over empty slots.
-  return dissolveBundlesInSlotsWithCredit(next, new Map(items.map((i) => [i.id, i])))
+  return dissolveCompositesInSlots(next, new Map(items.map((i) => [i.id, i])))
 }

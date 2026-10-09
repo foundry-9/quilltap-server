@@ -29,12 +29,14 @@
  * …` / `Never worn`); an item read without a `wear` annotation is never worn.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
+import { WARDROBE_SLOT_META, isComposite as isCompositeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { wardrobeOriginLabel, type ListedWardrobeItem } from '@/lib/wardrobe/wardrobe-container'
 import { formatWearLine, wearOf, type WearAnnotated } from '@/lib/wardrobe/wear-display'
 import { WardrobeItemThumbnail } from './wardrobe-item-thumbnail'
+import { SlotBadge } from './slot-ui'
 
 /** A listed item, plus the wear-ledger annotation the collection reads attach. */
 type RowItem = ListedWardrobeItem & WearAnnotated
@@ -117,7 +119,7 @@ export function WardrobeItemRow({
   depth = 0,
 }: WardrobeItemRowProps) {
   const isGeneratingImage = generatingImageIds?.has(item.id) ?? false
-  const isComposite = item.componentItemIds.length > 0
+  const isComposite = isCompositeItem(item)
   const [expanded, setExpanded] = useState(false)
   // Without an explicit predicate, fall back to the character-view rule:
   // personal items are manageable, shared-tier items are Move/Copy only.
@@ -131,49 +133,20 @@ export function WardrobeItemRow({
   const slotPickerRef = useRef<HTMLDivElement>(null)
   const kebabRef = useRef<HTMLDivElement>(null)
 
-  // Close popovers on outside click
-  useEffect(() => {
-    if (!slotPickerOpen && !kebabOpen) return
-    const onDoc = (e: MouseEvent): void => {
-      if (
-        slotPickerOpen &&
-        slotPickerRef.current &&
-        !slotPickerRef.current.contains(e.target as Node)
-      ) {
-        setSlotPickerOpen(false)
-      }
-      if (
-        kebabOpen &&
-        kebabRef.current &&
-        !kebabRef.current.contains(e.target as Node)
-      ) {
-        setKebabOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [slotPickerOpen, kebabOpen])
-
-  // Close popovers on Escape — capture phase + stopPropagation so the parent
-  // dialog's Escape handler doesn't dismiss the entire modal.
-  useEffect(() => {
-    if (!slotPickerOpen && !kebabOpen) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      if (slotPickerOpen) {
-        e.stopPropagation()
-        e.preventDefault()
-        setSlotPickerOpen(false)
-      }
-      if (kebabOpen) {
-        e.stopPropagation()
-        e.preventDefault()
-        setKebabOpen(false)
-      }
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [slotPickerOpen, kebabOpen])
+  // Popovers close on an outside click or Escape — the Escape swallowed in the
+  // capture phase so the enclosing dialog stays open.
+  const closeSlotPicker = useCallback(() => setSlotPickerOpen(false), [])
+  const closeKebab = useCallback(() => setKebabOpen(false), [])
+  useClickOutside(slotPickerRef, closeSlotPicker, {
+    enabled: slotPickerOpen,
+    onEscape: closeSlotPicker,
+    escapeCapture: true,
+  })
+  useClickOutside(kebabRef, closeKebab, {
+    enabled: kebabOpen,
+    onEscape: closeKebab,
+    escapeCapture: true,
+  })
 
   const components = useMemo(() => {
     if (!isComposite) return []
@@ -252,9 +225,7 @@ export function WardrobeItemRow({
               <span className="qt-badge qt-badge-secondary">archived</span>
             )}
             {item.types.map((t) => (
-              <span key={t} className={`qt-badge ${WARDROBE_SLOT_META[t].badgeClass}`}>
-                {t}
-              </span>
+              <SlotBadge key={t} slot={t} />
             ))}
             {!manageable && originLabel && (
               <span
@@ -321,9 +292,7 @@ export function WardrobeItemRow({
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
                         >
                           <span>{WARDROBE_SLOT_META[slot].label}</span>
-                          <span className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass}`}>
-                            {slot}
-                          </span>
+                          <SlotBadge slot={slot} />
                         </button>
                       </li>
                     ))}

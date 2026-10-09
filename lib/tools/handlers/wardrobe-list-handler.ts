@@ -14,24 +14,15 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeListToolInput, WardrobeListToolOutput, WardrobeListItemResult } from '../wardrobe-list-tool';
 import { validateWardrobeListInput } from '../wardrobe-list-tool';
-import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
-import { findEquippedSlots } from './wardrobe-handler-shared';
+import { isComposite as itemIsComposite } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { findEquippedSlots, loadToolPool, type WardrobeToolContext } from './wardrobe-handler-shared';
 import { formatWornRelative } from '@/lib/wardrobe/wear-display';
 import { neverWornSummary } from '@/lib/schemas/wardrobe-wear.types';
 import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
-/**
- * Context required for wardrobe list tool execution
- */
-export interface WardrobeListToolContext {
-  /** User ID for authentication and logging */
-  userId: string;
-  /** Chat ID for equipped outfit lookup */
-  chatId: string;
-  /** Character ID whose wardrobe to list */
-  characterId: string;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeListToolContext = WardrobeToolContext;
 
 /**
  * Error thrown during wardrobe list execution
@@ -80,11 +71,10 @@ export async function executeWardrobeListTool(
     const validatedInput = parsed;
     const { type_filter, appropriateness_filter, include_equipped } = validatedInput;
 
-    // The character's own wardrobe merged under the shared archetypes (their
-    // groups' stores + the chat's project stores + Quilltap General). Character
-    // items win on id collision so a personal override masks the shared item.
-    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
-    const allItems = await repos.wardrobe.findWearablePoolForCharacter(context.characterId, tiers);
+    // Everything the character can wear: their own vault over their groups'
+    // stores, the chat's project stores and Quilltap General.
+    const pool = await loadToolPool(repos, context.chatId, context.characterId);
+    const allItems = pool.wearable();
 
     const equippedSlots: EquippedSlots | null = await repos.chats.getEquippedOutfitForCharacter(
       context.chatId,
@@ -109,11 +99,6 @@ export async function executeWardrobeListTool(
       );
     }
 
-    // Map every item by id for composite-component title resolution. We
-    // include the unfiltered list so a filtered composite can still show its
-    // components (some of which may have been filtered out themselves).
-    const itemsById = new Map<string, WardrobeItem>();
-    for (const item of allItems) itemsById.set(item.id, item);
 
     // One ledger read for every listed item's wear, the caller's own share
     // kept apart from the household's (bug 184).
@@ -128,11 +113,11 @@ export async function executeWardrobeListTool(
       const wear = wearSummaries.get(item.id);
       const household = wear?.household ?? neverWornSummary();
       const yours = wear?.yours ?? neverWornSummary();
-      const isComposite = (item.componentItemIds?.length ?? 0) > 0;
+      // Component titles resolve against the whole pool, so a filtered-out
+      // (or archived) part still names itself.
+      const isComposite = itemIsComposite(item);
       const componentTitles = isComposite
-        ? item.componentItemIds
-            .map((cid) => itemsById.get(cid)?.title)
-            .filter((t): t is string => typeof t === 'string')
+        ? pool.getMany(item.componentItemIds).map((c) => c.title)
         : undefined;
       return {
         item_id: item.id,

@@ -25,7 +25,7 @@ import { handleCharacterAvatarGeneration } from '@/lib/background-jobs/handlers/
 import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
-import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt'
+import { buildCharacterAvatarPrompt } from '@/lib/image-gen/avatar-prompt'
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { writeCharacterAvatarToVault } from '@/lib/file-storage/character-vault-bridge'
 import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
@@ -38,7 +38,7 @@ jest.mock('@/lib/logger', () => {
   return { logger: makeLogger() }
 })
 
-jest.mock('@/lib/wardrobe/avatar-prompt', () => ({
+jest.mock('@/lib/image-gen/avatar-prompt', () => ({
   buildCharacterAvatarPrompt: jest.fn(),
 }))
 

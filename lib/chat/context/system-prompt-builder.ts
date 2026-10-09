@@ -11,6 +11,7 @@ import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/tim
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts'
+import { pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -244,8 +245,7 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
   if (character.physicalDescription) {
     const desc = character.physicalDescription
     const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
-    const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
-      || desc.completePrompt || desc.fullDescription || ''
+    const descText = pickPhysicalDescription(desc, 'self-image')
     if (descText) {
       parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}`)
     }

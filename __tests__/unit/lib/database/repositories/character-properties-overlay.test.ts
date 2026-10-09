@@ -2057,9 +2057,6 @@ describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
         findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
         findManyByMountPointsInFolder,
       },
-      wardrobe: {
-        findArchetypes: jest.fn().mockResolvedValue([]),
-      },
     });
     return { findManyByMountPointsInFolder };
   }
@@ -2231,10 +2228,10 @@ describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
   });
 
   it('resolves componentItems: UUID refs that point at shared archetypes', async () => {
-    // A character-owned bundle whose only component is a shared archetype
-    // (characterId === null, lives in the DB but not in this character's
-    // vault). Without archetype seeding the ref would be dropped and the
-    // bundle silently emptied.
+    // A character-owned bundle whose only component is a shared item (it lives
+    // in another tier, not this character's vault). The reader keeps a UUID
+    // ref verbatim without looking it up (bug 187) — dropping it would
+    // silently empty the bundle. The wearable pool resolves it at wear time.
     const fitbitId = '4c18725d-70bb-4cd6-a9d3-1f20c4aa8c7d';
     const bundleId = '11111111-2222-4333-8444-555555555555';
 
@@ -2267,24 +2264,6 @@ describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
       docMountDocuments: {
         findManyByMountPointsAndPath: jest.fn().mockResolvedValue([]),
         findManyByMountPointsInFolder,
-      },
-      wardrobe: {
-        findArchetypes: jest.fn().mockResolvedValue([
-          {
-            id: fitbitId,
-            characterId: null,
-            title: 'Fitbit',
-            description: null,
-            types: ['accessories'],
-            appropriateness: null,
-            isDefault: false,
-            componentItemIds: [],
-            archivedAt: null,
-            migratedFromClothingRecordId: null,
-            createdAt: '2026-01-01T00:00:00.000Z',
-            updatedAt: '2026-01-01T00:00:00.000Z',
-          },
-        ]),
       },
     });
 

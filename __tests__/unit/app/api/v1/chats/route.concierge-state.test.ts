@@ -274,7 +274,10 @@ describe('POST /api/v1/chats — Concierge state at creation', () => {
     chatRow = makeCreatedChat()
 
     ;(mockRepos.chats as any).getEquippedOutfitForCharacter = jest.fn().mockResolvedValue(null)
-    ;(mockRepos as any).wardrobe = { findByIdsForCharacter: jest.fn().mockResolvedValue([]) }
+    ;(mockRepos as any).wardrobe = {
+      findByCharacterId: jest.fn().mockResolvedValue([]),
+      readSharedTiers: jest.fn().mockResolvedValue([]),
+    }
     ;(mockRepos as any).projects = {
       findById: jest.fn().mockResolvedValue(null),
       update: jest.fn().mockResolvedValue(null),

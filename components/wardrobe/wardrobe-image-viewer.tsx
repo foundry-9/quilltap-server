@@ -9,6 +9,10 @@
  * thumbnail and from the item editor's Picture section, where Previous/Next
  * walk the item's picture history.
  *
+ * When the picture's bytes are missing, the frame's Remove deletes it through
+ * the images route's `delete-image` action rather than the generic image
+ * delete, and refreshes the wardrobe queries (bug 194).
+ *
  * It sits at `z-[90]`, above the wardrobe dialog (`z-[60]`) and the item
  * editor (`z-[70]`/`z-[80]`); the save dialog it opens rides at `z-[100]`,
  * and while that dialog is up the viewer leaves the keyboard alone so Escape
@@ -25,7 +29,9 @@ import { SaveImageDialog } from '@/app/salon/[id]/components/SaveImageDialog'
 import { downloadImageUrl } from '@/lib/download-utils'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
-import { wardrobeImageUrl } from '@/lib/wardrobe/item-images-client'
+import { useQueryClient } from '@tanstack/react-query'
+import { deleteWardrobeItemImage, wardrobeImageUrl } from '@/lib/wardrobe/item-images-client'
+import { queryKeys } from '@/lib/query/keys'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 
 interface WardrobeImageViewerProps {
@@ -62,6 +68,19 @@ export function WardrobeImageViewer({
   const src = wardrobeImageUrl(fileId)
   const filename = pictureFilename(itemTitle)
 
+  const queryClient = useQueryClient()
+
+  /**
+   * The bytes are gone: remove the picture through the wardrobe's own route,
+   * which drops the mount link and the `files` row and moves the item's
+   * current pointer on — the generic image delete knows none of that (bug
+   * 194) — then refresh every wardrobe read that might still show it.
+   */
+  const handleMissingCleanup = async () => {
+    await deleteWardrobeItemImage(itemId, container, fileId)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.all })
+  }
+
   const handleDownload = async () => {
     try {
       await downloadImageUrl(src, filename)
@@ -94,6 +113,7 @@ export function WardrobeImageViewer({
         alt={`Picture of ${itemTitle}`}
         imageId={fileId}
         filename={filename}
+        onMissingCleanup={handleMissingCleanup}
         onPrev={onPrev}
         onNext={onNext}
         keyboardActive={!saving}
@@ -123,5 +143,3 @@ export function WardrobeImageViewer({
     </>
   )
 }
-
-export default WardrobeImageViewer

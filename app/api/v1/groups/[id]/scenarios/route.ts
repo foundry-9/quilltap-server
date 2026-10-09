@@ -13,7 +13,7 @@
  *                                                description?, isDefault?,
  *                                                body }.
  *
- * Both routes call `ensureGroupOfficialStore` and
+ * Both routes call `ensureOwnerOfficialStore` and
  * `ensureGroupScenariosFolder` first so users hitting this endpoint don't
  * have to wait for the next startup-time heal pass to see their scenarios
  * folder.
@@ -25,7 +25,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import {
   ensureGroupScenariosFolder,
   ensureGroupKnowledgeFolder,
@@ -47,7 +47,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
     const group = await repos.groups.findById(id);
     if (!group) return notFound('Group');
 
-    const ensured = await ensureGroupOfficialStore(group.id, group.name);
+    const ensured = await ensureOwnerOfficialStore('group', group.id, group.name);
     if (!ensured) {
       return serverError('Failed to ensure group document store');
     }
@@ -78,7 +78,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     const body = await req.json();
     const validated = createScenarioSchema.parse(body);
 
-    const ensured = await ensureGroupOfficialStore(group.id, group.name);
+    const ensured = await ensureOwnerOfficialStore('group', group.id, group.name);
     if (!ensured) {
       return serverError('Failed to ensure group document store');
     }

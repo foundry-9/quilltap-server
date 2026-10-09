@@ -10,16 +10,18 @@ import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
+import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
 import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }))
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
-  resolveGroupMountPointIdsForCharacter: jest.fn(),
+  resolveGroupMountsForCharacter: jest.fn(),
   resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
-  resolveProjectMountPointIdsForChat: jest.fn().mockResolvedValue([]),
+}))
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: jest.fn().mockResolvedValue(null),
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks/outfit-selection', () => ({
   chooseLLMOutfit: jest.fn(),
@@ -36,8 +38,8 @@ jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
 }))
 
 const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof chooseLLMOutfit>
-const mockGroupMounts = resolveGroupMountPointIdsForCharacter as jest.MockedFunction<
-  typeof resolveGroupMountPointIdsForCharacter
+const mockGroupMounts = resolveGroupMountsForCharacter as jest.MockedFunction<
+  typeof resolveGroupMountsForCharacter
 >
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
   typeof resolveEquippedOutfitForCharacter
@@ -76,8 +78,7 @@ function makeRepos(own: WardrobeItem[], previous: Record<string, string[]> | nul
       },
       wardrobe: {
         findByCharacterId: jest.fn().mockResolvedValue(own),
-        findArchetypes: jest.fn().mockResolvedValue([]),
-        findArchetypesInMounts: jest.fn().mockResolvedValue([]),
+        readSharedTiers: jest.fn().mockResolvedValue([]),
       },
       connections: { findAll: jest.fn().mockResolvedValue([{ id: 'p1', isDefault: true }]) },
       chats: {
@@ -99,7 +100,7 @@ const CTX = { userId: 'u1', projectMountPointIds: [] as string[] }
 beforeEach(() => {
   jest.clearAllMocks()
   mockGroupMounts.mockResolvedValue([])
-  mockResolve.mockResolvedValue({
+  mockResolve.mockReturnValue({
     outfitValues: {},
     leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
     itemsById: new Map(),

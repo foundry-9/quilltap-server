@@ -4,17 +4,17 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
 import {
   getLanternBackgroundsStore,
   writeLanternBackgroundToMountStore,
 } from '@/lib/file-storage/lantern-store-bridge';
 
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
-import { buildImageGenParams, resolveProfileLoras } from '@/lib/image-gen/params-builder';
+import { resolveProfileLoras } from '@/lib/image-gen/params-builder';
+import { decodeProviderImage, makeLoggedImageAttempt, type DecodedProviderImage } from '@/lib/image-gen/image-attempt';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
 import type { ImageGenParams, ImageOrientation } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
@@ -22,7 +22,6 @@ import {
   GeneratedImageResult,
   validateImageGenerationInput,
 } from '@/lib/tools/image-generation-tool';
-import { convertToWebP } from '@/lib/files/webp-conversion';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
@@ -39,7 +38,6 @@ import {
 import { logger } from '@/lib/logger';
 import { getInheritedTags } from '@/lib/files/tag-inheritance';
 import { getErrorMessage } from '@/lib/error-utils';
-import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveConciergeSettings,
   type ResolvedConciergePolicy,
@@ -125,8 +123,7 @@ async function resolveRequesterName(
  * Save generated image to storage and database
  */
 async function saveGeneratedImage(
-  imageData: string, // Base64-encoded image data
-  mimeType: string,
+  decoded: DecodedProviderImage,
   userId: string,
   chatId: string | undefined, // Now used to tag the image with the chat
   callingParticipantId: string | undefined,
@@ -140,22 +137,12 @@ async function saveGeneratedImage(
   }
 ): Promise<GeneratedImageResult> {
   try {
-    // Decode base64 to buffer and convert to WebP
-    const rawBuffer = Buffer.from(imageData, 'base64');
-    const providerExt = mimeType.split('/')[1] || 'png';
-    const providerFilename = `generated_${Date.now()}.${providerExt}`;
-    const converted = await convertToWebP(rawBuffer, mimeType, providerFilename);
-    const buffer = converted.buffer;
-    const finalMimeType = converted.mimeType;
-    const originalFilename = converted.filename;
-
-    const sha256 = sha256OfBuffer(buffer);
+    const { buffer, mimeType: finalMimeType, filename: originalFilename, sha256 } = decoded;
 
     // Build linkedTo array
     const linkedTo = chatId ? [chatId] : [];
 
     const repos = getRepositories();
-    const category: FileCategory = 'IMAGE';
 
     // Generate a new file ID
     const fileId = crypto.randomUUID();
@@ -182,26 +169,22 @@ async function saveGeneratedImage(
     // bytes (bitmaps → WebP), so the FileEntry's mime/size must reflect
     // what's on disk, not the input contentType/buffer length.
     // IMPORTANT: Pass the fileId to ensure metadata matches storage path
-    const fileEntry = await repos.files.create({
+    const fileEntry = await createGeneratedFileRow(repos, {
+      id: fileId,
       userId,
       sha256,
       originalFilename,
-      mimeType: written.storedMimeType,
-      size: written.sizeBytes,
-      // Actual dimensions measured from the stored bytes (see
-      // image-orientation-gating) rather than left null.
-      width: converted.width ?? null,
-      height: converted.height ?? null,
+      stored: written,
+      width: decoded.width,
+      height: decoded.height,
       linkedTo,
-      source: 'GENERATED' as FileSource,
-      category,
-      generationPrompt: metadata.prompt,
-      generationModel: metadata.model,
-      generationRevisedPrompt: metadata.revisedPrompt || null,
-      description: null,
       tags: inheritedTags,
-      storageKey: written.storageKey,
-    }, { id: fileId });
+      generation: {
+        prompt: metadata.prompt,
+        model: metadata.model,
+        revisedPrompt: metadata.revisedPrompt,
+      },
+    });
 
     // Always use API route for S3-backed files
     const filepath = `/api/v1/files/${fileEntry.id}`;
@@ -362,65 +345,18 @@ async function generateImagesWithProvider(
   // resolves the orientation onto its own mechanism and appends its LoRA
   // trigger phrases; the LLM-log line names it. `toolInput.prompt` is already
   // the expanded prompt, so whatever the builder appends lands in final form.
-  const attempt = async (profile: ImageProfile, apiKey: string) => {
-    const rerouted = profile.id !== imageProfile.id;
-    const provider = createImageProvider(profile.provider);
-    const { params } = buildImageGenParams({
-      profile,
-      prompt: toolInput.prompt,
+  const attempt = makeLoggedImageAttempt({
+    userId,
+    logType: 'IMAGE_GENERATION',
+    prompt: toolInput.prompt,
+    primaryProfileId: imageProfile.id,
+    chatId: chatId ?? null,
+    params: {
       overrides: toolInputOverrides(toolInput),
       orientation: requestedOrientation(toolInput),
-      logContext: {
-        context: rerouted ? 'tools.generate_image.concierge-reroute' : 'tools.generate_image',
-        chatId,
-        profileId: profile.id,
-      },
-    });
-    const startTime = Date.now();
-    try {
-      const response = await provider.generateImage(params, apiKey);
-      const revisedPrompt = response.images?.[0]?.revisedPrompt || '';
-      logLLMCall({
-        userId,
-        type: 'IMAGE_GENERATION',
-        chatId,
-        provider: profile.provider,
-        modelName: profile.modelName,
-        imageProfileId: profile.id,
-        request: {
-          messages: [{ role: 'user', content: toolInput.prompt }],
-        },
-        response: {
-          content: revisedPrompt
-            || `Generated ${response.images?.length ?? 0} image(s)${rerouted ? ' (Concierge reroute)' : ''}`,
-        },
-        durationMs: Date.now() - startTime,
-      }).catch(err => {
-        logger.warn('[Image Generation] Failed to log image generation to LLM Inspector', {
-          error: getErrorMessage(err),
-        });
-      });
-      return response;
-    } catch (error) {
-      logLLMCall({
-        userId,
-        type: 'IMAGE_GENERATION',
-        chatId,
-        provider: profile.provider,
-        modelName: profile.modelName,
-        imageProfileId: profile.id,
-        request: {
-          messages: [{ role: 'user', content: toolInput.prompt }],
-        },
-        response: {
-          content: '',
-          error: getErrorMessage(error),
-        },
-        durationMs: Date.now() - startTime,
-      }).catch(() => { /* never block on logging */ });
-      throw error;
-    }
-  };
+      logContext: { context: 'tools.generate_image', chatId },
+    },
+  });
 
   let outcome;
   try {
@@ -459,15 +395,19 @@ async function generateImagesWithProvider(
   // Save images and create database records
   try {
     const images = await Promise.all(
-      generationResponse.images.map((img) =>
-        saveGeneratedImage(img.data || img.b64Json || '', img.mimeType || 'image/png', userId, chatId, callingParticipantId, {
+      generationResponse.images.map(async (_img, index) => {
+        const decoded = await decodeProviderImage(generationResponse, 'generated', index);
+        if (!decoded) {
+          throw new ImageGenerationError('STORAGE_ERROR', 'The image provider returned an image with no data');
+        }
+        return saveGeneratedImage(decoded, userId, chatId, callingParticipantId, {
           prompt: toolInput.prompt,
-          revisedPrompt: img.revisedPrompt,
+          revisedPrompt: decoded.revisedPrompt ?? undefined,
           model: activeProfile.modelName,
           provider: activeProfile.provider,
           routeTrail: outcome.trail.length > 0 ? outcome.trail : undefined,
-        })
-      )
+        });
+      }),
     );
     return {
       images,

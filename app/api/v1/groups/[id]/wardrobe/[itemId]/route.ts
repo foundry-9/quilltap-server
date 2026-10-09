@@ -1,29 +1,19 @@
 /**
- * Group Wardrobe — item detail endpoint.
+ * Group Wardrobe — item endpoint.
  *
- * GET    /api/v1/groups/[id]/wardrobe/[itemId] — fetch one group wardrobe item.
- * PUT    /api/v1/groups/[id]/wardrobe/[itemId] — update one group wardrobe item.
- * DELETE /api/v1/groups/[id]/wardrobe/[itemId] — delete one group wardrobe item.
+ * GET    /api/v1/groups/[id]/wardrobe/[itemId]                     — one item
+ * GET    /api/v1/groups/[id]/wardrobe/[itemId]?action=wear-history — who wore it, how often, where last
+ * PUT    /api/v1/groups/[id]/wardrobe/[itemId]                     — update it
+ * DELETE /api/v1/groups/[id]/wardrobe/[itemId]                     — delete it
  *
- * Mirrors the project wardrobe item routes; group and project items share the
- * same mount-folder storage, so the writes reuse the mount-scoped helpers.
- *
- * The handler bodies live in the shared factory
- * (`lib/mount-index/mount-wardrobe-route-factory.ts`); this file only
- * supplies the group tier's config.
- *
- * @module app/api/v1/groups/[id]/wardrobe/[itemId]
+ * Handler bodies: `lib/wardrobe/routes/wardrobe-route-factory.ts`.
  */
 
-import { createMountWardrobeItemHandlers } from '@/lib/mount-index/mount-wardrobe-route-factory';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
-import { readGroupWardrobe } from '@/lib/mount-index/group-wardrobe';
+import { createWardrobeItemHandlers } from '@/lib/wardrobe/routes/wardrobe-route-factory';
 
-export const { GET, PUT, DELETE } = createMountWardrobeItemHandlers({
-  ownerLabel: 'Group',
+export const { GET, PUT, DELETE } = createWardrobeItemHandlers<{ id: string; itemId: string }>({
+  scope: 'group',
+  paramsToId: ({ id }) => id,
   logTag: '[Groups v1]',
   logIdKey: 'groupId',
-  findOwner: (repos, id) => repos.groups.findById(id),
-  ensureOfficialStore: ensureGroupOfficialStore,
-  readWardrobe: readGroupWardrobe,
 });

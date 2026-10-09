@@ -44,7 +44,7 @@ import {
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
 import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
+import { loadWearablePool } from '@/lib/wardrobe/pool';
 import { createCreationProgressEmitter, type CreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
@@ -65,7 +65,7 @@ import {
   postHostUserCharacterAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { postOpeningOutfitWhisper } from '@/lib/services/aurora-notifications/writer';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { refreshAvatarForOutfit } from '@/lib/wardrobe/outfit-change-effects';
 import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
@@ -582,14 +582,10 @@ async function createInitialMessagesScenarioAndStaff(
 
       const equippedItemIds = allEquippedItemIds(equippedSlots)
         .filter((id) => typeof id === 'string' && id.length > 0);
-      const equippedItemsData = equippedItemIds.length > 0
-        ? await repos.wardrobe.findByIdsForCharacter(
-            characterId,
-            equippedItemIds,
-            await sharedWardrobeTiersForCharacter(characterId, equippedProjectMountPointIds),
-          )
-        : [];
-      const equippedItemsMap = new Map(equippedItemsData.map((item) => [item.id, item]));
+      const pool = equippedItemIds.length > 0
+        ? await loadWearablePool(repos, characterId, equippedProjectMountPointIds)
+        : null;
+      const equippedItemsMap = new Map(pool ? pool.getMany(equippedItemIds).map((item) => [item.id, item]) : []);
 
       const titlesFor = (slot: keyof typeof equippedSlots): string[] => {
         const ids = equippedSlots[slot];
@@ -610,12 +606,7 @@ async function createInitialMessagesScenarioAndStaff(
         outfit,
       });
 
-      await triggerAvatarGenerationIfEnabled(repos, {
-        userId,
-        chatId,
-        characterId,
-        callerContext: '[Chats v1] chat-open',
-      });
+      await refreshAvatarForOutfit(repos, { userId, chatId, characterId }, '[Chats v1] chat-open');
     } catch (error) {
       logger.warn('[Chats v1] Failed to post opening outfit whisper', {
         chatId,

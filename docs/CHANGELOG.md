@@ -4,6 +4,68 @@
 
 ### 4.10-dev
 
+#### Wardrobe refactor (spec `features/complete/wardrobe-refactor.md`); fix bugs 190 and 192–197
+
+- One wardrobe location: `lib/wardrobe/location.ts` (`resolveWardrobeLocation`) replaces
+  `resolve-container.ts`, the tier switches in `item-images.ts` and the transfer route, and the route
+  factory's owner/store steps. A project or group store is provisioned only with `ensure: true`.
+  `ensure-project-store.ts` / `ensure-group-store.ts` merged into `ensure-owner-store.ts`
+  (`ensureOwnerOfficialStore(kind, …)`); `project-wardrobe.ts` / `group-wardrobe.ts` deleted. Vault
+  writers renamed `*ProjectWardrobeItem` → `*MountWardrobeItem`; folder writes take a `WardrobeMount`
+  with a `group` scope; cycles throw `WardrobeComponentCycleError`.
+- One wearable pool per request: `lib/wardrobe/pool.ts` (`loadWearablePool`, `createSharedTierLoader`,
+  `loadCastPools`) reads each tier once and resolves the group tier itself. The vault reader no longer
+  seeds components from Quilltap General; unresolved UUID refs survive parsing. `shared-tiers.ts` and
+  `hydrate-components.ts` deleted. `resolveEquippedOutfitForCharacter(pool, slots)` is synchronous.
+  `WardrobeRepository` is now `findByCharacterId`, `readSharedTiers` and owner-hint write adapters; it no
+  longer extends the base repository (the table is gone). Backup and delete-all stop reading it. The
+  legacy-row read for the startup refresh and the vault cutover moved to
+  `migrations/lib/legacy-wardrobe-rows.ts`.
+- One outfit-change pipeline: pure slot math in client-safe `slot-ops.ts` (replaces `dissolve-bundles.ts`
+  and the pure half of `outfit-displacement.ts`, which is now just `applyDisplacement`); `wear-ops.ts`
+  (`resolveWearable`, `wearItem`, `takeOffItem`) shared by the tools and `?action=equip`;
+  `outfit-change-effects.ts` (avatar refresh + Aurora announcement) for every surface;
+  `item-mutations.ts` (`createItem`, `updateItem`, `setItemArchived`). `isComposite`, `addIdToSlot`,
+  `removeIdFromSlot`, `equippedSlotsEqual` added to `wardrobe.types.ts`. The executor's seven
+  `wardrobe_*` branches are one table (`wardrobe-tool-table.ts`) with one context. "Break apart" on a
+  legacy outfit card dissolves transitively, like wearing it.
+- One route factory for all four tiers (`lib/wardrobe/routes/wardrobe-route-factory.ts`); the General
+  and character routes are configs. Deliberate contract changes: component cycle is 400 on every tier
+  (was 500 for character/General); PUT checks existence before `imageFileId`; POST/PUT return
+  `{ wardrobeItem }` with `origin` and `wear` (the project POST no longer returns the list); a
+  character's endpoints check the character is the user's; a write to an archived character is 409.
+  Item GET also carries `wear`. A project or group store that can't be provisioned, and a character
+  with no linked vault (including its `?action=instructions`), now answer 404.
+- `?action=outfit-summary` routes leaves by their own `types` (the canonical rule), per-character pools.
+- Images (Phase E): `lib/image-gen/image-attempt.ts` (`makeLoggedImageAttempt`, `decodeProviderImage`)
+  and `lib/files/generated-file-row.ts` shared by the avatar, story background, wardrobe picture,
+  `generate_image` and preview-avatar paths; `pickPhysicalDescription` replaces the per-call variant
+  choosers; `avatar-prompt.ts` / `avatar-cache.ts` moved to `lib/image-gen/`. Preview avatar now uses
+  `resolveAvatarImageProfile` and Concierge failover (422 refusal, 502 provider failure), records real
+  dimensions, and drops the "— outfit preview" label. Wardrobe picture files are named
+  `<timestamp>-<kind>.webp` with a `(2)` suffix on collision.
+- Client (Phase F): all wardrobe lists use `useWardrobeTier` (TanStack Query, `queryKeys.wardrobe.list`);
+  the character view merges tiers by the server rule (an archived personal copy no longer hides a shared
+  item). `wardrobe-control-dialog.tsx` split into hooks and panes (~1900 → ~600 lines);
+  `use-outfit.ts` is now `useChatOutfit`. `ProjectWardrobeManager` and `useProjectWardrobe` removed: the
+  Prospero card mounts the shared browser. New `item-draft.ts`, `<SlotBadge>`, `<SlotCheckboxGroup>`,
+  `containerForListedItem`; `useClickOutside` gains `escapeCapture`. Slot chips read "Top", not "top".
+- 190: the item editor's component candidates include the group tier and archived items, and composite
+  slots come from `buildCompositeTypes` (widen, never narrow) on both client and server.
+- 192: transfer source probe is vault → groups → project → General and never provisions a store.
+- 193: `wardrobe_create` with `equip_now` fires the Aurora announcement and avatar refresh.
+- 194: the full-screen viewer removes a missing wardrobe picture through the wardrobe images route.
+- 195: `wardrobe_update` keeps a composite's designated slots when its components change.
+- 196: the Almanack's per-profile image spend counts every image log type (`IMAGE_SPEND_LOG_TYPES`),
+  including `WARDROBE_ITEM_IMAGE`.
+- 197: import-from-image resolves its vision profile with `profileCanReceiveAttachment`, shrinks the
+  image for transport, refuses an answer given without the image, times out at 120 s, and uploads the
+  photograph once.
+- `WardrobeRepository` keeps `dbTarget: 'main'` for the job child's write partitioner.
+- Removed dead code: `include_presets` on `wardrobe_list`, `OUTFIT_LLM_TIMEOUT_MS`, `sortForDefaultOutfit`,
+  `NO_ITEM_SENTINELS`, `emptyEquippedState`, `WardrobeOverlayOptions.defaultsOnly`, the
+  `*_WEARER_LABEL` and `OutfitSlotName` exports, and the client items listed in the spec.
+
 #### Fix bugs 187, 188, 189 and 191 (wardrobe)
 
 - 187: a character composite no longer loses components that live in a group or project store. The
@@ -24,7 +86,7 @@
 
 #### Wardrobe refactor plan and bugs 187–197 filed
 
-- New `docs/developer/features/wardrobe-refactor.md`: a code audit of the wardrobe subsystem (tiers,
+- New `docs/developer/features/complete/wardrobe-refactor.md`: a code audit of the wardrobe subsystem (tiers,
   repository, tools, routes, image pipeline, components) and a seven-phase consolidation plan around two
   missing abstractions, a single wardrobe location type and a per-request wearable pool. No code changes.
 - Eleven defects found by the audit are filed, open, in the bug catalogue: 187 (a character composite

@@ -1,14 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-import {
-  computeDisplacedSlots,
-  wearItemIntoSlots,
-  replaceItemIntoSlots,
-  equipItem,
-  replaceItem,
-  addToSlot,
-  removeFromSlot,
-} from '@/lib/wardrobe/outfit-displacement'
+import { computeDisplacedSlots, wearItemIntoSlots } from '@/lib/wardrobe/slot-ops'
+import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement'
+import { resolveWearable } from '@/lib/wardrobe/wear-ops'
+import { buildWearablePool } from '@/lib/wardrobe/pool'
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
 import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
@@ -422,7 +418,7 @@ describe('wardrobe outfit utilities', () => {
     })
   })
 
-  describe('wearItemIntoSlots / replaceItemIntoSlots (pure)', () => {
+  describe('wearItemIntoSlots / replace mode (pure)', () => {
     const worn = { top: ['shirt-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] }
 
     it('wearItemIntoSlots layers when the flag is off and replaces when on', () => {
@@ -447,11 +443,11 @@ describe('wardrobe outfit utilities', () => {
       })
     })
 
-    it('replaceItemIntoSlots always clears and sets the covered slots', () => {
+    it('replace mode always clears and sets the covered slots', () => {
       expect(
-        replaceItemIntoSlots(
+        computeDisplacedSlots(
           { top: ['shirt-1', 'cardigan-1'], bottom: ['jeans-1'], footwear: [], accessories: [], hair: [] },
-          { id: 'dress-1', types: ['top', 'bottom'] },
+          { mode: 'replace', item: { id: 'dress-1', types: ['top', 'bottom'] } },
         ),
       ).toEqual({
         top: ['dress-1'],
@@ -469,7 +465,7 @@ describe('wardrobe outfit utilities', () => {
     })
   })
 
-  describe('repo-backed equip primitives', () => {
+  describe('applyDisplacement (load → gesture → commit)', () => {
     let repos: {
       chats: {
         getEquippedOutfitForCharacter: jest.Mock
@@ -488,7 +484,7 @@ describe('wardrobe outfit utilities', () => {
       repos.wardrobeWear = ledgerOver(repos.chats)
     })
 
-    it('equipItem layers a multi-slot leaf garment when the replace flag is off', async () => {
+    it('wear layers a multi-slot leaf garment when the replace flag is off', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['shirt-1'],
         bottom: ['jeans-1'],
@@ -497,10 +493,10 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await equipItem(repos, 'chat-1', 'char-1', {
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'wear', item: {
         id: 'dress-1',
         types: ['top', 'bottom'],
-      })
+      } })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: ['shirt-1', 'dress-1'],
@@ -518,7 +514,7 @@ describe('wardrobe outfit utilities', () => {
       })
     })
 
-    it('equipItem replaces every covered slot when the item replace flag is on', async () => {
+    it('wear replaces every covered slot when the item replace flag is on', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['shirt-1'],
         bottom: ['jeans-1'],
@@ -527,11 +523,11 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await equipItem(repos, 'chat-1', 'char-1', {
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'wear', item: {
         id: 'dress-1',
         types: ['top', 'bottom'],
         replace: true,
-      })
+      } })
 
       expect(result).toEqual({
         top: ['dress-1'],
@@ -542,7 +538,7 @@ describe('wardrobe outfit utilities', () => {
       })
     })
 
-    it('replaceItem force-swaps every covered slot regardless of the flag', async () => {
+    it('replace force-swaps every covered slot regardless of the flag', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['shirt-1', 'cardigan-1'],
         bottom: ['jeans-1'],
@@ -551,10 +547,10 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await replaceItem(repos, 'chat-1', 'char-1', {
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'replace', item: {
         id: 'dress-1',
         types: ['top', 'bottom'],
-      })
+      } })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: ['dress-1'],
@@ -567,13 +563,13 @@ describe('wardrobe outfit utilities', () => {
       expect(result.bottom).toEqual(['dress-1'])
     })
 
-    it('equipItem starts from empty slots when nothing is equipped yet', async () => {
+    it('wear starts from empty slots when nothing is equipped yet', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue(null)
 
-      const result = await equipItem(repos, 'chat-1', 'char-1', {
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'wear', item: {
         id: 'dress-1',
         types: ['top', 'bottom'],
-      })
+      } })
 
       expect(result).toEqual({
         top: ['dress-1'],
@@ -584,7 +580,7 @@ describe('wardrobe outfit utilities', () => {
       })
     })
 
-    it('equipItem stores a composite as its own id (no expansion at write time)', async () => {
+    it('wear stores a composite whole when no pool lookup is given', async () => {
       // Composite "rain outfit" covers top/bottom/footwear via componentItemIds;
       // its own types reflect the slots it covers, and its id is what's stored.
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
@@ -595,10 +591,10 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      await equipItem(repos, 'chat-1', 'char-1', {
+      await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'wear', item: {
         id: 'rain-outfit',
         types: ['top', 'bottom', 'footwear'],
-      })
+      } })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: ['rain-outfit'],
@@ -609,7 +605,7 @@ describe('wardrobe outfit utilities', () => {
       })
     })
 
-    it('addToSlot appends to the slot array', async () => {
+    it('add_to_slot appends to the slot array', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['t-shirt-1'],
         bottom: [],
@@ -618,10 +614,10 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await addToSlot(repos, 'chat-1', 'char-1', 'top', {
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'add_to_slot', slot: 'top', item: {
         id: 'cardigan-1',
         types: ['top'],
-      })
+      } })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: ['t-shirt-1', 'cardigan-1'],
@@ -633,19 +629,7 @@ describe('wardrobe outfit utilities', () => {
       expect(result.top).toEqual(['t-shirt-1', 'cardigan-1'])
     })
 
-    it('addToSlot rejects items whose types do not include the requested slot', async () => {
-      // The slot validator runs before any DB read.
-      await expect(
-        addToSlot(repos, 'chat-1', 'char-1', 'top', {
-          id: 'shoes-1',
-          types: ['footwear'],
-        }),
-      ).rejects.toThrow(/cannot occupy slot 'top'/)
-
-      expect(repos.chats.setEquippedOutfit).not.toHaveBeenCalled()
-    })
-
-    it('addToSlot is a no-op when the item is already in the slot', async () => {
+    it('add_to_slot is a no-op when the item is already in the slot', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['cardigan-1'],
         bottom: [],
@@ -654,16 +638,16 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await addToSlot(repos, 'chat-1', 'char-1', 'top', {
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'add_to_slot', slot: 'top', item: {
         id: 'cardigan-1',
         types: ['top'],
-      })
+      } })
 
       // The slot still reflects a single occurrence; we don't double-append.
       expect(result.top).toEqual(['cardigan-1'])
     })
 
-    it('removeFromSlot with an itemId filters that id out of the slot', async () => {
+    it('remove_from_slot with an itemId filters that id out of the slot', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['t-shirt-1', 'cardigan-1'],
         bottom: [],
@@ -672,7 +656,7 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await removeFromSlot(repos, 'chat-1', 'char-1', 'top', 't-shirt-1')
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'remove_from_slot', slot: 'top', itemId: 't-shirt-1' })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: ['cardigan-1'],
@@ -684,7 +668,7 @@ describe('wardrobe outfit utilities', () => {
       expect(result.top).toEqual(['cardigan-1'])
     })
 
-    it('removeFromSlot without an itemId clears the slot entirely', async () => {
+    it('remove_from_slot without an itemId clears the slot entirely', async () => {
       repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({
         top: ['t-shirt-1', 'cardigan-1'],
         bottom: ['jeans-1'],
@@ -693,7 +677,7 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
 
-      const result = await removeFromSlot(repos, 'chat-1', 'char-1', 'top')
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'remove_from_slot', slot: 'top' })
 
       expect(repos.chats.setEquippedOutfit).toHaveBeenCalledWith('chat-1', 'char-1', {
         top: [],
@@ -703,6 +687,98 @@ describe('wardrobe outfit utilities', () => {
         hair: [],
       })
       expect(result.top).toEqual([])
+    })
+  })
+  describe('applyDisplacement — ledger source and composite credit', () => {
+    let repos: {
+      chats: { getEquippedOutfitForCharacter: jest.Mock; setEquippedOutfit: jest.Mock }
+      wardrobeWear: ReturnType<typeof ledgerOver>
+    }
+    const EMPTY = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
+
+    beforeEach(() => {
+      repos = {
+        chats: {
+          getEquippedOutfitForCharacter: jest.fn(async () => ({ ...EMPTY, top: ['shirt-1'] })),
+          setEquippedOutfit: jest.fn(async (_c: string, _ch: string, slots: unknown) => slots),
+        },
+      } as typeof repos
+      repos.wardrobeWear = ledgerOver(repos.chats)
+    })
+
+    it('commits put-on gestures with the caller source (default ui)', async () => {
+      await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'wear', item: { id: 'hat-1', types: ['accessories'] } })
+      await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'wear', item: { id: 'hat-1', types: ['accessories'] } }, 'tool')
+      const sources = repos.wardrobeWear.commitEquippedOutfit.mock.calls.map((c) => (c[0] as { source: string }).source)
+      expect(sources).toEqual(['ui', 'tool'])
+    })
+
+    it("commits take-off gestures as 'take-off' whatever source is passed", async () => {
+      await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'remove_from_slot', slot: 'top', itemId: 'shirt-1' }, 'tool')
+      await applyDisplacement(repos, 'chat-1', 'char-1', { mode: 'clear_slot', slot: 'top' })
+      const sources = repos.wardrobeWear.commitEquippedOutfit.mock.calls.map((c) => (c[0] as { source: string }).source)
+      expect(sources).toEqual(['take-off', 'take-off'])
+    })
+
+    it('dissolves a composite through the pool lookup and claims it as a worn bundle', async () => {
+      const lookup = new Map([
+        ['suit', { id: 'suit', types: ['top', 'bottom'], componentItemIds: ['jacket', 'trousers'] }],
+        ['jacket', { id: 'jacket', types: ['top'] }],
+        ['trousers', { id: 'trousers', types: ['bottom'] }],
+      ])
+      const result = await applyDisplacement(repos, 'chat-1', 'char-1', {
+        mode: 'wear',
+        item: lookup.get('suit')!,
+        itemsById: lookup,
+      })
+      expect(result).toMatchObject({ top: ['shirt-1', 'jacket'], bottom: ['trousers'] })
+      expect(repos.wardrobeWear.commitEquippedOutfit).toHaveBeenCalledWith(
+        expect.objectContaining({ wornBundles: [{ id: 'suit', leafIds: ['jacket', 'trousers'] }] }),
+      )
+    })
+  })
+
+  describe('resolveWearable (wear-ops) — the refusal front half', () => {
+    const origin = { scope: 'character' as const, id: 'char-1', name: '' }
+    const mk = (id: string, types: string[], extra: Partial<WardrobeItem> = {}) =>
+      ({
+        id,
+        characterId: 'char-1',
+        title: id,
+        types,
+        componentItemIds: [],
+        isDefault: false,
+        replace: false,
+        archivedAt: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        ...extra,
+        origin,
+      }) as WardrobeItem & { origin: typeof origin }
+    const pool = buildWearablePool(
+      'char-1',
+      { groupMountPointIds: [], projectMountPointIds: [] },
+      {
+        own: [mk('shoes-1', ['footwear']), mk('old-coat', ['top'], { archivedAt: '2026-02-01T00:00:00.000Z' })],
+        group: [],
+        project: [],
+        general: [],
+      },
+    )
+
+    it('refuses add_to_slot for an item whose types do not include the requested slot', () => {
+      const r = resolveWearable(pool, { itemId: 'shoes-1' }, 'add_to_slot', 'top')
+      expect(r).toMatchObject({ ok: false, reason: 'slot' })
+      expect(r.ok === false && r.message).toMatch(/cannot be added to the "top" slot/)
+    })
+
+    it('refuses an archived item and an unknown one', () => {
+      expect(resolveWearable(pool, { itemId: 'old-coat' }, 'wear')).toMatchObject({ ok: false, reason: 'archived' })
+      expect(resolveWearable(pool, { itemId: 'nope' }, 'wear')).toMatchObject({ ok: false, reason: 'not_found' })
+    })
+
+    it('resolves a wearable item in its own slot', () => {
+      expect(resolveWearable(pool, { itemId: 'shoes-1' }, 'add_to_slot', 'footwear')).toMatchObject({ ok: true })
     })
   })
 })

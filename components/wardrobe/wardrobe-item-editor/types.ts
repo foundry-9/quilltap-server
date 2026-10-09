@@ -17,6 +17,8 @@ export interface CandidateItem {
    * arrived without an origin) — those get no chip.
    */
   origin: WardrobeOrigin | null
+  /** Archived: still resolves a composite's slots, but can't be newly bundled. */
+  archived?: boolean
 }
 
 export type CandidateGroup = WardrobeItemType | 'multi'

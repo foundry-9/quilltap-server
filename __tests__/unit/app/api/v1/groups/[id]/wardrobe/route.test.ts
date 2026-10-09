@@ -3,7 +3,8 @@
  * (before these existed, group items could only be created via a transfer).
  *
  * Pins that:
- *  - GET ensures the group's official store + `Wardrobe/` folder and lists it.
+ *  - GET ensures the group's official store + `Wardrobe/` folder and lists it
+ *    (through the shared route factory and `resolveWardrobeLocation`).
  *  - POST creates a shared (characterId: null) item in the group's mount.
  *  - PUT/DELETE on the item route target the group's mount, and DELETE first
  *    scrubs equipped references.
@@ -48,40 +49,59 @@ jest.mock('@/lib/api/responses', () => ({
   serverError: (msg: string) => ({ __kind: 'serverError', status: 500, msg }),
   created: (data: any) => ({ body: data, status: 201 }),
   successResponse: (data: any, status = 200) => ({ body: data, status }),
+  conflict: (msg: string) => ({ __kind: 'conflict', status: 409, msg }),
 }))
 
-jest.mock('@/lib/mount-index/ensure-group-store', () => ({
-  ensureGroupOfficialStore: jest.fn(),
+jest.mock('@/lib/mount-index/ensure-owner-store', () => ({
+  ensureOwnerOfficialStore: jest.fn(),
 }))
 
-jest.mock('@/lib/mount-index/group-wardrobe', () => ({
-  ensureGroupWardrobeFolder: jest.fn(),
-  readGroupWardrobe: jest.fn(),
+jest.mock('@/lib/mount-index/shared-wardrobe', () => ({
+  ensureSharedWardrobeFolder: jest.fn(),
 }))
+
+jest.mock('@/lib/instance-settings', () => ({ getGeneralMountPointId: jest.fn() }))
+jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({ resolveGroupMountsForCharacter: jest.fn() }))
+jest.mock('@/lib/mount-index/general-wardrobe', () => ({ readGeneralWardrobe: jest.fn(async () => []) }))
+jest.mock('@/lib/wardrobe/pool', () => ({ loadWearablePool: jest.fn() }))
+
+jest.mock('@/lib/wardrobe/item-images', () => {
+  class ForeignWardrobeImageError extends Error {}
+  return {
+    ForeignWardrobeImageError,
+    assertItemImageChoice: jest.fn(async () => undefined),
+    cleanupItemImages: jest.fn(async () => undefined),
+  }
+})
 
 jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
-  createProjectWardrobeItem: jest.fn(),
-  updateProjectWardrobeItem: jest.fn(),
-  deleteProjectWardrobeItem: jest.fn(),
+  WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
+  readMountItems: jest.fn(),
+  createInMount: jest.fn(),
+  updateInMount: jest.fn(),
+  deleteInMount: jest.fn(),
+  resolveWardrobeMount: jest.fn(),
 }))
 
 import { GET, POST } from '@/app/api/v1/groups/[id]/wardrobe/route'
 import { GET as GET_ITEM, PUT, DELETE } from '@/app/api/v1/groups/[id]/wardrobe/[itemId]/route'
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store'
-import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store'
+import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe'
 import {
   readWardrobeInstructionsFile,
   writeWardrobeInstructionsFile,
 } from '@/lib/wardrobe/wardrobe-instructions'
 import {
-  createProjectWardrobeItem,
-  updateProjectWardrobeItem,
-  deleteProjectWardrobeItem,
+  createInMount,
+  deleteInMount,
+  readMountItems,
+  updateInMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
 
 const GROUP_ID = 'group-1'
 const MOUNT_ID = 'group-mount-1'
 const ITEM_ID = 'item-1'
+const GROUP_MOUNT = { mountPointId: MOUNT_ID, scope: 'group', characterId: null }
 
 const storedItem = {
   id: ITEM_ID,
@@ -113,7 +133,7 @@ beforeEach(() => {
     user: { id: 'user-1' },
     repos: {
       groups: {
-        findById: jest.fn().mockResolvedValue({ id: GROUP_ID, name: 'Main Cast' }),
+        findById: jest.fn().mockResolvedValue({ id: GROUP_ID, name: 'Main Cast', officialMountPointId: MOUNT_ID }),
       },
       chats: {
         removeEquippedItemFromAllChats: jest.fn().mockResolvedValue(undefined),
@@ -125,12 +145,12 @@ beforeEach(() => {
     },
   }
 
-  ;(ensureGroupOfficialStore as jest.Mock).mockResolvedValue({ mountPointId: MOUNT_ID, created: false })
-  ;(ensureGroupWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
-  ;(readGroupWardrobe as jest.Mock).mockResolvedValue([storedItem])
-  ;(createProjectWardrobeItem as jest.Mock).mockImplementation(async (_mount: string, item: any) => item)
-  ;(updateProjectWardrobeItem as jest.Mock).mockResolvedValue({ ...storedItem, title: 'Renamed sash' })
-  ;(deleteProjectWardrobeItem as jest.Mock).mockResolvedValue(true)
+  ;(ensureOwnerOfficialStore as jest.Mock).mockResolvedValue({ mountPointId: MOUNT_ID, created: false })
+  ;(ensureSharedWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
+  ;(readMountItems as jest.Mock).mockResolvedValue([storedItem])
+  ;(createInMount as jest.Mock).mockImplementation(async (_mount: unknown, item: any) => item)
+  ;(updateInMount as jest.Mock).mockResolvedValue({ ...storedItem, title: 'Renamed sash' })
+  ;(deleteInMount as jest.Mock).mockResolvedValue(true)
 })
 
 it('GET lists the group mount wardrobe after ensuring store and folder', async () => {
@@ -145,26 +165,45 @@ it('GET lists the group mount wardrobe after ensuring store and folder', async (
     { ...storedItem, origin: { scope: 'group', id: GROUP_ID, name: 'Main Cast' }, wear: NEVER_WORN },
   ])
   expect(mockCtx.repos.wardrobeWear.findSummaries).toHaveBeenCalledWith([ITEM_ID])
-  expect(ensureGroupOfficialStore).toHaveBeenCalledWith(GROUP_ID, 'Main Cast')
-  expect(ensureGroupWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
-  // Archived garments are hidden unless the caller asks.
-  expect(readGroupWardrobe).toHaveBeenCalledWith(MOUNT_ID, false)
+  expect(ensureOwnerOfficialStore).toHaveBeenCalledWith('group', GROUP_ID, 'Main Cast')
+  expect(ensureSharedWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
+  expect(readMountItems).toHaveBeenCalledWith(GROUP_MOUNT)
+})
+
+it('GET hides archived garments unless asked', async () => {
+  ;(readMountItems as jest.Mock).mockResolvedValue([
+    storedItem,
+    { ...storedItem, id: 'item-2', archivedAt: '2026-02-01T00:00:00.000Z' },
+  ])
+
+  const res: any = await GET(
+    { url: `http://localhost/api/v1/groups/${GROUP_ID}/wardrobe` } as any,
+    routeCtx({ id: GROUP_ID }),
+  )
+
+  expect(res.body.wardrobeItems.map((i: any) => i.id)).toEqual([ITEM_ID])
 })
 
 it('GET includes archived garments when asked', async () => {
+  ;(readMountItems as jest.Mock).mockResolvedValue([
+    storedItem,
+    { ...storedItem, id: 'item-2', archivedAt: '2026-02-01T00:00:00.000Z' },
+  ])
+
   const res: any = await GET(
     { url: `http://localhost/api/v1/groups/${GROUP_ID}/wardrobe?includeArchived=true` } as any,
     routeCtx({ id: GROUP_ID }),
   )
 
   expect(res.status).toBe(200)
-  expect(readGroupWardrobe).toHaveBeenCalledWith(MOUNT_ID, true)
+  expect(res.body.wardrobeItems.map((i: any) => i.id)).toEqual([ITEM_ID, 'item-2'])
 })
 
 it('GET 404s for an unknown group', async () => {
   mockCtx.repos.groups.findById.mockResolvedValue(null)
-  const res: any = await GET({} as any, routeCtx({ id: 'nope' }))
+  const res: any = await GET({ url: 'http://localhost/api/v1/groups/nope/wardrobe' } as any, routeCtx({ id: 'nope' }))
   expect(res.status).toBe(404)
+  expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
 })
 
 it('POST creates a shared item in the group mount', async () => {
@@ -174,17 +213,25 @@ it('POST creates a shared item in the group mount', async () => {
   )
 
   expect(res.status).toBe(201)
-  expect(createProjectWardrobeItem).toHaveBeenCalledWith(
-    MOUNT_ID,
+  expect(createInMount).toHaveBeenCalledWith(
+    GROUP_MOUNT,
     expect.objectContaining({ id: 'new-item-uuid', characterId: null, title: 'Parade gloves' }),
   )
-  expect(res.body.wardrobeItem.title).toBe('Parade gloves')
+  expect(res.body).toEqual({
+    wardrobeItem: expect.objectContaining({
+      title: 'Parade gloves',
+      origin: { scope: 'group', id: GROUP_ID, name: 'Main Cast' },
+      wear: NEVER_WORN,
+    }),
+  })
 })
 
 it('GET item returns one item from the group mount', async () => {
   const res: any = await GET_ITEM({} as any, routeCtx({ id: GROUP_ID, itemId: ITEM_ID }))
   expect(res.status).toBe(200)
   expect(res.body.wardrobeItem.id).toBe(ITEM_ID)
+  // An item read never provisions the store.
+  expect(ensureOwnerOfficialStore).not.toHaveBeenCalled()
 })
 
 it('PUT updates the item through the group mount', async () => {
@@ -194,12 +241,16 @@ it('PUT updates the item through the group mount', async () => {
   )
 
   expect(res.status).toBe(200)
-  expect(updateProjectWardrobeItem).toHaveBeenCalledWith(
-    MOUNT_ID,
+  expect(updateInMount).toHaveBeenCalledWith(
+    GROUP_MOUNT,
     ITEM_ID,
     expect.objectContaining({ title: 'Renamed sash' }),
   )
-  expect(res.body.wardrobeItem.title).toBe('Renamed sash')
+  expect(res.body.wardrobeItem).toMatchObject({
+    title: 'Renamed sash',
+    origin: { scope: 'group', id: GROUP_ID, name: 'Main Cast' },
+    wear: NEVER_WORN,
+  })
 })
 
 it('DELETE scrubs equipped references then deletes from the group mount', async () => {
@@ -208,12 +259,19 @@ it('DELETE scrubs equipped references then deletes from the group mount', async 
   expect(res.status).toBe(200)
   expect(mockCtx.repos.chats.removeEquippedItemFromAllChats).toHaveBeenCalledWith(ITEM_ID)
   expect(mockCtx.repos.wardrobeWear.deleteByItemIds).toHaveBeenCalledWith([ITEM_ID])
-  expect(deleteProjectWardrobeItem).toHaveBeenCalledWith(MOUNT_ID, ITEM_ID)
+  expect(deleteInMount).toHaveBeenCalledWith(GROUP_MOUNT, ITEM_ID)
 })
 
-it('DELETE 404s when the item is not in the group mount', async () => {
-  ;(deleteProjectWardrobeItem as jest.Mock).mockResolvedValue(false)
+it('DELETE 404s when the item is not in the group mount, before scrubbing anything', async () => {
   const res: any = await DELETE({} as any, routeCtx({ id: GROUP_ID, itemId: 'missing' }))
+  expect(res.status).toBe(404)
+  expect(mockCtx.repos.chats.removeEquippedItemFromAllChats).not.toHaveBeenCalled()
+  expect(deleteInMount).not.toHaveBeenCalled()
+})
+
+it('DELETE 404s when the writer finds nothing to delete', async () => {
+  ;(deleteInMount as jest.Mock).mockResolvedValue(false)
+  const res: any = await DELETE({} as any, routeCtx({ id: GROUP_ID, itemId: ITEM_ID }))
   expect(res.status).toBe(404)
 })
 
@@ -232,7 +290,7 @@ it('GET ?action=instructions reads the group store instructions (null when absen
   expect(res.status).toBe(200)
   expect(res.body.instructions).toBeNull()
   expect(readWardrobeInstructionsFile).toHaveBeenCalledWith(MOUNT_ID)
-  expect(readGroupWardrobe).not.toHaveBeenCalled()
+  expect(readMountItems).not.toHaveBeenCalled()
 })
 
 it('POST ?action=instructions writes to the group mount after ensuring the folder', async () => {
@@ -242,7 +300,7 @@ it('POST ?action=instructions writes to the group mount after ensuring the folde
   )
   expect(res.status).toBe(200)
   expect(res.body.instructions).toBe('You favour the regimental colours.')
-  expect(ensureGroupWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
+  expect(ensureSharedWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
   expect(writeWardrobeInstructionsFile).toHaveBeenCalledWith(
     MOUNT_ID,
     'You favour the regimental colours.',

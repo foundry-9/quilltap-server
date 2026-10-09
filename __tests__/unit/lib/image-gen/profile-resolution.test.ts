@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 
-import { resolveImageProfileForChat, resolveWardrobeImageProfile } from '@/lib/image-gen/profile-resolution'
+import {
+  resolveAvatarImageProfile,
+  resolveImageProfileForChat,
+  resolveWardrobeImageProfile,
+} from '@/lib/image-gen/profile-resolution'
 
 describe('resolveImageProfileForChat', () => {
   let repos: {
@@ -219,5 +223,41 @@ describe('resolveWardrobeImageProfile', () => {
     const result = await resolveWardrobeImageProfile('user-1', repos as any)
     expect(result).toBeNull()
     expect(repos.imageProfiles.findById).not.toHaveBeenCalledWith('lantern')
+  })
+})
+
+describe('resolveAvatarImageProfile', () => {
+  const profile = (id: string, extra: Record<string, unknown> = {}) => ({ id, userId: 'user-1', apiKeyId: `key-${id}`, ...extra })
+  let repos: { imageProfiles: { findById: jest.Mock; findDefault: jest.Mock } }
+
+  beforeEach(() => {
+    const byId: Record<string, unknown> = {
+      override: profile('override'),
+      chat: profile('chat'),
+      keyless: profile('keyless', { apiKeyId: null }),
+      foreign: profile('foreign', { userId: 'user-2' }),
+    }
+    repos = {
+      imageProfiles: {
+        findById: jest.fn(async (id: unknown) => byId[id as string] ?? null),
+        findDefault: jest.fn(async () => profile('default')),
+      },
+    }
+  })
+
+  it('takes the override first, then the chat, then the default', async () => {
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { override: 'override', chat: { imageProfileId: 'chat' } }))?.id).toBe('override')
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { chat: { imageProfileId: 'chat' } }))?.id).toBe('chat')
+    expect((await resolveAvatarImageProfile('user-1', repos as never))?.id).toBe('default')
+  })
+
+  it('passes over a keyless, foreign or missing candidate', async () => {
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { override: 'keyless', chat: { imageProfileId: 'foreign' } }))?.id).toBe('default')
+    expect((await resolveAvatarImageProfile('user-1', repos as never, { override: 'gone', chat: { imageProfileId: 'chat' } }))?.id).toBe('chat')
+  })
+
+  it('answers null when even the default has no key', async () => {
+    repos.imageProfiles.findDefault.mockResolvedValue(profile('default', { apiKeyId: null }) as never)
+    expect(await resolveAvatarImageProfile('user-1', repos as never)).toBeNull()
   })
 })

@@ -321,20 +321,16 @@ export async function readCharacterVaultScenarios(
  *
  * Cycle and unknown-ref handling: cycles in the declared component graph
  * wipe the offending item's `componentItemIds` (logged) but leave the item
- * itself intact so vault hand-edits aren't silently destructive. Unknown
- * refs (slug or UUID that doesn't match anything in this vault) are dropped
- * from that item's component list with a warning.
+ * itself intact so vault hand-edits aren't silently destructive. An unknown
+ * UUID ref is kept (it names a part in another tier); an unknown slug is
+ * dropped from that item's component list with a warning.
  */
 export async function readCharacterVaultWardrobe(
   mountPointId: string,
   characterId?: string,
-  options?: { seedArchetypes?: boolean },
 ): Promise<CharacterVaultWardrobe | null> {
   const repos = getRepositories();
   const charId = characterId ?? mountPointId;
-  // The Quilltap General Wardrobe/ folder IS the archetype set, so reading it
-  // must NOT seed archetypes — that would recurse back through findArchetypes.
-  const seedArchetypes = options?.seedArchetypes ?? true;
 
   const allDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
@@ -375,26 +371,10 @@ export async function readCharacterVaultWardrobe(
       itemBySlug.set(slug, item);
     }
 
-    // Seed shared archetypes into the lookup maps so a hand-written slug that
-    // names a General item (Fitbit, Apple Watch, etc.) still resolves. A UUID
-    // ref to any other tier (group, project) survives without a seed — see
-    // `resolveAndCheckComponentItems` (bug 187). Personal items win slug
-    // collisions; archetypes are pure fallback.
-    const hasComponentRefs = items.some((item) => item.componentItemIds.length > 0);
-    if (hasComponentRefs && seedArchetypes) {
-      const archetypes = await repos.wardrobe.findArchetypes(true);
-      for (const arche of archetypes) {
-        if (!itemById.has(arche.id)) {
-          itemById.set(arche.id, arche);
-        }
-        const slug = slugifyWardrobeTitle(arche.title);
-        if (slug.length > 0 && !claimedSlugs.has(slug)) {
-          claimedSlugs.add(slug);
-          itemBySlug.set(slug, arche);
-        }
-      }
-    }
-
+    // Component refs resolve against this folder alone. A component in another
+    // tier is written as its UUID and survives parsing unresolved (bug 187);
+    // the per-request wearable pool (`lib/wardrobe/pool.ts`) resolves it. The
+    // reader never calls back into the repository.
     resolveAndCheckComponentItems(items, itemBySlug, itemById, charId, mountPointId);
 
     return { items };

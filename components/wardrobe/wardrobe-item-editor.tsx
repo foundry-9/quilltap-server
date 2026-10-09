@@ -8,17 +8,22 @@ import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
 import FormActions from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
-import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
-import { unionTypes } from '@/lib/wardrobe/composite-types'
+import { isComposite } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { buildCompositeTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
+import { draftFromItem, emptyDraft, validateDraft } from '@/lib/wardrobe/item-draft'
 import {
   GENERAL_CONTAINER,
+  containerForListedItem,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
   type ListedWardrobeItem,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
+import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
+import { useWardrobeContainerItems } from '@/lib/hooks/use-wardrobe-container-items'
+import { SlotCheckboxGroup } from './slot-ui'
 import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
 import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
 import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
@@ -34,9 +39,7 @@ export type WardrobeCreateScope = 'character' | 'global' | 'project'
 interface WardrobeItemEditorProps {
   /** Owning character — null when the editor is opened on a shared container. */
   characterId: string | null
-  item?: WardrobeItem | null
-  /** Whether this item is being created/edited as a shared item */
-  isShared?: boolean
+  item?: ListedWardrobeItem | null
   /**
    * Project context (the chat's project). When present, the create-scope
    * selector offers a "this project" destination for new shared items.
@@ -71,7 +74,6 @@ interface WardrobeItemEditorProps {
 export function WardrobeItemEditor({
   characterId,
   item,
-  isShared: isSharedProp = false,
   projectId = null,
   container = null,
   containerLabel,
@@ -85,18 +87,14 @@ export function WardrobeItemEditor({
   const isEditing = !!item
   // A non-character container pins the editor to that container's endpoints.
   const sharedContainer = container && container.scope !== 'character' ? container : null
-  // Whether the item lives in a shared tier (Quilltap General or a project
-  // store) rather than a character vault. On edit this is fixed by the item's
-  // own tier; on create the "Add to" selector (`createScope`) governs routing,
-  // and this only seeds the notice / default selector.
-  const existingIsShared = isEditing && !item.characterId
-  const isShared = isSharedProp || existingIsShared
+  // Whether the item lives in a shared tier rather than a character vault.
+  // On edit this is fixed by the item's own tier; on create the "Add to"
+  // selector (`createScope`) governs routing.
+  const isShared = isEditing && !item.characterId
   // Destination for a NEW item: this character, shared-everywhere (Quilltap
   // General), or this project's store. Only meaningful when creating; editing
   // keeps an item in its existing tier.
-  const [createScope, setCreateScope] = useState<WardrobeCreateScope>(
-    isSharedProp ? 'global' : 'character',
-  )
+  const [createScope, setCreateScope] = useState<WardrobeCreateScope>('character')
 
   // A default garment is put on at the start of every chat by every character
   // that can reach it — so the checkbox's promise depends on where the item is
@@ -118,28 +116,29 @@ export function WardrobeItemEditor({
           ? 'Worn by default by every character in this project'
           : "Part of this character's default outfit"
 
+  // The one form-state shape (`lib/wardrobe/item-draft`), seeded from the
+  // item or blank.
+  const [initialDraft] = useState(() => (item ? draftFromItem(item) : emptyDraft()))
   const { formData, handleChange } = useFormState({
-    title: item?.title || '',
-    description: item?.description || '',
-    imagePrompt: item?.imagePrompt || '',
-    appropriateness: item?.appropriateness || '',
-    isDefault: item?.isDefault || false,
+    title: initialDraft.title,
+    description: initialDraft.description,
+    imagePrompt: initialDraft.imagePrompt,
+    appropriateness: initialDraft.appropriateness,
+    isDefault: initialDraft.isDefault,
   })
 
-  const [selectedTypes, setSelectedTypes] = useState<WardrobeItemType[]>(
-    item?.types || []
-  )
+  const [selectedTypes, setSelectedTypes] = useState<WardrobeItemType[]>(initialDraft.types)
   const [componentItemIds, setComponentItemIds] = useState<string[]>(
-    initialComponentItemIds ?? item?.componentItemIds ?? [],
+    initialComponentItemIds ?? initialDraft.componentItemIds,
   )
   // Composite equip behaviour. `replace: false` (default) = additive layering;
-  // `true` = clear the designated slots first. `bundleDesignatedTypes` lets a
-  // replace-composite designate slots beyond its components' union (e.g. Naked
-  // covering every clothing slot but only containing a ring); seeded from the stored
-  // types, with the component union always forced in at save time.
-  const [replace, setReplace] = useState<boolean>(item?.replace ?? false)
+  // `true` = clear the designated slots first. `bundleDesignatedTypes` are the
+  // slots a composite covers beyond its components' union (e.g. Naked
+  // covering every clothing slot but only containing a ring) — seeded from the
+  // stored types, so editing only ever widens (`buildCompositeTypes`).
+  const [replace, setReplace] = useState<boolean>(initialDraft.replace)
   const [bundleDesignatedTypes, setBundleDesignatedTypes] = useState<WardrobeItemType[]>(
-    item?.types ?? [],
+    initialDraft.types,
   )
   // Editor mode is independent of `componentItemIds` so the user can switch
   // between single garment and outfit bundle without immediately mutating
@@ -151,8 +150,6 @@ export function WardrobeItemEditor({
     return 'single'
   })
 
-  const [candidates, setCandidates] = useState<CandidateItem[]>([])
-  const [candidatesLoading, setCandidatesLoading] = useState(false)
   const [componentSearch, setComponentSearch] = useState('')
   const [expandedGroups, setExpandedGroups] = useState<Set<CandidateGroup>>(
     () => new Set<CandidateGroup>(GROUP_ORDER),
@@ -184,79 +181,43 @@ export function WardrobeItemEditor({
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
 
-  // Load candidate items so the user can pick components for a composite. In
-  // the character view: this character's wardrobe + project + shared
-  // archetypes. Pinned to a shared container: that container's items + the
-  // General archetypes (General alone when it *is* the container). We do this
-  // once on mount; adding fresh items mid-edit is rare and a re-open will
-  // refresh.
-  useEffect(() => {
-    let cancelled = false
-    const load = async (): Promise<void> => {
-      setCandidatesLoading(true)
-      try {
-        const [personalRes, projectRes, archetypeRes] = await Promise.all([
-          sharedContainer
-            ? sharedContainer.scope === 'general'
-              ? Promise.resolve(null)
-              : fetch(wardrobeCollectionUrl(sharedContainer))
-            : characterId
-              ? fetch(wardrobeCollectionUrl({ scope: 'character', id: characterId }))
-              : Promise.resolve(null),
-          !sharedContainer && projectId
-            ? fetch(wardrobeCollectionUrl({ scope: 'project', id: projectId }))
-            : Promise.resolve(null),
-          fetch(wardrobeCollectionUrl(GENERAL_CONTAINER)),
-        ])
-
-        const collected: CandidateItem[] = []
-        // `local` lists are the wardrobe being edited; anything else is
-        // borrowed and keeps the origin its endpoint attached.
-        const pushCandidates = (
-          list: ListedWardrobeItem[] | undefined,
-          local: boolean,
-        ) => {
-          for (const w of list ?? []) {
-            if (collected.some((c) => c.id === w.id)) continue
-            collected.push({
-              id: w.id,
-              title: w.title,
-              types: w.types,
-              componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
-              origin: local ? null : (w.origin ?? null),
-            })
-          }
-        }
-        if (personalRes && personalRes.ok) {
-          const data = (await personalRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
-          // In a shared container this first fetch IS the container's list;
-          // its items are the local (manageable) set, not shared imports.
-          pushCandidates(data.wardrobeItems, true)
-        }
-        if (projectRes && projectRes.ok) {
-          const data = (await projectRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
-          pushCandidates(data.wardrobeItems, false)
-        }
-        if (archetypeRes.ok) {
-          const data = (await archetypeRes.json()) as { wardrobeItems?: ListedWardrobeItem[] }
-          pushCandidates(data.wardrobeItems, false)
-        }
-        if (!cancelled) setCandidates(collected)
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('[WardrobeItemEditor] Failed to load candidate items', err)
-          setCandidates([])
-        }
-      } finally {
-        if (!cancelled) setCandidatesLoading(false)
+  // Candidate components, from the same tier queries every wardrobe list
+  // uses. In the character view: the character's whole reach (own vault,
+  // groups, project, General). Pinned to a shared container: that container
+  // plus General. Archived items are included so a composite whose parts were
+  // archived still resolves (and keeps) their slots (bug 190).
+  const characterCandidates = useCharacterWardrobeItems(sharedContainer ? null : characterId, {
+    projectId,
+    includeArchived: true,
+  })
+  const containerCandidates = useWardrobeContainerItems(sharedContainer, { includeArchived: true })
+  const candidatesLoading = sharedContainer
+    ? containerCandidates.loading
+    : characterCandidates.loading
+  const candidates = useMemo<CandidateItem[]>(() => {
+    const pool: ListedWardrobeItem[] = sharedContainer
+      ? containerCandidates.resolutionItems
+      : characterCandidates.items
+    const localIds = new Set(sharedContainer ? containerCandidates.items.map((i) => i.id) : [])
+    return pool.map((w) => {
+      // Items in the wardrobe being edited get no origin chip; borrowed ones
+      // keep the origin their read attached.
+      const local = sharedContainer ? localIds.has(w.id) : Boolean(w.characterId)
+      return {
+        id: w.id,
+        title: w.title,
+        types: w.types,
+        componentItemIds: Array.isArray(w.componentItemIds) ? w.componentItemIds : [],
+        origin: local ? null : (w.origin ?? null),
+        archived: Boolean(w.archivedAt),
       }
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sharedContainer is derived from container; key on its parts
-  }, [characterId, projectId, container?.scope, container?.id])
+    })
+  }, [
+    sharedContainer,
+    containerCandidates.resolutionItems,
+    containerCandidates.items,
+    characterCandidates.items,
+  ])
 
   /**
    * Items the user can pick as components, excluding:
@@ -275,8 +236,11 @@ export function WardrobeItemEditor({
     const search = componentSearch.trim().toLowerCase()
     return candidates
       .filter((c) => !excluded.has(c.id))
+      // An archived item can't be newly bundled, but one already in the
+      // outfit stays listed so it can be taken out.
+      .filter((c) => !c.archived || componentItemIds.includes(c.id))
       .filter((c) => (search ? c.title.toLowerCase().includes(search) : true))
-  }, [candidates, item, componentSearch])
+  }, [candidates, item, componentSearch, componentItemIds])
 
   const groupedCandidates = useMemo(() => {
     const map = new Map<CandidateGroup, CandidateItem[]>()
@@ -290,31 +254,30 @@ export function WardrobeItemEditor({
 
   const isBundle = editorMode === 'bundle'
 
-  // Auto-compute types from components when in bundle mode with components.
-  // The server runs the exact same union; we mirror it here so the UI always
-  // shows what's about to be saved.
+  // The slots the chosen components cover (union). Locked on in the slot
+  // designation below.
   const computedTypes = useMemo<WardrobeItemType[]>(() => {
     if (componentItemIds.length === 0) return []
     const components = candidates.filter((c) => componentItemIds.includes(c.id))
-    return unionTypes(components)
+    return buildCompositeTypes(components)
   }, [candidates, componentItemIds])
 
-  // Bundle coverage = the component union, optionally widened (for a replace
-  // composite) by the slots the user designates. Additive composites only ever
-  // cover their union. In single mode, types are always user-selected.
+  // Bundle coverage = the component union widened by the designated slots —
+  // `buildCompositeTypes`, the server's own rule. It never narrows: a
+  // component this editor can't resolve, or one removed, leaves the slots the
+  // item already claimed in place until the user unticks them. In single
+  // mode, types are always user-selected.
   const effectiveTypes = isBundle
-    ? replace
-      ? WARDROBE_SLOT_TYPES.filter(
-          (s) => computedTypes.includes(s) || bundleDesignatedTypes.includes(s),
-        )
-      : computedTypes
+    ? buildCompositeTypes(
+        candidates.filter((c) => componentItemIds.includes(c.id)),
+        bundleDesignatedTypes,
+      )
     : selectedTypes
 
   const handleTypeToggle = (type: WardrobeItemType): void => {
     if (isBundle) {
-      // Only a replace composite designates slots, and only beyond the
-      // component union — union slots are always covered (locked on).
-      if (!replace) return
+      // Designated slots beyond the component union; union slots are always
+      // covered (locked on).
       if (computedTypes.includes(type)) return
       setBundleDesignatedTypes((prev) =>
         prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
@@ -354,7 +317,7 @@ export function WardrobeItemEditor({
 
   const handleConfirmKeepTypes = (): void => {
     // Drop the components but lock in the types they had been computing.
-    setSelectedTypes(computedTypes)
+    setSelectedTypes(effectiveTypes)
     setComponentItemIds([])
     setEditorMode('single')
     setShowKeepResetPrompt(false)
@@ -385,51 +348,36 @@ export function WardrobeItemEditor({
     (isBundle && componentItemIds.length === 0)
 
   // The item's own route when editing — where Update PUTs and where the wear
-  // history is read. Pinned to a shared container, that container's route (an
-  // edit must never leak a project or group item into Quilltap General);
-  // otherwise the item keeps its existing tier.
+  // history is read. Pinned to a shared container, that container's route;
+  // otherwise the wardrobe the item's origin names (an edit must never leak a
+  // project or group item into Quilltap General).
   const itemHomeContainer: WardrobeContainer | null = item
-    ? sharedContainer ?? (isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId })
+    ? sharedContainer ?? containerForListedItem(item)
     : null
   const editItemUrl = item && itemHomeContainer ? wardrobeItemUrl(itemHomeContainer, item.id) : null
 
   const handleSave = async (): Promise<void> => {
     setSubmitAttempted(true)
-    if (!formData.title.trim()) {
-      showErrorToast('Enter a title')
-      return
-    }
-    if (!isBundle && selectedTypes.length === 0) {
-      showErrorToast('Select at least one type')
-      return
-    }
     if (isBundle && componentItemIds.length === 0) {
       showErrorToast('Add at least one component')
       return
     }
-    if (isBundle && computedTypes.length === 0) {
-      showErrorToast('Selected components do not cover any slots')
+    // One validation, the routes' own body schema (title, at least one slot).
+    const validation = validateDraft({
+      ...formData,
+      types: isBundle ? effectiveTypes : selectedTypes,
+      componentItemIds: isBundle ? componentItemIds : [],
+      replace,
+    })
+    if (!validation.ok) {
+      showErrorToast(validation.error)
       return
     }
+    const payload = validation.payload
 
     clearError()
 
     await executeSave(async () => {
-      const typesToSave = isBundle ? effectiveTypes : selectedTypes
-      const componentsToSave = isBundle ? componentItemIds : []
-
-      const payload: Record<string, unknown> = {
-        title: formData.title,
-        description: formData.description || null,
-        imagePrompt: formData.imagePrompt || null,
-        types: typesToSave,
-        appropriateness: formData.appropriateness || null,
-        isDefault: formData.isDefault,
-        componentItemIds: componentsToSave,
-        // `replace` is composite-only; leaf items always replace their slots.
-        replace: isBundle ? replace : false,
-      }
-
       // Route to the correct API endpoint. Pinned to a shared container, both
       // edits and creates target that container's own routes — an edit must
       // never leak a project or group item into Quilltap General. Otherwise
@@ -466,11 +414,23 @@ export function WardrobeItemEditor({
     })
   }
 
-  const selectedComponents = useMemo(() => {
-    return componentItemIds
-      .map((id) => candidates.find((c) => c.id === id))
-      .filter((c): c is CandidateItem => Boolean(c))
-  }, [candidates, componentItemIds])
+  // Every component keeps a chip — one this editor can't resolve (a store it
+  // can't see) shows as such rather than vanishing, and still saves.
+  const selectedComponents = useMemo<CandidateItem[]>(() => {
+    if (candidatesLoading) {
+      return candidates.filter((c) => componentItemIds.includes(c.id))
+    }
+    return componentItemIds.map(
+      (id) =>
+        candidates.find((c) => c.id === id) ?? {
+          id,
+          title: 'A garment beyond this wardrobe’s reach',
+          types: [],
+          componentItemIds: [],
+          origin: null,
+        },
+    )
+  }, [candidates, candidatesLoading, componentItemIds])
 
   return (
     <>
@@ -650,28 +610,11 @@ export function WardrobeItemEditor({
             {!isBundle && (
               <div>
                 <span className="qt-label mb-2 block">Type(s) *</span>
-                <div
-                  className="flex flex-wrap gap-3"
+                <SlotCheckboxGroup
+                  value={selectedTypes}
+                  onToggle={handleTypeToggle}
                   onBlur={() => setTouched((t) => ({ ...t, types: true }))}
-                >
-                  {WARDROBE_SLOT_TYPES.map((type) => {
-                    const checked = selectedTypes.includes(type)
-                    return (
-                      <label
-                        key={type}
-                        className="inline-flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => handleTypeToggle(type)}
-                          className="qt-checkbox"
-                        />
-                        <span className="text-sm capitalize text-foreground">{type}</span>
-                      </label>
-                    )
-                  })}
-                </div>
+                />
                 {showTypesError && (
                   <p className="mt-1 text-xs qt-text-destructive">
                     Select at least one type
@@ -796,7 +739,7 @@ export function WardrobeItemEditor({
                 itemId={item.id}
                 itemUrl={editItemUrl}
                 createdAt={item.createdAt}
-                isComposite={(item.componentItemIds?.length ?? 0) > 0}
+                isComposite={isComposite(item)}
               />
             )}
           </div>

@@ -1,69 +1,39 @@
 /**
- * Outfit Equip Primitives
+ * Persisted outfit changes — load, compute, commit.
  *
- * Every "put it on" gesture obeys a single rule, keyed on the item's `replace`
- * flag and applied to *each* slot the item's `types` designate:
+ * Every gesture that changes what a character has on in a chat comes through
+ * {@link applyDisplacement}: it loads the character's current slots, runs the
+ * pure gesture from `slot-ops.ts` (`computeDisplacedSlots`, the one mode →
+ * primitive table), and commits through `wardrobeWear.commitEquippedOutfit`
+ * — the wear ledger's chokepoint — telling it which composite (if any) the
+ * gesture dissolved, since the stored leaves alone cannot say an outfit was
+ * worn.
  *
- *   - `replace: false` (the default for both leaf garments and additive
- *     bundles) — the item is *layered* into the slot: its id is appended,
- *     keeping whatever is already there.
- *   - `replace: true` — the item *replaces* the slot: the slot becomes just
- *     `[item.id]`. Used for full-outfit swaps and "clear everything" bundles
- *     like Naked.
+ * The item lookup that lets a composite dissolve comes from the caller's
+ * wearable pool (`pool.byId`); without one a composite is stored whole, which
+ * still renders correctly via read-time expansion.
  *
- * Bundles (items with `componentItemIds`) dissolve as they go on: the leaves
- * are stored in the slots their own `types` declare and the bundle's id never
- * lands in equipped state, so what you're wearing always reads as garments
- * rather than as one opaque card over empty slot rows. The `replace` flag
- * still governs a bundle — it clears the slots the assembled outfit lands in
- * before the parts go on. Dissolution needs an item lookup; without one (or
- * when a bundle's parts can't be resolved) the bundle is stored whole, the
- * pre-4.8.1 behaviour, and read-time `expandComposites` still covers it.
- *
- * Primitives:
- *
- *   - `wearItemIntoSlots` / `equipItem(item)` — the flag-driven rule above.
- *   - `replaceItemIntoSlots` / `replaceItem(item)` — force-swap: each
- *     designated slot is cleared and set to `[item.id]`, ignoring the flag.
- *     The "clear the slot, then put this on" gesture.
- *   - `addToSlot(item, slot)` — append `item.id` to one named slot's array
- *     (granular layering — "also wear the cardigan").
- *   - `removeFromSlot(slot, itemId?)` — filter `itemId` out of the slot's
- *     array. With `itemId` omitted, clears the slot entirely.
- *
- * `wearItemIntoSlots` / `replaceItemIntoSlots` / `computeDisplacedSlots` are
- * pure (no-DB) variants for frontend optimistic updates and unit tests.
- *
- * Every persisted primitive writes through `wardrobeWear.commitEquippedOutfit`
- * — the wear ledger's chokepoint — and tells it which bundle (if any) it
- * dissolved, since the stored leaves alone cannot say an outfit was worn. The
- * chokepoint diffs against the true prior slots and credits the wears.
+ * Server-only. The pure math lives in `slot-ops.ts` for the client.
  *
  * @module wardrobe/outfit-displacement
  */
 
 import { logger } from '@/lib/logger';
+import { cloneEquippedSlots, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import {
-  dissolveBundleToLeaves,
-  isBundle,
-  layLeavesIntoSlots,
-} from '@/lib/wardrobe/dissolve-bundles';
-import type { WearableLookup, WearableNode } from '@/lib/wardrobe/dissolve-bundles';
-import { loadBundleLookup } from '@/lib/wardrobe/hydrate-components';
-import type { ComponentHydrationRepos } from '@/lib/wardrobe/hydrate-components';
-import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
-import {
-  cloneEquippedSlots,
-  makeEmptyEquippedSlots,
-} from '@/lib/schemas/wardrobe.types';
-import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+  analyzeComposite,
+  computeDisplacedSlots,
+  wornBundlesForMode,
+  type ComputeDisplacedOptions,
+} from '@/lib/wardrobe/slot-ops';
 import type {
   CommitEquippedOutfitInput,
   CommitEquippedOutfitResult,
   EquipSource,
 } from '@/lib/database/repositories/wardrobe-wear.repository';
 
-/** Minimal repository interfaces needed for these primitives */
+/** Minimal repository surface for a persisted outfit change. */
 export interface DisplacementRepos {
   chats: {
     getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>;
@@ -72,69 +42,6 @@ export interface DisplacementRepos {
   wardrobeWear: {
     commitEquippedOutfit(input: CommitEquippedOutfitInput): Promise<CommitEquippedOutfitResult>;
   };
-  /**
-   * Optional — supplied, a bundle's components are resolved so it can dissolve
-   * as it goes on. Absent, bundles are stored whole (the old behaviour), which
-   * still renders correctly via read-time expansion.
-   */
-  wardrobe?: ComponentHydrationRepos['wardrobe'];
-}
-
-/**
- * Shared options for the persisted primitives: the group + project stores in
- * scope, for multi-tier component resolution.
- */
-export type EquipOptions = SharedWardrobeTiers;
-
-/**
- * Resolve the lookup a bundle needs to dissolve. Non-bundles and repo sets
- * without wardrobe access short-circuit to `undefined` — no query fired.
- */
-async function lookupForBundle(
-  repos: DisplacementRepos,
-  characterId: string,
-  item: WearableNode,
-  opts?: EquipOptions,
-): Promise<WearableLookup | undefined> {
-  if (!repos.wardrobe || !isBundle(item)) return undefined;
-  return loadBundleLookup({ wardrobe: repos.wardrobe }, characterId, item.componentItemIds, opts);
-}
-
-/** A put-on gesture's origin, for the ledger. Take-off is implied by `removeFromSlot`. */
-export type PutOnSource = Extract<EquipSource, 'ui' | 'tool'>;
-
-/** A dissolved bundle and the leaves it contributed, for the ledger's composite credit. */
-export type WornBundle = { id: string; leafIds: string[] };
-
-/**
- * The bundle credit a put-on gesture claims: the bundle and the leaves it
- * dissolved into, or nothing when the item is a leaf or could not dissolve
- * (stored whole — the leaf diff then credits it as itself).
- */
-export function wornBundlesFor(
-  item: WearableNode,
-  itemsById: WearableLookup | undefined,
-  onlySlot?: WardrobeItemType,
-): WornBundle[] {
-  const leaves = dissolveBundleToLeaves(item, itemsById);
-  if (!leaves) return [];
-  const contributed = onlySlot ? leaves.filter((leaf) => leaf.slots.includes(onlySlot)) : leaves;
-  if (contributed.length === 0) return [];
-  return [{ id: item.id, leafIds: contributed.map((leaf) => leaf.id) }];
-}
-
-async function commit(
-  repos: DisplacementRepos,
-  chatId: string,
-  characterId: string,
-  nextSlots: EquippedSlots,
-  source: EquipSource,
-  wornBundles: WornBundle[],
-): Promise<EquippedSlots> {
-  // From the job child the result is synthetic (the write is buffered), so the
-  // primitives return the slots they computed rather than the chokepoint's echo.
-  await repos.wardrobeWear.commitEquippedOutfit({ chatId, characterId, nextSlots, wornBundles, source });
-  return nextSlots;
 }
 
 async function loadSlots(
@@ -146,266 +53,63 @@ async function loadSlots(
   return current ? cloneEquippedSlots(current) : makeEmptyEquippedSlots();
 }
 
-/**
- * Pure flag-driven wear: for each slot in `item.types`, replace the slot with
- * `[item.id]` when `item.replace` is true, otherwise append `item.id`
- * (layering, no-op if already present). The single rule behind every "put it
- * on" gesture — see the module doc. No DB access.
- */
-export function wearItemIntoSlots(
-  currentSlots: EquippedSlots,
-  item: { id: string; types: WardrobeItemType[]; replace?: boolean; componentItemIds?: string[] },
-  itemsById?: WearableLookup,
-): EquippedSlots {
-  // A bundle goes on as its parts, not as itself. `replace` still governs:
-  // an assembled outfit set to replace clears the slots it lands in first.
-  const leaves = dissolveBundleToLeaves(item, itemsById);
-  if (leaves) {
-    return layLeavesIntoSlots(currentSlots, item, leaves, {
-      clearCoveredSlots: item.replace === true,
+/** Log a composite that could not dissolve cleanly — the client-safe math can't. */
+function logCompositeIssues(options: ComputeDisplacedOptions, characterId: string): void {
+  if (!options.item || !options.itemsById) return;
+  const { cycles, truncated, unresolved } = analyzeComposite(options.item, options.itemsById);
+  if (cycles > 0 || truncated) {
+    logger.warn('[applyDisplacement] Malformed composite graph; expansion truncated', {
+      context: 'wardrobe',
+      characterId,
+      itemId: options.item.id,
+      cycles,
+      truncated,
     });
   }
-
-  const slots = cloneEquippedSlots(currentSlots);
-  for (const slotType of item.types) {
-    if (item.replace) {
-      slots[slotType] = [item.id];
-    } else if (!slots[slotType].includes(item.id)) {
-      slots[slotType] = [...slots[slotType], item.id];
-    }
+  if (unresolved) {
+    logger.warn('[applyDisplacement] Composite resolved to no wearable parts; wearing it whole', {
+      context: 'wardrobe',
+      characterId,
+      itemId: options.item.id,
+      componentCount: options.item.componentItemIds?.length ?? 0,
+    });
   }
-  return slots;
 }
 
 /**
- * Pure force-swap: clear each slot in `item.types` and set it to `[item.id]`,
- * regardless of the `replace` flag. The "clear the slot, then put this on"
- * gesture. No DB access.
- */
-export function replaceItemIntoSlots(
-  currentSlots: EquippedSlots,
-  item: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
-  itemsById?: WearableLookup,
-): EquippedSlots {
-  const leaves = dissolveBundleToLeaves(item, itemsById);
-  if (leaves) {
-    return layLeavesIntoSlots(currentSlots, item, leaves, { clearCoveredSlots: true });
-  }
-
-  const slots = cloneEquippedSlots(currentSlots);
-  for (const slotType of item.types) {
-    slots[slotType] = [item.id];
-  }
-  return slots;
-}
-
-/**
- * Wear an item into the slots its `types` designate, honoring the item's
- * `replace` flag (layer when false, replace when true — see
- * `wearItemIntoSlots`). The same rule for leaf garments and bundles alike.
+ * Apply one gesture to a character's slots in a chat and commit it. Returns
+ * the slots it computed (from the job child the chokepoint's write is
+ * buffered, so its echo would be synthetic).
  *
- * Composite items are stored as their own ID — expansion to leaves happens at
- * read time via `expandComposites`.
+ * The take-off modes (`remove_from_slot`, `clear_slot`) always commit as
+ * `'take-off'`; the put-on modes use `source`.
  */
-export async function equipItem(
+export async function applyDisplacement(
   repos: DisplacementRepos,
   chatId: string,
   characterId: string,
-  newItem: { id: string; types: WardrobeItemType[]; componentItemIds?: string[]; replace?: boolean },
-  opts?: EquipOptions,
-  source: PutOnSource = 'ui',
-): Promise<EquippedSlots> {
-  const [slots, itemsById] = await Promise.all([
-    loadSlots(repos, chatId, characterId),
-    lookupForBundle(repos, characterId, newItem, opts),
-  ]);
-  const next = wearItemIntoSlots(slots, newItem, itemsById);
-  return commit(repos, chatId, characterId, next, source, wornBundlesFor(newItem, itemsById));
-}
-
-/**
- * Force-swap an item into the slots its `types` designate: each is cleared and
- * set to `[item.id]`, ignoring the `replace` flag. The persisted counterpart
- * of `replaceItemIntoSlots`.
- */
-export async function replaceItem(
-  repos: DisplacementRepos,
-  chatId: string,
-  characterId: string,
-  newItem: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
-  opts?: EquipOptions,
-  source: PutOnSource = 'ui',
-): Promise<EquippedSlots> {
-  const [slots, itemsById] = await Promise.all([
-    loadSlots(repos, chatId, characterId),
-    lookupForBundle(repos, characterId, newItem, opts),
-  ]);
-  const next = replaceItemIntoSlots(slots, newItem, itemsById);
-  return commit(repos, chatId, characterId, next, source, wornBundlesFor(newItem, itemsById));
-}
-
-/**
- * Pure single-slot layering. A bundle contributes the parts that cover this
- * slot rather than its own id; if none of them do (the caller asked for a slot
- * the bundle claims but no part fills), the bundle's id goes in as before so
- * the gesture is never silently a no-op.
- */
-export function addItemToSlot(
-  currentSlots: EquippedSlots,
-  slot: WardrobeItemType,
-  item: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
-  itemsById?: WearableLookup,
-): EquippedSlots {
-  const slots = cloneEquippedSlots(currentSlots);
-  const leaves = dissolveBundleToLeaves(item, itemsById);
-  const forSlot = leaves?.filter((leaf) => leaf.slots.includes(slot)) ?? [];
-
-  if (forSlot.length > 0) {
-    for (const leaf of forSlot) {
-      if (!slots[slot].includes(leaf.id)) slots[slot] = [...slots[slot], leaf.id];
-    }
-    return slots;
-  }
-
-  if (!slots[slot].includes(item.id)) {
-    slots[slot] = [...slots[slot], item.id];
-  }
-  return slots;
-}
-
-/**
- * Append `item.id` to the given slot's array. Validates that
- * `slot ∈ item.types`. No-op if the item is already in the slot.
- */
-export async function addToSlot(
-  repos: DisplacementRepos,
-  chatId: string,
-  characterId: string,
-  slot: WardrobeItemType,
-  item: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
-  opts?: EquipOptions,
-  source: PutOnSource = 'ui',
-): Promise<EquippedSlots> {
-  if (!item.types.includes(slot)) {
-    throw new Error(
-      `Item ${item.id} (types=[${item.types.join(',')}]) cannot occupy slot '${slot}'`,
-    );
-  }
-
-  const [current, itemsById] = await Promise.all([
-    loadSlots(repos, chatId, characterId),
-    lookupForBundle(repos, characterId, item, opts),
-  ]);
-  const slots = addItemToSlot(current, slot, item, itemsById);
-
-  return commit(repos, chatId, characterId, slots, source, wornBundlesFor(item, itemsById, slot));
-}
-
-/**
- * Remove a specific item from the given slot's array. If `itemId` is
- * omitted, clears the slot entirely.
- */
-export async function removeFromSlot(
-  repos: DisplacementRepos,
-  chatId: string,
-  characterId: string,
-  slot: WardrobeItemType,
-  itemId?: string,
-): Promise<EquippedSlots> {
-  const slots = await loadSlots(repos, chatId, characterId);
-
-  if (!itemId) {
-    slots[slot] = [];
-  } else {
-    slots[slot] = slots[slot].filter((id) => id !== itemId);
-  }
-
-  return commit(repos, chatId, characterId, slots, 'take-off', []);
-}
-
-/** Pure-function variants for frontend optimistic updates. */
-
-export type DisplacementMode = 'wear' | 'replace' | 'add_to_slot' | 'remove_from_slot' | 'clear_slot';
-
-export interface ComputeDisplacedOptions {
-  mode: DisplacementMode;
-  /** Required for `wear`, `replace`, and `add_to_slot`. `replace` (the flag)
-   *  drives `wear`'s layer-vs-replace behaviour (see `wearItemIntoSlots`). */
-  item?: { id: string; types: string[]; componentItemIds?: string[]; replace?: boolean };
-  /** Required for `add_to_slot`, `remove_from_slot`, `clear_slot`. */
-  slot?: WardrobeItemType;
-  /** Filter target for `remove_from_slot`; omit to clear the slot. */
-  itemId?: string;
-  /**
-   * Item lookup used to dissolve a bundle as it goes on. Omit and bundles are
-   * stored whole — correct, just less legible in the slot rows.
-   */
-  itemsById?: WearableLookup;
-}
-
-export function computeDisplacedSlots(
-  currentSlots: EquippedSlots,
   options: ComputeDisplacedOptions,
-): EquippedSlots {
-  const slots = cloneEquippedSlots(currentSlots);
-
-  if (options.mode === 'wear') {
-    if (!options.item) return slots;
-    return wearItemIntoSlots(
-      slots,
-      {
-        id: options.item.id,
-        types: options.item.types as WardrobeItemType[],
-        componentItemIds: options.item.componentItemIds,
-        replace: options.item.replace,
-      },
-      options.itemsById,
-    );
-  }
-
-  if (options.mode === 'replace') {
-    if (!options.item) return slots;
-    return replaceItemIntoSlots(
-      slots,
-      {
-        id: options.item.id,
-        types: options.item.types as WardrobeItemType[],
-        componentItemIds: options.item.componentItemIds,
-      },
-      options.itemsById,
-    );
-  }
-
-  if (options.mode === 'add_to_slot') {
-    if (!options.item || !options.slot) return slots;
-    return addItemToSlot(
-      slots,
-      options.slot,
-      {
-        id: options.item.id,
-        types: options.item.types as WardrobeItemType[],
-        componentItemIds: options.item.componentItemIds,
-      },
-      options.itemsById,
-    );
-  }
-
-  if (options.mode === 'remove_from_slot') {
-    if (!options.slot) return slots;
-    if (!options.itemId) {
-      slots[options.slot] = [];
-    } else {
-      const target = options.itemId;
-      slots[options.slot] = slots[options.slot].filter((id) => id !== target);
-    }
-    return slots;
-  }
-
-  if (options.mode === 'clear_slot') {
-    if (!options.slot) return slots;
-    slots[options.slot] = [];
-    return slots;
-  }
-
-  return slots;
+  source: Extract<EquipSource, 'ui' | 'tool'> = 'ui',
+): Promise<EquippedSlots> {
+  const current = await loadSlots(repos, chatId, characterId);
+  logCompositeIssues(options, characterId);
+  const nextSlots = computeDisplacedSlots(current, options);
+  const takeOff = options.mode === 'remove_from_slot' || options.mode === 'clear_slot';
+  await repos.wardrobeWear.commitEquippedOutfit({
+    chatId,
+    characterId,
+    nextSlots,
+    wornBundles: wornBundlesForMode(options),
+    source: takeOff ? 'take-off' : source,
+  });
+  logger.debug('[applyDisplacement] Outfit change committed', {
+    context: 'wardrobe',
+    chatId,
+    characterId,
+    mode: options.mode,
+    itemId: options.item?.id ?? options.itemId ?? null,
+    slot: options.slot ?? null,
+    source: takeOff ? 'take-off' : source,
+  });
+  return nextSlots;
 }

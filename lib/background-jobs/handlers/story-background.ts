@@ -13,7 +13,6 @@ import {
   writeLanternBackgroundToMountStore,
 } from '@/lib/file-storage/lantern-store-bridge';
 
-import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { CONCEALMENT_MARKER, craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
 import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
@@ -21,7 +20,6 @@ import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-select
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import {
   equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
@@ -43,10 +41,8 @@ import {
 } from '@/lib/services/dangerous-content/image-failover';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
-import { convertToWebP } from '@/lib/files/webp-conversion';
-import { buildImageGenParams } from '@/lib/image-gen/params-builder';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
-import { logLLMCall } from '@/lib/services/llm-logging.service';
+import { decodeProviderImage, makeLoggedImageAttempt } from '@/lib/image-gen/image-attempt';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
 import {
   postLanternImageNotification,
   postLanternRefusalNotification,
@@ -59,6 +55,7 @@ import type { ImageUnderstudy } from '@/lib/services/dangerous-content/understud
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character, ImageProfile } from '@/lib/schemas/types';
+import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -66,12 +63,7 @@ function escapeRegex(s: string): string {
 
 function buildBasicEnumeration(char: Character): string {
   const primary = char.physicalDescription;
-  const desc =
-    primary?.mediumPrompt ||
-    primary?.shortPrompt ||
-    primary?.longPrompt ||
-    primary?.fullDescription ||
-    char.name;
+  const desc = pickPhysicalDescription(primary, 'scene') || char.name;
   return `${genderPrefixFromPronouns(char.pronouns)}${desc}`.trim();
 }
 
@@ -499,7 +491,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     // Fallback: simple first-description logic
     const primary = char!.physicalDescription;
-    const descParts = [genderPrefix + (primary?.mediumPrompt || primary?.shortPrompt || char!.name)];
+    const descParts = [genderPrefix + (pickPhysicalDescription(primary, 'scene') || char!.name)];
     return {
       name: char!.name,
       description: descParts.join('. '),
@@ -712,63 +704,18 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // profile's own size / aspect ratio / prompt wording and attaches its LoRAs
   // and residual options. Natural style works better for ambient backgrounds,
   // so it is fixed.
-  const attemptBackground = async (profile: ImageProfile, key: string) => {
-    const rerouted = profile.id !== imageProfile.id;
-    const provider = createImageProvider(profile.provider);
-    const { params } = buildImageGenParams({
-      profile,
-      prompt: finalPrompt!,
+  const attemptBackground = makeLoggedImageAttempt({
+    userId: job.userId,
+    logType: 'IMAGE_GENERATION',
+    prompt: finalPrompt!,
+    primaryProfileId: imageProfile.id,
+    chatId: payload.chatId,
+    params: {
       overrides: { n: 1, style: 'natural' },
       orientation: 'landscape',
-      logContext: {
-        context: rerouted
-          ? 'background-jobs.story-background.concierge-reroute'
-          : 'background-jobs.story-background',
-        jobId: job.id,
-        chatId: payload.chatId,
-      },
-    });
-    const startTime = Date.now();
-    try {
-      const response = await provider.generateImage(params, key);
-      const revisedPrompt = response.images?.[0]?.revisedPrompt || '';
-      await logLLMCall({
-        userId: job.userId,
-        type: 'IMAGE_GENERATION',
-        chatId: payload.chatId,
-        provider: profile.provider,
-        modelName: profile.modelName,
-        imageProfileId: profile.id,
-        request: {
-          messages: [{ role: 'user', content: finalPrompt }],
-        },
-        response: {
-          content: revisedPrompt
-            || `Generated ${response.images?.length ?? 0} image(s)${rerouted ? ' (Concierge reroute)' : ''}`,
-        },
-        durationMs: Date.now() - startTime,
-      });
-      return response;
-    } catch (error) {
-      await logLLMCall({
-        userId: job.userId,
-        type: 'IMAGE_GENERATION',
-        chatId: payload.chatId,
-        provider: profile.provider,
-        modelName: profile.modelName,
-        imageProfileId: profile.id,
-        request: {
-          messages: [{ role: 'user', content: finalPrompt }],
-        },
-        response: {
-          content: '',
-          error: getErrorMessage(error),
-        },
-        durationMs: Date.now() - startTime,
-      });
-      throw error;
-    }
-  };
+      logContext: { context: 'background-jobs.story-background', jobId: job.id, chatId: payload.chatId },
+    },
+  });
 
   let failover;
   try {
@@ -840,35 +787,16 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   }
 
   // 11. Save the generated image
-  if (!generationResponse.images || generationResponse.images.length === 0) {
-    logger.warn('[StoryBackground] No images returned from provider', {
+  const decoded = await decodeProviderImage(generationResponse, 'story_background');
+  if (!decoded) {
+    logger.warn('[StoryBackground] No image data returned from provider', {
       context: 'background-jobs.story-background',
       jobId: job.id,
+      imageCount: generationResponse.images?.length ?? 0,
     });
     return;
   }
-
-  const imageData = generationResponse.images[0];
-  const rawData = imageData.data || imageData.b64Json;
-  if (!rawData) {
-    logger.warn('[StoryBackground] Generated image has no data', {
-      context: 'background-jobs.story-background',
-      jobId: job.id,
-    });
-    return;
-  }
-  const rawBuffer = Buffer.from(rawData, 'base64');
-  const providerMimeType = imageData.mimeType || 'image/png';
-  const providerExt = providerMimeType.split('/')[1] || 'png';
-  const providerFilename = `story_background_${Date.now()}.${providerExt}`;
-
-  // Convert to WebP for consistent storage
-  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
-  const buffer = converted.buffer;
-  const mimeType = converted.mimeType;
-  const originalFilename = converted.filename;
-
-  const sha256 = sha256OfBuffer(buffer);
+  const { buffer, mimeType, filename: originalFilename } = decoded;
   const fileId = crypto.randomUUID();
 
   // Build linkedTo array with chat and character IDs
@@ -936,35 +864,25 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       });
     }
 
-    const category: FileCategory = 'IMAGE';
-    const source: FileSource = 'GENERATED';
-
-    await repos.files.create({
+    // No label: createGeneratedFileRow leaves `description` null (bug 132) —
+    // the prompt is the account of record.
+    await createGeneratedFileRow(repos, {
+      id: fileId,
       userId: job.userId,
-      sha256,
+      sha256: decoded.sha256,
       originalFilename,
-      mimeType: storedMimeType,
-      size: storedSize,
-      // Actual dimensions measured from the stored bytes (see
-      // image-orientation-gating) — providers may return a different shape.
-      width: converted.width ?? null,
-      height: converted.height ?? null,
+      stored: { storageKey, storedMimeType, sizeBytes: storedSize },
+      width: decoded.width,
+      height: decoded.height,
       linkedTo,
-      source,
-      category,
-      generationPrompt: finalPrompt,
-      generationModel: activeImageProfile.modelName,
-      generationRevisedPrompt: imageData.revisedPrompt || null,
-      // No label here. `description` is what describe_image and the blind-model
-      // fallback read as "what this picture shows"; a stub such as "Story
-      // background for: <title>" shadowed the prompt above and the vision
-      // path behind it (bug 132). The prompt is the account of record.
-      description: null,
-      tags: [],
-      storageKey,
+      generation: {
+        prompt: finalPrompt,
+        model: activeImageProfile.modelName,
+        revisedPrompt: decoded.revisedPrompt,
+      },
       projectId: folderProjectId,
       folderPath: fileFolderPath,
-    }, { id: fileId });
+    });
 
     logger.info('[StoryBackground] Image saved successfully', {
       context: 'background-jobs.story-background',

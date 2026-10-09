@@ -6,9 +6,7 @@
 import {
   formatWearLine,
   formatWornRelative,
-  isNeverWorn,
   sortAndFilterWardrobeItems,
-  sortWardrobeItems,
   wearOf,
   type SortableWardrobeItem,
 } from '@/lib/wardrobe/wear-display'
@@ -23,7 +21,7 @@ const worn = (wearCount: number, lastWornAt: string | null): WardrobeWearSummary
   lastWornChatId: null,
 })
 
-describe('wearOf / isNeverWorn', () => {
+describe('wearOf', () => {
   it('reads a missing annotation as the canonical never-worn summary', () => {
     expect(wearOf({})).toEqual({
       wearCount: 0,
@@ -32,8 +30,6 @@ describe('wearOf / isNeverWorn', () => {
       lastWornChatId: null,
     })
     expect(wearOf({ wear: null }).wearCount).toBe(0)
-    expect(isNeverWorn({})).toBe(true)
-    expect(isNeverWorn({ wear: worn(2, '2026-10-01T00:00:00.000Z') })).toBe(false)
   })
 })
 
@@ -89,7 +85,9 @@ describe('formatWornRelative', () => {
   })
 })
 
-describe('sortWardrobeItems', () => {
+describe('sortAndFilterWardrobeItems', () => {
+  const sortWardrobeItems = (list: SortableWardrobeItem[], sort: Parameters<typeof sortAndFilterWardrobeItems>[1]['sort']) =>
+    sortAndFilterWardrobeItems(list, { sort, neverWornOnly: false })
   const items: SortableWardrobeItem[] = [
     { title: 'Coat', createdAt: '2026-01-01T00:00:00.000Z', wear: worn(2, '2026-10-01T00:00:00.000Z') },
     { title: 'Apron', createdAt: '2026-05-01T00:00:00.000Z' },

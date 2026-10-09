@@ -12,8 +12,9 @@
  *    the outfit's `componentItemIds`, so nothing needs an id assigned up front.
  *
  * Unless the operator declines, the photograph itself is attached to every
- * piece (and the outfit) as its first picture, `kind=imported`. The server
- * de-duplicates the bytes, so N pieces share one blob behind N links. A
+ * piece (and the outfit) as its first picture, `kind=imported`. It is
+ * uploaded once, with the first piece; the rest link that picture
+ * (`?action=link-image`), so N pieces share one blob behind N links. A
  * failed attachment never aborts the import — the garment stands without it.
  *
  * @module components/wardrobe/import-from-image-modal
@@ -27,7 +28,7 @@ import FormActions from '@/components/ui/FormActions'
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { unionTypes } from '@/lib/wardrobe/composite-types'
-import { uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
+import { linkWardrobeItemImage, uploadWardrobeItemImage } from '@/lib/wardrobe/item-images-client'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 
 // ============================================================================
@@ -237,11 +238,23 @@ export function ImportFromImageModal({
     const photograph = keepPhotograph ? selectedFile : null
     let pictureFailures = 0
 
-    /** Attach the photograph to a freshly created item; never throws. */
+    /** The photograph's file id once it has been uploaded to the first piece. */
+    let photographFileId: string | null = null
+
+    /**
+     * Attach the photograph to a freshly created item; never throws. The bytes
+     * go up once, with the first piece; every later piece links that picture
+     * server-side rather than uploading it again.
+     */
     const attachPhotograph = async (itemId: string, title: string): Promise<void> => {
       if (!photograph) return
       try {
-        await uploadWardrobeItemImage(itemId, container, photograph, 'imported')
+        if (photographFileId) {
+          await linkWardrobeItemImage(itemId, container, photographFileId)
+        } else {
+          const { image } = await uploadWardrobeItemImage(itemId, container, photograph, 'imported')
+          photographFileId = image.fileId
+        }
       } catch (err) {
         pictureFailures += 1
         console.warn(

@@ -154,7 +154,6 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     pluginConfigs,
     chatSettingsResult,
     folders,
-    wardrobeItems,
   ] = await Promise.all([
     repos.characters.findAll(),
     repos.chats.findAll(),
@@ -180,9 +179,11 @@ async function collectUserData(userId: string): Promise<Omit<BackupData, 'manife
     globalRepos.chatSettings.findByUserId(userId),
     // Get folders
     globalRepos.folders.findByUserId(userId),
-    // Get wardrobe items (composites are wardrobe items now; outfit presets retired)
-    globalRepos.wardrobe.findAll(),
   ]);
+  // Wardrobe items live in document stores (`Wardrobe/*.md`), which the backup
+  // carries as documents; the legacy `wardrobeItems` array stays empty so old
+  // restorers still read the format.
+  const wardrobeItems: never[] = [];
 
   // Exclude backup files from the file list - we don't want to back up old backups
   const filteredFiles = files.filter(

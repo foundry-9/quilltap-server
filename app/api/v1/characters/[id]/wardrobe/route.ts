@@ -1,162 +1,21 @@
 /**
- * Character Wardrobe Items API v1
+ * Character Wardrobe — collection endpoint.
  *
- * GET /api/v1/characters/[id]/wardrobe - Get all wardrobe items for a character
- * GET /api/v1/characters/[id]/wardrobe?scope=group - Get the shared items in the
- *   `Wardrobe/` folder of every store belonging to a group this character is a
- *   member of. The group tier of the wearable pool, as a standalone read for the
- *   client-side merge (`useCharacterWardrobeItems`).
- * GET /api/v1/characters/[id]/wardrobe?action=instructions - Read the vault's
- *   `Wardrobe/instructions.md` dressing instructions (null when absent)
- * POST /api/v1/characters/[id]/wardrobe - Create a new wardrobe item
- * POST /api/v1/characters/[id]/wardrobe?action=instructions - Write (or clear,
- *   with null/blank) the vault's dressing instructions
+ * GET  /api/v1/characters/[id]/wardrobe                     — the character's own vault items
+ * GET  /api/v1/characters/[id]/wardrobe?scope=group         — the group tier of their wearable pool,
+ *                                                             each item tagged with its group
+ * POST /api/v1/characters/[id]/wardrobe                     — create an item in the vault
+ * GET  /api/v1/characters/[id]/wardrobe?action=instructions — read `Wardrobe/instructions.md`
+ * POST /api/v1/characters/[id]/wardrobe?action=instructions — write (or clear) it
+ *
+ * Handler bodies: `lib/wardrobe/routes/wardrobe-route-factory.ts`.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, exists, withActionDispatch } from '@/lib/api/middleware';
-import type { RequestContext } from '@/lib/api/middleware/context';
-import { logger } from '@/lib/logger';
-import { notFound, serverError, created, conflict, successResponse } from '@/lib/api/responses';
-import { readIncludeArchived } from '@/lib/api/query-params';
-import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
-import { withOrigin } from '@/lib/wardrobe/wardrobe-container';
-import { attachWear } from '@/lib/wardrobe/wear-history';
-import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
-import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
-import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
-import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
-import {
-  parseWardrobeInstructionsBody,
-  handleReadWardrobeInstructions,
-  handleWriteWardrobeInstructions,
-} from '@/lib/wardrobe/wardrobe-instructions-handlers';
+import { createWardrobeCollectionHandlers } from '@/lib/wardrobe/routes/wardrobe-route-factory';
 
-// GET /api/v1/characters/[id]/wardrobe?action=instructions
-async function handleGetInstructions(
-  _req: NextRequest,
-  { repos }: RequestContext,
-  { id }: { id: string },
-): Promise<NextResponse> {
-  const character = await repos.characters.findById(id);
-  if (!exists(character)) {
-    return notFound('Character');
-  }
-  const mountPointId = character.characterDocumentMountPointId ?? null;
-  return handleReadWardrobeInstructions(mountPointId, ({ present }) => {
-    logger.debug('[Wardrobe v1] Read character dressing instructions', {
-      characterId: id,
-      mountPointId,
-      present,
-    });
-  });
-}
-
-// POST /api/v1/characters/[id]/wardrobe?action=instructions
-async function handlePostInstructions(
-  req: NextRequest,
-  { repos }: RequestContext,
-  { id }: { id: string },
-): Promise<NextResponse> {
-  const character = await repos.characters.findById(id);
-  if (!exists(character)) {
-    return notFound('Character');
-  }
-  const body = await parseWardrobeInstructionsBody(req);
-
-  let loc;
-  try {
-    loc = await resolveWardrobeMount(id);
-  } catch (error) {
-    if (error instanceof CharacterArchivedError) {
-      return conflict('Character is archived; dressing instructions cannot be edited');
-    }
-    throw error;
-  }
-  if (!loc) {
-    if (body.cleared) return successResponse({ instructions: null });
-    return serverError('Character has no vault to hold dressing instructions');
-  }
-
-  const mountPointId = loc.mountPointId;
-  return handleWriteWardrobeInstructions(mountPointId, body, ({ cleared }) => {
-    logger.info('[Wardrobe v1] Character dressing instructions updated', {
-      characterId: id,
-      mountPointId,
-      cleared,
-    });
-  });
-}
-
-// GET /api/v1/characters/[id]/wardrobe
-export const GET = createContextParamsHandler<{ id: string }>(
-  withActionDispatch({ instructions: handleGetInstructions }, async (req, { user, repos }, { id }) => {
-    try {
-      const character = await repos.characters.findById(id);
-
-      if (!exists(character)) {
-        return notFound('Character');
-      }
-
-      const includeArchived = readIncludeArchived(req);
-      const scope = new URL(req.url).searchParams.get('scope');
-      if (scope === 'group') {
-        // Kept grouped so each item can say which group it hangs in; the
-        // attributed read resolves id collisions exactly as the flat one does.
-        const groups = await resolveGroupMountsForCharacter(id);
-        const wardrobeItems = await attachWear(
-          await repos.wardrobe.findArchetypesInMountsAttributed(groups, includeArchived),
-          repos,
-        );
-        logger.debug('[Wardrobe v1] Group-tier wardrobe read', {
-          characterId: id,
-          groupCount: groups.length,
-          groupMountCount: groups.reduce((n, g) => n + g.mountPointIds.length, 0),
-          itemCount: wardrobeItems.length,
-          context: 'wardrobe',
-        });
-        return NextResponse.json({ wardrobeItems });
-      }
-
-      const wardrobeItems = await attachWear(
-        withOrigin(
-          await repos.wardrobe.findByCharacterId(id, includeArchived),
-          { scope: 'character', id, name: character.name },
-        ),
-        repos,
-      );
-      return NextResponse.json({ wardrobeItems });
-    } catch (error) {
-      logger.error('[Wardrobe v1] Error fetching wardrobe items', { characterId: id }, error instanceof Error ? error : undefined);
-      return serverError('Failed to fetch wardrobe items');
-    }
-  })
-);
-
-// POST /api/v1/characters/[id]/wardrobe
-export const POST = createContextParamsHandler<{ id: string }>(
-  withActionDispatch({ instructions: handlePostInstructions }, async (req, { user, repos }, { id }) => {
-    const character = await repos.characters.findById(id);
-
-    if (!exists(character)) {
-      return notFound('Character');
-    }
-
-    const body = await req.json();
-    const validatedData = createWardrobeSchema.parse(body);
-
-    const item = await repos.wardrobe.create(wardrobeItemFromCreateBody(validatedData, id));
-
-    if (!item) {
-      return serverError('Failed to create wardrobe item');
-    }
-
-    logger.info('[Wardrobe v1] Wardrobe item created', {
-      characterId: id,
-      itemId: item.id,
-      title: validatedData.title,
-    });
-
-    return created({ wardrobeItem: item });
-  })
-);
+export const { GET, POST } = createWardrobeCollectionHandlers<{ id: string }>({
+  scope: 'character',
+  paramsToId: ({ id }) => id,
+  logTag: '[Wardrobe v1]',
+  logIdKey: 'characterId',
+});

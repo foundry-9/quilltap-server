@@ -64,7 +64,7 @@ jest.mock('better-sqlite3', () =>
 );
 
 import { collapseDuplicateAvatarRollsMigration } from '../../../migrations/scripts/collapse-duplicate-avatar-rolls-v1';
-import { deriveLegacyAvatarCacheKey } from '../../../lib/wardrobe/avatar-cache';
+import { deriveLegacyAvatarCacheKey } from '../../../lib/image-gen/avatar-cache';
 import { registerTextCodecFunction } from '../../../lib/database/backends/sqlite/text-codec-function';
 import { logger as migrationLogger } from '../../../migrations/lib/logger';
 

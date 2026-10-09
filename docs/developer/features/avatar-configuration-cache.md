@@ -7,7 +7,7 @@ of a fresh provider call every time a character puts the same coat back on.
 
 ## The observation
 
-`buildCharacterAvatarPrompt` (`lib/wardrobe/avatar-prompt.ts`) is a pure
+`buildCharacterAvatarPrompt` (`lib/image-gen/avatar-prompt.ts`) is a pure
 function. No clock, no RNG, no LLM. Given the same character fields, the same
 resolved outfit, the same in-scope stores and the same project aesthetic, it
 returns a byte-identical string. Everything deterministic about an avatar —
@@ -37,7 +37,7 @@ generationKey = sha256(canonicalJson({
 hash. The key is derived from the **pre-reroute** profile, so the lookup can
 happen before the Concierge classification call and save that too.
 
-Derivation and lookup live in one chokepoint, `lib/wardrobe/avatar-cache.ts`.
+Derivation and lookup live in one chokepoint, `lib/image-gen/avatar-cache.ts`.
 No call site computes a key itself.
 
 ### Legacy keys (v0)

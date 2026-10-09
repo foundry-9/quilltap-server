@@ -39,6 +39,13 @@ interface FullScreenImageViewerProps {
   imageId: string
   /** Filename shown by the missing-image placeholder. */
   filename: string
+  /**
+   * How the missing-image placeholder's Remove clears the dangling reference.
+   * Defaults to the generic `DELETE /api/v1/images/{imageId}`; a picture owned
+   * by a record (a wardrobe item) passes that record's own removal, which
+   * knows its links and pointers (bug 194). The viewer closes after it.
+   */
+  onMissingCleanup?: () => Promise<void>
   /** Buttons before Close, left to right. Hidden while the image is missing. */
   actions?: FullScreenImageAction[]
   onPrev?: () => void
@@ -68,6 +75,7 @@ export function FullScreenImageViewer({
   alt,
   imageId,
   filename,
+  onMissingCleanup,
   actions = [],
   onPrev,
   onNext,
@@ -140,7 +148,14 @@ export function FullScreenImageViewer({
         onClick={(e) => e.stopPropagation()}
       >
         {imageMissing ? (
-          <DeletedImagePlaceholder imageId={imageId} filename={filename} onCleanup={onClose} width={600} height={400} />
+          <DeletedImagePlaceholder
+            imageId={imageId}
+            filename={filename}
+            onRemove={onMissingCleanup}
+            onCleanup={onClose}
+            width={600}
+            height={400}
+          />
         ) : (
           // A plain <img>: authenticated API routes need the session cookie,
           // which Next.js image optimization does not forward.

@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-09)** |
-| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/wardrobe-refactor.md) |
+| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/complete/wardrobe-refactor.md) |
 | **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | Medium — an archived garment is retired on purpose; the tool refuses it, the UI does not, and `set_all` (the "Wear this fitting" commit) does not check at all |
 | **Who it bites** | the operator dressing a character from the dialog with "show archived" on, and any client that posts `?action=equip` with an archived id |

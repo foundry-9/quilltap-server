@@ -6,37 +6,33 @@
  * want the same thing: a per-slot list of leaf items and their titles, ready
  * to feed into `describeOutfit` or to render in a prompt block.
  *
- * This helper:
- *   1. Loads every wardrobe item belonging to the character (so the
- *      `itemsById` map can resolve composite components transitively).
- *   2. Falls back to `wardrobe.findByIdsForCharacter` for any equipped IDs not
- *      found in the character's own wardrobe (archetype items, etc.).
- *   2a. Hydrates composite components that are still missing — a shared
- *      composite's parts live in the shared tiers, not the character's vault —
- *      one bulk query per nesting level.
- *   3. Expands each input slot's array via `expandComposites`, then routes
- *      each resulting leaf into every output slot the leaf's own `types`
- *      declares — dedup'd across input slots. That way an atomic dress with
+ * This helper walks the character's wearable pool (`lib/wardrobe/pool.ts`),
+ * which already holds every tier the character can reach, archived items
+ * included (an item archived after the chat last loaded still resolves to its
+ * title):
+ *   1. Expands each input slot's array via `expandComposites` over the pool,
+ *      then routes each resulting leaf into every output slot the leaf's own
+ *      `types` declares — dedup'd across input slots. An atomic dress with
  *      `types=[top,bottom]` shows up in both rendered slots even if it was
  *      only equipped to one, and a composite outfit whose components have
  *      heterogeneous types distributes those components correctly.
- *   4. Returns per-slot leaf items, the title-array `OutfitSlotValues` for
- *      `describeOutfit`, and the underlying `itemsById` map for callers that
- *      still want to inspect items themselves.
+ *   2. Returns per-slot leaf items, the title-array `OutfitSlotValues` for
+ *      `describeOutfit`, and the `itemsById` map of everything it touched.
+ *
+ * No I/O: the caller loads the pool once and may reuse it.
  *
  * @module wardrobe/resolve-equipped
  */
 import { logger } from '@/lib/logger';
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
-import { hydrateComponentGraph } from '@/lib/wardrobe/hydrate-components';
 import {
   buildOutfitSlotValues,
   decorateOutfitItems,
   describeOutfit,
 } from '@/lib/wardrobe/outfit-description';
 import type { OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
-import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
+import { componentGraph, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
+import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   WARDROBE_SLOT_TYPES,
   allEquippedItemIds,
@@ -44,31 +40,12 @@ import {
 } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
-/** Minimal repository surface needed to resolve equipped items. */
-export interface ResolveEquippedRepos {
-  wardrobe: {
-    findByCharacterId(characterId: string, includeArchived?: boolean): Promise<WardrobeItem[]>;
-    findByIdsForCharacter(
-      characterId: string,
-      ids: string[],
-      opts?: SharedWardrobeTiers,
-    ): Promise<WardrobeItem[]>;
-  };
-}
-
-/**
- * Options for multi-tier equipped resolution. Equipped items not found in the
- * character's own vault are resolved against these group/project stores plus
- * Quilltap General. Omit when there is no chat context (General alone).
- */
-export type ResolveEquippedOptions = SharedWardrobeTiers;
-
 export interface ResolvedEquippedOutfit {
   /** Per-slot title arrays, ready for `describeOutfit`. */
   outfitValues: OutfitSlotValues;
   /** Per-slot leaf items (composites expanded), in the order they appear in equipped state. */
   leafItemsBySlot: Record<WardrobeItemType, WardrobeItem[]>;
-  /** Map of every item id encountered during resolution (composites + leaves). */
+  /** Every item id encountered during resolution (composites + leaves). */
   itemsById: Map<string, WardrobeItem>;
 }
 
@@ -88,67 +65,27 @@ function emptyResolved(): ResolvedEquippedOutfit {
 /**
  * Resolve a character's equipped slots into per-slot leaf items and a
  * `describeOutfit`-ready `OutfitSlotValues`. Composites are expanded
- * transitively via `expandComposites`.
- *
- * Pass the character's own id when known — that lets us load the full
- * character wardrobe (honouring the document-store overlay) and resolve
- * composite components even when they're not equipped themselves.
+ * transitively via `expandComposites` over the pool.
  */
-export async function resolveEquippedOutfitForCharacter(
-  repos: ResolveEquippedRepos,
-  characterId: string,
+export function resolveEquippedOutfitForCharacter(
+  pool: WearablePool,
   slots: EquippedSlots,
-  opts?: ResolveEquippedOptions,
-): Promise<ResolvedEquippedOutfit> {
+): ResolvedEquippedOutfit {
   const equippedItemIds = allEquippedItemIds(slots);
 
   if (equippedItemIds.length === 0) {
     return emptyResolved();
   }
 
-  // Pull everything in the character's wardrobe so transitive composite
-  // components resolve. Include archived: an item that's been archived after
-  // the chat last loaded should still resolve to its title for display.
-  let charItems: WardrobeItem[] = [];
-  try {
-    charItems = await repos.wardrobe.findByCharacterId(characterId, true);
-  } catch (error) {
-    logger.warn('[resolveEquippedOutfitForCharacter] findByCharacterId failed; proceeding with findByIds only', {
+  const itemsById: Map<string, WardrobeItem> = componentGraph(pool, equippedItemIds);
+  const unresolved = equippedItemIds.filter((id) => !itemsById.has(id));
+  if (unresolved.length > 0) {
+    logger.debug('[resolveEquippedOutfitForCharacter] Equipped ids not in the wearable pool', {
       context: 'wardrobe',
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
+      characterId: pool.characterId,
+      unresolvedCount: unresolved.length,
     });
   }
-
-  const itemsById = new Map<string, WardrobeItem>(charItems.map((i) => [i.id, i]));
-
-  // Fill in any equipped ids the character wardrobe didn't supply (archetype
-  // items, items from another character if the chat permits, etc.).
-  const missing = equippedItemIds.filter((id) => !itemsById.has(id));
-  if (missing.length > 0) {
-    try {
-      // Resolve via the character scope so archetypes (Quilltap General, the
-      // character's groups, the chat's project) and the character's own vault
-      // items both surface — there's no global wardrobe table to hit
-      // post-cutover.
-      const fallback = await repos.wardrobe.findByIdsForCharacter(characterId, missing, opts);
-      for (const item of fallback) {
-        itemsById.set(item.id, item);
-      }
-    } catch (error) {
-      logger.warn('[resolveEquippedOutfitForCharacter] findByIds fallback failed', {
-        context: 'wardrobe',
-        characterId,
-        missingCount: missing.length,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // A composite may bundle components the character doesn't own and that aren't
-  // equipped in their own right. Hydrating them is shared with the write side
-  // (see `hydrate-components`) so both ends see the same component graph.
-  await hydrateComponentGraph(repos, characterId, itemsById, opts);
 
   // First pass: expand each input slot's composites, dedupe by leaf id across
   // the whole equipped set, and remember the order leaves were first seen.
@@ -168,6 +105,15 @@ export async function resolveEquippedOutfitForCharacter(
     // `?? []` is load-bearing: a slot bag written before this slot existed has
     // no key at all, and `expandComposites` iterates what it is handed.
     const expanded = expandComposites(slots[slot] ?? [], itemsById);
+    if (expanded.cycles.length > 0 || expanded.truncated) {
+      logger.warn('[resolveEquippedOutfitForCharacter] Malformed composite graph; expansion truncated', {
+        context: 'wardrobe',
+        characterId: pool.characterId,
+        slot,
+        cycles: expanded.cycles.length,
+        truncated: expanded.truncated,
+      });
+    }
     for (const id of expanded.leafIds) {
       if (seenLeafIds.has(id)) continue;
       const item = itemsById.get(id);
@@ -195,29 +141,20 @@ export async function resolveEquippedOutfitForCharacter(
  * Describe a character's currently equipped outfit as a concise, title-only
  * markdown block — the shared "what are they wearing right now" pipeline for
  * prompt builders that must stay terse (scene-state baselines, mid-turn
- * clothing overrides).
- *
- * Resolves the equipped slots against the character's shared wardrobe tiers
- * (the group tier is looked up per character; the project tier is passed in,
- * already resolved by the caller) and renders via `describeOutfit` with
- * `titleOnly` decoration.
+ * clothing overrides). The project tier is passed in, already resolved by the
+ * caller; the pool resolves the group tier itself.
  */
 export async function describeEquippedOutfitTitleOnly(
-  repos: ResolveEquippedRepos,
+  repos: Pick<RepositoryContainer, 'wardrobe' | 'projects' | 'chats'>,
   characterId: string,
   equippedSlots: EquippedSlots,
   projectMountPointIds: string[] | undefined,
 ): Promise<string> {
-  const resolved = await resolveEquippedOutfitForCharacter(
-    repos,
-    characterId,
-    equippedSlots,
-    await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
-  );
+  const pool = await loadWearablePool(repos, characterId, projectMountPointIds ?? []);
+  const resolved = resolveEquippedOutfitForCharacter(pool, equippedSlots);
   return describeOutfit(
     buildOutfitSlotValues((slot) =>
       decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
     ),
   );
 }
-

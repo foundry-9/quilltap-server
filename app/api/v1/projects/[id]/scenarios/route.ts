@@ -13,7 +13,7 @@
  *                                                  description?, isDefault?,
  *                                                  body }.
  *
- * Both routes call `ensureProjectOfficialStore` and
+ * Both routes call `ensureOwnerOfficialStore` and
  * `ensureProjectScenariosFolder` first so users hitting this endpoint don't
  * have to wait for the next startup-time heal pass to see their scenarios
  * folder.
@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, created } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import {
   ensureProjectScenariosFolder,
   listProjectScenarios,
@@ -48,7 +48,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
       const project = await repos.projects.findById(id);
       if (!project) return notFound('Project');
 
-      const ensured = await ensureProjectOfficialStore(project.id, project.name);
+      const ensured = await ensureOwnerOfficialStore('project', project.id, project.name);
       if (!ensured) {
         return serverError('Failed to ensure project document store');
       }
@@ -87,7 +87,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
       const body = await req.json();
       const validated = createScenarioSchema.parse(body);
 
-      const ensured = await ensureProjectOfficialStore(project.id, project.name);
+      const ensured = await ensureOwnerOfficialStore('project', project.id, project.name);
       if (!ensured) {
         return serverError('Failed to ensure project document store');
       }

@@ -61,7 +61,7 @@ import {
   sqliteColumnExists,
   openMountIndexDbIfPresent,
 } from '../lib/database-utils';
-import { deriveLegacyAvatarCacheKey } from '../../lib/wardrobe/avatar-cache';
+import { deriveLegacyAvatarCacheKey } from '../../lib/image-gen/avatar-cache';
 import { isPhotosRelativePath } from '../../lib/photos/photos-paths';
 import { gcOrphanedFileRow } from '../../lib/mount-index/orphan-store-reaper';
 import { textToBlob } from '../../lib/database/text-compression';

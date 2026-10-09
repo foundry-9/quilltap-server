@@ -3,12 +3,12 @@
  *
  * Applies an ordered array of put-on operations in sequence, each building on
  * the last (equipped state is loaded/mutated/persisted per primitive, so it
- * accumulates naturally). Per-operation mode maps to the displacement
- * primitives in `lib/wardrobe/outfit-displacement.ts`:
+ * accumulates naturally). Each operation goes through `lib/wardrobe/wear-ops.ts`
+ * — the same resolution and gestures the chat's `?action=equip` uses:
  *
- *   - `wear`        → `equipItem(item)`   (honors the item's replace flag)
- *   - `replace`     → `replaceItem(item)` (force-swap the covered slots)
- *   - `add_to_slot` → `addToSlot(slot, item)`
+ *   - `wear`        — honours the item's replace flag
+ *   - `replace`     — force-swaps the covered slots
+ *   - `add_to_slot` — layers into one named slot
  *
  * Single garments and composites are handled identically — the item's own
  * `replace` flag decides layer-vs-swap. The handler FAILS FAST on the first bad
@@ -25,26 +25,19 @@ import type {
   WardrobeWearOpResult,
 } from '../wardrobe-wear-tool';
 import { validateWardrobeWearInput } from '../wardrobe-wear-tool';
-import { equipItem, replaceItem, addToSlot } from '@/lib/wardrobe/outfit-displacement';
-import { wearRefusal } from '@/lib/wardrobe/wearable';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { resolveWearable, wearItem } from '@/lib/wardrobe/wear-ops';
 import {
   buildWardrobeMutationFailure,
   describeWardrobeEffect,
   finalizeWardrobeMutation,
   formatWardrobeMutationResults,
+  loadToolPool,
   normalizeNoItemSentinel,
-  resolveWardrobeItemAcrossTiers,
-  wardrobeItemNotFoundMessage,
+  type WardrobeToolContext,
 } from './wardrobe-handler-shared';
 
-export interface WardrobeWearToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-  /** Per-turn announcement queue. Forwarded from `ToolExecutionContext`. */
-  pendingWardrobeAnnouncements?: Set<string>;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeWearToolContext = WardrobeToolContext;
 
 class WardrobeWearError extends Error {}
 
@@ -70,7 +63,7 @@ export async function executeWardrobeWearTool(
     );
   }
 
-  const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
+  const pool = await loadToolPool(repos, context.chatId, context.characterId);
 
   const results: WardrobeWearOpResult[] = [];
   let appliedCount = 0;
@@ -82,44 +75,20 @@ export async function executeWardrobeWearTool(
     const itemTitle = normalizeNoItemSentinel(op.item_title);
 
     try {
-      const item = await resolveWardrobeItemAcrossTiers(
+      const resolved = resolveWearable(pool, { itemId, itemTitle }, mode, op.slot);
+      if (!resolved.ok) {
+        throw new WardrobeWearError(resolved.message);
+      }
+      const { item } = resolved;
+      const { effect, slotsAffected } = await wearItem(
         repos,
-        context.characterId,
-        itemId,
-        itemTitle,
-        tiers,
+        context.chatId,
+        pool,
+        item,
+        mode,
+        op.slot,
+        'tool',
       );
-      if (!item) {
-        throw new WardrobeWearError(wardrobeItemNotFoundMessage(itemId, itemTitle));
-      }
-      const refusal = wearRefusal(item);
-      if (refusal) {
-        throw new WardrobeWearError(refusal);
-      }
-
-      let effect: 'layered' | 'replaced';
-      let slotsAffected: string[];
-
-      if (mode === 'add_to_slot') {
-        const slot = op.slot!;
-        if (!item.types.includes(slot)) {
-          throw new WardrobeWearError(
-            `Item "${item.title}" (types: ${item.types.join(', ')}) cannot be added to the "${slot}" slot`,
-          );
-        }
-        await addToSlot(repos, context.chatId, context.characterId, slot, item, tiers, 'tool');
-        effect = 'layered';
-        slotsAffected = [slot];
-      } else if (mode === 'replace') {
-        await replaceItem(repos, context.chatId, context.characterId, item, tiers, 'tool');
-        effect = 'replaced';
-        slotsAffected = item.types;
-      } else {
-        // mode === 'wear'
-        await equipItem(repos, context.chatId, context.characterId, item, tiers, 'tool');
-        effect = item.replace ? 'replaced' : 'layered';
-        slotsAffected = item.types;
-      }
 
       results.push({
         mode,
@@ -168,7 +137,7 @@ export async function executeWardrobeWearTool(
     appliedCount,
     results,
     failedError,
-    tiers,
+    pool,
   });
 }
 

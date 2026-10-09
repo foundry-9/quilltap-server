@@ -100,8 +100,8 @@ function routeFetch(deferOutfit: boolean): void {
       return jsonResponse({ characters: [{ id: CHARACTER_ID, name: 'Alice' }] })
     }
     if (url.includes('/wardrobe')) {
-      // Both the dialog's own list and useOutfit's per-character fetch; the
-      // shared-archetype call answers empty so the merge stays deterministic.
+      // Every tier of the character's list (own vault, ?scope=group); the
+      // General call answers empty so the merge stays deterministic.
       return jsonResponse({ wardrobeItems: url.endsWith('/api/v1/wardrobe') ? [] : ITEMS })
     }
     if (url.includes('/api/v1/image-profiles')) {

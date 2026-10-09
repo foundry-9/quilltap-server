@@ -549,7 +549,7 @@ class UserScopedLLMLogsRepository extends UserScopedRepository<LLMLog, LLMLogsRe
 
   async getStatsByProfile(
     groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
-    options?: { type?: LLMLogType },
+    options?: { type?: LLMLogType | readonly LLMLogType[] },
   ): Promise<LLMLogProfileStatsRow[]> {
     return this.baseRepo.getStatsByProfile(this.userId, groupBy, options ?? {});
   }

@@ -76,41 +76,7 @@ import {
   DOC_EDIT_TOOL_NAMES,
   type DocEditToolContext,
 } from '@/lib/tools/handlers/doc-edit-handler';
-import {
-  executeWardrobeListTool,
-  formatWardrobeListResults,
-  type WardrobeListToolContext,
-} from '@/lib/tools/handlers/wardrobe-list-handler';
-import {
-  executeWardrobeReadTool,
-  formatWardrobeReadResults,
-  type WardrobeReadToolContext,
-} from '@/lib/tools/handlers/wardrobe-read-handler';
-import {
-  executeWardrobeCreateTool,
-  formatWardrobeCreateResults,
-  type WardrobeCreateToolContext,
-} from '@/lib/tools/handlers/wardrobe-create-handler';
-import {
-  executeWardrobeUpdateTool,
-  formatWardrobeUpdateResults,
-  type WardrobeUpdateToolContext,
-} from '@/lib/tools/handlers/wardrobe-update-handler';
-import {
-  executeWardrobeArchiveTool,
-  formatWardrobeArchiveResults,
-  type WardrobeArchiveToolContext,
-} from '@/lib/tools/handlers/wardrobe-archive-handler';
-import {
-  executeWardrobeWearTool,
-  formatWardrobeWearResults,
-  type WardrobeWearToolContext,
-} from '@/lib/tools/handlers/wardrobe-wear-handler';
-import {
-  executeWardrobeTakeOffTool,
-  formatWardrobeTakeOffResults,
-  type WardrobeTakeOffToolContext,
-} from '@/lib/tools/handlers/wardrobe-take-off-handler';
+import { WARDROBE_TOOL_TABLE } from '@/lib/tools/handlers/wardrobe-tool-table';
 import {
   executeReadConversationTool,
   formatReadConversationResults,
@@ -749,172 +715,17 @@ export async function executeToolCallWithContext(
       };
     }
 
-    // Handle wardrobe_list
-    if (toolCall.name === 'wardrobe_list') {
-      const wardrobeContext: WardrobeListToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeListTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeListResults(result);
-
-      return {
-        toolName: 'wardrobe_list',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          items: result.items,
-          total_count: result.total_count,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_read
-    if (toolCall.name === 'wardrobe_read') {
-      const wardrobeContext: WardrobeReadToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeReadTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeReadResults(result);
-
-      return {
-        toolName: 'wardrobe_read',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          ...result,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_create
-    if (toolCall.name === 'wardrobe_create') {
-      const wardrobeContext: WardrobeCreateToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeCreateTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeCreateResults(result);
-
-      return {
-        toolName: 'wardrobe_create',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          item_id: result.item_id,
-          title: result.title,
-          equipped: result.equipped,
-          recipient_name: result.recipient_name,
-          current_state: result.current_state,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_update
-    if (toolCall.name === 'wardrobe_update') {
-      const wardrobeContext: WardrobeUpdateToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-      };
-
-      const result = await executeWardrobeUpdateTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeUpdateResults(result);
-
-      return {
-        toolName: 'wardrobe_update',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          ...result,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_archive (soft retire)
-    if (toolCall.name === 'wardrobe_archive') {
-      const wardrobeContext: WardrobeArchiveToolContext = {
+    // The seven wardrobe_* tools: one table, one context. Every tool gets the
+    // turn's announcement set, so none can be the one that drops it (bug 193).
+    const wardrobeTool = WARDROBE_TOOL_TABLE[toolCall.name];
+    if (wardrobeTool) {
+      const { success, result, error } = await wardrobeTool(toolCall.arguments, {
         userId,
         chatId,
         characterId: characterId || '',
         pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeArchiveTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeArchiveResults(result);
-
-      return {
-        toolName: 'wardrobe_archive',
-        success: result.success,
-        result: result.success ? {
-          formattedText: formattedResult,
-          item_id: result.item_id,
-          title: result.title,
-          action: result.action,
-        } : null,
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_wear (put on / layer — array of operations)
-    if (toolCall.name === 'wardrobe_wear') {
-      const wardrobeContext: WardrobeWearToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeWearTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeWearResults(result);
-
-      return {
-        toolName: 'wardrobe_wear',
-        success: result.success,
-        result: {
-          formattedText: formattedResult,
-          operations: result.operations,
-          current_state: result.current_state,
-          coverage_summary: result.coverage_summary,
-        },
-        error: result.success ? undefined : result.error,
-      };
-    }
-
-    // Handle wardrobe_take_off (remove / clear — array of operations)
-    if (toolCall.name === 'wardrobe_take_off') {
-      const wardrobeContext: WardrobeTakeOffToolContext = {
-        userId,
-        chatId,
-        characterId: characterId || '',
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      };
-
-      const result = await executeWardrobeTakeOffTool(toolCall.arguments, wardrobeContext);
-      const formattedResult = formatWardrobeTakeOffResults(result);
-
-      return {
-        toolName: 'wardrobe_take_off',
-        success: result.success,
-        result: {
-          formattedText: formattedResult,
-          operations: result.operations,
-          current_state: result.current_state,
-          coverage_summary: result.coverage_summary,
-        },
-        error: result.success ? undefined : result.error,
-      };
+      });
+      return { toolName: toolCall.name, success, result, error };
     }
 
     // Handle read_conversation (Scriptorium)

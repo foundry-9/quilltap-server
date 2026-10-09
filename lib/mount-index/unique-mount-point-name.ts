@@ -3,7 +3,7 @@
  *
  * Single source of truth for the "append ` (2)`, ` (3)`, … until unique"
  * naming policy used when provisioning document stores. Shared by:
- *   - runtime auto-creation (`ensure-project-store.ts`, `ensure-group-store.ts`,
+ *   - runtime auto-creation (`ensure-owner-store.ts`,
  *     via `ensure-official-store.ts`);
  *   - the one-time cutover migration (`cutover-projects-to-store.ts`);
  *   - the legacy file-conversion migration

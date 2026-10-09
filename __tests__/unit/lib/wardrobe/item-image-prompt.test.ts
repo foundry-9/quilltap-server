@@ -27,7 +27,7 @@ jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
 const { buildWardrobeItemImagePrompt, buildWardrobeItemCue } =
   require('@/lib/wardrobe/item-image-prompt') as typeof import('@/lib/wardrobe/item-image-prompt')
 const { buildFigureIdentityBlock, buildCharacterAvatarPrompt } =
-  require('@/lib/wardrobe/avatar-prompt') as typeof import('@/lib/wardrobe/avatar-prompt')
+  require('@/lib/image-gen/avatar-prompt') as typeof import('@/lib/image-gen/avatar-prompt')
 
 const NOW = '2026-01-01T00:00:00.000Z'
 

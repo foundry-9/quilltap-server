@@ -48,8 +48,10 @@ import { validateImageFile } from '@/lib/images-v2';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import {
   ForeignWardrobeImageError,
+  UnlinkableWardrobeImageError,
   addWardrobeItemImage,
   deleteWardrobeItemImage,
+  linkWardrobeItemImage,
   listWardrobeItemImages,
   resolveWardrobeItemHome,
   setCurrentWardrobeItemImage,
@@ -254,6 +256,28 @@ async function handleUpload(req: NextRequest, ctx: RequestContext, { itemId }: P
   }
 }
 
+// POST ?action=link-image — body { fileId }: give the item a copy-by-link of
+// another stored picture (Import from image's photograph, uploaded once).
+async function handleLinkImage(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
+  const found = await findHome(req, ctx, itemId);
+  if (!found.ok) return found.response;
+  const meta = { itemId, scope: found.query.scope };
+  try {
+    const { fileId } = fileIdBodySchema.parse(await req.json());
+    const { file: stored } = await linkWardrobeItemImage(ctx.repos, found.home, {
+      userId: ctx.user.id,
+      sourceFileId: fileId,
+    });
+    logger.info(`${LOG_TAG} Linked an existing picture to a wardrobe item`, { ...meta, sourceFileId: fileId, fileId: stored.id });
+    return created({ image: toWardrobeImageSummary(stored), current: stored.id });
+  } catch (error) {
+    if (error instanceof UnlinkableWardrobeImageError) {
+      return badRequest('That picture cannot be linked');
+    }
+    return mapWriteError(error, meta);
+  }
+}
+
 // POST ?action=set-current
 async function handleSetCurrent(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
   const found = await findHome(req, ctx, itemId);
@@ -347,6 +371,7 @@ export const POST = createContextParamsHandler<Params>(
   withActionDispatch<Params>({
     generate: handleGenerate,
     upload: handleUpload,
+    'link-image': handleLinkImage,
     'set-current': handleSetCurrent,
     'delete-image': handleDeleteImage,
     'save-to-store': handleSaveToStore,

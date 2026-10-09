@@ -38,6 +38,17 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
   profileParams: jest.fn(() => ({})),
 }))
 
+const mockShrink = jest.fn(async (args: { buffer: Buffer; mimeType: string }) => ({
+  buffer: args.buffer,
+  mimeType: args.mimeType,
+  wasShrunk: false,
+  originalSize: args.buffer.length,
+  finalSize: args.buffer.length,
+}))
+jest.mock('@/lib/files/llm-image-budget', () => ({
+  shrinkImageForLlmTransport: (...args: unknown[]) => mockShrink(...(args as [never])),
+}))
+
 const { analyzeImageForWardrobeItems } = require('@/lib/wardrobe/image-analysis') as {
   analyzeImageForWardrobeItems: typeof import('@/lib/wardrobe/image-analysis').analyzeImageForWardrobeItems
 }
@@ -53,20 +64,21 @@ const PROFILE = {
 
 const repos = {
   chatSettings: {
-    findByUserId: jest.fn(async () => null),
+    findByUserId: jest.fn(async (): Promise<unknown> => null),
   },
   connections: {
-    findAll: jest.fn(async () => [PROFILE]),
+    findById: jest.fn(async (): Promise<unknown> => null),
+    findByUserId: jest.fn(async () => [PROFILE]),
     findApiKeyByIdAndUserId: jest.fn(async () => ({ key_value: 'sk-test' })),
   },
-} as never
+}
 
 /** Run the real parser over a canned model answer. */
 async function analyze(items: unknown): Promise<{ types: string[]; title: string }[]> {
   mockSendMessage.mockResolvedValue({ content: JSON.stringify({ items }) })
   const result = await analyzeImageForWardrobeItems(
     { image: 'AAAA', mimeType: 'image/png' },
-    repos,
+    repos as never,
     'user-1',
   )
   return result.proposedItems as { types: string[]; title: string }[]
@@ -162,5 +174,59 @@ describe('wardrobe image analysis — the proposed outfit', () => {
     const system = request.messages.find((m) => m.role === 'system')!.content
     expect(system).toContain('"outfit": {')
     expect(system).toContain('set "outfit" to null')
+  })
+})
+
+describe('wardrobe image analysis — the shared vision path (bug 197)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    repos.chatSettings.findByUserId.mockResolvedValue(null)
+    repos.connections.findById.mockResolvedValue(null)
+  })
+
+  it('sends the bytes shrunk for transport, not the upload', async () => {
+    mockShrink.mockResolvedValueOnce({
+      buffer: Buffer.from('small'),
+      mimeType: 'image/webp',
+      wasShrunk: true,
+      originalSize: 3,
+      finalSize: 5,
+    })
+    mockSendMessage.mockResolvedValue({
+      content: JSON.stringify({ items: [{ title: 'Hat', description: 'A hat', types: ['accessories'] }] }),
+      usage: { promptTokens: 2000, completionTokens: 50, totalTokens: 2050 },
+    })
+    await analyzeImageForWardrobeItems({ image: 'AAAA', mimeType: 'image/png' }, repos as never, 'user-1')
+
+    expect(mockShrink).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'image/png', provider: 'ANTHROPIC' }))
+    const [request] = mockSendMessage.mock.calls[0] as [{ messages: { role: string; attachments?: { data: string; mimeType: string }[] }[] }]
+    const attachment = request.messages.find((m) => m.role === 'user')!.attachments![0]
+    expect(attachment.mimeType).toBe('image/webp')
+    expect(attachment.data).toBe(Buffer.from('small').toString('base64'))
+  })
+
+  it('refuses an answer the model gave without the image', async () => {
+    // Billed for the text alone: the gateway dropped the picture (bug 116).
+    mockSendMessage.mockResolvedValue({
+      content: JSON.stringify({ items: [{ title: 'Invented Gown', description: 'x', types: ['top'] }] }),
+      usage: { promptTokens: 40, completionTokens: 300, totalTokens: 340 },
+    })
+    await expect(
+      analyzeImageForWardrobeItems({ image: 'AAAA', mimeType: 'image/png' }, repos as never, 'user-1'),
+    ).rejects.toThrow(/without seeing the image/)
+  })
+
+  it('passes over a configured profile that cannot receive images', async () => {
+    const textOnly = { ...PROFILE, id: 'p-text', provider: 'OLLAMA', modelName: 'llama3' }
+    repos.chatSettings.findByUserId.mockResolvedValue({ imageDescriptionProfileId: 'p-text' })
+    repos.connections.findById.mockResolvedValue(textOnly)
+    mockSendMessage.mockResolvedValue({ content: JSON.stringify({ items: [] }) })
+
+    const result = await analyzeImageForWardrobeItems(
+      { image: 'AAAA', mimeType: 'image/png' },
+      repos as never,
+      'user-1',
+    )
+    expect(result.provider).toBe('ANTHROPIC')
   })
 })

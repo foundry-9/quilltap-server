@@ -3,28 +3,45 @@
 /**
  * Wardrobe Card
  *
- * Per-project Wardrobe management card on the Prospero project page. Mirrors
- * ScenariosCard: the collapsible header lives here, the CRUD body is rendered
- * by `ProjectWardrobeManager`, fed by the project-scoped `useProjectWardrobe`
- * hook. Items created here are the project tier of the tri-tier wardrobe model.
+ * Per-project Wardrobe card on the Prospero project page. The collapsible
+ * header lives here; the body is the shared wardrobe browser
+ * (`WardrobeBrowser`) on this project's container — the same list, filters,
+ * item editor, pictures, move/copy and dressing instructions the Wardrobe
+ * dialog offers when it browses a project. Items here are the project tier:
+ * wearable by every character in this project's chats.
  *
  * @module app/prospero/[id]/components/WardrobeCard
  */
 
+import { useCallback, useMemo, useState } from 'react'
 import { ChevronIcon } from '@/components/ui/ChevronIcon'
-import { ProjectWardrobeManager } from '@/components/wardrobe/ProjectWardrobeManager'
-import { useProjectWardrobe } from '../hooks'
 import { Icon } from '@/components/ui/icon'
+import { showConfirmation } from '@/lib/alert'
+import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeBrowser, WardrobeItemOverlays } from '@/components/wardrobe/WardrobeBrowser'
+import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
+import { useWardrobeListData } from '@/components/wardrobe/hooks/useWardrobeListData'
+import { useWardrobeItemActions } from '@/components/wardrobe/hooks/useWardrobeItemActions'
 
 interface WardrobeCardProps {
   projectId: string
+  projectName?: string
   expanded: boolean
   onToggle: () => void
 }
 
-
-export function WardrobeCard({ projectId, expanded, onToggle }: WardrobeCardProps) {
-  const mutator = useProjectWardrobe(projectId)
+export function WardrobeCard({ projectId, projectName, expanded, onToggle }: WardrobeCardProps) {
+  const container = useMemo<WardrobeContainer>(() => ({ scope: 'project', id: projectId }), [projectId])
+  // "Show archived" is a different server read, not a client-side filter.
+  const [showArchived, setShowArchived] = useState(false)
+  const data = useWardrobeListData(container, { includeArchived: showArchived })
+  const requestConfirmation = useCallback((message: string) => showConfirmation(message), [])
+  const actions = useWardrobeItemActions({
+    container,
+    chatId: null,
+    listItems: data.listItems,
+    requestConfirmation,
+  })
 
   return (
     <div className="qt-card qt-bg-card qt-border rounded-lg overflow-hidden">
@@ -35,7 +52,7 @@ export function WardrobeCard({ projectId, expanded, onToggle }: WardrobeCardProp
         <div className="flex items-center gap-3">
           <Icon name="wardrobe" className="w-5 h-5 qt-text-primary" />
           <div className="text-left">
-            <h3 className="qt-heading-4 text-foreground">Wardrobe ({mutator.items.length})</h3>
+            <h3 className="qt-heading-4 text-foreground">Wardrobe ({data.listItems.length})</h3>
             <p className="qt-text-small qt-text-secondary">
               Shared garments every character in this project can wear
             </p>
@@ -46,9 +63,24 @@ export function WardrobeCard({ projectId, expanded, onToggle }: WardrobeCardProp
 
       {expanded && (
         <div className="border-t qt-border-default p-4">
-          <ProjectWardrobeManager mutator={mutator} />
+          <WardrobeInstructionsSection container={container} />
+          <WardrobeBrowser
+            container={container}
+            data={data}
+            actions={actions}
+            showArchived={showArchived}
+            onShowArchivedChange={setShowArchived}
+            scrollList={false}
+          />
         </div>
       )}
+
+      <WardrobeItemOverlays
+        container={container}
+        containerLabel={projectName || 'This project'}
+        data={data}
+        actions={actions}
+      />
     </div>
   )
 }

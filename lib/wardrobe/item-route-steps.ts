@@ -1,9 +1,8 @@
 /**
- * The two steps every wardrobe item endpoint (character, General, project,
- * group) performs identically around its tier-specific write:
+ * The steps every wardrobe item endpoint (character, General, project,
+ * group) performs around its write (the archive flag is `updateItem`'s, in
+ * `item-mutations.ts`):
  *
- *   - PUT: translate the request's optional `archived` boolean into an
- *     `archivedAt` patch via `archivedPatch`;
  *   - PUT: refuse an `imageFileId` that is not one of the item's own pictures
  *     (`imageChoiceError`);
  *   - DELETE: scrub equipped references to the item from every chat, and drop
@@ -17,7 +16,6 @@
  */
 
 import { logger } from '@/lib/logger';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import {
   ForeignWardrobeImageError,
   assertItemImageChoice,
@@ -45,19 +43,6 @@ export async function imageChoiceError(
     }
     throw error;
   }
-}
-
-/**
- * The `archivedAt` patch a PUT body's `archived` flag implies for an item
- * currently stamped `currentArchivedAt`. `null` when the flag was omitted or
- * the item is already in the requested state — spread `?? {}` into the update.
- */
-export function applyArchiveFlag(
-  currentArchivedAt: string | null | undefined,
-  archived: boolean | undefined,
-): { archivedAt: string | null } | null {
-  if (archived === undefined) return null;
-  return archivedPatch(currentArchivedAt, archived, new Date().toISOString());
 }
 
 /**

@@ -14,18 +14,22 @@
 
 import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections'
 import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool'
+import { buildWearablePool } from '@/lib/wardrobe/pool'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection'
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
-import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
+import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
 
 jest.mock('@/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }))
+// The real wearable pool runs; only the tier resolution it leans on is stubbed.
 jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
-  resolveGroupMountPointIdsForCharacter: jest.fn(),
+  resolveGroupMountsForCharacter: jest.fn(),
   resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
-  resolveProjectMountPointIdsForChat: jest.fn().mockResolvedValue([]),
+}))
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: jest.fn().mockResolvedValue('general-mp'),
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks/outfit-selection', () => ({
   chooseLLMOutfit: jest.fn(),
@@ -45,9 +49,10 @@ const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof choose
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
   typeof resolveEquippedOutfitForCharacter
 >
-const mockGroupMounts = resolveGroupMountPointIdsForCharacter as jest.MockedFunction<
-  typeof resolveGroupMountPointIdsForCharacter
+const mockGroupMounts = resolveGroupMountsForCharacter as jest.MockedFunction<
+  typeof resolveGroupMountsForCharacter
 >
+const GROUP_TIER = [{ group: { id: 'grp-1', name: 'The Drones' }, mountPointIds: ['mp-group'] }]
 
 const CHAR_ID = 'c1c1c1c1-0000-0000-0000-000000000001'
 
@@ -76,12 +81,29 @@ function item(
 
 const ARCHIVED = { archivedAt: '2026-02-01T00:00:00.000Z' }
 
+/**
+ * Repos over a fake store layout: `general` lives in Quilltap General
+ * ('general-mp'), `project` in 'mp-project', `group` in 'mp-group'. The shared
+ * reads hand back archived items too (the pool always asks for them) — the
+ * pool, not the repository, is what keeps them off the candidate list.
+ */
 function makeRepos(
-  opts: { own?: WardrobeItem[]; shared?: WardrobeItem[]; group?: WardrobeItem[] } = {},
+  opts: { own?: WardrobeItem[]; general?: WardrobeItem[]; project?: WardrobeItem[]; group?: WardrobeItem[] } = {},
 ) {
   const setEquippedOutfit = jest.fn().mockResolvedValue(undefined)
-  const findArchetypes = jest.fn().mockResolvedValue(opts.shared ?? [])
-  const findArchetypesInMounts = jest.fn().mockResolvedValue(opts.group ?? [])
+  const mounts: Record<string, WardrobeItem[]> = {
+    'general-mp': opts.general ?? [],
+    'mp-project': opts.project ?? [],
+    'mp-group': opts.group ?? [],
+  }
+  const readSharedTiers = jest.fn(
+    async (mountPointIds: readonly string[], includeArchived: boolean, originOf: (mp: string) => unknown) =>
+      mountPointIds.flatMap((mp) =>
+        (mounts[mp] ?? [])
+          .filter((it) => includeArchived || !it.archivedAt)
+          .map((it) => ({ ...it, origin: originOf(mp) })),
+      ),
+  )
   const findByCharacterId = jest.fn().mockResolvedValue(opts.own ?? [])
   return {
     setEquippedOutfit,
@@ -91,12 +113,7 @@ function makeRepos(
           id: CHAR_ID, name: 'Bertie', description: 'd', personality: 'p', manifesto: 'm',
         }),
       },
-      wardrobe: {
-        findByCharacterId,
-        findArchetypes,
-        findArchetypesInMounts,
-        findWearablePoolForCharacter: jest.fn().mockResolvedValue([]),
-      },
+      wardrobe: { findByCharacterId, readSharedTiers },
       connections: { findAll: jest.fn().mockResolvedValue([{ id: 'p1', isDefault: true }]) },
       chats: {
         setEquippedOutfit,
@@ -129,8 +146,8 @@ beforeEach(() => {
   jest.clearAllMocks()
   clock = 0
   mockGroupMounts.mockResolvedValue([])
-  mockResolve.mockResolvedValue(
-    EMPTY_RESOLVED as Awaited<ReturnType<typeof resolveEquippedOutfitForCharacter>>,
+  mockResolve.mockReturnValue(
+    EMPTY_RESOLVED as unknown as ReturnType<typeof resolveEquippedOutfitForCharacter>,
   )
   mockChooseLLMOutfit.mockResolvedValue({
     success: true,
@@ -158,14 +175,9 @@ describe('llm_choose candidate pool — archived garments never audition', () =>
   })
 
   it('omits an archived garment from the GENERAL and PROJECT tiers', async () => {
-    // The repository hands back one merged shared list (project over general).
     const { repos } = makeRepos({
-      shared: [
-        item('general-live', ['top']),
-        item('general-shelved', ['top'], ARCHIVED),
-        item('project-live', ['bottom']),
-        item('project-shelved', ['bottom'], ARCHIVED),
-      ],
+      general: [item('general-live', ['top']), item('general-shelved', ['top'], ARCHIVED)],
+      project: [item('project-live', ['bottom']), item('project-shelved', ['bottom'], ARCHIVED)],
     })
 
     await applyOutfitSelections(
@@ -177,7 +189,7 @@ describe('llm_choose candidate pool — archived garments never audition', () =>
   })
 
   it('omits an archived garment from the GROUP tier', async () => {
-    mockGroupMounts.mockResolvedValue(['mp-group'])
+    mockGroupMounts.mockResolvedValue(GROUP_TIER)
     const { repos } = makeRepos({
       group: [item('group-live', ['top']), item('group-shelved', ['top'], ARCHIVED)],
     })
@@ -191,16 +203,17 @@ describe('llm_choose candidate pool — archived garments never audition', () =>
   })
 
   it('hands the LLM nothing at all when every garment in every tier is archived', async () => {
-    mockGroupMounts.mockResolvedValue(['mp-group'])
+    mockGroupMounts.mockResolvedValue(GROUP_TIER)
     const { repos } = makeRepos({
       own: [item('own-shelved', ['top'], { characterId: CHAR_ID, ...ARCHIVED })],
-      shared: [item('general-shelved', ['top'], ARCHIVED)],
+      general: [item('general-shelved', ['top'], ARCHIVED)],
+      project: [item('project-shelved', ['top'], ARCHIVED)],
       group: [item('group-shelved', ['top'], ARCHIVED)],
     })
 
     await applyOutfitSelections(
       'chat-1', [{ characterId: CHAR_ID, mode: 'llm_choose' }], repos as never,
-      { userId: 'u1', projectMountPointIds: [] },
+      { userId: 'u1', projectMountPointIds: ['mp-project'] },
     )
 
     // An empty pool short-circuits before the LLM is called at all.
@@ -214,7 +227,7 @@ describe('llm_choose candidate pool — archived garments never audition', () =>
 // this suite mocks that function out.)
 
 // ============================================================================
-// mergeWearablePool's shadowing semantics — documented, do not "fix"
+// Archived shadowing — dropped per tier BEFORE shadowing
 // ============================================================================
 
 describe('mergeWearablePool — archived shadowing', () => {
@@ -232,6 +245,48 @@ describe('mergeWearablePool — archived shadowing', () => {
       [item('coat', ['top'], { title: 'House coat' })],
       [item('coat', ['top'], { title: 'My coat', characterId: CHAR_ID, ...ARCHIVED })],
     )
-    expect(pool).toEqual([])
+    expect(pool.map((i) => i.title)).toEqual(['House coat'])
+  })
+})
+
+describe('buildWearablePool — the server pool applies the same rule', () => {
+  const origin = { scope: 'general' as const, id: null, name: 'Quilltap General' }
+  const tag = (it: WardrobeItem) => ({ ...it, origin })
+  const NO_MOUNTS = { groupMountPointIds: [], projectMountPointIds: [] }
+
+  it('resurfaces the shared copy in wearable(), while byId still sees the archived personal copy', () => {
+    const pool = buildWearablePool(CHAR_ID, NO_MOUNTS, {
+      own: [tag(item('coat', ['top'], { title: 'My coat', characterId: CHAR_ID, ...ARCHIVED }))],
+      group: [],
+      project: [],
+      general: [tag(item('coat', ['top'], { title: 'House coat' }))],
+    })
+    expect(pool.wearable().map((i) => i.title)).toEqual(['House coat'])
+    expect(pool.get('coat')?.title).toBe('My coat')
+  })
+
+  it('an archived group copy does not hide the live General one either', () => {
+    const pool = buildWearablePool(CHAR_ID, NO_MOUNTS, {
+      own: [],
+      group: [tag(item('coat', ['top'], { title: 'Group coat', ...ARCHIVED }))],
+      project: [],
+      general: [tag(item('coat', ['top'], { title: 'House coat' }))],
+    })
+    expect(pool.wearable().map((i) => i.title)).toEqual(['House coat'])
+  })
+
+  it('reaches the candidate list end to end: the house coat auditions in place of the shelved copy', async () => {
+    const { repos } = makeRepos({
+      own: [item('coat', ['top'], { title: 'My coat', characterId: CHAR_ID, ...ARCHIVED })],
+      general: [item('coat', ['top'], { title: 'House coat' })],
+    })
+
+    await applyOutfitSelections(
+      'chat-1', [{ characterId: CHAR_ID, mode: 'llm_choose' }], repos as never,
+      { userId: 'u1', projectMountPointIds: [] },
+    )
+
+    const items = mockChooseLLMOutfit.mock.calls[0]?.[4] as WardrobeItem[]
+    expect(items.map((i) => i.title)).toEqual(['House coat'])
   })
 })

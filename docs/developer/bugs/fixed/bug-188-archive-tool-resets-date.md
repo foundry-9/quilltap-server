@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | **FIXED in v4 (2026-10-09)** |
-| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/wardrobe-refactor.md) |
+| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/complete/wardrobe-refactor.md) |
 | **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | High — the archive date is the wear ledger's and the UI's record of when a garment was retired; a model that archives twice rewrites history |
 | **Who it bites** | any character whose model calls `wardrobe_archive` on an item it already archived (the tool resolves archived items by id, so nothing stops it) |

@@ -190,6 +190,7 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
         />
         <WardrobeCard
           projectId={projectId}
+          projectName={project.name}
           expanded={cardState.wardrobe}
           onToggle={() => toggleCard('wardrobe')}
         />

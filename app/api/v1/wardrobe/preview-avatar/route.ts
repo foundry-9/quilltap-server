@@ -9,29 +9,45 @@
  * onto the character's `avatarOverrides` or any chat's `characterAvatars`.
  * Out-of-chat avatars never overwrite the canonical character avatar.
  *
+ * It is drawn the way the chat avatar job draws one: the same profile choice
+ * (`resolveAvatarImageProfile`), the same prompt, the same portrait shape from
+ * the shared params builder, the same logged attempt, and the Concierge's
+ * image failover — a refusal is retried once on an uncensored understudy
+ * while the Concierge is on duty. There is no chat, so nothing is announced
+ * and no ledger is kept; the trail comes back in the response instead. The
+ * dangerous-content pre-screen is still skipped: the operator chose the model
+ * and the outfit by hand.
+ *
  * Body: { characterId, equippedSlots, imageProfileId? }
  *
- * Response: { fileId, url, mimeType, prompt }
+ * Response: { fileId, url, mimeType, prompt, rerouted, trail }
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError } from '@/lib/api/responses';
-import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
+import { getErrorMessage } from '@/lib/error-utils';
+import { badRequest, errorResponse, serverError } from '@/lib/api/responses';
+import { buildCharacterAvatarPrompt } from '@/lib/image-gen/avatar-prompt';
 import { resolveAesthetic } from '@/lib/image-gen/aesthetic';
-import { buildImageGenParams } from '@/lib/image-gen/params-builder';
-import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { resolveAvatarImageProfile } from '@/lib/image-gen/profile-resolution';
+import { decodeProviderImage, makeLoggedImageAttempt } from '@/lib/image-gen/image-attempt';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
 } from '@/lib/file-storage/character-vault-bridge';
-import { convertToWebP } from '@/lib/files/webp-conversion';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
-import type { FileCategory, FileSource } from '@/lib/schemas/types';
+import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
+import {
+  generateImageWithConciergeFailover,
+  getConciergeTrail,
+} from '@/lib/services/dangerous-content/image-failover';
+import type { ImageProfile } from '@/lib/schemas/types';
 import { EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
+
+const LOG_CONTEXT = 'api.v1.wardrobe.preview-avatar';
 
 const previewAvatarSchema = z.object({
   characterId: z.string().min(1, 'characterId is required'),
@@ -57,28 +73,15 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
     return badRequest('Character not found');
   }
 
-  // Resolve image profile: explicit override → default
-  let imageProfile = null;
-  if (imageProfileId) {
-    imageProfile = await repos.imageProfiles.findById(imageProfileId);
-  }
-  if (!imageProfile) {
-    const all = await repos.imageProfiles.findAll();
-    imageProfile = all.find((p) => p.isDefault) ?? all[0] ?? null;
+  // The one-shot pick, else the user's default — each checked for an API key.
+  const imageProfile = (await resolveAvatarImageProfile(user.id, repos, {
+    override: imageProfileId ?? null,
+  })) as ImageProfile | null;
+  if (!imageProfile?.apiKeyId) {
+    return badRequest('No image profile is configured. Set one in Settings → Images before generating avatars.');
   }
 
-  if (!imageProfile) {
-    return badRequest('No image profile available for avatar generation');
-  }
-
-  if (!imageProfile.apiKeyId) {
-    return badRequest('Selected image profile has no API key configured');
-  }
-
-  const apiKey = await repos.connections.findApiKeyByIdAndUserId(
-    imageProfile.apiKeyId,
-    user.id,
-  );
+  const apiKey = await repos.connections.findApiKeyByIdAndUserId(imageProfile.apiKeyId, user.id);
   if (!apiKey?.key_value) {
     return badRequest('API key for image profile is missing or invalid');
   }
@@ -98,47 +101,69 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
     );
   }
 
-  // Generate the portrait. We deliberately skip the dangerous-content
-  // classifier here: this is an explicit, user-initiated one-shot — the
-  // operator chose the model and the outfit, and the in-chat regen path is
-  // where the classifier guards against character-driven generations.
-  const provider = createImageProvider(imageProfile.provider);
-  // Through the shared builder, so the preview shows what the profile actually
-  // produces — LoRAs, residual options and all — rather than a hand-rolled
-  // subset that would make the preview lie about the real avatar. Portrait is
-  // resolved onto the provider's own mechanism instead of the hardcoded
-  // 1024x1792 that only OpenAI ever accepted.
-  const { params: previewParams } = buildImageGenParams({
-    profile: imageProfile,
-    prompt,
-    overrides: { n: 1, style: 'natural' },
-    orientation: 'portrait',
-    logContext: { context: 'api.v1.wardrobe.preview-avatar', profileId: imageProfile.id },
+  logger.debug('[Avatar Preview] Generating preview', {
+    context: LOG_CONTEXT,
+    characterId,
+    profileId: imageProfile.id,
+    profileOverride: !!imageProfileId,
+    leafCounts,
   });
-  const generationResponse = await provider.generateImage(previewParams, apiKey.key_value);
 
-  const imageData = generationResponse.images?.[0];
-  const rawData = imageData?.data || imageData?.b64Json;
-  if (!imageData || !rawData) {
-    return serverError('Image provider returned no image data');
+  // No chat: the global Concierge policy decides whether a refusal may fail
+  // over; there is no Locked state to honour and nothing to announce.
+  const chatSettings = await repos.chatSettings.findByUserId(user.id);
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, null);
+
+  // Portrait through the shared builder, so the preview shows what the profile
+  // actually produces — LoRAs, residual options and all — mapped onto the
+  // provider's own shape mechanism, exactly as the chat avatar job asks.
+  const attempt = makeLoggedImageAttempt({
+    userId: user.id,
+    logType: 'IMAGE_GENERATION',
+    prompt,
+    primaryProfileId: imageProfile.id,
+    characterId,
+    params: {
+      overrides: { n: 1, style: 'natural' },
+      orientation: 'portrait',
+      logContext: { context: LOG_CONTEXT, characterId },
+    },
+  });
+
+  let failover;
+  try {
+    failover = await generateImageWithConciergeFailover(
+      { profile: imageProfile, apiKey: apiKey.key_value },
+      attempt,
+      { userId: user.id, chatId: null, purpose: 'avatar', conciergePolicy },
+    );
+  } catch (error) {
+    const trail = getConciergeTrail(error);
+    const refused = !!trail && trail.some((row) => row.outcome === 'refused');
+    logger.warn('[Avatar Preview] Image generation failed', {
+      context: LOG_CONTEXT,
+      characterId,
+      error: getErrorMessage(error),
+      refused,
+      conciergeTrail: trail?.map((row) => ({ profileName: row.profileName, outcome: row.outcome })),
+    });
+    return errorResponse(
+      refused
+        ? 'The image provider declined to draw this portrait'
+        : `Image generation failed: ${getErrorMessage(error)}`,
+      // 422 is a content refusal; anything else is the provider failing.
+      refused ? 422 : 502,
+      { trail, refused },
+    );
   }
 
-  const rawBuffer = Buffer.from(rawData, 'base64');
-  const providerMimeType = imageData.mimeType || 'image/png';
-  const providerExt = providerMimeType.split('/')[1] || 'png';
-  const safeName = character.name.replace(/[^a-zA-Z0-9]/g, '_');
-  const providerFilename = `avatar_preview_${safeName}_${Date.now()}.${providerExt}`;
-
-  const converted = await convertToWebP(rawBuffer, providerMimeType, providerFilename);
-  const buffer = converted.buffer;
-  const mimeType = converted.mimeType;
-  const originalFilename = converted.filename;
-
-  const sha256 = sha256OfBuffer(buffer);
-  const fileId = crypto.randomUUID();
-
-  const category: FileCategory = 'IMAGE';
-  const source: FileSource = 'GENERATED';
+  const decoded = await decodeProviderImage(
+    failover.result,
+    `avatar_preview_${character.name.replace(/[^a-zA-Z0-9]/g, '_')}`,
+  );
+  if (!decoded) {
+    return serverError('Image provider returned no image data');
+  }
 
   try {
     // Previews are character-scoped and never tied to a chat. The character's
@@ -154,61 +179,51 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
     const written = await writeCharacterAvatarToVault({
       characterId,
       kind: 'history',
-      filename: originalFilename,
-      content: buffer,
-      contentType: mimeType,
-      description: `${character.name} — outfit preview`,
+      filename: decoded.filename,
+      content: decoded.buffer,
+      contentType: decoded.mimeType,
     });
-    const storageKey = written.storageKey;
-    const fileFolderPath: string | null = null;
 
-    // The vault bridge transcodes bitmap uploads to WebP; the FileEntry
-    // must record the post-transcode mime/size, not the input.
-    await repos.files.create(
-      {
-        userId: user.id,
-        sha256,
-        originalFilename,
-        mimeType: written.storedMimeType,
-        size: written.sizeBytes,
-        width: 1024,
-        height: 1792,
-        // Linked to the character so it surfaces in the character's gallery,
-        // but NOT to a chat — the caller may have no chat context, and even
-        // when they do, this preview is intentionally not bound to it.
-        linkedTo: [characterId],
-        source,
-        category,
-        generationPrompt: prompt,
-        generationModel: imageProfile.modelName,
-        generationRevisedPrompt: imageData.revisedPrompt || null,
-        description: `${character.name} — outfit preview`,
-        // tags must be UUIDs (tag IDs); the "preview" nature is captured in the
-        // description and folder path, not via a string tag.
-        tags: [characterId],
-        storageKey,
-        projectId: null,
-        folderPath: fileFolderPath,
+    // Linked to the character so it surfaces in the character's gallery, but
+    // NOT to a chat — the caller may have no chat context, and even when they
+    // do, this preview is intentionally not bound to it. No `description`
+    // label (bug 132): the prompt is the account of record.
+    const file = await createGeneratedFileRow(repos, {
+      userId: user.id,
+      sha256: decoded.sha256,
+      originalFilename: decoded.filename,
+      stored: written,
+      width: decoded.width,
+      height: decoded.height,
+      linkedTo: [characterId],
+      tags: [characterId],
+      generation: {
+        prompt,
+        model: failover.profile.modelName,
+        revisedPrompt: decoded.revisedPrompt,
       },
-      { id: fileId },
-    );
+    });
 
     logger.info('[Avatar Preview] Preview saved', {
-      context: 'wardrobe.preview-avatar',
+      context: LOG_CONTEXT,
       characterId,
-      fileId,
+      fileId: file.id,
+      profileId: failover.profile.id,
+      rerouted: failover.rerouted,
     });
 
     return NextResponse.json({
-      fileId,
-      url: `/api/v1/files/${fileId}?action=download`,
-      mimeType,
+      fileId: file.id,
+      url: `/api/v1/files/${file.id}?action=download`,
+      mimeType: written.storedMimeType,
       prompt,
+      rerouted: failover.rerouted,
+      trail: failover.trail.length > 0 ? failover.trail : null,
     });
   } catch (error) {
     logger.error(
       '[Avatar Preview] Failed to save preview image',
-      { characterId },
+      { context: LOG_CONTEXT, characterId },
       error instanceof Error ? error : undefined,
     );
     return serverError('Failed to save avatar preview');

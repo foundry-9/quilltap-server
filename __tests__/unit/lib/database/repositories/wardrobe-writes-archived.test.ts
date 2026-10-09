@@ -3,9 +3,9 @@
  *
  * Archiving prunes the vault in place, so an archived character still has a
  * live mount behind it — the old "no mount resolved → skip" no longer fires.
- * `resolveWardrobeMount` must throw the named error rather than return null,
- * because a null return sends callers down the legacy DB-fallback write path,
- * which would silently mutate an archived character's wardrobe.
+ * `resolveWardrobeMount` must throw the named error rather than return null:
+ * the tombstone guard is the only thing keeping an archived character's
+ * wardrobe from being edited back into existence.
  */
 
 import { describe, expect, it } from '@jest/globals';
@@ -47,13 +47,12 @@ describe('resolveWardrobeMount — archived characters', () => {
 
     await expect(resolveWardrobeMount('char-1')).resolves.toEqual({
       mountPointId: 'mount-1',
-      scopeId: 'char-1',
       characterId: 'char-1',
       scope: 'character',
     });
   });
 
-  it('throws CharacterArchivedError for an archived character instead of falling back to the DB path', async () => {
+  it('throws CharacterArchivedError for an archived character rather than resolving its pruned vault', async () => {
     charactersFindByIdRawMock.mockResolvedValue({
       id: 'char-1',
       archivedAt: '2026-08-10T00:00:00.000Z',
@@ -63,7 +62,7 @@ describe('resolveWardrobeMount — archived characters', () => {
     await expect(resolveWardrobeMount('char-1')).rejects.toBeInstanceOf(CharacterArchivedError);
   });
 
-  it('still returns null for a character with no vault (legacy DB fallback)', async () => {
+  it('returns null for a character with no linked vault', async () => {
     charactersFindByIdRawMock.mockResolvedValue({
       id: 'char-1',
       archivedAt: null,
@@ -71,5 +70,11 @@ describe('resolveWardrobeMount — archived characters', () => {
     });
 
     await expect(resolveWardrobeMount('char-1')).resolves.toBeNull();
+  });
+});
+
+describe('resolveWardrobeMount — General', () => {
+  it('returns null for General when it is not provisioned', async () => {
+    await expect(resolveWardrobeMount(null)).resolves.toBeNull();
   });
 });

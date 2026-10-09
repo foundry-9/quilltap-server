@@ -782,11 +782,17 @@ export class LLMLogsRepository extends AbstractDedicatedDbRepository<LLMLog> {
   async getStatsByProfile(
     userId: string,
     groupBy: ProfileGroupBy,
-    options: { type?: LLMLogType } = {},
+    options: { type?: LLMLogType | readonly LLMLogType[] } = {},
   ): Promise<LLMLogProfileStatsRow[]> {
     const { keyExpr, notNullClause } = profileKey(groupBy);
-    const typeClause = options.type ? `AND "type" = ?` : '';
-    const params: unknown[] = options.type ? [userId, options.type] : [userId];
+    // One type or several (image spend is `IMAGE_SPEND_LOG_TYPES`, bug 196).
+    const types: readonly LLMLogType[] = options.type === undefined
+      ? []
+      : typeof options.type === 'string' ? [options.type] : options.type;
+    const typeClause = types.length > 0
+      ? `AND "type" IN (${types.map(() => '?').join(', ')})`
+      : '';
+    const params: unknown[] = [userId, ...types];
 
     return this.aggregate<LLMLogProfileStatsRow>(
       `SELECT

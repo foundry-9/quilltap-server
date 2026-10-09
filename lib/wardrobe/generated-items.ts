@@ -29,7 +29,7 @@ export interface GeneratedWardrobeItem {
    * created items' ids (componentItemIds). Empty/absent = leaf garment.
    */
   components?: string[];
-  /** Composite-only: clear the designated slots on equip instead of layering. */
+  /** Clear the designated slots on wear instead of layering. */
   replace?: boolean;
 }
 

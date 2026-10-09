@@ -20,6 +20,7 @@ import {
   GATED_COMPANION_TRUST_DISPOSITION,
 } from '@/lib/services/character-field-semantics';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import { pickPhysicalDescription } from '@/lib/characters/physical-description';
 
 const log = logger.child({ module: 'external-prompt-generator' });
 
@@ -134,7 +135,7 @@ export async function generateExternalPrompt(
   const desc = character.physicalDescription;
   if (desc) {
     // Use the most detailed available description
-    descriptionContent = desc.fullDescription || desc.completePrompt || desc.longPrompt || desc.mediumPrompt || desc.shortPrompt || undefined;
+    descriptionContent = pickPhysicalDescription(desc, 'fullest') || undefined;
   }
 
   // Build the user message with all character data

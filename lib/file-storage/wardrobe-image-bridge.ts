@@ -6,14 +6,16 @@
  * or Quilltap General — beside the markdown, keyed by item id so a rename
  * cannot orphan them:
  *
- *   Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>-<8 hex>.webp
+ *   Wardrobe/images/<itemId>/<yyyymmdd-hhmmss>-<kind>.webp
  *
- * The bytes go through `linkBlobContent`, which normalizes images to WebP,
- * de-duplicates by sha256 (an Import-from-image photograph shared by N pieces
- * is one blob behind N links) and mints the `doc_mount_files` /
- * `doc_mount_blobs` / `doc_mount_file_links` trio. The returned storageKey is
- * the `mount-blob:{mountPointId}:{blobId}` shim every `files` row reader
- * already understands.
+ * (a second picture in the same second is bumped to `… (2).webp`). The write
+ * is `storeMountFile` with `collisionStrategy: 'unique-suffix'` — the ingest
+ * chokepoint, which reserves the path it picks, normalizes images to WebP and
+ * de-duplicates by sha256 through `linkBlobContent` (an Import-from-image
+ * photograph shared by N pieces is one blob behind N links). The returned
+ * storageKey is the `mount-blob:{mountPointId}:{blobId}` shim every `files`
+ * row reader already understands. This module adds only the path shape and
+ * the host-RPC shim.
  *
  * The projection sweep in `vault-projection.ts` touches `.md` documents only,
  * so these blobs are never mistaken for garments and never swept — which is
@@ -31,14 +33,12 @@
  */
 
 import path from 'path';
-import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
-import { emitDocumentDeleted, emitDocumentWritten } from '@/lib/mount-index/db-store-events';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
+import { storeMountFile } from '@/lib/mount-index/store-file';
+import { emitDocumentDeleted } from '@/lib/mount-index/db-store-events';
 import { buildMountBlobStorageKey } from './project-store-bridge';
-import { resolveUniqueRelativePath, sanitizeLeafName } from './bridge-path-helpers';
+import { sanitizeLeafName } from './bridge-path-helpers';
 
 const LOG_CONTEXT = 'file-storage.wardrobe-image-bridge';
 
@@ -79,9 +79,9 @@ export interface WriteWardrobeItemImageInput {
   contentType: string;
   description?: string;
   /**
-   * Re-use an exact leaf name (transfer re-linking keeps the source's). When
-   * omitted, a fresh `<timestamp>-<kind>.webp` is minted with collision
-   * bumping.
+   * Re-use an exact leaf name (transfer re-linking keeps the source's; the
+   * write upserts there). When omitted, a fresh `<timestamp>-<kind>.webp` is
+   * minted and bumped on collision.
    */
   leafName?: string;
 }
@@ -115,49 +115,46 @@ export async function writeWardrobeItemImage(
     return callHost<WriteWardrobeItemImageResult>('writeWardrobeItemImage', input);
   }
 
-  const repos = getRepositories();
   const folder = wardrobeItemImageFolder(input.itemId);
+  // A fresh picture gets a sortable `<timestamp>-<kind>.webp` leaf and lets
+  // the pipeline bump it (` (2)`, ` (3)`…) if the second is already taken;
+  // `storeMountFile` reserves the path it picks, so two writes in the same
+  // second cannot both land on it. A transfer re-link keeps the source's
+  // leaf exactly and upserts there.
   const desiredLeaf = input.leafName
     ? sanitizeLeafName(input.leafName)
-    // The random tail keeps two writes in the same second apart:
-    // resolveUniqueRelativePath only checks, it does not reserve, and a second
-    // linkBlobContent at the same path would overwrite the first's link.
-    : `${timestampStem(new Date())}-${input.kind}-${randomUUID().slice(0, 8)}.webp`;
-  const relativePath = input.leafName
-    ? `${folder}/${desiredLeaf}`
-    : await resolveUniqueRelativePath(input.mountPointId, `${folder}/${desiredLeaf}`);
+    : `${timestampStem(new Date())}-${input.kind}.webp`;
 
-  const folderId = await ensureFolderPath(input.mountPointId, folder);
-
-  // No transcode here: linkBlobContent is the image-normalization chokepoint
-  // and rewrites storedMimeType / relativePath to whatever it actually stores.
-  const { link, blobId } = await repos.docMountFileLinks.linkBlobContent({
+  // storeMountFile is the ingest chokepoint: it ensures the folder, routes
+  // the bytes through linkBlobContent (the image-normalization chokepoint,
+  // which de-duplicates by sha256) and emits the document-written event.
+  const stored = await storeMountFile({
     mountPointId: input.mountPointId,
-    relativePath,
-    fileName: path.posix.basename(relativePath),
-    folderId,
-    originalFileName: path.posix.basename(relativePath),
-    originalMimeType: input.contentType,
-    storedMimeType: input.contentType,
-    sha256: sha256OfBuffer(input.content),
-    description: input.description ?? '',
+    relativePath: `${folder}/${desiredLeaf}`,
     data: input.content,
+    originalMimeType: input.contentType,
+    originalFileName: desiredLeaf,
+    description: input.description ?? '',
+    collisionStrategy: input.leafName ? 'overwrite' : 'unique-suffix',
+    treatNativeTextAsDocument: false,
+    transcodeImages: true,
+    extractText: false,
+    enqueueEmbedding: false,
+    assetStorage: 'database',
   });
-
-  emitDocumentWritten({ mountPointId: input.mountPointId, relativePath: link.relativePath });
-  repos.docMountPoints.refreshStats(input.mountPointId).catch(() => { /* best-effort */ });
-
-  const blob = await repos.docMountBlobs.findById(blobId);
+  if (!stored.blobId || !stored.linkId) {
+    throw new Error(`Wardrobe image write to ${stored.relativePath} produced no blob link`);
+  }
 
   const result: WriteWardrobeItemImageResult = {
-    storageKey: buildMountBlobStorageKey(input.mountPointId, blobId),
-    linkId: link.id,
-    blobId,
-    relativePath: link.relativePath,
-    leafName: path.posix.basename(link.relativePath),
-    storedMimeType: blob?.storedMimeType ?? input.contentType,
-    sha256: link.sha256,
-    sizeBytes: link.fileSizeBytes,
+    storageKey: buildMountBlobStorageKey(input.mountPointId, stored.blobId),
+    linkId: stored.linkId,
+    blobId: stored.blobId,
+    relativePath: stored.relativePath,
+    leafName: path.posix.basename(stored.relativePath),
+    storedMimeType: stored.storedMimeType,
+    sha256: stored.sha256,
+    sizeBytes: stored.sizeBytes,
   };
 
   logger.debug('[WardrobeImageBridge] Wrote wardrobe item image', {
@@ -166,7 +163,7 @@ export async function writeWardrobeItemImage(
     itemId: input.itemId,
     kind: input.kind,
     relativePath: result.relativePath,
-    blobId,
+    blobId: result.blobId,
     sizeBytes: result.sizeBytes,
   });
 

@@ -95,7 +95,7 @@ import {
   triggerSceneStateTracking,
   triggerConversationRender,
 } from './memory-trigger.service'
-import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
+import { flushPendingWardrobeAnnouncements } from '@/lib/wardrobe/outfit-change-effects'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
 import { getCheapLLMProvider, profileParams, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'

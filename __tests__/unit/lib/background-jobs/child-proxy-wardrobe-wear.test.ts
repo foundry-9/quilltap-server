@@ -3,7 +3,7 @@
  *
  * An autonomous turn runs `wardrobe_wear` in the child, whose reads are a
  * stale snapshot blind to the job's own buffered writes. So the child must
- * never write slots or credit wears itself: `equipItem` reads the (stale)
+ * never write slots or credit wears itself: `applyDisplacement` reads the (stale)
  * prior slots, and its `commitEquippedOutfit` is buffered whole for the parent
  * to replay against the true prior state.
  */
@@ -29,9 +29,23 @@ import {
   __resetProxyCacheForTesting,
 } from '@/lib/background-jobs/child/child-repositories-proxy';
 import { classifyWriteTarget } from '@/lib/background-jobs/host/write-partition';
-import { equipItem, removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
+import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement';
 import { makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+
+/** Put an item on through the one displacement chokepoint (the tools' `wear`). */
+function wear(repos: unknown, chatId: string, characterId: string, item: { id: string; types: string[] }) {
+  return applyDisplacement(repos as never, chatId, characterId, { mode: 'wear', item: item as never }, 'tool');
+}
+
+/** Take one item out of one slot (the tools' `remove`). */
+function takeOff(repos: unknown, chatId: string, characterId: string, slot: string, itemId: string) {
+  return applyDisplacement(repos as never, chatId, characterId, {
+    mode: 'remove_from_slot',
+    slot: slot as never,
+    itemId,
+  });
+}
 
 const mockedRepoSource = mockedRealRepositories as jest.MockedFunction<typeof mockedRealRepositories>;
 
@@ -61,14 +75,7 @@ describe('child proxy — commitEquippedOutfit', () => {
 
     const writes = await runWithJobScope('job-wear', async () => {
       const repos = getChildRepositoriesProxy();
-      const slots = await equipItem(
-        repos as never,
-        'chat-1',
-        'char-1',
-        { id: 'coat', types: ['top'] },
-        undefined,
-        'tool',
-      );
+      const slots = await wear(repos, 'chat-1', 'char-1', { id: 'coat', types: ['top'] });
       // The primitive returns what it computed, not the synthetic write result.
       expect(slots.top).toEqual(['coat']);
       return flushPendingWrites();
@@ -122,8 +129,8 @@ describe('child proxy — equipped outfits are read-your-writes within a job (bu
 
     const writes = await runWithJobScope('job-two-wears', async () => {
       const repos = getChildRepositoriesProxy();
-      await equipItem(repos as never, 'chat-1', 'char-1', { id: 'shirt', types: ['top'] }, undefined, 'tool');
-      await equipItem(repos as never, 'chat-1', 'char-1', { id: 'coat', types: ['top'] }, undefined, 'tool');
+      await wear(repos, 'chat-1', 'char-1', { id: 'shirt', types: ['top'] });
+      await wear(repos, 'chat-1', 'char-1', { id: 'coat', types: ['top'] });
       return flushPendingWrites();
     });
 
@@ -140,14 +147,16 @@ describe('child proxy — equipped outfits are read-your-writes within a job (bu
 
     const writes = await runWithJobScope('job-wear-then-remove', async () => {
       const repos = getChildRepositoriesProxy();
-      await equipItem(repos as never, 'chat-1', 'char-1', { id: 'coat', types: ['top'] }, undefined, 'tool');
-      await removeFromSlot(repos as never, 'chat-1', 'char-1', 'bottom', 'trousers');
+      await wear(repos, 'chat-1', 'char-1', { id: 'coat', types: ['top'] });
+      await takeOff(repos, 'chat-1', 'char-1', 'bottom', 'trousers');
       return flushPendingWrites();
     });
 
     const final = replay(writes, baseline);
     expect(final.top).toEqual(['coat']);
     expect(final.bottom).toEqual([]);
+    // A take-off commits as 'take-off', never as the put-on's source.
+    expect((writes[1].args[0] as { source: string }).source).toBe('take-off');
   });
 
   it('keeps characters, chats and jobs apart', async () => {
@@ -156,7 +165,7 @@ describe('child proxy — equipped outfits are read-your-writes within a job (bu
 
     await runWithJobScope('job-a', async () => {
       const repos = getChildRepositoriesProxy();
-      await equipItem(repos as never, 'chat-1', 'char-1', { id: 'shirt', types: ['top'] }, undefined, 'tool');
+      await wear(repos, 'chat-1', 'char-1', { id: 'shirt', types: ['top'] });
       // A different character in the same chat still reads the snapshot.
       const other = await repos.chats.getEquippedOutfitForCharacter('chat-1', 'char-2');
       expect(other?.top).toEqual([]);
@@ -178,7 +187,7 @@ describe('child proxy — equipped outfits are read-your-writes within a job (bu
 
     await runWithJobScope('job-copy', async () => {
       const repos = getChildRepositoriesProxy();
-      await equipItem(repos as never, 'chat-1', 'char-1', { id: 'shirt', types: ['top'] }, undefined, 'tool');
+      await wear(repos, 'chat-1', 'char-1', { id: 'shirt', types: ['top'] });
       const first = await repos.chats.getEquippedOutfitForCharacter('chat-1', 'char-1');
       first!.top.push('vandal');
       const second = await repos.chats.getEquippedOutfitForCharacter('chat-1', 'char-1');

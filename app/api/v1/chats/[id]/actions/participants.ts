@@ -30,7 +30,7 @@ import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
 import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { refreshAvatarForOutfit } from '@/lib/wardrobe/outfit-change-effects';
 
 /**
  * Start impersonating a participant
@@ -247,7 +247,7 @@ async function applyOutfitForAddedParticipant(
  * first: an outfit that has already been drawn is simply rebound, and only a
  * new configuration costs a generation. Gated on the chat's
  * `avatarGenerationEnabled` (and skipped for autonomous rooms) by
- * `triggerAvatarGenerationIfEnabled`. Never allowed to fail the join.
+ * `refreshAvatarForOutfit`. Never allowed to fail the join.
  */
 async function refreshAvatarForArrivingCharacter(
   chatId: string,
@@ -265,12 +265,7 @@ async function refreshAvatarForArrivingCharacter(
       return;
     }
 
-    await triggerAvatarGenerationIfEnabled(repos, {
-      userId,
-      chatId,
-      characterId,
-      callerContext: '[Chats v1] participant-join',
-    });
+    await refreshAvatarForOutfit(repos, { userId, chatId, characterId }, '[Chats v1] participant-join');
     logger.debug('[Chats v1] Avatar refresh requested for arriving character', {
       chatId,
       characterId,

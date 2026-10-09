@@ -18,7 +18,7 @@ jest.mock('@/lib/instance-settings', () => ({
 
 jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
   resolveWardrobeMount: jest.fn(),
-  updateProjectWardrobeItem: jest.fn(),
+  updateMountWardrobeItem: jest.fn(),
 }))
 
 const mockWriteImage = jest.fn<(...args: any[]) => Promise<any>>()
@@ -38,8 +38,8 @@ jest.mock('@/lib/file-storage/project-store-bridge', () => ({
   readMountBlob: (...args: unknown[]) => mockReadMountBlob(...args),
 }))
 
-jest.mock('@/lib/wardrobe/resolve-container', () => ({
-  resolveWardrobeContainer: jest.fn(),
+jest.mock('@/lib/wardrobe/location', () => ({
+  resolveWardrobeLocation: jest.fn(),
 }))
 
 const {
@@ -385,30 +385,54 @@ describe('dropSourceImageLinks', () => {
 
 describe('resolveWardrobeItemHome', () => {
   const { resolveWardrobeItemHome } = require('@/lib/wardrobe/item-images') as typeof import('@/lib/wardrobe/item-images')
-  const { resolveWardrobeContainer } = require('@/lib/wardrobe/resolve-container') as { resolveWardrobeContainer: jest.Mock<any> }
+  const { resolveWardrobeLocation } = require('@/lib/wardrobe/location') as { resolveWardrobeLocation: jest.Mock<any> }
 
-  it('finds an item the container holds', async () => {
-    resolveWardrobeContainer.mockResolvedValue({
+  function location(items: Array<Partial<WardrobeItem>>, overrides: Record<string, unknown> = {}) {
+    return {
+      scope: 'character',
+      id: 'char-1',
       characterId: 'char-1',
-      mountPointId: null,
-      readItems: async () => [{ id: 'own', characterId: 'char-1' }, { id: 'arche', characterId: null }],
-    })
+      mountPointId: 'vault-src',
+      readItems: jest.fn(async () => items),
+      update: jest.fn(async (id: string, patch: Partial<WardrobeItem>) => ({ id, ...patch })),
+      writableMountPointId: jest.fn(async () => 'vault-src'),
+      ...overrides,
+    }
+  }
+
+  it('finds an item its tier holds, reading archived items too', async () => {
+    const loc = location([{ id: 'own', characterId: 'char-1' }])
+    resolveWardrobeLocation.mockResolvedValue(loc)
     const home = await resolveWardrobeItemHome(repos, 'user-1', 'character', 'char-1', 'own')
     expect(home?.item.id).toBe('own')
     expect(home?.characterId).toBe('char-1')
+    expect(home?.location).toBe(loc)
+    expect(loc.readItems).toHaveBeenCalledWith(true)
   })
 
-  it('does not treat a merged-in General archetype as the character\'s own', async () => {
-    resolveWardrobeContainer.mockResolvedValue({
-      characterId: 'char-1',
-      mountPointId: null,
-      readItems: async () => [{ id: 'arche', characterId: null }],
-    })
+  it('resolves the location as a read — never provisioning a store', async () => {
+    resolveWardrobeLocation.mockResolvedValue(null)
+    await resolveWardrobeItemHome(repos, 'user-1', 'project', 'proj-x', 'own')
+    expect(resolveWardrobeLocation).toHaveBeenCalledWith('project', 'proj-x', repos, 'user-1')
+  })
+
+  it("does not find a General item through a character's tier (the folder holds only the vault's own)", async () => {
+    resolveWardrobeLocation.mockResolvedValue(location([{ id: 'own', characterId: 'char-1' }]))
     expect(await resolveWardrobeItemHome(repos, 'user-1', 'character', 'char-1', 'arche')).toBeNull()
   })
 
-  it('returns null when the container does not resolve', async () => {
-    resolveWardrobeContainer.mockResolvedValue(null)
+  it('returns null when the tier does not resolve', async () => {
+    resolveWardrobeLocation.mockResolvedValue(null)
     expect(await resolveWardrobeItemHome(repos, 'user-1', 'project', 'proj-x', 'own')).toBeNull()
+  })
+
+  it('writes and resolves its mount through the location (so the tombstone check applies)', async () => {
+    const loc = location([{ id: 'own', characterId: 'char-1' }])
+    resolveWardrobeLocation.mockResolvedValue(loc)
+    const home = await resolveWardrobeItemHome(repos, 'user-1', 'character', 'char-1', 'own')
+    await home!.update({ imageFileId: 'file-z' })
+    expect(loc.update).toHaveBeenCalledWith('own', { imageFileId: 'file-z' })
+    expect(await home!.resolveMount()).toBe('vault-src')
+    expect(loc.writableMountPointId).toHaveBeenCalled()
   })
 })

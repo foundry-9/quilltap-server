@@ -135,7 +135,7 @@ export async function deleteUserData(
   const globalRepos = getRepositories();
 
   // Get all entities to delete
-  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, llmLogs, chatSettings, folders, wardrobeItems] =
+  const [characters, chats, tags, files, connectionProfiles, imageProfiles, embeddingProfiles, promptTemplates, roleplayTemplates, projects, groups, llmLogs, chatSettings, folders] =
     await Promise.all([
       repos.characters.findAll(),
       repos.chats.findAll(),
@@ -151,7 +151,6 @@ export async function deleteUserData(
       repos.llmLogs.findAll(10000), // High limit to get all user logs
       globalRepos.chatSettings.findByUserId(userId),
       globalRepos.folders.findByUserId(userId),
-      globalRepos.wardrobe.findAll(),
     ]);
 
   // Delete memories for each character first, through the deletion chokepoint.
@@ -185,7 +184,6 @@ export async function deleteUserData(
     ...llmLogs.map((log) => repos.llmLogs.delete(log.id)),
     ...(chatSettings ? [globalRepos.chatSettings.delete(chatSettings.id)] : []),
     ...folders.map((f) => globalRepos.folders.delete(f.id)),
-    ...wardrobeItems.map((w) => globalRepos.wardrobe.delete(w.id, w.characterId ?? null)),
   ]);
 
   // Delete files from storage. Archived-character bundles are spared when
@@ -240,7 +238,6 @@ export async function deleteUserData(
       llmLogs: llmLogs.length,
       chatSettings: chatSettings ? 1 : 0,
       folders: folders.length,
-      wardrobeItems: wardrobeItems.length,
     },
   });
 }

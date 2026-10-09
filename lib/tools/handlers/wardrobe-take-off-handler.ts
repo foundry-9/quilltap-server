@@ -1,12 +1,13 @@
 /**
  * Take Off Wardrobe Items Tool Handler
  *
- * Applies an ordered array of take-off operations in sequence. Per-operation
- * mode maps to the displacement primitive `removeFromSlot`:
+ * Applies an ordered array of take-off operations in sequence, through
+ * `applyDisplacement` (`lib/wardrobe/outfit-displacement.ts`):
  *
  *   - `remove`     → for each slot the item covers (or just `slot` if given),
- *                    `removeFromSlot(slot, item.id)` — other layers stay.
- *   - `clear_slot` → `removeFromSlot(slot)` — empty the named slot entirely.
+ *                    take the item out of that slot (`takeOffItem`) — other
+ *                    layers stay.
+ *   - `clear_slot` → empty the named slot entirely.
  *
  * Works for single garments and composites (a composite's id is filtered out of
  * every slot it covers). Fails fast on the first bad operation; fires avatar
@@ -22,25 +23,21 @@ import type {
 } from '../wardrobe-take-off-tool';
 import { validateWardrobeTakeOffInput } from '../wardrobe-take-off-tool';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { applyDisplacement } from '@/lib/wardrobe/outfit-displacement';
+import { findInPool, takeOffItem } from '@/lib/wardrobe/wear-ops';
 import {
   buildWardrobeMutationFailure,
   describeWardrobeEffect,
   finalizeWardrobeMutation,
   formatWardrobeMutationResults,
+  loadToolPool,
   normalizeNoItemSentinel,
-  resolveWardrobeItemAcrossTiers,
   wardrobeItemNotFoundMessage,
+  type WardrobeToolContext,
 } from './wardrobe-handler-shared';
 
-export interface WardrobeTakeOffToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-  /** Per-turn announcement queue. Forwarded from `ToolExecutionContext`. */
-  pendingWardrobeAnnouncements?: Set<string>;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeTakeOffToolContext = WardrobeToolContext;
 
 class WardrobeTakeOffError extends Error {}
 
@@ -66,7 +63,7 @@ export async function executeWardrobeTakeOffTool(
     );
   }
 
-  const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
+  const pool = await loadToolPool(repos, context.chatId, context.characterId);
 
   const results: WardrobeTakeOffOpResult[] = [];
   let appliedCount = 0;
@@ -80,7 +77,7 @@ export async function executeWardrobeTakeOffTool(
     try {
       if (mode === 'clear_slot') {
         const slot = op.slot!;
-        await removeFromSlot(repos, context.chatId, context.characterId, slot);
+        await applyDisplacement(repos, context.chatId, context.characterId, { mode: 'clear_slot', slot });
         results.push({
           mode,
           effect: 'cleared',
@@ -100,13 +97,7 @@ export async function executeWardrobeTakeOffTool(
       }
 
       // mode === 'remove'
-      const item = await resolveWardrobeItemAcrossTiers(
-        repos,
-        context.characterId,
-        itemId,
-        itemTitle,
-        tiers,
-      );
+      const item = findInPool(pool, { itemId, itemTitle });
       if (!item) {
         throw new WardrobeTakeOffError(wardrobeItemNotFoundMessage(itemId, itemTitle));
       }
@@ -116,9 +107,7 @@ export async function executeWardrobeTakeOffTool(
       const slotsAffected: WardrobeItemType[] = op.slot
         ? [op.slot]
         : (item.types as WardrobeItemType[]);
-      for (const slot of slotsAffected) {
-        await removeFromSlot(repos, context.chatId, context.characterId, slot, item.id);
-      }
+      await takeOffItem(repos, context.chatId, context.characterId, item.id, slotsAffected);
 
       results.push({
         mode,
@@ -164,7 +153,7 @@ export async function executeWardrobeTakeOffTool(
     appliedCount,
     results,
     failedError,
-    tiers,
+    pool,
   });
 }
 

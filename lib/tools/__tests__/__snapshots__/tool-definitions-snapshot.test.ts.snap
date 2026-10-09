@@ -1921,10 +1921,6 @@ exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters sn
       "description": "Whether to include currently equipped items in the results. Defaults to true.",
       "type": "boolean",
     },
-    "include_presets": {
-      "description": "Whether to include saved outfit presets in the response. Defaults to true.",
-      "type": "boolean",
-    },
     "type_filter": {
       "description": "Filter items by slot type. Possible values include "top", "bottom", "footwear", "accessories", "hair". Only items matching at least one of the specified types will be returned.",
       "items": {

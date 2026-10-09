@@ -34,10 +34,10 @@ import { neverWornSummary } from '@/lib/schemas/wardrobe-wear.types';
 
 
 /** The label for a wearer whose character can no longer be read. */
-export const DEPARTED_WEARER_LABEL = 'a departed character';
+const DEPARTED_WEARER_LABEL = 'a departed character';
 
 /** The label for the ledger's unattributed row (wearer deleted and folded, or unresolvable on import). */
-export const UNATTRIBUTED_WEARER_LABEL = 'unattributed';
+const UNATTRIBUTED_WEARER_LABEL = 'unattributed';
 
 /** A collection-read item carrying its wear summary. */
 export type WithWear<T> = T & { wear: WardrobeWearSummary };

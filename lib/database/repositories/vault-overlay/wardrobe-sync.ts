@@ -34,8 +34,6 @@ import { projectArrayIntoVaultFolder } from './vault-projection';
 export interface WardrobeOverlayOptions {
   /** Include items whose archivedAt is non-null. Default false. */
   includeArchived?: boolean;
-  /** Only return items with isDefault=true. */
-  defaultsOnly?: boolean;
 }
 
 /**
@@ -87,9 +85,6 @@ export async function getOverlaidWardrobeItems(
   }));
   if (!options.includeArchived) {
     items = items.filter((item) => !item.archivedAt);
-  }
-  if (options.defaultsOnly) {
-    items = items.filter((item) => item.isDefault);
   }
 
   return items;

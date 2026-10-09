@@ -25,7 +25,7 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import { ensureProjectScenariosFolder } from '@/lib/mount-index/project-scenarios';
 
 export async function ensureProjectScenariosForAllProjects(): Promise<{
@@ -56,7 +56,7 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
 
   for (const project of projects) {
     try {
-      const result = await ensureProjectOfficialStore(project.id, project.name);
+      const result = await ensureOwnerOfficialStore('project', project.id, project.name);
       if (!result) {
         failed++;
         continue;

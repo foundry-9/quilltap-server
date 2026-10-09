@@ -41,7 +41,7 @@ import { UuidRemapper } from '../uuid-remapper';
 import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archive';
 import { deleteUserData } from './delete-service';
 import { planWardrobeImagePointerFixes, remapBackupData, type WardrobeImagePointerFix } from './uuid-remap';
-import { updateProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
+import { updateMountWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 import { decodeIndexKeyedEmbedding } from './index-keyed-embedding';
@@ -925,7 +925,7 @@ export async function restore(
     for (const fix of wardrobeImagePointerFixes) {
       if (tombstonedVaults.has(fix.mountPointId) || tombstonedVaults.has(fix.sourceMountPointId)) continue;
       try {
-        if (await updateProjectWardrobeItem(fix.mountPointId, fix.itemId, { imageFileId: fix.imageFileId })) {
+        if (await updateMountWardrobeItem(fix.mountPointId, fix.itemId, { imageFileId: fix.imageFileId })) {
           wardrobeImagePointersFixed++;
         }
       } catch (error) {

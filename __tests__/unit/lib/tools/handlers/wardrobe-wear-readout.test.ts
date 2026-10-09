@@ -23,11 +23,14 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-jest.mock('@/lib/wardrobe/shared-tiers', () => ({
-  resolveSharedWardrobeTiersForChat: jest.fn().mockResolvedValue({ groupMountPointIds: [], projectMountPointIds: [] }),
-}))
+// One pool per tool call: the real pure builder over the test's own items.
+jest.mock('@/lib/wardrobe/pool', () => {
+  const actual = jest.requireActual('@/lib/wardrobe/pool') as Record<string, unknown>
+  return { ...actual, loadWearablePool: jest.fn() }
+})
 
 const { getRepositories } = require('@/lib/repositories/factory')
+const { loadWearablePool, buildWearablePool } = require('@/lib/wardrobe/pool')
 const {
   executeWardrobeListTool,
   formatWardrobeListResults,
@@ -77,14 +80,6 @@ let repos: any
 beforeEach(() => {
   jest.clearAllMocks()
   repos = {
-    wardrobe: {
-      findWearablePoolForCharacter: jest.fn().mockResolvedValue([
-        wardrobeItem(),
-        wardrobeItem({ id: 'item-2', title: 'Spats', types: ['footwear'] }),
-      ]),
-      findByIdForCharacter: jest.fn().mockResolvedValue(wardrobeItem()),
-      findByIdsForCharacter: jest.fn().mockResolvedValue([]),
-    },
     chats: {
       getEquippedOutfitForCharacter: jest.fn().mockResolvedValue(null),
     },
@@ -109,6 +104,22 @@ beforeEach(() => {
     },
   }
   ;(getRepositories as jest.Mock).mockReturnValue(repos)
+  const own = { scope: 'character', id: CALLER, name: '' }
+  ;(loadWearablePool as jest.Mock).mockResolvedValue(
+    buildWearablePool(
+      CALLER,
+      { groupMountPointIds: [], projectMountPointIds: [] },
+      {
+        own: [
+          { ...wardrobeItem(), origin: own },
+          { ...wardrobeItem({ id: 'item-2', title: 'Spats', types: ['footwear'] }), origin: own },
+        ],
+        group: [],
+        project: [],
+        general: [],
+      },
+    ),
+  )
 })
 
 describe('wardrobe_list', () => {

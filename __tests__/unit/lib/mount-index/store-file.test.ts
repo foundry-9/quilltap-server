@@ -232,8 +232,51 @@ describe('storeMountFile — binary blobs', () => {
       collisionStrategy: 'unique-suffix',
       enqueueEmbedding: false,
     });
-    expect(uniquePathMock).toHaveBeenCalledWith(MOUNT_ID, 'images/portrait.webp');
+    expect(uniquePathMock).toHaveBeenCalledWith(MOUNT_ID, 'images/portrait.webp', expect.any(Function));
     expect(result.relativePath).toBe('images/portrait (2).webp');
+  });
+
+  it('reserves a unique-suffix path so two concurrent writes cannot both take it', async () => {
+    transcodeMock.mockResolvedValue({ data: Buffer.from('b'), storedMimeType: 'image/webp', sizeBytes: 1, sha256: 's' });
+    // The DB knows of no file at either path; only the reservation can keep
+    // the second write off the first one's path.
+    uniquePathMock.mockImplementation(async (_mount: string, desired: string, isReserved: (p: string) => boolean) => {
+      if (!isReserved(desired)) return desired;
+      return desired.replace(/\.webp$/, ' (2).webp');
+    });
+    let releaseFirst!: () => void;
+    const firstLinked = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const link = repos.docMountFileLinks.linkBlobContent as jest.Mock;
+    const original = link.getMockImplementation();
+    link.mockImplementationOnce(async (args: unknown) => {
+      await firstLinked;
+      return original!(args);
+    });
+
+    const write = () => storeMountFile({
+      mountPointId: MOUNT_ID,
+      relativePath: 'images/portrait.webp',
+      data: Buffer.from('b'),
+      originalMimeType: 'image/webp',
+      collisionStrategy: 'unique-suffix',
+      enqueueEmbedding: false,
+    });
+    const first = write();
+    // Let the first write reach its (held) link call before the second starts.
+    await new Promise((resolve) => setImmediate(resolve));
+    const second = write();
+    await new Promise((resolve) => setImmediate(resolve));
+    releaseFirst();
+
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.relativePath).toBe('images/portrait.webp');
+    expect(b.relativePath).toBe('images/portrait (2).webp');
+
+    // Released once linked: a later write may take the plain path again
+    // (the DB, not the reservation, now says whether it is free).
+    const third = await write();
+    expect(third.relativePath).toBe('images/portrait.webp');
+    uniquePathMock.mockReset();
   });
 });
 

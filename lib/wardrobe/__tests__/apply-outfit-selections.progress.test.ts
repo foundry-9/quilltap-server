@@ -23,6 +23,13 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),
 }))
+jest.mock('@/lib/mount-index/tiered-mount-pool', () => ({
+  resolveGroupMountsForCharacter: jest.fn().mockResolvedValue([]),
+  resolveProjectMountPointIds: jest.fn().mockResolvedValue([]),
+}))
+jest.mock('@/lib/instance-settings', () => ({
+  getGeneralMountPointId: jest.fn().mockResolvedValue(null),
+}))
 jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
   resolveWardrobeInstructions: jest.fn().mockResolvedValue(null),
 }))
@@ -58,13 +65,10 @@ function makeRepos(overrides: Record<string, unknown> = {}) {
         }),
       },
       wardrobe: {
-        findByCharacterId: jest.fn().mockResolvedValue([{ id: 'w1', title: 'Jacket' }]),
+        findByCharacterId: jest.fn().mockResolvedValue([{ id: 'w1', title: 'Jacket', types: ['top'] }]),
         // The shared tiers (Quilltap General + project stores). Empty here —
         // these cases only care about the narration, not the merge.
-        findArchetypes: jest.fn().mockResolvedValue([]),
-        findWearablePoolForCharacter: jest
-          .fn()
-          .mockResolvedValue([{ id: 'w1', title: 'Jacket' }]),
+        readSharedTiers: jest.fn().mockResolvedValue([]),
       },
       connections: {
         findAll: jest.fn().mockResolvedValue([{ id: 'p1', isDefault: true }]),
@@ -92,7 +96,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
         deliberatelyUnclothed: false,
       },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
-    mockResolve.mockResolvedValue({
+    mockResolve.mockReturnValue({
       outfitValues: { top: ['Jacket'], bottom: [], footwear: [], accessories: [], hair: [] },
       leafItemsBySlot: {
         top: [{ id: 'w1', title: 'Jacket', componentItemIds: [] }],
@@ -136,7 +140,7 @@ describe('applyOutfitSelections — status-dialog emissions', () => {
       success: false,
       error: 'model said no',
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
-    mockResolve.mockResolvedValue({
+    mockResolve.mockReturnValue({
       outfitValues: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
       leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
       itemsById: new Map(),

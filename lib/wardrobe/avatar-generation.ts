@@ -8,6 +8,7 @@
 
 import { logger } from '@/lib/logger';
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
+import { resolveAvatarImageProfile } from '@/lib/image-gen/profile-resolution';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
 
@@ -42,8 +43,8 @@ export type AvatarGenerationResult =
   | { queued: false; reason: 'chat-not-found' | 'no-image-profile' | 'error'; message: string };
 
 /**
- * Unconditionally trigger avatar generation. Resolves the image profile from
- * the override first, then chat-level setting, then global default. Used by
+ * Unconditionally trigger avatar generation. Resolves the image profile
+ * through `resolveAvatarImageProfile` (override → chat → default). Used by
  * the manual regenerate-avatar button — the chat-level toggle does NOT gate
  * this path. Returns a structured result so callers can surface failures
  * (e.g. "no image profile configured") to the user.
@@ -68,36 +69,20 @@ export async function triggerAvatarGeneration(
       return { queued: false, reason: 'chat-not-found', message: 'Chat not found.' };
     }
 
-    // Resolve image profile: explicit override → chat-level → global default
-    let imageProfileId: string | null = null;
-
-    if (imageProfileIdOverride) {
-      const profile = await repos.imageProfiles.findById(imageProfileIdOverride);
-      if (profile) {
-        imageProfileId = profile.id;
-      } else {
-        logger.warn('Avatar generation override profile not found, falling back', {
-          context: callerContext,
-          chatId,
-          imageProfileIdOverride,
-        });
-      }
-    }
-
-    if (!imageProfileId && chat.imageProfileId) {
-      const profile = await repos.imageProfiles.findById(chat.imageProfileId);
-      if (profile) {
-        imageProfileId = profile.id;
-      }
-    }
-
-    if (!imageProfileId) {
-      const allProfiles = await repos.imageProfiles.findAll();
-      const defaultProfile = allProfiles.find((p) => p.isDefault) || null;
-      if (defaultProfile) {
-        imageProfileId = defaultProfile.id;
-      }
-    }
+    // Override → chat-level → the user's default, each checked for an API key.
+    const profile = await resolveAvatarImageProfile(userId, repos, {
+      override: imageProfileIdOverride,
+      chat,
+    });
+    const imageProfileId = profile?.id ?? null;
+    logger.debug('Avatar image profile resolved', {
+      context: callerContext,
+      chatId,
+      characterId,
+      imageProfileId,
+      overrideRequested: !!imageProfileIdOverride,
+      overrideHonoured: !!imageProfileIdOverride && imageProfileId === imageProfileIdOverride,
+    });
 
     if (!imageProfileId) {
       return {

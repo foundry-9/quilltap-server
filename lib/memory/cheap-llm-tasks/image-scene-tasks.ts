@@ -22,6 +22,7 @@ import type {
   StoryBackgroundPromptContext,
   UncensoredFallbackOptions,
 } from './types'
+import { pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 interface AestheticPromptInputs {
   sceneAesthetic?: string | null
@@ -912,7 +913,7 @@ export async function resolveAppearance(
   const characterSection = characters.map(char => {
     const descParts = char.physicalDescriptions.map(d => {
       const context = d.usageContext ? ` (context: ${d.usageContext})` : ''
-      const preview = d.mediumPrompt || d.shortPrompt || '(no description text)'
+      const preview = pickPhysicalDescription(d, 'scene') || '(no description text)'
       return `    - ID: ${d.id}, Name: "${d.name}"${context}: ${preview}`
     })
 

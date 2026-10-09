@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
-import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { isComposite as isCompositeItem, type WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import {
   GENERAL_CONTAINER,
@@ -72,7 +72,7 @@ export function WardrobeTransferDialog({
   // Composite outfits prompt for their components — all or nothing. A move
   // defaults to moving them along; a copy defaults to copying them, since an
   // outfit that arrives without its pieces is rarely what anyone meant.
-  const isComposite = item.componentItemIds.length > 0
+  const isComposite = isCompositeItem(item)
   const [componentMode, setComponentMode] = useState<ComponentMode>(
     mode === 'move' ? 'move' : 'copy',
   )

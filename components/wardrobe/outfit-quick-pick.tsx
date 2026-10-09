@@ -17,7 +17,8 @@
  * @module components/wardrobe/outfit-quick-pick
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useClickOutside } from '@/hooks/useClickOutside'
 import { Icon } from '@/components/ui/icon'
 import { selectComposedOutfits } from '@/lib/wardrobe/composed-outfits'
 import { formatSlotLabels } from '@/lib/schemas/wardrobe.types'
@@ -39,32 +40,18 @@ export function OutfitQuickPick({ items, onWear }: OutfitQuickPickProps) {
 
   const outfits = useMemo(() => selectComposedOutfits(items), [items])
 
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent): void => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [open])
-
-  // Close on Escape — capture phase + stopPropagation so the enclosing dialog's
-  // own Escape handler doesn't dismiss the whole modal along with the menu.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
-      e.preventDefault()
-      setOpen(false)
-      setSearch('')
-    }
-    document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
-  }, [open])
+  // Close on an outside click or Escape — the Escape swallowed in the
+  // capture phase so the enclosing dialog stays open.
+  const closeOnOutsideClick = useCallback(() => setOpen(false), [])
+  const closeOnEscape = useCallback(() => {
+    setOpen(false)
+    setSearch('')
+  }, [])
+  useClickOutside(containerRef, closeOnOutsideClick, {
+    enabled: open,
+    onEscape: closeOnEscape,
+    escapeCapture: true,
+  })
 
   const candidates = useMemo(() => {
     const term = search.trim().toLowerCase()

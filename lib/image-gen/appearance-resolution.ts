@@ -14,8 +14,9 @@ import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/r
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
 import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
-import { resolveEquippedOutfitForCharacter, type ResolveEquippedRepos } from '@/lib/wardrobe/resolve-equipped'
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
+import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
+import { loadWearablePool } from '@/lib/wardrobe/pool'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 import {
   resolveAppearance,
   sanitizeAppearance,
@@ -28,6 +29,7 @@ import {
   classifyContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { logger } from '@/lib/logger'
+import { pickPhysicalDescription } from '@/lib/characters/physical-description'
 
 // ============================================================================
 // TYPES
@@ -84,11 +86,7 @@ export interface AppearanceResolutionInput {
 }
 
 /** Repository surface for {@link equippedWardrobeItemsForAppearance}. */
-interface EquippedWardrobeRepos extends ResolveEquippedRepos {
-  chats: {
-    getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>
-  }
-}
+type EquippedWardrobeRepos = Pick<RepositoryContainer, 'wardrobe' | 'projects' | 'chats'>
 
 /**
  * Load a character's equipped outfit for a chat and flatten it into the
@@ -107,11 +105,9 @@ export async function equippedWardrobeItemsForAppearance(
 ): Promise<AppearanceResolutionInput['equippedWardrobeItems']> {
   const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId)
   if (!equippedSlots) return undefined
-  const resolved = await resolveEquippedOutfitForCharacter(
-    repos,
-    characterId,
+  const resolved = resolveEquippedOutfitForCharacter(
+    await loadWearablePool(repos, characterId, projectMountPointIds),
     equippedSlots,
-    await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
   )
   const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = []
   for (const slot of WARDROBE_SLOT_TYPES) {
@@ -173,12 +169,7 @@ function buildDefaultAppearances(
   return characters.map(char => {
     const primary = char.physicalDescription
 
-    const physDesc =
-      primary?.completePrompt ||
-      primary?.longPrompt ||
-      primary?.mediumPrompt ||
-      primary?.shortPrompt ||
-      char.characterName
+    const physDesc = pickPhysicalDescription(primary, 'full-length') || char.characterName
 
     const hasWardrobe = char.equippedWardrobeItems && char.equippedWardrobeItems.length > 0
 
@@ -213,13 +204,7 @@ function mapResolutionResults(
     // selectedDescriptionId is informational only.
     const selectedDesc: PhysicalDescription | null = char.physicalDescription
 
-    const physDesc = selectedDesc
-      ? (selectedDesc.completePrompt ||
-         selectedDesc.longPrompt ||
-         selectedDesc.mediumPrompt ||
-         selectedDesc.shortPrompt ||
-         char.characterName)
-      : char.characterName
+    const physDesc = pickPhysicalDescription(selectedDesc, 'full-length') || char.characterName
 
     return {
       characterId: char.characterId,
@@ -268,7 +253,7 @@ export async function resolveCharacterAppearances(
       const sceneChar = sceneState.characters.find(sc => sc.characterId === char.characterId)
       const primary = char.physicalDescription
       const physDesc = sceneChar?.appearance
-        || primary?.completePrompt || primary?.longPrompt || primary?.mediumPrompt || primary?.shortPrompt
+        || pickPhysicalDescription(primary, 'full-length')
         || char.characterName
 
       return {

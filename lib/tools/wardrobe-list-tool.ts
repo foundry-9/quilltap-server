@@ -33,12 +33,6 @@ export const wardrobeListToolInputSchema = z.object({
       'Whether to include currently equipped items in the results. Defaults to true.'
     )
     .optional(),
-  include_presets: z
-    .boolean()
-    .describe(
-      'Whether to include saved outfit presets in the response. Defaults to true.'
-    )
-    .optional(),
 })
 
 /**

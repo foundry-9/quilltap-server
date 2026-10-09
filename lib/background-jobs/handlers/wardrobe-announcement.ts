@@ -18,7 +18,7 @@ import { logger } from '@/lib/logger';
 import type { WardrobeOutfitAnnouncementPayload } from '../queue-service';
 import { postOutfitChangeWhisper } from '@/lib/services/aurora-notifications/writer';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
+import { loadWearablePool } from '@/lib/wardrobe/pool';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import {
   EquippedSlotsSchema,
@@ -69,11 +69,9 @@ export async function handleWardrobeOutfitAnnouncement(job: BackgroundJob): Prom
   }
 
   const projectMountPointIds = await resolveProjectMountPointIds(chat.projectId);
-  const resolved = await resolveEquippedOutfitForCharacter(
-    repos,
-    characterId,
+  const resolved = resolveEquippedOutfitForCharacter(
+    await loadWearablePool(repos, characterId, projectMountPointIds),
     slots,
-    await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
   );
 
   const character = await repos.characters.findById(characterId);

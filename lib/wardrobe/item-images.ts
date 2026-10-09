@@ -22,11 +22,6 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '@/lib/logger';
-import { getGeneralMountPointId } from '@/lib/instance-settings';
-import {
-  resolveWardrobeMount,
-  updateProjectWardrobeItem,
-} from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import {
   deleteWardrobeItemImageLink,
   writeWardrobeItemImage,
@@ -37,10 +32,11 @@ import {
   parseMountBlobStorageKey,
   readMountBlob,
 } from '@/lib/file-storage/project-store-bridge';
+import { createGeneratedFileRow } from '@/lib/files/generated-file-row';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { FileEntry, FileSource } from '@/lib/schemas/file.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { resolveWardrobeContainer } from '@/lib/wardrobe/resolve-container';
+import { resolveWardrobeLocation, type WardrobeLocation } from '@/lib/wardrobe/location';
 import type { WardrobeContainerScope } from '@/lib/wardrobe/wardrobe-container';
 
 const LOG_CONTEXT = 'wardrobe.item-images';
@@ -57,51 +53,31 @@ export class ForeignWardrobeImageError extends Error {
 // The item's home
 // ============================================================================
 
-/** An item located in its container, with the means to write it back. */
+/** An item located in its tier, with the means to write it back. */
 export interface WardrobeItemHome {
   scope: WardrobeContainerScope;
   /** The owning character — `character` scope only. */
   characterId: string | null;
   item: WardrobeItem;
-  /** Every item in the container (archived included). */
+  /** Every item in the item's folder (archived included). */
   containerItems: WardrobeItem[];
+  /** The item's tier. */
+  location: WardrobeLocation;
   /**
    * The mount holding the item's markdown — where its pictures go. Throws
    * `CharacterArchivedError` for an archived character's item (the tombstone);
    * callers let it propagate, never fall back.
    */
   resolveMount(): Promise<string>;
-  /** Patch the item through its tier's ordinary update chokepoint. */
+  /** Patch the item through its location. */
   update(patch: Partial<WardrobeItem>): Promise<WardrobeItem | null>;
 }
 
 /**
- * The mount a container's items live in. `resolveWardrobeMount` throws for an
- * archived character — that is the point.
- */
-export async function resolveContainerMountPointId(
-  scope: WardrobeContainerScope,
-  characterId: string | null,
-  mountPointId: string | null,
-): Promise<string> {
-  if (scope === 'project' || scope === 'group') {
-    if (!mountPointId) throw new Error(`No store mount resolved for ${scope} wardrobe`);
-    return mountPointId;
-  }
-  if (scope === 'general') {
-    const general = await getGeneralMountPointId();
-    if (!general) throw new Error('Quilltap General is not provisioned');
-    return general;
-  }
-  const loc = await resolveWardrobeMount(characterId);
-  if (!loc) throw new Error(`Character ${characterId} has no linked vault`);
-  return loc.mountPointId;
-}
-
-/**
- * Find `itemId` in the named container, or null when the container does not
- * resolve or does not hold the item (a General archetype is not in a
- * character's own wardrobe, even though the character's reads merge it in).
+ * Find `itemId` in the named tier, or null when the tier does not resolve or
+ * does not hold the item (a General item is not in a character's own
+ * wardrobe, even though the character's reads merge it in). A read: a project
+ * or group store that doesn't exist yet is not provisioned.
  */
 export async function resolveWardrobeItemHome(
   repos: RepositoryContainer,
@@ -110,28 +86,21 @@ export async function resolveWardrobeItemHome(
   containerId: string | null | undefined,
   itemId: string,
 ): Promise<WardrobeItemHome | null> {
-  const container = await resolveWardrobeContainer(scope, containerId, repos, userId);
-  if (!container) return null;
+  const location = await resolveWardrobeLocation(scope, containerId, repos, userId);
+  if (!location) return null;
 
-  const containerItems = await container.readItems();
-  const item = containerItems.find(
-    (i) => i.id === itemId && (scope !== 'character' || i.characterId === container.characterId),
-  );
+  const containerItems = await location.readItems(true);
+  const item = containerItems.find((i) => i.id === itemId);
   if (!item) return null;
 
-  const { characterId, mountPointId } = container;
   return {
     scope,
-    characterId,
+    characterId: location.characterId,
     item,
     containerItems,
-    resolveMount: () => resolveContainerMountPointId(scope, characterId, mountPointId),
-    update: (patch) => {
-      if (scope === 'project' || scope === 'group') {
-        return updateProjectWardrobeItem(mountPointId as string, itemId, patch);
-      }
-      return repos.wardrobe.update(itemId, patch, scope === 'character' ? characterId : null);
-    },
+    location,
+    resolveMount: () => location.writableMountPointId(),
+    update: (patch) => location.update(itemId, patch),
   };
 }
 
@@ -242,29 +211,24 @@ export async function addWardrobeItemImage(
     description,
   });
 
-  const file = await repos.files.create(
-    {
-      userId: input.userId,
-      sha256: written.sha256,
-      originalFilename: written.leafName,
-      mimeType: written.storedMimeType,
-      size: written.sizeBytes,
-      width: input.width ?? null,
-      height: input.height ?? null,
-      linkedTo: [home.item.id],
-      source: SOURCE_BY_KIND[input.kind],
-      category: 'IMAGE',
-      generationPrompt: input.generationPrompt ?? null,
-      generationModel: input.generationModel ?? null,
-      generationRevisedPrompt: input.generationRevisedPrompt ?? null,
-      description,
-      tags: [home.item.id],
-      storageKey: written.storageKey,
-      projectId: null,
-      folderPath: null,
+  // The mount link carries the caption; the `files` row carries no label
+  // (bug 132) — `describe_image` reads `description` as what the picture shows.
+  const file = await createGeneratedFileRow(repos, {
+    userId: input.userId,
+    sha256: written.sha256,
+    originalFilename: written.leafName,
+    stored: written,
+    width: input.width ?? null,
+    height: input.height ?? null,
+    linkedTo: [home.item.id],
+    tags: [home.item.id],
+    source: SOURCE_BY_KIND[input.kind],
+    generation: {
+      prompt: input.generationPrompt ?? null,
+      model: input.generationModel ?? null,
+      revisedPrompt: input.generationRevisedPrompt ?? null,
     },
-    { id: randomUUID() },
-  );
+  });
 
   const item = await home.update({ imageFileId: file.id });
 
@@ -278,6 +242,62 @@ export async function addWardrobeItemImage(
   });
 
   return { file, item };
+}
+
+/** The source picture for a link is not a stored wardrobe picture. */
+export class UnlinkableWardrobeImageError extends Error {
+  constructor(readonly fileId: string) {
+    super(`File ${fileId} is not a stored picture that can be linked`);
+    this.name = 'UnlinkableWardrobeImageError';
+  }
+}
+
+/**
+ * Give the item a picture another item already has — Import from image keeps
+ * one photograph as the first picture of every piece it creates, and uploads
+ * it once rather than once per piece. The bytes are read from the source's
+ * blob server-side and written through {@link addWardrobeItemImage}, whose
+ * sha256 de-duplication makes the new link point at the same blob. The new
+ * picture is the item's own (`files` row linked to it, current), so deleting
+ * it never touches the source's.
+ */
+export async function linkWardrobeItemImage(
+  repos: RepositoryContainer,
+  home: WardrobeItemHome,
+  input: { userId: string; sourceFileId: string },
+): Promise<{ file: FileEntry; item: WardrobeItem | null }> {
+  const source = await repos.files.findById(input.sourceFileId);
+  const bytes = source?.category === 'IMAGE' && source.storageKey && parseMountBlobStorageKey(source.storageKey)
+    ? await readMountBlob(source.storageKey)
+    : null;
+  if (!source || !bytes) {
+    logger.info('[WardrobeImages] Refused to link a picture with no readable blob', {
+      context: LOG_CONTEXT,
+      itemId: home.item.id,
+      sourceFileId: input.sourceFileId,
+      found: !!source,
+    });
+    throw new UnlinkableWardrobeImageError(input.sourceFileId);
+  }
+
+  logger.debug('[WardrobeImages] Linking an existing picture to a wardrobe item', {
+    context: LOG_CONTEXT,
+    itemId: home.item.id,
+    sourceFileId: source.id,
+    bytes: bytes.length,
+  });
+
+  return addWardrobeItemImage(repos, home, {
+    userId: input.userId,
+    kind: source.source === 'GENERATED' ? 'generated' : source.source === 'UPLOADED' ? 'uploaded' : 'imported',
+    content: bytes,
+    contentType: source.mimeType,
+    width: source.width ?? null,
+    height: source.height ?? null,
+    generationPrompt: source.generationPrompt ?? null,
+    generationModel: source.generationModel ?? null,
+    generationRevisedPrompt: source.generationRevisedPrompt ?? null,
+  });
 }
 
 /** Make one of the item's own pictures current. */

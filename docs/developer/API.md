@@ -1987,7 +1987,16 @@ Create a new archetype wardrobe item.
 }
 ```
 
-**Response**: `201 Created`
+**Response**: `201 Created` — `{ wardrobeItem }`, serialized exactly as a `GET` serializes it (with `origin` and `wear`).
+
+All four tiers' item endpoints (General, character, project, group) are one implementation, `lib/wardrobe/routes/wardrobe-route-factory.ts`, and answer alike:
+
+- `POST` and `PUT` return `{ wardrobeItem }` with `origin` and `wear`, like `GET`. (The project `POST` no longer returns the refreshed `wardrobeItems` list.) Collection `GET`s also return the tier's `mountPointId`.
+- A component cycle is a **400** on create and update, every tier.
+- A `PUT` answers 404 for a missing item before it checks `imageFileId`.
+- A composite's `types` are recomputed server-side from its components (`buildCompositeTypes`): the components' slots plus any designated extras. They widen, never narrow — a `PUT` that changes components without restating `types` keeps every slot the item already claimed.
+- A character's endpoints require the character to belong to the requesting user; a write to an archived character's vault is a **409**.
+- General's collection `GET` answers `{ wardrobeItems: [] }` while Quilltap General is unprovisioned; a write there is a 500.
 
 #### `GET /api/v1/wardrobe/[itemId]`
 
@@ -2081,9 +2090,9 @@ Get all wardrobe items for a character.
 
 The group tier is a standalone read so the client can assemble the same pool the
 server does (`useCharacterWardrobeItems` merges character > group > project >
-general). Server-side callers should use
-`repos.wardrobe.findWearablePoolForCharacter` with tiers from
-`resolveSharedWardrobeTiersForChat` rather than reassembling it.
+general, archived items dropped from each tier before shadowing). Server-side
+callers use `loadWearablePool` (`lib/wardrobe/pool.ts`) rather than
+reassembling it.
 
 **Response**: `200 OK`
 
@@ -2819,8 +2828,10 @@ Every slot is an **array** of wardrobe item ids (empty when nothing is worn ther
 #### `GET /api/v1/chats/[id]?action=outfit-summary`
 
 The same equipped state as `?action=outfit`, with each item id resolved to its title so a caller
-can render the outfit without a second round trip. Composites are expanded to their components at
-read time, exactly as `?action=outfit` does.
+can render the outfit without a second round trip. Each character's slots resolve against their own
+wearable pool (their own groups; the project and General tiers read once for the cast) by the canonical
+rule every prompt path uses (`resolveEquippedOutfitForCharacter`): composites are expanded, and each
+leaf is listed under every slot its own `types` cover — not only the slot it was equipped to.
 
 #### `GET /api/v1/chats/[id]?action=group-stores`
 

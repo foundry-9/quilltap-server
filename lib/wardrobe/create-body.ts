@@ -2,11 +2,12 @@
  * The one mapping from a validated wardrobe create body to the stored shape
  * of a wardrobe item (everything but `id` / `createdAt` / `updatedAt`).
  *
- * Every create endpoint — character, General, project, group — and the
- * transfer route's "land a copy here" write build their item through this,
- * so the defaults (`componentItemIds: []`, `isDefault: false`, `replace:
- * false`, nulls for the optional prose fields, no clothing-record provenance,
- * no picture) can't drift between tiers. A fresh item never carries an
+ * Every create — the item routes, the `wardrobe_create` tool and the
+ * transfer route's "land a copy here" write, all via `createItem` in
+ * `item-mutations.ts` — builds its item through this, so the defaults
+ * (`componentItemIds: []`, `isDefault: false`, `replace: false`, null for a
+ * missing *or blank* prose field, no clothing-record provenance, no picture)
+ * can't drift between tiers. A fresh item never carries an
  * `imageFileId`: a picture hangs off an item that already has an id, through
  * the images route.
  *
@@ -29,6 +30,11 @@ export type WardrobeCreateData = Omit<WardrobeItem, 'id' | 'createdAt' | 'update
  * (`null` for a shared item). Optional body fields resolve to their storage
  * defaults; `migratedFromClothingRecordId` is always `null` for a fresh item.
  */
+/** A prose field as stored: trimmed-empty reads as absent. */
+function prose(value: string | null | undefined): string | null {
+  return value && value.trim().length > 0 ? value : null;
+}
+
 export function wardrobeItemFromCreateBody(
   body: WardrobeCreateBody,
   characterId: string | null,
@@ -36,11 +42,11 @@ export function wardrobeItemFromCreateBody(
   return {
     characterId,
     title: body.title,
-    description: body.description ?? null,
-    imagePrompt: body.imagePrompt ?? null,
+    description: prose(body.description),
+    imagePrompt: prose(body.imagePrompt),
     types: body.types,
-    componentItemIds: body.componentItemIds ?? [],
-    appropriateness: body.appropriateness ?? null,
+    componentItemIds: Array.from(new Set(body.componentItemIds ?? [])),
+    appropriateness: prose(body.appropriateness),
     isDefault: body.isDefault ?? false,
     replace: body.replace ?? false,
     migratedFromClothingRecordId: null,

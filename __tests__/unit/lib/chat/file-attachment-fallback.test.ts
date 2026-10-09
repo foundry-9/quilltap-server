@@ -25,8 +25,8 @@ import {
   generateImageDescription,
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
-  verifyImageReachedModel,
 } from '@/lib/chat/file-attachment-fallback'
+import { verifyImageReachedModel } from '@/lib/llm/vision-request'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
 
@@ -373,13 +373,18 @@ describe('lib/chat/file-attachment-fallback', () => {
   // the chat turn, describe_image, the gallery and exports, permanently.
 
   describe('verifyImageReachedModel', () => {
+    // The describe-fallback's instruction: what the request's text costs alone.
+    const INSTRUCTION =
+      'Please describe this image in great detail. Include all visible elements, colors, composition, mood, and any text or notable features. Be thorough and descriptive.'
+
     it('rejects a long, confident answer billed for the instruction alone', () => {
       // 38 prompt tokens is the number off the live llm_logs row.
       const verdict = verifyImageReachedModel(
         {
           usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
         } as any,
-        'file-1'
+        'file-1',
+        INSTRUCTION
       )
       expect(verdict.arrived).toBe(false)
       expect(verdict.arrived === false && verdict.reason).toContain('38 prompt tokens')
@@ -394,7 +399,8 @@ describe('lib/chat/file-attachment-fallback', () => {
             failed: [{ id: 'file-1', error: 'provider does not forward attachments' }],
           },
         } as any,
-        'file-1'
+        'file-1',
+        INSTRUCTION
       )
       expect(verdict.arrived).toBe(false)
       expect(verdict.arrived === false && verdict.reason).toContain('does not forward attachments')
@@ -407,18 +413,20 @@ describe('lib/chat/file-attachment-fallback', () => {
             usage: { promptTokens: 812, completionTokens: 240, totalTokens: 1052 },
             attachmentResults: { sent: ['file-1'], failed: [] },
           } as any,
-          'file-1'
+          'file-1',
+          INSTRUCTION
         ).arrived
       ).toBe(true)
     })
 
     it('treats silence about tokens as silence, not as evidence', () => {
       // A provider that reports nothing must not be failed for it.
-      expect(verifyImageReachedModel({} as any, 'file-1').arrived).toBe(true)
+      expect(verifyImageReachedModel({} as any, 'file-1', INSTRUCTION).arrived).toBe(true)
       expect(
         verifyImageReachedModel(
           { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } } as any,
-          'file-1'
+          'file-1',
+          INSTRUCTION
         ).arrived
       ).toBe(true)
     })
@@ -433,7 +441,8 @@ describe('lib/chat/file-attachment-fallback', () => {
             usage: { promptTokens: 12, completionTokens: 200, totalTokens: 212 },
             cacheUsage: { cacheReadInputTokens: 1400 },
           } as any,
-          'file-1'
+          'file-1',
+          INSTRUCTION
         ).arrived
       ).toBe(true)
     })

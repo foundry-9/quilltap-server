@@ -64,6 +64,13 @@ export const queryKeys = {
      * consuming an inform all refresh it without a poll of its own.
      */
     informs: (id: string) => ['chats', id, 'informs'] as const,
+    /**
+     * The project a chat belongs to, as the wardrobe reads it to fold the
+     * project tier into a character's wardrobe. Deliberately not `detail(id)`:
+     * the realtime `chats` topic refetches `detail` on every message, and the
+     * wardrobe needs only the one field, once.
+     */
+    project: (id: string) => ['chats', id, 'project'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the
@@ -247,6 +254,20 @@ export const queryKeys = {
      * commits — a put-on gesture moves the wear ledger's tallies.
      */
     all: ['wardrobe'] as const,
+    /** Prefix of every `list(...)` key — invalidate after an item mutation. */
+    lists: ['wardrobe', 'list'] as const,
+    /**
+     * One wardrobe tier's collection read: a container (`scope:id`, see
+     * `wardrobeTierKey`) or a character's merged group tier. `includeArchived`
+     * is part of the key — the two are different server responses.
+     */
+    list: (tierKey: string, filters: { includeArchived: boolean }) =>
+      ['wardrobe', 'list', tierKey, filters] as const,
+    /**
+     * What every character in one chat is wearing (`?action=outfit`). Under
+     * `wardrobe` so `wardrobe.all` invalidation after an equip refreshes it.
+     */
+    outfit: (chatId: string) => ['wardrobe', 'outfit', chatId] as const,
     /**
      * One item's wear-ledger breakdown (`?action=wear-history`). Keyed by item
      * id first (the ledger's own key, so `wearHistory(id)` prefix-invalidates

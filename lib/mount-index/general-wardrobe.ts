@@ -50,10 +50,6 @@ export async function ensureGeneralWardrobeFolder(): Promise<{
  * Read all shared/archetype wardrobe items from `Quilltap General/Wardrobe/`.
  * `characterId` is coerced to `null` (these are not owned by any character).
  * Returns `[]` when the mount is not provisioned or the folder is empty.
- *
- * Archetype seeding is disabled in the underlying reader: this folder IS the
- * archetype set, so its composites resolve their components within the same
- * folder. Seeding would recurse back through `findArchetypes`.
  */
 export async function readGeneralWardrobe(includeArchived = false): Promise<WardrobeItem[]> {
   const mountPointId = await getGeneralMountPointId();

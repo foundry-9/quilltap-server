@@ -1,11 +1,19 @@
 /**
  * Wearable Pool Merge
  *
- * The one rule for folding the shared wardrobe tiers (Quilltap General +
- * project stores) together with a character's own vault into the single pool
- * of items that character can wear.
+ * The one rule for folding a character's wardrobe tiers into the single list
+ * of items that character can wear. Precedence is **character > group >
+ * project > general**: a personal item with the same id as a shared one
+ * shadows it (that's how a character keeps a private variant of a house
+ * garment, and opts *out* of a shared default by holding a copy with
+ * `isDefault: false`).
  *
- * Pure — no I/O. Callers fetch the tiers; this decides who wins.
+ * Archived items are dropped from each tier *before* shadowing, so an archived
+ * personal copy never hides the shared item it once overrode — the shared one
+ * resurfaces.
+ *
+ * Pure and client-safe. The server's pool (`lib/wardrobe/pool.ts`) applies the
+ * same rule; the client's merged character view calls this.
  *
  * @module wardrobe/wearable-pool
  */
@@ -13,26 +21,20 @@
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /**
- * Merge the shared tiers under a character's own wardrobe.
- *
- * Precedence is character > shared: a personal item with the same id as a
- * shared one shadows it entirely (that's how a character keeps a private
- * variant of a house garment, and how they opt *out* of a shared default by
- * holding a copy with `isDefault: false`).
- *
- * Archived items are dropped from the result — including archived personal
- * overrides, which is what lets the shared item resurface once a character
- * archives their own copy. `wardrobe_list` has always behaved this way.
- *
- * Callers who need archived items (the equip path, which wants an archived
- * item's `types` for display) should not use this helper.
+ * Merge tiers given weakest-first (General, project, group, then the
+ * character's own) into the wearable list.
  */
-export function mergeWearablePool(
-  shared: WardrobeItem[],
-  own: WardrobeItem[],
-): WardrobeItem[] {
-  const byId = new Map<string, WardrobeItem>();
-  for (const item of shared) byId.set(item.id, item);
-  for (const item of own) byId.set(item.id, item); // character overrides shared
-  return Array.from(byId.values()).filter((item) => !item.archivedAt);
+export function mergeWearableTiers<T extends WardrobeItem>(tiersWeakestFirst: ReadonlyArray<readonly T[]>): T[] {
+  const byId = new Map<string, T>();
+  for (const tier of tiersWeakestFirst) {
+    for (const item of tier) {
+      if (!item.archivedAt) byId.set(item.id, item);
+    }
+  }
+  return Array.from(byId.values());
+}
+
+/** {@link mergeWearableTiers} for one already-flattened shared list under the character's own. */
+export function mergeWearablePool<T extends WardrobeItem>(shared: readonly T[], own: readonly T[]): T[] {
+  return mergeWearableTiers([shared, own]);
 }

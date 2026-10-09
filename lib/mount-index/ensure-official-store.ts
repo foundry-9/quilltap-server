@@ -3,10 +3,9 @@
  *
  * Single implementation of the "find / adopt / create" flow that provisions an
  * entity's canonical "official" document store and persists the FK on the
- * entity row. Both `ensure-project-store.ts` and `ensure-group-store.ts` are
- * thin wrappers that build an {@link EnsureOfficialStoreConfig} and delegate
- * here; the two differ only in entity/prefix names and which repository
- * methods they call.
+ * entity row. `ensure-owner-store.ts` builds an {@link EnsureOfficialStoreConfig}
+ * per owner kind (project, group) and delegates here; the two differ only in
+ * entity/prefix names and which repository methods they call.
  *
  * Imports the repository factory (for `findAll` / `create`), which transitively
  * pulls in node-only modules. Kept separate from the `*-store-naming.ts`

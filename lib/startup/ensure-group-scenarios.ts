@@ -26,7 +26,7 @@
 
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
+import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import {
   ensureGroupScenariosFolder,
   ensureGroupKnowledgeFolder,
@@ -60,7 +60,7 @@ export async function ensureGroupScenariosForAllGroups(): Promise<{
 
   for (const group of groups) {
     try {
-      const result = await ensureGroupOfficialStore(group.id, group.name);
+      const result = await ensureOwnerOfficialStore('group', group.id, group.name);
       if (!result) {
         failed++;
         continue;

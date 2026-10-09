@@ -6,41 +6,44 @@
  * Loads the items of one *shared* wardrobe container — Quilltap General, a
  * project's store, or a group's store — without any tier merging: the list is
  * exactly what lives in that container's `Wardrobe/` folder, which is what the
- * wardrobe dialog shows (and lets you edit) when browsing that container
- * directly. The character scope stays with `useCharacterWardrobeItems`, whose
- * job is the opposite: merge every tier a character can reach.
+ * wardrobe browser shows (and lets you edit) on that container. The character
+ * scope stays with `useCharacterWardrobeItems`, whose job is the opposite.
  *
- * Alongside the container's own list, the General archetypes are fetched as a
+ * Alongside the container's own list, the General library is read as a
  * *resolution pool* (`resolutionItems`) so composite rows can display
- * components that bundle a General archetype — those stay read-only in the
- * dialog because they don't live in the viewed container.
+ * components that bundle a General archetype. That read always includes
+ * archived items: a composite may bundle one, and an unresolvable component
+ * renders as a gap.
+ *
+ * Both reads are `useWardrobeTier` queries, so they share the cache (and the
+ * `queryKeys.wardrobe.all` invalidation) with every other wardrobe list.
  *
  * @module lib/hooks/use-wardrobe-container-items
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import {
-  wardrobeCollectionUrl,
-  withWardrobeArchivedParam,
+  GENERAL_CONTAINER,
+  mergeWardrobeTiers,
   type WardrobeContainer,
-  type WardrobeItemWithOrigin,
 } from '@/lib/wardrobe/wardrobe-container'
+import { useWardrobeTier, type TierItem } from '@/lib/hooks/use-wardrobe-tier'
 
 export interface UseWardrobeContainerItemsResult {
-  /** Items that live in the container itself — the editable set. Each carries the container's origin. */
-  items: WardrobeItemWithOrigin[]
+  /** Items that live in the container itself — the editable set. */
+  items: TierItem[]
   /** `items` plus General archetypes (each with its own origin), for resolving composite components. */
-  resolutionItems: WardrobeItemWithOrigin[]
+  resolutionItems: TierItem[]
   loading: boolean
-  /** True once at least one fetch has completed for the current container. */
+  /** True once the container's reads have settled for the current container. */
   fetched: boolean
-  reload: () => Promise<void>
 }
+
+const EMPTY: TierItem[] = []
 
 /**
  * Load a shared container's wardrobe. Pass null (or a character-scoped
- * container) to no-op — the dialog uses `useCharacterWardrobeItems` for the
- * character scope and this hook for everything else.
+ * container) to no-op.
  */
 export function useWardrobeContainerItems(
   container: WardrobeContainer | null,
@@ -49,60 +52,29 @@ export function useWardrobeContainerItems(
     includeArchived?: boolean
   },
 ): UseWardrobeContainerItemsResult {
-  const scope = container?.scope ?? null
-  const containerId = container?.id ?? null
-  const active = scope !== null && scope !== 'character'
+  const active = container !== null && container.scope !== 'character'
+  const isGeneral = container?.scope === 'general'
   const includeArchived = opts?.includeArchived === true
 
-  const [items, setItems] = useState<WardrobeItemWithOrigin[]>([])
-  const [resolutionItems, setResolutionItems] = useState<WardrobeItemWithOrigin[]>([])
-  const [loading, setLoading] = useState(false)
-  const [fetched, setFetched] = useState(false)
+  const own = useWardrobeTier(active ? { container } : null, { includeArchived })
+  const general = useWardrobeTier(
+    { container: GENERAL_CONTAINER },
+    { includeArchived: true, enabled: active && !isGeneral },
+  )
 
-  const reload = useCallback(async (): Promise<void> => {
-    if (!active) {
-      setItems([])
-      setResolutionItems([])
-      setFetched(false)
-      return
-    }
-    setLoading(true)
-    try {
-      const url = wardrobeCollectionUrl({ scope, id: containerId }, { includeArchived })
-      const [containerRes, generalRes] = await Promise.all([
-        fetch(url),
-        // The resolution pool always includes archived archetypes: a composite
-        // may bundle one, and an unresolvable component would render as a gap.
-        scope === 'general'
-          ? Promise.resolve(null)
-          : fetch(withWardrobeArchivedParam('/api/v1/wardrobe', true)),
-      ])
-      if (!containerRes.ok) throw new Error(`HTTP ${containerRes.status}`)
-      const data = (await containerRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
-      const own = data.wardrobeItems ?? []
-      const pool = [...own]
-      if (generalRes && generalRes.ok) {
-        const generalData = (await generalRes.json()) as { wardrobeItems?: WardrobeItemWithOrigin[] }
-        for (const w of generalData.wardrobeItems ?? []) {
-          if (!pool.some((c) => c.id === w.id)) pool.push(w)
-        }
-      }
-      setItems(own)
-      setResolutionItems(pool)
-    } catch (err) {
-      console.warn('[useWardrobeContainerItems] Failed to load container wardrobe', err)
-      setItems([])
-      setResolutionItems([])
-    } finally {
-      setLoading(false)
-      setFetched(true)
-    }
-  }, [active, scope, containerId, includeArchived])
+  const items = active ? (own.items ?? EMPTY) : EMPTY
+  const resolutionItems = useMemo(
+    () =>
+      active
+        ? mergeWardrobeTiers([own.items, isGeneral ? undefined : general.items], {
+            includeArchived: true,
+          })
+        : EMPTY,
+    [active, own.items, isGeneral, general.items],
+  )
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reload wraps an async fetch; the setState lands well after this effect tick
-    void reload()
-  }, [reload])
-
-  return { items, resolutionItems, loading, fetched, reload }
+  // Settled once the container's read has landed and, unless General IS the
+  // container, the resolution pool's read too (each may have failed).
+  const fetched = own.fetched && (isGeneral || general.fetched)
+  return { items, resolutionItems, loading: own.loading, fetched }
 }

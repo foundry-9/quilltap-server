@@ -1,7 +1,7 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals'
 
 jest.mock('@/lib/logger', () => ({
-  logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
+  logger: (() => { const l: Record<string, unknown> = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }; l.child = jest.fn(() => l); return l })(),
 }))
 
 const resolveParticipantCharacterName = jest.fn(async () => 'Echo')

@@ -18,26 +18,24 @@ import type {
   WardrobeReadWearResult,
 } from '../wardrobe-read-tool';
 import { validateWardrobeReadInput } from '../wardrobe-read-tool';
+import { isComposite as itemIsComposite } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
-import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
+import type { WearablePool } from '@/lib/wardrobe/pool';
+import { findInPool } from '@/lib/wardrobe/wear-ops';
 import {
   findEquippedSlots,
-  isOwnWardrobeItem,
+  loadToolPool,
   normalizeNoItemSentinel,
-  resolveWardrobeItemAcrossTiers,
   wardrobeItemNotFoundMessage,
+  type WardrobeToolContext,
 } from './wardrobe-handler-shared';
 import type { WardrobeRepos } from './wardrobe-handler-shared';
 import { resolveWearers } from '@/lib/wardrobe/wear-history';
 import { formatWornRelative } from '@/lib/wardrobe/wear-display';
 import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
-export interface WardrobeReadToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeReadToolContext = WardrobeToolContext;
 
 /**
  * Build the full read-shaped output for a resolved wardrobe item. Shared by
@@ -45,21 +43,13 @@ export interface WardrobeReadToolContext {
  */
 export async function buildWardrobeReadOutput(
   repos: WardrobeRepos,
-  characterId: string,
+  pool: WearablePool,
   chatId: string,
   item: WardrobeItem,
-  tiers: SharedWardrobeTiers,
 ): Promise<WardrobeReadToolOutput> {
-  const isComposite = (item.componentItemIds?.length ?? 0) > 0;
-
-  let componentTitles: string[] = [];
-  if (isComposite) {
-    const components = await repos.wardrobe.findByIdsForCharacter(characterId, item.componentItemIds, tiers);
-    const titleById = new Map(components.map((c) => [c.id, c.title]));
-    componentTitles = item.componentItemIds
-      .map((cid) => titleById.get(cid))
-      .filter((t): t is string => typeof t === 'string');
-  }
+  const characterId = pool.characterId;
+  const isComposite = itemIsComposite(item);
+  const componentTitles = isComposite ? pool.getMany(item.componentItemIds).map((c) => c.title) : [];
 
   const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
   const equipped = findEquippedSlots(item.id, equippedSlots);
@@ -81,7 +71,7 @@ export async function buildWardrobeReadOutput(
     component_item_ids: item.componentItemIds ?? [],
     component_titles: componentTitles,
     archived: item.archivedAt != null,
-    is_own: isOwnWardrobeItem(item, characterId),
+    is_own: pool.owns(item),
     is_equipped: equipped.length > 0,
     equipped_slots: equipped,
     wear,
@@ -254,20 +244,17 @@ export async function executeWardrobeReadTool(
 
   try {
     const { item_id, item_title } = parsed;
-    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
+    const pool = await loadToolPool(repos, context.chatId, context.characterId);
 
-    const item = await resolveWardrobeItemAcrossTiers(
-      repos,
-      context.characterId,
-      normalizeNoItemSentinel(item_id),
-      normalizeNoItemSentinel(item_title),
-      tiers,
-    );
+    const item = findInPool(pool, {
+      itemId: normalizeNoItemSentinel(item_id),
+      itemTitle: normalizeNoItemSentinel(item_title),
+    });
     if (!item) {
       return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
-    return await buildWardrobeReadOutput(repos, context.characterId, context.chatId, item, tiers);
+    return await buildWardrobeReadOutput(repos, pool, context.chatId, item);
   } catch (error) {
     logger.error('Wardrobe read tool execution failed', {
       context: 'wardrobe-read-handler',

@@ -51,6 +51,7 @@ export interface WardrobeItemImageRefusal {
 export type WardrobeItemImageAction =
   | 'generate'
   | 'upload'
+  | 'link-image'
   | 'set-current'
   | 'delete-image'
   | 'save-targets'
@@ -135,6 +136,24 @@ export async function uploadWardrobeItemImage(
   const res = await fetch(wardrobeItemImagesUrl(itemId, container, 'upload'), {
     method: 'POST',
     body: form,
+  })
+  return readJsonOrThrow(res)
+}
+
+/**
+ * Give the item a picture another item already has (by that picture's file
+ * id). The bytes stay server-side: Import from image uploads its photograph
+ * once and links it to every other piece.
+ */
+export async function linkWardrobeItemImage(
+  itemId: string,
+  container: WardrobeContainer,
+  sourceFileId: string,
+): Promise<{ image: WardrobeItemImageSummary; current: string }> {
+  const res = await fetch(wardrobeItemImagesUrl(itemId, container, 'link-image'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileId: sourceFileId }),
   })
   return readJsonOrThrow(res)
 }

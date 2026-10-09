@@ -10,7 +10,7 @@
 // ── Subject ─────────────────────────────────────────────────────────────────
 import { projectRosterAdmits, rosterGatedProjectId } from '../roster-access';
 import { getAccessibleMountPoints, resolveDocEditPath, PathResolutionError } from '@/lib/doc-edit/path-resolver';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { resolveProjectTierForChat } from '@/lib/wardrobe/pool';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 import { getRepositories } from '@/lib/repositories/factory';
@@ -121,15 +121,15 @@ describe('doc tools', () => {
 describe('shared wardrobe', () => {
   it('withholds the project tier off the roster', async () => {
     mockWorld();
-    const off = await resolveSharedWardrobeTiersForChat('chat-1', OFF_ROSTER);
-    const on = await resolveSharedWardrobeTiersForChat('chat-1', ON_ROSTER);
-    expect(off.projectMountPointIds).toEqual([]);
-    expect(on.projectMountPointIds).toEqual([PROJECT_STORE.id]);
+    const off = await resolveProjectTierForChat(getRepositories(), 'chat-1', OFF_ROSTER);
+    const on = await resolveProjectTierForChat(getRepositories(), 'chat-1', ON_ROSTER);
+    expect(off).toEqual([]);
+    expect(on).toEqual([PROJECT_STORE.id]);
   });
 
   it('lets the operator dress any character from the project wardrobe', async () => {
     mockWorld();
-    const tiers = await resolveSharedWardrobeTiersForChat('chat-1', OFF_ROSTER, { operator: true });
-    expect(tiers.projectMountPointIds).toEqual([PROJECT_STORE.id]);
+    const tiers = await resolveProjectTierForChat(getRepositories(), 'chat-1', OFF_ROSTER, { operator: true });
+    expect(tiers).toEqual([PROJECT_STORE.id]);
   });
 });

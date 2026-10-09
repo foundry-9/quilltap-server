@@ -86,16 +86,73 @@ export function withOrigin(
 }
 
 /**
- * The container an item is addressed through in the *character view*, where
- * the list is a merge of every tier the character can reach: a
- * character-owned item lives in that character's vault; anything else is
- * treated as a Quilltap General archetype (the only shared tier whose items
- * the character view offers full management on).
+ * The container a listed item is addressed through — where its item routes
+ * (edit, star, archive, delete, picture) live. The `origin` the collection
+ * read attached wins: a garment borrowed from a group or project is addressed
+ * through that group or project, never through Quilltap General. Without an
+ * origin (a fixture, an item resolved from elsewhere) a character-owned item
+ * lives in its character's vault and anything else is taken for a General
+ * archetype, the only shared tier that needs no id to address.
  */
-export function homeContainerForItem(
-  item: Pick<WardrobeItem, 'characterId'>,
+export function containerForListedItem(
+  item: Pick<WardrobeItem, 'characterId'> & { origin?: WardrobeOrigin | null },
 ): WardrobeContainer {
+  if (item.origin) return { scope: item.origin.scope, id: item.origin.id }
   return item.characterId ? { scope: 'character', id: item.characterId } : GENERAL_CONTAINER
+}
+
+/**
+ * One readable wardrobe tier: a container's own collection, or (with
+ * `groups`) the merged group tier a character reaches, served by
+ * `GET /api/v1/characters/[id]/wardrobe?scope=group`.
+ */
+export interface WardrobeTier {
+  container: WardrobeContainer
+  /** Character scope only: read the character's group tier instead of their vault. */
+  groups?: boolean
+}
+
+/** Cache identity of a tier — the `tierKey` half of `queryKeys.wardrobe.list`. */
+export function wardrobeTierKey(tier: WardrobeTier): string {
+  return `${encodeWardrobeContainer(tier.container)}${tier.groups ? '|groups' : ''}`
+}
+
+/** Collection URL of a tier, honouring the archived opt-in. */
+export function wardrobeTierUrl(tier: WardrobeTier, opts?: { includeArchived?: boolean }): string {
+  if (!tier.groups) return wardrobeCollectionUrl(tier.container, opts)
+  return withWardrobeArchivedParam(
+    `${baseCollectionUrl(tier.container)}?scope=group`,
+    opts?.includeArchived === true,
+  )
+}
+
+/**
+ * Merge tier lists into one pool, nearest first (character > group > project
+ * > general); the first copy of an id wins.
+ *
+ * Without `includeArchived` this is `mergeWearableTiers`
+ * (`lib/wardrobe/wearable-pool.ts`): archived items leave EACH tier before the
+ * shadowing, so an archived personal copy never hides a live shared item of
+ * the same id. With it (a "Show archived" view, the editor's candidate list,
+ * a composite's resolution pool), the full per-tier lists are shadowed as they
+ * stand.
+ */
+export function mergeWardrobeTiers<T extends Pick<WardrobeItem, 'id' | 'archivedAt'>>(
+  tiers: ReadonlyArray<readonly T[] | undefined>,
+  opts?: { includeArchived?: boolean },
+): T[] {
+  const includeArchived = opts?.includeArchived === true
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const tier of tiers) {
+    for (const item of tier ?? []) {
+      if (!includeArchived && item.archivedAt) continue
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      out.push(item)
+    }
+  }
+  return out
 }
 
 /** Serialize a container for use as a `<select>` option value (`scope:id`). */

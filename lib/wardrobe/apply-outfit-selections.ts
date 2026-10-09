@@ -21,11 +21,12 @@
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-import { dissolveBundleToLeaves, dissolveBundlesInSlotsWithCredit } from '@/lib/wardrobe/dissolve-bundles';
+import { dissolveCompositeToLeaves, dissolveCompositesInSlots } from '@/lib/wardrobe/slot-ops';
 import type { EquipSource } from '@/lib/database/repositories/wardrobe-wear.repository';
 import {
   CLOTHING_SLOT_TYPES,
   WARDROBE_SLOT_TYPES,
+  isComposite,
   makeEmptyEquippedSlots,
 } from '@/lib/schemas/wardrobe.types';
 import type {
@@ -44,8 +45,7 @@ import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
 import type { SubpromptForPrompt } from '@/lib/subprompts/subprompts';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
-import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
+import { createSharedTierLoader, loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
 import { buildDefaultOutfitWithCredit } from '@/lib/wardrobe/default-outfit';
 import type {
   CreationProgressEmitter,
@@ -99,7 +99,7 @@ async function resolveSubpromptsForSeat(
  * Note the underlying request is not aborted, only abandoned; it will still be
  * billed and still land in the LLM log.
  */
-export const OUTFIT_LLM_TIMEOUT_MS = 60_000;
+const OUTFIT_LLM_TIMEOUT_MS = 60_000;
 
 /** Sentinel distinguishing "gave up waiting" from any legitimate resolution. */
 const TIMED_OUT = Symbol('outfit-llm-timed-out');
@@ -177,15 +177,14 @@ interface ResolvedOutfit {
  */
 function manualWornBundles(
   wornBundleIds: readonly string[] | undefined,
-  pool: WardrobeItem[],
+  pool: WearablePool,
 ): ResolvedOutfit['wornBundles'] {
   if (!wornBundleIds || wornBundleIds.length === 0) return [];
-  const byId = new Map(pool.map((i) => [i.id, i]));
   const result: ResolvedOutfit['wornBundles'] = [];
   for (const id of new Set(wornBundleIds)) {
-    const bundle = byId.get(id);
+    const bundle = pool.wearable().find((item) => item.id === id);
     if (!bundle) continue;
-    const leaves = dissolveBundleToLeaves(bundle, byId);
+    const leaves = dissolveCompositeToLeaves(bundle, pool.byId);
     if (leaves) result.push({ id: bundle.id, leafIds: leaves.map((leaf) => leaf.id) });
   }
   return result;
@@ -202,7 +201,7 @@ function toOutfitPreviewSlots(
     items.map((i) => ({
       id: i.id,
       title: i.title,
-      isComposite: (i.componentItemIds?.length ?? 0) > 0,
+      isComposite: isComposite(i),
     }));
   return Object.fromEntries(
     WARDROBE_SLOT_TYPES.map((slot) => [slot, map(leafItemsBySlot[slot] ?? [])]),
@@ -242,83 +241,19 @@ export async function applyOutfitSelections(
 ): Promise<void> {
   const projectMountPointIds = context?.projectMountPointIds ?? [];
 
-  // The project + general tiers are the same for every character in this batch,
-  // and `findArchetypes` re-reads and YAML-parses every file in each shared
-  // folder. Fetch them at most once, lazily — a batch of `manual`/`none`
-  // selections shouldn't pay for a wardrobe read at all.
-  let sharedPoolPromise: Promise<WardrobeItem[]> | null = null;
-  const getSharedPool = (): Promise<WardrobeItem[]> => {
-    if (!sharedPoolPromise) {
-      sharedPoolPromise = repos.wardrobe
-        .findArchetypes(false, { projectMountPointIds })
-        .catch((error) => {
-          logger.warn('[applyOutfitSelections] Failed to read shared wardrobe tiers; using the character vault alone', {
-            chatId,
-            projectMountCount: projectMountPointIds.length,
-            error: getErrorMessage(error, 'Unknown error'),
-          });
-          return [] as WardrobeItem[];
-        });
-    }
-    return sharedPoolPromise;
-  };
-
-  /**
-   * The group tier can't join the batched read: it's keyed on the character's
-   * own memberships, so each character gets their own. Read separately and
-   * layered over the batch tiers below (group beats project beats general).
-   */
-  const getGroupTier = async (characterId: string): Promise<WardrobeItem[]> => {
-    try {
-      const { groupMountPointIds } = await sharedWardrobeTiersForCharacter(characterId, []);
-      if (groupMountPointIds.length === 0) return [];
-      return await repos.wardrobe.findArchetypesInMounts(groupMountPointIds, false);
-    } catch (error) {
-      logger.warn('[applyOutfitSelections] Failed to read group wardrobe tier; skipping it', {
-        chatId,
-        characterId,
-        error: getErrorMessage(error, 'Unknown error'),
-      });
-      return [];
-    }
-  };
-
-  // Per-character merged pool (shared tiers under the character's own vault),
-  // memoized so a character whose `llm_choose` falls back to defaults doesn't
-  // re-read their vault.
-  const poolByCharacter = new Map<string, Promise<WardrobeItem[]>>();
-  const getPool = (characterId: string): Promise<WardrobeItem[]> => {
+  // The project + General tiers are the same for every character in this
+  // batch: read them at most once, lazily — a batch of `manual`/`none`
+  // selections never pays for a wardrobe read at all. Each character's pool
+  // adds their own vault and their own groups, memoised so a character whose
+  // `llm_choose` falls back to defaults doesn't re-read anything.
+  const sharedTiers = createSharedTierLoader(repos, projectMountPointIds);
+  const poolByCharacter = new Map<string, Promise<WearablePool>>();
+  const getPool = (characterId: string): Promise<WearablePool> => {
     let pending = poolByCharacter.get(characterId);
     if (!pending) {
-      pending = (async () => {
-        const [batchShared, group] = await Promise.all([
-          getSharedPool(),
-          getGroupTier(characterId),
-        ]);
-        // Group last: a group's livery shadows the project's copy of the same id.
-        const shared = [...batchShared, ...group];
-        let own: WardrobeItem[] = [];
-        try {
-          own = await repos.wardrobe.findByCharacterId(characterId);
-        } catch (error) {
-          logger.warn('[applyOutfitSelections] Failed to read character wardrobe; using shared tiers alone', {
-            chatId,
-            characterId,
-            error: getErrorMessage(error, 'Unknown error'),
-          });
-        }
-        const pool = mergeWearablePool(shared, own);
-        logger.debug('[applyOutfitSelections] Resolved wearable pool', {
-          chatId,
-          characterId,
-          poolSize: pool.length,
-          sharedCount: shared.length,
-          groupCount: group.length,
-          ownCount: own.length,
-          projectMountCount: projectMountPointIds.length,
-        });
-        return pool;
-      })();
+      pending = loadWearablePool(repos, characterId, projectMountPointIds, {
+        sharedTiers: sharedTiers(),
+      });
       poolByCharacter.set(characterId, pending);
     }
     return pending;
@@ -332,12 +267,7 @@ export async function applyOutfitSelections(
   ): Promise<void> => {
     if (!context?.progress) return;
     try {
-      const resolved = await resolveEquippedOutfitForCharacter(
-        repos,
-        characterId,
-        slots,
-        await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
-      );
+      const resolved = resolveEquippedOutfitForCharacter(await getPool(characterId), slots);
       context.progress.wardrobeResult(
         characterId,
         characterName,
@@ -368,7 +298,7 @@ export async function applyOutfitSelections(
 
     switch (mode) {
       case 'default':
-        return buildDefaultOutfitWithCredit(await getPool(characterId));
+        return buildDefaultOutfitWithCredit((await getPool(characterId)).wearable());
 
       case 'manual': {
         // The composer dissolves client-side and sends leaves; an outfit
@@ -405,7 +335,7 @@ export async function applyOutfitSelections(
             characterId,
           });
         }
-        return buildDefaultOutfitWithCredit(await getPool(characterId));
+        return buildDefaultOutfitWithCredit((await getPool(characterId)).wearable());
       }
 
       case 'llm_choose': {
@@ -422,7 +352,8 @@ export async function applyOutfitSelections(
             // Candidates come from all three tiers: a character whose entire
             // wardrobe is shared used to fail this guard and fall through to
             // (empty) defaults without the LLM ever being consulted.
-            const wardrobeItems = await getPool(characterId);
+            const pool = await getPool(characterId);
+            const wardrobeItems = pool.wearable();
 
             if (character && wardrobeItems.length > 0) {
               const resolved = selectCheapLLMFromProfiles(
@@ -443,13 +374,9 @@ export async function applyOutfitSelections(
                 // `Wardrobe/instructions.md` wins (character > group >
                 // project > general) and the search stops there. Soft-fails
                 // to null — instructions never block the outfit choice.
-                const { groupMountPointIds } = await sharedWardrobeTiersForCharacter(
-                  characterId,
-                  [],
-                ).catch(() => ({ groupMountPointIds: [] as string[] }));
                 const dressingInstructions = await resolveWardrobeInstructions({
                   characterMountPointId: character.characterDocumentMountPointId ?? null,
-                  groupMountPointIds: groupMountPointIds ?? [],
+                  groupMountPointIds: pool.tiers.groupMountPointIds,
                   projectMountPointIds,
                 }).catch(() => null);
                 if (dressingInstructions) {
@@ -517,10 +444,7 @@ export async function applyOutfitSelections(
                     // The prompt lets the model pick a bundle outright; break
                     // it into its parts before it's stored, so the wardrobe
                     // reads as garments rather than an opaque card.
-                    chosen = dissolveBundlesInSlotsWithCredit(
-                      result.result.slots,
-                      new Map(wardrobeItems.map((i) => [i.id, i])),
-                    );
+                    chosen = dissolveCompositesInSlots(result.result.slots, pool.byId);
                     deliberatelyUnclothed = declaredBare && !picked;
                   } else {
                     logger.warn('[applyOutfitSelections] LLM outfit selection failed, falling back to defaults', {
@@ -556,7 +480,7 @@ export async function applyOutfitSelections(
           return chosen;
         }
 
-        const fallback = buildDefaultOutfitWithCredit(await getPool(characterId));
+        const fallback = buildDefaultOutfitWithCredit((await getPool(characterId)).wearable());
         // If we already told the dialog we were consulting this character,
         // resolve their panel with the default we fell back to (and note it).
         if (consulted && context?.progress) {

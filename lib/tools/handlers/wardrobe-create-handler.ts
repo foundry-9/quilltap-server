@@ -7,11 +7,15 @@
  * (`image_prompt`) that steers image generation.
  *
  * Composite items are built by supplying `component_item_ids` and/or
- * `component_titles`. The handler resolves both (across the character's own
- * wardrobe, the project, and Quilltap General), dedupes, computes the `types`
- * union from the components' types (overriding any LLM-supplied `types`), and
- * persists the new item with the resolved `componentItemIds`. Cycles are
- * rejected by `WardrobeRepository.create` before the row lands.
+ * `component_titles`. The handler resolves both against the target
+ * character's wearable pool (their own wardrobe, their groups, the project,
+ * Quilltap General), dedupes, and creates through `createItem`, whose `types`
+ * are the components' slots widened by any `types` the caller lists. Cycles
+ * are refused by the folder writer before anything lands.
+ *
+ * `equip_now` wears it through the same gesture as `wardrobe_wear` and fires
+ * the same outfit-change effects — avatar refresh and the Aurora announcement
+ * (bug 193).
  */
 
 import { logger } from '@/lib/logger';
@@ -22,20 +26,21 @@ import type {
 } from '../wardrobe-create-tool';
 import { validateWardrobeCreateInput } from '../wardrobe-create-tool';
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { equipItem } from '@/lib/wardrobe/outfit-displacement';
-import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
+import { isComposite as itemIsComposite, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { createItem } from '@/lib/wardrobe/item-mutations';
+import { resolveWardrobeLocation } from '@/lib/wardrobe/location';
+import { notifyWardrobeChanged } from '@/lib/wardrobe/outfit-change-effects';
+import { loadWearablePool, type WearablePool } from '@/lib/wardrobe/pool';
+import { wearItem } from '@/lib/wardrobe/wear-ops';
 import { formatWardrobeToolImageLine, maybeQueueWardrobeToolImage } from '@/lib/wardrobe/tool-image-generation';
-import { unionTypes } from '@/lib/wardrobe/composite-types';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
-import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
-import { describeWardrobeEffect, formatEquippedSlotLines } from './wardrobe-handler-shared';
+import {
+  describeWardrobeEffect,
+  formatEquippedSlotLines,
+  type WardrobeToolContext,
+} from './wardrobe-handler-shared';
 
-export interface WardrobeCreateToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeCreateToolContext = WardrobeToolContext;
 
 export class WardrobeCreateError extends Error {
   constructor(message: string, public code: 'VALIDATION_ERROR' | 'EXECUTION_ERROR' | 'NOT_FOUND') {
@@ -82,63 +87,43 @@ async function resolveRecipientFromChat(
 }
 
 /**
- * Resolve component item references (IDs and/or titles) into a deduplicated,
- * ordered list of wardrobe items. Resolves across the target character's own
- * wardrobe AND shared archetypes (project + Quilltap General); the character's
- * own items win on id/title collision. ID matches are preferred over title
- * matches; unknown references throw.
+ * Resolve component references (ids and/or titles) against the target's pool
+ * into a deduplicated, ordered list. Ids first, then titles (the character's
+ * own items win a title collision); an unknown reference throws.
  */
-async function resolveComponentItems(
-  characterId: string,
+function resolveComponentItems(
+  pool: WearablePool,
   componentIds: string[] | undefined,
   componentTitles: string[] | undefined,
-  tiers: SharedWardrobeTiers,
-): Promise<WardrobeItem[]> {
-  const ids = componentIds ?? [];
-  const titles = componentTitles ?? [];
-  if (ids.length === 0 && titles.length === 0) return [];
-
-  const repos = getRepositories();
-  const ownItems = await repos.wardrobe.findByCharacterId(characterId, true);
-  const archetypes = await repos.wardrobe.findArchetypes(false, tiers);
-
-  // Character's own items take precedence on id/title collision.
-  const itemsById = new Map<string, WardrobeItem>();
-  const itemsByTitle = new Map<string, WardrobeItem>();
-  for (const i of [...archetypes, ...ownItems]) {
-    itemsById.set(i.id, i);
-    itemsByTitle.set(i.title.trim().toLowerCase(), i);
-  }
-
+): WardrobeItem[] {
   const seen = new Set<string>();
   const resolved: WardrobeItem[] = [];
+  const add = (item: WardrobeItem) => {
+    if (seen.has(item.id)) return;
+    seen.add(item.id);
+    resolved.push(item);
+  };
 
-  for (const id of ids) {
-    const item = itemsById.get(id);
+  for (const id of componentIds ?? []) {
+    const item = pool.get(id);
     if (!item) {
       throw new WardrobeCreateError(
-        `Component item with ID "${id}" was not found in this character's wardrobe, the project, or Quilltap General`,
+        `Component item with ID "${id}" was not found in this character's wardrobe, their groups, the project, or Quilltap General`,
         'NOT_FOUND',
       );
     }
-    if (!seen.has(item.id)) {
-      seen.add(item.id);
-      resolved.push(item);
-    }
+    add(item);
   }
 
-  for (const title of titles) {
-    const item = itemsByTitle.get(title.trim().toLowerCase());
+  for (const title of componentTitles ?? []) {
+    const item = pool.findByTitle(title);
     if (!item) {
       throw new WardrobeCreateError(
-        `Component item titled "${title}" was not found in this character's wardrobe, the project, or Quilltap General`,
+        `Component item titled "${title}" was not found in this character's wardrobe, their groups, the project, or Quilltap General`,
         'NOT_FOUND',
       );
     }
-    if (!seen.has(item.id)) {
-      seen.add(item.id);
-      resolved.push(item);
-    }
+    add(item);
   }
 
   return resolved;
@@ -218,62 +203,54 @@ export async function executeWardrobeCreateTool(
 
     // Keyed on the *target* character, not the caller: a gift is assembled from
     // what the recipient can reach, and the group tier is per-character.
-    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, targetCharacterId);
-
-    // Resolve components against the target character's wardrobe (plus shared
-    // archetypes) so a gifted composite references items in the recipient's
-    // collection. If components are supplied, the new item is a composite; its
-    // coverage is the union of the components' slots, optionally widened by any
-    // `types` the caller lists.
-    const components = await resolveComponentItems(
-      targetCharacterId,
-      component_item_ids,
-      component_titles,
-      tiers,
-    );
-
-    const isComposite = components.length > 0;
-    let resolvedTypes: WardrobeItemType[];
-    if (isComposite) {
-      const union = unionTypes(components);
-      if (union.length === 0) {
-        throw new WardrobeCreateError(
-          'Composite components do not cover any slots — this should not happen',
-          'VALIDATION_ERROR',
-        );
-      }
-      const designated = new Set<WardrobeItemType>([
-        ...union,
-        ...((types as WardrobeItemType[]) ?? []),
-      ]);
-      resolvedTypes = WARDROBE_SLOT_TYPES.filter((s) => designated.has(s));
-    } else {
-      resolvedTypes = (types as WardrobeItemType[]) ?? [];
-    }
-
+    const pool = await loadWearablePool(repos, targetCharacterId, undefined, { chatId: context.chatId });
+    const components = resolveComponentItems(pool, component_item_ids, component_titles);
     const componentItemIds = components.map((c) => c.id);
 
-    const newItem = await repos.wardrobe.create({
-      characterId: targetCharacterId,
-      title,
-      description: description || null,
-      imagePrompt: image_prompt || null,
-      types: resolvedTypes,
-      componentItemIds,
-      appropriateness: appropriateness || null,
-      isDefault: false,
-      replace: isComposite ? replace ?? false : false,
-    });
+    if (componentItemIds.length === 0 && (types?.length ?? 0) === 0) {
+      throw new WardrobeCreateError('A wardrobe item must cover at least one slot', 'VALIDATION_ERROR');
+    }
+
+    const location = await resolveWardrobeLocation('character', targetCharacterId, repos, context.userId);
+    if (!location) {
+      throw new WardrobeCreateError('That character has no wardrobe to hang this in', 'NOT_FOUND');
+    }
+
+    const newItem = await createItem(
+      location,
+      {
+        title,
+        description,
+        imagePrompt: image_prompt,
+        types: (types as WardrobeItemType[] | undefined) ?? [],
+        componentItemIds,
+        appropriateness,
+        isDefault: false,
+        replace: replace ?? false,
+      },
+      { lookup: pool.byId },
+    );
+    const isComposite = itemIsComposite(newItem);
+    const resolvedTypes = newItem.types;
 
     let equipped = false;
     let effect: 'layered' | 'replaced' | undefined;
     let currentState: EquippedSlots | undefined;
 
     if (equip_now) {
-      await equipItem(repos, context.chatId, targetCharacterId, newItem, tiers, 'tool');
-
+      // The pool predates the item; wear it against a lookup that knows it.
+      const withNew = { ...pool, byId: new Map([...pool.byId, [newItem.id, { ...newItem, origin: location.origin }]]) };
+      const outcome = await wearItem(
+        repos,
+        context.chatId,
+        withNew,
+        { ...newItem, origin: location.origin },
+        'wear',
+        undefined,
+        'tool',
+      );
       equipped = true;
-      effect = newItem.replace ? 'replaced' : 'layered';
+      effect = outcome.effect;
 
       // Read through the repository so the stored bag is normalized to all
       // five slots — a chat row written before a slot existed omits its key.
@@ -281,12 +258,16 @@ export async function executeWardrobeCreateTool(
         (await repos.chats.getEquippedOutfitForCharacter(context.chatId, targetCharacterId)) ??
         makeEmptyEquippedSlots();
 
-      await triggerAvatarGenerationIfEnabled(repos, {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: targetCharacterId,
-        callerContext: 'wardrobe-create-handler',
-      });
+      await notifyWardrobeChanged(
+        repos,
+        {
+          userId: context.userId,
+          chatId: context.chatId,
+          characterId: targetCharacterId,
+          pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+        },
+        'wardrobe-create-handler',
+      );
     }
 
     // A new garment is drawn by default when the operator allows tool pictures.

@@ -1,7 +1,8 @@
 /**
- * The wear ledger on the two hand-written wardrobe routes — the character's
- * own and Quilltap General. (The group/project tiers go through the route
- * factory and are pinned in `mount-wardrobe-route-factory.test.ts`.)
+ * The wear ledger on the character's own and Quilltap General's wardrobe
+ * routes, end to end through the route files. (All four tiers share
+ * `lib/wardrobe/routes/wardrobe-route-factory.ts`, pinned in detail in
+ * `__tests__/unit/lib/wardrobe/routes/wardrobe-route-factory.test.ts`.)
  *
  *   - Every collection GET attaches `wear` to each item from ONE
  *     `findSummaries` call, alongside `origin`.
@@ -34,7 +35,13 @@ jest.mock('@/lib/api/middleware', () => {
   }
 })
 
+// The folder reader answers by tier: the character's vault, or General.
 jest.mock('@/lib/database/repositories/vault-overlay/wardrobe-writes', () => ({
+  WardrobeComponentCycleError: class WardrobeComponentCycleError extends Error {},
+  readMountItems: jest.fn(),
+  createInMount: jest.fn(),
+  updateInMount: jest.fn(),
+  deleteInMount: jest.fn(),
   resolveWardrobeMount: jest.fn(),
 }))
 
@@ -50,9 +57,15 @@ jest.mock('@/lib/instance-settings', () => ({
   getGeneralMountPointId: jest.fn(),
 }))
 
-jest.mock('@/lib/mount-index/general-wardrobe', () => ({
-  ensureGeneralWardrobeFolder: jest.fn(),
+jest.mock('@/lib/mount-index/shared-wardrobe', () => ({
+  ensureSharedWardrobeFolder: jest.fn(),
 }))
+
+jest.mock('@/lib/mount-index/ensure-owner-store', () => ({
+  ensureOwnerOfficialStore: jest.fn(),
+}))
+
+jest.mock('@/lib/wardrobe/pool', () => ({ loadWearablePool: jest.fn() }))
 
 jest.mock('@/lib/wardrobe/wardrobe-instructions-handlers', () => ({
   parseWardrobeInstructionsBody: jest.fn(),
@@ -64,6 +77,8 @@ import { GET as GET_CHARACTER_LIST } from '@/app/api/v1/characters/[id]/wardrobe
 import { GET as GET_CHARACTER_ITEM } from '@/app/api/v1/characters/[id]/wardrobe/[itemId]/route'
 import { GET as GET_GENERAL_LIST } from '@/app/api/v1/wardrobe/route'
 import { GET as GET_GENERAL_ITEM } from '@/app/api/v1/wardrobe/[itemId]/route'
+import { readMountItems } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+import { getGeneralMountPointId } from '@/lib/instance-settings'
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111'
 const MARGUERITE = '22222222-2222-4222-8222-222222222222'
@@ -100,8 +115,14 @@ function params(p: Record<string, string>) {
 }
 
 function buildRepos() {
-  const characters: Record<string, { id: string; name: string; defaultImageId: null }> = {
-    [CHAR_ID]: { id: CHAR_ID, name: 'Vivienne', defaultImageId: null },
+  const characters: Record<string, Record<string, unknown>> = {
+    [CHAR_ID]: {
+      id: CHAR_ID,
+      name: 'Vivienne',
+      userId: 'user-1',
+      characterDocumentMountPointId: 'vault-1',
+      defaultImageId: null,
+    },
     [MARGUERITE]: { id: MARGUERITE, name: 'Marguerite', defaultImageId: null },
   }
   return {
@@ -111,13 +132,6 @@ function buildRepos() {
     },
     chats: {
       findById: jest.fn().mockResolvedValue({ id: CHAT_ID, title: 'The Thornfield Dinner' }),
-    },
-    wardrobe: {
-      findByCharacterId: jest.fn().mockResolvedValue([item(), item({ id: 'item-2', title: 'Spats' })]),
-      findByIdForCharacter: jest.fn().mockResolvedValue(item()),
-      findArchetypes: jest.fn().mockResolvedValue([item({ characterId: null })]),
-      findArchetypeById: jest.fn().mockResolvedValue(item({ characterId: null })),
-      findArchetypesInMountsAttributed: jest.fn().mockResolvedValue([]),
     },
     wardrobeWear: {
       findSummaries: jest.fn(async (ids: string[]) =>
@@ -131,6 +145,12 @@ function buildRepos() {
 beforeEach(() => {
   jest.clearAllMocks()
   mockCtx = { user: { id: 'user-1' }, repos: buildRepos() }
+  ;(getGeneralMountPointId as jest.Mock).mockResolvedValue('general-mount')
+  ;(readMountItems as jest.Mock).mockImplementation(async (mount: { scope: string }) =>
+    mount.scope === 'character'
+      ? [item(), item({ id: 'item-2', title: 'Spats' })]
+      : [item({ characterId: null })],
+  )
 })
 
 describe('collection GETs attach wear', () => {
@@ -195,8 +215,6 @@ describe('item GET ?action=wear-history', () => {
   })
 
   it('404s before reading the ledger when the item is not in the tier', async () => {
-    mockCtx.repos.wardrobe.findByIdForCharacter.mockResolvedValue(null)
-
     const res: any = await GET_CHARACTER_ITEM(
       req(`http://x.test/api/v1/characters/${CHAR_ID}/wardrobe/nope?action=wear-history`),
       params({ id: CHAR_ID, itemId: 'nope' }),

@@ -4,9 +4,10 @@
  * Edits the stored fields of an existing wardrobe item. Resolves the target
  * across every tier to LOCATE it, then enforces own-items-only:
  * shared archetypes (project / Quilltap General; `characterId === null`) are
- * read-only and the edit is refused. Only the supplied fields change. When the
- * component list changes and `types` wasn't given, the coverage union is
- * recomputed from the new components.
+ * read-only and the edit is refused. Only the supplied fields change. A
+ * composite's `types` go through `updateItem`'s widen-never-narrow rule: the
+ * components' slots plus every slot it already designated, unless `types` is
+ * restated (bug 195).
  *
  * Does NOT equip — wearing is a separate `wardrobe_wear` call. Echoes back the
  * updated item in `wardrobe_read` shape.
@@ -17,14 +18,15 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeUpdateToolInput, WardrobeUpdateToolOutput } from '../wardrobe-update-tool';
 import { validateWardrobeUpdateInput } from '../wardrobe-update-tool';
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { unionTypes } from '@/lib/wardrobe/composite-types';
-import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { updateItem } from '@/lib/wardrobe/item-mutations';
+import { resolveWardrobeLocation } from '@/lib/wardrobe/location';
+import { findInPool } from '@/lib/wardrobe/wear-ops';
 import {
-  isOwnWardrobeItem,
+  loadToolPool,
   normalizeNoItemSentinel,
-  resolveWardrobeItemAcrossTiers,
   sharedWardrobeItemReadOnlyMessage,
   wardrobeItemNotFoundMessage,
+  type WardrobeToolContext,
 } from './wardrobe-handler-shared';
 import { buildWardrobeReadFailure, buildWardrobeReadOutput } from './wardrobe-read-handler';
 import { formatWardrobeToolImageLine, maybeQueueWardrobeToolImage } from '@/lib/wardrobe/tool-image-generation';
@@ -43,11 +45,8 @@ function patchChangesLook(item: WardrobeItem, patch: Partial<WardrobeItem>): boo
   return false;
 }
 
-export interface WardrobeUpdateToolContext {
-  userId: string;
-  chatId: string;
-  characterId: string;
-}
+/** Every wardrobe tool runs in the same context (see `WardrobeToolContext`). */
+export type WardrobeUpdateToolContext = WardrobeToolContext;
 
 export async function executeWardrobeUpdateTool(
   input: unknown,
@@ -83,20 +82,17 @@ export async function executeWardrobeUpdateTool(
       generate_image,
     } = parsed;
 
-    const tiers = await resolveSharedWardrobeTiersForChat(context.chatId, context.characterId);
+    const pool = await loadToolPool(repos, context.chatId, context.characterId);
 
-    const item = await resolveWardrobeItemAcrossTiers(
-      repos,
-      context.characterId,
-      normalizeNoItemSentinel(item_id),
-      normalizeNoItemSentinel(item_title),
-      tiers,
-    );
+    const item = findInPool(pool, {
+      itemId: normalizeNoItemSentinel(item_id),
+      itemTitle: normalizeNoItemSentinel(item_title),
+    });
     if (!item) {
       return buildWardrobeReadFailure(wardrobeItemNotFoundMessage(item_id, item_title));
     }
 
-    if (!isOwnWardrobeItem(item, context.characterId)) {
+    if (!pool.owns(item)) {
       return buildWardrobeReadFailure(sharedWardrobeItemReadOnlyMessage(item.title, 'changed'));
     }
 
@@ -110,16 +106,10 @@ export async function executeWardrobeUpdateTool(
     if (replace !== undefined) patch.replace = replace;
     if (component_item_ids !== undefined) patch.componentItemIds = component_item_ids;
 
-    // When the component list changes and types weren't explicitly supplied,
-    // recompute the coverage union from the new components (across tiers).
-    if (component_item_ids !== undefined && types === undefined && component_item_ids.length > 0) {
-      const comps = await repos.wardrobe.findByIdsForCharacter(context.characterId, component_item_ids, tiers);
-      const union = unionTypes(comps);
-      if (union.length > 0) patch.types = union;
-    }
-
-    // `ownerCharacterId` must be passed so the vault mount resolves.
-    const updated = await repos.wardrobe.update(item.id, patch, item.characterId);
+    const location = await resolveWardrobeLocation('character', context.characterId, repos, context.userId);
+    const updated = location
+      ? await updateItem(location, item, patch, { lookup: pool.byId })
+      : null;
     if (!updated) {
       return buildWardrobeReadFailure(`Failed to update wardrobe item "${item.title}"`);
     }
@@ -147,7 +137,7 @@ export async function executeWardrobeUpdateTool(
       imageGeneration: imageGeneration?.status,
     });
 
-    const output = await buildWardrobeReadOutput(repos, context.characterId, context.chatId, updated, tiers);
+    const output = await buildWardrobeReadOutput(repos, pool, context.chatId, updated);
     return imageGeneration ? { ...output, image_generation: imageGeneration } : output;
   } catch (error) {
     logger.error('Wardrobe update tool execution failed', {

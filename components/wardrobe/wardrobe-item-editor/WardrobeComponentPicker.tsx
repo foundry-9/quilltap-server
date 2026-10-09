@@ -1,11 +1,11 @@
 'use client'
 
-import { WARDROBE_SLOT_TYPES, formatSlotLabels } from '@/lib/schemas/wardrobe.types'
+import { formatSlotLabels, isComposite } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { wardrobeOriginLabel } from '@/lib/wardrobe/wardrobe-container'
 import type { CandidateItem, CandidateGroup } from './types'
 import { GROUP_LABEL, GROUP_ORDER } from './constants'
-import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
+import { SlotBadge, SlotCheckboxGroup } from '../slot-ui'
 
 interface WardrobeComponentPickerProps {
   effectiveTypes: WardrobeItemType[]
@@ -67,14 +67,7 @@ export function WardrobeComponentPicker({
               no slots covered yet
             </span>
           ) : (
-            effectiveTypes.map((t) => (
-              <span
-                key={t}
-                className={`qt-badge ${WARDROBE_SLOT_META[t].badgeClass} uppercase`}
-              >
-                {t}
-              </span>
-            ))
+            effectiveTypes.map((t) => <SlotBadge key={t} slot={t} />)
           )}
         </div>
       </div>
@@ -180,7 +173,8 @@ export function WardrobeComponentPicker({
                             )}
                             <span className="shrink-0 max-w-[45%] text-right qt-text-xs qt-text-secondary">
                               {formatSlotLabels(c.types)}
-                              {c.componentItemIds.length > 0 ? ' · bundle' : ''}
+                              {isComposite(c) ? ' · bundle' : ''}
+                              {c.archived ? ' · archived' : ''}
                             </span>
                           </label>
                         </li>
@@ -220,37 +214,21 @@ export function WardrobeComponentPicker({
           </span>
         </label>
 
-        {replace && (
-          <div className="mt-2">
-            <p className="qt-text-xs qt-text-secondary mb-1">
-              Slots this outfit clears (its components&apos; slots are always included):
-            </p>
-            <div className="flex flex-wrap gap-3">
-              {WARDROBE_SLOT_TYPES.map((slot) => {
-                const locked = computedTypes.includes(slot)
-                const checked = effectiveTypes.includes(slot)
-                return (
-                  <label
-                    key={slot}
-                    className={`inline-flex items-center gap-1.5 ${
-                      locked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
-                    }`}
-                    title={locked ? 'Covered by a component — always cleared' : undefined}
-                  >
-                    <input
-                      type="checkbox"
-                      className="qt-checkbox"
-                      checked={checked}
-                      disabled={locked}
-                      onChange={() => onToggleType(slot)}
-                    />
-                    <span className="text-sm capitalize text-foreground">{slot}</span>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-        )}
+        {/* The slots this outfit covers. Its components' slots are always
+            in; more may be designated — a replace outfit clears them all. */}
+        <div className="mt-2">
+          <p className="qt-text-xs qt-text-secondary mb-1">
+            {replace
+              ? 'Slots this outfit clears (its components’ slots are always included):'
+              : 'Slots this outfit covers (its components’ slots are always included):'}
+          </p>
+          <SlotCheckboxGroup
+            value={effectiveTypes}
+            onToggle={onToggleType}
+            locked={computedTypes}
+            lockedTitle="Covered by a component — always included"
+          />
+        </div>
       </div>
     </div>
   )

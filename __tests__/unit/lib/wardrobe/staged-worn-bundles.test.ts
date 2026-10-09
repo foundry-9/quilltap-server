@@ -19,7 +19,7 @@ import {
 } from '@/lib/wardrobe/staged-live-outfits'
 import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
-import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
+import { wearItemIntoSlots } from '@/lib/wardrobe/slot-ops'
 
 const slots = (partial: Partial<EquippedSlots>): EquippedSlots => ({
   ...EMPTY_EQUIPPED_SLOTS,
