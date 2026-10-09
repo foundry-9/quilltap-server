@@ -2,16 +2,24 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | **FIXED in v4 (2026-10-09)** |
 | **Found** | 2026-10-09, the v5 port's dogfood walk of the wardrobe programme against a copy of `Friday` (Friday's wardrobe dialog showed `Worn 8× · last last week`) |
+| **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | Low — wording only; the date is right. It shows on every wardrobe row, wear-history line and `wardrobe_read` answer whose last wear is 7–13 or 30–59 days old |
 | **Who it bites** | anyone reading a wardrobe row or an item's wear history, and every character whose `wardrobe_read` reports a wear 7–13 or 30–59 days old (the doubled word reaches the model) |
 | **Provenance** | Original to v4 (the wear ledger, `3ee3b1342` / `7c8572869`). `formatRelativeDays` (`lib/format-time.ts`) was written for memory-recall labels, where "last week" stands alone; the wear lines put the word "last" in front of it |
 | **Defect site** | `lib/wardrobe/wear-display.ts:57` (`` `${count} · last ${when}` ``); `lib/tools/handlers/wardrobe-read-handler.ts:179-183` (`` `last ${last}` `` where `last` starts with the relative date); `components/wardrobe/wardrobe-item-editor/WardrobeWearHistorySection.tsx:142` (`` {w.wearCount}×, last {relative(w.lastWornAt)} ``) |
+| **Fix site** | `lib/wardrobe/wear-display.ts` (`formatWornRelative`, used by `formatWornWhen`), `lib/tools/handlers/wardrobe-read-handler.ts`, `lib/tools/handlers/wardrobe-list-handler.ts` |
 | **v5 status** | Faithful — v5 renders the same strings (`apps/web/src/app/wardrobe/wear-display.ts`, `apps/web/src/app/wardrobe/item-editor/wear-history-section.ts`, `crates/quilltap-core/src/tools/wardrobe_read.rs`); it will follow v4's fix |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-09).** The second option below. New `formatWornRelative` (`lib/wardrobe/wear-display.ts`)
+wraps `formatRelativeDays` and maps its two "last" rungs to `a week ago` / `a month ago`, so a wear
+line reads `Worn 8× · last a week ago`. `formatWornWhen` (the row line and the item editor's wear
+history) and both wardrobe tools go through it; the memory-recall labels that share the ladder are
+untouched.
 
 ## Symptom
 
@@ -46,13 +54,17 @@ word in front of it.
 
 ## Fix
 
-Not done. Options:
+`formatWornRelative(ts, nowMs)` in `lib/wardrobe/wear-display.ts` is the one place a wear date that
+follows the word "last" is phrased: it calls `formatRelativeDays` and rewrites exactly `last week` →
+`a week ago` and `last month` → `a month ago`. `formatWornWhen` (the Wardrobe dialog's row line and
+`WardrobeWearHistorySection`) delegates to it, as do `relativeWearDate` in the read handler and the
+list handler's note (which bug 184 rewrote to `worn by you N×, last …`). Option 1 (`last worn …`)
+was not taken because the row line and the editor would read `Worn 8× · last worn last week`, which
+still doubles the word.
 
-- Have the three renderers say `last worn …` instead of `last …` (`Worn 8× · last worn last week`,
-  `…, last worn last week by you.`, `8×, last worn last week`). One word at each site; the ladder is
-  untouched.
-- Or map the two rungs at the wear call sites (`last week` → `a week ago`, `last month` → `a month ago`)
-  through a small wrapper over `formatRelativeDays`, leaving the memory-recall labels as they are.
+## Verify
 
-Either way, add the 7–13 and 30–59 day cases to the `formatWearLine` and `formatWardrobeWearParagraph`
-tests.
+- `__tests__/unit/lib/wardrobe/wear-display.test.ts`: `formatWearLine` at 9, 13, 30 and 59 days, and
+  `formatWornRelative` across the ladder.
+- `__tests__/unit/lib/tools/handlers/wardrobe-wear-readout.test.ts`: the list note and the read
+  paragraph at 9 and 40 days.

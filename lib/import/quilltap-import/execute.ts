@@ -983,6 +983,16 @@ async function executeImportStrict(
       await importWardrobeItemImages(userId, data.characters, idMaps, warnings);
     }
 
+    // Store names: an imported vault arrives as "… (2)" when its name was
+    // taken; name each live vault after its character and retire any vault
+    // the import left unlinked (bug 186).
+    try {
+      const { reconcileStoreNames } = await import('@/lib/mount-index/reconcile-store-names');
+      await reconcileStoreNames('qtap-import');
+    } catch (error) {
+      warnings.push(`Failed to tidy document-store names after import: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     // Re-embed what we just inserted. Imported memories carry no vector, and
     // without this their semantic search stays broken until the next boot's
     // reconcile sweep runs.

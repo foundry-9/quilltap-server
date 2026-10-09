@@ -2,16 +2,24 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | **FIXED in v4 (2026-10-09)** |
 | **Found** | 2026-10-09, the v5 port's dogfood walk of the wardrobe programme against a copy of `Friday`. Asked how often she had worn the shared Levi's, Friday answered "one hundred and fifteen times"; her own count was 12. Laura had worn them 25 times, Charlie 14, and twelve others the rest |
+| **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | Medium — the model is told a number that is not about the character reading it, and nothing in the tool output says so. A character takes another's favourite as her own staple, or an item she has never worn as one she wore yesterday |
 | **Who it bites** | every character that reads shared items (Quilltap General archetypes, group and project wardrobes) through `wardrobe_list` or `wardrobe_read`; own items are rarely affected because usually only their owner wears them |
 | **Provenance** | Original to v4 (the wear ledger, `3ee3b1342`). The ledger is per (item, wearer); the tool reads aggregate it per item |
 | **Defect site** | `lib/tools/handlers/wardrobe-list-handler.ts:119-146` — `wear_count` / `last_worn_at` come from `repos.wardrobeWear.findSummaries` (`lib/database/repositories/wardrobe-wear.repository.ts:408-425`), which sums every wearer's rows per item; `formatWardrobeListWearNote` (`:205-212`) turns that into ` · last worn …` / ` · never worn`. `lib/tools/handlers/wardrobe-read-handler.ts:170-188` (`formatWardrobeWearParagraph`) — the head gives the household total and names the most recent wearer, but never the reading character's own count |
+| **Fix site** | `lib/database/repositories/wardrobe-wear.repository.ts` (`findSummariesForWearer`), `lib/tools/handlers/wardrobe-list-handler.ts` (`formatWardrobeListWearNote`), `lib/tools/handlers/wardrobe-read-handler.ts` (`formatWardrobeWearParagraph`), `lib/tools/wardrobe-list-tool.ts`, `lib/tools/wardrobe-read-tool.ts` |
 | **v5 status** | Faithful — v5 ports the same aggregation (`crates/quilltap-core/src/tools/wardrobe_list.rs`, `crates/quilltap-core/src/tools/wardrobe_read.rs`); it will follow v4's fix |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-09).** As proposed below. `wardrobe_list` reads each item's wear through the new
+`WardrobeWearRepository.findSummariesForWearer(itemIds, characterId)`, which returns the household
+total and the caller's own share from one ledger read; the result carries `worn_by_you` /
+`last_worn_by_you_at` beside `wear_count` / `last_worn_at`, and the line's note is written from the
+caller's side. `wardrobe_read` leads with the reader's own record and gives the household second.
 
 ## Symptom
 
@@ -56,16 +64,30 @@ which the fixtures do not.
 
 ## Fix
 
-Not done. The character tools should answer from the reader's point of view and keep the total as
-context. For example:
+- **Ledger read.** `findSummariesForWearer` groups the item rows once (the private `findRowsByItem`,
+  shared with `findSummaries`) and folds them twice: all rows for the household, the caller's rows for
+  `yours`. The result type is `WardrobeWearPerspective` (`lib/schemas/wardrobe-wear.types.ts`). It is
+  a `find*` read, so the child proxy passes it through.
+- **`wardrobe_list`.** The structured result keeps `wear_count` / `last_worn_at` as the household's
+  (documented as such) and adds `worn_by_you` / `last_worn_by_you_at`. The note:
+  - ` · never worn` — nobody has
+  - ` · never worn by you (worn 115× by others)`
+  - ` · worn by you 12×, last yesterday` — only the caller has worn it
+  - ` · worn by you 12×, last yesterday (115× in the household)`
+- **`wardrobe_read`.** `formatWardrobeWearParagraph` leads with the reader:
+  `You have worn it 13 times, first 25 Jun 2026, last today. Worn 116 times in all; also by Laura
+  (25 times) and Sunny (once).` When someone else wore it last, the household sentence adds
+  `most recently … by Laura`. A reader who never has reads `You have never worn it. Worn 115 times by
+  others, first …, last … by Laura: Laura (25 times), …`.
+- Both tool descriptions now say which number is the caller's and which is the household's.
 
-- `wardrobe_list`: carry the caller's own `worn_by_you` / `last_worn_by_you_at` beside the household
-  `wear_count` / `last_worn_at`, and write the note from the caller's side, e.g.
-  ` · worn by you 12×, last yesterday (115× in the household)` or
-  ` · never worn by you (115× in the household)`. The per-wearer rows are already in the ledger
-  (`findRowsForItems`), so the summary can be computed for one wearer alongside the total.
-- `wardrobe_read`: lead with the reader's own record, then the household, e.g.
-  `You have worn it 13 times, first 25 Jun 2026, last today. Worn 116 times in all; also by Laura (25 times), …`,
-  never folding the reader into an unnumbered `by you`.
+The Wardrobe dialog's row line and **Most worn** sort keep the household total; the help now says
+the dialog counts every wearer.
 
-The wardrobe UI's row line and sort can keep the household total; there it is labelled by context.
+## Verify
+
+- `__tests__/unit/lib/database/repositories/wardrobe-wear.repository.test.ts`: `findSummariesForWearer`
+  with two wearers, an item only someone else wore, and an unknown id.
+- `__tests__/unit/lib/tools/handlers/wardrobe-wear-readout.test.ts`: the list note in all four shapes,
+  and the read paragraph for a crowded household (the walk's case), a reader who is not the latest
+  wearer, and a reader who never wore it.

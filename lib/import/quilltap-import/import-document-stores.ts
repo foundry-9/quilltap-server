@@ -79,8 +79,19 @@ export async function importDocumentStores(
           await globalRepos.docMountChunks.deleteByMountPointId(existing.id);
           await globalRepos.docMountFiles.deleteByMountPointId(existing.id);
           await globalRepos.docMountFolders.deleteByMountPointId(existing.id);
+          // The archive's name, unless another store now holds it (the
+          // namespace is shared; this store's own current name never counts
+          // against it).
+          const overwriteName =
+            existing.name.trim().toLowerCase() === mp.name.trim().toLowerCase()
+              ? mp.name
+              : nextUniqueMountPointName(
+                  new Set([...takenNames].filter((n) => n.trim().toLowerCase() !== existing.name.trim().toLowerCase())),
+                  mp.name
+                );
+          takenNames.add(overwriteName);
           await globalRepos.docMountPoints.update(existing.id, {
-            name: mp.name,
+            name: overwriteName,
             basePath: mp.mountType === 'database' ? '' : mp.basePath,
             mountType: mp.mountType,
             storeType: mp.storeType ?? 'documents',

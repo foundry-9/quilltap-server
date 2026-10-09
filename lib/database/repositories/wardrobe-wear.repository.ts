@@ -48,6 +48,7 @@ import {
   WardrobeWearStatsRowSchema,
   neverWornSummary,
   type WardrobeWearHistory,
+  type WardrobeWearPerspective,
   type WardrobeWearStatsRow,
   type WardrobeWearSummary,
   type WardrobeWearer,
@@ -412,12 +413,7 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
 
     return this.safeQuery(
       async () => {
-        const rowsByItem = new Map<string, WardrobeWearStatsRow[]>();
-        for (const row of await this.findRowsForItems(ids)) {
-          const list = rowsByItem.get(row.itemId) ?? [];
-          list.push(row);
-          rowsByItem.set(row.itemId, list);
-        }
+        const rowsByItem = await this.findRowsByItem(ids);
         for (const [itemId, rows] of rowsByItem) {
           result.set(itemId, summarize(rows));
         }
@@ -425,6 +421,44 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
       },
       'Error reading wear summaries',
       { itemCount: ids.length },
+      result,
+    );
+  }
+
+  /**
+   * Each item's household totals beside one wearer's own share, for the
+   * character-facing `wardrobe_list`. The household total alone is the UI's
+   * number; handed to a character it reads as their own (bug 184). Every
+   * requested id is in the map; one never worn maps to two zero summaries.
+   */
+  async findSummariesForWearer(
+    itemIds: string[],
+    wearerCharacterId: string,
+  ): Promise<Map<string, WardrobeWearPerspective>> {
+    const ids = Array.from(new Set(itemIds.filter(Boolean)));
+    const result = new Map<string, WardrobeWearPerspective>(
+      ids.map((id) => [id, { household: neverWornSummary(), yours: neverWornSummary() }]),
+    );
+    if (ids.length === 0) return result;
+
+    return this.safeQuery(
+      async () => {
+        const rowsByItem = await this.findRowsByItem(ids);
+        for (const [itemId, rows] of rowsByItem) {
+          result.set(itemId, {
+            household: summarize(rows),
+            yours: summarize(rows.filter((row) => row.wearerCharacterId === wearerCharacterId)),
+          });
+        }
+        log.debug('Read wear summaries for wearer', {
+          itemCount: ids.length,
+          wornCount: rowsByItem.size,
+          wearerCharacterId,
+        });
+        return result;
+      },
+      'Error reading wear summaries for wearer',
+      { itemCount: ids.length, wearerCharacterId },
       result,
     );
   }
@@ -451,6 +485,17 @@ export class WardrobeWearRepository extends AbstractBaseRepository<WardrobeWearS
       { itemId },
       empty,
     );
+  }
+
+  /** {@link findRowsForItems}, grouped by item id. Items with no rows are absent. */
+  private async findRowsByItem(itemIds: string[]): Promise<Map<string, WardrobeWearStatsRow[]>> {
+    const rowsByItem = new Map<string, WardrobeWearStatsRow[]>();
+    for (const row of await this.findRowsForItems(itemIds)) {
+      const list = rowsByItem.get(row.itemId) ?? [];
+      list.push(row);
+      rowsByItem.set(row.itemId, list);
+    }
+    return rowsByItem;
   }
 
   /** Every ledger row for these items (export). */

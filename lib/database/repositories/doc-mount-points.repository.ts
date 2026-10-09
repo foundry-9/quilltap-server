@@ -18,7 +18,24 @@ import { CreateOptions } from './base.repository';
 import { AbstractDedicatedDbRepository } from './dedicated-db.repository';
 import { TypedQueryFilter } from '../interfaces';
 import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
-import { repairMountPointNameCollisions } from './mount-index-case-repair';
+import { ensureMountPointNameUniqueIndex } from './mount-index-case-repair';
+
+/**
+ * Thrown when a create or rename would give a store a name another store
+ * already holds. Store names are one case-insensitive namespace.
+ */
+export class MountPointNameTakenError extends Error {
+  readonly code = 'MOUNT_POINT_NAME_TAKEN';
+  constructor(
+    readonly requestedName: string,
+    readonly holder: Pick<DocMountPoint, 'id' | 'name'>,
+  ) {
+    super(
+      `A document store named "${holder.name}" already exists. Names are matched without regard to case — please choose a different name.`,
+    );
+    this.name = 'MountPointNameTakenError';
+  }
+}
 
 /**
  * Document Mount Points Repository
@@ -61,27 +78,53 @@ export class DocMountPointsRepository extends AbstractDedicatedDbRepository<DocM
       logger.info('Migrated doc_mount_points: added storeType column');
     }
 
-    // Repair: mount-point names form one case-insensitive namespace.
-    // Runs every init (cheap no-op scan when the invariant holds) so
-    // duplicates that slip in through a backup restore of legacy data
-    // get suffixed on the next boot. No DB unique index here — restore
-    // must be able to recreate legacy rows verbatim before this runs.
-    repairMountPointNameCollisions(db);
+    // Store names form one case-insensitive namespace (a name is an address
+    // in qtap:// URIs and every doc tool). Repair any surviving collisions,
+    // then keep the unique index in place. Runs every init; a no-op scan when
+    // the invariant holds.
+    ensureMountPointNameUniqueIndex(db);
   }
 
   // ============================================================================
   // Abstract method implementations
   // ============================================================================
 
+  /**
+   * Create a store. Refuses a name another store already holds, ignoring case
+   * ({@link MountPointNameTakenError}); a caller that wants a free name picks
+   * one with `nextUniqueMountPointName` first.
+   */
   async create(
     data: Omit<DocMountPoint, 'id' | 'createdAt' | 'updatedAt'>,
     options?: CreateOptions
   ): Promise<DocMountPoint> {
+    await this.assertNameFree(data.name, null);
     return this._create(data, options);
   }
 
+  /** Update a store. A rename is refused when another store holds the name. */
   async update(id: string, data: Partial<DocMountPoint>): Promise<DocMountPoint | null> {
+    if (data.name !== undefined) await this.assertNameFree(data.name, id);
     return this._update(id, data);
+  }
+
+  /** The store, other than `exceptId`, that holds this name (ignoring case), if any. */
+  async findNameHolder(name: string, exceptId: string | null): Promise<DocMountPoint | null> {
+    const needle = name.trim().toLowerCase();
+    const all = await this.findAll();
+    return all.find((mp) => mp.id !== exceptId && mp.name.trim().toLowerCase() === needle) ?? null;
+  }
+
+  private async assertNameFree(name: string, exceptId: string | null): Promise<void> {
+    const holder = await this.findNameHolder(name, exceptId);
+    if (holder) {
+      logger.warn('Refused a document-store name another store holds', {
+        name,
+        mountPointId: exceptId,
+        holderId: holder.id,
+      });
+      throw new MountPointNameTakenError(name, holder);
+    }
   }
 
   async delete(id: string): Promise<boolean> {

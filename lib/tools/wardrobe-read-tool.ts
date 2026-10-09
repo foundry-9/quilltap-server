@@ -110,8 +110,8 @@ export const wardrobeReadToolDefinition = {
       'Returns everything wardrobe_list omits: the Portrait Cue (image_prompt), ' +
       'default-outfit membership, composite/replace behaviour, the full ' +
       'component list, archived status, whether you own it, the slots it is ' +
-      'currently equipped in, its wear history (how often it has been worn, ' +
-      'when, and by whom), and its picture\'s image_file_id when it has one ' +
+      'currently equipped in, its wear history (how often you have worn it, ' +
+      'then how often the whole household has and by whom), and its picture\'s image_file_id when it has one ' +
       '(pass that to describe_image to see what it looks like). Items from your own wardrobe, the project, and ' +
       'Quilltap General all resolve.',
     parameters: zodToOpenAISchema(wardrobeReadToolInputSchema),

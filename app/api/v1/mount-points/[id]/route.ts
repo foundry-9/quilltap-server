@@ -101,14 +101,28 @@ export const PATCH = createContextParamsHandler<{ id: string }>(
       const body = await req.json();
       const validatedData = updateMountPointSchema.parse(body);
 
+      if (validatedData.name !== undefined && validatedData.name !== existing.name) {
+        // A live character vault is named after its character; renaming the
+        // vault alone would be undone by the next store-name reconcile.
+        const owner = (await repos.characters.findAllRaw()).find(
+          (c) => c.characterDocumentMountPointId === id
+        );
+        if (owner) {
+          logger.warn('[Mount Points v1] Rejected rename of a live character vault', {
+            mountPointId: id,
+            characterId: owner.id,
+            userId: user.id,
+          });
+          return conflict(
+            `This vault belongs to ${owner.name} and is named after them. Rename the character to rename the vault.`
+          );
+        }
+      }
+
       // Renames stay inside the case-insensitive name namespace: no store may
       // take a name a peer already holds, even in a different casing.
       if (validatedData.name !== undefined) {
-        const desiredLower = validatedData.name.trim().toLowerCase();
-        const allStores = await repos.docMountPoints.findAll();
-        const clash = allStores.find(
-          mp => mp.id !== id && mp.name.trim().toLowerCase() === desiredLower
-        );
+        const clash = await repos.docMountPoints.findNameHolder(validatedData.name, id);
         if (clash) {
           logger.warn('[Mount Points v1] Rejected duplicate mount point rename', {
             mountPointId: id,

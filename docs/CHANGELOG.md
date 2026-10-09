@@ -4,6 +4,61 @@
 
 ### 4.10-dev
 
+#### Fix bug 186: two document stores can share a name
+
+- Store names are one case-insensitive namespace (a name is a `qtap://` address), but only the API
+  routes and provisioning helpers enforced it. `DocMountPointsRepository.create` / `update` now refuse
+  a name another store holds (`MountPointNameTakenError`), and a unique NOCASE index
+  (`idx_doc_mount_points_name_nocase`) backs it, created on every table init after the existing
+  collision repair.
+- A restore gives each incoming store its archived name when free, otherwise the next ` (N)`, and keeps
+  the archive's `createdAt`. The `.qtap` import's overwrite path uniquifies the name too.
+- New naming rules (`lib/mount-index/store-names.ts`, applied by `reconcileStoreNames`): a character's
+  live vault is always `<Name> Character Vault`, following character renames; a character vault no
+  character points at is renamed `<Name> Version <YYYY-MM-DDTHHMMSSZ> Store` from its `createdAt`. Vaults
+  a vault-less namesake may still adopt, and orphans the operator renamed, are left alone. Runs at boot
+  after the vault backfill, after a restore or import, and on character create, rename and delete.
+- The mount-points rename route refuses to rename a live character vault (409); rename the character.
+
+#### Fix bug 185: a restore orphans every archived vault and official store
+
+- Restoring a full backup, in either mode, created characters, projects and groups through their
+  create paths, which drop the archived `characterDocumentMountPointId` / `officialMountPointId` and
+  provision fresh stores. The archive's own stores were then restored beside them with nothing
+  pointing at them, so every vault and official store read empty after a restore.
+- The restore now builds a claim map of the stores the archive carries (`store-claims.ts`). An entity
+  whose archived pointer names one is written bound to it through the new
+  `CharactersRepository.createBoundToVault` / store-backed `createBoundToStore`, which write the slim
+  row with the pointer and provision nothing. Otherwise it falls back to the create path. The first
+  claimant keeps a store; a later one, a missing store, or a store of the wrong kind falls back with a
+  restore warning.
+- `new-account` mode now remaps the three pointer fields with the stores' own ids.
+- A bound entity whose store row fails to restore at 22a gets a fresh store populated from its backup
+  row, except an archived character, which is left as a tombstone with a warning.
+- Memories are restored through the global repository, owner checked by id, because the user-scoped
+  check read the character through the vault overlay, which throws until the vault arrives.
+- Carried-store-row detection (bug 12) now covers project-bound files. A non-carried file of a bound
+  project is replayed after the project's store links are restored (22h), since the bridge finds a
+  project's store through them.
+- New `restore-store-binding.test.ts`, `store-claims.test.ts`, and a remap lockstep test.
+
+#### Fix bug 184: the wardrobe tools give a character the household's wear count as her own
+
+- `wardrobe_list` read each item's wear summed over every wearer and reported it unlabelled. New
+  `WardrobeWearRepository.findSummariesForWearer` returns the household total and the caller's own
+  share; the list result carries `worn_by_you` / `last_worn_by_you_at` beside `wear_count` /
+  `last_worn_at`, and the note reads from the caller's side
+  (` · worn by you 12×, last yesterday (115× in the household)`, ` · never worn by you (worn 115× by others)`).
+- `wardrobe_read`'s wear paragraph now leads with the reader's own count and dates, then the
+  household's total and the other wearers. Tool descriptions say which number is whose.
+
+#### Fix bug 183: a wear date 7–13 or 30–59 days old reads "last last week"
+
+- The wear lines put "last" before `formatRelativeDays`, two of whose rungs already begin with
+  "last". New `formatWornRelative` (`lib/wardrobe/wear-display.ts`) maps those two to "a week ago" /
+  "a month ago"; the wardrobe row line, the item editor's wear history and both wardrobe tools use
+  it. Memory-recall labels are unchanged.
+
 #### Release checklist 2: regression tests and coverage for 4.10 work
 
 - Bug 139: the All-LLM pause dialog's Continue handler moved out of `SalonView.tsx` into

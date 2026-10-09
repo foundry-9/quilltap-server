@@ -30,7 +30,7 @@ import {
 } from './wardrobe-handler-shared';
 import type { WardrobeRepos } from './wardrobe-handler-shared';
 import { resolveWearers } from '@/lib/wardrobe/wear-history';
-import { formatRelativeDays } from '@/lib/format-time';
+import { formatWornRelative } from '@/lib/wardrobe/wear-display';
 import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
 export interface WardrobeReadToolContext {
@@ -154,7 +154,7 @@ function wearDate(iso: string): string {
 
 function relativeWearDate(iso: string, nowMs: number): string {
   const ms = Date.parse(iso);
-  return Number.isNaN(ms) ? iso : formatRelativeDays(ms, nowMs);
+  return Number.isNaN(ms) ? iso : formatWornRelative(ms, nowMs);
 }
 
 function joinPhrases(parts: string[]): string {
@@ -163,8 +163,20 @@ function joinPhrases(parts: string[]): string {
 }
 
 /**
- * The `Wear` paragraph of `wardrobe_read`: "Worn 4 times, first 14 Mar 2026,
- * last 3 days ago by you. Also worn by Marguerite (once)." — or "Never worn."
+ * The `Wear` paragraph of `wardrobe_read`, from the reader's side first and
+ * the household's second (bug 184 — a shared item's total must never read as
+ * the reader's own):
+ *
+ *  - "Never worn."
+ *  - "You have worn it 4 times, first 14 Mar 2026, last 3 days ago."
+ *  - "You have worn it 13 times, first 25 Jun 2026, last today. Worn 116
+ *    times in all; also by Laura (25 times) and Sunny (once)."
+ *  - "You have worn it twice, first 14 Mar 2026, last 6 months ago. Worn 3
+ *    times in all, most recently 2 weeks ago by Marguerite; also by
+ *    Marguerite (once)."
+ *  - "You have never worn it. Worn 115 times by others, first 13 Jun 2026,
+ *    last yesterday by Laura: Laura (25 times) and Charlie (14 times)."
+ *
  * `nowMs` pins the clock for the relative dates (tests); it defaults to now.
  */
 export function formatWardrobeWearParagraph(
@@ -175,16 +187,27 @@ export function formatWardrobeWearParagraph(
     return 'Never worn.';
   }
 
-  const [latest, ...others] = wear.wearers;
-  const last = `${relativeWearDate(wear.last_worn_at, nowMs)} by ${wearerPhrase(latest)}`;
-  const head =
-    wear.wear_count === 1
-      ? `Worn once, ${last}.`
-      : `Worn ${wear.wear_count} times, first ${wearDate(wear.first_worn_at ?? wear.last_worn_at)}, last ${last}.`;
+  const you = wear.wearers.find((w) => w.is_you);
+  const others = wear.wearers.filter((w) => !w.is_you);
+  const latest = wear.wearers[0];
+  const othersList = joinPhrases(others.map((w) => `${wearerPhrase(w)} (${timesPhrase(w.wear_count)})`));
 
-  if (others.length === 0) return head;
-  const also = joinPhrases(others.map((w) => `${wearerPhrase(w)} (${timesPhrase(w.wear_count)})`));
-  return `${head} Also worn by ${also}.`;
+  if (you) {
+    const mine =
+      you.wear_count === 1
+        ? `You have worn it once, ${relativeWearDate(you.last_worn_at, nowMs)}.`
+        : `You have worn it ${timesPhrase(you.wear_count)}, first ${wearDate(you.first_worn_at)}, last ${relativeWearDate(you.last_worn_at, nowMs)}.`;
+    if (others.length === 0) return mine;
+    const mostRecent = latest.is_you
+      ? ''
+      : `, most recently ${relativeWearDate(latest.last_worn_at, nowMs)} by ${wearerPhrase(latest)}`;
+    return `${mine} Worn ${timesPhrase(wear.wear_count)} in all${mostRecent}; also by ${othersList}.`;
+  }
+
+  const last = `${relativeWearDate(wear.last_worn_at, nowMs)} by ${wearerPhrase(latest)}`;
+  if (wear.wear_count === 1) return `You have never worn it. Worn once, ${last}.`;
+  const head = `You have never worn it. Worn ${timesPhrase(wear.wear_count)} by others, first ${wearDate(wear.first_worn_at ?? wear.last_worn_at)}, last ${last}`;
+  return others.length > 1 ? `${head}: ${othersList}.` : `${head}.`;
 }
 
 export function buildWardrobeReadFailure(error: string): WardrobeReadToolOutput {

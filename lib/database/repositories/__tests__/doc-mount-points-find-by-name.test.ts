@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { DocMountPointsRepository } from '../doc-mount-points.repository';
+import { DocMountPointsRepository, MountPointNameTakenError } from '../doc-mount-points.repository';
 import type { DocMountPoint } from '@/lib/schemas/mount-index.types';
 
 jest.mock('@/lib/logger', () => {
@@ -64,5 +64,37 @@ describe('DocMountPointsRepository.countByName', () => {
     expect(await repo.countByName('Solo')).toBe(1);
     expect(await repo.countByName('dup')).toBe(2);
     expect(await repo.countByName('missing')).toBe(0);
+  });
+});
+
+describe('DocMountPointsRepository name chokepoint (bug 186)', () => {
+  function repoWithAll(mounts: DocMountPoint[]) {
+    const repo = new DocMountPointsRepository();
+    jest.spyOn(repo, 'findAll').mockResolvedValue(mounts);
+    const createSpy = jest
+      .spyOn(repo as unknown as { _create: (d: unknown) => Promise<unknown> }, '_create')
+      .mockImplementation(async (d) => d);
+    const updateSpy = jest
+      .spyOn(repo as unknown as { _update: (id: string, d: unknown) => Promise<unknown> }, '_update')
+      .mockImplementation(async (_id, d) => d);
+    return { repo, createSpy, updateSpy };
+  }
+
+  it('refuses to create a store under a name another holds, ignoring case', async () => {
+    const { repo, createSpy } = repoWithAll([mount('Tester Character Vault', 'a')]);
+    await expect(repo.create({ name: ' tester character vault' } as DocMountPoint)).rejects.toThrow(
+      MountPointNameTakenError
+    );
+    expect(createSpy).not.toHaveBeenCalled();
+    await repo.create({ name: 'Tester Character Vault (2)' } as DocMountPoint);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a rename onto a peer, but not a store keeping or re-casing its own name', async () => {
+    const { repo, updateSpy } = repoWithAll([mount('Notes', 'a'), mount('Lore', 'b')]);
+    await expect(repo.update('b', { name: 'NOTES' })).rejects.toThrow(MountPointNameTakenError);
+    await repo.update('a', { name: 'NOTES' });
+    await repo.update('b', { enabled: false });
+    expect(updateSpy).toHaveBeenCalledTimes(2);
   });
 });

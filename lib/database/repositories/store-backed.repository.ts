@@ -133,7 +133,8 @@ export abstract class AbstractStoreBackedRepository<
     return this.safeQuery(
       async () => {
         // Drop any incoming officialMountPointId — create always provisions a
-        // fresh store. Importers carrying a source pointer shouldn't reuse it.
+        // fresh store. Importers carrying a source pointer shouldn't reuse it;
+        // a restore re-binding to the archive's store uses createBoundToStore.
         const entityData = {
           ...this.prepareCreateData(data),
           officialMountPointId: null,
@@ -143,25 +144,12 @@ export abstract class AbstractStoreBackedRepository<
         // only the slim row.
         const created = await this._create(entityData, options);
 
-        // Provision the official store, then write the overlay files from the
-        // in-memory create payload. ensureOfficialStore sets officialMountPointId
-        // on the row.
-        const ensured = await this.store.ensureOfficialStore(created.id, created.name);
-        if (!ensured) {
-          throw new Error(
-            `Failed to provision official document store for ${lower} ${created.id}; ` +
-              `refusing to return a storeless ${lower}.`,
-          );
-        }
-        await this.store.writeManagedFields(ensured.mountPointId, {
-          ...created,
-          officialMountPointId: ensured.mountPointId,
-        });
+        const officialMountPointId = await this.provisionOfficialStore(created);
 
         logger.info(`${label} created`, {
           [this.store.idLogKey]: created.id,
           name: created.name,
-          officialMountPointId: ensured.mountPointId,
+          officialMountPointId,
         });
 
         // Reload through the overlay so the returned entity reflects the
@@ -174,6 +162,69 @@ export abstract class AbstractStoreBackedRepository<
       },
       `Error creating ${lower}`,
       { name: data.name },
+    );
+  }
+
+  /**
+   * Provision the entity's official store and write its store-resident fields
+   * from `entity` (the in-memory payload, not a re-read). `ensureOfficialStore`
+   * sets `officialMountPointId` on the row; a pointer naming a missing store is
+   * healed rather than trusted. Fails hard rather than leave the entity
+   * storeless, which would throw on every read. Returns the store's id.
+   */
+  async provisionOfficialStore(entity: T): Promise<string> {
+    const lower = this.store.entityLabel.toLowerCase();
+    const ensured = await this.store.ensureOfficialStore(entity.id, entity.name);
+    if (!ensured) {
+      throw new Error(
+        `Failed to provision official document store for ${lower} ${entity.id}; ` +
+          `refusing to return a storeless ${lower}.`,
+      );
+    }
+    await this.store.writeManagedFields(ensured.mountPointId, {
+      ...entity,
+      officialMountPointId: ensured.mountPointId,
+    });
+    return ensured.mountPointId;
+  }
+
+  /**
+   * Restore an entity row bound to the official store a backup carries for it.
+   *
+   * The one sanctioned exception to {@link create}'s fresh-store rule, and only
+   * for the restore: the archive's own store for this entity is being restored
+   * alongside the row, so minting a fresh one would leave the row pointing at
+   * an empty store and the archived one orphaned (bug 185). The restore's claim
+   * map guarantees no two rows are given the same store.
+   *
+   * Writes the slim row with `officialMountPointId` set and does nothing else —
+   * no provisioning, no link, no store writes (the archive carries the store's
+   * files and its link rows). The store's rows usually arrive later in the
+   * restore than the entity's, so the row is returned raw, never through the
+   * overlay, which would throw until they do.
+   */
+  async createBoundToStore(
+    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
+    mountPointId: string,
+    options?: CreateOptions,
+  ): Promise<T> {
+    const label = this.store.entityLabel;
+    return this.safeQuery(
+      async () => {
+        const entityData = {
+          ...this.prepareCreateData(data),
+          officialMountPointId: mountPointId,
+        } as Omit<T, 'id' | 'createdAt' | 'updatedAt'>;
+        const created = await this._create(entityData, options);
+        logger.info(`${label} restored bound to its archived store`, {
+          [this.store.idLogKey]: created.id,
+          name: created.name,
+          officialMountPointId: mountPointId,
+        });
+        return created;
+      },
+      `Error restoring ${label.toLowerCase()} bound to its store`,
+      { name: data.name, mountPointId },
     );
   }
 

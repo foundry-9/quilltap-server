@@ -634,6 +634,16 @@ export async function register() {
         const { backfillCharacterVaults } = await import('./lib/startup/backfill-character-vaults');
         vaultBackfillSettled = backfillCharacterVaults()
           .then(async () => {
+            // Store names: one case-insensitive namespace, each live vault
+            // named after its character, every unlinked vault retired to
+            // "<Name> Version <timestamp> Store". After the backfill, so a
+            // vault awaiting adoption is adopted before it could be retired.
+            // A no-op when the instance already conforms.
+            const { reconcileStoreNames } = await import(
+              './lib/mount-index/reconcile-store-names'
+            );
+            await reconcileStoreNames('boot');
+
             // Chained after backfill so newly created vaults (already in the
             // new shape) aren't visited a second time for no reason.
             const { migrateVaultPhysicalFiles } = await import(

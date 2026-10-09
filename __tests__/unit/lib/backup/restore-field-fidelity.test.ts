@@ -221,7 +221,6 @@ function buildRepoMocks() {
     get(_t, prop: string) {
       if (prop === 'chats')
         return repoStub({ create: chatsCreate, addMessage, getLastPlayedMessageAt, update: chatsUpdate })
-      if (prop === 'memories') return repoStub({ create: memoriesCreate })
       if (prop === 'connections') return repoStub({ create: connectionsCreate, findAll: jest.fn().mockResolvedValue([]) })
       if (prop === 'imageProfiles') return repoStub({ create: imageProfilesCreate })
       return repoStub()
@@ -231,6 +230,12 @@ function buildRepoMocks() {
   const globalRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
       if (prop === 'chatSettings') return repoStub({ create: chatSettingsCreate })
+      // Memories restore through the global repository, owner checked by a raw
+      // character read (bug 185: the user-scoped read goes through the vault
+      // overlay, which throws for a vault not yet restored).
+      if (prop === 'memories') return repoStub({ create: memoriesCreate })
+      if (prop === 'characters')
+        return repoStub({ findByIdRaw: jest.fn(async (id: string) => ({ id, userId: 'user-1' })) })
       return repoStub()
     },
   })

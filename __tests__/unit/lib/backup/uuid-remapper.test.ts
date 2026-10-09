@@ -476,6 +476,25 @@ describe('remapBackupData() - project FK remapping', () => {
     llmLogs: [],
   })
 
+  it('remaps every store pointer in lockstep with the store row it names (bug 185)', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      characters: [{ id: 'char-old', name: 'Friday', characterDocumentMountPointId: 'vault-old' }] as unknown as BackupData['characters'],
+      projects: [{ id: 'proj-old', officialMountPointId: 'pstore-old' }] as unknown as Project[],
+      groups: [{ id: 'group-old', officialMountPointId: 'gstore-old' }] as unknown as BackupData['groups'],
+      docMountPoints: [{ id: 'vault-old' }, { id: 'pstore-old' }, { id: 'gstore-old' }] as unknown as BackupData['docMountPoints'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const [vault, projectStore, groupStore] = (result.docMountPoints ?? []).map((mp) => mp.id)
+
+    expect(vault).not.toBe('vault-old')
+    expect(result.characters[0].characterDocumentMountPointId).toBe(vault)
+    expect(result.projects[0].officialMountPointId).toBe(projectStore)
+    expect(result.groups?.[0].officialMountPointId).toBe(groupStore)
+  })
+
   it('remaps project.defaultImageProfileId to the same new id as its image profile', () => {
     const remapper = new UuidRemapper()
     const data: BackupData = {

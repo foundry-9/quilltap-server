@@ -145,8 +145,11 @@ describe('wardrobe tool handlers', () => {
         findByIdRaw: jest.fn().mockResolvedValue(null),
       },
       wardrobeWear: {
-        findSummaries: jest.fn(async (ids: string[]) =>
-          new Map(ids.map((id) => [id, { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null }]))
+        findSummariesForWearer: jest.fn(async (ids: string[]) =>
+          new Map(ids.map((id) => [id, {
+            household: { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null },
+            yours: { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null },
+          }]))
         ),
         findHistory: jest.fn().mockResolvedValue({
           wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null, wearers: [],

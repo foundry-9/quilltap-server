@@ -204,7 +204,11 @@ export function remapBackupData(
   const remappedCharacters = data.characters.map((char) => {
     const remapped = {
       ...remapper.remapArrayFields(
-        remapper.remapFields(char, ['id', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId', 'defaultImageProfileId']),
+        // The vault pointer is remapped like any FK (bug 185): the remapper
+        // maps one original id to one new id everywhere, so the pointer names
+        // the id its vault's mount-point row is restored under, and the
+        // restore binds the character to that vault rather than minting one.
+        remapper.remapFields(char, ['id', 'characterDocumentMountPointId', 'defaultImageId', 'defaultConnectionProfileId', 'defaultPartnerId', 'defaultImageProfileId']),
         ['tags']
       ),
       userId: targetUserId,
@@ -367,17 +371,20 @@ export function remapBackupData(
   // Remap projects
   const remappedProjects = data.projects.map((project) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(project, ['id', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
+      // officialMountPointId remapped in lockstep with the store's own row, so
+      // the restore can bind the project to its archived store (bug 185).
+      remapper.remapFields(project, ['id', 'officialMountPointId', 'staticBackgroundImageId', 'storyBackgroundImageId', 'defaultImageProfileId', 'defaultRoleplayTemplateId']),
       ['characterRoster']
     ),
     userId: targetUserId,
   })) as Project[];
 
-  // Remap groups. Only the id needs remapping — like projects, the
-  // officialMountPointId is discarded and re-provisioned by `groups.create`, so
-  // it's intentionally left alone (membership/links carry the group id forward).
+  // Remap groups. Like projects, officialMountPointId is remapped in lockstep
+  // with the store's own row so the restore binds the group to its archived
+  // store rather than minting a fresh one (bug 185); membership and links
+  // carry the group id forward.
   const remappedGroups = (data.groups || []).map((group) => ({
-    ...remapper.remapFields(group, ['id']),
+    ...remapper.remapFields(group, ['id', 'officialMountPointId']),
   })) as Group[];
 
   // Remap LLM logs.

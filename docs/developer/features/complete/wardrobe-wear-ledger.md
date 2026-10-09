@@ -374,17 +374,31 @@ Fetched on open via `?action=wear-history`. For a composite, a one-line note und
 
 ### 5.5 Tools
 
-- `wardrobe_list` (`lib/tools/handlers/wardrobe-list-handler.ts`): append ` · last worn 3 days
-  ago` or ` · never worn` to each line. Dates relative via `formatRelativeAge` (clock-injected
-  so the snapshot test is stable). The list handler already loads the pool; add one
-  `findSummaries` call.
-- `wardrobe_read` (`wardrobe-read-handler.ts`): a `Wear` paragraph after the slot occupancy:
-  "Worn 4 times, first 14 Mar 2026, last 3 days ago by you. Also worn by Marguerite (once)."
-  Second person for the calling character (`characterId === context.characterId`), names for
-  others, "someone no longer in the household" for a deleted wearer. The tool's output type and
+- `wardrobe_list` (`lib/tools/handlers/wardrobe-list-handler.ts`): append the caller's own wear
+  to each line, with the household's total as context: ` · worn by you 12×, last yesterday (115×
+  in the household)`, ` · worn by you 3×, last 3 days ago` (only the caller has worn it),
+  ` · never worn by you (worn 115× by others)`, or ` · never worn`. Dates relative via
+  `formatWornRelative` (`lib/wardrobe/wear-display.ts`, clock-injected so tests are stable). One
+  `findSummariesForWearer` call answers every listed item; the structured result carries
+  `worn_by_you` / `last_worn_by_you_at` beside the household `wear_count` / `last_worn_at`.
+- `wardrobe_read` (`wardrobe-read-handler.ts`): a `Wear` paragraph after the slot occupancy, the
+  reader's own record first and the household's second: "You have worn it 13 times, first 25 Jun
+  2026, last today. Worn 116 times in all; also by Laura (25 times) and Sunny (once)." A reader
+  who has never worn it reads "You have never worn it. Worn 115 times by others, …". Second
+  person for the calling character (`characterId === context.characterId`), names for others,
+  "someone no longer in the household" for a deleted wearer. The tool's output type and
   its snapshot in `lib/tools/__tests__/tool-definitions-snapshot.test.ts` are updated (`npx
   jest -u` on that file after the schema change, as the standing rule says). Input schemas are
   unchanged.
+
+The first cut handed a character the household's total and its latest wear as if they were the
+reader's own (bug 184): the ledger's per-item summary suits the Wardrobe dialog, where the context
+labels it, but not a character reading shared items that a dozen others wear. The tools now
+answer from the reader's side.
+
+A relative date that follows the word "last" goes through `formatWornRelative`, not
+`formatRelativeDays` directly: the shared ladder's "last week" / "last month" rungs would read
+"last last week" (bug 183).
 
 Nothing is injected into the system prompt or the outfit description; a character learns about
 wear only by asking.

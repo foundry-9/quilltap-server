@@ -45,6 +45,11 @@ import { updateProjectWardrobeItem } from '@/lib/database/repositories/vault-ove
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 import { decodeIndexKeyedEmbedding } from './index-keyed-embedding';
+import { makeStoreClaimMap, type StoreClaim, type StoreOwnerKind } from './store-claims';
+import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
+import { reconcileStoreNames } from '@/lib/mount-index/reconcile-store-names';
+import { ensureCharacterVault } from '@/lib/mount-index/character-vault';
+import type { Character } from '@/lib/schemas/types';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
 
@@ -105,6 +110,31 @@ export async function restore(
     }
 
     const repos = getUserRepositories(targetUserId);
+    const globalRepos = getRepositories();
+
+    // Bug 185: a character's vault and a project's or group's official store
+    // travel in the archive beside the entity, and come back at 22a–22f. The
+    // entities' create paths would mint a fresh store and leave the archive's
+    // orphaned, so each entity whose archived pointer names a carried store is
+    // written bound to it instead (first claim wins; see store-claims.ts). In
+    // new-account mode the pointers were remapped with the stores' own ids.
+    const storeClaims = makeStoreClaimMap(data.docMountPoints || []);
+    // Entities bound to an archived store, kept so a store whose own row fails
+    // to restore at 22a can be replaced before anything reads through it.
+    const boundCharacters: Array<{ character: Character; mountPointId: string }> = [];
+    const boundProjects: Array<{ project: Awaited<ReturnType<typeof globalRepos.projects.createBoundToStore>>; mountPointId: string }> = [];
+    const boundGroups: Array<{ group: Awaited<ReturnType<typeof globalRepos.groups.createBoundToStore>>; mountPointId: string }> = [];
+    const noteStoreFallback = (kind: StoreOwnerKind, id: string, name: string, claim: StoreClaim): void => {
+      if (claim.bound || claim.reason === 'no-pointer') return;
+      const why =
+        claim.reason === 'not-carried'
+          ? 'the backup does not carry the store it pointed at'
+          : claim.reason === 'wrong-kind'
+            ? 'the store it pointed at is the wrong kind'
+            : `its store is already claimed by ${claim.claimedBy?.kind} ${claim.claimedBy?.id}`;
+      warnings.push(`The ${kind} "${name}" was given a fresh, empty store because ${why}`);
+      moduleLogger.warn('Restored entity falls back to a fresh store', { kind, id, reason: claim.reason, claimedBy: claim.claimedBy });
+    };
 
     // Restore in dependency order
     // All entities preserve their backup/remapped IDs via CreateOptions.id,
@@ -195,11 +225,27 @@ export async function restore(
     // disaster-recovery case — not one byte landed.
     let filesRestored = 0;
 
-    // 6. Characters
+    // 6. Characters. One bound to its archived vault is written as a slim row
+    // only; its vault arrives at 22a–22f, so nothing may read it through the
+    // overlay before then (memories below check ownership by id for that
+    // reason). Anything else is created with a fresh vault, as before.
+    const restoredCharacterIds = new Set<string>();
     for (const character of data.characters) {
       try {
         const { userId, createdAt, updatedAt, ...charData } = character;
-        await repos.characters.create(charData, { id: character.id });
+        const claim = storeClaims.claim('character', character.id, character.characterDocumentMountPointId);
+        if (claim.bound) {
+          const created = await globalRepos.characters.createBoundToVault(
+            { ...charData, userId: targetUserId },
+            claim.mountPointId,
+            { id: character.id }
+          );
+          boundCharacters.push({ character: created, mountPointId: claim.mountPointId });
+        } else {
+          noteStoreFallback('character', character.id, character.name, claim);
+          await repos.characters.create(charData, { id: character.id });
+        }
+        restoredCharacterIds.add(character.id);
       } catch (error) {
         warnings.push(`Failed to restore character "${character.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore character', { characterId: character.id, error });
@@ -254,12 +300,28 @@ export async function restore(
     // IDs are preserved during creation, so characterId/aboutCharacterId already point
     // to the correct (preserved) character IDs — no remapping needed.
     //
+    // Ownership is checked against the characters just restored rather than by
+    // the user-scoped repository's read, which goes through the vault overlay
+    // and would throw for a character bound to a vault not yet restored (22a).
+    //
     // The memory's own id is preserved too, and that matters: memories reference
     // each other through `relatedMemoryIds`, which uuid-remap rewrites in lockstep
     // with `id` for new-account restores. Letting the repository mint a fresh id
     // here would leave every one of those edges pointing at a memory that no longer
     // exists, quietly flattening the Commonplace Book's graph on restore.
     let memoriesRestored = 0;
+    // A character this restore wrote is the target user's; any other must
+    // already belong to them, read raw (no overlay) and remembered.
+    const memoryOwnerChecks = new Map<string, boolean>();
+    const memoryOwnerIsTargetUser = async (characterId: string): Promise<boolean> => {
+      if (restoredCharacterIds.has(characterId)) return true;
+      let owned = memoryOwnerChecks.get(characterId);
+      if (owned === undefined) {
+        owned = (await globalRepos.characters.findByIdRaw(characterId))?.userId === targetUserId;
+        memoryOwnerChecks.set(characterId, owned);
+      }
+      return owned;
+    };
     for (const memory of data.memories) {
       try {
         const { id, createdAt, updatedAt, ...memoryData } = memory;
@@ -275,7 +337,10 @@ export async function restore(
           });
           cleanMemoryData.embedding = decodedEmbedding;
         }
-        await repos.memories.create(cleanMemoryData as Parameters<typeof repos.memories.create>[0], { id });
+        if (!(await memoryOwnerIsTargetUser(cleanMemoryData.characterId as string))) {
+          throw new Error('Character not found or access denied');
+        }
+        await globalRepos.memories.create(cleanMemoryData as Parameters<typeof globalRepos.memories.create>[0], { id });
         memoriesRestored++;
       } catch (error) {
         warnings.push(`Failed to restore memory: ${error instanceof Error ? error.message : String(error)}`);
@@ -284,7 +349,6 @@ export async function restore(
     }
 
     // 10. Prompt Templates (user-created only)
-    const globalRepos = getRepositories();
     let promptTemplatesRestored = 0;
     for (const template of data.promptTemplates) {
       try {
@@ -329,13 +393,22 @@ export async function restore(
       }
     }
 
-    // 13. Projects
+    // 13. Projects. Bound to the archived official store when the archive
+    // carries it (bug 185) — slim row only, no fresh store and no link; the
+    // archive's link rows arrive at 22h. Otherwise a fresh store, as before.
     let projectsRestored = 0;
     for (const project of data.projects) {
       try {
         // userId no longer exists on Project (projects are global).
         const { createdAt, updatedAt, ...projectData } = project;
-        await repos.projects.create(projectData, { id: project.id });
+        const claim = storeClaims.claim('project', project.id, project.officialMountPointId);
+        if (claim.bound) {
+          const created = await globalRepos.projects.createBoundToStore(projectData, claim.mountPointId, { id: project.id });
+          boundProjects.push({ project: created, mountPointId: claim.mountPointId });
+        } else {
+          noteStoreFallback('project', project.id, project.name, claim);
+          await repos.projects.create(projectData, { id: project.id });
+        }
         projectsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore project "${project.name}": ${error instanceof Error ? error.message : String(error)}`);
@@ -343,17 +416,24 @@ export async function restore(
       }
     }
 
-    // 13a. Groups — parallel to projects: a slim row plus an official document
-    // store. `groups.create` (store-backed) discards any incoming
-    // officialMountPointId and provisions a fresh store, writing the hydrated
-    // description/instructions/state/properties back into it — exactly as
-    // projects restore above. Membership and additional-store links are restored
-    // later (22h-i / 22h-ii), once doc-mount points exist.
+    // 13a. Groups — parallel to projects: a slim row bound to the archived
+    // official store when the archive carries it, otherwise `groups.create`
+    // provisions a fresh store and writes the hydrated description /
+    // instructions / state / properties into it. Membership and
+    // additional-store links are restored later (22h-i / 22h-ii), once
+    // doc-mount points exist.
     let groupsRestored = 0;
     for (const group of data.groups || []) {
       try {
         const { createdAt, updatedAt, ...groupData } = group;
-        await repos.groups.create(groupData, { id: group.id });
+        const claim = storeClaims.claim('group', group.id, group.officialMountPointId);
+        if (claim.bound) {
+          const created = await globalRepos.groups.createBoundToStore(groupData, claim.mountPointId, { id: group.id });
+          boundGroups.push({ group: created, mountPointId: claim.mountPointId });
+        } else {
+          noteStoreFallback('group', group.id, group.name, claim);
+          await repos.groups.create(groupData, { id: group.id });
+        }
         groupsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore group "${group.name}": ${error instanceof Error ? error.message : String(error)}`);
@@ -510,17 +590,76 @@ export async function restore(
     // raw `SELECT *` gave them up — pattern arrays as JSON text, `enabled` as
     // INTEGER 0/1 — so coerce back to domain shape or every row is rejected by
     // the repository schema and the stores come back unreachable.
+    //
+    // Store names are one case-insensitive namespace (bug 186): a store keeps
+    // its archived name when it is free, otherwise takes the next ` (N)` —
+    // the case in new-account mode, where the archive's stores arrive beside
+    // the instance's own. The archive's createdAt is kept, since a retired
+    // vault's name is stamped with it. The reconcile at the end of the
+    // restore then names each live vault after its character.
     let docMountPointsRestored = 0;
+    const restoredMountPointIds = new Set<string>();
+    const takenStoreNames = new Set((await globalRepos.docMountPoints.findAll()).map((mp) => mp.name));
     for (const mp of data.docMountPoints || []) {
       try {
         const { id, createdAt, updatedAt, ...mpData } = coerceDocMountPointRow(mp);
-        await globalRepos.docMountPoints.create(mpData, { id: mp.id });
+        const name = nextUniqueMountPointName(takenStoreNames, mpData.name);
+        if (name !== mpData.name) {
+          moduleLogger.debug('Restored document store under a free name', { mountPointId: mp.id, archived: mpData.name, name });
+        }
+        await globalRepos.docMountPoints.create({ ...mpData, name }, { id: mp.id, ...(createdAt ? { createdAt } : {}) });
+        takenStoreNames.add(name);
+        restoredMountPointIds.add(mp.id);
         docMountPointsRestored++;
       } catch (error) {
         warnings.push(`Failed to restore document store "${mp.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore doc mount point', { mountPointId: mp.id, error });
       }
     }
+
+    // 22a-i. An entity bound to an archived store (6 / 13 / 13a) whose store
+    // row just failed to restore would point at nothing, and every read of it
+    // would throw. Give it a fresh store populated from its backup row — what
+    // the create path would have done.
+    for (const { character, mountPointId } of boundCharacters) {
+      if (restoredMountPointIds.has(mountPointId)) continue;
+      // An archived character is a tombstone: never provision it a vault.
+      if (character.archivedAt) {
+        warnings.push(`The archived character "${character.name}" could not be restored readable, because its vault could not be restored`);
+        moduleLogger.warn('Archived character vault failed to restore; tombstone left unhealed', { characterId: character.id, mountPointId });
+        continue;
+      }
+      try {
+        await ensureCharacterVault({ ...character, characterDocumentMountPointId: null });
+        warnings.push(`The character "${character.name}" was given a fresh vault because its own could not be restored`);
+        moduleLogger.warn('Re-provisioned a character vault whose archived store failed to restore', { characterId: character.id, mountPointId });
+      } catch (error) {
+        warnings.push(`Failed to give the character "${character.name}" a vault: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.error('Failed to re-provision character vault after restore', { characterId: character.id, mountPointId }, error instanceof Error ? error : undefined);
+      }
+    }
+    const reprovisionStores = [
+      ...boundProjects.map(({ project, mountPointId }) => ({ kind: 'project', entity: project, mountPointId, provision: () => globalRepos.projects.provisionOfficialStore(project) })),
+      ...boundGroups.map(({ group, mountPointId }) => ({ kind: 'group', entity: group, mountPointId, provision: () => globalRepos.groups.provisionOfficialStore(group) })),
+    ];
+    for (const { kind, entity, mountPointId, provision } of reprovisionStores) {
+      if (restoredMountPointIds.has(mountPointId)) continue;
+      try {
+        await provision();
+        warnings.push(`The ${kind} "${entity.name}" was given a fresh store because its own could not be restored`);
+        moduleLogger.warn('Re-provisioned an official store whose archived store failed to restore', { kind, id: entity.id, mountPointId });
+      } catch (error) {
+        warnings.push(`Failed to give the ${kind} "${entity.name}" a store: ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.error('Failed to re-provision official store after restore', { kind, id: entity.id, mountPointId }, error instanceof Error ? error : undefined);
+      }
+    }
+    moduleLogger.info('Restored entities bound to their archived stores', {
+      characters: boundCharacters.length,
+      projects: boundProjects.length,
+      groups: boundGroups.length,
+      storesCarried: (data.docMountPoints || []).length,
+      storesRestored: restoredMountPointIds.size,
+    });
 
     // 22a-bis. Files (deferred from step 5). The mount points now exist, so
     // both bridges resolve: projects (13) own their official stores and the
@@ -559,17 +698,66 @@ export async function restore(
       (data.docMountBlobs || []).map(b => [b.id, b.sha256] as const)
     );
 
+    // Re-ingest one user file's bytes through the bridges and record its row.
+    // The bridges may transcode bytes (bitmaps → WebP), so the row takes the
+    // post-bridge mime/size/sha256 rather than what the backup row claimed — a
+    // backup made before that fix may carry the pre-transcode lie, and
+    // re-writing it would re-introduce the "media_type X but bytes are Y"
+    // error, and (for sha256) a FileEntry that cannot be joined to the mount
+    // blob it points at (bug 117).
+    const replayFile = async (file: (typeof data.files)[number], originalFile: (typeof parsedData.files)[number]): Promise<void> => {
+      const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
+      if (!fileBuffer) {
+        warnings.push(`File not found in backup: ${file.originalFilename}`);
+        return;
+      }
+      // Project-bound files restore into the project mount (via FSM →
+      // project-store-bridge). Project-less files land in the Quilltap
+      // Uploads mount under restored/, not the catch-all _general/.
+      const {
+        storageKey: restoredStorageKey,
+        storedMimeType: restoredMimeType,
+        sizeBytes: restoredSize,
+        sha256: restoredSha256,
+      } = await writeLibraryFileBytes({
+        filename: file.originalFilename,
+        content: fileBuffer,
+        contentType: file.mimeType,
+        projectId: file.projectId,
+        folderPath: file.folderPath,
+        subfolder: 'restored',
+      });
+      const fileData = stripLegacyFileRowFields(file);
+      await repos.files.create(
+        {
+          ...fileData,
+          mimeType: restoredMimeType,
+          size: restoredSize,
+          sha256: restoredSha256,
+          storageKey: restoredStorageKey,
+        },
+        { id: file.id }
+      );
+      filesRestored++;
+    };
+
+    // A project bound to its archived store (13) has no link to it until 22h,
+    // and the bridge finds a project's store through its links — so a file of
+    // that project that still needs its bytes re-ingested waits until then,
+    // when it lands as an ordinary write into the populated store.
+    const boundProjectIds = new Set(boundProjects.map(({ project }) => project.id));
+    const deferredFileIndices: number[] = [];
+
     for (let i = 0; i < data.files.length; i++) {
       const file = data.files[i];
       const originalFile = parsedData.files[i]; // original IDs for disk lookup
       try {
         // Carried store rows (Bug 12): skip the replay, preserve the archived
-        // storageKey. Project-bound files are handled separately below (their
-        // duplication is orthogonal, per docs/developer/bugs.md), so this only fires for
-        // project-less files.
-        const carriedStorageKey = !file.projectId
-          ? carriedStorageKeyFor(originalFile.storageKey)
-          : null;
+        // storageKey. This covers project-bound files too: with the project
+        // bound to its archived store (bug 185), a replay would write into
+        // the very store whose archived link for the file lands at 22d and
+        // would collide with it.
+        const carriedStorageKey = carriedStorageKeyFor(originalFile.storageKey);
         if (carriedStorageKey) {
           const fileData = stripLegacyFileRowFields(file);
           const carriedBlobId = parseMountBlobStorageKey(carriedStorageKey)?.blobId;
@@ -586,47 +774,12 @@ export async function restore(
           continue;
         }
 
-        const fileBuffer = await getFileFromExtractedBackup(rootPath, originalFile, data.manifest?.backupFormat);
-        if (fileBuffer) {
-          // Project-bound files restore into the project mount (via FSM →
-          // project-store-bridge). Project-less files land in the Quilltap
-          // Uploads mount under restored/, not the catch-all _general/.
-          const {
-            storageKey: restoredStorageKey,
-            storedMimeType: restoredMimeType,
-            sizeBytes: restoredSize,
-            sha256: restoredSha256,
-          } = await writeLibraryFileBytes({
-            filename: file.originalFilename,
-            content: fileBuffer,
-            contentType: file.mimeType,
-            projectId: file.projectId,
-            folderPath: file.folderPath,
-            subfolder: 'restored',
-          });
-
-          // Create file metadata with storage key. The bridges may transcode
-          // bytes (bitmaps → WebP), so we record the post-bridge
-          // mime/size/sha256 rather than what the backup row claimed — a backup
-          // made before this fix may carry the pre-transcode lie, and
-          // re-writing it would re-introduce the "media_type X but bytes are Y"
-          // error, and (for sha256) a FileEntry that cannot be joined to the
-          // mount blob it points at (bug 117).
-          const fileData = stripLegacyFileRowFields(file);
-          await repos.files.create(
-            {
-              ...fileData,
-              mimeType: restoredMimeType,
-              size: restoredSize,
-              sha256: restoredSha256,
-              storageKey: restoredStorageKey,
-            },
-            { id: file.id }
-          );
-          filesRestored++;
-        } else {
-          warnings.push(`File not found in backup: ${file.originalFilename}`);
+        if (file.projectId && boundProjectIds.has(file.projectId)) {
+          deferredFileIndices.push(i);
+          continue;
         }
+
+        await replayFile(file, originalFile);
       } catch (error) {
         warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore file', { fileId: file.id, error });
@@ -812,6 +965,22 @@ export async function restore(
         warnings.push(`Failed to restore project↔store link: ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore project doc mount link', { linkId: link.id, error });
       }
+    }
+
+    // 22h-bis. Files of projects bound to their archived stores whose bytes
+    // still needed re-ingesting (deferred from 22a-bis). The links just
+    // restored let the bridge find each project's store.
+    for (const i of deferredFileIndices) {
+      const file = data.files[i];
+      try {
+        await replayFile(file, parsedData.files[i]);
+      } catch (error) {
+        warnings.push(`Failed to restore file "${file.originalFilename}": ${error instanceof Error ? error.message : String(error)}`);
+        moduleLogger.warn('Failed to restore deferred project file', { fileId: file.id, projectId: file.projectId, error });
+      }
+    }
+    if (deferredFileIndices.length > 0) {
+      moduleLogger.debug('Replayed deferred project files', { count: deferredFileIndices.length });
     }
 
     // 22h-i. Group ↔ document-store links (a group's *additional* linked stores;
@@ -1106,6 +1275,19 @@ export async function restore(
     }
 
     moduleLogger.info('All entities restored with preserved IDs - no reconciliation needed');
+
+    // 23a. Store names (bug 186): each live vault named after its character,
+    // every vault no character points at retired, no two stores alike.
+    try {
+      const nameResult = await reconcileStoreNames('restore');
+      moduleLogger.debug('Post-restore store-name reconcile complete', {
+        renamed: nameResult.renamed.length,
+        skippedReason: nameResult.skippedReason,
+      });
+    } catch (error) {
+      warnings.push(`Failed to tidy document-store names after restore: ${error instanceof Error ? error.message : String(error)}`);
+      moduleLogger.warn('Post-restore store-name reconcile failed', { error });
+    }
 
     // 24a. Compact archives arrive with no vectors at all: memory embeddings
     // are NULL and every derived collection (conversation chunks, vector

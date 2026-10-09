@@ -221,6 +221,17 @@ The **memories** figure in the restore summary now counts the memories actually
 restored, not merely those the archive offered, so a shortfall shows itself
 plainly.
 
+And one more, rather graver. Until October 2026 a restore, in either mode,
+brought every character's vault and every project's and group's store home
+faithfully — and then handed each of them a brand-new, empty store of its own,
+leaving the genuine article standing in the hall with no one to claim it. A
+restored character's wardrobe, prompts and album therefore looked bare as a
+pawned mantelpiece, though nothing whatever had been lost. Each character,
+project and group now goes straight back to the store it came with. Should an
+archive be damaged — a store missing from it, or two of its entries laying
+claim to the same one — the latecomer is given a fresh store instead, and the
+restore summary says precisely who and why.
+
 ## Restore Modes Explained
 
 **Replace Existing Data:**

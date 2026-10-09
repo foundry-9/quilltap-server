@@ -78,10 +78,18 @@ export interface WardrobeListItemResult {
   component_item_ids?: string[];
   /** Resolved component titles (best-effort; missing components are dropped). */
   component_titles?: string[];
-  /** Times worn, across every wearer (the wear ledger's total). 0 = never worn. */
+  /**
+   * Times worn by the whole household — every wearer, the calling character
+   * included. Context, not the caller's own record: that is `worn_by_you`.
+   * 0 = nobody has worn it.
+   */
   wear_count: number;
-  /** When it was last put on by anyone (ISO), or null when never worn. */
+  /** When anyone last put it on (ISO), or null when nobody has. */
   last_worn_at: string | null;
+  /** Times the calling character has worn it. 0 = never by them. */
+  worn_by_you: number;
+  /** When the calling character last put it on (ISO), or null when never. */
+  last_worn_by_you_at: string | null;
 }
 
 /**
@@ -120,8 +128,11 @@ export const wardrobeListToolDefinition = {
       'Supports optional filtering by item type and appropriateness context. ' +
       'Each item includes its equipped status (which slot[s] it occupies, if any), ' +
       'a composite flag indicating whether it bundles other items, and an is_own ' +
-      'flag (shared archetypes can be worn but not edited), when it was last ' +
-      'worn (or that it never has been), and, when the item has a picture, its ' +
+      'flag (shared archetypes can be worn but not edited), how often YOU have ' +
+      'worn it and when you last did (worn_by_you / last_worn_by_you_at), with ' +
+      'the whole household\'s total beside it as context (wear_count / ' +
+      'last_worn_at — other characters\' wears included, so not your own), and, ' +
+      'when the item has a picture, its ' +
       'image_file_id — pass that to describe_image to see what the item looks like. ' +
       'Use wardrobe_wear to put on / layer items, wardrobe_take_off to remove them, ' +
       'and wardrobe_read for the full detail (including the Portrait Cue) of one item. ' +

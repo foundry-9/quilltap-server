@@ -5,6 +5,7 @@
 
 import {
   formatWearLine,
+  formatWornRelative,
   isNeverWorn,
   sortAndFilterWardrobeItems,
   sortWardrobeItems,
@@ -60,6 +61,31 @@ describe('formatWearLine', () => {
 
   it('drops the date part when a counted wear has no date', () => {
     expect(formatWearLine(worn(3, null), NOW)).toBe('Worn 3×')
+  })
+
+  // Bug 183: the shared ladder's "last week" / "last month" rungs read
+  // "last last week" after the line's own "last".
+  it.each([
+    [9, 'Worn 8× · last a week ago'],
+    [13, 'Worn 8× · last a week ago'],
+    [30, 'Worn 8× · last a month ago'],
+    [59, 'Worn 8× · last a month ago'],
+  ])('does not double "last" %i days back', (days, line) => {
+    const at = new Date(NOW - days * 86_400_000).toISOString()
+    expect(formatWearLine(worn(8, at), NOW)).toBe(line)
+  })
+})
+
+describe('formatWornRelative', () => {
+  it('rewords only the two rungs that begin with "last"', () => {
+    const ago = (days: number) => NOW - days * 86_400_000
+    expect(formatWornRelative(ago(0), NOW)).toBe('today')
+    expect(formatWornRelative(ago(1), NOW)).toBe('yesterday')
+    expect(formatWornRelative(ago(3), NOW)).toBe('3 days ago')
+    expect(formatWornRelative(ago(8), NOW)).toBe('a week ago')
+    expect(formatWornRelative(ago(15), NOW)).toBe('2 weeks ago')
+    expect(formatWornRelative(ago(45), NOW)).toBe('a month ago')
+    expect(formatWornRelative(ago(120), NOW)).toBe('4 months ago')
   })
 })
 

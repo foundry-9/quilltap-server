@@ -59,13 +59,28 @@ export function formatWearLine(
 
 /**
  * A wear date as the ledger speaks of it — day-level and relative ("today",
- * "3 days ago", "last week"), the same ladder the character tools use. Empty
+ * "3 days ago", "a week ago"), the same ladder the character tools use. Empty
  * for a missing or unparseable date.
  */
 export function formatWornWhen(iso: string | null | undefined, nowMs: number = Date.now()): string {
   if (!iso) return ''
   const ts = Date.parse(iso)
-  return Number.isNaN(ts) ? '' : formatRelativeDays(ts, nowMs)
+  return Number.isNaN(ts) ? '' : formatWornRelative(ts, nowMs)
+}
+
+/**
+ * {@link formatRelativeDays} for a phrase that follows the word "last"
+ * (`Worn 4× · last …`, `…, last … by you.`). The shared ladder answers
+ * "last week" and "last month" for the 7–13 and 30–59 day rungs, which read
+ * "last last week" there (bug 183), so those two become "a week ago" and
+ * "a month ago". Every other rung passes through unchanged, and the
+ * memory-recall labels that share the ladder are untouched.
+ */
+export function formatWornRelative(ts: number, nowMs: number = Date.now()): string {
+  const phrase = formatRelativeDays(ts, nowMs)
+  if (phrase === 'last week') return 'a week ago'
+  if (phrase === 'last month') return 'a month ago'
+  return phrase
 }
 
 // ============================================================================

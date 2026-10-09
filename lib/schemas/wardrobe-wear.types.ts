@@ -71,6 +71,19 @@ export const WardrobeWearHistorySchema = WardrobeWearSummarySchema.extend({
 
 export type WardrobeWearHistory = z.infer<typeof WardrobeWearHistorySchema>;
 
+/**
+ * An item's wear as one character sees it: its own share beside the
+ * household's total. The character-facing tools answer from this, so a
+ * shared item's count is never handed to a reader as if it were their own
+ * (bug 184).
+ */
+export interface WardrobeWearPerspective {
+  /** Every wearer's rows folded together. */
+  household: WardrobeWearSummary;
+  /** The reading character's own row, or the zero summary. */
+  yours: WardrobeWearSummary;
+}
+
 /** The canonical "never worn" summary. Readers return this, never `undefined`. */
 export function neverWornSummary(): WardrobeWearSummary {
   return { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null };

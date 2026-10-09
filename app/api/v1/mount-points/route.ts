@@ -166,9 +166,7 @@ async function handleCreateMountPoint(
 
   // Document-store names form one case-insensitive namespace: no store may
   // share a name with a peer, even in a different casing.
-  const allStores = await repos.docMountPoints.findAll();
-  const desiredLower = validatedData.name.trim().toLowerCase();
-  const clash = allStores.find(mp => mp.name.trim().toLowerCase() === desiredLower);
+  const clash = await repos.docMountPoints.findNameHolder(validatedData.name, null);
   if (clash) {
     logger.warn('[Mount Points v1] Rejected duplicate mount point name', {
       name: validatedData.name,

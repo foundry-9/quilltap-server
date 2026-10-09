@@ -220,6 +220,33 @@ describe('WardrobeWearRepository', () => {
     expect(summaries.get('never')).toEqual({ wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null })
   })
 
+  it('findSummariesForWearer keeps the wearer\'s own share beside the household total (bug 184)', async () => {
+    await repo.incrementWears([
+      { itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' },
+      { itemId: 'coat', wearerCharacterId: CHAR_B, chatId: CHAT_2, at: '2026-02-01T00:00:00.000Z' },
+      { itemId: 'coat', wearerCharacterId: CHAR_B, chatId: CHAT_2, at: '2026-03-01T00:00:00.000Z' },
+      { itemId: 'hat', wearerCharacterId: CHAR_B, chatId: CHAT_2, at: '2026-03-01T00:00:00.000Z' },
+    ])
+    const zero = { wearCount: 0, firstWornAt: null, lastWornAt: null, lastWornChatId: null }
+    const summaries = await repo.findSummariesForWearer(['coat', 'hat', 'never'], CHAR_A)
+    expect(summaries.get('coat')).toEqual({
+      household: {
+        wearCount: 3,
+        firstWornAt: '2026-01-01T00:00:00.000Z',
+        lastWornAt: '2026-03-01T00:00:00.000Z',
+        lastWornChatId: CHAT_2,
+      },
+      yours: {
+        wearCount: 1,
+        firstWornAt: '2026-01-01T00:00:00.000Z',
+        lastWornAt: '2026-01-01T00:00:00.000Z',
+        lastWornChatId: CHAT_1,
+      },
+    })
+    expect(summaries.get('hat')).toEqual({ household: expect.objectContaining({ wearCount: 1 }), yours: zero })
+    expect(summaries.get('never')).toEqual({ household: zero, yours: zero })
+  })
+
   it('findHistory lists wearers most recent first', async () => {
     await repo.incrementWears([
       { itemId: 'coat', wearerCharacterId: CHAR_A, chatId: CHAT_1, at: '2026-01-01T00:00:00.000Z' },

@@ -17,7 +17,7 @@ import { validateWardrobeListInput } from '../wardrobe-list-tool';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import { findEquippedSlots } from './wardrobe-handler-shared';
-import { formatRelativeDays } from '@/lib/format-time';
+import { formatWornRelative } from '@/lib/wardrobe/wear-display';
 import { neverWornSummary } from '@/lib/schemas/wardrobe-wear.types';
 import { formatWardrobeImageHandle } from '@/lib/wardrobe/tool-image-generation';
 
@@ -115,13 +115,19 @@ export async function executeWardrobeListTool(
     const itemsById = new Map<string, WardrobeItem>();
     for (const item of allItems) itemsById.set(item.id, item);
 
-    // One ledger read for every listed item's "last worn".
-    const wearSummaries = await repos.wardrobeWear.findSummaries(filteredItems.map((item) => item.id));
+    // One ledger read for every listed item's wear, the caller's own share
+    // kept apart from the household's (bug 184).
+    const wearSummaries = await repos.wardrobeWear.findSummariesForWearer(
+      filteredItems.map((item) => item.id),
+      context.characterId,
+    );
 
     // Build result list with equipped status and composite metadata.
     const resultItems: WardrobeListItemResult[] = filteredItems.map((item) => {
       const equipped = findEquippedSlots(item.id, equippedSlots);
-      const wear = wearSummaries.get(item.id) ?? neverWornSummary();
+      const wear = wearSummaries.get(item.id);
+      const household = wear?.household ?? neverWornSummary();
+      const yours = wear?.yours ?? neverWornSummary();
       const isComposite = (item.componentItemIds?.length ?? 0) > 0;
       const componentTitles = isComposite
         ? item.componentItemIds
@@ -142,8 +148,10 @@ export async function executeWardrobeListTool(
         // we expose the *first* slot the item appears in for back-compat,
         // and the full set on `equipped_slots`.
         equipped_slot: equipped[0] ?? null,
-        wear_count: wear.wearCount,
-        last_worn_at: wear.lastWornAt,
+        wear_count: household.wearCount,
+        last_worn_at: household.lastWornAt,
+        worn_by_you: yours.wearCount,
+        last_worn_by_you_at: yours.lastWornAt,
         ...(isComposite
           ? {
               is_composite: true,
@@ -172,6 +180,7 @@ export async function executeWardrobeListTool(
       includeEquipped: include_equipped !== false,
       compositeCount: finalItems.filter((i) => i.is_composite).length,
       neverWornCount: finalItems.filter((i) => i.wear_count === 0).length,
+      neverWornByCallerCount: finalItems.filter((i) => i.worn_by_you === 0).length,
       withPictureCount: finalItems.filter((i) => i.image_file_id).length,
     });
 
@@ -197,25 +206,41 @@ export async function executeWardrobeListTool(
   }
 }
 
+/** "once" or "12×", for the compact list note. */
+function listTimes(count: number): string {
+  return count === 1 ? 'once' : `${count}×`;
+}
+
 /**
- * The compact wear note a listed item carries: ` · last worn 3 days ago` or
- * ` · never worn`. `nowMs` pins the clock (tests); it defaults to now.
+ * The compact wear note a listed item carries, from the caller's side with
+ * the household's total as context (bug 184):
+ *
+ *  - ` · never worn` — nobody has
+ *  - ` · never worn by you (worn 115× by others)`
+ *  - ` · worn by you 12×, last yesterday` — only the caller has worn it
+ *  - ` · worn by you 12×, last yesterday (115× in the household)`
+ *
+ * `nowMs` pins the clock (tests); it defaults to now.
  */
 export function formatWardrobeListWearNote(
-  item: Pick<WardrobeListItemResult, 'wear_count' | 'last_worn_at'>,
+  item: Pick<WardrobeListItemResult, 'wear_count' | 'last_worn_at' | 'worn_by_you' | 'last_worn_by_you_at'>,
   nowMs: number = Date.now(),
 ): string {
-  if (!item.wear_count || !item.last_worn_at) return ' · never worn';
-  const lastMs = Date.parse(item.last_worn_at);
-  if (Number.isNaN(lastMs)) return ' · never worn';
-  return ` · last worn ${formatRelativeDays(lastMs, nowMs)}`;
+  if (!item.wear_count) return ' · never worn';
+  if (!item.worn_by_you) return ` · never worn by you (worn ${listTimes(item.wear_count)} by others)`;
+  // A count with no readable date (a hand-edited row) drops the date part.
+  const yourLastMs = item.last_worn_by_you_at ? Date.parse(item.last_worn_by_you_at) : NaN;
+  const when = Number.isNaN(yourLastMs) ? '' : `, last ${formatWornRelative(yourLastMs, nowMs)}`;
+  const yours = `worn by you ${listTimes(item.worn_by_you)}${when}`;
+  if (item.wear_count <= item.worn_by_you) return ` · ${yours}`;
+  return ` · ${yours} (${listTimes(item.wear_count)} in the household)`;
 }
 
 /**
  * Format wardrobe list results for inclusion in conversation context
  *
  * @param output - Wardrobe list tool output to format
- * @param nowMs - Clock for the relative "last worn" dates; defaults to now
+ * @param nowMs - Clock for the relative wear dates; defaults to now
  * @returns Formatted string suitable for LLM context and display
  */
 export function formatWardrobeListResults(
