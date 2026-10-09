@@ -14,10 +14,8 @@
  * itself owns.
  */
 
-import { useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { useImageNavigation } from '@/hooks/useImageNavigation'
-import DeletedImagePlaceholder from '@/components/images/DeletedImagePlaceholder'
+import { FullScreenImageViewer } from '@/components/images/FullScreenImageViewer'
 import { downloadGalleryEntry } from '@/lib/download-utils'
 import { copyImageToClipboard } from '@/lib/clipboard-utils'
 import { Icon } from '@/components/ui/icon'
@@ -66,10 +64,6 @@ export default function ChatGalleryImageViewModal({
   onSave,
   onJumpToMessage,
 }: Readonly<ChatGalleryImageViewModalProps>) {
-  const [imageMissing, setImageMissing] = useState(false)
-
-  useImageNavigation({ isOpen, onClose, onPrev, onNext })
-
   const handleCopyToClipboard = async () => {
     try {
       await copyImageToClipboard(entry.url)
@@ -104,95 +98,26 @@ export default function ChatGalleryImageViewModal({
   const linkCount = entry.linkSummary?.count ?? 0
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center qt-bg-overlay backdrop-blur-sm"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      {/* Navigation buttons - left and right sides */}
-      {onPrev && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onPrev()
-          }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10 cursor-pointer"
-          title="Previous image (Left Arrow)"
-        >
-          <Icon name="chevron-left" className="w-8 h-8" />
-        </button>
-      )}
-
-      {onNext && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onNext()
-          }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-3 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors z-10 cursor-pointer"
-          title="Next image (Right Arrow)"
-        >
-          <Icon name="chevron-right" className="w-8 h-8" />
-        </button>
-      )}
-
-      {/* Top right control buttons */}
-      {!imageMissing && (
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onSave()
-            }}
-            className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
-            title="Save to a photo album"
-            aria-label="Save to a photo album"
-          >
-            <Icon name="bookmark" className="w-6 h-6" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleDownload()
-            }}
-            className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
-            title="Download"
-            aria-label="Download"
-          >
-            <Icon name="download" className="w-6 h-6" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleCopyToClipboard()
-            }}
-            className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
-            title="Copy to clipboard"
-            aria-label="Copy to clipboard"
-          >
-            <Icon name="copy" className="w-6 h-6" />
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onClose()
-            }}
-            className="p-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn rounded-full qt-text-overlay transition-colors cursor-pointer"
-            title="Close (Escape)"
-            aria-label="Close"
-          >
-            <Icon name="close" className="w-6 h-6" />
-          </button>
-        </div>
-      )}
-
-      {/* Delete — only where the chat itself owns the record. A portrait
-          belongs to its character; a kept or inline picture belongs to an
-          album or a vault; the background presently on the wall is what the
-          chat is showing. */}
-      {!imageMissing && entry.deletable && (
-        <div className="absolute bottom-4 right-4 z-10">
+    <FullScreenImageViewer
+      isOpen={isOpen}
+      onClose={onClose}
+      src={entry.url}
+      alt={entry.filename}
+      imageId={entry.id}
+      filename={entry.filename}
+      onPrev={onPrev}
+      onNext={onNext}
+      actions={[
+        { icon: 'bookmark', label: 'Save to a photo album', onClick: onSave },
+        { icon: 'download', label: 'Download', onClick: () => void handleDownload() },
+        { icon: 'copy', label: 'Copy to clipboard', onClick: () => void handleCopyToClipboard() },
+      ]}
+      // Delete — only where the chat itself owns the record. A portrait
+      // belongs to its character; a kept or inline picture belongs to an
+      // album or a vault; the background presently on the wall is what the
+      // chat is showing.
+      bottomRight={
+        entry.deletable ? (
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -204,58 +129,32 @@ export default function ChatGalleryImageViewModal({
           >
             <Icon name="trash" className="w-6 h-6" />
           </button>
-        </div>
-      )}
-
-      {/* Image container */}
-      <div
-        className="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {imageMissing ? (
-          <DeletedImagePlaceholder
-            imageId={entry.id}
-            filename={entry.filename}
-            onCleanup={onClose}
-            width={600}
-            height={400}
-          />
-        ) : (
-          <img
-            src={entry.url}
-            alt={entry.filename}
-            className="max-w-full max-h-[90vh] w-auto h-auto object-contain"
-            onError={() => setImageMissing(true)}
-          />
-        )}
-      </div>
-
-      {/* Filename and provenance at the bottom */}
-      <div
-        className="absolute bottom-4 left-1/2 -translate-x-1/2 qt-text-overlay-muted text-sm qt-bg-overlay-caption px-3 py-1 rounded text-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div>{entry.filename}</div>
-        <div className="text-xs opacity-80">
-          {provenance}
-          {linkCount > 0 && ` · [${linkCount} link${linkCount === 1 ? '' : 's'}]`}
-          {entry.messageId && onJumpToMessage && (
-            <>
-              {' · '}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onJumpToMessage(entry.messageId!)
-                }}
-                className="qt-link underline"
-              >
-                Jump to message
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+        ) : null
+      }
+      caption={
+        <>
+          <div>{entry.filename}</div>
+          <div className="text-xs opacity-80">
+            {provenance}
+            {linkCount > 0 && ` · [${linkCount} link${linkCount === 1 ? '' : 's'}]`}
+            {entry.messageId && onJumpToMessage && (
+              <>
+                {' · '}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onJumpToMessage(entry.messageId!)
+                  }}
+                  className="qt-link underline"
+                >
+                  Jump to message
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      }
+    />
   )
 }

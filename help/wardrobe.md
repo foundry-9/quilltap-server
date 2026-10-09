@@ -325,7 +325,7 @@ Conversations begun before the Hair slot arrived sit for their portraits exactly
 
 ## Portraits of the Garments
 
-A wardrobe item --- or a whole outfit --- may carry a picture of itself, so that two jackets of nearly identical name are told apart at a glance rather than by squinting at their descriptions. The picture appears as a small thumbnail beside the item in the wardrobe lists and in the slot and quick-pick choosers, and at full size in the item's editor.
+A wardrobe item --- or a whole outfit --- may carry a picture of itself, so that two jackets of nearly identical name are told apart at a glance rather than by squinting at their descriptions. The picture appears as a small thumbnail beside the item in the wardrobe lists and in the slot and quick-pick choosers, and at full size in the item's editor; click it to see it full screen (see [Viewing a Picture Properly](#viewing-a-picture-properly)).
 
 Open an item for editing and you will find an **Image** section directly beneath the title:
 
@@ -347,6 +347,16 @@ Characters may commission pictures too, when they make or amend their own garmen
 - **A shared garment** (Quilltap General, a project, or a group) belongs to nobody in particular, so it is drawn **catalogue style**: on a dress form or laid flat, with no one inside it. The caption says "catalogue shot" so the empty dress form comes as no surprise.
 
 An outfit follows the same rule for the whole ensemble. The picture's prompt is built from each piece's **Image cue** (or its title), never from the prose description, and is kept with the picture so you can see exactly what was asked of the painter. The "people and their outfits" aesthetic from **Settings → Images** applies to both kinds of picture.
+
+### Viewing a Picture Properly
+
+A thumbnail is a fine thing for telling jackets apart, but a poor one for admiring the stitching. Click the thumbnail beside an item in the wardrobe list --- or the picture, or any picture in the history strip, in the item's editor --- and it opens across the whole window, as large as your screen will allow. Three buttons wait in the top corner:
+
+- **Save to a document store** (the bookmark) files a copy in the `photos/` folder of whichever store you choose --- a character's vault, a project's files, any document store you keep, or Quilltap General, which is offered first. An optional caption may go with it; leave it blank and the item's name is used. Should the store already hold that very picture, you are told when it was filed rather than given a second copy. The garment's own pictures are not disturbed.
+- **Download** saves the picture to your computer.
+- **Copy** puts it on the clipboard.
+
+Opened from the editor, the arrows (or your keyboard's left and right keys) step through the item's whole history. **Escape**, the close button, or a click on the darkened margin puts the picture away. The little thumbnails in the slot and quick-pick choosers are for choosing, not viewing, and stay as they are.
 
 Pictures live beside the item in its own wardrobe's store, travel with it when you move or copy it to another wardrobe, go with it when it is deleted, and ride along in a character's `.qtap` export. An archived character's pictures may be admired but not changed.
 

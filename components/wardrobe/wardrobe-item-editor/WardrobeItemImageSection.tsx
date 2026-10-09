@@ -7,6 +7,9 @@
  * dashed frame), a Generate button with a profile picker, an Upload button, a
  * caption naming who drew the current picture, and a history strip of every
  * picture the item has had, each of which can be made current or taken down.
+ * Clicking the current picture or a history entry opens it full screen in
+ * `WardrobeImageViewer` (Save to a store, Download, Copy), where Previous /
+ * Next walk the history.
  *
  * Every URL and request goes through `lib/wardrobe/item-images-client`; the
  * history is one TanStack query keyed by `queryKeys.wardrobe.images`. Any change
@@ -32,6 +35,7 @@ import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import type { ChatSettings } from '@/components/settings/chat-settings/types'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
+import { WardrobeImageViewer } from '@/components/wardrobe/wardrobe-image-viewer'
 import {
   WardrobeImageRequestError,
   deleteWardrobeItemImage,
@@ -160,6 +164,13 @@ function ActiveImageSection({
   const currentId = imagesData?.current ?? item.imageFileId ?? null
   const currentImage: WardrobeItemImageSummary | null =
     images.find((i) => i.fileId === currentId) ?? null
+  // Index into `images` of the picture open full screen, or null.
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null)
+  const viewing = viewingIndex !== null ? images[viewingIndex] ?? null : null
+  const openViewer = (fileId: string) => {
+    const index = images.findIndex((i) => i.fileId === fileId)
+    if (index >= 0) setViewingIndex(index)
+  }
 
   /** After any change to the picture set: refresh the history and every wardrobe list. */
   const afterChange = async (): Promise<void> => {
@@ -334,14 +345,20 @@ function ActiveImageSection({
 
       {currentImage ? (
         <div className="relative inline-block">
-          <a href={wardrobeImageUrl(currentImage.fileId)} target="_blank" rel="noreferrer">
+          <button
+            type="button"
+            onClick={() => openViewer(currentImage.fileId)}
+            className="block cursor-zoom-in"
+            title="View full size"
+            aria-label={`View the picture of ${item.title} full size`}
+          >
             <img
               src={wardrobeImageUrl(currentImage.fileId)}
               alt={`Picture of ${item.title}`}
               className="max-h-[16rem] w-auto rounded border qt-border-default qt-bg-muted"
               data-testid="wardrobe-item-image-current"
             />
-          </a>
+          </button>
           {generating && (
             <div className="absolute inset-0 flex items-center justify-center rounded qt-bg-overlay-medium">
               <div
@@ -447,18 +464,27 @@ function ActiveImageSection({
                   }`}
                   data-testid="wardrobe-item-image-history-entry"
                 >
-                  <img
-                    src={wardrobeImageThumbnailUrl(img.fileId)}
-                    alt={isCurrent ? 'Current picture' : 'Earlier picture'}
-                    title={img.prompt ?? undefined}
-                    className="block w-16 h-16 object-cover qt-bg-muted"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 flex flex-col items-stretch justify-end gap-0.5 p-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => openViewer(img.fileId)}
+                    className="block cursor-zoom-in"
+                    title={img.prompt ?? 'View full size'}
+                    aria-label={isCurrent ? 'View the current picture full size' : 'View this earlier picture full size'}
+                  >
+                    <img
+                      src={wardrobeImageThumbnailUrl(img.fileId)}
+                      alt={isCurrent ? 'Current picture' : 'Earlier picture'}
+                      className="block w-16 h-16 object-cover qt-bg-muted"
+                      loading="lazy"
+                    />
+                  </button>
+                  {/* The hover buttons sit over the thumbnail; the empty part
+                      of this layer lets clicks through to the view button. */}
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-stretch justify-end gap-0.5 p-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                     {!isCurrent && (
                       <button
                         type="button"
-                        className="qt-button-secondary qt-button-sm !px-1 !py-0 qt-text-xs"
+                        className="pointer-events-auto qt-button-secondary qt-button-sm !px-1 !py-0 qt-text-xs"
                         onClick={() => setCurrentMutation.mutate(img.fileId)}
                         disabled={busy}
                         title="Make current"
@@ -468,7 +494,7 @@ function ActiveImageSection({
                     )}
                     <button
                       type="button"
-                      className="qt-button-secondary qt-button-sm !px-1 !py-0 qt-text-xs qt-text-destructive"
+                      className="pointer-events-auto qt-button-secondary qt-button-sm !px-1 !py-0 qt-text-xs qt-text-destructive"
                       onClick={() => void handleDelete(img.fileId)}
                       disabled={busy}
                       title="Delete this picture"
@@ -481,6 +507,24 @@ function ActiveImageSection({
             })}
           </ul>
         </div>
+      )}
+
+      {viewing && viewingIndex !== null && (
+        <WardrobeImageViewer
+          onClose={() => setViewingIndex(null)}
+          itemId={item.id}
+          itemTitle={item.title}
+          container={container}
+          fileId={viewing.fileId}
+          note={[
+            viewing.fileId === currentId ? 'Current picture' : 'Earlier picture',
+            images.length > 1 ? `${viewingIndex + 1} of ${images.length}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          onPrev={viewingIndex > 0 ? () => setViewingIndex(viewingIndex - 1) : undefined}
+          onNext={viewingIndex < images.length - 1 ? () => setViewingIndex(viewingIndex + 1) : undefined}
+        />
       )}
     </section>
   )

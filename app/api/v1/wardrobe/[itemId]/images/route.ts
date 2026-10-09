@@ -11,6 +11,8 @@
  * POST …?action=upload        multipart `file` (+ `kind`: uploaded | imported) → { image }
  * POST …?action=set-current   body { fileId }           → { current }
  * POST …?action=delete-image  body { fileId }           → { current }
+ * GET  …?action=save-targets                            → { albums: PhotoAlbumOption[] }
+ * POST …?action=save-to-store body { fileId, mountPointId, caption? } → { mountPoint, relativePath, … }
  *
  * `scope` ∈ character | project | group | general; `id` is required for all
  * but general. The item must live in the named container (404 otherwise). A
@@ -18,6 +20,13 @@
  * tombstone's `CharacterArchivedError` is mapped, never caught and retried.
  * Generation is synchronous and wrapped in `trackActivity('image', …)` so the
  * toolbar's Img chip lights for the whole call.
+ *
+ * `save-targets` / `save-to-store` back the full-screen picture viewer's Save:
+ * the same `SaveImageDialog` the Salon uses, offering every document store
+ * (archived characters' vaults excluded) and filing a copy through the shared
+ * `saveImageToAlbum` service. The picture must be one of the item's own; the
+ * item itself is not changed, so an archived character's item may still be
+ * copied *out*.
  */
 
 import type { NextRequest, NextResponse } from 'next/server';
@@ -47,6 +56,14 @@ import {
   toWardrobeImageSummary,
   type WardrobeItemHome,
 } from '@/lib/wardrobe/item-images';
+import {
+  saveImageToAlbum,
+  SaveImageToAlbumError,
+  SaveImageRequestSchema,
+} from '@/lib/photos/save-image-to-album';
+import { savedImageResponse, saveImageErrorResponse } from '@/lib/photos/save-image-response';
+import { listAllPhotoAlbumOptions } from '@/lib/photos/photo-album-options';
+import { getArchivedCharacterVaultMountPointIds } from '@/lib/mount-index/character-vault';
 import {
   NoWardrobeImageProfileError,
   WardrobeImageGenerationError,
@@ -267,7 +284,63 @@ async function handleDeleteImage(req: NextRequest, ctx: RequestContext, { itemId
   }
 }
 
-export const GET = createContextParamsHandler<Params>(handleList);
+// GET ?action=save-targets — every store the viewer's Save may file a copy in
+async function handleSaveTargets(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
+  const found = await findHome(req, ctx, itemId);
+  if (!found.ok) return found.response;
+  const albums = await listAllPhotoAlbumOptions(ctx.repos);
+  logger.debug(`${LOG_TAG} Listed save targets`, { itemId, scope: found.query.scope, count: albums.length });
+  return successResponse({ albums });
+}
+
+// POST ?action=save-to-store — file a copy of one of the item's pictures in a store's photos/
+async function handleSaveToStore(req: NextRequest, ctx: RequestContext, { itemId }: Params) {
+  const found = await findHome(req, ctx, itemId);
+  if (!found.ok) return found.response;
+
+  const parsed = SaveImageRequestSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return badRequest(parsed.error.issues.map((i) => i.message).join('; '));
+  const { fileId, mountPointId, caption, tags } = parsed.data;
+  const meta = { itemId, scope: found.query.scope, fileId, mountPointId };
+
+  // The guard: only this item's own pictures leave through this door.
+  const images = await listWardrobeItemImages(ctx.repos, itemId);
+  if (!images.some((f) => f.id === fileId)) {
+    logger.info(`${LOG_TAG} Refused to save a picture that is not the item's`, meta);
+    return badRequest('That picture does not belong to this wardrobe item');
+  }
+  // An archived character's vault is a tombstone; nothing is filed into it.
+  if ((await getArchivedCharacterVaultMountPointIds()).includes(mountPointId)) {
+    logger.info(`${LOG_TAG} Refused to save into an archived character's vault`, meta);
+    return conflict("That store belongs to an archived character and cannot be written to");
+  }
+
+  try {
+    const saved = await saveImageToAlbum({
+      mountPointId,
+      fileId,
+      caption: caption ?? found.home.item.title,
+      tags: tags ?? [],
+      attribution: { name: ctx.user.name ?? 'Quilltap', id: ctx.user.id ?? null, role: 'user' },
+    });
+    logger.info(`${LOG_TAG} Saved wardrobe picture to a store`, {
+      ...meta,
+      relativePath: saved.relativePath,
+      linkId: saved.linkId,
+    });
+    return savedImageResponse(saved);
+  } catch (error) {
+    if (error instanceof SaveImageToAlbumError) {
+      logger.info(`${LOG_TAG} Save to store rejected`, { ...meta, code: error.code, message: error.message });
+      return saveImageErrorResponse(error);
+    }
+    throw error;
+  }
+}
+
+export const GET = createContextParamsHandler<Params>(
+  withActionDispatch<Params>({ 'save-targets': handleSaveTargets }, handleList),
+);
 
 // No default verb: a bare POST is a 400 naming the actions.
 export const POST = createContextParamsHandler<Params>(
@@ -276,5 +349,6 @@ export const POST = createContextParamsHandler<Params>(
     upload: handleUpload,
     'set-current': handleSetCurrent,
     'delete-image': handleDeleteImage,
+    'save-to-store': handleSaveToStore,
   }),
 );

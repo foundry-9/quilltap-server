@@ -64,6 +64,38 @@ jest.mock('@/lib/wardrobe/item-image-generation', () => ({
   generateWardrobeItemImage: jest.fn(),
 }))
 
+jest.mock('@/lib/photos/save-image-to-album', () => {
+  const { z } = jest.requireActual('zod')
+  return {
+    SaveImageRequestSchema: z.object({
+      fileId: z.string().min(1, 'fileId is required'),
+      mountPointId: z.string().min(1, 'mountPointId is required'),
+      caption: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+    }),
+    SaveImageToAlbumError: class SaveImageToAlbumError extends Error {
+      constructor(readonly code: string, message: string, readonly extras?: Record<string, string>) {
+        super(message)
+      }
+      get existingCreatedAt() {
+        return this.extras?.existingCreatedAt
+      }
+      get existingRelativePath() {
+        return this.extras?.existingRelativePath
+      }
+    },
+    saveImageToAlbum: jest.fn(),
+  }
+})
+
+jest.mock('@/lib/photos/photo-album-options', () => ({
+  listAllPhotoAlbumOptions: jest.fn(),
+}))
+
+jest.mock('@/lib/mount-index/character-vault', () => ({
+  getArchivedCharacterVaultMountPointIds: jest.fn(async () => []),
+}))
+
 import { NextRequest } from 'next/server'
 import { GET, POST } from '@/app/api/v1/wardrobe/[itemId]/images/route'
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository'
@@ -81,6 +113,13 @@ import {
   generateWardrobeItemImage,
 } from '@/lib/wardrobe/item-image-generation'
 
+import { saveImageToAlbum, SaveImageToAlbumError } from '@/lib/photos/save-image-to-album'
+import { listAllPhotoAlbumOptions } from '@/lib/photos/photo-album-options'
+import { getArchivedCharacterVaultMountPointIds } from '@/lib/mount-index/character-vault'
+
+const mockSaveToAlbum = saveImageToAlbum as jest.Mock
+const mockListAlbums = listAllPhotoAlbumOptions as jest.Mock
+const mockArchivedVaults = getArchivedCharacterVaultMountPointIds as jest.Mock
 const mockResolveHome = resolveWardrobeItemHome as jest.Mock
 const mockList = listWardrobeItemImages as jest.Mock
 const mockAdd = addWardrobeItemImage as jest.Mock
@@ -126,7 +165,7 @@ function uploadPost(query: string, file: File): NextRequest {
 beforeEach(() => {
   jest.clearAllMocks()
   mockCtx = {
-    user: { id: 'user-1' },
+    user: { id: 'user-1', name: 'Ada' },
     repos: { files: { findById: jest.fn(async (id: string) => ({ id })) } },
   }
   mockResolveHome.mockResolvedValue(home)
@@ -306,5 +345,80 @@ describe('POST', () => {
       const res = await POST(jsonPost('action=generate&scope=character&id=char-1', {}), routeCtx)
       expect(res.status).toBe(409)
     })
+  })
+})
+
+describe('save-targets', () => {
+  it('lists every store as an album option', async () => {
+    const albums = [{ mountPointId: 'mp-general', name: 'Quilltap General', kind: 'general', isDefault: true }]
+    mockListAlbums.mockResolvedValue(albums)
+    const res = await GET(new NextRequest(`${BASE}?action=save-targets&scope=character&id=char-1`), routeCtx)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ albums })
+    expect(mockListAlbums).toHaveBeenCalledWith(mockCtx.repos)
+  })
+
+  it('404s for an item not in the named container', async () => {
+    mockResolveHome.mockResolvedValue(null)
+    const res = await GET(new NextRequest(`${BASE}?action=save-targets&scope=general`), routeCtx)
+    expect(res.status).toBe(404)
+    expect(mockListAlbums).not.toHaveBeenCalled()
+  })
+})
+
+describe('save-to-store', () => {
+  const query = 'action=save-to-store&scope=character&id=char-1'
+
+  it("files a copy of one of the item's pictures, captioned with its title by default", async () => {
+    mockSaveToAlbum.mockResolvedValue({
+      mountPointName: 'Quilltap General',
+      relativePath: 'photos/opera-coat.webp',
+      linkId: 'link-1',
+      keptAt: '2026-10-09T00:00:00.000Z',
+      fileId: 'file-a',
+      sha256: 'abc',
+    })
+    const res = await POST(jsonPost(query, { fileId: 'file-a', mountPointId: 'mp-general' }), routeCtx)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toMatchObject({ saved: true, mountPoint: 'Quilltap General', relativePath: 'photos/opera-coat.webp' })
+    expect(mockSaveToAlbum).toHaveBeenCalledWith({
+      mountPointId: 'mp-general',
+      fileId: 'file-a',
+      caption: 'Opera coat',
+      tags: [],
+      attribution: { name: 'Ada', id: 'user-1', role: 'user' },
+    })
+  })
+
+  it("refuses a picture that is not the item's", async () => {
+    const res = await POST(jsonPost(query, { fileId: 'someone-elses', mountPointId: 'mp-general' }), routeCtx)
+    expect(res.status).toBe(400)
+    expect(mockSaveToAlbum).not.toHaveBeenCalled()
+  })
+
+  it("refuses an archived character's vault", async () => {
+    mockArchivedVaults.mockResolvedValueOnce(['mp-tombstone'])
+    const res = await POST(jsonPost(query, { fileId: 'file-a', mountPointId: 'mp-tombstone' }), routeCtx)
+    expect(res.status).toBe(409)
+    expect(mockSaveToAlbum).not.toHaveBeenCalled()
+  })
+
+  it('answers 409 with the filing date when the store already holds the picture', async () => {
+    mockSaveToAlbum.mockRejectedValue(
+      new SaveImageToAlbumError('ALREADY_SAVED', 'Already saved', {
+        existingCreatedAt: '2026-10-01T00:00:00.000Z',
+        existingRelativePath: 'photos/x.webp',
+      } as never),
+    )
+    const res = await POST(jsonPost(query, { fileId: 'file-a', mountPointId: 'mp-general' }), routeCtx)
+    expect(res.status).toBe(409)
+    expect(await res.json()).toMatchObject({ code: 'ALREADY_SAVED', keptAt: '2026-10-01T00:00:00.000Z' })
+  })
+
+  it('400s on a body without a store', async () => {
+    const res = await POST(jsonPost(query, { fileId: 'file-a' }), routeCtx)
+    expect(res.status).toBe(400)
+    expect(mockSaveToAlbum).not.toHaveBeenCalled()
   })
 })

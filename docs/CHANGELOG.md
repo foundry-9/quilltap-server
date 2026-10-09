@@ -4,6 +4,25 @@
 
 ### 4.10-dev
 
+#### Wardrobe pictures open full screen, with Save to a document store
+
+- Clicking a wardrobe row's thumbnail, the item editor's current picture, or a history entry opens the
+  picture full screen (`components/wardrobe/wardrobe-image-viewer.tsx`) with Save to a document store,
+  Download and Copy. From the editor, Previous/Next walk the picture history.
+- Save reuses the Salon's `SaveImageDialog`, which gains a `{ kind: 'wardrobe' }` target; chat targets
+  now carry their `chatId` in the target instead of a separate prop. New actions on
+  `/api/v1/wardrobe/[itemId]/images`: `GET ?action=save-targets` (every enabled store, archived
+  characters' vaults excluded, Quilltap General default — `lib/photos/photo-album-options.ts`) and
+  `POST ?action=save-to-store` (refuses a picture that is not the item's and an archived character's
+  vault; files a copy through `saveImageToAlbum`, captioned with the item's title by default).
+- New shared frame `components/images/FullScreenImageViewer.tsx`; the chat gallery's
+  `ChatGalleryImageViewModal` now renders through it. `BaseModal` gains `overlayClassName`.
+- `lib/photos/save-image-response.ts` holds the save-image success and error responses for all three
+  save routes. The message toolbar's Save Image now answers a duplicate with 409 `ALREADY_SAVED` and
+  the filing date, as the gallery's did, instead of a bare 400.
+- `PhotoAlbumOption` / `PhotoAlbumKind` moved to `lib/photos/photo-album-options.ts` (re-exported from
+  the chat photo-albums action).
+
 #### Fix bug 186: two document stores can share a name
 
 - Store names are one case-insensitive namespace (a name is a `qtap://` address), but only the API

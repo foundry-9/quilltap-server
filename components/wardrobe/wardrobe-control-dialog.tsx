@@ -73,6 +73,7 @@ import {
   homeContainerForItem,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
+  type ListedWardrobeItem,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
@@ -80,6 +81,7 @@ import { useWardrobeContainerItems } from '@/lib/hooks/use-wardrobe-container-it
 import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
+import { WardrobeImageViewer } from './wardrobe-image-viewer'
 import { WardrobeItemRow } from './wardrobe-item-row'
 import { OutfitComposer } from './outfit-composer'
 import { ImportFromImageModal } from './import-from-image-modal'
@@ -258,6 +260,11 @@ function WardrobeControlDialogInner({
     void reloadActiveItems()
   })
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null)
+  // The row whose picture is open full screen, with the container its images
+  // route is addressed through.
+  const [viewingImage, setViewingImage] = useState<
+    { item: ListedWardrobeItem; container: WardrobeContainer } | null
+  >(null)
   const [transferringItem, setTransferringItem] = useState<WardrobeItem | null>(null)
   const [transferIntent, setTransferIntent] = useState<TransferIntent | null>(null)
   /** null = no editor open; 'create-single' / 'create-bundle' = new item in that mode */
@@ -601,6 +608,24 @@ function WardrobeControlDialogInner({
       await reloadActiveItems()
     },
     [selectedContainer, isCharacterScope, reloadActiveItems],
+  )
+
+  /**
+   * Open a row's current picture full screen. A borrowed row is addressed
+   * through the wardrobe its origin names; otherwise the same rule as every
+   * other row action.
+   */
+  const handleOpenImage = useCallback(
+    (item: ListedWardrobeItem) => {
+      const container: WardrobeContainer | null = item.origin
+        ? { scope: item.origin.scope, id: item.origin.id }
+        : isCharacterScope
+          ? homeContainerForItem(item)
+          : selectedContainer
+      if (!container || !item.imageFileId) return
+      setViewingImage({ item, container })
+    },
+    [isCharacterScope, selectedContainer],
   )
 
   /**
@@ -1171,7 +1196,11 @@ function WardrobeControlDialogInner({
   // (rendered as siblings) close the outer dialog via BaseModal's
   // click-outside handler.
   const editorOpen = Boolean(
-    editingItem || creatingNew || importFromImageOpen || (transferringItem && transferIntent),
+    editingItem ||
+      creatingNew ||
+      importFromImageOpen ||
+      (transferringItem && transferIntent) ||
+      viewingImage,
   )
 
   // Close Reset menu on outside click + Escape
@@ -1428,6 +1457,7 @@ function WardrobeControlDialogInner({
                     onToggleArchived={handleToggleArchived}
                     onGenerateImage={handleGenerateImage}
                     generatingImageIds={generatingImageIds}
+                    onOpenImage={handleOpenImage}
                     onEdit={(it) => setEditingItem(it)}
                     onDuplicate={handleDuplicate}
                     onMove={(it) => {
@@ -1646,6 +1676,17 @@ function WardrobeControlDialogInner({
           onImported={() => {
             void reloadItems()
           }}
+        />
+      )}
+
+      {/* A row's picture, full screen — above the dialog and the editor */}
+      {viewingImage?.item.imageFileId && (
+        <WardrobeImageViewer
+          onClose={() => setViewingImage(null)}
+          itemId={viewingImage.item.id}
+          itemTitle={viewingImage.item.title}
+          container={viewingImage.container}
+          fileId={viewingImage.item.imageFileId}
         />
       )}
 

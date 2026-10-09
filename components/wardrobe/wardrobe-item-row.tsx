@@ -22,7 +22,8 @@
  * the components without entering the editor.
  *
  * When the item has a current picture, a 40 px thumbnail sits at the left of
- * the title block; an item without one shows nothing there.
+ * the title block; an item without one shows nothing there. With
+ * `onOpenImage` the thumbnail opens the picture full screen.
  *
  * Under the badges sits one muted line from the wear ledger (`Worn 4× · last
  * …` / `Never worn`); an item read without a `wear` annotation is never worn.
@@ -85,6 +86,8 @@ interface WardrobeItemRowProps {
    * commission is out.
    */
   generatingImageIds?: ReadonlySet<string>
+  /** Open the item's current picture full screen. Passed down to nested rows. */
+  onOpenImage?: (item: ListedWardrobeItem) => void
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
   /** Nesting depth for composite components — used for indentation. */
@@ -108,6 +111,7 @@ export function WardrobeItemRow({
   onToggleArchived,
   onGenerateImage,
   generatingImageIds,
+  onOpenImage,
   onEquip,
   onAddToSlot,
   depth = 0,
@@ -214,7 +218,12 @@ export function WardrobeItemRow({
           <span className="inline-block w-3" aria-hidden />
         )}
 
-        <WardrobeItemThumbnail fileId={item.imageFileId} size={40} />
+        <WardrobeItemThumbnail
+          fileId={item.imageFileId}
+          size={40}
+          onOpen={onOpenImage ? () => onOpenImage(item) : undefined}
+          openLabel={`View the picture of ${item.title}`}
+        />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -491,6 +500,7 @@ export function WardrobeItemRow({
                 onDelete={onDelete}
                 onGenerateImage={onGenerateImage}
                 generatingImageIds={generatingImageIds}
+                onOpenImage={onOpenImage}
                 depth={depth + 1}
               />
             ))

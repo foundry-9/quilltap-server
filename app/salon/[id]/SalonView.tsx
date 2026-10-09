@@ -1977,9 +1977,9 @@ export function SalonView({ chatId }: SalonViewProps) {
             <SaveImageDialog
               isOpen={!!saveImageTarget}
               onClose={() => setSaveImageTarget(null)}
-              chatId={id}
               target={{
                 kind: 'message',
+                chatId: id,
                 messageId: saveImageTarget.messageId,
                 fileId: saveImageTarget.attachmentId,
               }}

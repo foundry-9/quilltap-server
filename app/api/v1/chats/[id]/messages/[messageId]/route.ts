@@ -41,6 +41,7 @@ import {
   SaveImageRequestSchema,
 } from '@/lib/photos/save-image-to-album';
 import { resolveSaveAttribution } from '@/lib/photos/save-attribution';
+import { savedImageResponse, saveImageErrorResponse } from '@/lib/photos/save-image-response';
 
 /**
  * Handle overriding danger flags on a message
@@ -346,15 +347,7 @@ async function handleSaveImage(
       linkId: saved.linkId,
     });
 
-    return successResponse({
-      saved: true,
-      mountPoint: saved.mountPointName,
-      relativePath: saved.relativePath,
-      linkId: saved.linkId,
-      keptAt: saved.keptAt,
-      fileId: saved.fileId,
-      sha256: saved.sha256,
-    });
+    return savedImageResponse(saved);
   } catch (error) {
     if (error instanceof SaveImageToAlbumError) {
       logger.info('[SaveImage] rejected', {
@@ -363,7 +356,7 @@ async function handleSaveImage(
         code: error.code,
         message: error.message,
       });
-      return badRequest(error.message);
+      return saveImageErrorResponse(error);
     }
     logger.error('[SaveImage] failed', {
       chatId: id,

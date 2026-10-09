@@ -553,8 +553,7 @@ export default function PhotoGalleryModal(props: PhotoGalleryModalProps) {
         <SaveImageDialog
           isOpen={true}
           onClose={() => setSaveTargetId(null)}
-          chatId={props.chatId}
-          target={{ kind: 'chat', fileId: saveTarget.id }}
+          target={{ kind: 'chat', chatId: props.chatId, fileId: saveTarget.id }}
           attachments={[
             {
               id: saveTarget.id,

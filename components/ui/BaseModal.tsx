@@ -28,6 +28,11 @@ export interface BaseModalProps {
   maxWidth?: ModalSize
   /** Additional classes to apply to the modal container */
   className?: string
+  /**
+   * Additional classes for the full-screen overlay — e.g. a raised `z-[…]`
+   * when the modal opens over a viewer already above the dialog layer.
+   */
+  overlayClassName?: string
   /** Whether to show the close button in the header - defaults to false */
   showCloseButton?: boolean
   /** Whether clicking outside should close the modal - defaults to true */
@@ -82,6 +87,7 @@ export function BaseModal({
   footer,
   maxWidth = 'lg',
   className = '',
+  overlayClassName = '',
   showCloseButton = false,
   closeOnClickOutside = true,
   closeOnEscape = true,
@@ -98,7 +104,7 @@ export function BaseModal({
   // Use portal to render at document body level, avoiding stacking context issues
   // (e.g., qt-page-container > * { z-index: 1 } trapping modals inside grid cells)
   return createPortal(
-    <div className="qt-dialog-overlay">
+    <div className={`qt-dialog-overlay ${overlayClassName}`}>
       <div
         ref={modalRef}
         className={`qt-dialog ${maxWidthClasses[maxWidth]} max-h-[90vh] flex flex-col ${className}`}

@@ -3,18 +3,21 @@
 /**
  * SaveImageDialog — operator-facing "save this attached image" picker.
  *
- * Opens from two doors: the per-message Save Image toolbar button, and the
- * chat gallery's Save. Fetches the list of candidate photo albums for the chat
- * (chat participants' vaults, the project album, linked document stores,
- * Quilltap General), then POSTs the chosen album to whichever save-image action
- * matches the door it came from.
+ * Opens from three doors: the per-message Save Image toolbar button, the
+ * chat gallery's Save, and the wardrobe picture viewer's Save. For the two
+ * Salon doors it fetches the chat's candidate photo albums (chat participants'
+ * vaults, the project album, linked document stores, Quilltap General); the
+ * wardrobe viewer belongs to no chat and is offered every document store. It
+ * then POSTs the chosen album to whichever save-image action matches the door
+ * it came from.
  *
  * The two differ only in the route they post to. The message route's guard —
  * *is this image attached to this message* — is a real invariant there, and
  * half the gallery has no message at all (a Lantern backdrop posted with alerts
  * off, a participant's standing portrait), so the gallery posts to a
  * chat-scoped twin whose guard is *is this image in this chat's gallery*.
- * Everything the reader sees is identical.
+ * The wardrobe door posts to the item's images route, whose guard is *is this
+ * one of the item's own pictures*. Everything the reader sees is identical.
  *
  * Mirrors the LLM `keep_image` save path under the hood — see
  * `lib/photos/save-image-to-album.ts`.
@@ -23,6 +26,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { FormActions } from '@/components/ui/FormActions'
+import { wardrobeItemImagesUrl } from '@/lib/wardrobe/item-images-client'
+import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
 import type { MessageAttachment } from '../types'
 
 type AlbumKind = 'character' | 'project' | 'document-store' | 'general'
@@ -38,18 +43,37 @@ interface AlbumOption {
 }
 
 /**
- * Which door the dialog was opened from, and therefore which route it posts
- * to. `fileId` is the image selected when it opened; the in-dialog picker can
- * move it when a message carries several.
+ * Which door the dialog was opened from, and therefore where it reads its
+ * albums and which route it posts to. `fileId` is the image selected when it
+ * opened; the in-dialog picker can move it when a message carries several.
  */
 export type SaveImageTarget =
-  | { kind: 'message'; messageId: string; fileId: string }
-  | { kind: 'chat'; fileId: string }
+  | { kind: 'message'; chatId: string; messageId: string; fileId: string }
+  | { kind: 'chat'; chatId: string; fileId: string }
+  | { kind: 'wardrobe'; itemId: string; container: WardrobeContainer; fileId: string }
+
+/** Where the album list for a door is read from. */
+function albumsUrlFor(target: SaveImageTarget): string {
+  return target.kind === 'wardrobe'
+    ? wardrobeItemImagesUrl(target.itemId, target.container, 'save-targets')
+    : `/api/v1/chats/${target.chatId}?action=photo-albums`
+}
+
+/** Where a door posts the save. */
+function saveUrlFor(target: SaveImageTarget): string {
+  switch (target.kind) {
+    case 'message':
+      return `/api/v1/chats/${target.chatId}/messages/${target.messageId}?action=save-image`
+    case 'chat':
+      return `/api/v1/chats/${target.chatId}?action=save-image`
+    case 'wardrobe':
+      return wardrobeItemImagesUrl(target.itemId, target.container, 'save-to-store')
+  }
+}
 
 interface SaveImageDialogProps {
   isOpen: boolean
   onClose: () => void
-  chatId: string
   target: SaveImageTarget
   /**
    * Candidate images for the in-dialog picker — every image attachment on the
@@ -57,6 +81,11 @@ interface SaveImageDialogProps {
    */
   attachments: MessageAttachment[]
   onSaved?: (info: { mountPoint: string; relativePath: string }) => void
+  /**
+   * Extra overlay classes — a raised `z-[…]` when the dialog opens over
+   * something that already sits above the ordinary dialog layer.
+   */
+  overlayClassName?: string
 }
 
 const ALBUM_KIND_LABEL: Record<AlbumKind, string> = {
@@ -69,10 +98,10 @@ const ALBUM_KIND_LABEL: Record<AlbumKind, string> = {
 export function SaveImageDialog({
   isOpen,
   onClose,
-  chatId,
   target,
   attachments,
   onSaved,
+  overlayClassName,
 }: Readonly<SaveImageDialogProps>) {
   const imageAttachments = useMemo(
     () => attachments.filter(a => a.mimeType.startsWith('image/')),
@@ -92,21 +121,24 @@ export function SaveImageDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const albumsUrl = albumsUrlFor(target)
+
   // Fetch the album options on mount. The parent unmounts the dialog when
   // closed, so this runs exactly once per open. setState calls live inside
   // the async callbacks (after a microtask), not synchronously in the
   // effect body.
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/v1/chats/${chatId}?action=photo-albums`)
+    fetch(albumsUrl)
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load photo albums (${res.status})`)
-        return res.json() as Promise<{ albums: AlbumOption[] }>
+        const body = (await res.json()) as { albums?: AlbumOption[] }
+        return body.albums ?? []
       })
-      .then((data) => {
+      .then((list) => {
         if (cancelled) return
-        setAlbums(data.albums)
-        const defaultOption = data.albums.find(a => a.isDefault) ?? data.albums[0]
+        setAlbums(list)
+        const defaultOption = list.find(a => a.isDefault) ?? list[0]
         if (defaultOption) {
           setSelectedMountPointId(defaultOption.mountPointId)
         }
@@ -121,7 +153,7 @@ export function SaveImageDialog({
     return () => {
       cancelled = true
     }
-  }, [chatId])
+  }, [albumsUrl])
 
   const selectedAttachment = useMemo(
     () => imageAttachments.find(a => a.id === selectedAttachmentId) ?? imageAttachments[0] ?? null,
@@ -133,11 +165,7 @@ export function SaveImageDialog({
     setSubmitting(true)
     setError(null)
     try {
-      // The two doors, and the only difference between them.
-      const url = target.kind === 'message'
-        ? `/api/v1/chats/${chatId}/messages/${target.messageId}?action=save-image`
-        : `/api/v1/chats/${chatId}?action=save-image`
-      const res = await fetch(url, {
+      const res = await fetch(saveUrlFor(target), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +206,7 @@ export function SaveImageDialog({
     } finally {
       setSubmitting(false)
     }
-  }, [selectedAttachment, selectedMountPointId, chatId, target, caption, onSaved, onClose])
+  }, [selectedAttachment, selectedMountPointId, target, caption, onSaved, onClose])
 
   const groupedAlbums = useMemo(() => {
     if (!albums) return null
@@ -204,6 +232,7 @@ export function SaveImageDialog({
       onClose={onClose}
       title="Save image to album"
       maxWidth="lg"
+      overlayClassName={overlayClassName}
       showCloseButton
       footer={
         <FormActions
@@ -268,7 +297,9 @@ export function SaveImageDialog({
           )}
           {!loadingAlbums && groupedAlbums && groupedAlbums.length === 0 && (
             <div className="text-sm opacity-70">
-              No photo albums are available for this chat.
+              {target.kind === 'wardrobe'
+                ? 'No document stores are available.'
+                : 'No photo albums are available for this chat.'}
             </div>
           )}
           {!loadingAlbums && groupedAlbums && groupedAlbums.length > 0 && (

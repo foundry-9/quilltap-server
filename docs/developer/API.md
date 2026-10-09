@@ -2016,8 +2016,10 @@ One route for an item's pictures in every tier; the item's container rides in th
 | `POST` | `upload` | multipart `file` (JPEG/PNG/WebP/GIF, ≤ 10 MB) and optional `kind: 'uploaded'\|'imported'` | `201 { image, current }` |
 | `POST` | `set-current` | `{ fileId }` | `{ current }` |
 | `POST` | `delete-image` | `{ fileId }` | `{ current }` — the next-newest becomes current |
+| `GET` | `save-targets` | — | `{ albums: PhotoAlbumOption[] }` — every enabled store, archived characters' vaults excluded, Quilltap General flagged `isDefault` |
+| `POST` | `save-to-store` | `{ fileId, mountPointId, caption?, tags? }` | `{ saved, mountPoint, relativePath, linkId, keptAt, fileId, sha256 }` |
 
-A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current` and `delete-image` refuse a file not linked to the item (400).
+A `POST` without an action is a 400. `generate` runs synchronously inside `trackActivity('image', …)`, with the profile resolved by `resolveWardrobeImageProfile` (override → `chatSettings.wardrobeImageSettings.imageProfileId` → default image profile; no usable profile → 400). A character's own item is drawn worn by its owner; a shared item is drawn catalogue style. The provider call goes through `generateImageWithConciergeFailover` with `purpose: 'wardrobe'` and no chat; a refusal that could not be rerouted answers **422** with `details: { trail, refused: true }`; any other provider failure (auth, rate limit, timeout, no image) answers **502** with the same `details` shape. `set-current`, `delete-image` and `save-to-store` refuse a file not linked to the item (400). `save-to-store` files a copy into the store's `photos/` through `saveImageToAlbum` (the Salon's save service), attributed to the operator and captioned with the item's title by default; an archived character's vault as the target is a **409**, and a store already holding the picture is a **409** `{ code: 'ALREADY_SAVED', keptAt, relativePath }`. The item is not written, so a picture may be copied out of an archived character's wardrobe.
 
 #### `POST /api/v1/wardrobe/analyze-image`
 
@@ -3920,7 +3922,7 @@ Cancel a Courier placeholder turn: delete the message and unpause the chat.
 
 #### `POST /api/v1/chats/[id]/messages/[messageId]?action=save-image`
 
-Save an image attached to the message into a chosen photo album.
+Save an image attached to the message into a chosen photo album. A store that already holds the picture answers **409** `{ code: 'ALREADY_SAVED', keptAt, relativePath }`.
 
 ---
 

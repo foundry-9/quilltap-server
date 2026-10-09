@@ -19,14 +19,15 @@
  * @module api/v1/chats/[id]/actions/save-image
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
+import { badRequest, notFound, serverError } from '@/lib/api/responses';
 import {
   saveImageToAlbum,
   SaveImageToAlbumError,
   SaveImageRequestSchema,
 } from '@/lib/photos/save-image-to-album';
+import { savedImageResponse, saveImageErrorResponse } from '@/lib/photos/save-image-response';
 import { resolveSaveAttribution } from '@/lib/photos/save-attribution';
 import { listChatGallery } from '@/lib/photos/chat-gallery';
 import type { RequestContext } from '@/lib/api/middleware';
@@ -96,15 +97,7 @@ export async function handleSaveGalleryImage(
       linkId: saved.linkId,
     });
 
-    return successResponse({
-      saved: true,
-      mountPoint: saved.mountPointName,
-      relativePath: saved.relativePath,
-      linkId: saved.linkId,
-      keptAt: saved.keptAt,
-      fileId: saved.fileId,
-      sha256: saved.sha256,
-    });
+    return savedImageResponse(saved);
   } catch (error) {
     if (error instanceof SaveImageToAlbumError) {
       logger.info('[SaveGalleryImage] rejected', {
@@ -112,20 +105,7 @@ export async function handleSaveGalleryImage(
         code: error.code,
         message: error.message,
       });
-      // Already in that album is not a failure of the request — it is the
-      // answer to it, and the dialog says so in those words.
-      if (error.code === 'ALREADY_SAVED') {
-        return NextResponse.json(
-          {
-            error: error.message,
-            code: error.code,
-            relativePath: error.existingRelativePath,
-            keptAt: error.existingCreatedAt,
-          },
-          { status: 409 },
-        );
-      }
-      return badRequest(error.message);
+      return saveImageErrorResponse(error);
     }
     logger.error(
       '[SaveGalleryImage] failed',

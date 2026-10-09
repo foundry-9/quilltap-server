@@ -239,7 +239,20 @@ POST   …?action=generate      body { imageProfileId?: string }           → {
 POST   …?action=upload        multipart file (validateImageFile: types + 10 MB cap from lib/images-v2.ts) → { image }
 POST   …?action=set-current   body { fileId }                             → { current }
 POST   …?action=delete-image  body { fileId }                             → { current }   // next-newest becomes current
+GET    …?action=save-targets                                              → { albums: PhotoAlbumOption[] }
+POST   …?action=save-to-store body { fileId, mountPointId, caption? }     → { mountPoint, relativePath, linkId, keptAt, … }
 ```
+
+`save-targets` / `save-to-store` back the full-screen viewer's Save (§6.6). `save-targets` is
+`listAllPhotoAlbumOptions` (`lib/photos/photo-album-options.ts`): every enabled store,
+archived characters' vaults excluded, Quilltap General the default. `save-to-store` refuses a
+`fileId` that is not one of the item's pictures (400) and an archived character's vault as the
+target (409), then files a copy through `saveImageToAlbum` — the same service as the Salon's
+Save Image and `keep_image` — into the store's `photos/`, attributed to the operator and
+captioned with the item's title unless one is given. A duplicate answers 409 `ALREADY_SAVED`
+with the filing date (`lib/photos/save-image-response.ts`, shared with both Salon save routes).
+The item itself is not written, so a picture may be copied out of an archived character's
+wardrobe.
 
 `app/api/v1/wardrobe/[itemId]/images/route.ts`, `createContextHandler` +
 `withActionDispatch` per the standing rule (no action on POST → 400; there is no default
@@ -325,6 +338,21 @@ turn it off. The `analyze-image` route itself is unchanged — it still discards
 ### 6.5 Settings
 
 The *Wardrobe Images* card (§3.1).
+
+### 6.6 Full-screen viewer (`components/wardrobe/wardrobe-image-viewer.tsx`)
+
+Clicking the row thumbnail (§6.2), the editor's current picture, or a history entry opens the
+picture full screen in the shared `FullScreenImageViewer` frame
+(`components/images/FullScreenImageViewer.tsx`, also under the chat gallery's viewer) with
+**Save to a document store**, **Download** and **Copy**. Save opens the Salon's
+`SaveImageDialog` with a `{ kind: 'wardrobe' }` target, which reads `save-targets` and posts
+`save-to-store`. From the editor, Previous / Next (and the arrow keys) walk the history.
+
+Stacking: the viewer is portalled at `z-[90]` (over the dialog at 60 and the editor at 70/80);
+the save dialog rides at `z-[100]` via `BaseModal`'s `overlayClassName`, and the viewer stops
+handling keys while it is up. The wardrobe dialog lifts the row viewer's state and counts it
+in `editorOpen`, so a click inside the portalled viewer is not read as a click outside the
+dialog. The 28 px picker thumbnails sit inside choice buttons and do not open the viewer.
 
 ## 7. Export, import, backup
 

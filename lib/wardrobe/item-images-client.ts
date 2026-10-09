@@ -48,7 +48,13 @@ export interface WardrobeItemImageRefusal {
   refused: boolean
 }
 
-export type WardrobeItemImageAction = 'generate' | 'upload' | 'set-current' | 'delete-image'
+export type WardrobeItemImageAction =
+  | 'generate'
+  | 'upload'
+  | 'set-current'
+  | 'delete-image'
+  | 'save-targets'
+  | 'save-to-store'
 
 /** `/api/v1/wardrobe/<itemId>/images?scope=…&id=…[&action=…]` */
 export function wardrobeItemImagesUrl(

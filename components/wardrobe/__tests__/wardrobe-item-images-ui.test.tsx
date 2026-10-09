@@ -44,6 +44,7 @@ function renderRow(
     canManage?: (item: WardrobeItem) => boolean
     onGenerateImage?: jest.Mock
     generatingImageIds?: ReadonlySet<string>
+    onOpenImage?: jest.Mock
   } = {},
 ) {
   return render(
@@ -60,6 +61,7 @@ function renderRow(
       onDelete={jest.fn()}
       onGenerateImage={opts.onGenerateImage ?? jest.fn()}
       generatingImageIds={opts.generatingImageIds}
+      onOpenImage={opts.onOpenImage}
     />,
   )
 }
@@ -94,7 +96,9 @@ describe('WardrobeItemImageSection', () => {
   beforeEach(() => {
     fetchSpy = jest.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
-      const body = url.includes('/images')
+      const body = url.includes('action=save-targets')
+        ? { albums: [{ mountPointId: 'mp-general', name: 'Quilltap General', kind: 'general', isDefault: true }] }
+        : url.includes('/images')
         ? IMAGES_BODY
         : url.includes('/image-profiles')
           ? { profiles: [] }
@@ -142,6 +146,30 @@ describe('WardrobeItemImageSection', () => {
       ).toBe(true),
     )
   })
+
+  it('opens a picture full screen, walks the history, and offers Save to a document store', async () => {
+    renderWithQuery(
+      <WardrobeItemImageSection
+        item={makeItem({ imageFileId: 'file-2' }) as WardrobeItem}
+        container={{ scope: 'character', id: 'char-1' }}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'View the picture of Midnight Lightning Flapper Dress full size' }))
+    const viewer = screen.getByRole('dialog', { name: 'Picture of Midnight Lightning Flapper Dress' })
+    expect(viewer).toHaveTextContent('Current picture · 1 of 2')
+
+    fireEvent.click(screen.getByTitle('Next image (Right Arrow)'))
+    expect(viewer).toHaveTextContent('Earlier picture · 2 of 2')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save to a document store' }))
+    expect(await screen.findByRole('option', { name: 'Quilltap General' })).toBeInTheDocument()
+    expect(
+      fetchSpy.mock.calls.some(([url]) =>
+        String(url).startsWith('/api/v1/wardrobe/item-1/images?scope=character&id=char-1&action=save-targets'),
+      ),
+    ).toBe(true)
+  })
 })
 
 describe('WardrobeItemRow — picture', () => {
@@ -150,6 +178,19 @@ describe('WardrobeItemRow — picture', () => {
     const thumb = screen.getByTestId('wardrobe-item-thumbnail')
     expect(thumb).toHaveAttribute('src', '/api/v1/files/file-9?action=thumbnail')
     expect(thumb).toHaveAttribute('width', '40')
+  })
+
+  it('opens the picture full screen from the thumbnail', () => {
+    const onOpenImage = jest.fn()
+    const item = makeItem({ imageFileId: 'file-9' })
+    renderRow(item, { onOpenImage })
+    fireEvent.click(screen.getByRole('button', { name: `View the picture of ${item.title}` }))
+    expect(onOpenImage).toHaveBeenCalledWith(item)
+  })
+
+  it('leaves the thumbnail a plain image without an open handler', () => {
+    renderRow(makeItem({ imageFileId: 'file-9' }))
+    expect(screen.queryByTestId('wardrobe-item-thumbnail-open')).not.toBeInTheDocument()
   })
 
   it('shows no thumbnail when the item has no picture', () => {
