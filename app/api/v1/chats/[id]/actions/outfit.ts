@@ -36,6 +36,7 @@ import {
   resolveProjectMountPointIds,
 } from '@/lib/mount-index/tiered-mount-pool';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { newlyWornArchivedItems, wearRefusal } from '@/lib/wardrobe/wearable';
 
 const equipBodySchema = z
   .object({
@@ -269,7 +270,8 @@ export async function handleEquipSlot(
     if (mode === 'set_all') {
       // Atomic replace — used by the dialog's "Wear this fitting" button to
       // commit a fitting-room composition all at once. Validate every id
-      // resolves to an item in this character's wardrobe before persisting.
+      // resolves to an item in this character's wardrobe before persisting,
+      // and that none is an archived item being newly put on.
       const allIds = new Set<string>();
       for (const key of WARDROBE_SLOT_TYPES) {
         for (const id of bodySlots![key]) allIds.add(id);
@@ -281,6 +283,14 @@ export async function handleEquipSlot(
           if (!foundIds.has(id)) {
             return badRequest(`Wardrobe item ${id} not available to this character`);
           }
+        }
+        const current = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
+        const archived = newlyWornArchivedItems(found, current);
+        if (archived.length > 0) {
+          logger.info('[Chats v1] Refused a fitting that puts on an archived item', {
+            chatId, characterId, itemIds: archived.map((i) => i.id), context: 'wardrobe',
+          });
+          return badRequest(wearRefusal(archived[0])!);
         }
       }
       const wornBundles = await resolveWornBundles(ctx, characterId, wornBundleIds ?? [], tiers);
@@ -302,6 +312,13 @@ export async function handleEquipSlot(
       if (!item) {
         return notFound('Wardrobe item');
       }
+      const refusal = wearRefusal(item);
+      if (refusal) {
+        logger.info('[Chats v1] Refused to wear an archived item', {
+          chatId, characterId, mode, itemId: item.id, context: 'wardrobe',
+        });
+        return badRequest(refusal);
+      }
       updatedSlots = await equipItem(repos, chatId, characterId, item, tiers);
       logger.info('[Chats v1] Wardrobe item worn', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
@@ -313,6 +330,13 @@ export async function handleEquipSlot(
       if (!item) {
         return notFound('Wardrobe item');
       }
+      const refusal = wearRefusal(item);
+      if (refusal) {
+        logger.info('[Chats v1] Refused to wear an archived item', {
+          chatId, characterId, mode, itemId: item.id, context: 'wardrobe',
+        });
+        return badRequest(refusal);
+      }
       updatedSlots = await replaceItem(repos, chatId, characterId, item, tiers);
       logger.info('[Chats v1] Wardrobe item force-replaced', {
         chatId, characterId, itemId: item.id, slotsAffected: item.types,
@@ -323,6 +347,13 @@ export async function handleEquipSlot(
       const item = await repos.wardrobe.findByIdForCharacter(characterId, itemId!, tiers);
       if (!item) {
         return notFound('Wardrobe item');
+      }
+      const refusal = wearRefusal(item);
+      if (refusal) {
+        logger.info('[Chats v1] Refused to wear an archived item', {
+          chatId, characterId, mode, itemId: item.id, context: 'wardrobe',
+        });
+        return badRequest(refusal);
       }
       if (!item.types.includes(slot as WardrobeItemType)) {
         return badRequest(

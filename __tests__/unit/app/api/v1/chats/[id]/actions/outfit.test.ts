@@ -1,4 +1,4 @@
-import { describe, expect, it, jest, beforeEach } from '@jest/globals'
+import { describe, expect, it, jest, beforeEach, afterEach } from '@jest/globals'
 import { ledgerOver } from '@/__tests__/helpers/wardrobe-wear-ledger'
 
 jest.mock('@/lib/logger', () => ({
@@ -282,6 +282,51 @@ describe('chats [id] equip action — wear ledger', () => {
       ctx,
     )
     expect(ctx.repos.wardrobeWear.commitEquippedOutfit.mock.calls[0][0].wornBundles).toEqual([])
+  })
+
+  describe('archived items (bug 191)', () => {
+    const COAT = '5a1e0000-0000-4000-8000-000000000009'
+    const coat = { id: COAT, title: 'Winter Coat', types: ['top'], componentItemIds: [], archivedAt: '2026-09-01T00:00:00.000Z' }
+    beforeEach(() => { all.set(COAT, coat) })
+    afterEach(() => { all.delete(COAT) })
+
+    it.each(['wear', 'replace'])('mode %s refuses an archived item with the tool\'s words', async (mode) => {
+      const response = await handleEquipSlot(makeRequest({ characterId: 'char-1', mode, itemId: COAT }), 'chat-1', ctx)
+      expect(response.status).toBe(400)
+      expect((await response.json()).error).toContain('"Winter Coat" is archived and cannot be worn')
+      expect(ctx.repos.wardrobeWear.commitEquippedOutfit).not.toHaveBeenCalled()
+    })
+
+    it('add_to_slot refuses an archived item', async () => {
+      const response = await handleEquipSlot(
+        makeRequest({ characterId: 'char-1', mode: 'add_to_slot', slot: 'top', itemId: COAT }),
+        'chat-1',
+        ctx,
+      )
+      expect(response.status).toBe(400)
+      expect(ctx.repos.wardrobeWear.commitEquippedOutfit).not.toHaveBeenCalled()
+    })
+
+    it('set_all refuses a fitting that newly puts on an archived item', async () => {
+      const response = await handleEquipSlot(
+        makeRequest({ characterId: 'char-1', mode: 'set_all', slots: { ...EMPTY, top: [COAT] } }),
+        'chat-1',
+        ctx,
+      )
+      expect(response.status).toBe(400)
+      expect(ctx.repos.wardrobeWear.commitEquippedOutfit).not.toHaveBeenCalled()
+    })
+
+    it('set_all lets an archived item already being worn stay on', async () => {
+      ctx.repos.chats.getEquippedOutfitForCharacter.mockResolvedValue({ ...EMPTY, top: [COAT] })
+      const response = await handleEquipSlot(
+        makeRequest({ characterId: 'char-1', mode: 'set_all', slots: { ...EMPTY, top: [COAT], bottom: [SLACKS] } }),
+        'chat-1',
+        ctx,
+      )
+      expect(response.status).toBe(200)
+      expect(ctx.repos.wardrobeWear.commitEquippedOutfit).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('wearing a bundle claims it with the leaves it dissolved into', async () => {

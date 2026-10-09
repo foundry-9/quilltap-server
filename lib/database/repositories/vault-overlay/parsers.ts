@@ -454,12 +454,27 @@ export function parseWardrobeTypesField(raw: unknown): WardrobeItemType[] | null
 }
 
 /**
+ * A component reference written as a raw UUID. `buildWardrobeItemFile` writes
+ * any component outside the vault's own folder (a group, project or General
+ * item) this way, so a UUID the local maps don't know is a cross-tier part,
+ * not a typo.
+ */
+const COMPONENT_UUID_REF = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
  * Resolve the raw `componentItems:` strings that `parseWardrobeItemFile`
  * stashed on each item into canonical UUIDs, then run a cycle check across
  * the resolved list. Items whose composites would form a cycle have their
  * `componentItemIds` cleared (read-tolerant — the item itself stays so the
- * user doesn't lose a hand-edit, but the bad reference is dropped). Unknown
- * refs (no slug or UUID match) are logged and dropped from that item's list.
+ * user doesn't lose a hand-edit, but the bad reference is dropped).
+ *
+ * A UUID that matches nothing local is KEPT as written: it names a component
+ * in another tier this reader cannot see (a group or project store), and
+ * dropping it here would let the next write of any item in the folder
+ * re-project the stripped list to disk (bug 187). `expandComposites` and the
+ * read-time hydration in `resolve-equipped.ts` resolve it against the full
+ * pool. Only a slug that matches nothing is logged and dropped — a slug is
+ * only ever written for an item in the same folder.
  *
  * Mutates `items` in place because the array is freshly built by the caller
  * and not yet exposed elsewhere.
@@ -471,7 +486,8 @@ export function resolveAndCheckComponentItems(
   characterId: string,
   mountPointId: string,
 ): void {
-  // First pass — slug/UUID → canonical UUID, dropping unknown refs.
+  // First pass — slug/UUID → canonical UUID. Unknown UUIDs survive; unknown
+  // slugs are dropped.
   for (const item of items) {
     if (item.componentItemIds.length === 0) continue;
     const resolved: string[] = [];
@@ -486,7 +502,17 @@ export function resolveAndCheckComponentItems(
         resolved.push(byId.id);
         continue;
       }
-      logger.warn('Wardrobe item references unknown component; dropping ref', {
+      if (COMPONENT_UUID_REF.test(ref)) {
+        logger.debug('Wardrobe item references a component outside this folder; keeping ref', {
+          characterId,
+          mountPointId,
+          itemId: item.id,
+          ref,
+        });
+        resolved.push(ref);
+        continue;
+      }
+      logger.warn('Wardrobe item references unknown component slug; dropping ref', {
         characterId,
         mountPointId,
         itemId: item.id,

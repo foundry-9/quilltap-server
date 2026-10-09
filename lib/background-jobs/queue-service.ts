@@ -248,7 +248,7 @@ export interface CharacterAvatarGenerationPayload {
  * owning character's wardrobe.
  */
 export interface WardrobeItemImageGenerationPayload {
-  /** Chat the tool ran in — scopes the pending-job dedupe and the realtime hint */
+  /** Chat the tool ran in — scopes the pending-job dedupe and the realtime hint, and its Concierge state governs the picture */
   chatId: string;
   /** The character whose wardrobe holds the item (the recipient, for a gift) */
   characterId: string;

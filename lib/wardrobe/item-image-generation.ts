@@ -6,10 +6,13 @@
  *      designated → default).
  *   2. Resolve the owner (character scope only) and an outfit's leaves, then
  *      build the prompt (`buildWardrobeItemImagePrompt`).
- *   3. `generateImageWithConciergeFailover` with `chatId: null` and
- *      `purpose: 'wardrobe'` — there is no chat, so no Locked state, no
- *      announcement and no ledger; the trail is the only record and is
- *      returned for the editor to show.
+ *   3. `generateImageWithConciergeFailover` with `purpose: 'wardrobe'`. The
+ *      editor's Generate button has no chat (`chatId: null`): no Locked
+ *      state, no announcement and no ledger; the trail is the only record
+ *      and is returned for the editor to show. A tool-queued picture carries
+ *      the chat it was asked for in, and that chat's Concierge state governs
+ *      it (bug 189): Locked never fails over, Unmoderated routes direct to
+ *      the uncensored desk, and a refusal is ledgered and announced there.
  *   4. `convertToWebP` → `addWardrobeItemImage` (bridge write, `files` row,
  *      `imageFileId` update).
  *
@@ -28,6 +31,7 @@ import { getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
 import { resolveWardrobeImageProfile } from '@/lib/image-gen/profile-resolution';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { resolveConciergeSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { resolveImageProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
 import {
   generateImageWithConciergeFailover,
   getConciergeTrail,
@@ -48,6 +52,7 @@ import {
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { RouteAttempt } from '@/lib/schemas/chat.types';
 import type { Character } from '@/lib/schemas/character.types';
+import type { ChatMetadata } from '@/lib/schemas/types';
 import type { ImageProfile } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
@@ -151,6 +156,27 @@ async function resolveOwner(
   }
 }
 
+/**
+ * The chat a tool-queued picture belongs to. A failed read costs the chat's
+ * Concierge state its snapshot only — the failover re-reads it by id at
+ * refusal time.
+ */
+async function loadChat(
+  repos: RepositoryContainer,
+  chatId: string,
+): Promise<ChatMetadata | null> {
+  try {
+    return await repos.chats.findById(chatId);
+  } catch (error) {
+    logger.warn('[WardrobeItemImage] Chat unreadable; the failover will re-read its Concierge state', {
+      context: LOG_CONTEXT,
+      chatId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
 /** The project whose aesthetic applies: a project-scope item's own project. */
 async function resolveProjectAestheticMount(
   home: WardrobeItemHome,
@@ -174,6 +200,11 @@ export async function generateWardrobeItemImage(
     /** The container id from the request (project id for the aesthetic). */
     containerId: string | null;
     imageProfileId?: string | null;
+    /**
+     * The chat a tool-queued picture was asked for in. Its Concierge state
+     * governs the call; null (the editor) reads as Moderated with no ledger.
+     */
+    chatId?: string | null;
   },
 ): Promise<WardrobeItemImageGenerationResult> {
   const { userId, home } = args;
@@ -213,8 +244,42 @@ export async function generateWardrobeItemImage(
     profileOverride: !!args.imageProfileId,
   });
 
+  const chatId = args.chatId ?? null;
+  const chat = chatId ? await loadChat(repos, chatId) : null;
   const chatSettings = await repos.chatSettings.findByUserId(userId);
-  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, null);
+  const conciergePolicy = resolveConciergeSettings(chatSettings ?? null, chat);
+  logger.debug('[WardrobeItemImage] Concierge policy resolved', {
+    context: LOG_CONTEXT,
+    itemId: home.item.id,
+    chatId,
+    chatFound: !!chat,
+    conciergeState: conciergePolicy.state,
+    routeDirect: conciergePolicy.routeDirect,
+  });
+
+  // An Unmoderated chat goes straight to the uncensored desk, as the avatar
+  // job does: the verdict is already in.
+  let primaryProfile: ImageProfile = profile;
+  let primaryKey: string = apiKey.key_value;
+  if (conciergePolicy.routeDirect) {
+    const routeResult = await resolveImageProviderForDangerousContent(
+      profile,
+      apiKey.key_value,
+      conciergePolicy,
+      userId,
+    );
+    if (routeResult.rerouted) {
+      primaryProfile = routeResult.imageProfile;
+      primaryKey = routeResult.apiKey;
+    }
+    logger.info('[WardrobeItemImage] Unmoderated chat: routed direct to the uncensored desk', {
+      context: LOG_CONTEXT,
+      itemId: home.item.id,
+      chatId,
+      rerouted: routeResult.rerouted,
+      profile: primaryProfile.name,
+    });
+  }
 
   const attempt = async (attemptProfile: ImageProfile, key: string) => {
     const provider = createImageProvider(attemptProfile.provider);
@@ -262,9 +327,16 @@ export async function generateWardrobeItemImage(
   let failover;
   try {
     failover = await generateImageWithConciergeFailover(
-      { profile, apiKey: apiKey.key_value },
+      { profile: primaryProfile, apiKey: primaryKey },
       attempt,
-      { userId, chatId: null, purpose: 'wardrobe', conciergePolicy },
+      {
+        userId,
+        chatId,
+        chat,
+        purpose: 'wardrobe',
+        conciergePolicy,
+        primaryVia: primaryProfile.id !== profile.id ? 'concierge' : 'primary',
+      },
     );
   } catch (error) {
     const trail = getConciergeTrail(error);

@@ -1,8 +1,9 @@
 /**
  * Archive Wardrobe Item Tool Handler
  *
- * Soft-retires a wardrobe item via `WardrobeRepository.archive` (sets
- * `archivedAt`). Never hard-deletes — restoring is a human-only UI action.
+ * Soft-retires a wardrobe item by stamping `archivedAt` through
+ * `archivedPatch` — the same idempotent rule the item routes use, so archiving
+ * an already-archived item keeps its original date (bug 188). Never hard-deletes — restoring is a human-only UI action.
  * Resolves the target across every tier to LOCATE it, then enforces
  * own-items-only: shared archetypes (project / Quilltap General) are read-only
  * and the call is refused.
@@ -17,6 +18,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeArchiveToolInput, WardrobeArchiveToolOutput } from '../wardrobe-archive-tool';
 import { validateWardrobeArchiveInput } from '../wardrobe-archive-tool';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
+import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 import {
   findEquippedSlots,
   isOwnWardrobeItem,
@@ -77,12 +79,24 @@ export async function executeWardrobeArchiveTool(
       return buildFailureResponse(sharedWardrobeItemReadOnlyMessage(item.title, 'archived'));
     }
 
+    const patch = archivedPatch(item.archivedAt, true, new Date().toISOString());
+    if (!patch) {
+      logger.debug('Wardrobe item already archived; keeping its original date', {
+        context: 'wardrobe-archive-handler',
+        chatId: context.chatId,
+        characterId: context.characterId,
+        itemId: item.id,
+        archivedAt: item.archivedAt,
+      });
+      return { success: true, item_id: item.id, title: item.title, action: 'archived', already_archived: true };
+    }
+
     // Is the item currently equipped? (Archive doesn't clear equipped slots, but
     // an equipped-then-archived item warrants a visible refresh.)
     const equipped = await repos.chats.getEquippedOutfitForCharacter(context.chatId, context.characterId);
     const wasEquipped = findEquippedSlots(item.id, equipped).length > 0;
 
-    const archived = await repos.wardrobe.archive(item.id, item.characterId);
+    const archived = await repos.wardrobe.update(item.id, patch, item.characterId);
     if (!archived) {
       return buildFailureResponse(`Failed to archive wardrobe item "${item.title}"`);
     }
@@ -130,6 +144,9 @@ export async function executeWardrobeArchiveTool(
 export function formatWardrobeArchiveResults(output: WardrobeArchiveToolOutput): string {
   if (!output.success) {
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
+  }
+  if (output.already_archived) {
+    return `"${output.title}" (${output.item_id}) was already archived; nothing changed.`;
   }
   return `Archived "${output.title}" (${output.item_id}). It's hidden from listings and can't be worn; a human can restore it.`;
 }

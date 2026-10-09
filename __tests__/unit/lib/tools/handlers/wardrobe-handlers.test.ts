@@ -131,7 +131,6 @@ describe('wardrobe tool handlers', () => {
         ),
         create: jest.fn(),
         update: jest.fn(),
-        archive: jest.fn(),
         delete: jest.fn(),
       },
       chats: {
@@ -406,17 +405,35 @@ describe('wardrobe tool handlers', () => {
   // ───────────────────────────────────────────────────────── wardrobe_archive
 
   describe('executeWardrobeArchiveTool', () => {
-    it('archives an owned item via archive() and never delete()', async () => {
+    it('archives an owned item by stamping archivedAt and never delete()', async () => {
       const item = makeWardrobeItem({ id: 'item-1', characterId: 'char-1', title: 'Old Cloak' })
       repos.wardrobe.findById.mockResolvedValue(item)
-      repos.wardrobe.archive.mockResolvedValue({ ...item, archivedAt: now })
+      repos.wardrobe.update.mockImplementation(async (_id: string, patch: any) => ({ ...item, ...patch }))
 
       const result = await executeWardrobeArchiveTool({ item_id: 'item-1' }, context)
 
       expect(result.success).toBe(true)
       expect(result.action).toBe('archived')
-      expect(repos.wardrobe.archive).toHaveBeenCalledWith('item-1', 'char-1')
+      expect(result.already_archived).toBeUndefined()
+      expect(repos.wardrobe.update).toHaveBeenCalledWith(
+        'item-1',
+        { archivedAt: expect.any(String) },
+        'char-1',
+      )
       expect(repos.wardrobe.delete).not.toHaveBeenCalled()
+    })
+
+    it('keeps the original date when the item is already archived (bug 188)', async () => {
+      const item = makeWardrobeItem({
+        id: 'item-1', characterId: 'char-1', title: 'Winter Coat', archivedAt: '2026-09-01T00:00:00.000Z',
+      })
+      repos.wardrobe.findById.mockResolvedValue(item)
+
+      const result = await executeWardrobeArchiveTool({ item_id: 'item-1' }, context)
+
+      expect(result.success).toBe(true)
+      expect(result.already_archived).toBe(true)
+      expect(repos.wardrobe.update).not.toHaveBeenCalled()
     })
 
     it('refuses to archive a shared archetype', async () => {
@@ -426,7 +443,7 @@ describe('wardrobe tool handlers', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toMatch(/shared wardrobe item/i)
-      expect(repos.wardrobe.archive).not.toHaveBeenCalled()
+      expect(repos.wardrobe.update).not.toHaveBeenCalled()
     })
   })
 

@@ -6,7 +6,8 @@
  *
  * The work is `generateWardrobeItemImage`, the same path the editor's Generate
  * button takes: designated profile, worn-by-owner prompt, the Concierge's
- * image failover, then `addWardrobeItemImage`. In the job child the bridge
+ * image failover — governed by the chat the tool was called in (bug 189) —
+ * then `addWardrobeItemImage`. In the job child the bridge
  * write goes to the parent over host-RPC; the `files` row and the item's
  * `imageFileId` patch ride the buffered-write batch, exactly as the avatar
  * job's do.
@@ -75,6 +76,7 @@ export async function handleWardrobeItemImageGeneration(job: BackgroundJob): Pro
       userId: job.userId,
       home,
       containerId: payload.characterId,
+      chatId: payload.chatId ?? null,
     });
 
     logger.info('[WardrobeItemImage] Tool-queued wardrobe item image complete', {

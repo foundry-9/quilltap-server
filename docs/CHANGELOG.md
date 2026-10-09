@@ -4,6 +4,24 @@
 
 ### 4.10-dev
 
+#### Fix bugs 187, 188, 189 and 191 (wardrobe)
+
+- 187: a character composite no longer loses components that live in a group or project store. The
+  vault parser keeps a component reference it cannot match locally when it is a UUID (cross-tier parts
+  are always written as UUIDs), so the next write no longer persists the loss. Only an unmatched slug is
+  dropped. Also fixes group and project composites that reference General items.
+- 188: `wardrobe_archive` archives through `archivedPatch`. Archiving an already-archived item writes
+  nothing and keeps the original `archivedAt`; the tool reports `already_archived`.
+  `WardrobeRepository.archive` and `unarchive` are deleted.
+- 189: tool-queued wardrobe pictures use the chat they were asked for in. `generateWardrobeItemImage`
+  takes `chatId`, resolves the Concierge policy against the chat, routes an Unmoderated chat directly to
+  the uncensored desk, and passes the chat to the image failover, so Locked chats never fail over and
+  refusals are ledgered and announced. The job handler passes `payload.chatId`.
+- 191: archived items can't be worn from the wardrobe dialog or `?action=equip`. New
+  `lib/wardrobe/wearable.ts` (`wearRefusal`) is shared by `wardrobe_wear`, every equip mode, and the
+  dialog's wear gestures. `set_all` refuses a fitting that newly puts on an archived item; one already
+  being worn may stay.
+
 #### Wardrobe refactor plan and bugs 187–197 filed
 
 - New `docs/developer/features/wardrobe-refactor.md`: a code audit of the wardrobe subsystem (tiers,

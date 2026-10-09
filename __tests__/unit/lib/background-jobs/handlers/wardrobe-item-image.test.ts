@@ -69,13 +69,14 @@ describe('handleWardrobeItemImageGeneration', () => {
     })
   })
 
-  it("draws the item from its owner's wardrobe", async () => {
+  it("draws the item from its owner's wardrobe, under the chat's Concierge state", async () => {
     await handleWardrobeItemImageGeneration(job)
     expect(mockResolveHome).toHaveBeenCalledWith(repos, 'user-1', 'character', 'char-1', 'item-1')
     expect(mockGenerate).toHaveBeenCalledWith(repos, {
       userId: 'user-1',
       home,
       containerId: 'char-1',
+      chatId: 'chat-1',
     })
   })
 

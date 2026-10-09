@@ -41,6 +41,11 @@ export interface WardrobeArchiveToolOutput {
   title: string;
   /** Always 'archived' on success (soft retire; restorable by a human). */
   action: 'archived';
+  /**
+   * True when the item was already archived — nothing was written and its
+   * original `archivedAt` stands.
+   */
+  already_archived?: boolean;
   error?: string;
 }
 

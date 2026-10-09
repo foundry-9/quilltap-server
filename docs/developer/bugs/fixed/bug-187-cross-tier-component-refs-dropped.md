@@ -2,18 +2,29 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
-| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../features/wardrobe-refactor.md) |
-| **Fixed** | — |
+| **Status** | **FIXED in v4 (2026-10-09)** |
+| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/wardrobe-refactor.md) |
+| **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | **High** (silent data loss) — the stripped reference is written back to disk by the next write of any item in the same vault |
 | **Who it bites** | anyone who builds a composite in a character's own wardrobe from parts that hang in a group or project store, whether through `wardrobe_create` (which resolves components across every tier) or the item editor (whose candidate list includes the project tier) |
 | **Provenance** | Original to v4. The group and project wardrobe tiers were added after the vault reader's component-seeding step, which still seeds from Quilltap General alone |
 | **Defect site** | `lib/database/repositories/vault-overlay/vault-readers.ts:383-395` (`readCharacterVaultWardrobe` seeds `findArchetypes(true)` with no tiers); `lib/database/repositories/vault-overlay/parsers.ts:466-490` (`resolveAndCheckComponentItems` drops an unknown ref); `lib/database/repositories/vault-overlay/wardrobe-writes.ts:95,150,200` (`readMountItems` → `projectVaultWardrobe` re-projects the stripped list) |
-| **Fix site** | proposed: Phase B of the refactor plan — the reader keeps an unresolved UUID reference, and component resolution moves to the per-request pool |
+| **Fix site** | `lib/database/repositories/vault-overlay/parsers.ts` (`resolveAndCheckComponentItems` keeps an unmatched UUID ref; only an unmatched slug is dropped); comments in `vault-readers.ts` and `lib/mount-index/shared-wardrobe.ts` |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-09).** The parser no longer drops a component reference it cannot match locally
+when the reference is a UUID: `buildWardrobeItemFile` writes every component outside the vault's own
+folder as its UUID, so an unmatched UUID is a cross-tier part, not a typo. It is kept as written, and the
+next write re-projects it unchanged. Only an unmatched *slug* (slugs are written for same-folder items
+alone) is still warned about and dropped. Downstream resolution already tolerates unknown ids
+(`expandComposites`) and fetches cross-tier ones (`resolve-equipped.ts` hydration). The same rule closes
+the mirror gap for group and project composites that reference General items. The larger Phase B move
+(component resolution from the per-request pool, dropping the General seed) is left to the refactor plan;
+it is no longer needed to stop the data loss. Regression test: "keeps a UUID component ref that lives in
+another tier (bug 187)" in `character-properties-overlay.test.ts`.
 
 ## Symptom
 
@@ -51,7 +62,7 @@ Same-tier composites, the common case, are unaffected. Read-time hydration in
 `resolve-equipped.ts` recovers the *equipped* case, so a worn outfit still
 shows its parts for as long as the reference survives on disk.
 
-## Fix (proposed)
+## Fix (as proposed at filing)
 
 - Parsing keeps an unresolved reference as the UUID it was written as.
   `expandComposites` already tolerates unknown ids; a slug that matches

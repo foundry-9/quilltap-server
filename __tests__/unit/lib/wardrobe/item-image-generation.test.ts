@@ -1,8 +1,9 @@
 /**
  * Wardrobe item picture generation (lib/wardrobe/item-image-generation.ts).
  *
- * The Concierge's image failover is the chokepoint — called with no chat and
- * purpose 'wardrobe'. A reroute is reported; a refusal throws the trail and
+ * The Concierge's image failover is the chokepoint — called with purpose
+ * 'wardrobe', and with the chat a tool-queued picture was asked for in
+ * (bug 189), or none from the editor. A reroute is reported; a refusal throws the trail and
  * writes nothing; the stored file carries the prompt on record.
  */
 
@@ -48,8 +49,14 @@ jest.mock('@/lib/files/webp-conversion', () => ({
   convertToWebP: (...args: unknown[]) => mockConvertToWebP(...args),
 }))
 
+const mockResolveConcierge = jest.fn<(...args: unknown[]) => unknown>()
 jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
-  resolveConciergeSettings: jest.fn(() => ({ policy: 'resolved' })),
+  resolveConciergeSettings: (...args: unknown[]) => mockResolveConcierge(...args),
+}))
+
+const mockRouteDirect = jest.fn<(...args: unknown[]) => Promise<unknown>>()
+jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
+  resolveImageProviderForDangerousContent: (...args: unknown[]) => mockRouteDirect(...args),
 }))
 
 const mockFailover = jest.fn<(...args: any[]) => Promise<any>>()
@@ -147,7 +154,9 @@ beforeEach(() => {
       })),
     },
     chatSettings: { findByUserId: jest.fn(async () => ({})) },
+    chats: { findById: jest.fn(async () => null) },
   }
+  mockResolveConcierge.mockReturnValue({ state: 'moderated', routeDirect: false })
   mockResolveProfile.mockResolvedValue(primary)
   mockGetProjectOfficialMountPointId.mockResolvedValue(null)
   mockGenerateImage.mockResolvedValue({ images: [{ data: Buffer.from('png-bytes').toString('base64'), mimeType: 'image/png' }] })
@@ -174,6 +183,42 @@ describe('generateWardrobeItemImage', () => {
     expect(ctx).toMatchObject({ userId: 'user-1', chatId: null, purpose: 'wardrobe' })
     expect(mockCreateImageProvider).toHaveBeenCalledWith('OPENAI')
     expect(mockLogLLMCall).toHaveBeenCalledWith(expect.objectContaining({ type: 'WARDROBE_ITEM_IMAGE', characterId: 'char-1' }))
+  })
+
+  it('resolves the Concierge against the chat a tool-queued picture came from (bug 189)', async () => {
+    const lockedChat = { id: 'chat-1', conciergeMode: 'locked' }
+    repos.chats.findById.mockResolvedValue(lockedChat)
+    mockResolveConcierge.mockReturnValue({ state: 'locked', routeDirect: false })
+
+    await generateWardrobeItemImage(repos, {
+      userId: 'user-1',
+      home: makeHome() as any,
+      containerId: 'char-1',
+      chatId: 'chat-1',
+    })
+
+    expect(repos.chats.findById).toHaveBeenCalledWith('chat-1')
+    expect(mockResolveConcierge).toHaveBeenCalledWith({}, lockedChat)
+    const [, , ctx] = mockFailover.mock.calls[0]
+    expect(ctx).toMatchObject({ chatId: 'chat-1', chat: lockedChat, purpose: 'wardrobe', primaryVia: 'primary' })
+    expect(mockRouteDirect).not.toHaveBeenCalled()
+  })
+
+  it('routes an Unmoderated chat direct to the uncensored desk', async () => {
+    repos.chats.findById.mockResolvedValue({ id: 'chat-1', conciergeMode: 'unmoderated' })
+    mockResolveConcierge.mockReturnValue({ state: 'unmoderated', routeDirect: true })
+    mockRouteDirect.mockResolvedValue({ rerouted: true, imageProfile: understudy, apiKey: 'sk-understudy' })
+
+    await generateWardrobeItemImage(repos, {
+      userId: 'user-1',
+      home: makeHome() as any,
+      containerId: 'char-1',
+      chatId: 'chat-1',
+    })
+
+    const [prim, , ctx] = mockFailover.mock.calls[0]
+    expect(prim).toEqual({ profile: understudy, apiKey: 'sk-understudy' })
+    expect(ctx).toMatchObject({ primaryVia: 'concierge' })
   })
 
   it('stores the picture with the prompt on record and reports the primary', async () => {

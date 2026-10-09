@@ -2178,6 +2178,45 @@ describe('readCharacterVaultWardrobe — componentItems frontmatter', () => {
     expect(composite!.componentItemIds).toEqual([knownId]);
   });
 
+  it('keeps a UUID component ref that lives in another tier (bug 187)', async () => {
+    // A coat hanging in the household group's Wardrobe/ folder is written as
+    // its UUID (it has no slug in this vault). The reader can't see the group
+    // tier; dropping the ref would let the next write erase it from disk.
+    const bootsId = '12121212-3434-4565-8787-909090909090';
+    const groupCoatId = 'abababab-cdcd-4efe-8f0f-a1a1a1a1a1a1';
+    const compositeId = 'bcbcbcbc-dede-4f0f-8a1a-b2b2b2b2b2b2';
+    setupVault([
+      vaultDoc(
+        'mount-g',
+        'Boots.md',
+        ['---', `id: ${bootsId}`, 'title: Boots', 'types:', '- footwear', '---', '', ''].join('\n'),
+      ),
+      vaultDoc(
+        'mount-g',
+        'Regimental Kit.md',
+        [
+          '---',
+          `id: ${compositeId}`,
+          'title: Regimental Kit',
+          'types:',
+          '- top',
+          '- footwear',
+          'componentItems:',
+          '- boots',
+          `- ${groupCoatId}`,
+          '- not-a-real-slug',
+          '---',
+          '',
+          '',
+        ].join('\n'),
+      ),
+    ]);
+
+    const result = await readCharacterVaultWardrobe('mount-g', 'char-g');
+    const composite = result!.items.find((i) => i.id === compositeId);
+    expect(composite!.componentItemIds).toEqual([bootsId, groupCoatId]);
+  });
+
   it('parses leaf items with no componentItems: as componentItemIds: []', async () => {
     setupVault([
       vaultDoc(

@@ -65,6 +65,7 @@ import {
   type WardrobeListSort,
 } from '@/lib/wardrobe/wear-display'
 import { addItemToSlot, wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
+import { wearRefusal } from '@/lib/wardrobe/wearable'
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
 import {
   GENERAL_CONTAINER,
@@ -586,8 +587,9 @@ function WardrobeControlDialogInner({
   /**
    * Archive or restore one garment. Archiving hides it from the pickers and
    * bars it from the outfit-selection LLM's candidate list; it does NOT strip
-   * it off a character already wearing it, and does not forbid a human who has
-   * ticked "Show archived" from putting it back on.
+   * it off a character already wearing it. Nobody may put it back on — not
+   * even a human who has ticked "Show archived" — until it is restored
+   * (`wearRefusal`, the rule the equip route and `wardrobe_wear` share).
    */
   const handleToggleArchived = useCallback(
     async (item: WardrobeItem) => {
@@ -772,27 +774,37 @@ function WardrobeControlDialogInner({
     [selectedCharacterId, chatId, isInChat, outfit.outfitState],
   )
 
+  // An archived garment is retired: every wear gesture refuses it with the
+  // same words the equip route and `wardrobe_wear` use (bug 191).
+  const refuseIfUnwearable = useCallback((item: WardrobeItem): boolean => {
+    const refusal = wearRefusal(item)
+    if (refusal) showErrorToast(refusal)
+    return refusal !== null
+  }, [])
+
   // The "Wear" button honors the item's `replace` flag (layer when off,
   // replace when on) across every slot it covers — the same rule as the live
   // equip path. To force a swap, clear the slot first.
   const handleEquipItem = useCallback(
     (item: WardrobeItem) => {
       if (!isInChat) return
+      if (refuseIfUnwearable(item)) return
       updateLiveStaged((prev) => wearItemIntoSlots(prev, item, itemsById), wornBundleIdsFor(item))
     },
-    [isInChat, itemsById, updateLiveStaged],
+    [isInChat, itemsById, updateLiveStaged, refuseIfUnwearable],
   )
 
   const handleAddToSlot = useCallback(
     (item: WardrobeItem, slot: WardrobeItemType) => {
       if (!isInChat) return
       if (!item.types.includes(slot)) return
+      if (refuseIfUnwearable(item)) return
       updateLiveStaged(
         (prev) => addItemToSlot(prev, slot, item, itemsById),
         wornBundleIdsFor(item),
       )
     },
-    [isInChat, itemsById, updateLiveStaged],
+    [isInChat, itemsById, updateLiveStaged, refuseIfUnwearable],
   )
 
   // Picking an item from a slot row wears it (fills every slot it covers,
@@ -802,6 +814,7 @@ function WardrobeControlDialogInner({
     (slot: WardrobeItemType, itemId: string) => {
       if (!isInChat) return
       const item = itemsById.get(itemId)
+      if (item && refuseIfUnwearable(item)) return
       // The outfit pull-down (`OutfitQuickPick`) arrives here too, so this is
       // where a staged bundle wear is recorded for the ledger.
       updateLiveStaged(
@@ -814,7 +827,7 @@ function WardrobeControlDialogInner({
         item ? wornBundleIdsFor(item) : [],
       )
     },
-    [isInChat, itemsById, updateLiveStaged],
+    [isInChat, itemsById, updateLiveStaged, refuseIfUnwearable],
   )
 
   const handleSlotRemove = useCallback(
@@ -840,11 +853,12 @@ function WardrobeControlDialogInner({
     (slot: WardrobeItemType, itemId: string) => {
       const item = itemsById.get(itemId)
       if (!item) return
+      if (refuseIfUnwearable(item)) return
       // Wear it across every slot it covers, honoring the `replace` flag.
       setFittingSlots((prev) => wearItemIntoSlots(prev, item, itemsById))
       setFittingWornBundleIds((prev) => appendWornBundleIds(prev, wornBundleIdsFor(item)))
     },
-    [itemsById],
+    [itemsById, refuseIfUnwearable],
   )
 
   const fittingRemove = useCallback((slot: WardrobeItemType, itemId: string) => {
@@ -1072,6 +1086,7 @@ function WardrobeControlDialogInner({
 
   const rowEquip = useCallback(
     (item: WardrobeItem) => {
+      if (refuseIfUnwearable(item)) return
       if (useFittingActions) {
         // Honor the item's `replace` flag across every slot it covers,
         // matching `wearItemIntoSlots` / the live equip path.
@@ -1081,7 +1096,7 @@ function WardrobeControlDialogInner({
       }
       handleEquipItem(item)
     },
-    [useFittingActions, itemsById, handleEquipItem],
+    [useFittingActions, itemsById, handleEquipItem, refuseIfUnwearable],
   )
 
   const rowAddToSlot = useCallback(

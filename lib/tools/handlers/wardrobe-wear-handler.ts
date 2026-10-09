@@ -26,6 +26,7 @@ import type {
 } from '../wardrobe-wear-tool';
 import { validateWardrobeWearInput } from '../wardrobe-wear-tool';
 import { equipItem, replaceItem, addToSlot } from '@/lib/wardrobe/outfit-displacement';
+import { wearRefusal } from '@/lib/wardrobe/wearable';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
   buildWardrobeMutationFailure,
@@ -91,8 +92,9 @@ export async function executeWardrobeWearTool(
       if (!item) {
         throw new WardrobeWearError(wardrobeItemNotFoundMessage(itemId, itemTitle));
       }
-      if (item.archivedAt) {
-        throw new WardrobeWearError(`Item "${item.title}" is archived and cannot be worn`);
+      const refusal = wearRefusal(item);
+      if (refusal) {
+        throw new WardrobeWearError(refusal);
       }
 
       let effect: 'layered' | 'replaced';

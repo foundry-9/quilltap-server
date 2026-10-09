@@ -53,11 +53,11 @@ export async function ensureSharedWardrobeFolder(
  * resolves its components within this same folder, not by recursing through
  * `findArchetypes` (which would loop back here).
  *
- * Consequence, and a known gap: a shared composite whose components live in a
- * *different* tier loses those refs at parse time — `resolveAndCheckComponentItems`
- * only sees this folder's items. Same-tier composites (the common case) are
- * fine. Read-time hydration in `lib/wardrobe/resolve-equipped.ts` recovers the
- * equipped case; the parse-time gap is tracked separately.
+ * A shared composite whose components live in a *different* tier keeps those
+ * refs as the UUIDs they were written as — `resolveAndCheckComponentItems`
+ * only drops an unmatched *slug* (bug 187). Resolution against the other tiers
+ * happens downstream (`expandComposites` tolerates unknown ids; read-time
+ * hydration in `lib/wardrobe/resolve-equipped.ts` fetches them).
  */
 export async function readSharedWardrobe(
   mountPointId: string,

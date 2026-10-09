@@ -60,6 +60,14 @@ Fix 187, 188, 189 and 191 before any structural work; they are small and the
 refactor would otherwise carry them along. The rest fall out of the phases
 that touch them.
 
+**Done 2026-10-09:** 187, 188, 189 and 191 are fixed (see each bug's file in
+`bugs/fixed/`). What the phases below still owe them: Phase B can drop the
+General seed and the `seedArchetypes` guard (187's data loss is closed by
+keeping unmatched UUIDs); `resolveWearable` can absorb
+`lib/wardrobe/wearable.ts` (191); `archive-item.ts` is only needed if the
+notifier wants a home (188 — the repository's `archive` / `unarchive` are
+already gone).
+
 ## 3. The work, in order
 
 Phases are independent enough to ship one at a time. Each ends with `npx tsc`,

@@ -322,31 +322,6 @@ export class WardrobeRepository extends AbstractBaseRepository<WardrobeItem> {
   }
 
   /**
-   * Archive a wardrobe item (soft delete)
-   * Sets archivedAt to the current timestamp.
-   */
-  async archive(id: string, ownerCharacterId?: string | null): Promise<WardrobeItem | null> {
-    const now = this.getCurrentTimestamp();
-    const item = await this.update(id, { archivedAt: now }, ownerCharacterId);
-    if (item) {
-      logger.info('Wardrobe item archived', { wardrobeItemId: id, archivedAt: now });
-    }
-    return item;
-  }
-
-  /**
-   * Unarchive a wardrobe item (restore from archive)
-   * Sets archivedAt to null.
-   */
-  async unarchive(id: string, ownerCharacterId?: string | null): Promise<WardrobeItem | null> {
-    const item = await this.update(id, { archivedAt: null }, ownerCharacterId);
-    if (item) {
-      logger.info('Wardrobe item unarchived', { wardrobeItemId: id });
-    }
-    return item;
-  }
-
-  /**
    * Create a new wardrobe item
    * @param data The wardrobe item data
    * @param options Optional CreateOptions to specify ID and createdAt (for sync)

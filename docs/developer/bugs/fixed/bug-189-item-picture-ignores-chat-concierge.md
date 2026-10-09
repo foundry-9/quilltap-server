@@ -2,18 +2,27 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
-| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../features/wardrobe-refactor.md) |
-| **Fixed** | — |
+| **Status** | **FIXED in v4 (2026-10-09)** |
+| **Found** | 2026-10-09, code audit for the [wardrobe refactor plan](../../features/wardrobe-refactor.md) |
+| **Fixed** | 2026-10-09, v4.10-dev |
 | **Severity** | High — a **Locked** chat's picture can be rerouted to the uncensored desk after a refusal, which Locked exists to forbid; and an Unmoderated chat's `routeDirect`, the refusal ledger and the Concierge's announcement are all skipped |
 | **Who it bites** | any chat where a character creates or redraws a garment through `wardrobe_create` / `wardrobe_update` with image generation on |
 | **Provenance** | Original to v4. Wardrobe item pictures were specified as "chatless" (`item-image-generation.ts:9`) before the job started carrying the chat id |
 | **Defect site** | `lib/wardrobe/item-image-generation.ts:216-217` (`resolveConciergeSettings(chatSettings, null)`) and `:267` (`chatId: null` in the failover context); `lib/background-jobs/handlers/wardrobe-item-image.ts:42` has `payload.chatId` and does not pass it |
-| **Fix site** | proposed: `generateWardrobeItemImage` takes an optional `chatId`, loads the chat, and passes it to both `resolveConciergeSettings` and `generateImageWithConciergeFailover` |
+| **Fix site** | `lib/wardrobe/item-image-generation.ts` (`generateWardrobeItemImage` takes `chatId`, loads the chat, resolves the Concierge with it, routes an Unmoderated chat direct, and passes `{ chatId, chat, primaryVia }` to the failover); `lib/background-jobs/handlers/wardrobe-item-image.ts` passes `payload.chatId` |
 | **v5 status** | Not assessed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-10-09).** `generateWardrobeItemImage` takes an optional `chatId`. When given, it
+loads the chat (a read failure logs and leaves the snapshot null; the failover re-reads the state by id
+at refusal time anyway), resolves the Concierge policy with it, and passes `chatId` and `chat` to
+`generateImageWithConciergeFailover`, so a Locked chat's refusal stays refused and is ledgered and
+announced. An Unmoderated chat (`routeDirect`) goes straight to the uncensored desk through
+`resolveImageProviderForDangerousContent`, as the avatar job does, with `primaryVia: 'concierge'`. The job
+handler passes `payload.chatId`; the editor's images route still passes none. The optional pre-screen on
+this path was not added. Tests in `item-image-generation.test.ts` and `wardrobe-item-image.test.ts`.
 
 ## Symptom
 
@@ -40,7 +49,7 @@ genuinely chatless, which is where the null came from.
 Wardrobe pictures are a recent feature; refusals on them are rare; and the
 reroute produces a picture, which looks like success.
 
-## Fix (proposed)
+## Fix (as proposed at filing)
 
 Add `chatId?: string | null` to `generateWardrobeItemImage`. When present,
 load the chat and pass it to `resolveConciergeSettings(chatSettings, chat)`
