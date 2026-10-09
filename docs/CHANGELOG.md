@@ -4,6 +4,20 @@
 
 ### 4.10-dev
 
+#### Wardrobe refactor plan and bugs 187–197 filed
+
+- New `docs/developer/features/wardrobe-refactor.md`: a code audit of the wardrobe subsystem (tiers,
+  repository, tools, routes, image pipeline, components) and a seven-phase consolidation plan around two
+  missing abstractions, a single wardrobe location type and a per-request wearable pool. No code changes.
+- Eleven defects found by the audit are filed, open, in the bug catalogue: 187 (a character composite
+  loses group- or project-store components on the next vault read; the loss is then written back), 188
+  (`wardrobe_archive` re-stamps the archive date), 189 (tool-queued wardrobe pictures ignore the chat's
+  Concierge state), 190 (the item editor narrows a composite's slots), 191 (the dialog can wear archived
+  items), 192 (transfer probe order and store provisioning on read), 193 (create-and-equip never
+  announced), 194 (viewer cleanup bypasses wardrobe link cleanup), 195 (`wardrobe_update` narrows
+  composite types), 196 (Almanack misses wardrobe image spend), 197 (import-from-image skips the vision
+  transport safeguards).
+
 #### Wardrobe pictures open full screen, with Save to a document store
 
 - Clicking a wardrobe row's thumbnail, the item editor's current picture, or a history entry opens the
