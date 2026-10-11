@@ -4,6 +4,13 @@
 
 ### 4.10-dev
 
+#### Fix bug 198: wardrobe dialog showed a stale outfit after a tool-driven change
+
+- `useChatOutfit` refetches on every mount and `slotsFor` returns undefined until that fetch lands, so
+  the Live tab and Outfit Builder never seed from a cached snapshot from an earlier dialog visit.
+- The `chats` realtime topic now also invalidates `queryKeys.wardrobe.outfit(chatId)`, so an LLM's
+  `wardrobe_*` change refreshes the cached outfit.
+
 #### Wardrobe refactor (spec `features/complete/wardrobe-refactor.md`); fix bugs 190 and 192–197
 
 - One wardrobe location: `lib/wardrobe/location.ts` (`resolveWardrobeLocation`) replaces

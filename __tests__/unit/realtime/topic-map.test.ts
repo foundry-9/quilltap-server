@@ -36,6 +36,7 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.background('chat-1'),
       queryKeys.chats.gallery('chat-1'),
       queryKeys.chats.informs('chat-1'),
+      queryKeys.wardrobe.outfit('chat-1'),
     ]);
   });
 
@@ -49,6 +50,16 @@ describe('queryKeysForTopic', () => {
     );
     expect(queryKeysForTopic('chats', 'other-chat')).not.toContainEqual(
       queryKeys.chats.informs('chat-1'),
+    );
+  });
+
+  it('refreshes the worn outfit on the chats topic (bug 198)', () => {
+    // A tool-driven wardrobe change lands as messages, which publish `chats`.
+    expect(queryKeysForTopic('chats', 'chat-1')).toContainEqual(
+      queryKeys.wardrobe.outfit('chat-1'),
+    );
+    expect(queryKeysForTopic('chats', 'chat-2')).not.toContainEqual(
+      queryKeys.wardrobe.outfit('chat-1'),
     );
   });
 

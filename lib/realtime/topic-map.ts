@@ -69,6 +69,11 @@ export function queryKeysForTopic(topic: string, id?: string): readonly QueryKey
             // a cancel publishes the topic explicitly — so the composer chips
             // stay honest without a poll.
             queryKeys.chats.informs(id),
+            // What everyone in the chat is wearing. An LLM's wardrobe_* call
+            // or an Aurora announcement lands as a message, which publishes
+            // `chats` — without this a tool-driven outfit change left the
+            // wardrobe dialog's cached snapshot stale (bug 198).
+            queryKeys.wardrobe.outfit(id),
           ]
         : [queryKeys.chats.all]
 

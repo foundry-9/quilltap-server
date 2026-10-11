@@ -9,6 +9,12 @@
  * follows every equip refreshes it. Pass `chatId === null` for chat-less
  * surfaces; the query stays idle.
  *
+ * The snapshot seeds staging that never re-seeds (the Live tab and the Outfit
+ * Builder are ref-gated so a refetch can't wipe in-progress edits), so a
+ * cached copy from an earlier visit must never reach them: an LLM may have
+ * dressed or undressed someone since (bug 198). The query therefore refetches
+ * on every mount, and `slotsFor` answers undefined until that fetch lands.
+ *
  * Equipping is not here: the wardrobe dialog stages its gestures and commits
  * with `?action=equip` (`set_all`) on Done.
  *
@@ -26,7 +32,8 @@ export interface UseChatOutfitResult {
   equippedOutfit: EquippedOutfitState | undefined
   /**
    * One character's worn slots — empty slots for a character the chat has
-   * never dressed — or undefined while the snapshot has not arrived.
+   * never dressed — or undefined until a snapshot fetched since this view
+   * mounted has arrived. A cached copy from an earlier visit never answers.
    */
   slotsFor: (characterId: string | null) => EquippedSlots | undefined
   loading: boolean
@@ -44,15 +51,17 @@ export function useChatOutfit(chatId: string | null): UseChatOutfitResult {
       return data?.equippedOutfit ?? {}
     },
     enabled: chatId !== null,
+    refetchOnMount: 'always',
   })
 
   const equippedOutfit = query.data
+  const current = query.isFetchedAfterMount
   const slotsFor = useCallback(
     (characterId: string | null): EquippedSlots | undefined => {
-      if (!characterId || !equippedOutfit) return undefined
+      if (!characterId || !equippedOutfit || !current) return undefined
       return equippedOutfit[characterId] ?? EMPTY_EQUIPPED_SLOTS
     },
-    [equippedOutfit],
+    [equippedOutfit, current],
   )
 
   return {
