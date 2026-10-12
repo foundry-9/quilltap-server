@@ -4,6 +4,23 @@
 
 ### 4.10-dev
 
+#### Spec: memory system refactor
+
+- `docs/developer/features/memory-system-refactor.md`: a design for rebuilding the Commonplace Book
+  end to end on six abstractions it never had — one candidate shape, one extraction context, a pure
+  admission decision applied in the parent over host-RPC, three named scores (relevance, salience,
+  protection) with one function each, one clock for event time on both the write and read side, a
+  staged recall pipeline whose delivery step is the only record of what the model saw, and one
+  maintenance job (fold near-duplicates, consolidate, demote, retire, mirror) with a parent-side
+  ledger. `vector_entries` is retired for memories in favour of `memories.embedding` + `tier` behind a
+  `memoryIndex` owner; every delete goes through `retireMemories`. Lists 28 defects to file as bugs
+  199–226 (four to fix first: recall never delivered on continue turns, orphan vectors blinding the
+  gate, chat wipe and dedup deleting manual rows and digests, entity anchors cut by the cosine floor).
+  Seven phases, each with tests, acceptance and a V4test walkthrough, shipped one PR per phase. The
+  fifteen decisions in §7 (including moving housekeeping settings to `instance_settings.memoryMaintenance`
+  and a single instance-wide calendar for event time) are locked. Linked from `ROADMAP.md`. Design only;
+  nothing built yet.
+
 #### Specs: scenarios from anywhere; wardrobe folders
 
 - `docs/developer/features/scenarios-from-anywhere.md`: a "Browse all scenarios" dialog over every

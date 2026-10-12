@@ -80,6 +80,7 @@ This document tracks planned features and improvements for Quilltap.
 
 ### Content & Worldbuilding (The Commonplace Book)
 
+- [ ] Memory system refactor — one candidate shape, one extraction context, parent-side admission, three named scores, one clock, one recall pipeline with delivery, one maintenance job, one deletion chokepoint; `vector_entries` retired for memories (design: [memory-system-refactor.md](memory-system-refactor.md))
 - [ ] Worldbook/Lore system
 - [X] Complete embedding of files
   - [X] Text files
