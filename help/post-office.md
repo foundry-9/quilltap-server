@@ -43,7 +43,7 @@ The envelope (the document's frontmatter) records who sent it, their character i
 
 ## Suparṇā's announcement
 
-A letter sitting unread in a mailbox would be a poor sort of letter. So whenever a character is about to take its turn, the Post Office quietly checks that character's mailbox — right after the Commonplace Book has finished its own whispering. Any letters that have arrived since last time prompt **Suparṇā** to step forward with a private word: she names each sender, says when the letter came, reads it aloud, and reminds the recipient how to answer or set it aside. Each such announcement is a one-time event — Suparṇā does not repeat herself on later turns, for once a letter has been announced it is marked as delivered-to-attention and left in peace.
+A letter sitting unread in a mailbox would be a poor sort of letter. So whenever a character is about to take its turn — whether answering something you have just said or merely carrying on of its own accord (a nudge, a chained reply, an autonomous room) — the Post Office quietly checks that character's mailbox — right after the Commonplace Book has finished its own whispering. Any letters that have arrived since last time prompt **Suparṇā** to step forward with a private word: she names each sender, says when the letter came, reads it aloud, and reminds the recipient how to answer or set it aside. Each such announcement is a one-time event — Suparṇā does not repeat herself on later turns, for once a letter has been announced it is marked as delivered-to-attention and left in peace.
 
 Suparṇā keeps no secrets behind a screen: her announcements are openly visible to every character, so even a character who otherwise keeps the Staff at arm's length still hears that the post has come.
 

@@ -42,19 +42,38 @@ import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/repositories/factory'
+import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import { buildSuparnaMailLLMContext } from '@/lib/services/suparna-notifications/writer'
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
   markMemoriesAccessed: jest.fn(),
 }))
 
+jest.mock('@/lib/post-office/mailbox', () => ({
+  ...jest.requireActual('@/lib/post-office/mailbox'),
+  collectUnalertedMail: jest.fn().mockResolvedValue([]),
+  markAlerted: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/lib/services/suparna-notifications/writer', () => ({
+  ...jest.requireActual('@/lib/services/suparna-notifications/writer'),
+  postSuparnaMailWhisper: jest.fn().mockResolvedValue(null),
+}))
+
 const mockedSearchMemories = searchMemoriesSemantic as jest.MockedFunction<typeof searchMemoriesSemantic>
+const mockedCollectUnalertedMail = collectUnalertedMail as jest.MockedFunction<typeof collectUnalertedMail>
+const mockedMarkAlerted = markAlerted as jest.MockedFunction<typeof markAlerted>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
 
 afterEach(() => {
   mockedSearchMemories.mockReset()
   mockedSearchMemories.mockResolvedValue([])
   mockedGetRepositories.mockReset()
+  mockedCollectUnalertedMail.mockReset()
+  mockedCollectUnalertedMail.mockResolvedValue([])
+  mockedMarkAlerted.mockReset()
+  mockedMarkAlerted.mockResolvedValue(undefined)
 })
 
 describe('Token Counter', () => {
@@ -1382,6 +1401,86 @@ describe('Context Manager', () => {
       expect(last.role).toBe('user')
       expect(last.content).toBe(`${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`)
       expect(result.informRowIds).toEqual(['row-1'])
+    })
+
+    // ------------------------------------------------------------------
+    // Suparṇā's mail on a turn with no new user message (bug 227).
+    // ------------------------------------------------------------------
+
+    describe('mail on a turn with no new user message (bug 227)', () => {
+      const letter = {
+        path: 'Mail/2026-10-12-from-iris.md',
+        from: 'Iris',
+        sentAt: timestamp,
+        body: 'Meet me at the lighthouse.',
+        alerted: false,
+        inReplyTo: null,
+      }
+
+      const buildWithMail = async (newUserMessage: string | null) => {
+        mockedGetRepositories.mockReturnValue({
+          memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        } as any)
+        mockedCollectUnalertedMail.mockResolvedValue([letter])
+
+        return buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: { ...characterA, characterDocumentMountPointId: 'vault-a' } as any,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            participants: allParticipants,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 2,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          } as any,
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          newUserMessage: newUserMessage ?? undefined,
+          skipMemories: true,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+            { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+          ],
+        } as any)
+      }
+
+      it('rides its own trailing user message, since the letter is marked alerted either way', async () => {
+        const result = await buildWithMail(null)
+
+        // The letter is stamped alerted on this turn, so this is its only chance.
+        expect(mockedMarkAlerted).toHaveBeenCalledWith('vault-a', letter.path)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(buildSuparnaMailLLMContext([letter]))
+      })
+
+      it('still rides the new user message as a trailing section when there is one', async () => {
+        const result = await buildWithMail('Any post today?')
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(`Any post today?\n\n---\n\n${buildSuparnaMailLLMContext([letter])}`)
+      })
     })
 
     it('stacks several pending passages in posting order, rule-separated', async () => {

@@ -86,6 +86,13 @@
   breadcrumb browser with bulk move; tools see `folder` read-only.
 - Both linked from `ROADMAP.md`. Design only; nothing built yet.
 
+#### Fix bug 227: mail dropped on turns with no new user message
+
+- `buildContext` now includes `suparnaMailLLMContext` in the trailing-only user message used by continue,
+  nudge, chained and autonomous turns. Before, those turns posted Suparṇā's whisper and marked each
+  letter alerted, but the model never received the letter text.
+- Help: `help/post-office.md` states that the mail check covers turns with no new message.
+
 #### Fix bug 198: wardrobe dialog showed a stale outfit after a tool-driven change
 
 - `useChatOutfit` refetches on every mount and `slotsFor` returns undefined until that fetch lands, so
