@@ -4,6 +4,10 @@
 
 ### 4.10-dev
 
+#### Document Commonplace cleanup on character deletion
+
+- Deleting a character (not archiving) removes its `Commonplace/` digest files along with its digests. Confirmed as intended; documented in `help/memory-consolidation.md` and bug 208.
+
 #### PR 90 review: 16 findings on the bug 203–226 fixes
 
 - Migration `rezone-legacy-memory-occurred-at-v1` re-stamps legacy UTC-midnight `occurredAt` values at local midnight of the same date in the instance timezone (decision 10's no-backfill reversed). No `createdAt` cutoff.
