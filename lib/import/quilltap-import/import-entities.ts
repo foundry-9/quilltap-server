@@ -22,7 +22,7 @@ import type {
 import { stripScenarioSeededSummary } from '@/lib/chat/scenario-seeded-summary';
 import { withConciergeModeFromLegacy } from '@/lib/services/dangerous-content/chat-override';
 import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
-import { remintChatMessageIds, type RemintedChatMessages } from './message-id-remap';
+import { remintChatMessageIds, remapImportedMessageId, type RemintedChatMessages } from './message-id-remap';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -319,8 +319,10 @@ export async function importGroups(
 
 /**
  * Insert a chat's bundle messages, under the reminted ids when `reminted` is
- * given (recording each pair in `idMaps.messages` for the sidecars that name
- * messages), or under their source ids otherwise. Returns the count inserted.
+ * given, or under their source ids otherwise. For a reminted chat each
+ * source → new pair is recorded in `idMaps.messages` only once its insert
+ * succeeds, so a sidecar can never be pointed at a message that is not here.
+ * Returns the count inserted.
  */
 async function addImportedMessages(
   newChatId: string,
@@ -331,22 +333,24 @@ async function addImportedMessages(
   warnings: string[]
 ): Promise<number> {
   const toInsert = reminted ? reminted.messages : chat.messages;
-  if (reminted) {
-    for (const [sourceId, newId] of reminted.idMap) idMaps.messages.set(sourceId, newId);
-  }
+  const landed = reminted ? new Map<string, string>() : null;
+  if (landed) idMaps.messages.set(chat.id, landed);
   moduleLogger.debug('Importing chat messages', {
     sourceChatId: chat.id,
     newChatId,
     messageCount: toInsert.length,
     remintedMessageIds: Boolean(reminted),
     droppedMessageRefs: reminted?.droppedRefs ?? 0,
+    summaryCleared: reminted?.summaryCleared ?? false,
   });
 
   let added = 0;
-  for (const message of toInsert) {
+  for (const [index, message] of toInsert.entries()) {
     try {
       await repos.chats.addMessage(newChatId, message);
       added++;
+      const sourceId = chat.messages[index]?.id;
+      if (landed && sourceId && !landed.has(sourceId)) landed.set(sourceId, message.id);
     } catch (msgError) {
       warnings.push(
         `Failed to import message in chat "${chat.title}": ${
@@ -389,45 +393,34 @@ export async function importChats(
         if (options.conflictStrategy === 'overwrite') {
           await repos.chats.delete(chat.id, { syncVaults: false });
         }
-
-        if (options.conflictStrategy === 'duplicate') {
-          const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
-          // The original chat and its messages are still here, so the copy
-          // needs fresh message ids as well as a fresh chat id (bug 199).
-          const reminted = remintChatMessageIds(chatData, chat.messages);
-          const newChat = await repos.chats.create({
-            // A bundle from before the three Concierge states carries only the
-            // legacy pair; derive the state so the chat keeps its behaviour.
-            ...withConciergeModeFromLegacy(stripScenarioSeededSummary({ ...chatData, ...reminted.chatPatch })),
-            title: `${chatData.title} (imported)`,
-          });
-          idMaps.chats.set(chat.id, newChat.id);
-
-          messages += await addImportedMessages(newChat.id, chat, reminted, idMaps, repos, warnings);
-
-          imported++;
-          continue;
-        }
       }
 
+      // Duplicate creates a copy beside the original under a fresh id; every
+      // other strategy reaching here inserts the bundle's chat.
+      const isDuplicate = Boolean(existing) && options.conflictStrategy === 'duplicate';
+      const keepsSourceIds = Boolean(options.preserveIds) && !isDuplicate;
+
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
+      // Only a chat that keeps its source id keeps its message ids. A chat
+      // created under a fresh id gets fresh message ids too: `chat_messages.id`
+      // is global, so the duplicate's original — or an earlier import of the
+      // same bundle — already holds them (bug 199).
+      const reminted = keepsSourceIds ? null : remintChatMessageIds(chatData, chat.messages);
       // A pre-bug-158 export carries the chat's scenario in `contextSummary` as
       // well as `scenarioText`; the migration that cleared those rows has long
       // since run in this instance, so the import is the only thing standing
       // between a stale bundle and the bug coming back.
       // …and a pre-phase-3 bundle carries only the legacy Concierge pair, so
       // the chat's three-state posture is derived from it here.
-      //
-      // Only a chat that keeps its source id keeps its message ids. A chat
-      // created under a fresh id gets fresh message ids too: `chat_messages.id`
-      // is global, and the same bundle imported twice would otherwise collide
-      // on every message of the second copy (bug 199).
-      const reminted = options.preserveIds ? null : remintChatMessageIds(chatData, chat.messages);
       const cleaned = withConciergeModeFromLegacy(
         stripScenarioSeededSummary(reminted ? { ...chatData, ...reminted.chatPatch } : chatData)
       );
-      const createData = options.preserveIds ? { ...cleaned, id: chat.id } : cleaned;
-      const createOptions = getPreserveIdsCreateOptions(chat.id, options);
+      const createData = keepsSourceIds
+        ? { ...cleaned, id: chat.id }
+        : isDuplicate
+          ? { ...cleaned, title: `${chatData.title} (imported)` }
+          : cleaned;
+      const createOptions = keepsSourceIds ? getPreserveIdsCreateOptions(chat.id, options) : undefined;
       const newChat = await repos.chats.create(createData, createOptions);
       idMaps.chats.set(chat.id, newChat.id);
 
@@ -560,7 +553,7 @@ export async function importMemories(
         tags: newTags,
         // Follows its message when the chat import reminted message ids.
         sourceMessageId: memory.sourceMessageId
-          ? idMaps.messages.get(memory.sourceMessageId) ?? memory.sourceMessageId
+          ? remapImportedMessageId(idMaps, memory.chatId, memory.sourceMessageId)
           : memory.sourceMessageId,
       };
       const created = await repos.memories.create(payload, createOptions);

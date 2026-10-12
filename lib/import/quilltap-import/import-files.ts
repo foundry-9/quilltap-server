@@ -124,6 +124,8 @@ async function remapLinkedTo(
   const kept: string[] = [];
   const dropped: string[] = [];
   const resolvedChatIds: string[] = [];
+  /** Source ids of the imported chats named in this array. */
+  const sourceChatIds: string[] = [];
   const unresolved: string[] = [];
 
   for (const id of linkedTo) {
@@ -131,12 +133,13 @@ async function remapLinkedTo(
       idMaps.characters.get(id) ??
       idMaps.chats.get(id) ??
       idMaps.projects.get(id) ??
-      idMaps.groups.get(id) ??
-      // A message reminted with its chat (bug 199).
-      idMaps.messages.get(id);
+      idMaps.groups.get(id);
     if (mapped) {
       kept.push(mapped);
-      if (idMaps.chats.get(id)) resolvedChatIds.push(mapped);
+      if (idMaps.chats.get(id)) {
+        resolvedChatIds.push(mapped);
+        sourceChatIds.push(id);
+      }
       continue;
     }
 
@@ -153,6 +156,16 @@ async function remapLinkedTo(
   }
 
   for (const id of unresolved) {
+    // A message reminted with its chat (bug 199) resolves through that chat's
+    // own map, which holds only messages whose insert succeeded.
+    const reminted = sourceChatIds
+      .map((chatId) => idMaps.messages.get(chatId)?.get(id))
+      .find((newId): newId is string => Boolean(newId));
+    if (reminted) {
+      kept.push(reminted);
+      continue;
+    }
+
     let matched = false;
     for (const chatId of resolvedChatIds) {
       let messageIds = messageIdCache.get(chatId);

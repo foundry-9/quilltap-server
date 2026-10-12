@@ -9,51 +9,77 @@
  * message is reminted, and every reference *to* a message inside the chat
  * row or the message rows follows it through one old → new map:
  *
- * - `message.swipeGroupId` — `swipe-<messageId>` (regenerate-swipe) or a bare
- *   message id; anything else (SillyTavern's `swipe-<index>`) is an opaque,
- *   per-chat grouping key and is kept.
- * - `chat.summaryAnchorMessageIds` — anchors with no message in the bundle are
- *   dropped (they would name nothing in the new chat).
+ * - `message.swipeGroupId` — `swipe-<messageId>` (what regenerate-swipe
+ *   writes) is rewritten; any other key (SillyTavern's `swipe-<index>`) is an
+ *   opaque, per-chat grouping key and is kept.
+ * - `chat.summaryAnchorMessageIds` — if any anchor names no message in the
+ *   bundle, the running summary is cleared with its anchors and fold cursor,
+ *   exactly as `?action=rebuild-summary` does, so the ordinary cadence
+ *   refolds rather than trusting a summary with a partial anchor set.
  * - `chat.otherExtractionWatermarkMessageId` — nulled when unresolvable, which
  *   simply lets the next fold-grain pass catch up.
  * - `chat.courierCheckpoints[*].lastResolvedMessageId` — a checkpoint whose
- *   message is gone is dropped, so the next Courier turn sends full context.
+ *   message is gone (or that cannot be read) is dropped, so the next Courier
+ *   turn sends full context.
  *
  * Sidecars outside the chat row (informs, annotations, memories, file links)
- * read the returned map via `idMaps.messages`.
+ * resolve through {@link remapImportedMessageId}, keyed by their source chat.
  *
  * @module import/quilltap-import/message-id-remap
  */
 
 import { randomUUID } from 'crypto';
 import type { ChatMetadata, MessageEvent } from '@/lib/schemas/types';
+import type { IdMappingState } from './types';
 
 const SWIPE_PREFIX = 'swipe-';
 
+type MessageRefFields =
+  | 'summaryAnchorMessageIds'
+  | 'otherExtractionWatermarkMessageId'
+  | 'courierCheckpoints'
+  | 'contextSummary'
+  | 'lastSummaryTurn';
+
 /** The chat-row fields that name messages, rewritten for the new ids. */
-export type ChatMessageRefPatch = Partial<
-  Pick<ChatMetadata, 'summaryAnchorMessageIds' | 'otherExtractionWatermarkMessageId' | 'courierCheckpoints'>
->;
+export type ChatMessageRefPatch = Partial<Pick<ChatMetadata, MessageRefFields>>;
 
 export interface RemintedChatMessages {
   /** The bundle's messages, each under a fresh id. Order is preserved. */
   messages: MessageEvent[];
   /** Chat-row fields to spread over the chat before `create`. Only fields present on the source chat appear. */
   chatPatch: ChatMessageRefPatch;
-  /** Source message id → new message id. */
+  /**
+   * Source message id → new message id, for remapping references. A source id
+   * that occurs twice in one bundle chat maps to its first occurrence; every
+   * occurrence still gets its own new id in `messages`.
+   */
   idMap: Map<string, string>;
-  /** References that named no message in the bundle and were dropped or nulled. */
+  /** Message references in the chat row that named no message in the bundle. */
   droppedRefs: number;
+  /** Whether the running summary was cleared because an anchor did not resolve. */
+  summaryCleared: boolean;
 }
 
 function remapSwipeGroupId(groupId: string, idMap: ReadonlyMap<string, string>): string {
-  const bare = idMap.get(groupId);
-  if (bare) return bare;
-  if (groupId.startsWith(SWIPE_PREFIX)) {
-    const mapped = idMap.get(groupId.slice(SWIPE_PREFIX.length));
-    if (mapped) return `${SWIPE_PREFIX}${mapped}`;
+  if (!groupId.startsWith(SWIPE_PREFIX)) return groupId;
+  const mapped = idMap.get(groupId.slice(SWIPE_PREFIX.length));
+  return mapped ? `${SWIPE_PREFIX}${mapped}` : groupId;
+}
+
+/** A bundle may carry a JSON column as its serialized string; read either. */
+function readJsonObject(value: unknown): Record<string, unknown> | null {
+  let parsed = value;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
   }
-  return groupId;
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : null;
 }
 
 /**
@@ -62,33 +88,39 @@ function remapSwipeGroupId(groupId: string, idMap: ReadonlyMap<string, string>):
  * database.
  */
 export function remintChatMessageIds(
-  chat: Partial<Pick<ChatMetadata, 'summaryAnchorMessageIds' | 'otherExtractionWatermarkMessageId' | 'courierCheckpoints'>>,
+  chat: Partial<Pick<ChatMetadata, MessageRefFields>>,
   messages: MessageEvent[],
   mintId: () => string = randomUUID
 ): RemintedChatMessages {
   const idMap = new Map<string, string>();
-  for (const message of messages) {
-    if (message.id && !idMap.has(message.id)) idMap.set(message.id, mintId());
-  }
+  const newIds = messages.map((message) => {
+    const newId = mintId();
+    if (message.id && !idMap.has(message.id)) idMap.set(message.id, newId);
+    return newId;
+  });
 
-  let droppedRefs = 0;
-
-  const reminted = messages.map((message) => ({
+  const reminted = messages.map((message, index) => ({
     ...message,
-    id: idMap.get(message.id) ?? mintId(),
+    id: newIds[index],
     ...(message.swipeGroupId ? { swipeGroupId: remapSwipeGroupId(message.swipeGroupId, idMap) } : {}),
   }));
 
   const chatPatch: ChatMessageRefPatch = {};
+  let droppedRefs = 0;
+  let summaryCleared = false;
 
   if (Array.isArray(chat.summaryAnchorMessageIds)) {
-    const anchors: string[] = [];
-    for (const id of chat.summaryAnchorMessageIds) {
-      const mapped = idMap.get(id);
-      if (mapped) anchors.push(mapped);
-      else droppedRefs++;
+    const anchors = chat.summaryAnchorMessageIds.map((id) => idMap.get(id));
+    const unresolved = anchors.filter((id) => !id).length;
+    if (unresolved > 0) {
+      droppedRefs += unresolved;
+      summaryCleared = true;
+      chatPatch.contextSummary = null;
+      chatPatch.summaryAnchorMessageIds = [];
+      chatPatch.lastSummaryTurn = 0;
+    } else {
+      chatPatch.summaryAnchorMessageIds = anchors as string[];
     }
-    chatPatch.summaryAnchorMessageIds = anchors;
   }
 
   if (chat.otherExtractionWatermarkMessageId) {
@@ -97,23 +129,41 @@ export function remintChatMessageIds(
     chatPatch.otherExtractionWatermarkMessageId = mapped;
   }
 
-  const checkpoints = chat.courierCheckpoints;
-  if (checkpoints && typeof checkpoints === 'object' && !Array.isArray(checkpoints)) {
+  if (chat.courierCheckpoints != null) {
+    const checkpoints = readJsonObject(chat.courierCheckpoints);
     const next: Record<string, unknown> = {};
-    for (const [characterId, checkpoint] of Object.entries(checkpoints as Record<string, unknown>)) {
-      const lastId =
-        checkpoint && typeof checkpoint === 'object'
-          ? (checkpoint as { lastResolvedMessageId?: unknown }).lastResolvedMessageId
-          : undefined;
+    for (const [characterId, raw] of Object.entries(checkpoints ?? {})) {
+      const checkpoint = readJsonObject(raw);
+      const lastId = checkpoint?.lastResolvedMessageId;
       const mapped = typeof lastId === 'string' ? idMap.get(lastId) : undefined;
-      if (!mapped) {
+      if (!checkpoint || !mapped) {
         droppedRefs++;
         continue;
       }
-      next[characterId] = { ...(checkpoint as Record<string, unknown>), lastResolvedMessageId: mapped };
+      next[characterId] = { ...checkpoint, lastResolvedMessageId: mapped };
     }
+    if (!checkpoints) droppedRefs++;
     chatPatch.courierCheckpoints = Object.keys(next).length > 0 ? next : null;
   }
 
-  return { messages: reminted, chatPatch, idMap, droppedRefs };
+  return { messages: reminted, chatPatch, idMap, droppedRefs, summaryCleared };
+}
+
+/**
+ * Resolve a sidecar's message reference against the chat it belongs to.
+ *
+ * - The source chat was not reminted (kept its ids, was skipped, or is not in
+ *   this import): the id is returned unchanged.
+ * - The source chat was reminted and the message landed: its new id.
+ * - The source chat was reminted and the message did not land (absent from
+ *   the bundle, or its insert failed): `null` — there is nothing to point at.
+ */
+export function remapImportedMessageId(
+  idMaps: Pick<IdMappingState, 'messages'>,
+  sourceChatId: string | null | undefined,
+  messageId: string
+): string | null {
+  const chatMap = sourceChatId ? idMaps.messages.get(sourceChatId) : undefined;
+  if (!chatMap) return messageId;
+  return chatMap.get(messageId) ?? null;
 }

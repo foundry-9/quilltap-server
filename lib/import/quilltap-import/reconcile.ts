@@ -19,6 +19,7 @@ import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
 import { remapScenarioSource } from '@/lib/scenarios/source-remap';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
+import { remapImportedMessageId } from './message-id-remap';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -51,8 +52,8 @@ export type ChatInformRemapResult =
  *   conflict strategy skipped, or one whose roster was edited in the
  *   destination, may not have the seat at all.
  * - `recordMessageId` and `consumedByMessageId` are message ids. They go
- *   through `idMaps.messages`, which is the identity unless the chat was
- *   created under a fresh id and its messages reminted (bug 199) — and a
+ *   through `remapImportedMessageId`, which is the identity unless the chat
+ *   was created under a fresh id and its messages reminted (bug 199) — and a
  *   message import that warned and continued leaves a hole either way.
  *
  * A row whose seat or whose Host record is missing is **dropped**: an inform
@@ -74,20 +75,25 @@ export function remapChatInform(
     };
   }
 
-  const remapMessageId = (id: string | null | undefined): string | null =>
-    id ? idMaps.messages.get(id) ?? id : null;
-
-  const recordMessageId = remapMessageId(inform.recordMessageId);
-  if (recordMessageId && !known.messageIds.has(recordMessageId)) {
+  // `null` back from the remap means the chat was reminted and this message
+  // never landed — treated exactly like a pointer the destination lacks.
+  const sourceRecordId = inform.recordMessageId ?? null;
+  const recordMessageId = sourceRecordId
+    ? remapImportedMessageId(idMaps, inform.chatId, sourceRecordId)
+    : null;
+  if (sourceRecordId && (!recordMessageId || !known.messageIds.has(recordMessageId))) {
     return {
       ok: false,
-      reason: `record message ${recordMessageId} is missing from chat ${chatId}`,
+      reason: `record message ${sourceRecordId} is missing from chat ${chatId}`,
     };
   }
 
-  const consumedByMessageId = remapMessageId(inform.consumedByMessageId);
+  const sourceConsumedById = inform.consumedByMessageId ?? null;
+  const consumedByMessageId = sourceConsumedById
+    ? remapImportedMessageId(idMaps, inform.chatId, sourceConsumedById)
+    : null;
   const consumedByMessageIdCleared = Boolean(
-    consumedByMessageId && !known.messageIds.has(consumedByMessageId)
+    sourceConsumedById && (!consumedByMessageId || !known.messageIds.has(consumedByMessageId))
   );
 
   return {

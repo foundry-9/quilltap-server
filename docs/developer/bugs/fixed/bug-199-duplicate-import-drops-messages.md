@@ -19,9 +19,9 @@
 `remintChatMessageIds` (`lib/import/quilltap-import/message-id-remap.ts`), and every reference to a
 message follows through one per-chat old → new map: `swipeGroupId`, `summaryAnchorMessageIds`,
 `otherExtractionWatermarkMessageId`, `courierCheckpoints[*].lastResolvedMessageId` inside the chat,
-and — through the new `idMaps.messages` — inform `recordMessageId` / `consumedByMessageId`,
-annotation `sourceMessageId`, memory `sourceMessageId` and file `linkedTo`. A `preserveIds` import
-keeps its source ids, as before. Test:
+and — through the new `idMaps.messages`, keyed by source chat and filled only as inserts succeed —
+inform `recordMessageId` / `consumedByMessageId`, annotation `sourceMessageId`, memory
+`sourceMessageId` and file `linkedTo`. A `preserveIds` import keeps its source ids, as before. Test:
 `__tests__/unit/lib/import/quilltap-import/duplicate-chat-message-ids.test.ts`.
 
 ## Symptom
@@ -58,23 +58,31 @@ a bundle moving to a different instance, where the ids are free.
 ## Fix
 
 Only a chat that keeps its source id keeps its message ids. Anywhere `importChats` creates the chat
-under a fresh id (the `duplicate` branch, and the non-`preserveIds` insert), it calls
-`remintChatMessageIds` before `chats.create`:
+under a fresh id (the `duplicate` strategy, and the non-`preserveIds` insert — now one code path, the
+duplicate adding only its "(imported)" title), it calls `remintChatMessageIds` before `chats.create`:
 
-- every message gets a new id;
-- `swipeGroupId` of the form `swipe-<messageId>` (what regenerate-swipe writes) or a bare message id
-  is rewritten; an opaque key such as SillyTavern's `swipe-<index>` is kept, since group keys are only
+- every message gets its own new id, even when a bundle chat repeats a source id (references to a
+  repeated id follow its first occurrence);
+- `swipeGroupId` of the form `swipe-<messageId>` (what regenerate-swipe writes) is rewritten; any
+  other key, such as SillyTavern's `swipe-<index>`, is opaque and kept, since group keys are only
   compared within one chat;
-- `summaryAnchorMessageIds` is mapped, dropping anchors that name no message in the bundle;
+- `summaryAnchorMessageIds` is mapped; if any anchor names no message in the bundle, the summary is
+  cleared together with its anchors and `lastSummaryTurn` — what `?action=rebuild-summary` does — so
+  the ordinary cadence refolds instead of trusting a summary whose anchor set is partial;
 - `otherExtractionWatermarkMessageId` is mapped or nulled (the next fold-grain pass catches up);
-- `courierCheckpoints` entries are mapped, and dropped when their message is gone (the next Courier
-  turn sends full context).
+- `courierCheckpoints` (an object, or a JSON string from a hand-edited bundle) is mapped entry by
+  entry; an entry whose message is gone, or that cannot be read, is dropped, so the next Courier turn
+  sends full context.
 
-The map is recorded in `idMaps.messages`, which the sidecar importers read: `remapChatInform` maps
-both message pointers before checking them against the destination chat, conversation annotations
-and memories map `sourceMessageId`, and `remapLinkedTo` keeps a reminted message id in a file's
-`linkedTo`. Each chat's message import logs at debug (count, whether ids were reminted, how many
-references were dropped), and each failed message insert logs a warning.
+The map lands in `idMaps.messages`, keyed by **source chat** (two chats in one bundle can share
+message ids), and an entry is written only after its message's insert succeeds. Sidecars resolve
+through `remapImportedMessageId(idMaps, sourceChatId, messageId)`: unchanged for a chat that was not
+reminted, the new id for a message that landed, `null` for one that did not. `remapChatInform` treats
+`null` as a missing pointer (record → drop the row, consumed-by → clear the field); annotations and
+memories store `null` rather than a dangling id; `remapLinkedTo` resolves a message id only through a
+chat named in the same `linkedTo` array. Each chat's message import logs at debug (count, whether ids
+were reminted, dropped references, whether the summary was cleared), and each failed message insert
+logs a warning.
 
 ## Verify
 

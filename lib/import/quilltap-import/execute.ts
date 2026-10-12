@@ -41,6 +41,7 @@ import {
   importInstanceSettings,
 } from './import-configuration';
 import { reconcileRelationships, remapChatInform } from './reconcile';
+import { remapImportedMessageId } from './message-id-remap';
 import { enqueueEmbeddingGenerate } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
@@ -667,7 +668,7 @@ async function executeImportStrict(
             ...annotationData,
             chatId: remappedChatId,
             ...(annotation.sourceMessageId && {
-              sourceMessageId: idMaps.messages.get(annotation.sourceMessageId) ?? annotation.sourceMessageId,
+              sourceMessageId: remapImportedMessageId(idMaps, annotation.chatId, annotation.sourceMessageId),
             }),
           });
           annotationsImported++;

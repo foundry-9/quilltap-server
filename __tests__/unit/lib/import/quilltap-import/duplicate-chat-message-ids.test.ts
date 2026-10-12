@@ -221,8 +221,12 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
     expect(copied[1].swipeGroupId).toBe(`swipe-${newA}`)
     expect(copied[2].swipeGroupId).toBe(`swipe-${newA}`)
 
-    // Chat-row message references follow; an anchor with no message is dropped.
-    expect(copy.summaryAnchorMessageIds).toEqual([newUser, newA])
+    // Chat-row message references follow. One anchor names a message the
+    // bundle does not carry, so the summary is cleared for a refold.
+    expect(copy.summaryAnchorMessageIds).toEqual([])
+    expect(copy.contextSummary).toBeNull()
+    expect(copy.lastSummaryTurn).toBe(0)
+    void newUser
     expect(copy.otherExtractionWatermarkMessageId).toBe(newB)
     expect(copy.courierCheckpoints).toEqual({
       [ALICE_CHARACTER]: { lastResolvedMessageId: newB, resolvedAt: '2026-10-12T00:05:00.000Z' },
@@ -260,7 +264,7 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
       projects: new Map(),
       tags: new Map(),
       preserveIdsSkips: new Set(),
-      messages: new Map([[REPLY_A, 'reply-a-copy']]),
+      messages: new Map([[SOURCE_CHAT_ID, new Map([[REPLY_A, 'reply-a-copy']])]]),
     }
     const memory = {
       id: generateId(),
@@ -288,6 +292,82 @@ describe('executeImport — message ids of a chat imported under a fresh id (bug
     expect(memoriesCreate.mock.calls[0][0]).toMatchObject({ chatId: 'chat-copy', sourceMessageId: 'reply-a-copy' })
   })
 
+  it('keeps the summary when every anchor resolves', async () => {
+    const bundle = archive() as { data: { chats: Array<Record<string, unknown>> } }
+    bundle.data.chats[0].summaryAnchorMessageIds = [USER_MSG, REPLY_A]
+    bundle.data.chats[0].contextSummary = 'Tea was poured.'
+    bundle.data.chats[0].lastSummaryTurn = 2
+
+    await executeImport(generateId(), bundle as never, {
+      conflictStrategy: 'duplicate',
+      includeMemories: false,
+      includeRelatedEntities: true,
+    })
+
+    const [copy] = copiesOf()
+    const [newUser, newA] = messagesOf(copy.id as string).map((m) => m.id)
+    expect(copy.summaryAnchorMessageIds).toEqual([newUser, newA])
+    expect(copy.contextSummary).toBe('Tea was poured.')
+    expect(copy.lastSummaryTurn).toBe(2)
+  })
+
+  it('keeps every message when one bundle chat repeats a message id', async () => {
+    const bundle = archive() as { data: { chats: Array<{ messages: unknown[] }> } }
+    bundle.data.chats[0].messages.push(message(USER_MSG, { content: 'the same id again' }))
+
+    const result = await executeImport(generateId(), bundle as never, {
+      conflictStrategy: 'duplicate',
+      includeMemories: false,
+      includeRelatedEntities: true,
+    })
+
+    expect(result.imported.messages).toBe(5)
+    expect(result.warnings.filter((w) => w.includes('UNIQUE'))).toEqual([])
+  })
+
+  it('keys sidecar remaps by chat when two bundle chats share message ids', async () => {
+    const bundle = archive() as { data: { chats: Array<Record<string, unknown>>; chatInforms: Array<Record<string, unknown>> } }
+    const twinId = '55555555-5555-4555-8555-555555555555'
+    bundle.data.chats.push({ ...bundleChat(), id: twinId, title: 'The Twin' })
+
+    await executeImport(generateId(), bundle as never, {
+      conflictStrategy: 'duplicate',
+      includeMemories: false,
+      includeRelatedEntities: true,
+    })
+
+    const first = copiesOf().find((c) => c.title === 'The Clockwork Tea')!
+    const firstMessages = messagesOf(first.id as string)
+    // The inform belongs to the first chat and must follow the first chat's ids.
+    expect(informsCreate.mock.calls[0][0]).toMatchObject({
+      chatId: first.id,
+      recordMessageId: firstMessages[3].id,
+      consumedByMessageId: firstMessages[2].id,
+    })
+  })
+
+  it('does not point a sidecar at a message whose insert failed', async () => {
+    seedOriginal()
+    const repos = (getUserRepositories as jest.Mock)()
+    const chatsRepo = repos.chats as { addMessage: jest.Mock }
+    const realAdd = chatsRepo.addMessage.getMockImplementation()!
+    chatsRepo.addMessage.mockImplementation(async (chatId: string, msg: Record<string, unknown>) => {
+      if (msg.systemSender === 'host') throw new Error('disk on fire')
+      return realAdd(chatId, msg)
+    })
+
+    const result = await executeImport(generateId(), archive() as never, {
+      conflictStrategy: 'duplicate',
+      includeMemories: false,
+      includeRelatedEntities: true,
+    })
+
+    expect(result.imported.messages).toBe(3)
+    // The inform's Host record never landed in the copy, so the row is dropped.
+    expect(informsCreate).not.toHaveBeenCalled()
+    expect(result.warnings.some((w) => w.includes(HOST_RECORD))).toBe(true)
+  })
+
   it('keeps source message ids under preserveIds', async () => {
     const result = await executeImport(generateId(), archive() as never, {
       conflictStrategy: 'skip',
@@ -310,6 +390,44 @@ describe('remintChatMessageIds', () => {
       () => `new-${++n}`
     )
     expect(messages[0]).toMatchObject({ id: 'new-1', swipeGroupId: 'swipe-3' })
+  })
+
+  it('gives every occurrence of a repeated id its own new id, mapping references to the first', () => {
+    let n = 0
+    const result = remintChatMessageIds(
+      { summaryAnchorMessageIds: [USER_MSG] },
+      [message(USER_MSG), message(USER_MSG)] as never,
+      () => `new-${++n}`
+    )
+    expect(result.messages.map((m) => m.id)).toEqual(['new-1', 'new-2'])
+    expect(result.chatPatch.summaryAnchorMessageIds).toEqual(['new-1'])
+  })
+
+  it('keeps a bare swipe group key even when it equals a message id', () => {
+    const { messages } = remintChatMessageIds(
+      {},
+      [message(REPLY_A, { swipeGroupId: REPLY_A })] as never,
+      () => 'new'
+    )
+    expect(messages[0].swipeGroupId).toBe(REPLY_A)
+  })
+
+  it('reads Courier checkpoints carried as a JSON string', () => {
+    const result = remintChatMessageIds(
+      {
+        courierCheckpoints: JSON.stringify({
+          c: { lastResolvedMessageId: REPLY_B, resolvedAt: 'x' },
+        }) as never,
+      },
+      [message(REPLY_B)] as never,
+      () => 'new-b'
+    )
+    expect(result.chatPatch.courierCheckpoints).toEqual({ c: { lastResolvedMessageId: 'new-b', resolvedAt: 'x' } })
+  })
+
+  it('drops Courier checkpoints it cannot read', () => {
+    const result = remintChatMessageIds({ courierCheckpoints: 'not json' as never }, [] as never)
+    expect(result.chatPatch.courierCheckpoints).toBeNull()
   })
 
   it('nulls unresolvable watermarks and checkpoints, and leaves absent fields absent', () => {
