@@ -4,6 +4,12 @@
 
 ### 4.10-dev
 
+#### File bugs 230 and 231; list carried-forward memory work
+
+- Bug 230 (open): the memory dry run omits `projectId`, project description and context summary.
+- Bug 231 (open): two overlapping extraction jobs can overwrite each other's related links and footnotes (cross-job half of bug 209).
+- Memory refactor spec §2.1 lists what the 203–226 targeted fixes left for each phase.
+
 #### Fix bugs 203–226: memory system defects from the refactor audit
 
 Targeted fixes on the current code, ahead of the memory refactor phases. Three migrations: `add-episode-extraction-watermark-v1`, `add-memory-superseded-at-v1`, `recompute-reinforced-importance-v1`.
