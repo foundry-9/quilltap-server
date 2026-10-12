@@ -7,14 +7,10 @@ import { getErrorMessage } from '@/lib/error-utils'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { readErrorText } from './hooks/api-error-text'
+import { MEMORY_CAP_BOUNDS, MEMORY_SETTING_DEFAULTS } from '@/lib/memory/settings-defaults'
+import type { MemoryMaintenanceSettings } from '@/lib/schemas/settings.types'
 
-interface HousekeepingConfig {
-  enabled: boolean
-  perCharacterCap: number
-  perCharacterCapOverrides: Record<string, number>
-  autoMergeSimilarThreshold: number
-  mergeSimilar: boolean
-}
+type HousekeepingConfig = MemoryMaintenanceSettings
 
 interface CharacterSummary {
   id: string
@@ -33,15 +29,11 @@ interface CharacterCountsRow {
   protected?: number
 }
 
-const DEFAULT_CONFIG: HousekeepingConfig = {
-  enabled: false,
-  perCharacterCap: 2000,
-  perCharacterCapOverrides: {},
-  autoMergeSimilarThreshold: 0.9,
-  mergeSimilar: false,
-}
+const DEFAULT_CONFIG: HousekeepingConfig = MEMORY_SETTING_DEFAULTS.maintenance
+const CAP_MIN = MEMORY_CAP_BOUNDS.min
+const CAP_MAX = MEMORY_CAP_BOUNDS.max
 
-const HOUSEKEEPING_CONFIG_URL = '/api/v1/memories?action=housekeeping-config'
+const HOUSEKEEPING_CONFIG_URL = '/api/v1/memories?action=maintenance-config'
 const CHARACTER_MEMORY_COUNTS_URL = '/api/v1/memories?action=character-memory-counts'
 
 export function MemoryHousekeepingCard() {
@@ -56,7 +48,7 @@ export function MemoryHousekeepingCard() {
     isLoading: configLoading,
     error: loadError,
   } = useQuery({
-    queryKey: queryKeys.memories.housekeepingConfig,
+    queryKey: queryKeys.memories.maintenanceConfig,
     queryFn: ({ signal }) =>
       apiFetch<{ settings?: Partial<HousekeepingConfig> }>(HOUSEKEEPING_CONFIG_URL, { signal }),
   })
@@ -123,7 +115,7 @@ export function MemoryHousekeepingCard() {
   }
 
   const handleCapBlur = (value: number) => {
-    if (!Number.isFinite(value) || value < 100 || value > 100000) return
+    if (!Number.isFinite(value) || value < CAP_MIN || value > CAP_MAX) return
     if (value === config.perCharacterCap) return
     void saveConfig({ perCharacterCap: Math.floor(value) })
   }
@@ -141,8 +133,8 @@ export function MemoryHousekeepingCard() {
       }
     } else {
       const parsed = Math.floor(Number(trimmed))
-      if (!Number.isFinite(parsed) || parsed < 100 || parsed > 100000) {
-        setError(`Override for character ${characterId.slice(0, 8)} must be between 100 and 100,000`)
+      if (!Number.isFinite(parsed) || parsed < CAP_MIN || parsed > CAP_MAX) {
+        setError(`Override for character ${characterId.slice(0, 8)} must be between ${CAP_MIN.toLocaleString()} and ${CAP_MAX.toLocaleString()}`)
         return
       }
       if (nextOverrides[characterId] === parsed) return // no change
@@ -208,8 +200,8 @@ export function MemoryHousekeepingCard() {
         <input
           id="perCharacterCap"
           type="number"
-          min={100}
-          max={100000}
+          min={CAP_MIN}
+          max={CAP_MAX}
           step={100}
           value={config.perCharacterCap}
           disabled={saving}
@@ -261,8 +253,8 @@ export function MemoryHousekeepingCard() {
                       </div>
                       <input
                         type="number"
-                        min={100}
-                        max={100000}
+                        min={CAP_MIN}
+                        max={CAP_MAX}
                         step={100}
                         placeholder={`${config.perCharacterCap}`}
                         value={draftValue}

@@ -27,13 +27,14 @@ import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
-import { calculateReinforcedImportance } from './reinforced-importance'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
+import { calculateReinforcedImportance } from './scoring'
 import {
   MAX_REINFORCEMENT_FOOTNOTES,
   appendCappedFootnotes,
   countReinforcementFootnotes,
 } from './reinforcement-footnotes'
+import { ADMISSION_THRESHOLDS } from './settings-defaults'
 
 // =============================================================================
 // Constants
@@ -47,13 +48,13 @@ import {
  * the facts restated most faithfully are not the ones that never accrue
  * reinforcement.
  */
-export const NEAR_DUPLICATE_THRESHOLD = 0.90
+export const NEAR_DUPLICATE_THRESHOLD = ADMISSION_THRESHOLDS.nearDuplicate
 
 /** Duplicate-enough threshold — memories above this are reinforced, not duplicated. */
-export const MERGE_THRESHOLD = 0.85
+export const MERGE_THRESHOLD = ADMISSION_THRESHOLDS.reinforce
 
 /** Related-but-distinct threshold — memories in this band get linked. */
-export const RELATED_THRESHOLD = 0.70
+export const RELATED_THRESHOLD = ADMISSION_THRESHOLDS.related
 
 export {
   MAX_REINFORCEMENT_FOOTNOTES,
@@ -74,7 +75,7 @@ const EMBEDDING_RETRY_DELAY_MS = 500
  * days, SKIP_NEAR_DUPLICATE / REINFORCE downgrade to INSERT_RELATED so
  * distinct occasions of the same activity both persist as rows.
  */
-export const DATE_GUARD_DAYS = 7
+export const DATE_GUARD_DAYS = ADMISSION_THRESHOLDS.dateGuardDays
 
 /** True when both timestamps parse and sit more than {@link DATE_GUARD_DAYS} apart. */
 export function occasionsAreDistinct(

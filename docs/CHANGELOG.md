@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Memory refactor Phase A: scoring, clock, settings, candidate
+
+Structural Phase A of `docs/developer/features/memory-system-refactor.md`. One migration.
+
+- Scoring: new `lib/memory/scoring/` holds the three numbers. `relevance` (cosine and the recall blend), `salience` (reinforced importance with a 30-day half-life, no floor) and `protection` (the housekeeping score, unchanged). `calculateEffectiveWeight`, `rankMemoriesByWeight`, `lib/memory/memory-weighting.ts` and `lib/memory/reinforced-importance.ts` removed. Search results, the memory tools and debug info report `salience` instead of `effectiveWeight` / `rawWeight`.
+- Every `minImportance` filter reads reinforced importance through `filterImportance`. Prompt paths use `RECALL_MIN_IMPORTANCE` (0.3); the memory search tool and API search default to `TOOL_MIN_IMPORTANCE` (0). UI importance bands come from `importanceBand`.
+- Time: new `lib/memory/time/` (`calendar`, `calendar-refresh`, `anchors`, `rules`, `clock`, `age-label`). One `DAY_REFERENCE_TABLE` drives both the extraction-side `when` resolver and the search-side day windows. Windows are closed (`to` is the next boundary minus 1 ms). A "today" phrase is stamped at local midnight. Day counts go out to fourteen days. `lib/memory/day-references.ts` removed.
+- Settings: `lib/memory/settings.ts` (`resolveMemorySettings`) is the one read of every memory setting; `lib/memory/settings-defaults.ts` holds the defaults (from the Zod schemas) and the gate's admission thresholds. New instance setting `memoryMaintenance` `{enabled, perCharacterCap, perCharacterCapOverrides}`, caps 100–100,000, replaces `chat_settings.autoHousekeepingSettings`. `mergeSimilar` / `autoMergeSimilarThreshold` removed.
+- Migration `move-memory-maintenance-settings-v1`: copies housekeeping settings into `memoryMaintenance`, deletes the `memoryExtractionConcurrency` instance key, drops `chat_settings.autoHousekeepingSettings`, `memoryExtractionLimits` and `memoryExtractionConcurrency`. Restore of an older backup derives `memoryMaintenance` the same way.
+- API: `?action=maintenance-config` (old `housekeeping-config` still answers). `?action=extraction-concurrency` removed. Housekeep results drop `merged` / `mergedIds` / `wouldMerge`; `maxMemories` is validated to 100–100,000 and defaults to the character's configured cap.
+- Candidate: new `lib/memory/candidate.ts` with `MemoryCandidateSchema`, the one shape every producer builds (per-turn passes, fold OTHER, fold episode, manual API, consolidation). Targeting tags ride on the candidate and are written into keywords only by `toCreateMemoryOptions`. The parser's `coerceImportance` is the only importance default, so a model's 0 stays 0. The cheap-LLM `MemoryCandidate` type is renamed `MemoryDraft`.
+- Almanack reports `instanceSettings.memoryMaintenance` instead of the chat-settings housekeeping block.
+
 #### Fix bugs 230–234: the remaining open memory bugs
 
 Targeted fixes ahead of the memory refactor phases that were to close them. No migrations.

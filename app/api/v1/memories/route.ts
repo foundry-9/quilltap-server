@@ -12,7 +12,7 @@
  * - POST ?action=housekeep - Run memory cleanup synchronously (characterId in body)
  * - POST ?action=housekeep-sweep - Enqueue a background sweep across every character owned by the user
  * - POST ?action=embeddings - Generate missing embeddings (characterId in body)
- * - POST ?action=housekeeping-config - Update auto-housekeeping settings
+ * - POST ?action=maintenance-config - Update memory maintenance settings (enabled, per-character cap and overrides; instance-wide). `housekeeping-config` is the old name and still answers.
  * - POST ?action=extraction-limits-config - Update per-hour extraction rate limits
  * - POST ?action=recall-config - Update recall relevance settings (cross-project scope policy, related-memory expansion)
  * - POST ?action=consolidate - Fold clusters of hot memories into digests (characterId, dryRun?, maxClustersPerRun?, clusterThreshold? in body). dryRun runs in-process and returns the report; otherwise enqueues a job and returns { jobId }
@@ -20,19 +20,17 @@
  * - POST ?action=extraction-mode-config - Update the extraction grain of the OTHER pass (instance-wide)
  * - POST ?action=backfill-embeddings - Enqueue embedding-generate jobs for memories missing an embedding
  * - POST ?action=regenerate-all - Wipe and rebuild every chat-linked memory in the background
- * - POST ?action=extraction-concurrency - Update the per-user MEMORY_EXTRACTION concurrency cap
  * - POST ?action=anchor-gate-probe - Measure whether the embedded anchor line suppresses gate reinforcement (read-only dev tool; characterId in body)
  * - PUT ?action=embeddings - Rebuild vector index (characterId in body)
  * - GET ?action=housekeep&characterId= - Get housekeeping preview
  * - GET ?action=embeddings&characterId= - Get embedding status
- * - GET ?action=housekeeping-config - Read current auto-housekeeping settings
+ * - GET ?action=maintenance-config - Read memory maintenance settings (`housekeeping-config` still answers)
  * - GET ?action=extraction-limits-config - Read current extraction rate limits
  * - GET ?action=recall-config - Read current recall relevance settings
  * - GET ?action=consolidation-config - Read consolidation settings
  * - GET ?action=extraction-mode-config - Read the extraction grain settings
  * - GET ?action=backfill-embeddings - Report progress of the embedding backfill
  * - GET ?action=character-memory-counts - List user's characters with memory counts (for housekeeping UI)
- * - GET ?action=extraction-concurrency - Read current MEMORY_EXTRACTION concurrency cap
  * - GET ?action=regenerate-all - Report whether a regenerate sweep is in flight
  */
 
@@ -45,13 +43,21 @@ import {
 import { createMemoryWithGate, searchMemoriesSemantic, generateMissingEmbeddings, rebuildVectorIndex, deleteMemoriesByChatIdWithVectors } from '@/lib/memory/memory-service';
 import { runHousekeeping, getHousekeepingPreview, HousekeepingOptions } from '@/lib/memory/housekeeping';
 import { runAnchorGateProbe } from '@/lib/memory/anchor-gate-probe';
+import { filterImportance, TOOL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
+import { resolveMemorySettings } from '@/lib/memory/settings';
+import { MemoryCandidateSchema, toCreateMemoryOptions } from '@/lib/memory/candidate';
+import {
+  MemoryMaintenanceCapSchema,
+  MemoryMaintenanceCapOverridesSchema,
+  MEMORY_MAINTENANCE_CAP_MIN,
+  MEMORY_MAINTENANCE_CAP_MAX,
+} from '@/lib/schemas/settings.types';
 import { scheduleRefit } from '@/lib/embedding/embedding-job-scheduler';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
 import { enqueueEmbeddingGenerate, enqueueMemoryConsolidation, enqueueMemoryHousekeepingSweep, enqueueMemoryRegenerateAll } from '@/lib/background-jobs/queue-service';
-import { setMemoryExtractionConcurrencyOverride } from '@/lib/background-jobs/processor';
 import {
-  getMemoryExtractionConcurrency,
-  setMemoryExtractionConcurrency,
+  getMemoryMaintenanceSettings,
+  setMemoryMaintenanceSettings,
   getMemoryExtractionLimits,
   setMemoryExtractionLimits,
   getMemoryRecallSettings,
@@ -107,12 +113,11 @@ const searchMemorySchema = z.object({
 
 const housekeepingOptionsSchema = z.object({
   characterId: z.uuid('Character ID is required'),
-  maxMemories: z.number().min(10).max(10000).optional(),
+  /** The cap for this run; absent, the character's own (override → global). One bound, from the schema. */
+  maxMemories: MemoryMaintenanceCapSchema.optional(),
   maxAgeMonths: z.number().min(1).max(120).optional(),
   maxInactiveMonths: z.number().min(1).max(120).optional(),
   minImportance: z.number().min(0).max(1).optional(),
-  mergeSimilar: z.boolean().optional(),
-  mergeThreshold: z.number().min(0.8).max(1).optional(),
   dryRun: z.boolean().optional(),
 });
 
@@ -128,12 +133,12 @@ const rebuildIndexSchema = z.object({
   }),
 });
 
-const housekeepingConfigSchema = z.object({
+// The maintenance settings validate through their own schema (bounds included,
+// overrides too); unknown keys such as the retired merge knobs are stripped.
+const maintenanceConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  perCharacterCap: z.number().int().min(100).max(100000).optional(),
-  perCharacterCapOverrides: z.record(z.string(), z.number().int().positive()).optional(),
-  autoMergeSimilarThreshold: z.number().min(0).max(1).optional(),
-  mergeSimilar: z.boolean().optional(),
+  perCharacterCap: MemoryMaintenanceCapSchema.optional(),
+  perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.optional(),
 });
 
 const extractionLimitsConfigSchema = z.object({
@@ -173,10 +178,6 @@ const backfillStartSchema = z.object({
   batchSize: z.number().int().min(1).max(2000).prefault(500),
 });
 
-const extractionConcurrencySchema = z.object({
-  concurrency: z.number().int().min(1).max(32),
-});
-
 // =============================================================================
 // GET /api/v1/memories - List memories
 // =============================================================================
@@ -192,14 +193,14 @@ export const GET = createContextHandler(async (req, { user, repos }) => {
     {
       housekeep: () => handleHousekeepPreview(req, { user, repos }, characterId),
       embeddings: () => handleEmbeddingStatus(req, { user, repos }, characterId),
-      'housekeeping-config': () => handleReadHousekeepingConfig(req, { user, repos }),
+      'maintenance-config': () => handleReadMaintenanceConfig(req, { user, repos }),
+      'housekeeping-config': () => handleReadMaintenanceConfig(req, { user, repos }),
       'extraction-limits-config': () => handleReadExtractionLimitsConfig(req, { user, repos }),
       'recall-config': () => handleReadRecallConfig(req, { user, repos }),
       'consolidation-config': () => handleReadConsolidationConfig(),
       'extraction-mode-config': () => handleReadExtractionModeConfig(),
       'backfill-embeddings': () => handleBackfillProgress(req, { user, repos }),
       'character-memory-counts': () => handleCharacterMemoryCounts(req, { user, repos }),
-      'extraction-concurrency': () => handleReadExtractionConcurrency(req, { user, repos }),
       'regenerate-all': () => handleRegenerateAllStatus(req, { user, repos }),
     },
     () => handleListMemories(req, { user, repos }, { characterId, chatId, messageId })
@@ -251,7 +252,8 @@ export const POST = createContextHandler(async (req, { user, repos }) =>
       housekeep: () => handleHousekeep(req, { user, repos }),
       'housekeep-sweep': () => handleHousekeepSweep(req, { user }),
       embeddings: () => handleGenerateEmbeddings(req, { user, repos }),
-      'housekeeping-config': () => handleWriteHousekeepingConfig(req, { user, repos }),
+      'maintenance-config': () => handleWriteMaintenanceConfig(req, { user, repos }),
+      'housekeeping-config': () => handleWriteMaintenanceConfig(req, { user, repos }),
       'extraction-limits-config': () => handleWriteExtractionLimitsConfig(req, { user, repos }),
       'recall-config': () => handleWriteRecallConfig(req, { user, repos }),
       'consolidation-config': () => handleWriteConsolidationConfig(req),
@@ -259,7 +261,6 @@ export const POST = createContextHandler(async (req, { user, repos }) =>
       consolidate: () => handleConsolidate(req, { user, repos }),
       'backfill-embeddings': () => handleBackfillStart(req, { user, repos }),
       'regenerate-all': () => handleRegenerateAll(req, { user, repos }),
-      'extraction-concurrency': () => handleWriteExtractionConcurrency(req, { user, repos }),
       'anchor-gate-probe': () => handleAnchorGateProbe(req, { user, repos }),
     },
     () => handleCreateMemory(req, { user, repos })
@@ -365,7 +366,7 @@ async function listMemoriesByCharacter(
   }
 
   if (minImportance !== undefined && !isNaN(minImportance)) {
-    memories = memories.filter((m: any) => m.importance >= minImportance);
+    memories = memories.filter((m: any) => filterImportance(m) >= minImportance);
   }
 
   if (source && (source === 'AUTO' || source === 'MANUAL' || source === 'CONSOLIDATED')) {
@@ -543,25 +544,32 @@ async function handleCreateMemory(
   }
 
   // Every manual write goes through the gate (decision 13): source forced to
-  // MANUAL, provenance stamped 'manual'.
-  const outcome = await createMemoryWithGate(
-    {
-      characterId: validatedData.characterId,
-      content: validatedData.content,
-      summary: validatedData.summary,
-      keywords: validatedData.keywords,
-      tags: validatedData.tags,
-      importance: validatedData.importance,
-      aboutCharacterId: validatedData.aboutCharacterId,
-      chatId: validatedData.chatId,
-      projectId,
+  // MANUAL, provenance stamped 'manual'. A hand-written memory carries no
+  // targeting tags (it reads as the defaults) and its event time is given,
+  // not phrased.
+  const candidate = MemoryCandidateSchema.parse({
+    content: validatedData.content,
+    summary: validatedData.summary,
+    keywords: validatedData.keywords,
+    targeting: null,
+    importance: validatedData.importance,
+    kind: validatedData.kind ?? 'semantic',
+    when: null,
+    entities: validatedData.entities ?? [],
+    tags: validatedData.tags,
+    subject: { holderId: validatedData.characterId, aboutId: validatedData.aboutCharacterId ?? null },
+    provenance: {
       source: 'MANUAL',
       witnessedContext: 'manual',
-      sourceMessageId: validatedData.sourceMessageId,
-      ...(validatedData.kind !== undefined && { kind: validatedData.kind }),
-      ...(validatedData.occurredAt !== undefined && { occurredAt: validatedData.occurredAt }),
-      ...(validatedData.entities !== undefined && { entities: validatedData.entities }),
+      chatId: validatedData.chatId ?? null,
+      projectId,
+      sourceMessageId: validatedData.sourceMessageId ?? null,
+      anchorTimeMs: Date.now(),
+      pass: 'manual',
     },
+  });
+  const outcome = await createMemoryWithGate(
+    toCreateMemoryOptions(candidate, { occurredAt: validatedData.occurredAt ?? null, narrativeTime: null }),
     // A hand-written memory the gate folds into an existing extracted row
     // promotes that row to MANUAL at the higher importance, so the operator's
     // intent survives housekeeping.
@@ -616,7 +624,7 @@ async function handleSearch(
     userId: user.id,
     limit,
     minScore,
-    minImportance,
+    minImportance: minImportance ?? TOOL_MIN_IMPORTANCE,
     source,
     // The Commonplace Book browses the whole archive, cold rows included.
     includeCold: true,
@@ -709,12 +717,12 @@ async function handleHousekeep(
     return notFound('Character');
   }
 
+  // The manual action honours the character's cap override, as the sweep does.
+  const { maintenance } = await resolveMemorySettings(user.id);
   const options: HousekeepingOptions = {
     ...optionData,
-    userId: user.id,
+    maxMemories: optionData.maxMemories ?? maintenance.capFor(characterId),
   };
-
-  // Embedding profile is always the system default — no per-chat override
 
   // Run housekeeping (or preview if dryRun)
   const result = options.dryRun
@@ -727,7 +735,6 @@ async function handleHousekeep(
     result: {
       demoted: result.demoted,
       deleted: result.deleted,
-      merged: result.merged,
       kept: result.kept,
       totalBefore: result.totalBefore,
       totalAfter: result.totalAfter,
@@ -738,7 +745,6 @@ async function handleHousekeep(
       coldCount: result.coldCount,
       demotedIds: result.demotedIds,
       deletedIds: result.deletedIds,
-      mergedIds: result.mergedIds,
       details: options.dryRun ? result.details : undefined,
     },
   });
@@ -782,14 +788,17 @@ async function handleHousekeepPreview(
 
   // Parse options from query params
   const { searchParams } = req.nextUrl;
-  const options: HousekeepingOptions = { userId: user.id };
+  const { maintenance } = await resolveMemorySettings(user.id);
+  const options: HousekeepingOptions = { maxMemories: maintenance.capFor(characterId) };
 
   if (searchParams.has('maxMemories')) {
-    const val = parseInt(searchParams.get('maxMemories')!, 10);
-    if (isNaN(val) || val < 1 || val > 100000) {
-      return badRequest('maxMemories must be an integer between 1 and 100000');
+    const cap = MemoryMaintenanceCapSchema.safeParse(Number(searchParams.get('maxMemories')));
+    if (!cap.success) {
+      return badRequest(
+        `maxMemories must be an integer between ${MEMORY_MAINTENANCE_CAP_MIN} and ${MEMORY_MAINTENANCE_CAP_MAX}`,
+      );
     }
-    options.maxMemories = val;
+    options.maxMemories = cap.data;
   }
   if (searchParams.has('maxAgeMonths')) {
     const val = parseInt(searchParams.get('maxAgeMonths')!, 10);
@@ -805,11 +814,6 @@ async function handleHousekeepPreview(
     }
     options.minImportance = val;
   }
-  if (searchParams.has('mergeSimilar')) {
-    options.mergeSimilar = searchParams.get('mergeSimilar') === 'true';
-  }
-
-  // Embedding profile is always the system default — no per-chat override
 
   const preview = await getHousekeepingPreview(characterId, options);
 
@@ -818,7 +822,6 @@ async function handleHousekeepPreview(
     preview: {
       wouldDemote: preview.demoted,
       wouldDelete: preview.deleted,
-      wouldMerge: preview.merged,
       wouldKeep: preview.kept,
       totalBefore: preview.totalBefore,
       totalAfter: preview.totalAfter,
@@ -828,59 +831,34 @@ async function handleHousekeepPreview(
   });
 }
 
-async function handleReadHousekeepingConfig(
+async function handleReadMaintenanceConfig(
   _req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any }
+  _ctx: { user: { id: string }; repos: any }
 ) {
-  const settings = await repos.chatSettings.findByUserId(user.id);
-  const autoHousekeepingSettings = settings?.autoHousekeepingSettings ?? {
-    enabled: false,
-    perCharacterCap: 2000,
-    perCharacterCapOverrides: {},
-    autoMergeSimilarThreshold: 0.90,
-    mergeSimilar: false,
-  };
-  return NextResponse.json({ success: true, settings: autoHousekeepingSettings });
+  const settings = await getMemoryMaintenanceSettings();
+  return NextResponse.json({ success: true, settings });
 }
 
-async function handleWriteHousekeepingConfig(
+async function handleWriteMaintenanceConfig(
   req: NextRequest,
-  { user, repos }: { user: { id: string }; repos: any }
+  { user }: { user: { id: string }; repos: any }
 ) {
   const body = await req.json();
-  const parsed = housekeepingConfigSchema.safeParse(body);
+  const parsed = maintenanceConfigSchema.safeParse(body);
   if (!parsed.success) {
     return validationError(parsed.error);
   }
 
-  const existing = await repos.chatSettings.findByUserId(user.id);
-  const currentSettings = existing?.autoHousekeepingSettings ?? {
-    enabled: false,
-    perCharacterCap: 2000,
-    perCharacterCapOverrides: {},
-    autoMergeSimilarThreshold: 0.90,
-    mergeSimilar: false,
-  };
+  const settings = await setMemoryMaintenanceSettings(parsed.data);
 
-  const merged = {
-    enabled: parsed.data.enabled ?? currentSettings.enabled,
-    perCharacterCap: parsed.data.perCharacterCap ?? currentSettings.perCharacterCap,
-    perCharacterCapOverrides: parsed.data.perCharacterCapOverrides ?? currentSettings.perCharacterCapOverrides,
-    autoMergeSimilarThreshold: parsed.data.autoMergeSimilarThreshold ?? currentSettings.autoMergeSimilarThreshold,
-    mergeSimilar: parsed.data.mergeSimilar ?? currentSettings.mergeSimilar,
-  };
-
-  await repos.chatSettings.updateForUser(user.id, {
-    autoHousekeepingSettings: merged,
-  });
-
-  logger.info('[Memories API] Auto-housekeeping settings updated', {
+  logger.info('[Memories API] Memory maintenance settings updated', {
     userId: user.id,
-    enabled: merged.enabled,
-    perCharacterCap: merged.perCharacterCap,
+    enabled: settings.enabled,
+    perCharacterCap: settings.perCharacterCap,
+    capOverrides: Object.keys(settings.perCharacterCapOverrides).length,
   });
 
-  return NextResponse.json({ success: true, settings: merged });
+  return NextResponse.json({ success: true, settings });
 }
 
 async function handleReadExtractionLimitsConfig(
@@ -1453,31 +1431,4 @@ async function handleRegenerateAllStatus(
     inFlightExtractions,
     inFlight: inFlightFanOut + inFlightWipes + inFlightExtractions,
   });
-}
-
-async function handleReadExtractionConcurrency(
-  _req: NextRequest,
-  _ctx: { user: { id: string }; repos: any },
-) {
-  const concurrency = await getMemoryExtractionConcurrency();
-  return NextResponse.json({ success: true, concurrency });
-}
-
-async function handleWriteExtractionConcurrency(
-  req: NextRequest,
-  _ctx: { user: { id: string }; repos: any },
-) {
-  const body = await req.json();
-  const parsed = extractionConcurrencySchema.safeParse(body);
-  if (!parsed.success) {
-    return validationError(parsed.error);
-  }
-  await setMemoryExtractionConcurrency(parsed.data.concurrency);
-  // Push the new value into the processor's runtime cache so it takes effect
-  // on the next claim tick rather than waiting for the next cache refresh.
-  setMemoryExtractionConcurrencyOverride(parsed.data.concurrency);
-  logger.info('[Memories API] Memory extraction concurrency updated (instance-wide)', {
-    concurrency: parsed.data.concurrency,
-  });
-  return NextResponse.json({ success: true, concurrency: parsed.data.concurrency });
 }

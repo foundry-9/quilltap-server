@@ -141,7 +141,7 @@ export interface ToolResult {
  */
 export interface LoadedMemoriesContext {
   /** Semantic-search memories rendered under `## Relevant Memories`. */
-  semantic?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>;
+  semantic?: Array<{ summary: string; importance: number; score: number; salience: number }>;
   /** Inter-character memories rendered under `## Memories About Other Characters`. */
   interCharacter?: Array<{ aboutCharacterName: string; summary: string; importance: number }>;
   /** Memory recap text injected on chat start or character join, if any. */

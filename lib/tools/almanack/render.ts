@@ -536,6 +536,11 @@ function renderLedgers(push: Push, data: AlmanackReportData): void {
       `floor ${data.instanceSettings.memoryExtractionLimits.softFloor})`,
   );
   push(
+    `- **Memory maintenance**: ${yesNo(data.instanceSettings.memoryMaintenance.enabled)} ` +
+      `(per-character cap ${data.instanceSettings.memoryMaintenance.perCharacterCap}, ` +
+      `${data.instanceSettings.memoryMaintenance.capOverrides} override(s))`,
+  );
+  push(
     `- **Last maintenance sweep**: ${formatDateTime(data.instanceSettings.lastMaintenanceSweepAt)}`,
     '',
   );
@@ -732,13 +737,9 @@ function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push(`- **Enabled**: ${yesNo(fc.autoLock.enabled)}`);
   push(`- **Idle Minutes**: ${fc.autoLock.idleMinutes}`, '');
 
-  push('#### Memory Cascade & Housekeeping', '');
+  push('#### Memory Cascade', '');
   push(`- **On Message Delete**: ${fc.memoryCascade.onMessageDelete}`);
-  push(`- **On Swipe/Regenerate**: ${fc.memoryCascade.onSwipeRegenerate}`);
-  push(`- **Auto Housekeeping**: ${yesNo(fc.autoHousekeeping.enabled)}`);
-  push(`- **Per-Character Cap**: ${fc.autoHousekeeping.perCharacterCap}`);
-  push(`- **Merge Similar**: ${yesNo(fc.autoHousekeeping.mergeSimilar)}`);
-  push(`- **Merge Threshold**: ${fc.autoHousekeeping.autoMergeSimilarThreshold}`, '');
+  push(`- **On Swipe/Regenerate**: ${fc.memoryCascade.onSwipeRegenerate}`, '');
 
   push('#### Salon Behaviour', '');
   push(`- **Answer Confirmation**: ${yesNo(fc.answerConfirmation.enabled)}`);

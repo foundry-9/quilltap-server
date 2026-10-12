@@ -8,8 +8,8 @@
  * write side missed "last night" and "yesterday".
  */
 
-import { resolveWhenPhrase } from '../episodic'
-import { resolveDayReference } from '../day-references'
+import { resolveWhenPhrase } from '../clock'
+import { resolveDayReference } from '../clock'
 import {
   getMemoryTimeZone,
   resetMemoryTimeZoneCacheForTests,
@@ -17,7 +17,7 @@ import {
   startOfZonedDayMs,
   zonedDayBoundsIso,
   zonedTimeToUtcMs,
-} from '../memory-calendar'
+} from '../calendar'
 
 const TZ = 'America/Chicago'
 
@@ -69,7 +69,7 @@ describe('memory calendar — write lands inside read (bug 212)', () => {
     expect(resolveWhenPhrase('last night', anchor, TZ)).toBe('2026-10-11T23:00:00.000Z')
     expect(resolveDayReference('last night', new Date(anchor), TZ)!.timeRange).toEqual({
       from: '2026-10-11T23:00:00.000Z',
-      to: '2026-10-12T11:00:00.000Z',
+      to: '2026-10-12T10:59:59.999Z',
     })
     // "yesterday" is local midnight, not UTC midnight.
     expect(resolveWhenPhrase('yesterday', anchor, TZ)).toBe('2026-10-11T05:00:00.000Z')

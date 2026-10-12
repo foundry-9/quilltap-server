@@ -42,14 +42,18 @@ import {
   type UncensoredFallbackOptions,
 } from './cheap-llm-tasks'
 import { createMemoryWithGate } from './memory-service'
-import { resolveEpisodicAnchors } from './episodic-anchors'
+import { MemoryCandidateSchema, toCreateMemoryOptions, type TargetingTags } from './candidate'
+import { resolveEpisodicAnchors } from './time/anchors'
 import { isFoldEligibleMessage, foldPassRange, sliceFoldWindow } from './fold-window'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
+
+/** The targeting every episode carries: a past, narrow piece of history. */
+const EPISODE_TARGETING: TargetingTags = { temporal: 'past', scope: 'narrow', context: 'history' }
 
 /** Cap on fragment links attached to one episode (per character). */
 const MAX_FRAGMENT_LINKS = 8
@@ -305,25 +309,30 @@ async function runSlice(
     for (const participant of presentParticipants) {
       const characterId = participant.characterId as string
       try {
-        const outcome = await createMemoryWithGate(
-          {
-            characterId,
-            content: episode.narrative,
-            summary: episode.summary,
-            keywords: [...episode.entities.map(e => e.toLowerCase()), 'past', 'scope: narrow', 'history'],
-            importance: episode.importance,
+        // An episode is a past, narrow piece of history: its targeting is a
+        // value on the candidate, written into the row's keywords with the rest.
+        const candidate = MemoryCandidateSchema.parse({
+          content: episode.narrative,
+          summary: episode.summary,
+          keywords: episode.entities.map(e => e.toLowerCase()),
+          targeting: EPISODE_TARGETING,
+          importance: episode.importance,
+          kind: 'episodic',
+          when: episode.when ?? null,
+          entities: episode.entities,
+          subject: { holderId: characterId, aboutId: null },
+          provenance: {
+            source: 'AUTO',
+            witnessedContext: input.inAutonomousRoom ? 'autonomous_room' : 'user_present',
             chatId,
             projectId: input.projectId ?? null,
-            source: 'AUTO',
             sourceMessageId,
-            sourceMessageTimestamp: occurredAt,
-            witnessedContext: input.inAutonomousRoom ? 'autonomous_room' : 'user_present',
-            occurredAt,
-            narrativeTime,
-            entities: episode.entities,
-            kind: 'episodic',
-            tags: [],
+            anchorTimeMs: Date.parse(clock.nowIso),
+            pass: 'episode-fold',
           },
+        })
+        const outcome = await createMemoryWithGate(
+          toCreateMemoryOptions(candidate, { occurredAt, narrativeTime, sourceMessageTimestamp: occurredAt ?? undefined }),
           { userId },
         )
 

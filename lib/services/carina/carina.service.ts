@@ -63,6 +63,7 @@ import { BRAHMA_CARINA_ANSWERER_ID, isBrahmaName } from './brahma-answerer';
 import type { CarinaResult } from './carina.types';
 import type { Character, ChatParticipantBase, ConnectionProfile, MessageEvent } from '@/lib/schemas/types';
 import { buildProgressionsSection } from '@/lib/progressions/prompt-section';
+import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
 /** Maximum detect→execute→re-stream iterations within a single Carina answer. */
 const MAX_TOOL_ITERATIONS = 5;
@@ -71,8 +72,6 @@ const MAX_TOOL_ITERATIONS = 5;
 const CARINA_MEMORY_TOKEN_BUDGET = 1200;
 /** Upper bound on how many recalled memories to consider for the budget. */
 const CARINA_MEMORY_LIMIT = 12;
-/** Floor on memory importance for Carina recall (mirrors the per-turn head). */
-const CARINA_MEMORY_MIN_IMPORTANCE = 0.3;
 
 export interface RunCarinaQueryOptions {
   userId: string;
@@ -220,7 +219,7 @@ async function loadCarinaMemoryRecall(
       // Always the default embedding profile, as the per-turn recall does.
       embeddingProfileId: undefined,
       limit: CARINA_MEMORY_LIMIT,
-      minImportance: CARINA_MEMORY_MIN_IMPORTANCE,
+      minImportance: RECALL_MIN_IMPORTANCE,
     });
     if (results.length === 0) return null;
 

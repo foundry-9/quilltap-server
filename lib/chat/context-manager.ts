@@ -219,6 +219,7 @@ import { getCompiledIdentityStack } from '@/lib/services/system-prompt-compiler/
 import { resolveSelectedSubprompts } from '@/lib/subprompts/subprompts'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
+import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
 
 // Re-export types from extracted modules for backwards compatibility
 export type { OtherParticipantInfo } from './context/system-prompt-builder'
@@ -370,7 +371,7 @@ export interface BuiltContext {
   /** Warnings generated during context building */
   warnings: string[]
   /** Debug info: the actual memories that were included */
-  debugMemories?: Array<{ summary: string; importance: number; score: number; effectiveWeight: number }>
+  debugMemories?: Array<{ summary: string; importance: number; score: number; salience: number }>
   /** Debug info: the inter-character memories that were included (multi-character chats) */
   debugInterCharacterMemories?: Array<{ aboutCharacterName: string; summary: string; importance: number }>
   /** Debug info: the knowledge entries that were included for this turn */
@@ -737,7 +738,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     roleplayTemplate,
     embeddingProfileId,
     skipMemories = false,
-    minMemoryImportance = 0.5,
+    minMemoryImportance = RECALL_MIN_IMPORTANCE,
     // Multi-character options (Phase 3)
     respondingParticipant,
     allParticipants,

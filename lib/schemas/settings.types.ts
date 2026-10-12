@@ -128,30 +128,44 @@ export const MemoryCascadePreferencesSchema = z.object({
 export type MemoryCascadePreferences = z.infer<typeof MemoryCascadePreferencesSchema>;
 
 // ============================================================================
-// AUTO-HOUSEKEEPING SETTINGS (Commonplace Book)
+// MEMORY MAINTENANCE SETTINGS (Commonplace Book — instance_settings.memoryMaintenance)
 // ============================================================================
 
-/**
- * Per-character cap override. When a characterId appears in the map, its cap
- * replaces the global `perCharacterCap` for that character only.
- */
-export const AutoHousekeepingCapOverrideSchema = z.record(z.string(), z.number().int().positive());
-export type AutoHousekeepingCapOverride = z.infer<typeof AutoHousekeepingCapOverrideSchema>;
+/** Smallest and largest per-character cap the maintenance settings accept. */
+export const MEMORY_MAINTENANCE_CAP_MIN = 100;
+export const MEMORY_MAINTENANCE_CAP_MAX = 100_000;
 
-export const AutoHousekeepingSettingsSchema = z.object({
-  /** When true, housekeeping runs automatically (post-write watermark + scheduled sweep). Default off. */
+/** One per-character cap: an integer in [{@link MEMORY_MAINTENANCE_CAP_MIN}, {@link MEMORY_MAINTENANCE_CAP_MAX}]. */
+export const MemoryMaintenanceCapSchema = z
+  .number()
+  .int()
+  .min(MEMORY_MAINTENANCE_CAP_MIN)
+  .max(MEMORY_MAINTENANCE_CAP_MAX);
+
+/**
+ * Per-character cap overrides keyed by characterId. When a character appears
+ * here, its cap replaces the global `perCharacterCap` for that character only.
+ */
+export const MemoryMaintenanceCapOverridesSchema = z.record(z.string(), MemoryMaintenanceCapSchema);
+export type MemoryMaintenanceCapOverrides = z.infer<typeof MemoryMaintenanceCapOverridesSchema>;
+
+/**
+ * Memory maintenance (formerly per-user `chat_settings.autoHousekeepingSettings`,
+ * moved by `move-memory-maintenance-settings-v1`). Stored under
+ * `instance_settings.memoryMaintenance`; read through `resolveMemorySettings`
+ * (`lib/memory/settings.ts`), whose `capFor` is the one cap resolver.
+ * Every default lives here, once.
+ */
+export const MemoryMaintenanceSettingsSchema = z.object({
+  /** When true, maintenance runs automatically (post-write watermark + scheduled sweep). Default off. */
   enabled: z.boolean().default(false),
-  /** Global per-character memory cap. Housekeeping engages when count >= 80% of this. */
-  perCharacterCap: z.number().int().positive().default(2000),
+  /** Global per-character cap on demotable memories. Maintenance engages at 90% of it. */
+  perCharacterCap: MemoryMaintenanceCapSchema.default(2000),
   /** Per-character cap overrides keyed by characterId. */
-  perCharacterCapOverrides: AutoHousekeepingCapOverrideSchema.default({}),
-  /** Similarity threshold for the optional merge-similar pass during housekeeping. */
-  autoMergeSimilarThreshold: z.number().min(0).max(1).default(0.90),
-  /** When true, housekeeping also merges semantically similar memories (on top of retention-policy deletions). */
-  mergeSimilar: z.boolean().default(false),
+  perCharacterCapOverrides: MemoryMaintenanceCapOverridesSchema.default({}),
 });
 
-export type AutoHousekeepingSettings = z.infer<typeof AutoHousekeepingSettingsSchema>;
+export type MemoryMaintenanceSettings = z.infer<typeof MemoryMaintenanceSettingsSchema>;
 
 // ============================================================================
 // MEMORY RECALL SETTINGS (Commonplace Book — recall/read path)
@@ -727,21 +741,6 @@ export const ChatSettingsSchema = z.object({
   memoryCascadePreferences: MemoryCascadePreferencesSchema.default({
     onMessageDelete: 'ASK_EVERY_TIME',
     onSwipeRegenerate: 'DELETE_MEMORIES',
-  }),
-  /** Commonplace Book auto-housekeeping settings (off by default; user opts in from the Commonplace Book tab) */
-  autoHousekeepingSettings: AutoHousekeepingSettingsSchema.default({
-    enabled: false,
-    perCharacterCap: 2000,
-    perCharacterCapOverrides: {},
-    autoMergeSimilarThreshold: 0.90,
-    mergeSimilar: false,
-  }),
-  /** Per-hour extraction rate limit for the Commonplace Book (off by default) */
-  memoryExtractionLimits: MemoryExtractionLimitsSchema.default({
-    enabled: false,
-    maxPerHour: 20,
-    softStartFraction: 0.7,
-    softFloor: 0.7,
   }),
   /** 4.6 Private Character Rooms — user-level defaults for autonomous rooms */
   autonomousRoomSettings: AutonomousRoomSettingsSchema.default({

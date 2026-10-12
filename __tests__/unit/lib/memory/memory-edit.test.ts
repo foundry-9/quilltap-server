@@ -30,7 +30,7 @@ import { updateMemoryWithEmbedding } from '@/lib/memory/memory-service'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { writeCommonplaceDigestsToVault } from '@/lib/file-storage/commonplace-digest-vault-bridge'
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance'
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance'
 
 type Row = Record<string, any>
 

@@ -162,7 +162,7 @@ flowchart TD
 
 From chat messages landing in the database through extraction, gating, reinforcement, and storage.
 
-Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/memory-weighting.ts`
+Key files: `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/scoring/`
 
 ```mermaid
 flowchart TD
@@ -577,7 +577,7 @@ flowchart TD
 | System | Key Files |
 |--------|-----------|
 | **System Prompt** | `lib/chat/context/system-prompt-builder.ts`, `lib/chat/context-manager.ts`, `lib/services/chat-message/context-builder.service.ts`, `lib/services/chat-message/orchestrator.service.ts` |
-| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/memory-weighting.ts` |
+| **Memory Extraction** | `lib/services/chat-message/memory-trigger.service.ts`, `lib/memory/memory-processor.ts`, `lib/memory/cheap-llm-tasks/memory-tasks.ts`, `lib/memory/memory-gate.ts`, `lib/memory/scoring/` |
 | **Memory Storage** | `lib/memory/memory-service.ts`, `lib/embedding/embedding-service.ts`, `lib/embedding/vector-store.ts`, `lib/database/repositories/memories.repository.ts` |
 | **Context Summary** | `lib/chat/context-summary.ts`, `lib/background-jobs/handlers/context-summary.ts`, `lib/memory/cheap-llm-tasks/chat-tasks.ts` |
 | **Scene State** | `lib/background-jobs/handlers/scene-state-tracking.ts`, `lib/memory/cheap-llm-tasks/image-scene-tasks.ts` |

@@ -25,7 +25,7 @@ import {
   sqliteTableExists,
   sqliteColumnExists,
 } from '../lib/database-utils';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 
 const MIGRATION_ID = 'recompute-reinforced-importance-v1';
 const LOG_CONTEXT = `migration.${MIGRATION_ID}`;

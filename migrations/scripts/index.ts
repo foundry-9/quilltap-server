@@ -432,6 +432,8 @@ import { recomputeReinforcedImportanceMigration } from './recompute-reinforced-i
 import { rezoneLegacyMemoryOccurredAtMigration } from './rezone-legacy-memory-occurred-at-v1';
 // Memory: partial supersededById index for the delete chokepoint's digest scrub
 import { addMemoriesSupersededByIndexMigration } from './add-memories-superseded-by-index-v1';
+// Memory: housekeeping settings into instance_settings.memoryMaintenance; dead knobs dropped (refactor phase A)
+import { moveMemoryMaintenanceSettingsMigration } from './move-memory-maintenance-settings-v1';
 
 /**
  * All available migrations.
@@ -880,6 +882,8 @@ export const migrations: Migration[] = [
   rezoneLegacyMemoryOccurredAtMigration,
   // Memory: partial supersededById index (delete chokepoint digest scrub)
   addMemoriesSupersededByIndexMigration,
+  // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
+  moveMemoryMaintenanceSettingsMigration,
 ];
 
 export {
@@ -1306,5 +1310,7 @@ export {
   rezoneLegacyMemoryOccurredAtMigration,
   // Memory: partial supersededById index (delete chokepoint digest scrub)
   addMemoriesSupersededByIndexMigration,
+  // Memory: housekeeping settings → instance_settings.memoryMaintenance; dead memory knobs dropped
+  moveMemoryMaintenanceSettingsMigration,
 };
 

@@ -3,7 +3,7 @@
  * policy shared by the per-turn extractor and the fold-episode pass.
  */
 
-import { resolveEpisodicAnchors } from '../episodic-anchors'
+import { resolveEpisodicAnchors } from '../anchors'
 
 const ANCHOR = '2026-07-20T09:05:00.000Z' // a Monday
 const WINDOW_START = '2026-07-19T18:00:00.000Z'

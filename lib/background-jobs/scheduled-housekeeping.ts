@@ -1,8 +1,9 @@
 /**
  * Scheduled Memory Housekeeping
  *
- * Daily sweep that enqueues a MEMORY_HOUSEKEEPING job for every user whose
- * autoHousekeepingSettings.enabled is true. The job handler decides whether
+ * Daily sweep that, when memory maintenance is enabled
+ * (`instance_settings.memoryMaintenance.enabled`), enqueues MEMORY_HOUSEKEEPING
+ * jobs for every user's characters. The job handler decides whether
  * to actually do anything per character (based on cap + retention rules);
  * this driver only decides *who* gets a job enqueued.
  *
@@ -17,6 +18,7 @@
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueMemoryHousekeepingSweep } from './queue-service';
+import { getMemoryMaintenanceSettings } from '@/lib/instance-settings';
 
 const moduleLogger = logger.child({ module: 'scheduled-housekeeping' });
 
@@ -155,6 +157,12 @@ export async function runScheduledHousekeeping(): Promise<{ usersProcessed: numb
   }
 
   try {
+    const maintenance = await getMemoryMaintenanceSettings();
+    if (!maintenance.enabled) {
+      moduleLogger.debug('Memory maintenance is off; no scheduled housekeeping enqueued');
+      return { usersProcessed: 0, jobsEnqueued: 0 };
+    }
+
     const repos = getRepositories();
     const allChatSettings = await repos.chatSettings.findAll();
 
@@ -162,10 +170,6 @@ export async function runScheduledHousekeeping(): Promise<{ usersProcessed: numb
     let jobsEnqueued = 0;
 
     for (const settings of allChatSettings) {
-      if (!settings.autoHousekeepingSettings?.enabled) {
-        continue;
-      }
-
       try {
         const jobIds = await enqueueMemoryHousekeepingSweep(settings.userId, {
           reason: 'scheduled',

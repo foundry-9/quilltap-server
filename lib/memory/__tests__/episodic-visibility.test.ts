@@ -45,8 +45,7 @@ describe('formatDynamicMemoryHead dates', () => {
         memory: makeMemory({ occurredAt }),
         score: 0.8,
         usedEmbedding: true,
-        effectiveWeight: 0.7,
-        rawWeight: 0.7,
+        salience: 0.7,
       },
     ]
     const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never, SELF_SUBJECT)
@@ -62,8 +61,7 @@ describe('formatDynamicMemoryHead dates', () => {
         }),
         score: 0.8,
         usedEmbedding: true,
-        effectiveWeight: 0.7,
-        rawWeight: 0.7,
+        salience: 0.7,
       },
     ]
     const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never, SELF_SUBJECT)

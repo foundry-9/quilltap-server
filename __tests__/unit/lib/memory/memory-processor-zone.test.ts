@@ -164,7 +164,7 @@ function makeTranscript(extra: {
 
 const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as { getRepositories: jest.Mock }
 
-import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/memory-calendar'
+import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/time/calendar'
 
 const ORIGINAL_ENV_TZ = process.env.QUILLTAP_TIMEZONE
 

@@ -48,17 +48,17 @@ Both sweeps *archive* rather than delete. Once the retention-policy sweep is com
 
 ### Enable automatic housekeeping
 
-Turns the feature on. When off, no sweeps happen automatically — though the **Run housekeeping now** button still works. Turn it on only after you have reviewed the cap below. Turning it on does not immediately sweep; it schedules the first sweep for the next daily run or the next watermark trigger, whichever comes first.
+Turns the feature on. Like every other Commonplace Book setting, it belongs to the whole instance rather than to any one user's chat settings, so whoever flips it flips it for the house. When off, no sweeps happen automatically — though the **Run housekeeping now** button still works. Turn it on only after you have reviewed the cap below. Turning it on does not immediately sweep; it schedules the first sweep for the next daily run or the next watermark trigger, whichever comes first.
 
 ### Per-character cap
 
-The number of **automatic** memories a character may keep on the active shelf before housekeeping engages. Archived memories, memories you wrote by hand, and consolidation digests do not count against it. Default **2000**. Acceptable range 100 – 100,000. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
+The number of **automatic** memories a character may keep on the active shelf before housekeeping engages. Archived memories, memories you wrote by hand, and consolidation digests do not count against it. Default **2000**. Acceptable range 100 – 100,000 — the same bounds govern the overrides below and the **Run housekeeping now** dialog, so no corner of the house keeps a different ledger. The reactive trigger fires at 90% of this cap — so a 2000-memory cap engages the sweep at 1800.
 
 If you want a different cap for a particular character, open **Per-character overrides** beneath the cap. Each character is listed with two figures: how many memories are *counted* against the cap, and how many are *protected* (hand-written and digests) and so exempt. The counted figure turns red when it is over that character's cap. An override takes precedence over the global cap; leave the box blank and the character uses the global one.
 
 ### Merging similar memories (retired)
 
-Earlier versions offered a tick-box to merge near-identical memories during the sweep. That job now belongs to [Memory Consolidation](memory-consolidation.md), which combines whole clusters of related memories into digests and keeps the originals in the archive. The old setting is still read from saved configuration, but the sweep ignores it. **Memory Deduplication**, further down this tab, still merges pairs on demand.
+Earlier versions offered a tick-box to merge near-identical memories during the sweep. That job now belongs to [Memory Consolidation](memory-consolidation.md), which combines whole clusters of related memories into digests and keeps the originals in the archive. The old setting has been cleared out of saved configuration altogether, along with its threshold. **Memory Deduplication**, further down this tab, still merges pairs on demand.
 
 ### Deleting archived memories
 

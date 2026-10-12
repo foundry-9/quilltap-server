@@ -46,7 +46,7 @@ import {
   extractSelfMemoriesFromTurn,
 } from '@/lib/memory/cheap-llm-tasks/memory-tasks'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { CheapLLMTaskResult, MemoryCandidate } from '@/lib/memory/cheap-llm-tasks/types'
+import type { CheapLLMTaskResult, MemoryDraft } from '@/lib/memory/cheap-llm-tasks/types'
 import {
   AMY_ID,
   FRIDAY_ID,
@@ -71,8 +71,8 @@ const describeIfConfigured = MODEL ? describe : describe.skip
 async function otherAbout(observerId: string, transcript: ReturnType<typeof buildProposalNoReplyTranscript>, subjects: typeof fridaySubjects) {
   const res = (await extractOtherMemoriesFromTurn(
     transcript, observerId, subjects, SELECTION, 'eval-user', undefined, 'eval-chat', 16000,
-  )) as CheapLLMTaskResult<Map<string, MemoryCandidate[]>>
-  return res.result ?? new Map<string, MemoryCandidate[]>()
+  )) as CheapLLMTaskResult<Map<string, MemoryDraft[]>>
+  return res.result ?? new Map<string, MemoryDraft[]>()
 }
 
 describeIfConfigured('memory consent eval (live model)', () => {
@@ -87,7 +87,7 @@ describeIfConfigured('memory consent eval (live model)', () => {
       const transcript = buildProposalNoReplyTranscript()
       const selfRes = (await extractSelfMemoriesFromTurn(
         transcript, OWEN_ID, 'ALREADY ESTABLISHED about Owen\n[IDENTITY] Runs the farm.', SELECTION, 'eval-user', undefined, 'eval-chat', 16000,
-      )) as CheapLLMTaskResult<MemoryCandidate[]>
+      )) as CheapLLMTaskResult<MemoryDraft[]>
       const fromFriday = await otherAbout(FRIDAY_ID, transcript, fridaySubjects)
       const fromAmy = await otherAbout(AMY_ID, transcript, [
         fridaySubjects[1],
@@ -126,7 +126,7 @@ describeIfConfigured('memory consent eval (live model)', () => {
       const fromAmyAboutOwen = await otherAbout(AMY_ID, buildCustodyTranscript(), amySubjects)
       const amySelf = (await extractSelfMemoriesFromTurn(
         buildCustodyTranscript(), AMY_ID, 'ALREADY ESTABLISHED about Amy\n[IDENTITY] Owen\'s wife.', SELECTION, 'eval-user', undefined, 'eval-chat', 16000,
-      )) as CheapLLMTaskResult<MemoryCandidate[]>
+      )) as CheapLLMTaskResult<MemoryDraft[]>
       const all = [...(fromAmyAboutOwen.get(OWEN_ID) ?? []), ...(amySelf.result ?? [])].map((c) => c.content)
       const keys = all.filter((c) => /\bkeys?\b/i.test(c))
       if (keys.length > 0 && keys.some((c) => /breakfast/i.test(c))) passes++

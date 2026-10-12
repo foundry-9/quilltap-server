@@ -7,6 +7,7 @@
 
 import { getRepositories, type RepositoryContainer } from '@/lib/repositories/factory'
 import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memory-service'
+import { salience } from '@/lib/memory/scoring'
 import { logger } from '@/lib/logger'
 import type { ChatParticipantBaseInput } from '@/lib/schemas/chat.types'
 
@@ -106,6 +107,9 @@ async function loadMemoriesForParticipant(
   limit: number
 ): Promise<ParticipantMemory[]> {
   const memoryMap = new Map<string, ParticipantMemory>()
+  // Salience of each chosen memory: the order the greeting reads them in.
+  const salienceById = new Map<string, number>()
+  const nowMs = Date.now()
 
   // 1. Get recent memories specifically about this participant (sorted by importance, then recency)
   // Hot tier only; consolidated digests lead (stable partition keeps the
@@ -130,6 +134,7 @@ async function loadMemoriesForParticipant(
         summary: memory.summary,
         importance: memory.importance,
       })
+      salienceById.set(memory.id, salience(memory, { nowMs }).salience)
     }
   }
 
@@ -166,6 +171,7 @@ async function loadMemoriesForParticipant(
           summary: result.memory.summary,
           importance: result.memory.importance,
         })
+        salienceById.set(result.memory.id, salience(result.memory, { nowMs }).salience)
       }
     }
 
@@ -198,6 +204,7 @@ async function loadMemoriesForParticipant(
             summary: memory.summary,
             importance: memory.importance,
           })
+          salienceById.set(memory.id, salience(memory, { nowMs }).salience)
         }
         // Stop if we have enough
         if (memoryMap.size >= limit) break
@@ -211,9 +218,9 @@ async function loadMemoriesForParticipant(
     }
   }
 
-  // 4. Sort by importance and take top N
+  // 4. Sort by salience (reinforced importance × time decay) and take top N
   const selected = Array.from(memoryMap.entries())
-    .sort((a, b) => b[1].importance - a[1].importance)
+    .sort((a, b) => (salienceById.get(b[0]) ?? 0) - (salienceById.get(a[0]) ?? 0))
     .slice(0, limit)
 
   // The greeting is composed from exactly these — they count as accessed.

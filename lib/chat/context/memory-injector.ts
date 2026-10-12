@@ -9,7 +9,8 @@ import { createHash } from 'node:crypto'
 import type { Provider, Memory } from '@/lib/schemas/types'
 import type { SceneState } from '@/lib/schemas/chat.types'
 import { estimateTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
-import { calculateEffectiveWeight, formatRelativeAge } from '@/lib/memory/memory-weighting'
+import { salience } from '@/lib/memory/scoring'
+import { formatMemoryAge } from '@/lib/memory/time'
 import type { SemanticSearchResult } from '@/lib/memory/memory-service'
 
 /**
@@ -256,14 +257,13 @@ export interface DebugMemoryInfo {
   summary: string
   importance: number
   score: number
-  effectiveWeight: number
-  /** No-floor ranking weight (importance × time decay) — the term the blend uses. */
-  rawWeight?: number
+  /** Salience (reinforcedImportance × time decay, no floor) — the worth term the blend uses. */
+  salience: number
   /** Combined recall-context multiplier, when a recallContext drove the ranking. */
   recallMultiplier?: number
   /** Labels for the adjustments that fired (e.g. `narrow✓`, `past↓`). */
   recallFired?: string[]
-  /** Ranking blend (RELEVANCE·cosine + PRIORITY·rawWeight) before the recall multiplier. */
+  /** Ranking blend (RELEVANCE·cosine + PRIORITY·salience) before the recall multiplier. */
   blendedBefore?: number
   /** Blended score after the recall multiplier (what the head ranks on). */
   blendedAfter?: number
@@ -420,10 +420,10 @@ export function formatMemoriesForContext(
   let memoriesUsed = 0
   const debugMemories: DebugMemoryInfo[] = []
 
-  // Calculate effective weights and sort by weight (primary), score (tiebreaker)
+  // Sort by salience (primary), score (tiebreaker)
   const memoriesWithWeight = memories.map(r => ({
     ...r,
-    weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+    weight: r.salience ?? salience(r.memory).salience,
   }))
 
   const sortedMemories = memoriesWithWeight.sort((a, b) => {
@@ -438,7 +438,7 @@ export function formatMemoriesForContext(
     // Use full content (not summary) so the whisper carries the same nuance the
     // model formed at extraction time. Summary is the cache-friendly form for
     // recap LLM inputs, but the per-line whisper has the budget for the body.
-    const age = formatRelativeAge(memory, now)
+    const age = formatMemoryAge(memory, now)
     const narrative = memory.narrativeTime?.trim()
     const body = memory.content?.trim() || memory.summary
     const meta = formatMemoryMetadataTag({
@@ -463,7 +463,7 @@ export function formatMemoriesForContext(
       summary: memory.summary,
       importance: memory.importance,
       score,
-      effectiveWeight: weight,
+      salience: weight,
     })
   }
 
@@ -544,22 +544,22 @@ export function formatInterCharacterMemoriesForContext(
     const relevanceEntries = (relevanceByCharacter.get(characterId) ?? [])
       .map(r => ({
         memory: r.memory,
-        weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+        weight: r.salience ?? salience(r.memory).salience,
         relevance: r.score as number | null,
       }))
       .sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
 
-    // Importance half — sorted by effective weight, excluding ids already in the
+    // Importance half — sorted by salience, excluding ids already in the
     // relevance half (dedup leans toward keeping the relevance copy).
     const relevanceIds = new Set(relevanceEntries.map(e => e.memory.id))
     const importanceEntries = (importanceByCharacter.get(characterId) ?? [])
       .filter(m => !relevanceIds.has(m.id))
       .map(m => ({
         memory: m,
-        weight: calculateEffectiveWeight(m).effectiveWeight,
+        weight: salience(m).salience,
         relevance: null as number | null,
       }))
-      // Consolidated digests lead, then effective weight.
+      // Consolidated digests lead, then salience.
       .sort((a, b) => {
         const da = a.memory.source === 'CONSOLIDATED' ? 1 : 0
         const db = b.memory.source === 'CONSOLIDATED' ? 1 : 0
@@ -576,7 +576,7 @@ export function formatInterCharacterMemoriesForContext(
     }
 
     for (const { memory, weight, relevance } of ordered) {
-      const age = formatRelativeAge(memory, now)
+      const age = formatMemoryAge(memory, now)
       const body = memory.content?.trim() || memory.summary
       const meta = formatMemoryMetadataTag({
         importance: memory.importance,
@@ -671,7 +671,7 @@ export function formatFrozenMemoryArchive(
       summary: memory.summary,
       importance: memory.importance,
       score: 0,
-      effectiveWeight: 0,
+      salience: 0,
     })
   }
 
@@ -710,7 +710,7 @@ export function formatDynamicMemoryHead(
   const ranked = memories
     .map(r => ({
       ...r,
-      weight: r.effectiveWeight ?? calculateEffectiveWeight(r.memory).effectiveWeight,
+      weight: r.salience ?? salience(r.memory).salience,
     }))
     .sort((a, b) => {
       // When recall adjustments are present (a recallContext was supplied to
@@ -737,16 +737,16 @@ export function formatDynamicMemoryHead(
   let memoriesUsed = 0
 
   const now = new Date()
-  for (const { memory, score, weight, rawWeight, recallAdjustment } of ranked) {
+  for (const { memory, score, weight, recallAdjustment } of ranked) {
     const summary = memory.summary?.trim() || memory.content?.trim() || ''
     if (!summary) continue
     const idTag = `[m_${memory.id.slice(0, 4)}]`
     // Episodic spine: date every head entry. The age label reads off the
-    // event clock (occurredAt ?? write clock — see formatRelativeAge), and
+    // event clock (occurredAt ?? write clock — see formatMemoryAge), and
     // narrativeTime rides along verbatim so fictional-timeline anchors reach
     // the model too. Without this, even a retrieval hit couldn't confirm
     // "last week".
-    const age = formatRelativeAge(memory, now)
+    const age = formatMemoryAge(memory, now)
     const narrative = memory.narrativeTime?.trim()
     const whenTag = narrative ? `[${age} · ${narrative}]` : `[${age}]`
     const meta = formatMemoryMetadataTag({
@@ -770,8 +770,7 @@ export function formatDynamicMemoryHead(
       summary: memory.summary,
       importance: memory.importance,
       score,
-      effectiveWeight: weight,
-      rawWeight,
+      salience: weight,
       recallMultiplier: recallAdjustment?.multiplier,
       recallFired: recallAdjustment?.fired,
       blendedBefore: recallAdjustment?.blendedBefore,

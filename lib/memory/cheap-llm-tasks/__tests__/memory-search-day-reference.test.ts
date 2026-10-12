@@ -38,7 +38,7 @@ jest.mock('@/lib/logger', () => {
 import { executeCheapLLMTask } from '../core-execution';
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
 import type { ChatMessage } from '../types';
-import { resetMemoryTimeZoneCacheForTests, setCachedInstanceTimeZone } from '@/lib/memory/memory-calendar';
+import { resetMemoryTimeZoneCacheForTests, setCachedInstanceTimeZone } from '@/lib/memory/time/calendar';
 
 const SELECTION: CheapLLMSelection = {
   provider: 'OPENAI',
@@ -129,7 +129,7 @@ describe('extractMemorySearchKeywords — deterministic day-reference merge', ()
     nextResponse = JSON.stringify({ keywords: ['mission'], retrospective: false, timeRange: null });
     const r = await run(userSays('tell me about yesterday'));
     expect(r.retrospective).toBe(true);
-    expect(r.timeRange).toEqual({ from: localMidnight(-1), to: localMidnight(0) });
+    expect(r.timeRange).toEqual({ from: localMidnight(-1), to: new Date(Date.parse(localMidnight(0)) - 1).toISOString() });
   });
 
   it('leaves the LLM result untouched on a fictional (narrative) timeline', async () => {
@@ -244,7 +244,7 @@ describe('extractMemorySearchKeywords — one memory calendar (bug 212)', () => 
   it('resolves the deterministic scan on the instance calendar', async () => {
     nextResponse = JSON.stringify({ keywords: ['lighthouse'], retrospective: false, timeRange: null });
     const r = await runAt(userSays('do you remember last night at the lighthouse?'));
-    expect(r.timeRange).toEqual({ from: '2026-10-11T23:00:00.000Z', to: '2026-10-12T11:00:00.000Z' });
+    expect(r.timeRange).toEqual({ from: '2026-10-11T23:00:00.000Z', to: '2026-10-12T10:59:59.999Z' });
   });
 
   it('renders TODAY on the instance calendar', async () => {

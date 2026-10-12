@@ -7,6 +7,7 @@ import { fetchJson } from '@/lib/fetch-helpers'
 import { showSuccessToast } from '@/lib/toast'
 import { FormActions } from '@/components/ui/FormActions'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { importanceBand } from '@/lib/memory/scoring/importance'
 
 interface Tag {
   id: string
@@ -96,11 +97,8 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
     handleFormSubmit(new Event('submit') as any)
   }
 
-  const importanceLabel = form.formData.importance >= 0.7
-    ? 'High'
-    : form.formData.importance >= 0.4
-      ? 'Medium'
-      : 'Low'
+  const band = importanceBand(form.formData.importance)
+  const importanceLabel = band === 'high' ? 'High' : band === 'medium' ? 'Medium' : 'Low'
 
   return (
     <div className="qt-dialog-overlay p-4">

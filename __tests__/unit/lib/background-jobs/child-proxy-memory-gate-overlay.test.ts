@@ -77,7 +77,7 @@ import {
 import { createMemoryWithGate } from '@/lib/memory/memory-service';
 import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import type { Memory } from '@/lib/schemas/types';
 import type { ChildWritePayload } from '@/lib/background-jobs/ipc-types';
 

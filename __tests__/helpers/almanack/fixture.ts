@@ -303,12 +303,6 @@ export function makeAlmanackFixture(
       thinkingDisplay: { defaultVisible: true, defaultCollapsed: true },
       answerConfirmation: { enabled: false },
       autonomousRoomDefaults: { dailyTokenBudget: 1_000_000 },
-      autoHousekeeping: {
-        enabled: true,
-        perCharacterCap: 2000,
-        mergeSimilar: false,
-        autoMergeSimilarThreshold: 0.9,
-      },
       textReplacements: { enabled: true, rules: 12, enabledRules: 10 },
       composerSpellcheck: true,
       impersonationVoiceMode: 'ask',
@@ -327,6 +321,7 @@ export function makeAlmanackFixture(
         softStartFraction: 0.7,
         softFloor: 0.7,
       },
+      memoryMaintenance: { enabled: true, perCharacterCap: 2000, capOverrides: 1 },
       lastMaintenanceSweepAt: '2026-08-05T03:00:00.000Z',
     },
     backgroundJobs: {

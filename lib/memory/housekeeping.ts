@@ -12,7 +12,8 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { Memory } from '@/lib/schemas/types'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
-import { calculateProtectionScore } from './memory-weighting'
+import { filterImportance, protection } from './scoring'
+import { MEMORY_SETTING_DEFAULTS } from './settings-defaults'
 import { deleteMemoriesWithUnlinkBatch } from './memory-gate'
 import { getMemoryConsolidationSettings } from '@/lib/instance-settings'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
@@ -20,16 +21,10 @@ import { invalidateFrozenArchive } from './frozen-archive-cache'
 import { logger } from '@/lib/logger'
 
 /**
- * Protection score below which a memory is a deletion candidate.
- * Memories above this threshold are preserved by the housekeeping gate.
- */
-const PROTECTION_THRESHOLD = 0.5
-
-/**
  * Housekeeping options for memory cleanup
  */
 export interface HousekeepingOptions {
-  /** Maximum number of memories to keep (default: 1000) */
+  /** Cap on demotable (hot AUTO) memories (default: the maintenance schema's `perCharacterCap`, 2000) */
   maxMemories?: number
   /** Delete memories older than this many months if not important (default: 6) */
   maxAgeMonths?: number
@@ -37,16 +32,8 @@ export interface HousekeepingOptions {
   maxInactiveMonths?: number
   /** Delete memories below this importance threshold (default: 0.3) */
   minImportance?: number
-  /** Retired in favour of consolidation: accepted, ignored (default: false) */
-  mergeSimilar?: boolean
-  /** Similarity threshold for merging (default: 0.9) */
-  mergeThreshold?: number
   /** Preview changes without applying (default: false) */
   dryRun?: boolean
-  /** User ID for embedding operations (required for merge) */
-  userId?: string
-  /** Embedding profile ID */
-  embeddingProfileId?: string
 }
 
 /**
@@ -57,8 +44,6 @@ export interface HousekeepingResult {
   deleted: number
   /** Number of hot memories moved to the cold tier */
   demoted: number
-  /** Retired: always 0. Kept so older callers keep reading a number. */
-  merged: number
   /** Number of memories kept */
   kept: number
   /** Hot memories before the sweep (demotable + protected) */
@@ -85,8 +70,6 @@ export interface HousekeepingResult {
   deletedIds: string[]
   /** IDs of memories moved to the cold tier */
   demotedIds: string[]
-  /** Retired: always empty */
-  mergedIds: string[]
   /** Reasons for each demotion/deletion */
   details: HousekeepingDetail[]
 }
@@ -96,7 +79,7 @@ export interface HousekeepingResult {
  */
 export interface HousekeepingDetail {
   memoryId: string
-  action: 'deleted' | 'demoted' | 'merged' | 'kept'
+  action: 'deleted' | 'demoted' | 'kept'
   reason: string
   summary?: string
 }
@@ -104,13 +87,11 @@ export interface HousekeepingDetail {
 /**
  * Default housekeeping options based on PLAN.md retention policy
  */
-const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingProfileId'>> = {
-  maxMemories: 2000,
+const DEFAULT_OPTIONS: Required<HousekeepingOptions> = {
+  maxMemories: MEMORY_SETTING_DEFAULTS.maintenance.perCharacterCap,
   maxAgeMonths: 6,
   maxInactiveMonths: 6,
   minImportance: 0.3,
-  mergeSimilar: false,
-  mergeThreshold: 0.9,
   dryRun: false,
 }
 
@@ -127,16 +108,11 @@ const DEFAULT_OPTIONS: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingP
  * `source === 'MANUAL'` remains a hard override — explicit user intent is
  * treated as durable regardless of what the signals say.
  *
- * See `calculateProtectionScore` in memory-weighting.ts for the full formula.
+ * See `protection` in `lib/memory/scoring` for the full formula; it also
+ * reports MANUAL rows and CONSOLIDATED digests as protected.
  */
 function isProtectedMemory(memory: Memory, now: Date): boolean {
-  // MANUAL is explicit user intent; CONSOLIDATED digests are the surviving
-  // record of their archived members. Neither is ever demoted by policy.
-  if (!isDemotableSource(memory)) {
-    return true
-  }
-  const { score } = calculateProtectionScore(memory, undefined, now)
-  return score >= PROTECTION_THRESHOLD
+  return protection(memory, { nowMs: now.getTime() }).protected
 }
 
 /**
@@ -155,16 +131,16 @@ function isDemotableSource(memory: Pick<Memory, 'source'>): boolean {
 function shouldDeleteMemory(
   memory: Memory,
   now: Date,
-  options: Required<Omit<HousekeepingOptions, 'userId' | 'embeddingProfileId'>>,
+  options: Required<HousekeepingOptions>,
   isProtected: boolean
 ): { shouldDelete: boolean; reason: string } {
   if (isProtected) {
     return { shouldDelete: false, reason: 'protected' }
   }
 
-  // Use reinforcedImportance for threshold checks (falls back to importance for old memories)
-  const effectiveImportance = memory.reinforcedImportance ?? memory.importance
-  if (effectiveImportance < options.minImportance) {
+  // reinforcedImportance (falling back to importance), as every importance filter reads it
+  const importanceForFilter = filterImportance(memory)
+  if (importanceForFilter < options.minImportance) {
     const createdAt = new Date(memory.createdAt)
     const ageMonths = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24 * 30)
 
@@ -203,8 +179,7 @@ function shouldDeleteMemory(
  * `memoryConsolidation.coldRetentionDays` (default: never).
  *
  * - Pass 1 demotes low-importance, old, inactive rows.
- * - Pass 2 (`mergeSimilar`) is retired in favour of consolidation; the option is
- *   still accepted for back-compat but does nothing.
+ * - (The old merge-similar pass is gone; consolidation combines rows.)
  * - Pass 3 demotes demotable rows (hot AUTO), lowest protection score first,
  *   until they fit the cap. MANUAL rows and digests never count against the
  *   cap (bug 210).
@@ -254,7 +229,6 @@ export async function runHousekeeping(
   const result: HousekeepingResult = {
     deleted: 0,
     demoted: 0,
-    merged: 0,
     kept: 0,
     totalBefore,
     totalAfter: totalBefore,
@@ -265,7 +239,6 @@ export async function runHousekeeping(
     capUsed: opts.maxMemories,
     deletedIds: [],
     demotedIds: [],
-    mergedIds: [],
     details: [],
   }
 
@@ -279,20 +252,16 @@ export async function runHousekeeping(
     dryRun: opts.dryRun,
   })
 
-  if (opts.mergeSimilar) {
-    logger.debug('[Housekeeping] mergeSimilar is retired in favour of consolidation; skipping the merge pass', {
-      characterId,
-    })
-  }
-
   const demoteSet = new Set<string>()
 
   if (memories.length > 0) {
-    // Sort memories by importance (descending) then by creation date (ascending)
-    // This ensures we keep the most important and newest memories
+    // Visit memories by reinforced importance (descending), then newest first.
+    // Each row is decided on its own, so this only orders the report.
     const sortedMemories = [...memories].sort((a, b) => {
-      if (b.importance !== a.importance) {
-        return b.importance - a.importance
+      const ia = filterImportance(a)
+      const ib = filterImportance(b)
+      if (ib !== ia) {
+        return ib - ia
       }
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     })
@@ -341,7 +310,7 @@ export async function runHousekeeping(
       const scored: Array<{ memory: Memory; score: number }> = []
       for (let i = 0; i < remainingDemotable.length; i++) {
         const memory = remainingDemotable[i]
-        const { score } = calculateProtectionScore(memory, undefined, now)
+        const { score } = protection(memory, { nowMs: now.getTime() })
         scored.push({ memory, score })
         if ((i + 1) % YIELD_INTERVAL === 0) {
           await yieldTick()
@@ -463,33 +432,4 @@ export async function getHousekeepingPreview(
   options: HousekeepingOptions = {}
 ): Promise<HousekeepingResult> {
   return runHousekeeping(characterId, { ...options, dryRun: true })
-}
-
-/**
- * Check if housekeeping is needed for a character
- *
- * Returns true if:
- * - Demotable (hot AUTO) memory count exceeds 80% of the limit (bug 210)
- * - There are memories matching demotion or retention criteria
- */
-export async function needsHousekeeping(
-  characterId: string,
-  options: Omit<HousekeepingOptions, 'dryRun'> = {}
-): Promise<boolean> {
-  const repos = getRepositories()
-  const maxMemories = options.maxMemories ?? DEFAULT_OPTIONS.maxMemories
-
-  // Quick check: the demotable count the cap is measured against
-  const { hotTotal, demotable } = await repos.memories.countCapBreakdown(characterId)
-  if (demotable >= maxMemories * 0.8) {
-    return true
-  }
-
-  // More thorough check: preview housekeeping
-  if (hotTotal > 0) {
-    const preview = await getHousekeepingPreview(characterId, options)
-    return preview.demoted + preview.deleted > 0
-  }
-
-  return false
 }

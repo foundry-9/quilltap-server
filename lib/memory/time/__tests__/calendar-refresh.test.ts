@@ -9,8 +9,8 @@ jest.mock('@/lib/logger', () => ({
 }))
 
 import { getRepositories } from '@/lib/repositories/factory'
-import { refreshMemoryTimeZone } from '../memory-calendar-refresh'
-import { getMemoryTimeZone, resetMemoryTimeZoneCacheForTests } from '../memory-calendar'
+import { refreshMemoryTimeZone } from '../calendar-refresh'
+import { getMemoryTimeZone, resetMemoryTimeZoneCacheForTests } from '../calendar'
 
 const mockedRepos = getRepositories as jest.MockedFunction<typeof getRepositories>
 

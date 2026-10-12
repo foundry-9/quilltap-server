@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod'
-import { CONTEXT_VALUES, RECALL_MULTIPLIERS, RECALL_TUNING_DEFAULTS, TEMPORAL_VALUES, type BoostGate } from './recall-tags'
+import { CONTEXT_VALUES, DEFAULT_RECALL_TUNING, RECALL_MULTIPLIERS, TEMPORAL_VALUES, type BoostGate } from './recall-tags'
 
 export type { BoostGate } from './recall-tags'
 
@@ -64,10 +64,8 @@ export interface ResolvedRecallTuning {
   backgroundReserve: number
 }
 
-export const DEFAULT_RECALL_TUNING: ResolvedRecallTuning = Object.freeze({
-  multipliers: Object.freeze({ ...RECALL_MULTIPLIERS }) as RecallMultiplierTable,
-  ...RECALL_TUNING_DEFAULTS,
-})
+/** The shipped tuning — defined once, in `recall-tags.ts`. */
+export { DEFAULT_RECALL_TUNING }
 
 const multiplierOverrideShape = Object.fromEntries(
   (Object.keys(RECALL_MULTIPLIERS) as RecallMultiplierKey[]).map(key => [

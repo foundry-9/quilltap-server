@@ -14,7 +14,7 @@ import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
 import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
-import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh';
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
 type EmbeddingEntityType = 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';

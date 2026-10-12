@@ -95,7 +95,7 @@ describe('searchMemoriesSemantic — text-search fallback honours recall options
     updateAccessTimeBulk: jest.Mock
   }
   let searchMemoriesSemantic: typeof import('@/lib/memory/memory-service').searchMemoriesSemantic
-  let calculateEffectiveWeight: typeof import('@/lib/memory/memory-weighting').calculateEffectiveWeight
+  let salience: typeof import('@/lib/memory/scoring').salience
 
   const inside = makeMemory({ id: 'in-window', content: 'We walked to the harbour', summary: 'harbour walk', occurredAt: '2026-04-10T12:00:00.000Z' })
   const outside = makeMemory({ id: 'out-window', content: 'The harbour was foggy', summary: 'harbour fog', occurredAt: '2026-03-01T12:00:00.000Z' })
@@ -121,7 +121,7 @@ describe('searchMemoriesSemantic — text-search fallback honours recall options
 
     jest.isolateModules(() => {
       searchMemoriesSemantic = require('@/lib/memory/memory-service').searchMemoriesSemantic
-      calculateEffectiveWeight = require('@/lib/memory/memory-weighting').calculateEffectiveWeight
+      salience = require('@/lib/memory/scoring').salience
     })
   })
 
@@ -160,8 +160,8 @@ describe('searchMemoriesSemantic — text-search fallback honours recall options
     const clockMs = Date.parse('2026-04-12T00:00:00.000Z')
     const results = await searchMemoriesSemantic('char-1', 'harbour walk', { userId: 'u', weightClockMs: clockMs })
     const hit = results.find(r => r.memory.id === 'in-window')!
-    const expected = calculateEffectiveWeight(hit.memory, undefined, new Date(clockMs))
-    expect(hit.effectiveWeight).toBeCloseTo(expected.effectiveWeight, 10)
+    const expected = salience(hit.memory, { nowMs: clockMs })
+    expect(hit.salience).toBeCloseTo(expected.salience, 10)
   })
 
   it('unions extra probes and entity anchors into the candidate pool', async () => {

@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { MEMORY_CAP_BOUNDS, MEMORY_SETTING_DEFAULTS } from '@/lib/memory/settings-defaults'
 
 interface HousekeepingDetail {
   memoryId: string
-  action: 'deleted' | 'demoted' | 'merged' | 'kept'
+  action: 'deleted' | 'demoted' | 'kept'
   reason: string
   summary?: string
 }
@@ -34,7 +35,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
   const [error, setError] = useState<string | null>(null)
 
   // Options state
-  const [maxMemories, setMaxMemories] = useState(1000)
+  const [maxMemories, setMaxMemories] = useState<number>(MEMORY_SETTING_DEFAULTS.maintenance.perCharacterCap)
   const [maxAgeMonths, setMaxAgeMonths] = useState(6)
   const [minImportance, setMinImportance] = useState(0.3)
 
@@ -137,9 +138,9 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               <input
                 type="number"
                 value={maxMemories}
-                onChange={(e) => setMaxMemories(parseInt(e.target.value) || 1000)}
-                min={10}
-                max={10000}
+                onChange={(e) => setMaxMemories(parseInt(e.target.value) || MEMORY_SETTING_DEFAULTS.maintenance.perCharacterCap)}
+                min={MEMORY_CAP_BOUNDS.min}
+                max={MEMORY_CAP_BOUNDS.max}
                 className="qt-input"
               />
               <div className="mt-1 qt-text-xs space-y-0.5">

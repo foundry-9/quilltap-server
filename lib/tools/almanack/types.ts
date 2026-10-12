@@ -285,12 +285,6 @@ export interface FeatureConfigInfo {
   thinkingDisplay: { defaultVisible: boolean; defaultCollapsed: boolean };
   answerConfirmation: { enabled: boolean };
   autonomousRoomDefaults: Record<string, unknown>;
-  autoHousekeeping: {
-    enabled: boolean;
-    perCharacterCap: number;
-    mergeSimilar: boolean;
-    autoMergeSimilarThreshold: number;
-  };
   textReplacements: { enabled: boolean; rules: number; enabledRules: number };
   composerSpellcheck: boolean;
   impersonationVoiceMode: 'off' | 'ask' | 'always';
@@ -309,6 +303,11 @@ export interface InstanceSettingsInfo {
     maxPerHour: number;
     softStartFraction: number;
     softFloor: number;
+  };
+  memoryMaintenance: {
+    enabled: boolean;
+    perCharacterCap: number;
+    capOverrides: number;
   };
   lastMaintenanceSweepAt: string | null;
 }

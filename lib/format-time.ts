@@ -176,7 +176,7 @@ export function formatRelativeAge(ts: number, nowMs: number = Date.now()): strin
  * Distinct from {@link formatRelativeAge}, which counts seconds and minutes
  * for a readout that ticks. This is the ladder for things that happened days
  * or months ago — a memory's age in recall, a garment last worn. The memory
- * injector's label (`formatRelativeAge` in `lib/memory/memory-weighting.ts`)
+ * injector's label (`formatMemoryAge` in `lib/memory/time/age-label.ts`)
  * delegates here so the two readings cannot drift.
  *
  * `nowMs` is injectable so callers (and their tests) can pin the clock.

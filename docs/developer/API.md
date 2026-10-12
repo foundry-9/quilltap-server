@@ -4285,14 +4285,13 @@ Preview housekeeping actions (dry run).
 
 **Query Parameters**:
 - `characterId` (required) - Character to preview housekeeping for
-- `maxMemories` - Maximum memories to keep (default: 1000)
-- `maxAgeMonths` - Maximum age in months (default: 6)
-- `minImportance` - Minimum importance threshold (default: 0.3)
-- `mergeSimilar` - Whether to merge similar memories (default: false)
+- `maxMemories` - Cap on demotable memories, an integer 100–100,000 (default: the character's cap from the `memoryMaintenance` instance setting, `capFor(characterId)`)
+- `maxAgeMonths` - Maximum age in months
+- `minImportance` - Minimum (reinforced) importance threshold
 
 #### `POST /api/v1/memories?action=housekeep`
 
-Run housekeeping (deduplication, summarization) on memories.
+Run housekeeping (cap demotion and cold retention) on one character's memories. Merging similar memories is not part of housekeeping; that is the consolidation pass.
 
 **Query Parameters**:
 - `characterId` (required) - Character to housekeep memories for
@@ -4301,16 +4300,15 @@ Run housekeeping (deduplication, summarization) on memories.
 
 ```json
 {
-  "maxMemories": 1000,
+  "maxMemories": 2000,
   "maxAgeMonths": 6,
-  "minImportance": 0.3,
-  "mergeSimilar": true
+  "minImportance": 0.3
 }
 ```
 
-**Response** (both verbs): `{ success, dryRun, result: { demoted, deleted, merged, kept, totalBefore,
-totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds, deletedIds, mergedIds,
-details? } }`. `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
+**Response** (both verbs): `{ success, dryRun, result: { demoted, deleted, kept, totalBefore,
+totalAfter, hotTotal, demotable, protected, capUsed, coldCount, demotedIds, deletedIds,
+details? } }` (`merged` / `mergedIds` / `wouldMerge` were removed in 4.10). `maxMemories` caps **demotable** rows only — hot AUTO rows; `protected` counts the hot
 MANUAL rows and digests that are never demoted and never measured against the cap. Over the cap,
 the excess is demoted lowest protection score first.
 
@@ -4360,13 +4358,15 @@ manual), so two sweeps never work on one character at once.
 **Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" | null, "jobIds": ["job-uuid", …] }`
 (`jobId` is the first of `jobIds`, kept for older callers).
 
-#### `GET` / `POST /api/v1/memories?action=housekeeping-config`
+#### `GET` / `POST /api/v1/memories?action=maintenance-config`
 
-Read and write the per-user automatic-housekeeping settings stored on chat settings. `POST` merges
-the fields you send over the stored ones; both return `{ success, settings }`.
+Read and write the **instance-wide** memory maintenance settings (the `memoryMaintenance` instance
+setting). `POST` merges the fields you send over the stored ones; both return `{ success, settings }`.
+`?action=housekeeping-config` is the old name and still answers.
 
-**Settings**: `enabled`, `perCharacterCap` (default 2000), `perCharacterCapOverrides`,
-`autoMergeSimilarThreshold` (default 0.90), `mergeSimilar`.
+**Settings**: `enabled` (default false), `perCharacterCap` (default 2000),
+`perCharacterCapOverrides` (`{ [characterId]: cap }`). Every cap is an integer 100–100,000
+(`MemoryMaintenanceCapSchema`). The retired `mergeSimilar` / `autoMergeSimilarThreshold` are gone.
 
 #### `GET` / `POST /api/v1/memories?action=extraction-limits-config`
 
@@ -4374,14 +4374,6 @@ Read and write the **instance-wide** memory-extraction rate limits. `POST` merge
 values; both return `{ success, settings }`.
 
 **Settings**: `enabled`, `maxPerHour`, `softStartFraction`, `softFloor`.
-
-#### `GET` / `POST /api/v1/memories?action=extraction-concurrency`
-
-Read and write the **instance-wide** memory-extraction concurrency. A write also pushes the value
-into the job processor's runtime cache, so it takes effect on the next claim tick rather than at
-the next cache refresh.
-
-**Request Body** (POST): `{ "concurrency": 3 }` · **Response**: `{ success, concurrency }`.
 
 #### `GET` / `POST /api/v1/memories?action=recall-config`
 

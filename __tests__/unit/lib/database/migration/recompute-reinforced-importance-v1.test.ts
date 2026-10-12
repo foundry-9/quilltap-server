@@ -37,7 +37,7 @@ jest.mock('../../../../../migrations/lib/database-utils', () => {
 })
 
 import { recomputeReinforcedImportanceMigration as migration } from '../../../../../migrations/scripts/recompute-reinforced-importance-v1'
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance'
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance'
 import { reportProgress } from '../../../../../migrations/lib/progress'
 import { prettify, humanize } from '@/lib/startup/prettify'
 

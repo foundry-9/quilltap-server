@@ -9,21 +9,21 @@ import type { Pronouns } from '@/lib/schemas/character.types'
 import { formatNameWithPronouns } from '../format-utils'
 import {
   TEMPORAL_VALUES,
-  SCOPE_VALUES,
   CONTEXT_VALUES,
   type TemporalTag,
   type ContextTag,
 } from '@/lib/memory/recall-tags'
-import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
-import { getMemoryTimeZone, zonedDateStamp, zonedDayBoundsIso, zonedParts } from '@/lib/memory/memory-calendar'
-import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh'
+import { coerceImportance, normaliseTargeting } from '@/lib/memory/candidate'
+import { normaliseTimeRange, resolveReferenceWindow, type DayReferenceResolution } from '@/lib/memory/time/clock'
+import { getMemoryTimeZone, zonedDateStamp, zonedParts } from '@/lib/memory/time/calendar'
+import { refreshMemoryTimeZone } from '@/lib/memory/time/calendar-refresh'
 import { executeCheapLLMTask, type CheapLLMLatencyClass } from './core-execution'
 import { logger } from '@/lib/logger'
 import { stripCodeFences } from '@/lib/llm/llm-json'
 import type {
   ChatMessage,
   CheapLLMTaskResult,
-  MemoryCandidate,
+  MemoryDraft,
   UncensoredFallbackOptions,
 } from './types'
 
@@ -47,7 +47,7 @@ export const HARD_CANDIDATE_CAP = 2
 export const EVENT_EXTRA_SLOT = 1
 
 /** True when a candidate is a dated/placed EVENT that earns the extra slot. */
-function isAnchoredEvent(c: MemoryCandidate): boolean {
+function isAnchoredEvent(c: MemoryDraft): boolean {
   return c.kind === 'episodic' && (!!c.when || (c.entities?.length ?? 0) > 0)
 }
 
@@ -55,7 +55,7 @@ function isAnchoredEvent(c: MemoryCandidate): boolean {
  * Apply the candidate cap with the episodic soft-raise: base cap always, plus
  * one extra slot when a dated/placed EVENT survives inside the raised window.
  */
-function capCandidates(candidates: MemoryCandidate[], baseCap: number): MemoryCandidate[] {
+function capCandidates(candidates: MemoryDraft[], baseCap: number): MemoryDraft[] {
   const raised = candidates.slice(0, baseCap + EVENT_EXTRA_SLOT)
   if (raised.length > baseCap && raised.some(isAnchoredEvent)) {
     return raised
@@ -119,8 +119,6 @@ export interface ExtractionClock {
   nowIso: string
   /** Which clock the chat's story runs on. */
   timelineMode: 'realtime' | 'narrative'
-  /** Current in-story time, when known (narrative chats only). */
-  narrativeNow?: string | null
   /**
    * The memory-calendar zone this clock is read in (bug 212). The caller
    * resolves it once and hands the same value to the `when` resolver, so the
@@ -163,10 +161,6 @@ function renderClockBlock(clock: ExtractionClock | undefined): string {
     `Current date/time: ${stamp}`,
     `Timeline mode: ${clock.timelineMode}`,
   ]
-  const narrativeNow = clock.narrativeNow?.trim()
-  if (narrativeNow) {
-    lines.push(`Current in-story time: ${narrativeNow}`)
-  }
   lines.push(
     'Resolve relative time phrases against this clock; emit "when" as an absolute date (YYYY-MM-DD) whenever you can.',
   )
@@ -260,29 +254,6 @@ These describe the memory's frame; they do not change its content.
  * `lib/memory/recall-tags.ts` (the single source of truth, imported above) so
  * the extraction (write) and recall (read) sides can never drift.
  */
-
-/**
- * Validate the three model-emitted targeting tags against their closed
- * vocabularies, default any invalid/missing value (present / wide /
- * information), and materialize them into the keyword array: `temporal` and
- * `context` as bare words, `scope` as `scope: <value>`. Logs at debug whenever
- * a value had to be defaulted so silent model drift is visible in the
- * per-message memory logs. The tags never persist as top-level memory fields.
- */
-function applyTargetingTags(
-  freeKeywords: string[],
-  item: Record<string, unknown>,
-): string[] {
-  const rawTemporal = typeof item.temporal === 'string' ? item.temporal.trim().toLowerCase() : ''
-  const rawScope = typeof item.scope === 'string' ? item.scope.trim().toLowerCase() : ''
-  const rawContext = typeof item.context === 'string' ? item.context.trim().toLowerCase() : ''
-
-  const temporal = TEMPORAL_VALUES.has(rawTemporal) ? rawTemporal : 'present'
-  const scope = SCOPE_VALUES.has(rawScope) ? rawScope : 'wide'
-  const context = CONTEXT_VALUES.has(rawContext) ? rawContext : 'information'
-
-  return [...freeKeywords, temporal, `scope: ${scope}`, context]
-}
 
 /**
  * Memory extraction prompt: what THE SUBJECT retains about themselves after
@@ -685,24 +656,24 @@ ${subjectsBlock}`
 }
 
 /**
- * Coerce a raw parsed object into a MemoryCandidate, or return null when
+ * Coerce a raw parsed object into a MemoryDraft, or return null when
  * the row is empty (no content and no summary).
  *
- * `opts.applyTags` — when true the three targeting-tag axes (temporal /
- * scope / context) are validated and merged into the keyword array via
- * `applyTargetingTags`. When false the raw keyword array is used as-is
- * (batch extraction path, which does not emit targeting tags).
+ * `opts.applyTags` — when true the three targeting axes (temporal / scope /
+ * context) the model emitted are normalised onto `targeting`
+ * (`normaliseTargeting`); when false (batch extraction, which does not emit
+ * them) `targeting` takes the defaults. Keywords are the free words either way.
  */
 function coerceMemoryCandidate(
   item: Record<string, unknown>,
   opts: { applyTags: boolean },
-): MemoryCandidate | null {
+): MemoryDraft | null {
   const freeKeywords = Array.isArray(item.keywords)
     ? (item.keywords as unknown[]).filter((k): k is string => typeof k === 'string')
     : []
   // Episodic fields (validated; anything malformed degrades to semantic/absent)
   const rawKind = typeof item.kind === 'string' ? item.kind.trim().toLowerCase() : ''
-  const kind: MemoryCandidate['kind'] = rawKind === 'episodic' ? 'episodic' : 'semantic'
+  const kind: MemoryDraft['kind'] = rawKind === 'episodic' ? 'episodic' : 'semantic'
   const when = typeof item.when === 'string' && item.when.trim().length > 0
     ? item.when.trim()
     : undefined
@@ -713,17 +684,18 @@ function coerceMemoryCandidate(
         .slice(0, 8)
     : undefined
 
-  const candidate: MemoryCandidate = {
+  const candidate: MemoryDraft = {
     content: typeof item.content === 'string'
       ? item.content
       : (item.content ? JSON.stringify(item.content) : undefined),
     summary: typeof item.summary === 'string'
       ? item.summary
       : (item.summary ? JSON.stringify(item.summary) : undefined),
-    keywords: opts.applyTags
-      ? applyTargetingTags(freeKeywords, item)
-      : freeKeywords,
-    importance: typeof item.importance === 'number' ? item.importance : 0.5,
+    keywords: freeKeywords,
+    // The one importance default (clamped number, else 0.5) and the one
+    // targeting normaliser (`lib/memory/candidate.ts`).
+    importance: coerceImportance(item.importance),
+    targeting: normaliseTargeting(opts.applyTags ? item : null),
     kind,
     when,
     entities,
@@ -747,8 +719,8 @@ function parseOtherCandidatesBySubject(
   content: string,
   subjects: ReadonlyArray<OtherSubjectInput>,
   perSubjectCap: number,
-): Map<string, MemoryCandidate[]> {
-  const result = new Map<string, MemoryCandidate[]>()
+): Map<string, MemoryDraft[]> {
+  const result = new Map<string, MemoryDraft[]>()
   for (const s of subjects) result.set(s.id, [])
 
   if (subjects.length === 0) return result
@@ -860,7 +832,7 @@ If there are no memories, respond with exactly: NO_MEMORIES`
  * significance bar internally; the parser drops obviously-empty rows
  * (no content and no summary) and caps the array length.
  */
-function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
+function parseMemoryCandidateArray(content: string): MemoryDraft[] {
   try {
     const cleanContent = stripCodeFences(content)
     const parsed = JSON.parse(cleanContent)
@@ -868,7 +840,7 @@ function parseMemoryCandidateArray(content: string): MemoryCandidate[] {
 
     const coerced = items
       .map(item => coerceMemoryCandidate(item as Record<string, unknown>, { applyTags: true }))
-      .filter((m): m is MemoryCandidate => m !== null)
+      .filter((m): m is MemoryDraft => m !== null)
     // Episodic soft-raise: one slot beyond the cap, only for a dated/placed EVENT.
     return capCandidates(coerced, HARD_CANDIDATE_CAP)
   } catch {
@@ -968,7 +940,7 @@ export async function extractSelfMemoriesFromTurn(
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
   clock?: ExtractionClock,
-): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+): Promise<CheapLLMTaskResult<MemoryDraft[]>> {
   const target = transcript.characterSlices.find(s => s.characterId === targetCharacterId)
   if (!target) {
     return { success: true, result: [], usage: undefined }
@@ -1033,10 +1005,10 @@ export async function extractOtherMemoriesFromTurn(
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
   clock?: ExtractionClock,
-): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
+): Promise<CheapLLMTaskResult<Map<string, MemoryDraft[]>>> {
   const observer = transcript.characterSlices.find(s => s.characterId === observerCharacterId)
   if (!observer || subjects.length === 0) {
-    const empty = new Map<string, MemoryCandidate[]>()
+    const empty = new Map<string, MemoryDraft[]>()
     for (const s of subjects) empty.set(s.id, [])
     return { success: true, result: empty, usage: undefined }
   }
@@ -1095,9 +1067,9 @@ export async function extractOtherMemoriesFromFold(
   inAutonomousRoom: boolean = false,
   orienting?: OrientingContext,
   clock?: ExtractionClock,
-): Promise<CheapLLMTaskResult<Map<string, MemoryCandidate[]>>> {
+): Promise<CheapLLMTaskResult<Map<string, MemoryDraft[]>>> {
   if (windowMessages.length === 0 || subjects.length === 0) {
-    const empty = new Map<string, MemoryCandidate[]>()
+    const empty = new Map<string, MemoryDraft[]>()
     for (const s of subjects) empty.set(s.id, [])
     return { success: true, result: empty, usage: undefined }
   }
@@ -1154,7 +1126,7 @@ export async function batchExtractMemories(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string
-): Promise<CheapLLMTaskResult<MemoryCandidate[]>> {
+): Promise<CheapLLMTaskResult<MemoryDraft[]>> {
   // Format all exchanges for batch processing
   const exchangesText = exchanges
     .map((e, i) => `Exchange ${i + 1}:\nUser: ${e.userMessage}\nAssistant: ${e.assistantMessage}`)
@@ -1191,7 +1163,7 @@ ${exchangesText}`,
     selection,
     messages,
     userId,
-    (content: string): MemoryCandidate[] => {
+    (content: string): MemoryDraft[] => {
       try {
         const cleanContent = stripCodeFences(content)
         const parsed = JSON.parse(cleanContent)
@@ -1201,7 +1173,7 @@ ${exchangesText}`,
 
         return parsed
           .map((item: Record<string, unknown>) => coerceMemoryCandidate(item, { applyTags: false }))
-          .filter((m): m is MemoryCandidate => m !== null)
+          .filter((m): m is MemoryDraft => m !== null)
       } catch {
         // If parsing fails, return empty array
         return []
@@ -1242,8 +1214,6 @@ export interface FoldEpisode {
   narrativeTime?: string
   /** Proper nouns of the episode: places, people, named things. */
   entities: string[]
-  /** Participant names involved in the episode. */
-  participants: string[]
   /** Importance 0.2–1.0. */
   importance: number
 }
@@ -1304,7 +1274,6 @@ function parseFoldEpisodes(content: string): FoldEpisode[] {
           ? item.narrativeTime.trim()
           : undefined,
         entities: strArray(item.entities),
-        participants: strArray(item.participants),
         importance: typeof item.importance === 'number'
           ? Math.min(1, Math.max(0.2, item.importance))
           : 0.6,
@@ -1345,8 +1314,7 @@ export async function extractEpisodesFromFold(
     .join('\n\n')
 
   const clockLine =
-    `CLOCK: current date/time ${renderClockStamp(clock)}; timeline mode ${clock.timelineMode}` +
-    (clock.narrativeNow?.trim() ? `; current in-story time ${clock.narrativeNow.trim()}` : '')
+    `CLOCK: current date/time ${renderClockStamp(clock)}; timeline mode ${clock.timelineMode}`
 
   const messages: LLMMessage[] = [
     { role: 'system', content: FOLD_EPISODE_PROMPT },
@@ -1498,7 +1466,7 @@ export async function extractMemorySearchKeywords(
   // so the server's timezone is the user's. A UTC TODAY line tells a user
   // talking at 21:44 CDT that it is already tomorrow, and every "today" the
   // model resolves then lands on a day containing none of the memories it
-  // means (see lib/memory/day-references.ts, which does the same math).
+  // means (see lib/memory/time, whose rule table the deterministic scan reads).
   //
   // Bug 212: "local" is the instance's memory calendar (instance timezone →
   // QUILLTAP_TIMEZONE → system), the same one the write side stamps with.
@@ -1517,13 +1485,12 @@ export async function extractMemorySearchKeywords(
   // matching the prompt's own rule for fictional clocks.
   const dayReference =
     timelineMode === 'realtime' && Number.isFinite(nowMs)
-      ? resolveDayReference(
+      ? resolveReferenceWindow(
           cappedMessages
             .slice(-DAY_REFERENCE_SCAN_MESSAGES)
             .map(m => m.content)
             .join('\n'),
-          new Date(nowMs),
-          memoryTimeZone,
+          { timeZone: memoryTimeZone, nowMs },
         )
       : null
 
@@ -1581,22 +1548,15 @@ export async function extractMemorySearchKeywords(
         let timeRange: { from: string; to: string } | null = null
         if (!Array.isArray(parsed) && parsed?.timeRange && typeof parsed.timeRange === 'object') {
           const tr = parsed.timeRange as Record<string, unknown>
-          const from = typeof tr.from === 'string' ? tr.from.trim() : ''
-          const to = typeof tr.to === 'string' ? tr.to.trim() : ''
-          if (
-            /^\d{4}-\d{2}-\d{2}/.test(from) &&
-            /^\d{4}-\d{2}-\d{2}/.test(to) &&
-            Number.isFinite(Date.parse(from)) &&
-            Number.isFinite(Date.parse(to))
-          ) {
-            // Normalize date-only bounds to full LOCAL-day coverage on the
-            // memory calendar (bug 212), not UTC days.
-            const fromIso = from.length === 10 ? zonedDayBoundsIso(from, memoryTimeZone)?.from ?? null : from
-            const toIso = to.length === 10 ? zonedDayBoundsIso(to, memoryTimeZone)?.to ?? null : to
-            if (fromIso && toIso && Date.parse(fromIso) <= Date.parse(toIso)) {
-              timeRange = { from: fromIso, to: toIso }
-            }
-          }
+          // Date-only bounds widen to full LOCAL days on the memory calendar
+          // (bug 212), never UTC days — the same clock the scan reads.
+          timeRange = normaliseTimeRange(
+            {
+              from: typeof tr.from === 'string' ? tr.from : null,
+              to: typeof tr.to === 'string' ? tr.to : null,
+            },
+            { timeZone: memoryTimeZone },
+          )
         }
         const entities =
           !Array.isArray(parsed) && Array.isArray(parsed?.entities)

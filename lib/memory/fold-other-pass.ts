@@ -38,13 +38,13 @@
  * @module memory/fold-other-pass
  */
 
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { getRepositories } from '@/lib/repositories/factory'
 import {
   extractOtherMemoriesFromFold,
   loadCanonForObserverAboutSubject,
   renderOtherCanonBlock,
-  MemoryCandidate,
+  MemoryDraft,
   type UncensoredFallbackOptions,
   type OrientingContext,
   type ExtractionClock,
@@ -415,7 +415,7 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
           continue
         }
 
-        const bySubject = extraction.result ?? new Map<string, MemoryCandidate[]>()
+        const bySubject = extraction.result ?? new Map<string, MemoryDraft[]>()
         const lastMessage = lastMessageByCharacter.get(observer.id) ?? sliceMessages[sliceMessages.length - 1]
         for (const subject of resolved) {
           // The parser allows one extra slot for an anchored event; the fold
@@ -438,6 +438,7 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
               aboutCharacterId: subject.id,
               aboutCharacterName: subject.name,
               pass: 'OTHER',
+              candidatePass: 'other-fold',
               candidate,
               passLabel: `fold OTHER memory ${observer.name} about ${subject.name}`,
               ctx: writeCtx,

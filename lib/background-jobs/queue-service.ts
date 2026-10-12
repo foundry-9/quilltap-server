@@ -299,7 +299,7 @@ export interface ConversationRenderEnqueueResult {
 
 /**
  * Payload for memory-housekeeping job.
- * Leave every field undefined to fall back to the per-user autoHousekeepingSettings.
+ * Leave every field undefined to fall back to `instance_settings.memoryMaintenance`.
  */
 export interface MemoryHousekeepingPayload {
   /**
@@ -308,12 +308,8 @@ export interface MemoryHousekeepingPayload {
    * before that change — still sweeps every character owned by userId.
    */
   characterId?: string;
-  /** Override the per-character cap (otherwise uses the user's autoHousekeepingSettings). */
+  /** Override the per-character cap (otherwise `resolveMemorySettings().maintenance.capFor`). */
   maxMemories?: number;
-  /** Override the merge-similar threshold. */
-  mergeThreshold?: number;
-  /** Override whether to merge semantically similar memories. */
-  mergeSimilar?: boolean;
   /** Dry run — preview deletions without applying. Default false. */
   dryRun?: boolean;
   /** Why the job was enqueued (for debug logs). */

@@ -27,11 +27,10 @@ import { searchMemoriesSemantic, markMemoriesAccessed } from '@/lib/memory/memor
 import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
 import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
+import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring'
 
 /** Upper bound on how many memories the recall considers. */
 const RECALL_LIMIT = 20
-/** Floor on memory importance for a rehearsal's recall. */
-const RECALL_MIN_IMPORTANCE = 0.3
 /** How many recalled memories survive into the rendered block. */
 const RECALL_MAX_ENTRIES = 12
 

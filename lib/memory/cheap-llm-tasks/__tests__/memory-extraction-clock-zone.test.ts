@@ -34,7 +34,7 @@ import {
 } from '../memory-tasks'
 import { executeCheapLLMTask } from '../core-execution'
 import { getRepositories } from '@/lib/repositories/factory'
-import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/memory-calendar'
+import { resetMemoryTimeZoneCacheForTests } from '@/lib/memory/time/calendar'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript'
 

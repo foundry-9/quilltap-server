@@ -23,6 +23,7 @@ import { searchDocumentChunks } from '@/lib/mount-index/document-search'
 import { readDatabaseDocument } from '@/lib/mount-index/database-store'
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser'
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { RECALL_MULTIPLIERS } from './recall-tags'
 
 const logger = createServiceLogger('ConversationSummarySearch')
 
@@ -206,9 +207,10 @@ export async function searchVaultConversationSummaries(
       if (windowHits.length >= limit) {
         return windowHits.slice(0, limit)
       }
-      const CONVERSATION_WINDOW_BOOST = 1.3
+      // The same soft window boost memory recall applies (one constant).
+      const boost = RECALL_MULTIPLIERS.occurredWithinWindow
       const boosted = matches
-        .map(m => (overlapsWindow(m) ? { ...m, score: m.score * CONVERSATION_WINDOW_BOOST } : m))
+        .map(m => (overlapsWindow(m) ? { ...m, score: m.score * boost } : m))
         .sort((a, b) => b.score - a.score)
       return boosted.slice(0, limit)
     }

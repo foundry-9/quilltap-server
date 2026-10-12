@@ -95,8 +95,10 @@ export interface SearchScriptoriumResult {
     // Memory-specific
     memoryId?: string
     summary?: string
+    /** reinforcedImportance (falling back to importance) — what the bands read. */
     importance?: number
-    effectiveWeight?: number
+    /** Salience (reinforced importance × time decay). */
+    salience?: number
     createdAt?: string
     source?: 'AUTO' | 'MANUAL' | 'CONSOLIDATED'
     /** Set on a cold-tier memory: '(archived — superseded by <digest id>)' or '(archived)'. */

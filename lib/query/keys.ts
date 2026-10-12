@@ -216,7 +216,7 @@ export const queryKeys = {
     recallConfig: ['memories', 'recall-config'] as const,
     consolidationConfig: ['memories', 'consolidation-config'] as const,
     extractionModeConfig: ['memories', 'extraction-mode-config'] as const,
-    housekeepingConfig: ['memories', 'housekeeping-config'] as const,
+    maintenanceConfig: ['memories', 'maintenance-config'] as const,
     characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
     /** The per-chat row count the Salon sidebar renders beside its delete control. */
     chatCount: (chatId: string) => ['memories', 'chat-count', chatId] as const,

@@ -162,8 +162,8 @@ describe('weightClockMs', () => {
     })
     const [today] = await searchMemoriesSemantic('char-1', 'q', { userId: 'u1', limit: 10, recallContext: ctx() })
 
-    expect(atCreation.rawWeight).toBeCloseTo(0.5)
-    expect(today.rawWeight!).toBeLessThan(atCreation.rawWeight!)
+    expect(atCreation.salience).toBeCloseTo(0.5)
+    expect(today.salience!).toBeLessThan(atCreation.salience!)
   })
 })
 

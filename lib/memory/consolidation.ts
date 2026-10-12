@@ -69,7 +69,7 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText } from './episodic'
-import { refreshMemoryTimeZone } from './memory-calendar-refresh'
+import { refreshMemoryTimeZone } from './time/calendar-refresh'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 import {
   clusterBucket,

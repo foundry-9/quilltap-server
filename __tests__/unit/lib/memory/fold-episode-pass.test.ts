@@ -21,7 +21,7 @@ jest.mock('@/lib/memory/memory-service', () => ({
   createMemoryWithGate: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/episodic', () => ({
+jest.mock('@/lib/memory/time/clock', () => ({
   resolveWhenPhrase: jest.fn(() => null),
 }))
 
@@ -29,7 +29,7 @@ import { runFoldEpisodePass } from '@/lib/memory/fold-episode-pass'
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractEpisodesFromFold } from '@/lib/memory/cheap-llm-tasks'
 import { createMemoryWithGate } from '@/lib/memory/memory-service'
-import { resolveWhenPhrase } from '@/lib/memory/episodic'
+import { resolveWhenPhrase } from '@/lib/memory/time/clock'
 
 const mockRepos = getRepositories as jest.Mock
 const mockExtract = extractEpisodesFromFold as jest.Mock

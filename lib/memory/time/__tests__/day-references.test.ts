@@ -18,7 +18,7 @@
  * misses every memory from the day they are asking about.
  */
 
-import { resolveDayReference } from '../day-references'
+import { resolveDayReference } from '../clock'
 
 /** 2026-07-28 21:44 **local** — the wall-clock moment from the diagnosed chat. */
 const NOW = new Date(2026, 6, 28, 21, 44, 0, 0)
@@ -36,6 +36,9 @@ function localHour(offset: number, hour: number): string {
     NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + offset, hour, 0, 0, 0,
   ).toISOString()
 }
+
+/** The last instant before `iso` — read windows are closed, ending 1 ms before the next boundary. */
+const before = (iso: string) => new Date(Date.parse(iso) - 1).toISOString()
 
 describe('resolveDayReference — the regression case', () => {
   it('resolves a late-evening "today" to the local day', () => {
@@ -76,12 +79,12 @@ describe('resolveDayReference — lexicon', () => {
     { text: 'you seemed rattled this afternoon', matched: 'this afternoon', from: localMidnight(0), to: NOW.toISOString() },
     { text: 'that thing this evening', matched: 'this evening', from: localMidnight(0), to: NOW.toISOString() },
     { text: 'what a mess tonight', matched: 'tonight', from: localMidnight(0), to: NOW.toISOString() },
-    { text: 'about yesterday', matched: 'yesterday', from: localMidnight(-1), to: localMidnight(0) },
-    { text: 'the day before yesterday', matched: 'day before yesterday', from: localMidnight(-2), to: localMidnight(-1) },
-    { text: 'we met 3 days ago', matched: '3 days ago', from: localMidnight(-3), to: localMidnight(-2) },
-    { text: 'we met three days ago', matched: 'three days ago', from: localMidnight(-3), to: localMidnight(-2) },
-    { text: 'that was 1 day ago', matched: '1 day ago', from: localMidnight(-1), to: localMidnight(0) },
-    { text: 'fourteen days ago exactly', matched: 'fourteen days ago', from: localMidnight(-14), to: localMidnight(-13) },
+    { text: 'about yesterday', matched: 'yesterday', from: localMidnight(-1), to: before(localMidnight(0)) },
+    { text: 'the day before yesterday', matched: 'day before yesterday', from: localMidnight(-2), to: before(localMidnight(-1)) },
+    { text: 'we met 3 days ago', matched: '3 days ago', from: localMidnight(-3), to: before(localMidnight(-2)) },
+    { text: 'we met three days ago', matched: 'three days ago', from: localMidnight(-3), to: before(localMidnight(-2)) },
+    { text: 'that was 1 day ago', matched: '1 day ago', from: localMidnight(-1), to: before(localMidnight(0)) },
+    { text: 'fourteen days ago exactly', matched: 'fourteen days ago', from: localMidnight(-14), to: before(localMidnight(-13)) },
   ]
 
   it.each(cases)('resolves "$matched" from "$text"', ({ text, matched, from, to }) => {
@@ -95,7 +98,7 @@ describe('resolveDayReference — lexicon', () => {
   it('spans "last night" from 18:00 the previous local evening to 06:00 this morning', () => {
     const r = resolveDayReference('you were quiet last night', NOW)!
     expect(r.timeRange.from).toBe(localHour(-1, 18))
-    expect(r.timeRange.to).toBe(localHour(0, 6))
+    expect(r.timeRange.to).toBe(before(localHour(0, 6)))
     expect(r.pastPointing).toBe(true)
   })
 
@@ -110,7 +113,7 @@ describe('resolveDayReference — lexicon', () => {
   it('resolves "last week" to the previous Monday–Sunday local week', () => {
     const r = resolveDayReference('what you said last week', NOW)!
     expect(r.timeRange.from).toBe(localMidnight(-8))
-    expect(r.timeRange.to).toBe(localMidnight(-1))
+    expect(r.timeRange.to).toBe(before(localMidnight(-1)))
   })
 
   it('leaves an out-of-range "N days ago" to the LLM', () => {

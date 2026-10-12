@@ -43,6 +43,7 @@ import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
 import type { ChatEvent } from '@/lib/schemas/chat.types'
 import type { ResolvedConciergePolicy } from '@/lib/services/dangerous-content/resolver.service'
+import { RECALL_MIN_IMPORTANCE } from '@/lib/memory/scoring';
 
 /** Archive overlap (≤ FROZEN_ARCHIVE_MAX_SIZE) plus the largest retrospective head. */
 export const PROACTIVE_RECALL_POOL_SIZE = FROZEN_ARCHIVE_MAX_SIZE + DYNAMIC_HEAD_MAX_SIZE * 2
@@ -339,7 +340,7 @@ async function proactiveRecallTask(
         captureQueryEmbedding: captured => {
           queryEmbedding = captured
         },
-        minImportance: 0.3,
+        minImportance: RECALL_MIN_IMPORTANCE,
         recallContext,
         // Episodic recall: entity anchoring always (a verbatim place name
         // cannot be sliced off by the cosine floor); window + probes only on

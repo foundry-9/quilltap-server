@@ -84,7 +84,7 @@ import {
 import { deleteMemoriesWithUnlinkBatch, absorbNearDuplicate } from '@/lib/memory/memory-gate';
 import type { Memory } from '@/lib/schemas/types';
 import { MemoriesRepository } from '@/lib/database/repositories/memories.repository';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import path from 'path';
 
 const { getRawDatabase } = jest.requireMock('@/lib/database/backends/sqlite/client') as { getRawDatabase: jest.Mock };

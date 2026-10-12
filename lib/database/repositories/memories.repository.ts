@@ -15,7 +15,7 @@ import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
 import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
 import { getRawDatabase } from '../backends/sqlite/client';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
 /**
@@ -218,7 +218,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           (filter as any).source = source;
         }
         if (minImportance !== undefined) {
-          (filter as any).importance = { $gte: minImportance };
+          (filter as any).reinforcedImportance = { $gte: minImportance };
         }
         if (tier) {
           (filter as any).tier = tier;
@@ -285,7 +285,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
-   * Find memories with importance >= minImportance threshold
+   * Find memories whose reinforced importance is >= minImportance (the value every importance filter reads)
    * @param characterId The character ID
    * @param minImportance Minimum importance value (0-1)
    * @returns Promise<Memory[]> Array of memories meeting importance threshold
@@ -300,7 +300,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
 
         const memories = await this.findByFilter({
           characterId,
-          importance: { $gte: minImportance },
+          reinforcedImportance: { $gte: minImportance },
         });
         return memories;
       },
@@ -1455,7 +1455,8 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
         const memories = await this.findByFilter(
           { characterId, aboutCharacterId },
           {
-            sort: { importance: -1, createdAt: -1 },
+            // reinforcedImportance, the value every importance filter reads.
+            sort: { reinforcedImportance: -1, createdAt: -1 },
           }
         );
         return memories;
@@ -1471,13 +1472,14 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
    * capped per about-character via a window function so SQLite ranks and
    * truncates each partition before returning rows.
    *
-   * Sort key approximates {@link calculateEffectiveWeight}: raw importance
-   * dominates, with `lastReinforcedAt` (falling back to `createdAt`) breaking
-   * ties so a recently-reinforced memory beats a stale one of equal score.
+   * Sort key approximates salience (`lib/memory/scoring`): reinforced
+   * importance dominates, with `lastReinforcedAt` (falling back to
+   * `createdAt`) breaking ties so a recently-reinforced memory beats a stale
+   * one of equal score.
    *
    * The caller (context-manager) sizes `limitPerCharacter` from the
    * inter-character whisper budget plus a buffer; any further re-ranking by
-   * effective weight happens in JS over this much smaller set.
+   * salience happens in JS over this much smaller set.
    */
   async findByCharacterAboutCharacters(
     characterId: string,
@@ -1496,7 +1498,7 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
             SELECT *,
               ROW_NUMBER() OVER (
                 PARTITION BY aboutCharacterId
-                ORDER BY importance DESC,
+                ORDER BY COALESCE(reinforcedImportance, importance) DESC,
                          COALESCE(lastReinforcedAt, createdAt) DESC
               ) AS rn
             FROM memories

@@ -33,6 +33,7 @@ import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/b
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
+import { withMemoryMaintenanceFromLegacy } from '@/lib/memory/settings-legacy';
 import { reconcileEmbeddingDimensions } from '@/lib/startup/reconcile-embedding-dimensions';
 import { enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
@@ -1179,7 +1180,8 @@ export async function restore(
     // so a fresh instance's auto-provisioned defaults get overwritten by the
     // backup's values.
     let instanceSettingsRestored = 0;
-    for (const row of data.instanceSettings || []) {
+    const instanceSettingRows = withMemoryMaintenanceFromLegacy(data.instanceSettings || [], data.chatSettings || []);
+    for (const row of instanceSettingRows) {
       try {
         await rawQuery(
           'INSERT INTO "instance_settings" ("key", "value") VALUES (?, ?) ' +

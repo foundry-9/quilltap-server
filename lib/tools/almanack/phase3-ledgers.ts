@@ -20,6 +20,7 @@ import {
   getMaxConcurrentJobs,
   getMemoryExtractionLimits,
   getMemoryRecallSettings,
+  getMemoryMaintenanceSettings,
   getLastMaintenanceSweepAt,
 } from '@/lib/instance-settings';
 import { resolveStaleChatDays, retentionCutoff } from '@/lib/background-jobs/maintenance/retention-constants';
@@ -42,6 +43,7 @@ import type {
   StorageStats,
   TerminalInfo,
 } from './types';
+import { MEMORY_SETTING_DEFAULTS } from '@/lib/memory/settings-defaults';
 
 const moduleLogger = logger.child({ module: 'almanack:ledgers' });
 
@@ -179,6 +181,11 @@ export function defaultInstanceSettings(): InstanceSettingsInfo {
       maxPerHour: 20,
       softStartFraction: 0.7,
       softFloor: 0.7,
+    },
+    memoryMaintenance: {
+      enabled: MEMORY_SETTING_DEFAULTS.maintenance.enabled,
+      perCharacterCap: MEMORY_SETTING_DEFAULTS.maintenance.perCharacterCap,
+      capOverrides: 0,
     },
     lastMaintenanceSweepAt: null,
   };
@@ -631,12 +638,6 @@ export function defaultFeatureConfig(): FeatureConfigInfo {
     thinkingDisplay: { defaultVisible: true, defaultCollapsed: true },
     answerConfirmation: { enabled: false },
     autonomousRoomDefaults: {},
-    autoHousekeeping: {
-      enabled: false,
-      perCharacterCap: 2000,
-      mergeSimilar: false,
-      autoMergeSimilarThreshold: 0.9,
-    },
     textReplacements: { enabled: true, rules: 0, enabledRules: 0 },
     composerSpellcheck: true,
     impersonationVoiceMode: 'off',
@@ -690,7 +691,6 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
   const cw = chatSettings?.coreWhisper;
   const td = chatSettings?.thinkingDisplay;
   const ac = chatSettings?.answerConfirmationSettings;
-  const ah = chatSettings?.autoHousekeepingSettings;
 
   const [ruleRow] = await Promise.all([
     mainRow<{ total: number; enabled: number }>(
@@ -750,12 +750,6 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
     },
     answerConfirmation: { enabled: ac?.enabled ?? false },
     autonomousRoomDefaults: (chatSettings?.autonomousRoomSettings ?? {}) as Record<string, unknown>,
-    autoHousekeeping: {
-      enabled: ah?.enabled ?? false,
-      perCharacterCap: ah?.perCharacterCap ?? 2000,
-      mergeSimilar: ah?.mergeSimilar ?? false,
-      autoMergeSimilarThreshold: ah?.autoMergeSimilarThreshold ?? 0.9,
-    },
     textReplacements: {
       enabled: chatSettings?.textReplacementsEnabled ?? true,
       rules: num(ruleRow?.total),
@@ -779,13 +773,14 @@ export async function collectFeatureConfig(userId: string): Promise<FeatureConfi
  * and the number the sweep acts on can never disagree.
  */
 export async function collectInstanceSettings(userId: string): Promise<InstanceSettingsInfo> {
-  const [retention, staleChatDays, maxConcurrentJobs, recall, extraction, lastSweep] =
+  const [retention, staleChatDays, maxConcurrentJobs, recall, extraction, maintenance, lastSweep] =
     await Promise.all([
       getDataRetentionSettings(),
       resolveStaleChatDays(),
       getMaxConcurrentJobs(),
       getMemoryRecallSettings(),
       getMemoryExtractionLimits(),
+      getMemoryMaintenanceSettings(),
       getLastMaintenanceSweepAt(),
     ]);
   void retention; // resolveStaleChatDays already folds it in
@@ -822,6 +817,11 @@ export async function collectInstanceSettings(userId: string): Promise<InstanceS
       maxPerHour: extraction.maxPerHour,
       softStartFraction: extraction.softStartFraction,
       softFloor: extraction.softFloor,
+    },
+    memoryMaintenance: {
+      enabled: maintenance.enabled,
+      perCharacterCap: maintenance.perCharacterCap,
+      capOverrides: Object.keys(maintenance.perCharacterCapOverrides).length,
     },
     lastMaintenanceSweepAt: lastSweep ? lastSweep.toISOString() : null,
   };

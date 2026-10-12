@@ -29,7 +29,7 @@ import { logger } from '@/lib/logger';
 import { runWithJobFolderCache } from './job-folder-cache';
 import { cloneEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { calculateReinforcedImportance } from '@/lib/memory/reinforced-importance';
+import { calculateReinforcedImportance } from '@/lib/memory/scoring/reinforced-importance';
 import { appendCappedFootnotes } from '@/lib/memory/reinforcement-footnotes';
 
 const log = logger.child({ module: 'jobs:child:proxy' });

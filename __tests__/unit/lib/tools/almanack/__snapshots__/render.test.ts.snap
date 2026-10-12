@@ -330,14 +330,10 @@ Cast sizes:
 - **Enabled**: No
 - **Idle Minutes**: 15
 
-#### Memory Cascade & Housekeeping
+#### Memory Cascade
 
 - **On Message Delete**: ASK_EVERY_TIME
 - **On Swipe/Regenerate**: DELETE_MEMORIES
-- **Auto Housekeeping**: Yes
-- **Per-Character Cap**: 2000
-- **Merge Similar**: No
-- **Merge Threshold**: 0.9
 
 #### Salon Behaviour
 
@@ -362,6 +358,7 @@ Cast sizes:
 - **Max concurrent background jobs**: 4
 - **Memory recall**: scope policy \`down-weight\`, related-memory expansion No
 - **Memory extraction limits**: Yes (max 20/hour, soft start 0.7, floor 0.7)
+- **Memory maintenance**: Yes (per-character cap 2000, 1 override(s))
 - **Last maintenance sweep**: 8/5/2026, 3:00:00 AM
 
 ### Background Jobs

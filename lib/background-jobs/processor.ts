@@ -63,21 +63,3 @@ export async function resetStuckJobs(timeoutMinutes?: number): Promise<number> {
   return dispatcherResetStuckJobs(timeoutMinutes);
 }
 
-/**
- * Legacy memory-extraction concurrency override. The runtime cap is now a
- * flat global 4-in-flight enforced by the dispatcher; per-type knobs are
- * gone. The `chatSettings.memoryExtractionConcurrency` instance setting is
- * still persisted (so the slider doesn't appear to lose its value if any UI
- * still reads/writes it), but it no longer affects job execution.
- *
- * The setter is a no-op that warns; the getter returns the legacy value
- * the caller might be displaying.
- */
-let setOverrideWarned = false;
-export function setMemoryExtractionConcurrencyOverride(_value: number): void {
-  if (!setOverrideWarned) {
-    setOverrideWarned = true;
-    logger.warn('[processor.ts] setMemoryExtractionConcurrencyOverride is a no-op since the global concurrency cap was unified at 4. The chatSettings value is still persisted but has no runtime effect.');
-  }
-}
-

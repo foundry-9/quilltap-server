@@ -18,12 +18,16 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   summarizeMemoryRecap: jest.fn(),
 }))
 
-jest.mock('@/lib/memory/memory-weighting', () => ({
-  formatRelativeAge: jest.fn(),
+jest.mock('@/lib/memory/time', () => ({
+  formatMemoryAge: jest.fn(),
 }))
 
 jest.mock('@/lib/memory/conversation-summary-search', () => ({
   searchVaultConversationSummaries: jest.fn(),
+  RELEVANT_CONVERSATIONS_MIN: 3,
+  RELEVANT_CONVERSATIONS_MAX: 10,
+  RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS: 4000,
+  RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS: 32000,
   // Mirror the real renderer/note so the recap block assembles in tests.
   renderRelevantConversationsBlock: (matches: Array<{ conversationId: string; conversationTitle: string }>) =>
     matches.length === 0
@@ -57,8 +61,8 @@ const repositoriesMock = jest.requireMock('@/lib/repositories/factory') as {
 const cheapLlmMock = jest.requireMock('@/lib/memory/cheap-llm-tasks') as {
   summarizeMemoryRecap: jest.Mock
 }
-const weightingMock = jest.requireMock('@/lib/memory/memory-weighting') as {
-  formatRelativeAge: jest.Mock
+const weightingMock = jest.requireMock('@/lib/memory/time') as {
+  formatMemoryAge: jest.Mock
 }
 const conversationSearchMock = jest.requireMock('@/lib/memory/conversation-summary-search') as {
   searchVaultConversationSummaries: jest.Mock
@@ -66,7 +70,7 @@ const conversationSearchMock = jest.requireMock('@/lib/memory/conversation-summa
 
 const mockGetRepositories = repositoriesMock.getRepositories
 const mockSummarizeMemoryRecap = cheapLlmMock.summarizeMemoryRecap
-const mockFormatRelativeAge = weightingMock.formatRelativeAge
+const mockFormatRelativeAge = weightingMock.formatMemoryAge
 const mockSearchVaultConversationSummaries = conversationSearchMock.searchVaultConversationSummaries
 
 // Mock repository

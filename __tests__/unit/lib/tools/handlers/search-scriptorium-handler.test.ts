@@ -87,7 +87,7 @@ describe('search-scriptorium-handler', () => {
   it('marks only the memories it returns to the model as accessed', async () => {
     const mem = (id: string, score: number) => ({
       score,
-      effectiveWeight: 0.5,
+      salience: 0.5,
       memory: {
         id,
         content: `content ${id}`,
@@ -114,7 +114,7 @@ describe('search-scriptorium-handler', () => {
     mockSearchMemoriesSemantic.mockResolvedValue([
       {
         score: 0.72,
-        effectiveWeight: 0.88,
+        salience: 0.88,
         memory: {
           id: 'memory-1',
           content: 'Remember the blueprints in the west archive.',
