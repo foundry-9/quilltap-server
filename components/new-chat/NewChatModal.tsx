@@ -232,7 +232,14 @@ export function NewChatModal({
                 profiles={profiles}
                 selectedCharacters={selectedCharacters}
                 onSelectedCharactersChange={setSelectedCharacters}
-                onCharactersChanged={() => setState((prev) => ({ ...prev, scenarioId: null }))}
+                onCharactersChanged={() =>
+                  setState((prev) =>
+                    // A character's own scenario leaves with the cast that offered it.
+                    prev.scenarioSelection.kind === 'character'
+                      ? { ...prev, scenarioSelection: { kind: 'custom' } }
+                      : prev,
+                  )
+                }
                 disabled={creating}
               />
             )}

@@ -807,10 +807,10 @@ export async function register() {
       // Scenarios/ folder. Idempotent and silent when the provisioning
       // migration hasn't run yet (returns null mountPointId).
       try {
-        const { ensureGeneralScenariosFolder } = await import(
-          './lib/mount-index/general-scenarios'
-        );
-        await ensureGeneralScenariosFolder();
+        const { resolveScenarioLocation } = await import('./lib/scenarios/location');
+        const { getRepositories } = await import('./lib/repositories/factory');
+        const { SINGLE_USER_ID } = await import('./lib/auth/single-user');
+        await resolveScenarioLocation('general', null, getRepositories(), SINGLE_USER_ID, { ensure: true });
       } catch (ensureError) {
         logger.warn('Error ensuring general scenarios folder, continuing startup', {
           context: 'instrumentation.register',

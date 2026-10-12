@@ -136,6 +136,17 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
+   * Find the character whose vault is `mountPointId`, **without the vault
+   * overlay**. Used by the scenario location to classify a mount as a
+   * character's (it needs only `id`, `userId`, `archivedAt`) — hydrating the
+   * vault to answer "whose mount is this?" would be wasted work, and a broken
+   * vault must cost a classification rather than a throw.
+   */
+  async findByDocumentMountPointIdRaw(mountPointId: string): Promise<Character | null> {
+    return this.findOneByFilter({ characterDocumentMountPointId: mountPointId } as TypedQueryFilter<Character>);
+  }
+
+  /**
    * Find characters by user ID
    * @param userId The user ID
    * @returns Promise<Character[]> Array of characters belonging to the user
@@ -868,7 +879,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    */
   async addScenario(
     characterId: string,
-    data: { title: string; content: string; archived?: boolean }
+    data: { title: string; content: string; description?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     // A vault-backed character re-keys each scenario from its file path when
     // the vault is read back, so the id minted below is transient. Callers
@@ -884,6 +895,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
         id,
         title: data.title,
         content: data.content,
+        ...(data.description && data.description.trim().length > 0 && { description: data.description.trim() }),
         // Omission means active; never persist an explicit `archived: false`.
         ...(data.archived === true && { archived: true }),
         createdAt: now,
@@ -918,7 +930,7 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   async updateScenario(
     characterId: string,
     scenarioId: string,
-    data: { title?: string; content?: string; archived?: boolean }
+    data: { title?: string; content?: string; description?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     return this.updateInSubArray<CharacterScenario>(
       characterId,

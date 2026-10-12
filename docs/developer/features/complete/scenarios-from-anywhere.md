@@ -1,8 +1,8 @@
 # Feature: Scenarios from anywhere — one location, a source pointer, and a browser
 
-**Status:** Approved 2026-10-12, not yet built.
+**Status:** Approved 2026-10-12; built 2026-10-12 (see §7, As built).
 **Owner subsystems:** The Salon (both pickers), The Scriptorium (the stores scenarios live in), Aurora (character vaults), Prospero (project stores).
-**Companion spec:** [wardrobe-folders.md](wardrobe-folders.md) was written the same day and shares nothing but the author; build them in either order.
+**Companion spec:** [wardrobe-folders.md](../wardrobe-folders.md) was written the same day and shares nothing but the author; build them in either order.
 **Implementation note:** This spec is written to be executed by Claude Code. Follow the CLAUDE.md standing rules throughout: changelog entry, help docs with `url` + In-Chat Navigation, debug logging on every touched backend path, `qt-*` classes not raw Tailwind, `npx tsc` not `npm run build`, DDL.md and `qtap-export.schema.json` kept current, migrations with a `PRETTY_LABELS` entry and `reportProgress`. The decisions in §2 were settled with the operator before this spec was written. **Do not reopen them.**
 
 ---
@@ -227,3 +227,21 @@ Each phase ends with `npx tsc`, `npm run lint`, the touched unit suites, and the
 ### Phase E — docs
 
 - `help/scenario-browser.md` (new; `url: /salon/new`), updates to `help/general-scenarios.md`, `help/project-scenarios.md`, `help/groups.md`, `help/chats.md` (the provenance line and reload), `docs/CHANGELOG.md`, DDL.md, `docs/developer/API.md` (three new actions, one new field), and a CLAUDE.md chokepoint line: *"A scenario is addressed through `resolveScenarioLocation` / `resolveScenarioRef` (`lib/scenarios/location.ts`); the four tiers are scopes of one location, never separate code paths, and `chats.scenarioSource` / `scenarioNotes` are written only beside `scenarioText` by `resolveScenarioSelection`'s two callers."* Move this spec to `features/complete/` with an "As built" section.
+
+## 7. As built
+
+Built as specified, phases A–E. Where the build departs from or sharpens the text above:
+
+- **Module layout.** `lib/scenarios/location.ts` (the location, `classifyScenarioMount`, `lookupScenarioRef` / `resolveScenarioRef`, `parseScenarioForScope`, `characterScenarioIdForPath`), `lib/scenarios/everywhere.ts` (the lister), `lib/scenarios/source-remap.ts` (client-safe import/restore remap). `general-scenarios.ts`, `project-scenarios.ts` and `group-scenarios.ts` are **deleted**; the group tier's `Knowledge/` folder helper moved to `lib/mount-index/group-knowledge.ts`. `resolveStoreScenarioTier` is gone.
+- **`lookupScenarioRef`** sits beside `resolveScenarioRef` and returns `ok | missing | refused`, so callers can tell a 400 (bad path, or a mount that is no scenario owner) from a file that has merely gone. `resolveScenarioSelection` throws `ScenarioRefRefusedError` for the former (both routes map it to 400) and fails soft on the latter.
+- **Character tier reads.** `list` reads the vault's `Scenarios/` documents directly and parses them with the vault parser (`parseScenarioFile`) rather than mapping `character.scenarios[]`; paths are therefore the files' real paths (a hand-authored file whose name differs from its title still round-trips). Writes go through `addScenario` / `updateScenario` / `removeScenario` / `update({ defaultScenarioId })`; `addScenario` and `updateScenario` now accept `description`. Archived (and other users') characters resolve and classify as null.
+- **Raw finders.** `characters.findByDocumentMountPointIdRaw`; `findByOfficialMountPointIdRaw` lives once on `AbstractStoreBackedRepository`, so projects and groups share it.
+- **Routes.** `lib/mount-index/scenario-item-route-factory.ts` now serves General as well as projects and groups, and gained `createScenarioCollectionBodies` (list + create); all six route files are thin configs. The character scenarios route (`/api/v1/characters/[id]/scenarios`) is unchanged — it is id-addressed and already writes through the repository, which is exactly what the location's character tier delegates to.
+- **Startup heals** call `resolveScenarioLocation(scope, id, repos, SINGLE_USER_ID, { ensure: true })`; their result is `{ total, healed, failed }` (the separate `created` count went with `ensureOwnerOfficialStore`'s direct call).
+- **`ScenarioRefSchema` / `ScenarioSourceSchema`** live in `lib/schemas/chat.types.ts` (client-safe); the location re-exports the ref schema.
+- **No-op check.** `?action=scenario` compares text, source and notes (`sameResolvedScenario`). A change of provenance or notes that leaves the text byte-identical is written but neither recompiles nor announces — only the text reaches the prompt.
+- **`?action=scenario-source`** also returns `scenarioName` (for the provenance line) and `scenarioId` (a character source's path-derived id, so the picker can show it under its native heading).
+- **The lister** also returns `scenarioId` on character rows, which is how a browser pick of the chat's own character snaps to `{ kind: 'character' }`. Excerpts longer than 240 characters end in `…`.
+- **Import.** Chats import before document stores, so the source's mount is remapped in `reconcileRelationships` (not the chat insert): mapped → new id; unmapped but already present in this instance → kept; otherwise → null. New-account restore remaps through the shared `UuidRemapper`.
+- **New Chat seeding** is one effect in `useNewChat` over `seedScenarioSelection` (`components/new-chat/scenario-seed.ts`), re-run whenever the single LLM character's default or the project/general defaults change, until `scenarioTouched`. Continuation mode skips the character default. The project-default override note is shown only when the project default is the selection and the character has a default of its own.
+- **Both pickers** now always render the dropdown (Browse is always worth offering). The in-chat control's text box is the notes under a preset and the whole scene under Custom; save always sends it as `scenario`.

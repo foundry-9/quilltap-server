@@ -550,7 +550,8 @@ export function resolveAndCheckComponentItems(
  * the body. Files with neither fall back to the filename-without-extension as
  * the title so malformed files are still visible rather than silently dropped.
  *
- * Project Scenarios in `lib/mount-index/project-scenarios.ts` use the same
+ * The file-backed scenario tiers (`lib/mount-index/scenarios-common.ts`, via
+ * the scenario location in `lib/scenarios/location.ts`) use the same
  * shape (frontmatter-first, heading-fallback) for symmetry between vault and
  * project scenario authoring.
  */

@@ -38,6 +38,7 @@ API reference for Quilltap v4.3 and later.
 > **Freshness note (v4.10-dev):** Additions since v4.9:
 >
 > - **Impersonated-line voice rewrite** — `POST /api/v1/chats/[id]?action=impersonation-voice-preview` restates a line typed while impersonating a character in that character's own voice, for operator review before it posts. Gated by the `impersonationVoiceMode` field on chat settings (`'off'` / `'ask'` / `'always'`, default `'off'`); under `'ask'` the client calls this only when the operator presses Restate.
+> - **Scenarios from anywhere** — `GET /api/v1/scenarios?action=everywhere` lists every scenario in the instance by owner (no bodies); `GET /api/v1/scenarios?action=read&mountPointId=&path=` reads one by ref; `GET /api/v1/chats/[id]?action=scenario-source` reports where a chat's scene came from. `scenarioRef: { mountPointId, path }` is accepted on `POST /api/v1/chats` and `POST /api/v1/chats/[id]?action=scenario`, and chats carry `scenarioSource` / `scenarioNotes`. See [Scenarios](#scenarios).
 
 ## Table of Contents
 
@@ -2487,13 +2488,14 @@ Fold another conversation's characters and summary into **this** chat (the inver
 
 #### `POST /api/v1/chats/[id]?action=scenario`
 
-Change (or clear) the chat's scenario mid-conversation. Fields mirror the create payload one-for-one and resolve through the same precedence chain (`lib/chat/scenario-selection.ts`): character `scenarioId` > `projectScenarioPath` > `groupScenarioPath` > `generalScenarioPath`, with free-text `scenario` layered beneath whatever resolves.
+Change (or clear) the chat's scenario mid-conversation. Fields mirror the create payload one-for-one and resolve through the same precedence chain (`lib/chat/scenario-selection.ts`): `scenarioRef` > character `scenarioId` > `projectScenarioPath` > `groupScenarioPath` > `generalScenarioPath`, with free-text `scenario` layered beneath whatever resolves. Every kind is turned into a `{ mountPointId, path }` ref and read through the scenario location (`lib/scenarios/location.ts`).
 
 **Request Body** (every field optional; an empty body clears the scenario):
 
 ```json
 {
   "scenario": "free-text notes",
+  "scenarioRef": { "mountPointId": "store-uuid", "path": "Scenarios/reading-room.md" },
   "scenarioId": "character-scenario-uuid",
   "projectScenarioPath": "Scenarios/bridge.md",
   "groupScenarioPath": "Scenarios/parlour.md",
@@ -2507,9 +2509,17 @@ Change (or clear) the chat's scenario mid-conversation. Fields mirror the create
 **Notes**:
 
 - `projectScenarioPath` resolves against the chat's own `projectId` (not a client-supplied one). A `scenarioId` is resolved against whichever active participant character owns it; a character whose vault is unavailable is skipped rather than failing the request.
-- Every tier fails soft — an unresolvable pointer logs a warning and falls through to the next tier.
-- On an actual change: rewrites `chat.scenarioText`, calls `compileAllIdentityStacks` (the scene is baked into `{{scenario}}` in each precompiled stack), and posts a Host announcement with `systemKind: "scenario-change"`, worded as a revision. A blank result retires the scene with a matching notice. A stack-recompile failure is logged and non-fatal — the read-through fallback covers it.
-- Resolving to the text already stored is a no-op: no write, no recompile, no announcement, and `changed: false`.
+- `scenarioRef` names a scenario anywhere: a character vault, a project's or group's official store, or Quilltap General. A ref whose path leaves `Scenarios/` or whose mount is none of those four kinds is a **400**; one whose file has gone missing fails soft like the other kinds. "Reload from source" in the Salon is this action with `{ scenarioRef: <the chat's source>, scenario: <its notes> }`.
+- Every legacy kind fails soft — an unresolvable pointer logs a warning and falls through to the next tier.
+- The chat stores the recipe: `scenarioText` (what the prompt reads), `scenarioSource` (`{ mountPointId, path, bodySha256 }` — the file and the SHA-256 of its body as resolved; null for a custom scene) and `scenarioNotes` (the free text). All three are written together, here and at chat creation only.
+- On an actual change: rewrites `chat.scenarioText` (with its source and notes), calls `compileAllIdentityStacks` (the scene is baked into `{{scenario}}` in each precompiled stack), and posts a Host announcement with `systemKind: "scenario-change"`, worded as a revision. A blank result retires the scene with a matching notice. A stack-recompile failure is logged and non-fatal — the read-through fallback covers it.
+- Resolving to the recipe already stored (text, source and notes) is a no-op: no write, no recompile, no announcement, and `changed: false`. A change of source or notes that leaves the text identical is written but neither recompiles nor announces.
+
+#### `GET /api/v1/chats/[id]?action=scenario-source`
+
+Where the chat's scene came from. Query key `queryKeys.chats.scenarioSource(chatId)`, refreshed by the `chats` realtime topic.
+
+**Response**: `{ source, owner, scenarioName, scenarioId, exists, changed, notes }` — `source` is the stored `scenarioSource` (null for a custom scene or a chat from before sources were recorded); `owner` is `{ scope, id, name }` of the store's owner; `exists` is false when the file (or its owner) is gone; `changed` is true when the file's current body no longer hashes to `source.bodySha256`; `scenarioId` is the path-derived id when the source is a character scenario.
 - The chat-start `systemKind: "scenario"` message is **not** removed or rewritten.
 - `updateChatSchema` (`PUT /api/v1/chats/[id]`) deliberately does **not** expose `scenarioText`; a bare field update would skip the recompile and the announcement.
 
@@ -6801,7 +6811,9 @@ Delete one group wardrobe item. Cleans up equipped references across chats first
 
 ### Scenarios
 
-Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, `archived`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+Every scenario is addressed through one chokepoint, `resolveScenarioLocation` / `resolveScenarioRef` (`lib/scenarios/location.ts`): a location is one owner's `Scenarios/` folder — a character vault, a project's or group's official store, or Quilltap General — and a `{ mountPointId, path }` ref names any scenario in any of them.
+
+Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, `archived`, body) kept in a `Scenarios/` folder. They exist at three file-backed tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
 
 **Archived scenarios.** A file carrying `archived: true` is excluded from every list response unless the request passes **`?includeArchived=true`**; absence of the key means active, and the serializer never writes `archived: false`. The parameter is honoured by all three tiers' collection GETs, by the participant-aggregate route below, and by the item-level `PUT`/`POST ?action=rename`/`DELETE` on the freshly-listed scenarios they return (so a manager with "Show archived" ticked gets back a list that still contains the row it just changed). Two rules hold regardless of the parameter:
 
@@ -6815,6 +6827,8 @@ For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename 
 **General tier**
 
 - `GET /api/v1/scenarios` — list general scenarios. Tolerates the pre-migration race (returns an empty list with `mountPointId: null`).
+- `GET /api/v1/scenarios?action=everywhere[&includeArchived=true]` — every scenario in the instance, for the scenario browser. Response `{ sources: [{ scope, id, name, mountPointId, scenarios: [{ path, scenarioId?, filename, name, description?, isDefault, archived, excerpt, updatedAt }], warnings }] }`, sources ordered General, projects, groups, characters (each A–Z). Bodies are **not** included — `excerpt` is the first 240 characters, whitespace-collapsed. Owners with an empty folder are listed; owners without a store are skipped and never provisioned; archived characters are omitted. One document query serves every owner. `scenarioId` (character rows only) is the id `scenarioId` picks carry.
+- `GET /api/v1/scenarios?action=read&mountPointId=<uuid>&path=<Scenarios/x.md>` — one scenario with its body, by ref: `{ scenario, owner: { scope, id, name, mountPointId } }`. 400 for a ref that names no scenario owner (or a path outside `Scenarios/`), 404 for a missing file.
 - `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, archived?, body }`. Rejects writes during the pre-migration window.
 - `GET /api/v1/scenarios/[scenarioPath]` — read one.
 - `PUT /api/v1/scenarios/[scenarioPath]` — update content + frontmatter.

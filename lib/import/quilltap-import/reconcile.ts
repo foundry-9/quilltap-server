@@ -16,6 +16,7 @@ import type {
   Project,
 } from '@/lib/schemas/types';
 import { deleteStoreCascade } from '@/lib/mount-index/delete-store-cascade';
+import { remapScenarioSource } from '@/lib/scenarios/source-remap';
 import type { ChatInform } from '@/lib/schemas/chat-inform.types';
 import type { IdMappingState } from './types';
 
@@ -410,6 +411,25 @@ export async function reconcileRelationships(
         if (newProjectId) {
           updates.projectId = newProjectId;
           hasUpdates = true;
+        }
+      }
+
+      // Re-point the scenario source at the imported copy of its store. A
+      // source whose mount did not come across (and is not already in this
+      // instance) is dropped rather than left dangling.
+      if (chat.scenarioSource) {
+        const source = chat.scenarioSource;
+        const mapped = idMaps.mountPoints.get(source.mountPointId)
+          ?? ((await getRepositories().docMountPoints.findById(source.mountPointId)) ? source.mountPointId : null);
+        const remapped = remapScenarioSource(source, () => mapped);
+        if (!remapped || remapped.mountPointId !== source.mountPointId) {
+          updates.scenarioSource = remapped;
+          hasUpdates = true;
+          moduleLogger.debug('Remapped chat scenario source', {
+            chatId: newId,
+            fromMountPointId: source.mountPointId,
+            toMountPointId: remapped?.mountPointId ?? null,
+          });
         }
       }
 

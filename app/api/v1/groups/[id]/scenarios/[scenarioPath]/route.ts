@@ -10,39 +10,22 @@
  *
  * `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`.
  * The route accepts the bare filename (with or without `.md`) and prefixes
- * `Scenarios/` server-side; `..` segments are rejected. This matches the
- * convenience accepted by `resolveGroupScenarioBody`.
+ * `Scenarios/` server-side; `..` segments are rejected. 
  *
  * PUT, POST and DELETE all honour `?includeArchived=true` on the freshly-listed
  * scenarios they return, so a manager with "Show archived" ticked gets back a
  * list that still contains the row it just changed.
  *
  * The handler bodies live in the shared factory
- * (`lib/mount-index/scenario-item-route-factory.ts`); this file only supplies
- * the group tier's config.
+ * (`lib/mount-index/scenario-item-route-factory.ts`), which reads and writes
+ * through the group's scenario location; this file only supplies the labels.
  */
 
 import { createScenarioItemHandlers } from '@/lib/mount-index/scenario-item-route-factory';
-import {
-  ensureGroupScenariosFolder,
-  ensureGroupKnowledgeFolder,
-  listGroupScenarios,
-  readGroupScenario,
-  setGroupScenarioDefault,
-  GROUP_SCENARIOS_FOLDER,
-} from '@/lib/mount-index/group-scenarios';
 
-export const { GET, PUT, POST, DELETE } = createScenarioItemHandlers({
+export const { GET, PUT, POST, DELETE } = createScenarioItemHandlers<{ id: string; scenarioPath: string }>({
+  scope: 'group',
   ownerLabel: 'Group',
   logTag: '[Groups v1]',
   logIdKey: 'groupId',
-  scenariosFolder: GROUP_SCENARIOS_FOLDER,
-  findOwner: (repos, id) => repos.groups.findById(id),
-  ensureFolders: async (mountPointId) => {
-    await ensureGroupScenariosFolder(mountPointId);
-    await ensureGroupKnowledgeFolder(mountPointId);
-  },
-  listScenarios: listGroupScenarios,
-  readScenario: readGroupScenario,
-  setScenarioDefault: setGroupScenarioDefault,
 });

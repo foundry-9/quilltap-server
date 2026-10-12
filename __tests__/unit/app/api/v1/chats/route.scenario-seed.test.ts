@@ -81,6 +81,27 @@ jest.mock('@/lib/import/sillytavern-import-service', () => ({
   importLegacyChat: jest.fn(),
 }))
 
+// Resolution itself is `scenario-selection.test.ts`'s business; here the
+// chosen character scenario simply resolves to its body, as it would through
+// the location, so the test can watch which columns the body lands in.
+jest.mock('@/lib/chat/scenario-selection', () => ({
+  ...jest.requireActual('@/lib/chat/scenario-selection'),
+  resolveScenarioSelection: jest.fn(async (fields: { scenarioId?: string }) =>
+    fields.scenarioId
+      ? {
+          scenarioText: [
+            "# Scenario: Amy's Pool",
+            '',
+            'Amy is in her pool, and Charlie walks up the path and sits down on the flat',
+            'rocks next to it.',
+          ].join('\n'),
+          scenarioSource: null,
+          scenarioNotes: null,
+        }
+      : { scenarioText: null, scenarioSource: null, scenarioNotes: null },
+  ),
+}))
+
 jest.mock('@/lib/services/host-notifications/writer', () => ({
   postHostAddAnnouncement: jest.fn().mockResolvedValue(undefined),
   postHostScenarioAnnouncement: jest.fn().mockResolvedValue(undefined),

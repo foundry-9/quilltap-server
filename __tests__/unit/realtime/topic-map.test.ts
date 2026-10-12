@@ -37,6 +37,7 @@ describe('queryKeysForTopic', () => {
       queryKeys.chats.gallery('chat-1'),
       queryKeys.chats.informs('chat-1'),
       queryKeys.wardrobe.outfit('chat-1'),
+      queryKeys.chats.scenarioSource('chat-1'),
     ]);
   });
 

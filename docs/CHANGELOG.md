@@ -4,6 +4,22 @@
 
 ### 4.10-dev
 
+#### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)
+
+- One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `resolveScenarioRef` / `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.
+- Scenario route factory now covers General too and builds the collection list/create bodies.
+- New raw finders: `characters.findByDocumentMountPointIdRaw`, `findByOfficialMountPointIdRaw` on store-backed repositories (projects, groups). `addScenario` / `updateScenario` accept `description`.
+- `GET /api/v1/scenarios?action=everywhere` lists every scenario in the instance by owner with a 240-char excerpt (one document query); `?action=read&mountPointId=&path=` reads one by ref.
+- `scenarioRef: { mountPointId, path }` accepted on chat create and `?action=scenario`; resolved first; a ref to anything but the four kinds of owner, or a path outside `Scenarios/`, is a 400.
+- `resolveScenarioSelection` returns `{ scenarioText, scenarioSource, scenarioNotes }`; both callers write all three. Migration `add-chat-scenario-source-v1` adds `chats.scenarioSource` (JSON) and `chats.scenarioNotes`. Export schema updated; import remaps the source's mount in reconcile (dropped to null when the store did not come across); new-account restore remaps it with the store.
+- `GET /api/v1/chats/[id]?action=scenario-source` reports owner, existence and whether the file's body hash changed; `queryKeys.chats.scenarioSource` rides the `chats` realtime topic.
+- `?action=scenario` no-op check compares text, source and notes; a provenance-only change is written without a recompile or Host announcement.
+- New `ScenarioBrowserDialog` ("Browse all scenarios…" in both pickers): owners by section, search across shelves, Markdown preview, keyboard navigation. A pick inside the chat's hierarchy snaps to its native kind; anything else is a `store` selection shown under "Elsewhere".
+- In-chat Scenario control: provenance line, "Reload from source" when the file changed, "the shelf copy is gone" when it was removed, a notes box under presets; current selection comes from the source when there is one, body matching otherwise.
+- New Chat keeps one `scenarioSelection` (plus `scenarioTouched`) instead of five pointer fields, so the form shows what it submits. Seed order is character default > project default > general default, matching the server; a hand pick is not re-seeded. Fixes the form showing the project default while submitting the character's.
+- Scenario label on the New Chat form now points at the select (`htmlFor` was `new-chat-scenario`, which matched nothing).
+- Help: new `help/scenario-browser.md`; updated `general-scenarios.md`, `project-scenarios.md`, `groups.md`, `chats.md`.
+
 #### Specs: scenarios from anywhere; wardrobe folders
 
 - `docs/developer/features/scenarios-from-anywhere.md`: a "Browse all scenarios" dialog over every

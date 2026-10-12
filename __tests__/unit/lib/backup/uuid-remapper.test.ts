@@ -495,6 +495,35 @@ describe('remapBackupData() - project FK remapping', () => {
     expect(result.groups?.[0].officialMountPointId).toBe(groupStore)
   })
 
+  it("re-points a chat's scenario source at its store's new id", () => {
+    const remapper = new UuidRemapper()
+    const storeId = '11111111-1111-4111-8111-111111111111'
+    const data: BackupData = {
+      ...emptyBackup(),
+      projects: [{ id: 'proj-old', officialMountPointId: storeId }] as unknown as Project[],
+      docMountPoints: [{ id: storeId }] as unknown as BackupData['docMountPoints'],
+      chats: [
+        {
+          id: 'chat-old',
+          participants: [],
+          messages: [],
+          scenarioSource: { mountPointId: storeId, path: 'Scenarios/tea.md', bodySha256: 'a'.repeat(64) },
+          scenarioNotes: 'Rain.',
+        },
+      ] as unknown as BackupData['chats'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    expect(result.chats[0].scenarioSource).toEqual({
+      mountPointId: result.docMountPoints?.[0].id,
+      path: 'Scenarios/tea.md',
+      bodySha256: 'a'.repeat(64),
+    })
+    expect(result.chats[0].scenarioSource?.mountPointId).not.toBe(storeId)
+    expect(result.chats[0].scenarioNotes).toBe('Rain.')
+  })
+
   it('remaps project.defaultImageProfileId to the same new id as its image profile', () => {
     const remapper = new UuidRemapper()
     const data: BackupData = {

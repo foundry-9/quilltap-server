@@ -1,13 +1,13 @@
 /**
  * Scenarios — shared file-IO primitives.
  *
- * Two scopes wrap these helpers:
- *   - `project-scenarios.ts` — per-project `Scenarios/` folder inside each
- *     project's official document store.
- *   - `general-scenarios.ts` — instance-wide `Scenarios/` folder inside the
- *     "Quilltap General" singleton mount.
+ * Every file-backed scope is addressed through `resolveScenarioLocation`
+ * (`lib/scenarios/location.ts`), which wraps these helpers: General, each
+ * project's official store and each group's official store. (A character's
+ * vault has its own file shape and is written through the characters
+ * repository; see the location.)
  *
- * Both scopes follow the same on-disk shape: plain markdown files at
+ * The store scopes follow the same on-disk shape: plain markdown files at
  * `<folder>/<filename>.md` with optional YAML frontmatter:
  *
  *   ---
@@ -46,6 +46,9 @@ import {
   updateFrontmatterInContent,
 } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
+
+/** The folder every scope keeps its scenarios in. */
+export const SCENARIOS_FOLDER = 'Scenarios';
 
 // ============================================================================
 // Request-body schemas (shared by every scenario scope's API routes)
@@ -202,11 +205,30 @@ export async function listScenariosInFolder(
     '.md',
   );
 
-  docs.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return buildScenarioList(docs, parseScenarioDoc, options, { mountPointId, folderName });
+}
+
+/**
+ * Turn one folder's already-fetched documents into a sorted scenario list with
+ * default-conflict resolution applied — the pure half of
+ * `listScenariosInFolder`, shared with the instance-wide lister (which fetches
+ * every owner's documents in a single query and buckets them by mount).
+ *
+ * `parse` is the scope's parser: `parseScenarioDoc` for the store tiers, the
+ * vault parser for a character's vault. A parser may set `rawIsDefault` from
+ * something other than frontmatter (a character's default is a column).
+ */
+export function buildScenarioList(
+  docs: DocMountDocument[],
+  parse: (doc: DocMountDocument) => ParsedScenario | null,
+  options: { includeArchived?: boolean } = {},
+  logContext: Record<string, unknown> = {},
+): ListScenariosResult {
+  const sorted = [...docs].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
 
   const parsed: ParsedScenario[] = [];
-  for (const doc of docs) {
-    const scenario = parseScenarioDoc(doc);
+  for (const doc of sorted) {
+    const scenario = parse(doc);
     if (!scenario) continue;
     if (scenario.archived && !options.includeArchived) continue;
     parsed.push(scenario);
@@ -238,8 +260,7 @@ export async function listScenariosInFolder(
       `These are also marked default but are being ignored: ${offenders.map(o => `"${o}"`).join(', ')}.`,
     );
     logger.warn('Scenarios: multiple isDefault: true entries', {
-      mountPointId,
-      folderName,
+      ...logContext,
       winner,
       offenders,
     });
@@ -302,8 +323,9 @@ export async function resolveScenarioBody(
 }
 
 /**
- * Set a single file as the scope's default. Sequenced multi-file write:
- *   1. Set `isDefault: true` on the chosen file.
+ * Set a single file as the scope's default, or clear the default when
+ * `defaultPath` is null. Sequenced multi-file write:
+ *   1. Set `isDefault: true` on the chosen file (skipped when clearing).
  *   2. Demote any other files that had `isDefault: true` to `isDefault: false`.
  *
  * No transaction — partial failure leaves the alphabetical-tiebreaker rule
@@ -311,7 +333,7 @@ export async function resolveScenarioBody(
  */
 export async function setScenarioDefaultInFolder(
   mountPointId: string,
-  defaultPath: string,
+  defaultPath: string | null,
   folderName: string,
 ): Promise<void> {
   const repos = getRepositories();
@@ -321,21 +343,15 @@ export async function setScenarioDefaultInFolder(
     '.md',
   );
 
-  let chosenFound = false;
-
-  for (const doc of docs) {
-    if (doc.relativePath === defaultPath) {
-      const updated = updateFrontmatterInContent(doc.content, { isDefault: true });
-      if (updated !== doc.content) {
-        await writeDatabaseDocument(mountPointId, doc.relativePath, updated);
-      }
-      chosenFound = true;
-      break;
+  if (defaultPath !== null) {
+    const chosen = docs.find((doc) => doc.relativePath === defaultPath);
+    if (!chosen) {
+      throw new Error(`Cannot set default — scenario not found: ${defaultPath}`);
     }
-  }
-
-  if (!chosenFound) {
-    throw new Error(`Cannot set default — scenario not found: ${defaultPath}`);
+    const updated = updateFrontmatterInContent(chosen.content, { isDefault: true });
+    if (updated !== chosen.content) {
+      await writeDatabaseDocument(mountPointId, chosen.relativePath, updated);
+    }
   }
 
   for (const doc of docs) {

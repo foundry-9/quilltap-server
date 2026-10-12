@@ -71,6 +71,12 @@ export const queryKeys = {
      * wardrobe needs only the one field, once.
      */
     project: (id: string) => ['chats', id, 'project'] as const,
+    /**
+     * Where the chat's scene came from and whether that file has since been
+     * revised (`?action=scenario-source`). Rides the `chats` realtime topic,
+     * so a scenario change — which posts the Host's announcement — refreshes it.
+     */
+    scenarioSource: (id: string) => ['chats', id, 'scenario-source'] as const,
   },
   /**
    * Scenario option lists, per tier. Read by the New Chat dialog and the
@@ -92,6 +98,12 @@ export const queryKeys = {
       ['scenarios', 'group', characterIdsKey, { includeArchived }] as const,
     character: (characterId: string, includeArchived = false) =>
       ['scenarios', 'character', characterId, { includeArchived }] as const,
+    /** Every scenario in the instance, by owner (`?action=everywhere`) — no bodies. */
+    everywhere: (includeArchived = false) =>
+      ['scenarios', 'everywhere', { includeArchived }] as const,
+    /** One scenario, body included, by ref (`?action=read`). */
+    ref: (mountPointId: string, path: string) =>
+      ['scenarios', 'ref', mountPointId, path] as const,
   },
   groups: {
     all: ['groups'] as const,
