@@ -123,7 +123,8 @@ collapsing the two maintenance jobs into one — then deleting what they replace
 Each is verified against source (creation, gate, scoring and maintenance maps, 2026-10-12). File
 them in the [bug catalogue](../bugs.md) as **bugs 199–226** before Phase A, one file each, with the
 metadata table the catalogue requires. Fix the four marked **first** before any structural work;
-the rest are closed by the phase named.
+the rest are closed by the phase named. **199 is filed and fixed** (2026-10-12, with bug 227, the
+same gap for Suparṇā's mail).
 
 | # | Sev | Defect | Where | Closed by |
 |---|---|---|---|---|

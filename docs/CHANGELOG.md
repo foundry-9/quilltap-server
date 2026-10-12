@@ -86,11 +86,12 @@
   breadcrumb browser with bulk move; tools see `folder` read-only.
 - Both linked from `ROADMAP.md`. Design only; nothing built yet.
 
-#### Fix bug 227: mail dropped on turns with no new user message
+#### Fix bugs 199 and 227: recall and mail dropped on turns with no new user message
 
-- `buildContext` now includes `suparnaMailLLMContext` in the trailing-only user message used by continue,
-  nudge, chained and autonomous turns. Before, those turns posted Suparṇā's whisper and marked each
-  letter alerted, but the model never received the letter text.
+- `buildContext` now includes `llmRecallText` and `suparnaMailLLMContext` in the trailing-only user
+  message used by continue, nudge, chained and autonomous turns, in the same order as on a turn with a
+  new user message. Before, those turns posted the Commonplace Book and Suparṇā whispers, stamped the
+  recalled memories as shown and marked each letter alerted, but the model received neither text.
 - Help: `help/post-office.md` states that the mail check covers turns with no new message.
 
 #### Fix bug 198: wardrobe dialog showed a stale outfit after a tool-driven change

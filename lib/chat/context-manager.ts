@@ -2799,17 +2799,18 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       name: newUserMsgName,
       metadata: { isUserTurn: true },
     })
-  } else if (userNarrationAnchor || turnSkipInstruction || suparnaMailLLMContext || progressionsLLMContext || informBlock) {
+  } else if (userNarrationAnchor || turnSkipInstruction || llmRecallText || suparnaMailLLMContext || progressionsLLMContext || informBlock) {
     // Chained / continue turns carry no new user message, so neither the note,
-    // the mail, the progressions report nor the inform block can ride as a
-    // trailing section above. Push them as their own trailing user message (same off-scene/timestamp
+    // the recall, the mail, the progressions report nor the inform block can
+    // ride as a trailing section above. Push them as their own trailing user message (same off-scene/timestamp
     // pattern) so the model sees them this turn, in the same order they would
     // have taken there. Anthropic 4.6+ rejects role=assistant tails, so 'user'
     // is required. The scene note leads: it is about the scene, the others
-    // about the character. The mail must be here (bug 227): the block above
-    // has already marked each letter `alerted`, so a turn that drops it never
-    // gets a second chance to tell the model.
-    const trailingOnly = [userNarrationAnchor, suparnaMailLLMContext, progressionsLLMContext, informBlock, turnSkipInstruction].filter(Boolean)
+    // about the character. Recall and mail must both be here: by now the
+    // whisper has been posted and the rows stamped accessed (bug 199), and each
+    // letter marked `alerted` (bug 227), so a turn that drops either never gets
+    // a second chance to tell the model.
+    const trailingOnly = [userNarrationAnchor, llmRecallText, suparnaMailLLMContext, progressionsLLMContext, informBlock, turnSkipInstruction].filter(Boolean)
     contextMessages.push({
       role: 'user',
       content: trailingOnly.join('\n\n---\n\n'),

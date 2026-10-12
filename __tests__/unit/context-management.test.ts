@@ -1404,6 +1404,69 @@ describe('Context Manager', () => {
     })
 
     // ------------------------------------------------------------------
+    // Recall on a turn with no new user message (bug 199).
+    // ------------------------------------------------------------------
+
+    describe('recall on a turn with no new user message (bug 199)', () => {
+      it('rides its own trailing user message', async () => {
+        mockedGetRepositories.mockReturnValue({
+          memories: {
+            findByCharacterAboutCharacters: jest.fn().mockResolvedValue([memory]),
+            findHotDigests: jest.fn().mockResolvedValue([]),
+          },
+          chatInforms: {
+            findPendingForParticipant: jest.fn().mockResolvedValue([]),
+            findConsumedByMessages: jest.fn().mockResolvedValue([]),
+          },
+        } as any)
+
+        const result = await buildContext({
+          provider: 'OPENAI',
+          modelName: 'gpt-4o',
+          userId: 'user',
+          character: characterA,
+          userCharacter: { name: 'Alex', description: 'Curious' },
+          chat: {
+            id: 'chat-1',
+            userId: 'user',
+            participants: allParticipants,
+            title: 'Test Chat',
+            contextSummary: null,
+            sillyTavernMetadata: null,
+            tags: [],
+            messageCount: 2,
+            lastMessageAt: timestamp,
+            lastRenameCheckInterchange: 0,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          },
+          existingMessages: [
+            { role: 'USER', content: 'Hello', id: 'm1' },
+            { role: 'ASSISTANT', content: 'Greetings', id: 'm2' },
+          ],
+          embeddingProfileId: null,
+          skipMemories: false,
+          maxMemories: 1,
+          minMemoryImportance: 0.3,
+          respondingParticipant: participantA,
+          allParticipants,
+          participantCharacters,
+          messagesWithParticipants: [
+            { role: 'USER', content: 'Hello', participantId: 'participant-user', createdAt: timestamp },
+            { role: 'ASSISTANT', content: 'Greetings', participantId: 'participant-b', createdAt: timestamp },
+          ],
+        })
+
+        // No new user message, so the recall cannot ride one; it must still
+        // reach the model as the trailing user message.
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toContain('You also recall about the others present')
+        expect(last.content).toContain('About Iris: [today] Detailed history')
+      })
+    })
+
+    // ------------------------------------------------------------------
     // Suparṇā's mail on a turn with no new user message (bug 227).
     // ------------------------------------------------------------------
 

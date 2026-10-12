@@ -16,7 +16,7 @@
 ---
 
 **FIXED in v4 (2026-10-12).** `suparnaMailLLMContext` is now in the trailing-only branch's guard and in
-`trailingOnly`, between the scene note and the progressions report — the same relative order it has in
+`trailingOnly`, between the recall (bug 199) and the progressions report — the same relative order it has in
 `trailingContextSections`. Test: `__tests__/unit/context-management.test.ts`, *mail on a turn with no
 new user message (bug 227)*.
 
@@ -49,8 +49,8 @@ suspect the model missed it. Tests built mail context only on turns with a new u
 Add `suparnaMailLLMContext` to the guard and to `trailingOnly`. The comment above the branch now names
 the mail and why it cannot be left out.
 
-Recall (`llmRecallText`) has the same gap on these turns. That is bug 199, reserved by the
-[memory system refactor](../../features/memory-system-refactor.md) spec and not part of this fix.
+Recall (`llmRecallText`) had the same gap on these turns; that is [bug 199](bug-199-continue-turn-recall-dropped.md),
+fixed in the same change.
 
 ## Verify
 
