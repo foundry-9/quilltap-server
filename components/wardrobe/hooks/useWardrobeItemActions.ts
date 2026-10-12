@@ -47,6 +47,16 @@ export interface TransferRequest {
   mode: 'move' | 'copy'
 }
 
+/**
+ * The Move-to-folder picker. It lives here, beside the other overlays, so
+ * `overlayOpen` sees it: the dialog's click-outside handler would otherwise
+ * treat a click inside the (portalled) picker as a click outside the dialog
+ * and close both (bug 199).
+ */
+export interface FolderPickerRequest {
+  items: ListedWardrobeItem[]
+}
+
 export interface ImageViewRequest {
   item: ListedWardrobeItem
   container: WardrobeContainer
@@ -80,6 +90,7 @@ export function useWardrobeItemActions({
   const [editor, setEditor] = useState<EditorRequest | null>(null)
   const [transfer, setTransfer] = useState<TransferRequest | null>(null)
   const [imageView, setImageView] = useState<ImageViewRequest | null>(null)
+  const [folderPicker, setFolderPicker] = useState<FolderPickerRequest | null>(null)
   const [updatingDefaultId, setUpdatingDefaultId] = useState<string | null>(null)
   // Every item whose picture is being drawn right now. A set, not one id: two
   // rows may each have a commission out.
@@ -260,14 +271,19 @@ export function useWardrobeItemActions({
   const copy = useCallback((item: ListedWardrobeItem) => setTransfer({ item, mode: 'copy' }), [])
   const closeTransfer = useCallback(() => setTransfer(null), [])
   const closeImage = useCallback(() => setImageView(null), [])
+  const openFolderPicker = useCallback((items: ListedWardrobeItem[]) => {
+    if (items.length > 0) setFolderPicker({ items })
+  }, [])
+  const closeFolderPicker = useCallback(() => setFolderPicker(null), [])
 
   return {
     // overlay state
     editor,
     transfer,
     imageView,
+    folderPicker,
     /** True while any of this hook's overlays is open. */
-    overlayOpen: editor !== null || transfer !== null || imageView !== null,
+    overlayOpen: editor !== null || transfer !== null || imageView !== null || folderPicker !== null,
     // row state
     updatingDefaultId,
     generatingImageIds,
@@ -285,6 +301,8 @@ export function useWardrobeItemActions({
     copy,
     closeTransfer,
     closeImage,
+    openFolderPicker,
+    closeFolderPicker,
     addressOf,
     refresh,
     /** Ask the operator to confirm (the folder delete uses it too). */

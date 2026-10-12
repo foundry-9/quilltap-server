@@ -130,7 +130,9 @@ export function WardrobeBrowser({
   const [view, setView] = useState({ key: containerKey, tier: OWN_TIER, folder: '' })
   const [selectModeState, setSelectModeState] = useState({ key: containerKey, on: false })
   const [newFolderState, setNewFolderState] = useState({ key: '', name: '' })
-  const [picker, setPicker] = useState<{ items: TierItem[] } | null>(null)
+  // The Move-to-folder picker's state lives in the actions hook, so the
+  // dialog's `overlayOpen` counts it (bug 199).
+  const picker = actions.folderPicker
   const [moving, setMoving] = useState(false)
 
   const searching = titleFilter.trim().length > 0
@@ -312,10 +314,6 @@ export function WardrobeBrowser({
     [viewKey],
   )
 
-  const openPickerFor = useCallback((items: TierItem[]) => {
-    if (items.length > 0) setPicker({ items })
-  }, [])
-
   const pickerHome = picker ? actions.addressOf(picker.items[0]) : null
   const pickerCurrentFolder = useMemo(() => {
     if (!picker) return null
@@ -338,7 +336,7 @@ export function WardrobeBrowser({
           ? `"${picker.items[0].title}" now hangs in ${where}`
           : `${plural(moved.length, 'item')} now hang in ${where}`,
       )
-      setPicker(null)
+      actions.closeFolderPicker()
       clearSelection()
       setSelectMode(false)
     } catch (error) {
@@ -364,7 +362,7 @@ export function WardrobeBrowser({
           type="button"
           className="qt-button-secondary qt-button-sm"
           disabled={selectedItems.length === 0}
-          onClick={() => openPickerFor(selectedItems)}
+          onClick={() => actions.openFolderPicker(selectedItems)}
         >
           Move to folder…
         </button>
@@ -641,7 +639,7 @@ export function WardrobeBrowser({
                   onDuplicate={actions.duplicate}
                   onMove={actions.move}
                   onCopy={actions.copy}
-                  onMoveToFolder={(i) => openPickerFor([i as TierItem])}
+                  onMoveToFolder={(i) => actions.openFolderPicker([i])}
                   selection={
                     selectMode
                       ? { selected: selectedIds.has(item.id), onToggle: toggleSelected }
@@ -689,7 +687,7 @@ export function WardrobeBrowser({
           subject={picker.items.length === 1 ? `"${picker.items[0].title}"` : plural(picker.items.length, 'item')}
           currentFolder={pickerCurrentFolder}
           moving={moving}
-          onClose={() => setPicker(null)}
+          onClose={actions.closeFolderPicker}
           onMove={moveToFolder}
         />
       )}

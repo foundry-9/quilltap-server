@@ -72,6 +72,9 @@
   id-less files first; delete-folder pre-checks non-item files and same-name subfolders (409, nothing moved);
   `GET ?action=folders` no longer provisions stores; projection ensures only missing folders; folder moves no
   longer re-read the wardrobe for casing; the delete confirmation mentions archived pieces.
+- Fixed bug 199: any click inside the Move-to-folder picker closed the whole wardrobe dialog in a chat, so
+  nothing could be moved with a mouse. The picker's state moved into `useWardrobeItemActions`, whose
+  `overlayOpen` now counts it.
 
 #### Specs: scenarios from anywhere; wardrobe folders
 

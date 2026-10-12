@@ -6,13 +6,16 @@
  *  - a search ignores folders and shows each hit's folder;
  *  - tier rows appear only in a character's container;
  *  - select mode puts checkboxes only on manageable rows;
- *  - the Move-to-folder picker disables the folder the item is already in.
+ *  - the Move-to-folder picker disables the folder the item is already in;
+ *  - a click inside that picker does not close the dialog around the browser
+ *    (bug 199: the picker must count as one of the actions' overlays).
  */
 
 import React from 'react'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { renderWithQuery } from '../../../helpers/renderWithQuery'
 import { WardrobeBrowser } from '@/components/wardrobe/WardrobeBrowser'
+import { BaseModal } from '@/components/ui/BaseModal'
 import type { WardrobeListData } from '@/components/wardrobe/hooks/useWardrobeListData'
 import type { WardrobeItemActions } from '@/components/wardrobe/hooks/useWardrobeItemActions'
 import type { WardrobeContainer } from '@/lib/wardrobe/wardrobe-container'
@@ -82,6 +85,9 @@ function makeActions(): WardrobeItemActions {
     copy: noop,
     closeTransfer: noop,
     closeImage: noop,
+    folderPicker: null,
+    openFolderPicker: noop,
+    closeFolderPicker: noop,
     addressOf: (i: { characterId?: string | null }) =>
       i.characterId ? { scope: 'character', id: i.characterId } : { scope: 'project', id: 'proj-1' },
     refresh: jest.fn(async () => {}),
@@ -98,16 +104,52 @@ function routeFetch(folders: Array<{ path: string; name: string; itemCount: numb
   })) as unknown as typeof fetch
 }
 
-function renderBrowser(container: WardrobeContainer, data: WardrobeListData, actions = makeActions()) {
-  renderWithQuery(
-    <WardrobeBrowser
-      container={container}
-      data={data}
-      actions={actions}
-      showArchived={false}
-      onShowArchivedChange={jest.fn()}
-    />,
+/**
+ * The browser inside a modal wired the way the Wardrobe dialog wires it
+ * (`closeOnClickOutside={!actions.overlayOpen}`), with the picker state held
+ * the way `useWardrobeItemActions` holds it.
+ */
+function Harness({
+  container,
+  data,
+  base,
+  onDialogClose,
+}: {
+  container: WardrobeContainer
+  data: WardrobeListData
+  base: WardrobeItemActions
+  onDialogClose: () => void
+}) {
+  const [folderPicker, setFolderPicker] = React.useState<WardrobeItemActions['folderPicker']>(null)
+  const actions = {
+    ...base,
+    folderPicker,
+    overlayOpen: folderPicker !== null,
+    openFolderPicker: (items: NonNullable<WardrobeItemActions['folderPicker']>['items']) => {
+      if (items.length > 0) setFolderPicker({ items })
+    },
+    closeFolderPicker: () => setFolderPicker(null),
+  } as WardrobeItemActions
+  return (
+    <BaseModal isOpen onClose={onDialogClose} title="Wardrobe" closeOnClickOutside={!actions.overlayOpen}>
+      <WardrobeBrowser
+        container={container}
+        data={data}
+        actions={actions}
+        showArchived={false}
+        onShowArchivedChange={jest.fn()}
+      />
+    </BaseModal>
   )
+}
+
+function renderBrowser(
+  container: WardrobeContainer,
+  data: WardrobeListData,
+  actions = makeActions(),
+  onDialogClose: () => void = jest.fn(),
+) {
+  renderWithQuery(<Harness container={container} data={data} base={actions} onDialogClose={onDialogClose} />)
   return actions
 }
 
@@ -233,5 +275,27 @@ describe('WardrobeBrowser — folders', () => {
     expect(formal).toBeDisabled()
     expect(within(list).getByRole('option', { name: /top level/ })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled()
+  })
+
+  it('a click inside the picker does not close the dialog around the browser (bug 199)', async () => {
+    const onDialogClose = jest.fn()
+    renderBrowser(characterContainer, makeData([COAT, GLOVES], ownOnly), makeActions(), onDialogClose)
+    await waitFor(() => expect(folderRows()).toHaveLength(2))
+    fireEvent.click(within(folderRows()[0]).getByText('Formal'))
+    await screen.findByTitle('Opera Gloves')
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to folder…' }))
+    const list = await screen.findByRole('listbox', { name: 'Folders' })
+
+    // A real click starts with mousedown, which is what the click-outside
+    // handler listens for; fireEvent.click alone would never reach it.
+    const topLevel = within(list).getByRole('option', { name: /top level/ })
+    fireEvent.mouseDown(topLevel)
+    fireEvent.click(topLevel)
+
+    expect(onDialogClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('listbox', { name: 'Folders' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Move' })).not.toBeDisabled()
   })
 })
