@@ -1,4 +1,4 @@
-# Bug 227 — Importing a chat with "Create New" drops every message
+# Bug 228 — Importing a chat with "Create New" drops every message
 
 | | |
 |---|---|

@@ -5,7 +5,7 @@
  * importer creates under a new id (the `duplicate` conflict strategy, or any
  * import without `preserveIds`) therefore cannot reuse its bundle's message
  * ids whenever those messages may already exist — the original chat beside
- * its duplicate, or a second import of the same bundle (bug 227). So every
+ * its duplicate, or a second import of the same bundle (bug 228). So every
  * message is reminted, and every reference *to* a message inside the chat
  * row or the message rows follows it through one old → new map:
  *

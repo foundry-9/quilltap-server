@@ -5,6 +5,7 @@
  * assistant-side RNG auto-detection, and background memory/summary triggers.
  */
 
+import { markMailAlertsDelivered } from '@/lib/post-office/mailbox'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { stripCharacterNamePrefix, truncateAtForeignSpeaker, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 import {
@@ -303,6 +304,10 @@ export async function finalizeMessageResponse({
       consumed,
     })
   }
+
+  // Mark the letters Suparṇā announced this turn, on the same footing as the
+  // informs above: only now that the reply is persisted. Null on a swipe.
+  await markMailAlertsDelivered(builtContext.mailAlertsOwed, { chatId, via: 'finalizer' })
 
   // Surface the resolved confirmation state to the live client (badge +, on a
   // revision, the replacement bubble text). The persisted columns carry it too,

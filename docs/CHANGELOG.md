@@ -4,7 +4,7 @@
 
 ### 4.10-dev
 
-#### Fix bug 227: importing a chat with "Create New" dropped every message
+#### Fix bug 228: importing a chat with "Create New" dropped every message
 
 - The `duplicate` conflict strategy created the copy under a new chat id but inserted each message under its original id; `chat_messages.id` is global, so every insert failed with `UNIQUE constraint failed: chat_messages.id` and the copy had no messages. The default (non-`preserveIds`) path failed the same way when one bundle was imported twice.
 - A chat created under a fresh id now gets fresh message ids (`remintChatMessageIds`, `lib/import/quilltap-import/message-id-remap.ts`), one per message even when a bundle chat repeats an id. `swipeGroupId` (`swipe-<messageId>` only), `otherExtractionWatermarkMessageId` and `courierCheckpoints[*].lastResolvedMessageId` (object or JSON string) are rewritten through the same map. If any `summaryAnchorMessageIds` entry does not resolve, the summary is cleared with its anchors and `lastSummaryTurn`, as `?action=rebuild-summary` does. `preserveIds` imports keep source ids.
@@ -13,6 +13,18 @@
 - The `duplicate` path also recorded a random id in `idMaps.chats` that was never the copy's id, so informs, annotations, chat documents and memories for a duplicated chat pointed at a chat that did not exist. It now records the created chat's id.
 - Debug log per chat on message import; per-message warn on failure.
 - Test: `__tests__/unit/lib/import/quilltap-import/duplicate-chat-message-ids.test.ts`. Help: `help/system-import-export.md`.
+
+#### Fix bug 227: mail marked announced before its turn succeeded
+
+- Mail is no longer marked alerted during context building. `buildContext` returns `mailAlertsOwed`;
+  `markMailAlertsDelivered` (`lib/post-office/mailbox.ts`) flips the letters from the finalizer, the
+  preserved-partial path, a tool-only save, or a turn-skip. A provider failure that saves nothing leaves
+  them unalerted and they are announced again on the next attempt.
+- A swipe skips the mail check. It used to post a mail whisper into the re-roll and mark the letter.
+- The trailing sections (Core whisper, recall, mail, progressions, inform, turn note) are built once, in
+  one ordered list, and both the new-message and no-message branches use it (follow-up to bug 199).
+- Help: `help/post-office.md` states that the mail check covers turns with no new message and that a
+  failed turn re-announces its letters.
 
 #### Memory refactor, Phase 0: bugs filed, three fixed, one closed
 

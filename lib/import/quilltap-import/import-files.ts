@@ -156,7 +156,7 @@ async function remapLinkedTo(
   }
 
   for (const id of unresolved) {
-    // A message reminted with its chat (bug 227) resolves through that chat's
+    // A message reminted with its chat (bug 228) resolves through that chat's
     // own map, which holds only messages whose insert succeeded.
     const reminted = sourceChatIds
       .map((chatId) => idMaps.messages.get(chatId)?.get(id))

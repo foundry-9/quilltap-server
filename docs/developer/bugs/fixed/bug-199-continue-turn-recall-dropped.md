@@ -55,3 +55,10 @@ it can fire on a chained turn, and is now delivered when it does.
 
 In a chat with memories, press Continue. The request log's last user message contains the
 "you remember" recall text that the whisper shows.
+
+## Follow-up (PR 88, 2026-10-12)
+
+The trailing-only list was still a second hand-kept copy of the new-message list. Both branches now
+draw on one ordered `trailingContextSections` list (the no-message tail adds the scene note in front),
+and a test pins the two tails to the same order. The same review found that letters were marked
+alerted before the provider call: [bug 227](bug-227-mail-alerted-before-delivery.md).
