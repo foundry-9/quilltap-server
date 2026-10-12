@@ -233,6 +233,7 @@ export async function parseBackupZip(zipPath: string): Promise<{ data: BackupDat
         replace: true,
         migratedFromClothingRecordId: null,
         archivedAt: null,
+        folder: '',
         createdAt: preset.createdAt,
         updatedAt: preset.updatedAt,
       }));

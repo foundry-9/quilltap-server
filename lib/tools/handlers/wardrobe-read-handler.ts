@@ -72,6 +72,7 @@ export async function buildWardrobeReadOutput(
     component_titles: componentTitles,
     archived: item.archivedAt != null,
     is_own: pool.owns(item),
+    folder: item.folder || null,
     is_equipped: equipped.length > 0,
     equipped_slots: equipped,
     wear,
@@ -217,6 +218,7 @@ export function buildWardrobeReadFailure(error: string): WardrobeReadToolOutput 
     component_titles: [],
     archived: false,
     is_own: false,
+    folder: null,
     is_equipped: false,
     equipped_slots: [],
     error,
@@ -281,7 +283,8 @@ export function formatWardrobeReadResults(
     return `Wardrobe Error: ${output.error || 'Unknown error'}`;
   }
 
-  const lines: string[] = [`${output.title} (${output.item_id})`];
+  const folderTag = output.folder ? ` [folder: ${output.folder}]` : '';
+  const lines: string[] = [`${output.title} (${output.item_id})${folderTag}`];
   lines.push(`  types: ${output.types.join(', ')}`);
   if (output.appropriateness) lines.push(`  appropriateness: ${output.appropriateness}`);
   if (output.description) lines.push(`  description: ${output.description}`);

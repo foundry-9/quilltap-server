@@ -219,6 +219,15 @@ export function withWardrobeArchivedParam(url: string, includeArchived: boolean)
   return `${url}${url.includes('?') ? '&' : '?'}includeArchived=true`
 }
 
+/**
+ * A collection action endpoint for a container — the folder actions
+ * (`folders`, `create-folder`, `rename-folder`, `delete-folder`,
+ * `move-items`) and `instructions`.
+ */
+export function wardrobeCollectionActionUrl(container: WardrobeContainer, action: string): string {
+  return `${baseCollectionUrl(container)}?action=${encodeURIComponent(action)}`
+}
+
 /** Item endpoint for a container (GET / PUT / DELETE one item). */
 export function wardrobeItemUrl(container: WardrobeContainer, itemId: string): string {
   return `${baseCollectionUrl(container)}/${itemId}`

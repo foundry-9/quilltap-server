@@ -13,10 +13,15 @@
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
  *  - `⋮` kebab menu with secondary actions: Edit, Generate image, toggle the
- *    default-outfit flag, Duplicate, Move, Copy, and Delete. Which of these appear is
- *    governed by the `canManage` predicate: items living in the container
+ *    default-outfit flag, Duplicate, Archive, Move to folder…, Move to another
+ *    wardrobe…, Copy to another wardrobe…, and Delete. Which of these appear
+ *    is governed by the `canManage` predicate: items living in the container
  *    being browsed get the full set, items merged in from another shared
- *    tier keep only Move and Copy.
+ *    tier keep only the two cross-wardrobe actions (a borrowed item is filed
+ *    by whoever manages its own wardrobe).
+ *
+ * In the browser's select mode a manageable row shows a checkbox and its
+ * other controls go quiet; a search hit shows the folder it lives in.
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
@@ -69,6 +74,15 @@ interface WardrobeItemRowProps {
   onDuplicate: (item: WardrobeItem) => void
   onMove: (item: WardrobeItem) => void
   onCopy: (item: WardrobeItem) => void
+  /** File the item in another folder of its own wardrobe (manageable rows only). */
+  onMoveToFolder?: (item: WardrobeItem) => void
+  /**
+   * Select mode: a checkbox on a manageable row (never on a borrowed one),
+   * and the wear buttons and `⋮` disabled while it is on.
+   */
+  selection?: { selected: boolean; onToggle: (item: WardrobeItem) => void }
+  /** A search hit's folder, shown as a muted crumb (`Formal › Evening`). */
+  folderCrumb?: string | null
   onDelete: (item: WardrobeItem) => void
   /**
    * Archive an active garment, or restore an archived one. Optional — a
@@ -109,6 +123,9 @@ export function WardrobeItemRow({
   onDuplicate,
   onMove,
   onCopy,
+  onMoveToFolder,
+  selection,
+  folderCrumb,
   onDelete,
   onToggleArchived,
   onGenerateImage,
@@ -127,6 +144,7 @@ export function WardrobeItemRow({
   // "May this view edit it" and "where did it come from" are separate
   // questions; the chip answers the second, and only for borrowed rows.
   const originLabel = wardrobeOriginLabel(item.origin)
+  const selectMode = selection !== undefined
 
   const [slotPickerOpen, setSlotPickerOpen] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -178,6 +196,19 @@ export function WardrobeItemRow({
       style={{ marginLeft: depth > 0 ? `${depth * 12}px` : undefined }}
     >
       <div className="flex items-start gap-2">
+        {selectMode && (
+          manageable ? (
+            <input
+              type="checkbox"
+              className="qt-checkbox mt-1"
+              checked={selection.selected}
+              onChange={() => selection.onToggle(item)}
+              aria-label={`Select ${item.title}`}
+            />
+          ) : (
+            <span className="inline-block w-4" aria-hidden />
+          )
+        )}
         {isComposite ? (
           <button
             type="button"
@@ -236,6 +267,11 @@ export function WardrobeItemRow({
               </span>
             )}
           </div>
+          {folderCrumb && (
+            <div className="qt-text-xs qt-text-secondary mt-0.5" data-testid="wardrobe-folder-crumb">
+              {folderCrumb}
+            </div>
+          )}
           {/* Wear ledger tally — the count is what gets compared across rows;
               the full breakdown is the editor's job. */}
           <div className="qt-text-xs qt-text-secondary mt-0.5" data-testid="wardrobe-wear-line">
@@ -255,6 +291,7 @@ export function WardrobeItemRow({
             <button
               type="button"
               onClick={() => onEquip(item)}
+              disabled={selectMode}
               className="qt-button-ghost qt-button-sm"
               title="Puts it on across every slot it covers — layers or replaces per the item's setting"
             >
@@ -269,6 +306,7 @@ export function WardrobeItemRow({
               <button
                 type="button"
                 onClick={handleAddClick}
+                disabled={selectMode}
                 className="qt-button-ghost qt-button-sm"
                 title={addTooltip}
                 aria-label={addTooltip}
@@ -307,6 +345,7 @@ export function WardrobeItemRow({
               <button
                 type="button"
                 onClick={() => setKebabOpen((v) => !v)}
+                disabled={selectMode}
                 className="qt-button-ghost qt-button-sm"
                 aria-label="More actions"
                 title="More actions"
@@ -398,6 +437,21 @@ export function WardrobeItemRow({
                         )}
                       </>
                     )}
+                    {manageable && onMoveToFolder && (
+                      <li>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setKebabOpen(false)
+                            onMoveToFolder(item)
+                          }}
+                          className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                        >
+                          Move to folder…
+                        </button>
+                      </li>
+                    )}
                     <li>
                       <button
                         type="button"
@@ -408,7 +462,7 @@ export function WardrobeItemRow({
                         }}
                         className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
                       >
-                        Move
+                        Move to another wardrobe…
                       </button>
                     </li>
                     <li>
@@ -421,7 +475,7 @@ export function WardrobeItemRow({
                         }}
                         className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
                       >
-                        Copy
+                        Copy to another wardrobe…
                       </button>
                     </li>
                     {manageable && (

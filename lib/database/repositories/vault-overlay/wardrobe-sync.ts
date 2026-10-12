@@ -27,7 +27,8 @@ import {
   CHARACTER_WARDROBE_JSON_PATH,
   WARDROBE_INSTRUCTIONS_FILENAME,
 } from './schema';
-import { hasLinkedVault } from './parsers';
+import { joinFolder, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
+import { hasLinkedVault, isWardrobeItemDocument } from './parsers';
 import { readCharacterVaultWardrobe } from './vault-readers';
 import { projectArrayIntoVaultFolder } from './vault-projection';
 
@@ -92,7 +93,7 @@ export async function getOverlaidWardrobeItems(
 
 /**
  * Project an authoritative wardrobe-item list into the vault's `Wardrobe/`
- * folder, deleting any stale legacy `wardrobe.json` so the new format is the
+ * folder — each item at `Wardrobe/<folder>/<title>.md` — deleting any stale legacy `wardrobe.json` so the new format is the
  * single source on disk. Composite items emit their `componentItems:` slug
  * arrays via the slug map built here. Shared between the per-write vault
  * writers (`wardrobe-writes.ts`) and the one-time startup refresh so they all
@@ -114,13 +115,25 @@ export async function projectVaultWardrobe(
     CHARACTER_WARDROBE_FOLDER,
     items,
     (item) => ({
-      fileName: `${sanitizeFileName(item.title)}.md`,
+      // The folder is the path: an item filed in `Formal/Evening` is written
+      // to `Wardrobe/Formal/Evening/<title>.md`, and a moved item is written
+      // at its new path while the sweep removes the old one.
+      fileName: joinFolder(item.folder ?? '', `${sanitizeFileName(item.title)}.md`),
       content: buildWardrobeItemFile(item, slugByItemId),
     }),
     characterId,
-    // The dressing-instructions file is not a garment: the sweep must never
-    // delete it, and an item titled "Instructions" must land on a suffix.
-    { preserveFileNames: [WARDROBE_INSTRUCTIONS_FILENAME] },
+    {
+      // The dressing-instructions file is not a garment: the sweep must never
+      // delete it, and an item titled "Instructions" must land on a suffix.
+      preserveFileNames: [WARDROBE_INSTRUCTIONS_FILENAME],
+      // Subfolders are the operator's filing; `images/` holds item pictures
+      // and is never swept.
+      recursive: { excludeSubfolders: WARDROBE_RESERVED_FOLDER_SEGMENTS },
+      // Only item files are the wardrobe's to sweep: a note, or a file that
+      // doesn't parse as an item, kept under `Wardrobe/` (at any depth) is
+      // left exactly where the operator put it.
+      ownsFile: isWardrobeItemDocument,
+    },
   );
 
   // The legacy single-JSON file is always cleaned up after a successful

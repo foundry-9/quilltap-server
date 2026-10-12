@@ -548,13 +548,14 @@ describe('ndjson-writer', () => {
       expect(footer.counts.wardrobeWear).toBe(2);
     });
 
-    it("emits the ledger for a store's Wardrobe items only — not notes, nested files or instructions", async () => {
+    it("emits the ledger for a store's Wardrobe items only — not notes, pictures or instructions", async () => {
       const storeId = generateId();
       globalRepos.docMountPoints.findById.mockResolvedValue(mountPoint(storeId));
       globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
         wardrobeDoc(storeId, 'Wardrobe/Scarf.md', SCARF_ID),
         wardrobeDoc(storeId, 'Wardrobe/instructions.md', null),
-        wardrobeDoc(storeId, 'Wardrobe/Old/Coat.md', COAT_ID),
+        wardrobeDoc(storeId, 'Wardrobe/Formal/instructions.md', null),
+        wardrobeDoc(storeId, `Wardrobe/images/${HAT_ID}/Hat.md`, HAT_ID),
         wardrobeDoc(storeId, 'Notes/Hat.md', HAT_ID),
       ]);
       globalRepos.wardrobeWear.findRowsForItems.mockResolvedValue([wearRow(SCARF_ID)]);
@@ -569,6 +570,27 @@ describe('ndjson-writer', () => {
 
       expect(globalRepos.wardrobeWear.findRowsForItems).toHaveBeenCalledWith([SCARF_ID]);
       expect(records.filter((r) => r.kind === 'wardrobe_wear')).toHaveLength(1);
+    });
+
+    it('emits the ledger for an item filed in a wardrobe subfolder', async () => {
+      const storeId = generateId();
+      globalRepos.docMountPoints.findById.mockResolvedValue(mountPoint(storeId));
+      globalRepos.docMountDocuments.findByMountPointId.mockResolvedValue([
+        wardrobeDoc(storeId, 'Wardrobe/Scarf.md', SCARF_ID),
+        wardrobeDoc(storeId, 'Wardrobe/Formal/Evening/Coat.md', COAT_ID),
+      ]);
+      globalRepos.wardrobeWear.findRowsForItems.mockResolvedValue([wearRow(SCARF_ID), wearRow(COAT_ID)]);
+
+      const records = (await drain(
+        streamExportRecords(testUserId, {
+          type: 'document-stores',
+          scope: 'selected',
+          selectedIds: [storeId],
+        })
+      )) as Array<Record<string, unknown>>;
+
+      expect(globalRepos.wardrobeWear.findRowsForItems).toHaveBeenCalledWith([SCARF_ID, COAT_ID]);
+      expect(records.filter((r) => r.kind === 'wardrobe_wear')).toHaveLength(2);
     });
 
     it('reads no ledger when the export carries no wardrobe items', async () => {

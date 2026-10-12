@@ -2,7 +2,7 @@
 
 /**
  * Row actions for a wardrobe list — star, archive, draw a picture, delete,
- * duplicate — plus the open/closed state of the overlays they summon (the
+ * duplicate (into the same folder) — plus the open/closed state of the overlays they summon (the
  * item editor, the move/copy dialog, the full-screen picture).
  *
  * Every item is addressed through `containerForListedItem` when the browsed
@@ -34,7 +34,13 @@ import {
 
 export type EditorRequest =
   | { kind: 'edit'; item: WardrobeItem }
-  | { kind: 'create'; mode: 'single' | 'bundle'; componentItemIds: string[] }
+  | {
+      kind: 'create'
+      mode: 'single' | 'bundle'
+      componentItemIds: string[]
+      /** The folder being browsed — where the editor files the new item by default. */
+      folder?: string
+    }
 
 export interface TransferRequest {
   item: ListedWardrobeItem
@@ -81,10 +87,14 @@ export function useWardrobeItemActions({
     () => new Set(),
   )
 
-  /** Re-read every wardrobe list, and in chat the worn snapshot. */
+  /**
+   * Re-read every wardrobe list and folder tree (an item's folder may be new),
+   * and in chat the worn snapshot.
+   */
   const refresh = useCallback(async (): Promise<void> => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.lists }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.folderLists }),
       chatId
         ? queryClient.invalidateQueries({ queryKey: queryKeys.wardrobe.outfit(chatId) })
         : Promise.resolve(),
@@ -241,8 +251,8 @@ export function useWardrobeItemActions({
 
   const openEditor = useCallback((item: WardrobeItem) => setEditor({ kind: 'edit', item }), [])
   const openCreate = useCallback(
-    (mode: 'single' | 'bundle', componentItemIds: string[] = []) =>
-      setEditor({ kind: 'create', mode, componentItemIds }),
+    (mode: 'single' | 'bundle', componentItemIds: string[] = [], opts?: { folder?: string }) =>
+      setEditor({ kind: 'create', mode, componentItemIds, folder: opts?.folder }),
     [],
   )
   const closeEditor = useCallback(() => setEditor(null), [])
@@ -277,6 +287,8 @@ export function useWardrobeItemActions({
     closeImage,
     addressOf,
     refresh,
+    /** Ask the operator to confirm (the folder delete uses it too). */
+    confirm: requestConfirmation,
   }
 }
 
