@@ -6,7 +6,7 @@
 
 #### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)
 
-- One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `resolveScenarioRef` / `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.
+- One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.
 - Scenario route factory now covers General too and builds the collection list/create bodies.
 - New raw finders: `characters.findByDocumentMountPointIdRaw`, `findByOfficialMountPointIdRaw` on store-backed repositories (projects, groups). `addScenario` / `updateScenario` accept `description`.
 - `GET /api/v1/scenarios?action=everywhere` lists every scenario in the instance by owner with a 240-char excerpt (one document query); `?action=read&mountPointId=&path=` reads one by ref.
@@ -24,6 +24,24 @@
 - Character scenario location is read-only (`StoreScenarioLocation` carries writes for General/project/group). Removed the unused character write methods, `resolveBody`, `resolveScenarioRef`, and the test-only `listScenariosInFolder` / `readScenarioByPath` / `resolveScenarioBody`.
 - Help: new `help/scenario-browser.md`; updated `general-scenarios.md`, `project-scenarios.md`, `groups.md`, `chats.md`.
 - Review fixes: the in-chat control no longer selects a source whose file is gone (saving it replaced the scene with the notes alone); leaving Custom for a preset clears the box instead of appending the old scene as notes; the character location's `update` keeps `defaultScenarioId` on a retitle and refuses a retitle onto an existing file. The scenario-by-ref query is one hook, `useScenarioRefBody`; `components/scenario/types.ts` reuses `ScenarioRef` from `chat.types`.
+
+#### Spec: memory system refactor
+
+- `docs/developer/features/memory-system-refactor.md`: a design for rebuilding the Commonplace Book
+  end to end on six abstractions it never had — one candidate shape, one extraction context, a pure
+  admission decision applied in the parent over host-RPC, three named scores (relevance, salience,
+  protection) with one function each, one clock for event time on both the write and read side, a
+  staged recall pipeline whose delivery step is the only record of what the model saw, and one
+  maintenance job (fold near-duplicates, consolidate, demote, retire, mirror) with a parent-side
+  ledger. `vector_entries` is retired for memories in favour of `memories.embedding` + `tier` behind a
+  `memoryIndex` owner; every delete goes through `retireMemories`. Lists 28 defects to file as bugs
+  199–226 (four to fix first: recall never delivered on continue turns, orphan vectors blinding the
+  gate, chat wipe and dedup deleting manual rows and digests, entity anchors cut by the cosine floor).
+  Seven phases, each with tests, acceptance and a V4test walkthrough, shipped one PR per phase. The
+  fifteen decisions in §7 (including moving housekeeping settings to `instance_settings.memoryMaintenance`
+  and a single instance-wide calendar for event time) are locked. The four code audits the diagnosis
+  rests on (creation, gate/merge, scoring/recall, maintenance) are appended in full. Linked from
+  `ROADMAP.md`. Design only; nothing built yet.
 
 #### Specs: scenarios from anywhere; wardrobe folders
 
