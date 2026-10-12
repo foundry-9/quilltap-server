@@ -8,6 +8,8 @@
  * here rather than in either surface's own module.
  */
 
+import type { ScenarioRef } from '@/lib/schemas/chat.types'
+
 /**
  * Suffix appended to a dropdown option for an archived entry. A native
  * `<option>` can't hold a badge element, so the marker has to be text.
@@ -127,11 +129,8 @@ export const STORE_SCENARIO_PREFIX = 'store:'
  */
 export const BROWSE_SCENARIO_VALUE = '__browse__'
 
-/** The universal pointer to one scenario file, wherever it lives. */
-export interface ScenarioRef {
-  mountPointId: string
-  path: string
-}
+/** The universal pointer to one scenario file, wherever it lives (schema of record in `chat.types`). */
+export type { ScenarioRef }
 
 /**
  * Which tier a picker is currently pointed at. `custom` means no preset —

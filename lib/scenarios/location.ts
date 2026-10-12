@@ -367,6 +367,12 @@ function characterLocation(
     async update(path, patch) {
       const current = await readOrThrow(path);
       const title = patch.name ?? current.name;
+      // A retitle re-projects the file under its new name, which re-keys it.
+      const newPath = characterScenarioPathForTitle(title);
+      // Two scenarios projecting to one file would overwrite each other.
+      if (newPath !== current.path && (await repos.docMountDocuments.findByMountPointAndPath(mountPointId, newPath))) {
+        throw new ScenarioConflictError(sanitizeFileName(title));
+      }
       const updated = await repos.characters.updateScenario(characterId, idForPath(current.path), {
         title,
         content: patch.body,
@@ -374,9 +380,11 @@ function characterLocation(
         ...(patch.archived !== undefined && { archived: patch.archived }),
       });
       if (!updated) throw new ScenarioNotFoundError(current.path);
-      // A retitle re-projects the file under its new name, which re-keys it.
-      const newPath = characterScenarioPathForTitle(title);
-      if (patch.isDefault) await repos.characters.update(characterId, { defaultScenarioId: idForPath(newPath) });
+      // The default is a column keyed by the path-derived id, so a retitled
+      // default must follow its file (as `rename` does) or it would dangle.
+      if (patch.isDefault || (current.isDefault && newPath !== current.path)) {
+        await repos.characters.update(characterId, { defaultScenarioId: idForPath(newPath) });
+      }
       logger.debug('[ScenarioLocation] Updated character scenario', { characterId, mountPointId, path: current.path, newPath });
       return readOrThrow(newPath);
     },

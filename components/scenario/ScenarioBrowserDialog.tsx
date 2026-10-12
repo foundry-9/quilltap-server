@@ -118,6 +118,27 @@ export function pickToSelection(
   }
 }
 
+/**
+ * One scenario's body by ref (`GET /api/v1/scenarios?action=read`), cached per
+ * ref. The one reader behind the browser's preview and the pickers' preview of
+ * a `store` selection. Pass null to read nothing.
+ */
+export function useScenarioRefBody(
+  ref: { mountPointId: string; path: string } | null,
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: queryKeys.scenarios.ref(ref?.mountPointId ?? '', ref?.path ?? ''),
+    queryFn: ({ signal }) =>
+      apiFetch<{ scenario: { body: string } }>(
+        `/api/v1/scenarios?action=read&mountPointId=${encodeURIComponent(ref!.mountPointId)}&path=${encodeURIComponent(ref!.path)}`,
+        { signal },
+      ),
+    enabled: ref !== null && options.enabled !== false,
+    retry: false,
+  })
+}
+
 /** Case-insensitive match on name, description, excerpt and owner name. */
 export function scenarioMatchesSearch(source: BrowserSource, scenario: BrowserScenario, query: string): boolean {
   const q = query.trim().toLowerCase()
@@ -171,13 +192,7 @@ export function ScenarioBrowserDialog({ isOpen, onClose, hierarchy, onPick }: Sc
     ? results.find((r) => r.source.mountPointId === highlight.mountPointId && r.scenario.path === highlight.path) ?? null
     : null
 
-  const { data: preview, isLoading: previewLoading } = useQuery({
-    queryKey: queryKeys.scenarios.ref(highlight?.mountPointId ?? '', highlight?.path ?? ''),
-    queryFn: ({ signal }) =>
-      apiFetch<{ scenario: { body: string } }>(
-        `/api/v1/scenarios?action=read&mountPointId=${encodeURIComponent(highlight!.mountPointId)}&path=${encodeURIComponent(highlight!.path)}`,
-        { signal },
-      ),
+  const { data: preview, isLoading: previewLoading } = useScenarioRefBody(highlight, {
     enabled: isOpen && highlighted !== null,
   })
 

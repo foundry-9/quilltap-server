@@ -32,10 +32,7 @@ import type {
 } from './types'
 import type { ProjectListEntry, RefetchedScenarioTiers } from './hooks/useNewChat'
 import { ScenarioSelect } from '@/components/scenario/ScenarioSelect'
-import { ScenarioBrowserDialog } from '@/components/scenario/ScenarioBrowserDialog'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { ScenarioBrowserDialog, useScenarioRefBody } from '@/components/scenario/ScenarioBrowserDialog'
 import type { ScenarioSelection } from '@/components/scenario/types'
 import { SubpromptPicker } from '@/components/subprompts'
 import dynamic from 'next/dynamic'
@@ -235,21 +232,9 @@ export function NewChatForm({
   }, [scenarioSelection, projectScenarios, generalScenarios, groupScenarios, allCharacterScenarios])
 
   // A pick from elsewhere carries no body in the option lists; read it by ref.
-  const { data: storePreview } = useQuery({
-    queryKey: queryKeys.scenarios.ref(
-      scenarioSelection.kind === 'store' ? scenarioSelection.mountPointId : '',
-      scenarioSelection.kind === 'store' ? scenarioSelection.path : '',
-    ),
-    queryFn: ({ signal }) =>
-      apiFetch<{ scenario: { body: string } }>(
-        scenarioSelection.kind === 'store'
-          ? `/api/v1/scenarios?action=read&mountPointId=${encodeURIComponent(scenarioSelection.mountPointId)}&path=${encodeURIComponent(scenarioSelection.path)}`
-          : '',
-        { signal },
-      ),
-    enabled: scenarioSelection.kind === 'store',
-    retry: false,
-  })
+  const { data: storePreview } = useScenarioRefBody(
+    scenarioSelection.kind === 'store' ? scenarioSelection : null,
+  )
 
   const selectedPreset =
     scenarioSelection.kind === 'custom'

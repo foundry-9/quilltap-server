@@ -235,6 +235,15 @@ describe('ChatScenarioControl', () => {
       expect(screen.queryByRole('button', { name: 'Reload from source' })).not.toBeInTheDocument()
     })
 
+    it('keeps the scene it has when the shelf copy is gone, rather than a ref that would save as notes alone', async () => {
+      stubTiers(atriumSource({ exists: false, notes: 'Keep the cracked pane.' }))
+      const scene = 'Glass overhead.\n\nKeep the cracked pane.'
+      renderControl({ scenarioText: scene })
+
+      await screen.findByText(/the shelf copy is gone/)
+      expect(screen.getByLabelText('Custom scenario text')).toHaveValue(scene)
+    })
+
     it('offers Reload when the shelf copy changed, and reload posts the ref with the same notes', async () => {
       stubTiers(atriumSource({ changed: true, notes: 'Keep the cracked pane.' }))
       const onChatUpdated = jest.fn()
@@ -301,6 +310,23 @@ describe('ChatScenarioControl', () => {
         generalScenarioPath: 'general/masquerade.md',
         scenario: 'One guest lies.',
       })
+    })
+
+    it('does not carry a custom scene beneath a preset picked over it', async () => {
+      stubTiers()
+      const onChatUpdated = jest.fn()
+      renderControl({ onChatUpdated })
+
+      await userEvent.type(await screen.findByLabelText('Custom scenario text'), 'A storm at sea.')
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'A Masquerade' })).toBeInTheDocument()
+      )
+      await userEvent.selectOptions(screen.getByLabelText('Scenario'), 'general:general/masquerade.md')
+      expect(screen.getByLabelText('Notes beneath the scene')).toHaveValue('')
+      await userEvent.click(screen.getByRole('button', { name: 'Change scenario' }))
+
+      await waitFor(() => expect(onChatUpdated).toHaveBeenCalled())
+      expect(savedPayload()).toEqual({ generalScenarioPath: 'general/masquerade.md', scenario: '' })
     })
 
     it('surfaces the server\'s own error text instead of a bare status code', async () => {

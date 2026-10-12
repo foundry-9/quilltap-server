@@ -31,7 +31,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { ScenarioSelect } from '@/components/scenario/ScenarioSelect'
-import { ScenarioBrowserDialog } from '@/components/scenario/ScenarioBrowserDialog'
+import { ScenarioBrowserDialog, useScenarioRefBody } from '@/components/scenario/ScenarioBrowserDialog'
 import { withArchivedParam } from '@/components/scenarios/archived-query'
 import {
   scenarioSelectionToPayload,
@@ -218,20 +218,22 @@ export function ChatScenarioControl({
   // than seeded into state, so it settles as the tiers finish loading without
   // ever fighting a choice the user has since made.
   const currentAsSelection = useMemo((): { selection: ScenarioSelection; customText: string } => {
-    if (sourceInfo?.source && sourceInfo.owner) {
+    // Only a source whose file still exists can seed a preset: a save re-reads
+    // the file, and a gone one would resolve to nothing, leaving the chat with
+    // the notes alone. A gone source falls through to the text below, so the
+    // scene the chat actually has stays in the box.
+    if (sourceInfo?.source && sourceInfo.owner && sourceInfo.exists) {
       const { source, owner } = sourceInfo
       const notes = sourceInfo.notes ?? ''
-      if (sourceInfo.exists) {
-        if (owner.scope === 'general') return { selection: { kind: 'general', path: source.path }, customText: notes }
-        if (owner.scope === 'project' && owner.id && owner.id === projectId) {
-          return { selection: { kind: 'project', path: source.path }, customText: notes }
-        }
-        if (owner.scope === 'group' && owner.id && groupIds.includes(owner.id)) {
-          return { selection: { kind: 'group', groupId: owner.id, path: source.path }, customText: notes }
-        }
-        if (owner.scope === 'character' && owner.id && owner.id === singleLlmCharacterId && sourceInfo.scenarioId) {
-          return { selection: { kind: 'character', scenarioId: sourceInfo.scenarioId }, customText: notes }
-        }
+      if (owner.scope === 'general') return { selection: { kind: 'general', path: source.path }, customText: notes }
+      if (owner.scope === 'project' && owner.id && owner.id === projectId) {
+        return { selection: { kind: 'project', path: source.path }, customText: notes }
+      }
+      if (owner.scope === 'group' && owner.id && groupIds.includes(owner.id)) {
+        return { selection: { kind: 'group', groupId: owner.id, path: source.path }, customText: notes }
+      }
+      if (owner.scope === 'character' && owner.id && owner.id === singleLlmCharacterId && sourceInfo.scenarioId) {
+        return { selection: { kind: 'character', scenarioId: sourceInfo.scenarioId }, customText: notes }
       }
       return {
         selection: {
@@ -271,8 +273,14 @@ export function ChatScenarioControl({
 
   const { selection, customText } = draft ?? currentAsSelection
 
+  // Under Custom the box is the whole scene; under a preset it is the notes
+  // beneath it. Leaving Custom for a preset must not turn the old scene into
+  // notes, or the new preset would be posted with the entire old scene layered
+  // beneath it. Preset → preset (and preset → Custom) keep what was typed.
+  const textForSelection = (next: ScenarioSelection) =>
+    selection.kind === 'custom' && next.kind !== 'custom' ? '' : customText
   const setSelection = (next: ScenarioSelection) => {
-    setDraft({ selection: next, customText })
+    setDraft({ selection: next, customText: textForSelection(next) })
   }
   const setCustomText = (next: string) => {
     setDraft({ selection, customText: next })
@@ -300,21 +308,7 @@ export function ChatScenarioControl({
   }, [selection, projectScenarios, generalScenarios, groupScenarios, characterScenarios])
 
   // A pick from elsewhere carries no body in the option lists; read it by ref.
-  const { data: storePreview } = useQuery({
-    queryKey: queryKeys.scenarios.ref(
-      selection.kind === 'store' ? selection.mountPointId : '',
-      selection.kind === 'store' ? selection.path : '',
-    ),
-    queryFn: ({ signal }) =>
-      apiFetch<{ scenario: { body: string } }>(
-        selection.kind === 'store'
-          ? `/api/v1/scenarios?action=read&mountPointId=${encodeURIComponent(selection.mountPointId)}&path=${encodeURIComponent(selection.path)}`
-          : '',
-        { signal },
-      ),
-    enabled: enabled && selection.kind === 'store',
-    retry: false,
-  })
+  const { data: storePreview } = useScenarioRefBody(selection.kind === 'store' ? selection : null, { enabled })
   const previewBody = selection.kind === 'store' ? storePreview?.scenario.body ?? null : selectedPresetBody
 
   // "Use this scene": the Host's draft becomes the custom text. The existing
@@ -414,7 +408,7 @@ export function ChatScenarioControl({
           isOpen={browserOpen}
           onClose={() => setBrowserOpen(false)}
           hierarchy={{ projectId, groupIds, characterId: singleLlmCharacterId }}
-          onPick={(next) => setDraft({ selection: next, customText })}
+          onPick={setSelection}
         />
       )}
       {sourceInfo?.source && sourceInfo.owner && (
