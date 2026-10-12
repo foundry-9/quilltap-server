@@ -24,7 +24,12 @@
  * at or before it are never re-read, which is also what keeps a fold that
  * re-walks old turns (a summary rebuild) from re-paying for them. A window
  * wider than one prompt is read in consecutive slices, so the watermark never
- * passes a message the prompt did not see (bug 206). The daily maintenance
+ * passes a message the prompt did not see (bug 206). The pass reads from its
+ * watermark through the end of the window it is handed (`foldPassRange`), so
+ * a slice an earlier run lost to a timeout is read before a newer fold window
+ * rather than jumped; and one run reads at most
+ * {@link FOLD_OTHER_MAX_SLICES_PER_JOB} slices, leaving the rest of a long
+ * backlog to the next fold or sweep. The daily maintenance
  * sweep uses the same watermark to catch up short or idle chats that never
  * reach a fold (`findFoldOtherCatchupCandidates`).
  *
@@ -33,6 +38,7 @@
  * @module memory/fold-other-pass
  */
 
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { getRepositories } from '@/lib/repositories/factory'
 import {
   extractOtherMemoriesFromFold,
@@ -54,7 +60,7 @@ import {
 import {
   isFoldEligibleMessage,
   messagesPastWatermark,
-  windowPastWatermark,
+  foldPassRange,
   sliceFoldWindow,
 } from './fold-window'
 import { buildExtractionUncensoredFallback, loadExtractionProjectDescription } from './extraction-route'
@@ -79,6 +85,9 @@ import { logger } from '@/lib/logger'
 /** One prompt reads at most this many eligible messages; a wider window is read in consecutive slices of it. */
 export const FOLD_OTHER_MAX_WINDOW_MESSAGES = 60
 
+/** One run reads at most this many slices; a longer backlog continues on the next fold or sweep, from the advanced watermark. */
+export const FOLD_OTHER_MAX_SLICES_PER_JOB = 4
+
 /** A chat must have been quiet this long before the sweep treats its tail as uncovered. */
 export const FOLD_OTHER_CATCHUP_IDLE_MS = 2 * 60 * 60 * 1000
 
@@ -93,6 +102,12 @@ export interface RunFoldOtherPassInput {
   userId: string
   /** The covered window: chronological, may contain system/tool rows (they are filtered). */
   windowMessages: MessageEvent[]
+  /**
+   * The chat's whole transcript (`type: 'message'` rows, chronological), when
+   * the caller already holds it. Saves a second full read and decompression;
+   * read here only when absent and a watermark needs it.
+   */
+  chatMessages?: MessageEvent[]
   cheapLLM: CheapLLMSelection
   /** The profile whose token budget bounds the call (per-turn uses the chat profile). */
   cheapMaxTokens?: number
@@ -117,6 +132,8 @@ export interface FoldOtherPassResult {
   candidatesProposed: number
   /** Passes that never happened because the cheap LLM timed out. The caller may fail a job on this. */
   passesLostToTimeout: number
+  /** Slices left unread because the run hit {@link FOLD_OTHER_MAX_SLICES_PER_JOB}. */
+  slicesDeferred: number
   watermarkAdvancedTo: string | null
   usage: { promptTokens: number; completionTokens: number; totalTokens: number }
   extractedCandidates?: ExtractedCandidate[]
@@ -130,6 +147,7 @@ function emptyResult(skippedReason?: string): FoldOtherPassResult {
     memoriesReinforced: 0,
     candidatesProposed: 0,
     passesLostToTimeout: 0,
+    slicesDeferred: 0,
     watermarkAdvancedTo: null,
     usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
   }
@@ -166,22 +184,24 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
     const chat = await repos.chats.findById(chatId)
     if (!chat) return emptyResult('no-chat')
 
-    // Drop what the watermark already covers. The fold may re-walk early turns
-    // (a summary rebuild); the watermark is what stops us paying twice.
+    // Read from the watermark through the end of the window. The fold may
+    // re-walk early turns (a summary rebuild); the watermark is what stops us
+    // paying twice. A fold of only newer turns after a lost slice hands us a
+    // window past a gap; the gap is read first, never jumped.
     let window = input.windowMessages
     if (chat.otherExtractionWatermarkMessageId && window.length > 0) {
-      const all = (await repos.chats.getMessages(chatId)).filter(
-        (m): m is MessageEvent => m.type === 'message',
-      ) as unknown as MessageEvent[]
+      const all = input.chatMessages ?? (await loadTranscript(chatId))
       const before = window.length
-      const cut = windowPastWatermark(window, all, chat.otherExtractionWatermarkMessageId)
-      if (cut.applied) {
-        window = cut.window
+      const range = foldPassRange(window, all, chat.otherExtractionWatermarkMessageId)
+      if (range.applied) {
+        window = range.messages
         logger.debug('[FoldOtherPass] Applied watermark to window', {
           chatId,
           watermark: chat.otherExtractionWatermarkMessageId,
           before,
           after: window.length,
+          gap: range.gap,
+          transcriptHandedIn: input.chatMessages !== undefined,
         })
         if (window.length === 0) return emptyResult('behind-watermark')
       }
@@ -190,7 +210,16 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
     const coverThrough =
       input.coverThroughMessageId ?? window[window.length - 1]?.id ?? null
     const eligible = window.filter(isFoldEligibleMessage)
-    const slices = sliceFoldWindow(eligible, FOLD_OTHER_MAX_WINDOW_MESSAGES, coverThrough)
+    const allSlices = sliceFoldWindow(eligible, FOLD_OTHER_MAX_WINDOW_MESSAGES, coverThrough)
+    const slices = allSlices.slice(0, FOLD_OTHER_MAX_SLICES_PER_JOB)
+    result.slicesDeferred = allSlices.length - slices.length
+    if (result.slicesDeferred > 0) {
+      logger.info('[FoldOtherPass] Backlog wider than one run; the rest waits for the next fold or sweep', {
+        chatId,
+        slicesRead: slices.length,
+        slicesDeferred: result.slicesDeferred,
+      })
+    }
     if (slices.length > 1) {
       logger.info('[FoldOtherPass] Window wider than one prompt; reading it in slices', {
         chatId,
@@ -290,9 +319,12 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
         createdAt: m.createdAt ?? null,
       }))
       const lastStamped = [...sliceMessages].reverse().find(m => m.createdAt)
+      // The memory-calendar zone is resolved before the prompt is built and
+      // rides on the clock to the `when` resolver (writeCandidate).
       const clock: ExtractionClock = {
         nowIso: lastStamped?.createdAt ?? new Date().toISOString(),
         timelineMode: input.timelineMode,
+        timeZone: await refreshMemoryTimeZone(),
       }
       const writeCtx = {
         chatId,
@@ -404,6 +436,7 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
               candidate,
               passLabel: `fold OTHER memory ${observer.name} about ${subject.name}`,
               ctx: writeCtx,
+              timeZone: clock.timeZone,
               sourceMessageId: lastMessage?.id ?? null,
               sourceMessageCreatedAt: lastMessage?.createdAt ?? null,
               debugLogs,
@@ -455,6 +488,13 @@ export async function runFoldOtherPass(input: RunFoldOtherPassInput): Promise<Fo
     result.skippedReason = 'error'
     return result
   }
+}
+
+async function loadTranscript(chatId: string): Promise<MessageEvent[]> {
+  logger.debug('[FoldOtherPass] Reading the transcript to place the watermark', { chatId })
+  return (await getRepositories().chats.getMessages(chatId)).filter(
+    (m): m is MessageEvent => m.type === 'message',
+  ) as unknown as MessageEvent[]
 }
 
 async function advanceWatermark(
@@ -638,6 +678,7 @@ export async function runFoldOtherCatchup(input: RunFoldOtherCatchupInput): Prom
     chatId,
     userId,
     windowMessages: window,
+    chatMessages: messages,
     cheapLLM,
     cheapMaxTokens: resolveMaxTokens(input.connectionProfile),
     uncensoredFallback: buildExtractionUncensoredFallback(chat, conciergePolicy, input.availableProfiles),

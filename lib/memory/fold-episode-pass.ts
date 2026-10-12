@@ -12,14 +12,17 @@
  * expansion can pull the fragments when the episode surfaces.
  *
  * Watermark: `chats.episodeExtractionWatermarkMessageId` is the last message
- * the pass has read. A window is cut to what lies past it, so a hard-rebuild
- * fold (which re-walks turns 1..N) or a refold after `rebuild-summary` never
- * re-extracts history the pass already covered (bug 207). The same
+ * the pass has read. The pass reads from its watermark through the end of the
+ * fold's window (`foldPassRange`), so a hard-rebuild fold (which re-walks
+ * turns 1..N) or a refold after `rebuild-summary` never re-extracts history
+ * the pass already covered (bug 207), and a stretch an earlier run lost to a
+ * timeout is read before the new window rather than jumped. The same
  * eligibility filter as the fold OTHER pass applies (`fold-window.ts`), and a
- * window wider than {@link FOLD_EPISODE_MAX_WINDOW_MESSAGES} is read in
- * consecutive slices, the watermark advancing past each one as it is read. A
- * slice lost to a cheap-LLM timeout stops the run and leaves the watermark
- * before it.
+ * range wider than {@link FOLD_EPISODE_MAX_WINDOW_MESSAGES} is read in
+ * consecutive slices, the watermark advancing past each one as it is read —
+ * at most {@link FOLD_EPISODE_MAX_SLICES_PER_JOB} of them per run, the rest
+ * left for the next fold. A slice lost to a cheap-LLM timeout stops the run
+ * and leaves the watermark before it.
  *
  * The cheap-LLM call carries the chat's uncensored fallback, so an empty
  * answer on dangerous content retries on the Concierge desk exactly as the
@@ -40,7 +43,7 @@ import {
 } from './cheap-llm-tasks'
 import { createMemoryWithGate } from './memory-service'
 import { resolveEpisodicAnchors } from './episodic-anchors'
-import { isFoldEligibleMessage, windowPastWatermark, sliceFoldWindow } from './fold-window'
+import { isFoldEligibleMessage, foldPassRange, sliceFoldWindow } from './fold-window'
 import { resolveSpeakerNames, speakerLabel, type SpeakerNames } from '@/lib/chat/speaker-names'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatParticipantBase, MessageEvent } from '@/lib/schemas/types'
@@ -54,11 +57,20 @@ const MAX_FRAGMENT_LINKS = 8
 /** One episode prompt reads at most this many eligible messages; a wider window is read in slices of it. */
 export const FOLD_EPISODE_MAX_WINDOW_MESSAGES = 60
 
+/** One run reads at most this many slices; a longer backlog is left for the next fold, from the advanced watermark. */
+export const FOLD_EPISODE_MAX_SLICES_PER_JOB = 4
+
 export interface RunFoldEpisodePassInput {
   chatId: string
   userId: string
   /** The just-folded window: USER + character messages, chronological. */
   windowMessages: MessageEvent[]
+  /**
+   * The chat's whole transcript (`type: 'message'` rows, chronological), when
+   * the caller already holds it. Saves a second full read and decompression
+   * per fold; read here only when absent and a watermark needs it.
+   */
+  chatMessages?: MessageEvent[]
   cheapLLM: CheapLLMSelection
   /** Retry target for an empty answer on dangerous content (the Concierge desk). */
   uncensoredFallback?: UncensoredFallbackOptions
@@ -73,6 +85,8 @@ export interface FoldEpisodePassResult {
   fragmentsLinked: number
   /** Slices the window was read in (0 when nothing past the watermark was eligible). */
   slices: number
+  /** Slices left unread because the run hit {@link FOLD_EPISODE_MAX_SLICES_PER_JOB}; the next fold takes them up. */
+  slicesDeferred: number
   /** Set when a slice was lost to a cheap-LLM timeout; the watermark stays before it. */
   timedOut: boolean
   watermarkAdvancedTo: string | null
@@ -86,6 +100,7 @@ function emptyResult(skippedReason?: string): FoldEpisodePassResult {
     memoriesWritten: 0,
     fragmentsLinked: 0,
     slices: 0,
+    slicesDeferred: 0,
     timedOut: false,
     watermarkAdvancedTo: null,
     ...(skippedReason ? { skippedReason } : {}),
@@ -108,23 +123,25 @@ export async function runFoldEpisodePass(
     const chat = await repos.chats.findById(chatId)
     if (!chat) return emptyResult('no-chat')
 
-    // Drop what the episode watermark already covers. A hard rebuild hands us
-    // turns 1..N; only the part past the watermark is new to this pass.
+    // Read from the episode watermark through the end of the fold's window.
+    // A hard rebuild hands us turns 1..N; only the part past the watermark is
+    // new to this pass. A fold of only newer turns after a lost slice hands us
+    // a window past a gap; the gap is read first, never jumped.
     let window = input.windowMessages
     const watermark = chat.episodeExtractionWatermarkMessageId ?? null
     if (watermark) {
-      const all = (await repos.chats.getMessages(chatId)).filter(
-        (m): m is MessageEvent => m.type === 'message',
-      ) as unknown as MessageEvent[]
+      const all = input.chatMessages ?? (await loadTranscript(chatId))
       const before = window.length
-      const cut = windowPastWatermark(window, all, watermark)
-      if (cut.applied) {
-        window = cut.window
+      const range = foldPassRange(window, all, watermark)
+      if (range.applied) {
+        window = range.messages
         logger.debug('[FoldEpisodePass] Applied watermark to window', {
           chatId,
           watermark,
           before,
           after: window.length,
+          gap: range.gap,
+          transcriptHandedIn: input.chatMessages !== undefined,
         })
         if (window.length === 0) return emptyResult('behind-watermark')
       }
@@ -132,8 +149,17 @@ export async function runFoldEpisodePass(
 
     const coverThrough = window[window.length - 1]?.id ?? null
     const eligible = window.filter(isFoldEligibleMessage)
-    const slices = sliceFoldWindow(eligible, FOLD_EPISODE_MAX_WINDOW_MESSAGES, coverThrough)
+    const allSlices = sliceFoldWindow(eligible, FOLD_EPISODE_MAX_WINDOW_MESSAGES, coverThrough)
+    const slices = allSlices.slice(0, FOLD_EPISODE_MAX_SLICES_PER_JOB)
     result.slices = slices.length
+    result.slicesDeferred = allSlices.length - slices.length
+    if (result.slicesDeferred > 0) {
+      logger.info('[FoldEpisodePass] Backlog wider than one run; the rest waits for the next fold', {
+        chatId,
+        slicesRead: slices.length,
+        slicesDeferred: result.slicesDeferred,
+      })
+    }
 
     // Present character participants form the episode memory — the same set
     // whose recall the whisper feeds. User-controlled characters form
@@ -165,10 +191,12 @@ export async function runFoldEpisodePass(
     // Resolve speaker names per participant. Shared with the context-summary
     // fold — see lib/chat/speaker-names.ts for why there is only one of these.
     const speakerNames = await resolveSpeakerNames(chat)
+    // Episodes this run has written, per character: never a fragment of a later episode (finding 10).
+    const writtenEpisodeIds = new Set<string>()
 
     for (let sliceIndex = 0; sliceIndex < slices.length; sliceIndex++) {
       const slice = slices[sliceIndex]
-      const outcome = await runSlice(input, slice.messages, presentParticipants, speakerNames, result)
+      const outcome = await runSlice(input, slice.messages, presentParticipants, speakerNames, writtenEpisodeIds, result)
       if (outcome === 'timed-out') {
         result.timedOut = true
         logger.warn('[FoldEpisodePass] Slice lost to a timeout; watermark not advanced past it', {
@@ -210,6 +238,7 @@ async function runSlice(
   sliceMessages: MessageEvent[],
   presentParticipants: ChatParticipantBase[],
   speakerNames: SpeakerNames,
+  writtenEpisodeIds: Set<string>,
   result: FoldEpisodePassResult,
 ): Promise<'done' | 'timed-out'> {
   const { chatId, userId, cheapLLM } = input
@@ -218,9 +247,13 @@ async function runSlice(
   // Anchor the clock to the slice's newest message so historical folds
   // (regeneration sweeps) date correctly.
   const lastStamped = [...sliceMessages].reverse().find(m => m.createdAt)
+  // The memory-calendar zone (bug 212) is resolved before the prompt is
+  // built and rides on the clock to the `when` resolution below, so the date
+  // the model is shown and the date its phrases resolve against agree.
   const clock: ExtractionClock = {
     nowIso: lastStamped?.createdAt ?? new Date().toISOString(),
     timelineMode: input.timelineMode,
+    timeZone: await refreshMemoryTimeZone(),
   }
 
   const rendered: FoldEpisodeMessage[] = sliceMessages.map(m => ({
@@ -257,8 +290,6 @@ async function runSlice(
   const windowMessageIds = sliceMessages.map(m => m.id)
   const sourceMessageId = lastStamped?.id ?? sliceMessages[sliceMessages.length - 1]?.id ?? null
 
-  // Phrases resolve on the instance's memory calendar (bug 212).
-  await refreshMemoryTimeZone()
   for (const episode of extraction.result) {
     // The phrase resolves against the slice's newest message (the clock the
     // model was told), falling back to its oldest.
@@ -268,6 +299,7 @@ async function runSlice(
       fallbackIso: windowStartIso,
       timelineMode: input.timelineMode,
       narrativeTime: episode.narrativeTime,
+      timeZone: clock.timeZone,
     })
 
     for (const participant of presentParticipants) {
@@ -297,6 +329,7 @@ async function runSlice(
 
         const memory = outcome.memory
         if (!memory) continue
+        writtenEpisodeIds.add(memory.id)
         if (outcome.action === 'INSERT' || outcome.action === 'INSERT_RELATED' || outcome.action === 'SKIP_GATE') {
           result.memoriesWritten++
         }
@@ -306,11 +339,23 @@ async function runSlice(
         // surfaces. Union-preserving on both sides (never clobber links the
         // gate already made) — this relies on `createMemoryWithGate` returning
         // the POST-LINK row for INSERT_RELATED, so `memory.relatedMemoryIds`
-        // below already carries the gate's links (Bug 26).
-        const fragments = await repos.memories.findByCharacterAndSourceMessageIds(
+        // below already carries the gate's links (Bug 26). An episode this
+        // run wrote shares the slice's source message (and the job child's
+        // overlay surfaces it), but it is a sibling, not a fragment: linking it
+        // would spend fragment slots on episodes (finding 10).
+        const candidates = await repos.memories.findByCharacterAndSourceMessageIds(
           characterId,
           windowMessageIds,
         )
+        const fragments = candidates.filter(f => !writtenEpisodeIds.has(f.id))
+        if (fragments.length < candidates.length) {
+          logger.debug('[FoldEpisodePass] Left sibling episodes out of the fragment links', {
+            chatId,
+            characterId,
+            episodeId: memory.id,
+            siblings: candidates.length - fragments.length,
+          })
+        }
         const fragmentIds = fragments
           .map(f => f.id)
           .filter(id => id !== memory.id)
@@ -350,6 +395,13 @@ async function runSlice(
     }
   }
   return 'done'
+}
+
+async function loadTranscript(chatId: string): Promise<MessageEvent[]> {
+  logger.debug('[FoldEpisodePass] Reading the transcript to place the watermark', { chatId })
+  return (await getRepositories().chats.getMessages(chatId)).filter(
+    (m): m is MessageEvent => m.type === 'message',
+  ) as unknown as MessageEvent[]
 }
 
 async function advanceWatermark(

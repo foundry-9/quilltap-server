@@ -13,10 +13,11 @@ jest.mock('@/lib/repositories/factory', () => ({
   getRepositories: jest.fn(),
 }))
 
-// `rawQuery` routes the digest-link scrub's two queries (bug 225 — covered in
-// memory-retention-clock.test.ts) to an empty answer, so the scripted
-// `scriptedRawQuery` below sees exactly the relatedMemoryIds scan and the
-// doomed-id resolves these tests pin.
+// The digest-link scrub (bug 225) reads through repository methods now, which
+// `buildRepo` answers with nothing; the routing below stays as a guard so any
+// raw digest query still gets an empty answer and the scripted
+// `scriptedRawQuery` sees exactly the relatedMemoryIds scan and the doomed-id
+// resolves these tests pin.
 jest.mock('@/lib/database/manager', () => {
   const scriptedRawQuery = jest.fn()
   const isDigestScrub = (sql: string) =>
@@ -93,6 +94,12 @@ function buildRepo(rows: FakeMemoryRow[]) {
           bulkDeleted.push({ characterId, ids })
           return ids.length
         }),
+        // The digest scrub (bug 225; covered in memory-delete-digest-chokepoint.test.ts)
+        // finds nothing to scrub here.
+        findDigestsContainingMembers: jest.fn(async () => []),
+        findIdsSupersededByAny: jest.fn(async () => []),
+        removeConsolidatedMembers: jest.fn(async () => 0),
+        updateTierBulk: jest.fn(async () => 0),
         updateForCharacter: jest.fn(async (characterId: string, memoryId: string, patch: { relatedMemoryIds?: string[] }) => {
           updates.push({ characterId, memoryId, relatedMemoryIds: patch.relatedMemoryIds ?? [] })
           return null

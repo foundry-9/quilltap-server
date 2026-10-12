@@ -9,7 +9,15 @@ jest.mock('@/lib/logger', () => {
   return { logger: { ...child, child: jest.fn(() => child) } }
 })
 jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
-jest.mock('@/lib/memory/memory-service', () => ({ updateMemoryWithEmbedding: jest.fn() }))
+jest.mock('@/lib/memory/memory-service', () => ({
+  updateMemoryWithEmbedding: jest.fn(),
+  MemoryReembedError: class MemoryReembedError extends Error {
+    constructor(public readonly memoryId: string, cause?: unknown) {
+      super(`Could not embed the edited memory: ${cause instanceof Error ? cause.message : String(cause)}`)
+      this.name = 'MemoryReembedError'
+    }
+  },
+}))
 jest.mock('@/lib/memory/frozen-archive-cache', () => ({ invalidateFrozenArchive: jest.fn() }))
 jest.mock('@/lib/realtime/bus', () => ({ publishRealtime: jest.fn() }))
 jest.mock('@/lib/file-storage/commonplace-digest-vault-bridge', () => ({
@@ -42,9 +50,22 @@ function setup(rows: Row[]) {
     findByCharacterId: jest.fn(async (characterId: string) =>
       Array.from(byId.values()).filter((r) => r.characterId === characterId)
     ),
+    // Stands in for the repository's hot-digest query (source CONSOLIDATED,
+    // hot tier, the subject's bucket) — the set consolidation mirrors.
+    findHotDigests: jest.fn(async (characterId: string, subject: string) =>
+      Array.from(byId.values()).filter(
+        (r) =>
+          r.characterId === characterId &&
+          r.source === 'CONSOLIDATED' &&
+          (r.tier ?? 'hot') === 'hot' &&
+          r.aboutCharacterId === (subject === 'self' ? characterId : subject)
+      )
+    ),
   }
+  const name = (id: string) => ({ id, name: id === 'holder' ? 'Holly' : id === 'otto' ? 'Otto' : 'Pip' })
   const characters = {
-    findByIdRaw: jest.fn(async (id: string) => ({ id, name: id === 'holder' ? 'Holly' : 'Otto' })),
+    findById: jest.fn(async (id: string) => name(id)),
+    findByIdRaw: jest.fn(async (id: string) => name(id)),
   }
   jest.mocked(getRepositories).mockReturnValue({ memories, characters } as never)
   jest.mocked(updateMemoryWithEmbedding).mockImplementation(async (characterId, id, patch) =>
@@ -130,6 +151,38 @@ describe('editMemory (bug 203)', () => {
     expect(input.files).toHaveLength(1)
     expect(input.files[0]).toMatchObject({ subjectCharacterId: 'otto', subjectName: 'Otto', isSelf: false })
     expect(input.files[0].digests.map((d) => d.content).sort()).toEqual(['other digest', 'revised digest'])
+  })
+
+  it('mirrors through the consolidation writer: same digest set, both buckets when the subject moves', async () => {
+    setup([
+      // An unembedded hot digest is still a hot digest: consolidation mirrors it.
+      { ...base, id: 'd1', source: 'CONSOLIDATED', aboutCharacterId: 'otto', content: 'otto digest' },
+      { ...base, id: 'd2', source: 'CONSOLIDATED', aboutCharacterId: 'pip', content: 'pip digest' },
+    ])
+    await editMemory('holder', 'd1', { aboutCharacterId: 'pip' }, { userId: 'u1' })
+
+    expect(writeCommonplaceDigestsToVault).toHaveBeenCalledTimes(1)
+    const input = jest.mocked(writeCommonplaceDigestsToVault).mock.calls[0][0]
+    const bySubject = Object.fromEntries(input.files.map((f) => [f.subjectCharacterId, f.digests.map((d) => d.content).sort()]))
+    expect(bySubject).toEqual({ otto: [], pip: ['otto digest', 'pip digest'] })
+    const src = require('fs').readFileSync(require('path').join(process.cwd(), 'lib/memory/memory-edit.ts'), 'utf8')
+    expect(src).not.toMatch(/function refreshCommonplaceMirror/)
+  })
+
+  it('reports a failed re-embed instead of saving text over a stale vector', async () => {
+    const { MemoryReembedError } = jest.requireMock<typeof import('@/lib/memory/memory-service')>(
+      '@/lib/memory/memory-service'
+    )
+    const { byId } = setup([{ ...base, id: 'm1', relatedMemoryIds: [] }, { ...base, id: 'n1' }])
+    jest.mocked(updateMemoryWithEmbedding).mockRejectedValue(new MemoryReembedError('m1', new Error('provider down')))
+
+    const result = await editMemory('holder', 'm1', { content: 'new text', relatedMemoryIds: ['n1'] }, { userId: 'u1' })
+
+    expect(result).toEqual({ ok: false, reason: 'embedding-failed', message: expect.stringContaining('provider down') })
+    expect(byId.get('m1')!.content).toBe('old text')
+    expect(byId.get('n1')!.relatedMemoryIds).toEqual([])
+    expect(invalidateFrozenArchive).not.toHaveBeenCalled()
+    expect(publishRealtime).not.toHaveBeenCalled()
   })
 
   it('returns not-found for a memory of another character', async () => {

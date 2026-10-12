@@ -108,7 +108,13 @@ describe('child proxy — memory housekeeping writes', () => {
   it('F8: a buffered batch delete reports the resolved count, never NaN', async () => {
     const realBulkDelete = jest.fn();
     mockedRepoSource.mockReturnValue({
-      memories: { bulkDelete: realBulkDelete, updateForCharacter: jest.fn() },
+      memories: {
+        bulkDelete: realBulkDelete,
+        updateForCharacter: jest.fn(),
+        // The digest scrub's reads: nothing to scrub.
+        findDigestsContainingMembers: jest.fn(async () => []),
+        findIdsSupersededByAny: jest.fn(async () => []),
+      },
     } as never);
     mockedRawQuery.mockImplementation((async (sql: string) => {
       if (sql.includes('relatedMemoryIds IS NOT NULL')) return [];

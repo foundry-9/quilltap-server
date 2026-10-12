@@ -4,6 +4,24 @@
 
 ### 4.10-dev
 
+#### PR 90 review: 16 findings on the bug 203–226 fixes
+
+- Migration `rezone-legacy-memory-occurred-at-v1` re-stamps legacy UTC-midnight `occurredAt` values at local midnight of the same date in the instance timezone (decision 10's no-backfill reversed). No `createdAt` cutoff.
+- Every embedding-text builder and extraction prompt resolves the instance timezone first and carries it on `ExtractionClock.timeZone` to the `when` resolver, so the CLOCK block and the resolver use one calendar.
+- A reinforcement-only job batch no longer unloads the character's vector store.
+- Deleting memories from a digest in a background job composes: the `consolidatedFrom` scrub is a SQL removal delta (`removeConsolidatedMembers`), read through the child overlay, scoped to the deleted rows' characters. New partial index `idx_memories_supersededById` (migration `add-memories-superseded-by-index-v1`).
+- Deleting a digest (card, sweep or job) re-mirrors `Commonplace/<Subject>.md`; a subject with no digests left has its file removed. In a job, after commit.
+- Fold OTHER and episode passes read from their own watermark through the fold window, so a slice lost to a timeout is read by the next fold. Each run reads at most 4 slices; an OTHER catch-up with more continues in a follow-up job.
+- The episode pass no longer links sibling episodes from the same run as fragments.
+- A fold hands both passes the transcript it already loaded.
+- A manual memory the gate folds into an existing row promotes it to MANUAL with the higher importance (`promoteOnMatch`).
+- Dedup merge treats the survivor patch as the commit point; a missed count update no longer keeps the merged-away rows.
+- Editing a memory's text embeds first; if embedding fails the edit returns 502 and the row is unchanged.
+- `editMemory` mirrors through `mirrorCommonplaceForSubjects`; its private copy is gone.
+- New memories are written with their embedding in the insert (`createMemoryDirectWithEmbedding` is the one persist tail).
+- The user-wide housekeeping sweep reads the job queue once.
+- Filed bugs 232 (episode pass has no idle catch-up), 233 (search and replace never re-embeds memories), 234 (related-links scrub lost update).
+
 #### File bugs 230 and 231; list carried-forward memory work
 
 - Bug 230 (open): the memory dry run omits `projectId`, project description and context summary.

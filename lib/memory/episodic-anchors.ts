@@ -27,6 +27,12 @@ export interface EpisodicAnchorInput<F extends string | null = string | null> {
   timelineMode: 'realtime' | 'narrative'
   /** An explicit in-story stamp the caller already holds; outranks `when` as `narrativeTime`. */
   narrativeTime?: string | null
+  /**
+   * The memory-calendar zone to resolve `when` in — the one the extractor's
+   * clock was rendered in. Absent, `resolveWhenPhrase`'s default (the cached
+   * instance zone) applies.
+   */
+  timeZone?: string
 }
 
 /** `occurredAt` is only nullable when the fallback was. */
@@ -49,7 +55,9 @@ export function resolveEpisodicAnchors<F extends string | null>(
 ): EpisodicAnchors<F> {
   let occurredAt: string | F = input.fallbackIso
   if (input.when && input.referenceIso) {
-    const resolved = resolveWhenPhrase(input.when, input.referenceIso)
+    const resolved = input.timeZone
+      ? resolveWhenPhrase(input.when, input.referenceIso, input.timeZone)
+      : resolveWhenPhrase(input.when, input.referenceIso)
     if (resolved) occurredAt = resolved
   }
   const explicit = input.narrativeTime ?? null

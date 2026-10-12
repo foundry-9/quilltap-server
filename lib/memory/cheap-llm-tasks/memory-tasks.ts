@@ -121,17 +121,43 @@ export interface ExtractionClock {
   timelineMode: 'realtime' | 'narrative'
   /** Current in-story time, when known (narrative chats only). */
   narrativeNow?: string | null
+  /**
+   * The memory-calendar zone this clock is read in (bug 212). The caller
+   * resolves it once and hands the same value to the `when` resolver, so the
+   * date the model is shown and the date its phrases resolve against cannot
+   * disagree. Absent, the extraction entry point resolves it before building
+   * the prompt ({@link withMemoryTimeZone}).
+   */
+  timeZone?: string
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+/**
+ * The clock with its memory-calendar zone resolved. Every extraction entry
+ * point calls this before building a prompt: the zone is read from the
+ * instance settings (`refreshMemoryTimeZone`), so a cold cache in the job
+ * child never renders the clock in the env/system fallback zone.
+ */
+async function withMemoryTimeZone<C extends ExtractionClock | undefined>(clock: C): Promise<C> {
+  if (!clock || clock.timeZone) return clock
+  const timeZone = await refreshMemoryTimeZone()
+  logger.debug('[Memory] Extraction clock zone resolved', { timeZone, nowIso: clock.nowIso })
+  return { ...clock, timeZone } as C
+}
+
+/** `2026-07-14 (Tuesday), <nowIso>` — the clock's local date on the memory calendar. */
+function renderClockStamp(clock: ExtractionClock): string {
+  const ms = Date.parse(clock.nowIso)
+  if (!Number.isFinite(ms)) return clock.nowIso
+  const timeZone = clock.timeZone ?? getMemoryTimeZone()
+  return `${zonedDateStamp(ms, timeZone)} (${WEEKDAYS[zonedParts(ms, timeZone).weekday]}), ${clock.nowIso}`
+}
+
 /** Render the CLOCK footer block. Returns `''` when no clock was supplied. */
 function renderClockBlock(clock: ExtractionClock | undefined): string {
   if (!clock) return ''
-  const ms = Date.parse(clock.nowIso)
-  const stamp = Number.isFinite(ms)
-    ? `${zonedDateStamp(ms, getMemoryTimeZone())} (${WEEKDAYS[zonedParts(ms, getMemoryTimeZone()).weekday]}), ${clock.nowIso}`
-    : clock.nowIso
+  const stamp = renderClockStamp(clock)
   const lines = [
     'CLOCK',
     `Current date/time: ${stamp}`,
@@ -947,6 +973,7 @@ export async function extractSelfMemoriesFromTurn(
   if (!target) {
     return { success: true, result: [], usage: undefined }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const maxMemories = resolveMaxMemories(resolvedMaxTokens)
   const targetLabel = formatNameWithPronouns(target.characterName, target.characterPronouns ?? null)
@@ -1013,6 +1040,7 @@ export async function extractOtherMemoriesFromTurn(
     for (const s of subjects) empty.set(s.id, [])
     return { success: true, result: empty, usage: undefined }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const perSubjectCap = resolveMaxMemories(resolvedMaxTokens)
   const observerLabel = formatNameWithPronouns(observer.characterName, observer.characterPronouns ?? null)
@@ -1073,6 +1101,7 @@ export async function extractOtherMemoriesFromFold(
     for (const s of subjects) empty.set(s.id, [])
     return { success: true, result: empty, usage: undefined }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const cap = Math.max(1, perSubjectCap)
   const observerLabel = formatNameWithPronouns(observer.name, observer.pronouns)
@@ -1305,6 +1334,7 @@ export async function extractEpisodesFromFold(
   if (windowMessages.length === 0) {
     return { success: true, result: [] }
   }
+  clock = await withMemoryTimeZone(clock)
 
   const rendered = windowMessages
     .map(m => {
@@ -1315,7 +1345,7 @@ export async function extractEpisodesFromFold(
     .join('\n\n')
 
   const clockLine =
-    `CLOCK: current date/time ${clock.nowIso}; timeline mode ${clock.timelineMode}` +
+    `CLOCK: current date/time ${renderClockStamp(clock)}; timeline mode ${clock.timelineMode}` +
     (clock.narrativeNow?.trim() ? `; current in-story time ${clock.narrativeNow.trim()}` : '')
 
   const messages: LLMMessage[] = [
@@ -1472,7 +1502,7 @@ export async function extractMemorySearchKeywords(
   //
   // Bug 212: "local" is the instance's memory calendar (instance timezone →
   // QUILLTAP_TIMEZONE → system), the same one the write side stamps with.
-  const memoryTimeZone = await refreshMemoryTimeZone()
+  const memoryTimeZone = clock?.timeZone ?? await refreshMemoryTimeZone()
   const nowIso = clock?.nowIso ?? new Date().toISOString()
   const nowMs = Date.parse(nowIso)
   const timelineMode = clock?.timelineMode ?? 'realtime'

@@ -55,6 +55,7 @@ jest.mock('@/lib/logger', () => {
 })
 
 import { rawQuery } from '@/lib/database/manager'
+import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { deleteMemoryWithUnlink, deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
@@ -86,8 +87,13 @@ function read(id: string) {
 /** Repository writes the delete helpers issue, applied to the real table. */
 function installRepos() {
   const now = '2026-09-01T00:00:00.000Z'
+  const real = new MemoriesRepository()
   const memories = {
     findById: jest.fn(async (id: string) => read(id) ?? null),
+    // The digest scrub's reads and its removal delta are the production SQL.
+    findDigestsContainingMembers: jest.fn((c: string[], m: string[]) => real.findDigestsContainingMembers(c, m)),
+    findIdsSupersededByAny: jest.fn((c: string[], d: string[]) => real.findIdsSupersededByAny(c, d)),
+    removeConsolidatedMembers: jest.fn((c: string, d: string, m: string[]) => real.removeConsolidatedMembers(c, d, m)),
     updateForCharacter: jest.fn(async (_c: string, id: string, patch: Record<string, unknown>) => {
       for (const [k, v] of Object.entries(patch)) {
         db.prepare(`UPDATE memories SET "${k}" = ?, updatedAt = ? WHERE id = ?`)
@@ -117,10 +123,11 @@ beforeEach(() => {
   jest.clearAllMocks()
   db = new Database(':memory:')
   db.exec(`CREATE TABLE memories (
-    id TEXT PRIMARY KEY, characterId TEXT, tier TEXT, source TEXT,
+    id TEXT PRIMARY KEY, characterId TEXT, aboutCharacterId TEXT, tier TEXT, source TEXT,
     supersededById TEXT, supersededAt TEXT, consolidatedFrom TEXT, relatedMemoryIds TEXT, updatedAt TEXT)`)
   ;(rawQuery as jest.Mock).mockImplementation(async (sql: string, params: unknown[] = []) =>
     db.prepare(sql).all(...params))
+  ;(getRawDatabase as jest.Mock).mockReturnValue(db)
   ;(getCharacterVectorStore as jest.Mock).mockResolvedValue({
     removeVector: jest.fn(async () => true),
     save: jest.fn(async () => undefined),

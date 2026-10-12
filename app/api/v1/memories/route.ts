@@ -562,7 +562,10 @@ async function handleCreateMemory(
       ...(validatedData.occurredAt !== undefined && { occurredAt: validatedData.occurredAt }),
       ...(validatedData.entities !== undefined && { entities: validatedData.entities }),
     },
-    { userId: user.id }
+    // A hand-written memory the gate folds into an existing extracted row
+    // promotes that row to MANUAL at the higher importance, so the operator's
+    // intent survives housekeeping.
+    { userId: user.id, promoteOnMatch: true }
   );
 
   const memory = outcome.memory;

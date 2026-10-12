@@ -8,12 +8,16 @@
  *
  * - **Eligibility.** Only a spoken USER/ASSISTANT line from a seat, with text,
  *   is read. Staff whispers, tool rows and empty messages are not.
- * - **Watermark.** A window is cut to the messages strictly after the pass's
- *   watermark, ordered by the chat's own message order. A watermark that names
- *   a message no longer in the chat is treated as absent.
+ * - **Watermark.** A pass reads the messages strictly after its own
+ *   watermark through the end of the window it was handed, ordered by the
+ *   chat's own message order (`foldPassRange`) — so a stretch an earlier run
+ *   lost to a timeout is read before the window, never jumped. A watermark
+ *   that names a message no longer in the chat is treated as absent.
  * - **Slicing.** A window wider than the pass's prompt bound is processed in
  *   consecutive slices, oldest first, and the watermark advances only past a
  *   slice that was read (bugs 206, 207). Nothing is marked covered unread.
+ *   Each pass reads a bounded number of slices per run; the rest waits for the
+ *   next fold or catch-up, which starts from the advanced watermark.
  *
  * @module memory/fold-window
  */
@@ -97,4 +101,45 @@ export function sliceFoldWindow<T extends { id: string }>(
     })
   }
   return slices
+}
+
+/** What a fold pass should read this run: everything past its watermark through the end of the window it was handed. */
+export interface FoldPassRange<T> {
+  messages: T[]
+  /** True when the watermark shaped the range (it named a message still in the chat). */
+  applied: boolean
+  /** Messages in the range that were not in the window handed over — an unread stretch the pass is catching up on. */
+  gap: number
+}
+
+/**
+ * The stretch a fold-grain pass reads: the messages strictly after its
+ * watermark, through the last message of the window it was handed, in the
+ * chat's own order. A pass never reads only the window, because the window is
+ * the *fold's* — a slice the pass lost to a timeout lies before it, and reading
+ * the window alone would carry the watermark over that slice for good. Without
+ * a watermark (or with one naming a vanished message) the window is the range,
+ * as before: a pass that has never run does not backfill all history on the
+ * fold path.
+ */
+export function foldPassRange<T extends { id: string }>(
+  window: ReadonlyArray<T>,
+  allMessages: ReadonlyArray<T>,
+  watermarkMessageId: string | null | undefined,
+): FoldPassRange<T> {
+  if (window.length === 0 || !watermarkMessageId) return { messages: [...window], applied: false, gap: 0 }
+  const watermarkIdx = allMessages.findIndex(m => m.id === watermarkMessageId)
+  if (watermarkIdx === -1) return { messages: [...window], applied: false, gap: 0 }
+  const lastId = window[window.length - 1].id
+  const endIdx = allMessages.findIndex(m => m.id === lastId)
+  if (endIdx === -1) {
+    // The window's end is not in the transcript we were given; fall back to cutting the window itself.
+    const cut = windowPastWatermark(window, allMessages, watermarkMessageId)
+    return { messages: cut.window, applied: cut.applied, gap: 0 }
+  }
+  if (endIdx <= watermarkIdx) return { messages: [], applied: true, gap: 0 }
+  const messages = allMessages.slice(watermarkIdx + 1, endIdx + 1)
+  const inWindow = new Set(window.map(m => m.id))
+  const gap = messages.reduce((n, m) => (inWindow.has(m.id) ? n : n + 1), 0)
+  return { messages, applied: true, gap }
 }

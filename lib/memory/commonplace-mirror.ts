@@ -224,3 +224,70 @@ export async function mirrorCommonplaceAfterCommit(
     })
   }
 }
+
+/** The buffered memories writes that delete rows, and where each names its ids. */
+const MEMORY_DELETE_WRITES: Readonly<Record<string, (args: readonly unknown[]) => unknown[]>> = {
+  'memories.delete': (args) => [args[0]],
+  'memories.deleteForCharacter': (args) => [args[1]],
+  'memories.bulkDelete': (args) => (Array.isArray(args[1]) ? args[1] : []),
+}
+
+/** Every memory id a write batch deletes. Pure. */
+export function memoryIdsDeletedByWrites(writes: readonly CommittedMemoryWrite[]): string[] {
+  const ids = new Set<string>()
+  for (const write of writes) {
+    const pick = MEMORY_DELETE_WRITES[write.method]
+    if (!pick) continue
+    for (const id of pick(write.args ?? [])) {
+      if (typeof id === 'string' && id) ids.add(id)
+    }
+  }
+  return Array.from(ids)
+}
+
+/**
+ * The holders and subject buckets of the digests a write batch is about to
+ * delete. Must run **before** the batch commits — a deleted row cannot be
+ * read afterwards. Any job type counts: a digest deleted by a housekeeping
+ * sweep or a dedup merge leaves its bucket's mirror as stale as one deleted by
+ * consolidation. Never throws; a failed read resolves nothing.
+ */
+export async function digestBucketsDeletedByWrites(
+  writes: readonly CommittedMemoryWrite[],
+): Promise<Map<string, Set<string>>> {
+  const buckets = new Map<string, Set<string>>()
+  const ids = memoryIdsDeletedByWrites(writes)
+  if (ids.length === 0) return buckets
+  try {
+    const rows = await getRepositories().memories.findDigestSubjectsByIds(ids)
+    for (const row of rows) {
+      if (!row.characterId || !row.aboutCharacterId) continue // the no-subject bucket has no mirror
+      const set = buckets.get(row.characterId) ?? new Set<string>()
+      set.add(row.aboutCharacterId)
+      buckets.set(row.characterId, set)
+    }
+    log.debug('Resolved digest buckets a batch deletes', { deletedIds: ids.length, digests: rows.length })
+  } catch (error) {
+    log.debug('Digest bucket lookup before commit failed; no mirror refresh', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  return buckets
+}
+
+/**
+ * Dispatcher commit hook for digest deletes: once the batch that deleted them
+ * has committed, rewrite each bucket's mirror from what remains (see
+ * {@link digestBucketsDeletedByWrites}, which the dispatcher calls before
+ * commit). Never throws.
+ */
+export async function mirrorCommonplaceForDeletedDigests(
+  buckets: ReadonlyMap<string, ReadonlySet<string>>,
+): Promise<void> {
+  if (buckets.size === 0) return
+  const updatedAt = new Date().toISOString()
+  for (const [holderId, subjects] of buckets) {
+    await mirrorCommonplaceForSubjects(holderId, subjects, updatedAt)
+  }
+  log.debug('Commonplace mirror refreshed after a committed digest delete', { holders: buckets.size })
+}

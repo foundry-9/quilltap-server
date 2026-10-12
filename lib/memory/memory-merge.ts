@@ -136,7 +136,9 @@ export function planMemoryMerge(
 /**
  * Apply a merge plan to the survivor and re-embed it when its content (or its
  * anchor date) changed. Returns the survivor as it now stands, or null when
- * the row could not be updated.
+ * the row could not be updated. The survivor patch is the commit point: if it
+ * lands and the reinforcement step then misses, the survivor is still returned
+ * (with a warning) so callers delete the losers it absorbed.
  *
  * `userId` is needed for the re-embed; without it a changed survivor keeps its
  * old vector (logged) until the next reindex.
@@ -151,8 +153,13 @@ export async function applyMemoryMerge(
     return survivor
   }
 
+  // The survivor patch is the commit point: once it lands, the survivor holds
+  // what the losers knew, so a later miss on the separate reinforcement step
+  // must not report the whole fold as failed (callers would then keep the
+  // losers beside a survivor that already absorbed them).
   let updated: Memory | null = survivor
-  if (Object.keys(plan.patch).length > 0) {
+  const patched = Object.keys(plan.patch).length > 0
+  if (patched) {
     updated = await patchMemory(survivor, plan.patch)
     if (!updated) {
       logger.warn('[MemoryMerge] Failed to update survivor', {
@@ -173,10 +180,15 @@ export async function applyMemoryMerge(
         survivorId: survivor.id,
         characterId: survivor.characterId,
         reinforcementDelta: plan.reinforcementDelta,
+        survivorPatched: patched,
       })
-      return null
+      // Nothing committed yet: the fold failed outright and the losers stay.
+      if (!patched) return null
+      // The patch already committed; the losers' counts are lost but their
+      // content and links are not, so the fold stands.
+    } else {
+      updated = { ...updated, ...counted }
     }
-    updated = { ...updated, ...counted }
   }
 
   const needsReembed = plan.contentChanged || plan.patch.occurredAt !== undefined

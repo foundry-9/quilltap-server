@@ -4214,7 +4214,10 @@ Create a memory by hand. The row always goes through the memory gate, is always 
 
 **Response**: `201 Created` with `{ memory, action }` when a row was inserted (`action` is
 `INSERT` or `INSERT_RELATED`); `200 OK` with `{ memory, action }` carrying the *existing* row
-when the gate folded the write into it (`REINFORCE` or `SKIP_NEAR_DUPLICATE`). `500` when the
+when the gate folded the write into it (`REINFORCE` or `SKIP_NEAR_DUPLICATE`). The route passes
+`promoteOnMatch`, so that existing row is promoted: an `AUTO` row becomes `MANUAL`, and its
+`importance` becomes the higher of its own and the requested one (`reinforcedImportance`
+recomputed); a digest keeps `CONSOLIDATED`. `500` when the
 embedding could not be generated (no row is written).
 
 #### `GET /api/v1/memories/[id]`
@@ -4229,7 +4232,9 @@ Update a memory. Goes through `editMemory` (`lib/memory/memory-edit.ts`): a chan
 `reinforcedImportance`; `relatedMemoryIds` must name existing memories of the same character
 (otherwise `400`) and is written on both sides of each link; the character's frozen archive is
 invalidated and `memories` is published; editing a hot consolidation digest rewrites its
-`Commonplace/` mirror file.
+`Commonplace/` mirror file (through `mirrorCommonplaceForSubjects`). The new embedding is generated
+*before* the row is written and lands in the same update; if it cannot be generated the edit is
+refused with `502` and an explanatory `error`, and the row is unchanged.
 
 **Request Body**:
 

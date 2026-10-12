@@ -159,6 +159,8 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-memory-tiers-v1': 'Fitting the Commonplace Book with a cellar…',
   'add-memory-superseded-at-v1': 'Chalking a date on every bottle laid down in the cellar…',
   'recompute-reinforced-importance-v1': 'Re-weighing every remembrance on an honest scale…',
+  'rezone-legacy-memory-occurred-at-v1': 'Resetting the older diary dates to the household clock…',
+  'add-memories-superseded-by-index-v1': 'Cross-indexing the cellar, so every bottle may be traced to its vintage…',
   'add-chat-scenario-source-v1': "Noting where each chat's scene was found",
   'add-episode-extraction-watermark-v1': 'Slipping a bookmark into each chronicle, lest old chapters be retold…',
   'add-text-replacements-enabled-field-v1': 'Wiring the autocorrect master switch',

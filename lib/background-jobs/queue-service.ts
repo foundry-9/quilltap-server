@@ -642,13 +642,43 @@ export async function enqueueMemoryHousekeepingSweep(
 ): Promise<string[]> {
   const repos = getRepositories();
   const characters = await repos.characters.findByUserId(userId);
+
+  // One read of the in-flight jobs for the whole sweep, deduped in memory —
+  // not two job-list reads per character.
+  let inFlight: InFlightHousekeeping | null = null;
+  try {
+    inFlight = await findInFlightHousekeeping(userId);
+  } catch (error) {
+    logger.warn('[Housekeeping] Failed to check for existing jobs during sweep enqueue', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Fall through to enqueue every character — double work is better than none.
+  }
+
+  if (inFlight?.legacyJobId && characters.length > 0) {
+    logger.debug('[Housekeeping] Legacy user-wide job in flight covers the sweep; not enqueuing', {
+      userId,
+      existingJobId: inFlight.legacyJobId,
+      reason: payload.reason ?? 'unknown',
+    });
+    return [inFlight.legacyJobId];
+  }
+
+  const byCharacter = inFlight?.byCharacter ?? new Map<string, string>();
   const ids: string[] = [];
   for (const character of characters) {
-    const id = await enqueueMemoryHousekeepingForCharacter(
-      userId,
-      { ...payload, characterId: character.id },
-      options,
-    );
+    let id = byCharacter.get(character.id);
+    if (id) {
+      logger.debug('[Housekeeping] Job already in flight for character; not enqueuing another', {
+        characterId: character.id,
+        existingJobId: id,
+        reason: payload.reason ?? 'unknown',
+      });
+    } else {
+      id = await enqueueHousekeepingJob(userId, { ...payload, characterId: character.id }, options);
+      byCharacter.set(character.id, id);
+    }
     if (id && !ids.includes(id)) ids.push(id);
   }
   logger.debug('[Housekeeping] User-wide sweep fanned out per character', {
@@ -660,30 +690,50 @@ export async function enqueueMemoryHousekeepingSweep(
   return ids;
 }
 
+/** The housekeeping jobs a user has PENDING or PROCESSING, by what they cover. */
+interface InFlightHousekeeping {
+  /** characterId → id of an in-flight job for that character. */
+  byCharacter: Map<string, string>;
+  /** A legacy user-wide job (no `characterId`) in flight, which covers everyone. */
+  legacyJobId: string | null;
+}
+
+/** Read the user's in-flight housekeeping jobs once. Throws on a read failure. */
+async function findInFlightHousekeeping(userId: string): Promise<InFlightHousekeeping> {
+  const repos = getRepositories();
+  const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
+  const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
+  const byCharacter = new Map<string, string>();
+  let legacyJobId: string | null = null;
+  for (const job of [...pending, ...processing]) {
+    if (job.type !== 'MEMORY_HOUSEKEEPING') continue;
+    const characterId = (job.payload as Record<string, unknown> | undefined)?.characterId;
+    if (typeof characterId === 'string' && characterId) {
+      if (!byCharacter.has(characterId)) byCharacter.set(characterId, job.id);
+    } else if (characterId === undefined || characterId === null) {
+      legacyJobId ??= job.id;
+    }
+  }
+  return { byCharacter, legacyJobId };
+}
+
 /** Per-character enqueue with the per-character dedupe (bug 221). */
 async function enqueueMemoryHousekeepingForCharacter(
   userId: string,
   payload: MemoryHousekeepingPayload & { characterId: string },
   options?: EnqueueJobOptions
 ): Promise<string> {
-  const repos = getRepositories();
-
   try {
-    const pending = await repos.backgroundJobs.findByUserId(userId, 'PENDING');
-    const processing = await repos.backgroundJobs.findByUserId(userId, 'PROCESSING');
-    const existing = [...pending, ...processing].find(j => {
-      if (j.type !== 'MEMORY_HOUSEKEEPING') return false;
-      const existingCharId = (j.payload as Record<string, unknown> | undefined)?.characterId;
-      // Same character, or a legacy user-wide job that sweeps every character.
-      return existingCharId === payload.characterId || existingCharId === undefined || existingCharId === null;
-    });
-    if (existing) {
+    const { byCharacter, legacyJobId } = await findInFlightHousekeeping(userId);
+    // Same character, or a legacy user-wide job that sweeps every character.
+    const existingId = byCharacter.get(payload.characterId) ?? legacyJobId;
+    if (existingId) {
       logger.debug('[Housekeeping] Job already in flight for character; not enqueuing another', {
         characterId: payload.characterId,
-        existingJobId: existing.id,
+        existingJobId: existingId,
         reason: payload.reason ?? 'unknown',
       });
-      return existing.id;
+      return existingId;
     }
   } catch (error) {
     logger.warn('[Housekeeping] Failed to check for existing jobs during enqueue', {
@@ -693,6 +743,18 @@ async function enqueueMemoryHousekeepingForCharacter(
     // Fall through to enqueue anyway — double work is better than none.
   }
 
+  return enqueueHousekeepingJob(userId, payload, options);
+}
+
+/**
+ * Write one housekeeping job, no dedupe lookup — callers have already
+ * checked what is in flight.
+ */
+async function enqueueHousekeepingJob(
+  userId: string,
+  payload: MemoryHousekeepingPayload & { characterId: string },
+  options?: EnqueueJobOptions
+): Promise<string> {
   // Housekeeping is retry-hostile: each retry re-runs the whole sweep from
   // scratch, and a single sweep on a character with tens of thousands of
   // memories can burn minutes of main-thread time. The daily scheduler

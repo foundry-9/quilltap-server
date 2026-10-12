@@ -69,6 +69,7 @@ import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { buildMemoryEmbeddingText } from './episodic'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
 import {
   clusterBucket,
@@ -948,6 +949,8 @@ export async function runConsolidation(
     // be embedded would be invisible to recall and the gate, so its whole
     // cluster is dropped (no partial writes) and the plan rebuilt without it.
     const failed = new Set<number>()
+    // Anchor dates render on the instance's memory calendar (cold cache in the child).
+    const memoryTimeZone = await refreshMemoryTimeZone()
     for (const digest of [...plan.creates, ...plan.updates]) {
       if (failed.has(digest.clusterIndex)) continue
       try {
@@ -956,7 +959,7 @@ export async function runConsolidation(
             occurredAt: digest.occurredAt,
             narrativeTime: digest.narrativeTime,
             entities: digest.entities,
-          }),
+          }, memoryTimeZone),
           userId,
           undefined,
           { priority: 'background' },

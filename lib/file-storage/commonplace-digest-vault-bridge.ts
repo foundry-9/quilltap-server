@@ -26,6 +26,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getCharacterVaultStore } from './character-vault-bridge';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import {
+  deleteDatabaseDocumentIfExists,
   readDatabaseDocumentIfExists,
   writeDatabaseDocument,
 } from '@/lib/mount-index/database-store';
@@ -56,6 +57,8 @@ export interface WriteCommonplaceDigestsInput {
 export interface WriteCommonplaceDigestsResult {
   written: number;
   unchanged: number;
+  /** Files removed because their bucket no longer holds a hot digest. */
+  removed?: number;
   skipped: number;
   /** Why the whole mirror was skipped, when it was. */
   skippedReason?: 'archived' | 'missing-character' | 'no-vault' | 'job-child';
@@ -111,7 +114,36 @@ export async function writeCommonplaceDigestsToVault(
     if (toWrite.length > 0) {
       await ensureFolderPath(target.mountPointId, COMMONPLACE_FOLDER);
     }
-    result.skipped += input.files.length - toWrite.length;
+
+    // A bucket with no hot digest left (its last one was deleted) has no
+    // canon to state: remove its file rather than leave it presenting the
+    // deleted digests as established fact.
+    for (const file of input.files) {
+      if (file.digests.length > 0) continue;
+      const path = commonplacePathFor(
+        file.isSelf ? 'self' : { id: file.subjectCharacterId, name: file.subjectName }
+      );
+      try {
+        if (await deleteDatabaseDocumentIfExists(target.mountPointId, path)) {
+          result.removed = (result.removed ?? 0) + 1;
+          logger.debug('Removed Commonplace mirror for an emptied bucket', {
+            context,
+            characterId: input.holderCharacterId,
+            path,
+          });
+        } else {
+          result.skipped++;
+        }
+      } catch (error) {
+        result.skipped++;
+        logger.warn('Failed to remove an emptied Commonplace mirror', {
+          context,
+          characterId: input.holderCharacterId,
+          path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     for (const file of toWrite) {
       const path = commonplacePathFor(

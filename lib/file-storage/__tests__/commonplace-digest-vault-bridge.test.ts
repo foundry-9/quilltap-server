@@ -10,6 +10,7 @@
 jest.mock('@/lib/mount-index/database-store', () => ({
   writeDatabaseDocument: jest.fn().mockResolvedValue({ mtime: 0 }),
   readDatabaseDocumentIfExists: jest.fn().mockResolvedValue(null),
+  deleteDatabaseDocumentIfExists: jest.fn().mockResolvedValue(false),
 }))
 
 jest.mock('@/lib/mount-index/folder-paths', () => ({
@@ -23,7 +24,11 @@ jest.mock('@/lib/background-jobs/child/host-rpc-client', () => ({
 import { writeCommonplaceDigestsToVault, type WriteCommonplaceDigestsInput } from '@/lib/file-storage/commonplace-digest-vault-bridge'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge'
-import { readDatabaseDocumentIfExists, writeDatabaseDocument } from '@/lib/mount-index/database-store'
+import {
+  deleteDatabaseDocumentIfExists,
+  readDatabaseDocumentIfExists,
+  writeDatabaseDocument,
+} from '@/lib/mount-index/database-store'
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
 import { callHost } from '@/lib/background-jobs/child/host-rpc-client'
 
@@ -32,6 +37,7 @@ const mockVault = jest.mocked(getCharacterVaultStore)
 const mockRead = jest.mocked(readDatabaseDocumentIfExists)
 const mockWrite = jest.mocked(writeDatabaseDocument)
 const mockCallHost = jest.mocked(callHost)
+const mockDelete = jest.mocked(deleteDatabaseDocumentIfExists)
 
 const input: WriteCommonplaceDigestsInput = {
   holderCharacterId: 'friday-1',
@@ -106,5 +112,29 @@ describe('writeCommonplaceDigestsToVault', () => {
     expect(result.skipped).toBe(2)
     expect(mockCallHost).not.toHaveBeenCalled()
     expect(mockWrite).not.toHaveBeenCalled()
+  })
+
+  it('removes the file of a bucket whose last hot digest was deleted', async () => {
+    mockDelete.mockResolvedValueOnce(true)
+    const result = await writeCommonplaceDigestsToVault({
+      ...input,
+      files: [{ ...input.files[0], digests: [] }, input.files[1]],
+    })
+    expect(mockDelete).toHaveBeenCalledWith('vault-1', 'Commonplace/Laura.md')
+    expect(mockWrite.mock.calls.map((c) => c[1])).toEqual(['Commonplace/Self.md'])
+    expect(result.removed).toBe(1)
+  })
+
+  it('an emptied bucket with no file is a no-op, and touches nothing in the child', async () => {
+    const emptied = { ...input, files: [{ ...input.files[0], digests: [] }] }
+    const result = await writeCommonplaceDigestsToVault(emptied)
+    expect(result.removed ?? 0).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(ensureFolderPath).not.toHaveBeenCalled()
+
+    process.env.QUILLTAP_JOB_CHILD = '1'
+    mockDelete.mockClear()
+    await writeCommonplaceDigestsToVault(emptied)
+    expect(mockDelete).not.toHaveBeenCalled()
   })
 })

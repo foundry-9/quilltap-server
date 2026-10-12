@@ -274,6 +274,14 @@ describe('F7 — sizeMemoryPools', () => {
 // F8
 // =============================================================================
 
+/** The delete chokepoint's digest-scrub reads, finding nothing to scrub. */
+function noDigestScrub() {
+  return {
+    findDigestsContainingMembers: jest.fn(async () => []),
+    findIdsSupersededByAny: jest.fn(async () => []),
+  }
+}
+
 describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
   function setupBatch(bulkDeleteResult: unknown) {
     dbMock.rawQuery.mockImplementation(async (sql: string) => {
@@ -285,7 +293,7 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
       ]
     })
     const bulkDelete = jest.fn(async () => bulkDeleteResult)
-    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete } })
+    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete, ...noDigestScrub() } })
     return bulkDelete
   }
 
@@ -309,7 +317,7 @@ describe('F8 — deleteMemoriesWithUnlinkBatch count', () => {
       return [{ id: 'a', characterId: 'char-1' }]
     })
     const bulkDelete = jest.fn(async () => 1)
-    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete } })
+    factoryMock.getRepositories.mockReturnValue({ memories: { updateForCharacter, bulkDelete, ...noDigestScrub() } })
 
     await gate.deleteMemoriesWithUnlinkBatch(['a'], {
       currentLinks: new Map([['survivor', { characterId: 'char-1', relatedMemoryIds: ['a', 'n1', 'kept'] }]]),

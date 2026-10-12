@@ -45,16 +45,23 @@ const ANCHOR_MAX_ENTITIES = 4
  * carries no anchors, so callers can append unconditionally. The date is
  * rendered as the local calendar date on the memory calendar (time-of-day adds noise, not signal, to
  * the embedding); `narrativeTime` rides along verbatim when present.
+ *
+ * `timeZone` is the memory-calendar zone to render the date in. Callers pass
+ * `await refreshMemoryTimeZone()` so a cold cache (a fresh job child) cannot
+ * embed a different date than the parent would; absent, the cached zone (or
+ * its env/system fallback) applies.
  */
-export function buildMemoryAnchorLine(view: EpisodicAnchorView): string {
+export function buildMemoryAnchorLine(view: EpisodicAnchorView, timeZone?: string): string {
   const parts: string[] = []
   const occurredAt = view.occurredAt?.trim()
   if (occurredAt) {
     // The calendar date on the instance's memory calendar (bug 212): a local
     // midnight stored as UTC east of Greenwich would otherwise read a day early.
+    // Legacy UTC-midnight point dates were re-stamped at local midnight by the
+    // rezone-legacy-memory-occurred-at-v1 migration, so they read their own day.
     const parsed = Date.parse(occurredAt)
     const dateOnly = Number.isFinite(parsed)
-      ? zonedDateStamp(parsed, getMemoryTimeZone())
+      ? zonedDateStamp(parsed, timeZone ?? getMemoryTimeZone())
       : occurredAt.slice(0, 10)
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
       parts.push(`when: ${dateOnly}`)
@@ -84,14 +91,18 @@ export function buildMemoryAnchorLine(view: EpisodicAnchorView): string {
  * New writes only carry the anchor; legacy rows re-embed without one until the
  * optional batched re-embed runs. Mixed old/new embedded-text rows are an
  * accepted, indefinite state (see the spec's cross-cutting list).
+ *
+ * `timeZone` is passed through to {@link buildMemoryAnchorLine}; every caller
+ * resolves it with `refreshMemoryTimeZone()` first.
  */
 export function buildMemoryEmbeddingText(
   summary: string,
   content: string,
   anchors?: EpisodicAnchorView | null,
+  timeZone?: string,
 ): string {
   const base = `${summary}\n\n${content}`
-  const anchorLine = anchors ? buildMemoryAnchorLine(anchors) : ''
+  const anchorLine = anchors ? buildMemoryAnchorLine(anchors, timeZone) : ''
   return anchorLine ? `${base}\n${anchorLine}` : base
 }
 
@@ -139,7 +150,8 @@ const WORD_NUMBERS: Record<string, number> = {
  * (`day-references.ts`) also knows is stamped at the START of the same local
  * window the read side returns for it, from the same calendar, so a memory
  * written as "last night" lands inside "last night" read. Rows written before
- * this fix keep their UTC-midnight values (no backfill).
+ * this fix were re-stamped from UTC midnight to local midnight of the same
+ * calendar date by the rezone-legacy-memory-occurred-at-v1 migration.
  *
  * Returns null for anything unrecognized (including future-tense phrases) —
  * recall must degrade, never block, so an unresolvable phrase simply leaves

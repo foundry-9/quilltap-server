@@ -272,7 +272,8 @@ describe('runFoldEpisodePass — the episode memory', () => {
     await runFoldEpisodePass(input())
 
     const [, clock] = mockExtract.mock.calls[0]
-    expect(clock).toEqual({ nowIso: '2026-07-20T09:05:00.000Z', timelineMode: 'realtime' })
+    // The memory-calendar zone is resolved before the prompt and rides on the clock.
+    expect(clock).toEqual({ nowIso: '2026-07-20T09:05:00.000Z', timelineMode: 'realtime', timeZone: expect.any(String) })
   })
 
   it('dates the episode from the window start when the when-phrase does not resolve', async () => {
@@ -290,7 +291,9 @@ describe('runFoldEpisodePass — the episode memory', () => {
 
     await runFoldEpisodePass(input())
 
-    expect(mockResolveWhen).toHaveBeenCalledWith('last Tuesday', '2026-07-20T09:05:00.000Z')
+    // Resolved in the same zone the extractor's clock was rendered in.
+    const [, clock] = mockExtract.mock.calls[0] as [unknown, { timeZone: string }]
+    expect(mockResolveWhen).toHaveBeenCalledWith('last Tuesday', '2026-07-20T09:05:00.000Z', clock.timeZone)
     expect((mockGate.mock.calls[0][0] as AnyRecord).occurredAt).toBe('2026-07-14T00:00:00.000Z')
   })
 
@@ -539,5 +542,123 @@ describe('runFoldEpisodePass — uncensored fallback (bug 213)', () => {
     await runFoldEpisodePass(input({ uncensoredFallback: fallback }))
 
     expect(mockExtract.mock.calls[0][5]).toBe(fallback)
+  })
+})
+
+describe('runFoldEpisodePass — review findings 4, 7, 10, 13', () => {
+  const seat = (i: number) => (i % 2 === 0 ? 'p-user' : 'p-ai')
+  const history = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      message(`h${i + 1}`, {
+        role: i % 2 === 0 ? 'USER' : 'ASSISTANT',
+        participantId: seat(i),
+        createdAt: new Date(Date.UTC(2026, 6, 20, 9, i)).toISOString(),
+      }),
+    )
+
+  let liveChat: AnyRecord
+  let getMessages: jest.Mock
+
+  /** A chat whose watermark actually moves when the pass writes it. */
+  function primeLiveChat(all: unknown[], watermark: string | null = null) {
+    primeRepos()
+    chatMessages = all
+    liveChat = {
+      id: 'chat-1',
+      episodeExtractionWatermarkMessageId: watermark,
+      participants: [
+        { id: 'p-user', type: 'USER', status: 'active', characterId: null },
+        { id: 'p-ai', type: 'CHARACTER', status: 'active', characterId: 'char-1' },
+      ],
+    }
+    chatUpdate.mockImplementation(async (_id: string, patch: AnyRecord) => {
+      Object.assign(liveChat, patch)
+      return liveChat
+    })
+    getMessages = jest.fn(async () => chatMessages)
+    const repos = mockRepos()
+    mockRepos.mockReturnValue({
+      ...repos,
+      chats: { ...repos.chats, findById: jest.fn(async () => liveChat), getMessages },
+    })
+  }
+
+  const renderedIds = (call: unknown[]) =>
+    (call[0] as Array<{ content: string }>).map((m) => m.content.replace('content ', ''))
+
+  it('#4: a slice lost to a timeout is read by the next fold even when that fold only covers newer turns', async () => {
+    const all = history(250)
+    primeLiveChat(all)
+    mockExtract
+      .mockResolvedValueOnce({ success: true, result: [] })
+      .mockResolvedValueOnce({ success: false, timedOut: true, error: 'timeout' })
+
+    // First fold: turns 1..240, four slices; slice 2 times out.
+    const first = await runFoldEpisodePass(input({ windowMessages: all.slice(0, 240) }))
+    expect(first.timedOut).toBe(true)
+    expect(liveChat.episodeExtractionWatermarkMessageId).toBe('h60')
+
+    // Second fold: only the ten newest turns. The gap h61..h240 must be read first.
+    mockExtract.mockReset()
+    mockExtract.mockResolvedValue({ success: true, result: [] })
+    const second = await runFoldEpisodePass(input({ windowMessages: all.slice(240) }))
+
+    expect(renderedIds(mockExtract.mock.calls[0])[0]).toBe('h61')
+    const read = mockExtract.mock.calls.flatMap((c) => renderedIds(c))
+    expect(read).toEqual(all.slice(60).map((m) => (m as unknown as { id: string }).id))
+    expect(second.watermarkAdvancedTo).toBe('h250')
+  })
+
+  it('#7: a long backlog takes several jobs and the watermark advances monotonically', async () => {
+    const all = history(600)
+    primeLiveChat(all)
+    mockExtract.mockResolvedValue({ success: true, result: [] })
+
+    const marks: string[] = []
+    for (let job = 0; job < 4; job++) {
+      mockExtract.mockClear()
+      const r = await runFoldEpisodePass(input({ windowMessages: all }))
+      expect(mockExtract.mock.calls.length).toBeLessThanOrEqual(4)
+      if (r.watermarkAdvancedTo) marks.push(r.watermarkAdvancedTo)
+      if (liveChat.episodeExtractionWatermarkMessageId === 'h600') break
+    }
+
+    expect(marks).toEqual(['h240', 'h480', 'h600'])
+  })
+
+  it('#10: a second episode from the same slice does not link the first as a fragment', async () => {
+    primeLiveChat(WINDOW)
+    mockExtract.mockResolvedValue({
+      success: true,
+      result: [episode({ summary: 'first' }), episode({ summary: 'second' })],
+    })
+    const created: AnyRecord[] = []
+    mockGate.mockImplementation(async () => {
+      const memory = { id: `mem-ep${created.length + 1}`, relatedMemoryIds: [], kind: 'episodic', sourceMessageId: 'm2' }
+      created.push(memory)
+      return { action: 'INSERT', memory }
+    })
+    // The child overlay surfaces buffered creates: earlier episodes share the slice's source message.
+    findFragments.mockImplementation(async () => [
+      { id: 'frag-1', relatedMemoryIds: [], kind: 'semantic', sourceMessageId: 'm1' },
+      ...created.map((m) => ({ ...m })),
+    ])
+
+    const result = await runFoldEpisodePass(input())
+
+    const ep2Write = updateForCharacter.mock.calls.find((c) => c[1] === 'mem-ep2')
+    expect((ep2Write![2] as AnyRecord).relatedMemoryIds).toEqual(['frag-1'])
+    expect(updateForCharacter.mock.calls.find((c) => c[1] === 'mem-ep1' && ((c[2] as AnyRecord).relatedMemoryIds as string[]).includes('mem-ep2'))).toBeUndefined()
+    expect(result.fragmentsLinked).toBe(2)
+  })
+
+  it('#13: uses the transcript it is handed instead of reading it again', async () => {
+    const all = history(10)
+    primeLiveChat(all, 'h4')
+
+    await runFoldEpisodePass(input({ windowMessages: all.slice(6), chatMessages: all }))
+
+    expect(getMessages).not.toHaveBeenCalled()
+    expect(renderedIds(mockExtract.mock.calls[0])).toEqual(['h5', 'h6', 'h7', 'h8', 'h9', 'h10'])
   })
 })

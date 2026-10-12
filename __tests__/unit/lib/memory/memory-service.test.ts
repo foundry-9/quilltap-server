@@ -381,6 +381,57 @@ describe('Memory Service', () => {
   })
 
   // ============================================================================
+  // createMemoryWithGate INSERT — one persist tail for both create paths
+  // ============================================================================
+  describe('createMemoryWithGate INSERT persist tail', () => {
+    const data = {
+      characterId: 'char-1',
+      content: 'A brand new observation',
+      summary: 'new',
+      importance: 0.6,
+      source: 'MANUAL' as const,
+    }
+
+    beforeEach(() => {
+      mockGenerateEmbedding.mockResolvedValue({ embedding: [0.1, 0.2, 0.3], model: 'test-model' })
+      mockVectorStore.search.mockReturnValue([])
+      ;(mockMemoriesRepo as any).findByIds = jest.fn<any>().mockResolvedValue([])
+      mockMemoriesRepo.create.mockImplementation(async (row: any) => ({ id: 'new-mem', ...row }))
+      mockMemoriesRepo.updateForCharacter.mockImplementation(async (c: any, id: any, patch: any) => ({ id, characterId: c, ...patch }))
+    })
+
+    it('writes the gate embedding in the create call — no row ever exists without it', async () => {
+      const outcome = await createMemoryWithGate(data, { userId: 'user-123' })
+
+      expect(outcome.action).toBe('INSERT')
+      expect(mockMemoriesRepo.create).toHaveBeenCalledTimes(1)
+      expect(mockMemoriesRepo.create.mock.calls[0][0]).toMatchObject({ embedding: [0.1, 0.2, 0.3] })
+      expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
+      expect(mockVectorStore.addVector).toHaveBeenCalledWith('new-mem', [0.1, 0.2, 0.3], {
+        memoryId: 'new-mem',
+        characterId: 'char-1',
+        tier: 'hot',
+      })
+      expect(outcome.memory).toMatchObject({ id: 'new-mem', embedding: [0.1, 0.2, 0.3] })
+    })
+
+    it('the direct (skipGate) path persists exactly as the gate path does', async () => {
+      await createMemoryWithGate(data, { userId: 'user-123' })
+      const gateCreate = mockMemoriesRepo.create.mock.calls[0]
+      const gateVector = mockVectorStore.addVector.mock.calls[0]
+      jest.clearAllMocks()
+      mockMemoriesRepo.create.mockImplementation(async (row: any) => ({ id: 'new-mem', ...row }))
+      mockGenerateEmbedding.mockResolvedValue({ embedding: [0.1, 0.2, 0.3], model: 'test-model' })
+
+      await createMemoryWithGate(data, { userId: 'user-123', skipGate: true })
+
+      expect(mockMemoriesRepo.create.mock.calls[0]).toEqual(gateCreate)
+      expect(mockVectorStore.addVector.mock.calls[0]).toEqual(gateVector)
+      expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
+    })
+  })
+
+  // ============================================================================
   // deleteMemoryWithVector Tests
   // ============================================================================
   describe('deleteMemoryWithVector', () => {
@@ -537,6 +588,48 @@ describe('Memory Service', () => {
       expect(mockGenerateEmbedding).toHaveBeenCalled()
       expect(mockVectorStore.updateVector).toHaveBeenCalled()
       expect(result).toBeDefined()
+    })
+
+    it('embeds before writing: a failed embed throws and leaves the row untouched', async () => {
+      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(mockMemories[0])
+      mockGenerateEmbedding.mockRejectedValue(new Error('provider down'))
+
+      jest.isolateModules(() => {
+        const serviceModule = require('@/lib/memory/memory-service')
+        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
+      })
+
+      await expect(
+        updateMemoryWithEmbedding('char-1', 'memory-1', { content: 'Updated content' }, options)
+      ).rejects.toMatchObject({ name: 'MemoryReembedError', memoryId: 'memory-1' })
+      expect(mockMemoriesRepo.updateForCharacter).not.toHaveBeenCalled()
+      expect(mockVectorStore.updateVector).not.toHaveBeenCalled()
+    })
+
+    it('writes the new text and its embedding in one update, embedded from the edited text', async () => {
+      mockMemoriesRepo.findByIdForCharacter = jest.fn().mockResolvedValue(mockMemories[0])
+      mockMemoriesRepo.updateForCharacter.mockImplementation(async (_c: any, _id: any, patch: any) => ({
+        ...mockMemories[0],
+        ...patch,
+      }))
+      mockGenerateEmbedding.mockResolvedValue({ embedding: [0.7, 0.8, 0.9], model: 'test-model' })
+      mockVectorStore.hasVector.mockReturnValue(true)
+
+      jest.isolateModules(() => {
+        const serviceModule = require('@/lib/memory/memory-service')
+        updateMemoryWithEmbedding = serviceModule.updateMemoryWithEmbedding
+      })
+
+      const result = await updateMemoryWithEmbedding('char-1', 'memory-1', { content: 'Updated content' }, options)
+
+      expect(mockMemoriesRepo.updateForCharacter).toHaveBeenCalledTimes(1)
+      expect(mockMemoriesRepo.updateForCharacter).toHaveBeenCalledWith('char-1', 'memory-1', {
+        content: 'Updated content',
+        embedding: [0.7, 0.8, 0.9],
+      })
+      expect(String(mockGenerateEmbedding.mock.calls[0][0])).toContain('Updated content')
+      expect(mockVectorStore.updateVector).toHaveBeenCalledWith('memory-1', [0.7, 0.8, 0.9])
+      expect((result as any).embedding).toEqual([0.7, 0.8, 0.9])
     })
 
     it('should return null when memory not found', async () => {

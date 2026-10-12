@@ -15,7 +15,7 @@
 
 ---
 
-**FIXED in v4 (2026-10-12).** `createMemoryDirect` now embeds first (one retry after 500 ms, as the gate does) and writes the row with its embedding in the same insert, then adds it to the vector store. If both attempts fail it writes nothing and returns null; `createMemoryWithGate` reports that as `SKIP_EMBEDDING_FAILED` with `memory: null`, so `POST /api/v1/memories` with `skipGate: true` answers with the existing "no row was created" error instead of a 201. The explicit `skipEmbedding` option still writes a bare row (no caller sets it). Removing `createMemoryDirect` and `skipGate` stays with Phase C. Tests: `createMemoryWithEmbedding` cases in `__tests__/unit/lib/memory/memory-service.test.ts`.
+**FIXED in v4 (2026-10-12).** `createMemoryDirect` now embeds first (one retry after 500 ms, as the gate does) and writes the row with its embedding in the same insert, then adds it to the vector store. If both attempts fail it writes nothing and returns null; `createMemoryWithGate` reports that as `SKIP_EMBEDDING_FAILED` with `memory: null`, so `POST /api/v1/memories` with `skipGate: true` answers with the existing "no row was created" error instead of a 201. The explicit `skipEmbedding` option still writes a bare row (no caller sets it). Removing `createMemoryDirect` and `skipGate` stays with Phase C. Tests: `createMemoryWithEmbedding` cases in `__tests__/unit/lib/memory/memory-service.test.ts`. Review follow-up: `createMemoryDirect` now embeds and delegates to `createMemoryDirectWithEmbedding`, the one persist tail, which writes the embedding in the `create` call itself (the gate path used to create then update) and stamps the new vector hot.
 
 ## Symptom
 

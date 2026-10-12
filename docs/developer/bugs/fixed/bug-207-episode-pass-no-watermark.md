@@ -30,7 +30,12 @@ the next hard rebuild rebuilds them in slices. The column is carried in `.qtap` 
 (`qtap-export.schema.json`), remapped on restore (`uuid-remap.ts`) and on fresh-id import
 (`message-id-remap.ts`). Tests: `__tests__/unit/lib/memory/fold-episode-pass.test.ts` ("watermark
 and slices"), `memory-regenerate-chat-fold-other.test.ts`, the migration's integration test, and the
-remap/restore/patch-only tests.
+remap/restore/patch-only tests. Review follow-up: the pass reads from its watermark through the end of the
+fold's window (`foldPassRange`), so a slice lost to a timeout is read by the next fold rather than
+jumped; it reads at most `FOLD_EPISODE_MAX_SLICES_PER_JOB` (4) slices per fold, so a long backlog
+(after a regenerate, say) is rebuilt over several folds; it no longer links an episode it wrote
+earlier in the same run as a "fragment" of a later one; and the fold hands both passes the
+transcript it already read instead of each re-reading it.
 
 ## Symptom
 

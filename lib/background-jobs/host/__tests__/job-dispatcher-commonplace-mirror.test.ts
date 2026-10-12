@@ -28,8 +28,12 @@ jest.mock('@/lib/memory/consolidation-triggers', () => ({
 }));
 
 const mirrorCommonplaceAfterCommit = jest.fn(async () => undefined);
+const digestBucketsDeletedByWrites = jest.fn(async (): Promise<Map<string, Set<string>>> => new Map());
+const mirrorCommonplaceForDeletedDigests = jest.fn(async () => undefined);
 jest.mock('@/lib/memory/commonplace-mirror', () => ({
   mirrorCommonplaceAfterCommit: (...args: unknown[]) => mirrorCommonplaceAfterCommit(...(args as [])),
+  digestBucketsDeletedByWrites: (...args: unknown[]) => digestBucketsDeletedByWrites(...(args as [])),
+  mirrorCommonplaceForDeletedDigests: (...args: unknown[]) => mirrorCommonplaceForDeletedDigests(...(args as [])),
 }));
 
 function fakeDb(opts?: { failCommit?: string }) {
@@ -75,6 +79,7 @@ beforeEach(() => {
     memories: {
       create: jest.fn(async () => ({})),
       updateTierBulk: jest.fn(async () => 0),
+      delete: jest.fn(async () => true),
     },
     backgroundJobs: {
       markCompleted: jest.fn(async () => null),
@@ -147,5 +152,49 @@ describe('Commonplace mirror after a consolidation job (bug 208)', () => {
 
     expect(repos.backgroundJobs.markFailed).toHaveBeenCalled();
     expect(mirrorCommonplaceAfterCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe('Commonplace mirror after a batch that deletes a digest', () => {
+  const deleteWrites: ChildWritePayload[] = [{ method: 'memories.delete', args: ['digest-1'] }];
+
+  function sweepJob(id: string): BackgroundJob {
+    return { ...consolidationJob(id), type: 'MEMORY_HOUSEKEEPING' } as BackgroundJob;
+  }
+
+  it('reads the buckets before commit and mirrors them after, for any job type', async () => {
+    const mainDb = fakeDb();
+    jest.mocked(getRawDatabase).mockReturnValue(mainDb as never);
+    const buckets = new Map([['holder-1', new Set(['laura-1'])]]);
+    digestBucketsDeletedByWrites.mockImplementationOnce(async () => {
+      // Before the main partition opens its transaction.
+      expect(mainDb.calls).toEqual([]);
+      return buckets;
+    });
+    let callsAtMirror: string[] = [];
+    mirrorCommonplaceForDeletedDigests.mockImplementationOnce(async () => {
+      callsAtMirror = [...mainDb.calls];
+    });
+    const job = sweepJob('job-sweep');
+    inFlight(job);
+
+    await handleChildJobResult({ type: 'job-result', jobId: job.id, ok: true, writes: deleteWrites } as never);
+    await flush();
+
+    expect(digestBucketsDeletedByWrites).toHaveBeenCalledWith(deleteWrites);
+    expect(mirrorCommonplaceForDeletedDigests).toHaveBeenCalledWith(buckets);
+    expect(callsAtMirror).toEqual(['BEGIN IMMEDIATE', 'COMMIT']);
+  });
+
+  it('a batch that fails to commit refreshes no mirror', async () => {
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb({ failCommit: 'disk full' }) as never);
+    digestBucketsDeletedByWrites.mockResolvedValueOnce(new Map([['holder-1', new Set(['laura-1'])]]));
+    const job = sweepJob('job-sweep-fail');
+    inFlight(job);
+
+    await handleChildJobResult({ type: 'job-result', jobId: job.id, ok: true, writes: deleteWrites } as never);
+    await flush();
+
+    expect(mirrorCommonplaceForDeletedDigests).not.toHaveBeenCalled();
   });
 });

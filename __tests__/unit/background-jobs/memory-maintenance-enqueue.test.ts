@@ -103,6 +103,39 @@ describe('housekeeping dedupe per character (bug 221)', () => {
   });
 });
 
+describe('housekeeping sweep reads the in-flight jobs once', () => {
+  beforeEach(() => {
+    repos.characters.findByUserId.mockResolvedValue(
+      Array.from({ length: 5 }, (_, i) => ({ id: `char-${i}` }))
+    );
+  });
+
+  it('loads PENDING and PROCESSING once for the whole sweep, not per character', async () => {
+    jobs.push({ id: 'busy', type: 'MEMORY_HOUSEKEEPING', status: 'PENDING', payload: { characterId: 'char-2' } });
+    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
+
+    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledTimes(2);
+    expect(repos.backgroundJobs.findByUserId.mock.calls.map((c: unknown[]) => c[1]).sort()).toEqual(['PENDING', 'PROCESSING']);
+    expect(ids).toHaveLength(5);
+    expect(ids[2]).toBe('busy');
+    expect(repos.backgroundJobs.create).toHaveBeenCalledTimes(4);
+  });
+
+  it('a legacy user-wide job in flight covers every character', async () => {
+    jobs.push({ id: 'legacy', type: 'MEMORY_HOUSEKEEPING', status: 'PROCESSING', payload: { reason: 'scheduled' } });
+    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
+    expect(ids).toEqual(['legacy']);
+    expect(repos.backgroundJobs.create).not.toHaveBeenCalled();
+  });
+
+  it('still enqueues every character when the lookup fails', async () => {
+    repos.backgroundJobs.findByUserId.mockRejectedValue(new Error('db busy'));
+    const ids = await enqueueMemoryHousekeepingSweep('user-1', { reason: 'scheduled' });
+    expect(ids).toHaveLength(5);
+    expect(repos.backgroundJobs.findByUserId).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('consolidation carries clusterThreshold (bug 223)', () => {
   it('puts the threshold on the job payload', async () => {
     await enqueueMemoryConsolidation('user-1', { characterId: 'char-a', clusterThreshold: 0.65, trigger: 'manual' });

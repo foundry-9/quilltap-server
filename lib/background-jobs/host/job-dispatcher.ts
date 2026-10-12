@@ -376,6 +376,9 @@ export async function applyWritesUnsafe(
   // name no character; resolve their owners now, while a deleted row still
   // exists to be read (bug 217).
   const memoryOwners = lookupMemoryOwners(memoryIdsNeedingOwnerLookup(writes), jobId);
+  // Likewise the subject buckets of any digest the batch deletes, so their
+  // Commonplace mirror can be refreshed once the delete has committed.
+  const deletedDigestBuckets = await lookupDeletedDigestBuckets(writes, jobId);
 
   if (isMainPrimaryJobType(jobType)) {
     await applyPartition('main', getRawDatabase(), parts.main, jobId);
@@ -393,6 +396,7 @@ export async function applyWritesUnsafe(
   // safe even when a best-effort secondary partition was dropped.
   cleanupStagingDirs(writes, jobId);
   dispatchInvalidations(writes, memoryOwners);
+  void mirrorDeletedDigestsAfterCommit(deletedDigestBuckets, jobId);
 
   // The Concierge's refusal ledger: a child can buffer an increment but can
   // neither read the resulting count nor act on it, so the auto-switch check
@@ -694,6 +698,41 @@ async function mirrorCommonplaceAfterCommit(
       jobId: job?.id,
       error: getErrorMessage(err),
     });
+  }
+}
+
+/**
+ * Before a batch commits: the holders and subjects of the digests it deletes.
+ * Reads nothing when the batch deletes no memories.
+ */
+async function lookupDeletedDigestBuckets(
+  writes: ChildWritePayload[],
+  jobId: string,
+): Promise<Map<string, Set<string>>> {
+  try {
+    const mod = await import('@/lib/memory/commonplace-mirror');
+    return await mod.digestBucketsDeletedByWrites(writes);
+  } catch (err) {
+    log.debug('Deleted-digest lookup skipped before commit', { jobId, error: getErrorMessage(err) });
+    return new Map();
+  }
+}
+
+/**
+ * After a batch that deleted digests commits, rewrite those buckets'
+ * `Commonplace/` files from what remains, so the vault stops presenting a
+ * deleted digest as canon. Best-effort and off the result path.
+ */
+async function mirrorDeletedDigestsAfterCommit(
+  buckets: Map<string, Set<string>>,
+  jobId: string,
+): Promise<void> {
+  if (buckets.size === 0) return;
+  try {
+    const mod = await import('@/lib/memory/commonplace-mirror');
+    await mod.mirrorCommonplaceForDeletedDigests(buckets);
+  } catch (err) {
+    log.warn('Commonplace mirror after digest delete skipped', { jobId, error: getErrorMessage(err) });
   }
 }
 

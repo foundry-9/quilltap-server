@@ -107,7 +107,7 @@ describe('POST /api/v1/memories (manual create, bug 218)', () => {
     expect(data.source).toBe('MANUAL')
     expect(data.witnessedContext).toBe('manual')
     expect(data.projectId).toBeNull()
-    expect(opts).toEqual({ userId: 'user-1' })
+    expect(opts).toEqual({ userId: 'user-1', promoteOnMatch: true })
     expect(opts.skipGate).toBeUndefined()
   })
 

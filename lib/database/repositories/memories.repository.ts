@@ -969,6 +969,174 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
   }
 
   /**
+   * The given holders' digests whose `consolidatedFrom` names any of
+   * `memberIds` — the delete chokepoint's digest scan. Scoped by holder (a
+   * digest and its members share one) and pre-filtered with a quoted-id LIKE
+   * per member, the same shape as the `relatedMemoryIds` neighbour scan, so it
+   * never walks every digest in the instance. The JSON is parsed here; callers
+   * still check membership exactly. Rows carry `id`, `characterId` and
+   * `consolidatedFrom` only.
+   */
+  async findDigestsContainingMembers(
+    characterIds: readonly string[],
+    memberIds: readonly string[],
+  ): Promise<Array<{ id: string; characterId: string; consolidatedFrom: string[] }>> {
+    return this.safeQuery(
+      async () => {
+        const holders = Array.from(new Set(characterIds));
+        const members = Array.from(new Set(memberIds));
+        if (holders.length === 0 || members.length === 0) return [];
+        const found = new Map<string, { id: string; characterId: string; consolidatedFrom: string[] }>();
+        // Members chunked small: each contributes one LIKE term and one bind.
+        const MEMBER_CHUNK = 50;
+        for (const holderChunk of chunkArray(holders, SQLITE_VARIABLE_CHUNK_SIZE - MEMBER_CHUNK)) {
+          for (const memberChunk of chunkArray(members, MEMBER_CHUNK)) {
+            const rows = await rawQuery<Array<{ id: string; characterId: string; consolidatedFrom: string | null }>>(
+              `SELECT id, characterId, consolidatedFrom FROM memories
+                WHERE characterId IN (${holderChunk.map(() => '?').join(',')})
+                  AND (${memberChunk.map(() => 'consolidatedFrom LIKE ?').join(' OR ')})`,
+              [...holderChunk, ...memberChunk.map((id) => `%"${id}"%`)],
+            );
+            for (const row of rows) {
+              if (found.has(row.id)) continue;
+              let parsed: unknown = [];
+              try {
+                parsed = row.consolidatedFrom ? JSON.parse(row.consolidatedFrom) : [];
+              } catch {
+                parsed = [];
+              }
+              found.set(row.id, {
+                id: row.id,
+                characterId: row.characterId,
+                consolidatedFrom: Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [],
+              });
+            }
+          }
+        }
+        logger.debug('Found digests naming doomed members', {
+          holders: holders.length,
+          members: members.length,
+          digests: found.size,
+        });
+        return Array.from(found.values());
+      },
+      'Error finding digests containing members',
+      { characters: characterIds.length, members: memberIds.length },
+      [],
+    );
+  }
+
+  /**
+   * Ids (with holder) of the given holders' rows whose `supersededById` names
+   * one of `digestIds` — the members a deleted digest leaves behind. Backed by
+   * `idx_memories_supersededById`.
+   */
+  async findIdsSupersededByAny(
+    characterIds: readonly string[],
+    digestIds: readonly string[],
+  ): Promise<Array<{ id: string; characterId: string }>> {
+    return this.safeQuery(
+      async () => {
+        const holders = Array.from(new Set(characterIds));
+        if (holders.length === 0 || digestIds.length === 0) return [];
+        const out: Array<{ id: string; characterId: string }> = [];
+        const half = Math.floor(SQLITE_VARIABLE_CHUNK_SIZE / 2);
+        for (const holderChunk of chunkArray(holders, half)) {
+          for (const digestChunk of chunkArray(Array.from(digestIds), half)) {
+            const rows = await rawQuery<Array<{ id: string; characterId: string }>>(
+              `SELECT id, characterId FROM memories
+                WHERE supersededById IN (${digestChunk.map(() => '?').join(',')})
+                  AND characterId IN (${holderChunk.map(() => '?').join(',')})`,
+              [...digestChunk, ...holderChunk],
+            );
+            out.push(...rows);
+          }
+        }
+        return out;
+      },
+      'Error finding members superseded by digests',
+      { characters: characterIds.length, digests: digestIds.length },
+      [],
+    );
+  }
+
+  /**
+   * Remove `memberIds` from one digest's `consolidatedFrom`, in SQL against
+   * the row as it stands at write time. A delta, not a whole-array write: in
+   * the job child two deletes from one digest each buffer only their own
+   * removal, and the parent's replay applies both — a whole-array write built
+   * from the child's snapshot would let the second resurrect the first's
+   * member (review of bug 225). Returns rows changed (0 in the job child, where
+   * the write is buffered).
+   */
+  async removeConsolidatedMembers(
+    characterId: string,
+    digestId: string,
+    memberIds: readonly string[],
+  ): Promise<number> {
+    return this.safeQuery(
+      async () => {
+        const members = Array.from(new Set(memberIds));
+        if (members.length === 0) return 0;
+        const db = getRawDatabase();
+        if (!db) {
+          throw new Error('Digest member removal: the main database is not initialized');
+        }
+        const now = this.getCurrentTimestamp();
+        let changed = 0;
+        for (const chunk of chunkArray(members, SQLITE_VARIABLE_CHUNK_SIZE - 3)) {
+          const result = db
+            .prepare(
+              `UPDATE memories
+                  SET consolidatedFrom = (
+                        SELECT COALESCE(json_group_array(value), '[]')
+                          FROM json_each(memories.consolidatedFrom)
+                         WHERE value NOT IN (${chunk.map(() => '?').join(',')})
+                      ),
+                      updatedAt = ?
+                WHERE id = ? AND characterId = ?
+                  AND json_valid(consolidatedFrom)`,
+            )
+            .run(...chunk, now, digestId, characterId);
+          changed = Math.max(changed, result.changes);
+        }
+        logger.debug('Removed members from digest', { characterId, digestId, members: members.length, changed });
+        return changed;
+      },
+      'Error removing members from digest',
+      { characterId, digestId, count: memberIds.length },
+      0,
+    );
+  }
+
+  /**
+   * Holder and subject of every digest (`source = 'CONSOLIDATED'`) among
+   * `ids`. Read before such rows are deleted, so the Commonplace mirror of
+   * their buckets can be refreshed once the delete has committed.
+   */
+  async findDigestSubjectsByIds(
+    ids: readonly string[],
+  ): Promise<Array<{ id: string; characterId: string; aboutCharacterId: string | null }>> {
+    return this.safeQuery(
+      async () => {
+        const out: Array<{ id: string; characterId: string; aboutCharacterId: string | null }> = [];
+        for (const chunk of chunkArray(Array.from(new Set(ids)), SQLITE_VARIABLE_CHUNK_SIZE)) {
+          const rows = await rawQuery<Array<{ id: string; characterId: string; aboutCharacterId: string | null }>>(
+            `SELECT id, characterId, aboutCharacterId FROM memories
+              WHERE source = 'CONSOLIDATED' AND id IN (${chunk.map(() => '?').join(',')})`,
+            chunk,
+          );
+          out.push(...rows);
+        }
+        return out;
+      },
+      'Error finding digest subjects',
+      { count: ids.length },
+      [],
+    );
+  }
+
+  /**
    * Ids of a character's superseded, cold, non-MANUAL memories superseded
    * before `olderThan` — the only rows `coldRetentionDays` may delete.
    *

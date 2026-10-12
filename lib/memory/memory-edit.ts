@@ -15,7 +15,8 @@
  *   - `relatedMemoryIds` must name existing memories of the same character, and
  *     the link is written on both sides;
  *   - the frozen archive is invalidated and `memories` is published;
- *   - a digest's Commonplace mirror bucket(s) are rewritten.
+ *   - a digest's Commonplace mirror bucket(s) are rewritten through
+ *     `mirrorCommonplaceForSubjects`, the same writer consolidation uses.
  *
  * Parent-process only (it publishes realtime hints and invalidates the
  * parent's archive cache).
@@ -28,9 +29,9 @@ import type { Memory } from '@/lib/schemas/types'
 import { logger } from '@/lib/logger'
 import { publishRealtime } from '@/lib/realtime/bus'
 import { calculateReinforcedImportance } from './reinforced-importance'
-import { updateMemoryWithEmbedding } from './memory-service'
+import { MemoryReembedError, updateMemoryWithEmbedding } from './memory-service'
 import { invalidateFrozenArchive } from './frozen-archive-cache'
-import type { CommonplaceDigestEntry } from './commonplace-file'
+import { mirrorCommonplaceForSubjects } from './commonplace-mirror'
 
 const log = logger.child({ module: 'memory:memory-edit' })
 
@@ -50,6 +51,8 @@ export type EditMemoryResult =
   | { ok: true; memory: Memory }
   | { ok: false; reason: 'not-found' }
   | { ok: false; reason: 'invalid-related'; invalidIds: string[] }
+  /** The edited text could not be embedded; nothing was written. */
+  | { ok: false; reason: 'embedding-failed'; message: string }
 
 /**
  * Apply a hand edit to one memory and bring its derived state with it.
@@ -108,9 +111,24 @@ export async function editMemory(
   }
 
   // --- the row, re-embedded when its embedded text changed ------------------
-  const memory = await updateMemoryWithEmbedding(characterId, memoryId, update, {
-    userId: options.userId,
-  })
+  // Embeds before it writes: a failed embed leaves the row (and so the links
+  // below, the archive and the mirror) exactly as they were.
+  let memory: Memory | null
+  try {
+    memory = await updateMemoryWithEmbedding(characterId, memoryId, update, {
+      userId: options.userId,
+    })
+  } catch (error) {
+    if (error instanceof MemoryReembedError) {
+      log.warn('Memory edit refused: the edited text could not be embedded', {
+        characterId,
+        memoryId,
+        error: error.message,
+      })
+      return { ok: false, reason: 'embedding-failed', message: error.message }
+    }
+    throw error
+  }
   if (!memory) return { ok: false, reason: 'not-found' }
 
   for (const id of added) {
@@ -142,11 +160,12 @@ export async function editMemory(
   if (existing.source === 'CONSOLIDATED' && (existing.tier ?? 'hot') === 'hot') {
     // A digest's bucket is its subject (consolidation's `bucketKeyOf`); an
     // edit that moves `aboutCharacterId` touches both the old and new file.
-    const subjects = new Set<string | null>([
-      existing.aboutCharacterId ?? null,
-      memory.aboutCharacterId ?? null,
-    ])
-    await refreshCommonplaceMirror(characterId, subjects)
+    // The no-subject bucket has no mirror file. Never throws.
+    const subjects = [existing.aboutCharacterId, memory.aboutCharacterId].filter(
+      (s): s is string => typeof s === 'string' && s.length > 0
+    )
+    const written = await mirrorCommonplaceForSubjects(characterId, subjects)
+    log.debug('Refreshed Commonplace mirror after digest edit', { characterId, memoryId, subjects, written })
   }
 
   log.debug('Memory edited', {
@@ -155,68 +174,4 @@ export async function editMemory(
     fields: Object.keys(patch),
   })
   return { ok: true, memory }
-}
-
-/**
- * Rewrite the holder's Commonplace mirror file for each subject bucket given
- * (null = the no-subject bucket, which has no file). Each file is rebuilt from
- * every hot, embedded digest in that bucket — the same set consolidation
- * mirrors. Best-effort: a failure is logged, never thrown.
- */
-async function refreshCommonplaceMirror(
-  holderId: string,
-  subjects: ReadonlySet<string | null>,
-): Promise<void> {
-  const targets = Array.from(subjects).filter((s): s is string => s !== null)
-  if (targets.length === 0) return
-  try {
-    const repos = getRepositories()
-    const holder = await repos.characters.findByIdRaw(holderId)
-    if (!holder) return
-
-    const digestsBySubject = new Map<string, CommonplaceDigestEntry[]>()
-    for (const subject of targets) digestsBySubject.set(subject, [])
-    for (const row of await repos.memories.findByCharacterId(holderId)) {
-      if (row.source !== 'CONSOLIDATED' || (row.tier ?? 'hot') !== 'hot') continue
-      if (!row.embedding || row.embedding.length === 0) continue
-      const subject = row.aboutCharacterId ?? null
-      if (subject === null) continue
-      const bucket = digestsBySubject.get(subject)
-      if (!bucket) continue
-      bucket.push({
-        content: row.content,
-        kind: row.kind ?? 'semantic',
-        occurredAt: row.occurredAt ?? null,
-        reinforcedImportance: row.reinforcedImportance ?? row.importance,
-      })
-    }
-
-    const files = []
-    for (const [subject, digests] of digestsBySubject) {
-      const isSelf = subject === holderId
-      let subjectName = holder.name
-      if (!isSelf) {
-        const other = await repos.characters.findByIdRaw(subject)
-        if (!other) continue // consolidation writes no file for a vanished subject
-        subjectName = other.name
-      }
-      files.push({ subjectCharacterId: subject, subjectName, isSelf, digests })
-    }
-    if (files.length === 0) return
-
-    const { writeCommonplaceDigestsToVault } = await import(
-      '@/lib/file-storage/commonplace-digest-vault-bridge'
-    )
-    const result = await writeCommonplaceDigestsToVault({
-      holderCharacterId: holderId,
-      files,
-      updatedAt: new Date().toISOString(),
-    })
-    log.debug('Refreshed Commonplace mirror after digest edit', { characterId: holderId, ...result })
-  } catch (error) {
-    log.warn('Commonplace mirror refresh failed after digest edit (the digest itself is saved)', {
-      characterId: holderId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 }

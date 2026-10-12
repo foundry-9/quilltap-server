@@ -178,6 +178,8 @@ phases and must not be lost:
 | D | `chats.episodeExtractionWatermarkMessageId` (bug 207) and `otherExtractionWatermarkMessageId` fold into `memory_extraction_cursors`. | [bug 207](../bugs/fixed/bug-207-episode-pass-no-watermark.md) |
 | E | The text-search fallback still ignores `minScore` and filters raw `importance`, and has no related-memory expansion or R6 background reserve. | [bug 214](../bugs/fixed/bug-214-text-fallback-drops-options.md) |
 | E | The inter-character section is deduped against the archive by id but not backfilled; rows cut from the archive by its token budget can still appear there. | [bug 224](../bugs/fixed/bug-224-recall-sections-overlap.md) |
+| B | The `relatedMemoryIds` scrub in the delete chokepoints still writes whole lists from a committed snapshot; the digest scrub became a removal delta in the PR 90 review. | [bug 234](../bugs/bug-234-related-scrub-lost-update.md) (open) |
+| D | The fold episode pass has no idle catch-up; with the 4-slice-per-run cap a long backlog advances only as the chat folds. | [bug 232](../bugs/bug-232-episode-no-idle-catchup.md) (open) |
 | F | Housekeeping may now demote protected AUTO rows, last, when over the cap (decision 3). Review on Friday's first maintenance dry run. | [bug 210](../bugs/fixed/bug-210-cap-counts-protected-rows.md) |
 
 ---
@@ -831,7 +833,7 @@ dated note here, not an implementer's call.
 | 7 | **The three manual-only retention knobs are dropped** (age and inactivity are already in protection's content term); **viewing a memory is not an access** — `GET /memories/[id]` stops stamping `lastAccessedAt`. | F, G |
 | 8 | **One PR per phase to main.** | all |
 | 9 | **Housekeeping settings move to `instance_settings.memoryMaintenance`**; the `chat_settings.autoHousekeepingSettings` column is dropped by migration. Every memory knob then shares one storage class behind `resolveMemorySettings`. | A |
-| 10 | **One calendar per instance** for event time on both the write and read side: instance `timezone` → `QUILLTAP_TIMEZONE` → system. The per-chat timezone field stays display-only. Pre-refactor rows keep their UTC-point `occurredAt`; no backfill. | A |
+| 10 | **One calendar per instance** for event time on both the write and read side: instance `timezone` → `QUILLTAP_TIMEZONE` → system. The per-chat timezone field stays display-only. Pre-refactor rows keep their UTC-point `occurredAt`; no backfill (*reversed — see the PR 90 review amendment below*). | A |
 | 11 | **One Maintenance card** replaces the Housekeeping, Consolidation and Dedup cards; three help pages merge into `help/memory-maintenance.md` and the old `section=` deep-links redirect to it. | G |
 | 12 | **The inter-character relevance half is a filter of the turn's one gathered pool** by `aboutCharacterId`, deduped against archive and head — one embedding and one search per turn. | E |
 | 13 | **`skipGate` leaves the API.** Import, restore and consolidation keep their explicit direct inserts; nothing else inserts around admission. | G |
@@ -843,6 +845,20 @@ defect*. R5 of the recall retuning (2026-10-08) deliberately keeps entity-anchor
 floor, with related expansion as the only exemption, and a test pins it. Boosting or exempting anchor
 hits would also move `cap14` against decision 14. Charlie chose to keep R5; only the misleading
 comments were corrected. Any change to the floor's exemptions is a tuning change under §5.1.
+
+**Amendment (2026-10-12, review of PR 90).** Decision 10's "no backfill" is reversed: the owner's
+review of PR 90 asked for one. Once the anchor line and the day windows read `occurredAt` on the
+instance calendar, a legacy UTC-midnight point date reads as the previous day anywhere west of
+Greenwich. Migration `rezone-legacy-memory-occurred-at-v1` re-stamps every row whose `occurredAt` is
+exactly a UTC midnight at local midnight of the same calendar date in the instance zone (resolved as
+`refreshMemoryTimeZone` resolves it). It runs once, before the new resolver writes anything, so on an
+ordinary upgrade every UTC-midnight row is legacy; there is deliberately no `createdAt` cutoff, since an
+instance still on old code keeps writing legacy rows. The residual case is a development instance that
+ran the bug-212 code before this migration in a UTC−6 zone, where a post-fix "last night" (18:00 local)
+is itself a UTC midnight. No re-embed is needed: legacy
+vectors carry the UTC date, which is the date the re-stamped value reads. Every path that builds
+embedding text or an extraction prompt now resolves the zone first (`refreshMemoryTimeZone`) and
+passes it explicitly, so the parent and a cold job child render the same date.
 
 ## 8. Risks
 

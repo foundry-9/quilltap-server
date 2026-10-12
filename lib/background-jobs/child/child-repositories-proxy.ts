@@ -84,6 +84,12 @@ interface MemoryOverlayEntry {
   /** Observations counted by buffered `incrementReinforcement` calls. */
   reinforcementDelta: number;
   lastReinforcedAt?: string;
+  /**
+   * Members buffered `removeConsolidatedMembers` calls took out of the row's
+   * `consolidatedFrom` since its last absolute `consolidatedFrom` patch — a
+   * delta applied to whatever list the row reads with.
+   */
+  consolidatedFromRemoved?: Set<string>;
   deleted: boolean;
 }
 
@@ -273,7 +279,20 @@ function recordBufferedMemoryWrite(
       const id = asId(methodName === 'update' ? args[0] : args[1]);
       const patch = methodName === 'update' ? args[1] : args[2];
       if (!id || !patch || typeof patch !== 'object') return;
-      Object.assign(memoryOverlayEntry(scope, id).patch, patch);
+      const entry = memoryOverlayEntry(scope, id);
+      Object.assign(entry.patch, patch);
+      // An absolute list replaces any removal deltas buffered before it.
+      if ('consolidatedFrom' in patch) entry.consolidatedFromRemoved = undefined;
+      break;
+    }
+    case 'removeConsolidatedMembers': {
+      const id = asId(args[1]);
+      const members = Array.isArray(args[2]) ? args[2].filter((m): m is string => typeof m === 'string') : [];
+      if (!id || members.length === 0) return;
+      const entry = memoryOverlayEntry(scope, id);
+      const removed = entry.consolidatedFromRemoved ?? new Set<string>();
+      for (const m of members) removed.add(m);
+      entry.consolidatedFromRemoved = removed;
       break;
     }
     case 'incrementReinforcement': {
@@ -327,6 +346,14 @@ function overlayMemoryRow(
 ): Record<string, unknown> | null {
   if (entry.deleted) return null;
   const row: Record<string, unknown> = { ...base, ...entry.patch };
+  if (entry.consolidatedFromRemoved && entry.consolidatedFromRemoved.size > 0) {
+    const removed = entry.consolidatedFromRemoved;
+    let list: unknown = row.consolidatedFrom;
+    if (typeof list === 'string') {
+      try { list = JSON.parse(list); } catch { list = []; }
+    }
+    if (Array.isArray(list)) row.consolidatedFrom = list.filter((m) => !removed.has(m as string));
+  }
   if (entry.reinforcementDelta > 0) {
     const baseCount = typeof base.reinforcementCount === 'number' ? base.reinforcementCount : 1;
     const reinforcementCount = baseCount + entry.reinforcementDelta;

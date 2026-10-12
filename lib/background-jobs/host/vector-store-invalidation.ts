@@ -37,12 +37,16 @@ type CharacterKeyShape =
  * Every repository write that changes a character's memory rows or vectors in
  * a way the cached store must see (vector added/removed/changed, row
  * removed, tier moved).
+ *
+ * `memories.incrementReinforcement` is deliberately absent: it moves only
+ * `reinforcementCount` / `reinforcedImportance` / `lastReinforcedAt`, none of
+ * which the store caches (its entries carry memoryId, characterId and tier),
+ * and listing it unloaded the character's store after nearly every turn.
  */
 export const VECTOR_STORE_WRITE_SHAPES: Readonly<Record<string, CharacterKeyShape>> = {
   'memories.create': 'characterField',
   'memories.upsert': 'characterField',
   'memories.updateForCharacter': 'characterArg',
-  'memories.incrementReinforcement': 'characterArg',
   'memories.deleteForCharacter': 'characterArg',
   'memories.bulkDelete': 'characterArg',
   // Tier moves change the store's hot-only metadata (stamped at load).

@@ -63,6 +63,16 @@ describe('vectorStoreKeysForWrites', () => {
     ];
     expect(vectorStoreKeysForWrites(writes).size).toBe(0);
   });
+
+  it('a reinforcement-only write changes no vector or tier, so it touches nothing', () => {
+    // The store caches only memoryId / characterId / tier — reinforcement
+    // count and reinforced importance never reach it.
+    const writes: ChildWritePayload[] = [
+      { method: 'memories.incrementReinforcement', args: ['charA', 'm1', '2026-10-12T00:00:00.000Z', 1] },
+    ];
+    expect(vectorStoreKeysForWrites(writes).size).toBe(0);
+    expect(memoryIdsNeedingOwnerLookup(writes)).toEqual([]);
+  });
 });
 
 describe('applyWritesUnsafe — vector-store invalidation after commit', () => {
@@ -74,7 +84,7 @@ describe('applyWritesUnsafe — vector-store invalidation after commit', () => {
   function repos() {
     const write = () => jest.fn(() => Promise.resolve(1));
     return {
-      memories: { bulkDelete: write(), delete: write(), create: write() },
+      memories: { bulkDelete: write(), delete: write(), create: write(), incrementReinforcement: write() },
       chats: { update: write() },
     };
   }
@@ -118,6 +128,18 @@ describe('applyWritesUnsafe — vector-store invalidation after commit', () => {
     const firstCommit = db.exec.mock.invocationCallOrder[db.exec.mock.calls.findIndex((c) => c[0] === 'COMMIT')];
     expect(firstPrepare).toBeLessThan(firstCommit);
     expect(vectorNotifications()).toEqual(['charA', 'charB']);
+  });
+
+  it('a reinforcement-only batch leaves the store loaded', async () => {
+    jest.mocked(getRawDatabase).mockReturnValue(fakeDb() as never);
+    await applyWritesUnsafe(
+      'job-4',
+      [{ method: 'memories.incrementReinforcement', args: ['charA', 'm1', '2026-10-12T00:00:00.000Z', 1] }],
+      'MEMORY_EXTRACTION',
+    );
+    expect(vectorNotifications()).toEqual([]);
+    await new Promise((r) => setImmediate(r));
+    expect(unloadStore).not.toHaveBeenCalled();
   });
 
   it('a batch with no memories.* write drops none', async () => {

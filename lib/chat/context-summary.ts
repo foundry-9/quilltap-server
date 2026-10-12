@@ -572,6 +572,13 @@ export async function generateContextSummary(
       uncensoredRoute: foldUncensoredFallback?.isDangerousChat === true,
     })
 
+    // Both fold passes place their watermarks against the transcript this fold
+    // already read; handing it over saves each a full read and decompression.
+    const foldTranscript = allChatMessages.filter(
+      (m): m is MessageEvent => m.type === 'message',
+    ) as unknown as MessageEvent[]
+    const foldWindowMessages = turnsToFold.flatMap(t => t.messages)
+
     // Episodic spine: fold-time episode pass. Over the just-folded window, ask
     // the cheap LLM for 0–2 consolidated episode records and write them as
     // dated `kind: 'episodic'` memories linked to the window's per-turn
@@ -580,11 +587,11 @@ export async function generateContextSummary(
     // it has not (bug 207). Best-effort: a failed episode pass never fails the
     // fold.
     try {
-      const windowMessages = turnsToFold.flatMap(t => t.messages)
       await runFoldEpisodePass({
         chatId,
         userId,
-        windowMessages,
+        windowMessages: foldWindowMessages,
+        chatMessages: foldTranscript,
         cheapLLM,
         uncensoredFallback: foldUncensoredFallback,
         timelineMode: chat.timelineMode ?? 'realtime',
@@ -601,11 +608,11 @@ export async function generateContextSummary(
     // (the pass checks), advances the chat's OTHER watermark, and inherits the
     // Concierge policy exactly as the per-turn pass does. Best-effort.
     try {
-      const windowMessages = turnsToFold.flatMap(t => t.messages)
       await runFoldOtherPass({
         chatId,
         userId,
-        windowMessages,
+        windowMessages: foldWindowMessages,
+        chatMessages: foldTranscript,
         cheapLLM,
         cheapMaxTokens: resolveMaxTokens(connectionProfile),
         uncensoredFallback: foldUncensoredFallback,

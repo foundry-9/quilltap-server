@@ -26,7 +26,7 @@ The Book now keeps a single calendar for both the filing and the finding. When a
 
 Which clock? The **Default timezone** in the Salon's settings, if you have set one; failing that, the `QUILLTAP_TIMEZONE` the instance was started with; failing *that*, the machine's own. A chat's own timestamp timezone governs only how times are *displayed* in that chat — it does not move the Book's calendar.
 
-One small wrinkle for the record: memories filed *before* this change keep the dates they were given, which were Greenwich midnights. West of Greenwich such a memory may read as a day earlier than it happened; east of it, it usually lands on the right day. Nothing has been rewritten, and new memories are filed on your calendar from the start.
+Memories filed *before* this change were given Greenwich midnights, which west of Greenwich would have read as the evening before. On the first start after the upgrade the Book quietly moves each of those to midnight of the same day on your own clock, so an older memory dated the fourteenth stays dated the fourteenth, whichever side of Greenwich you live on. Dates carrying an actual hour — the moment a turn was spoken, say — are left exactly as they were, and new memories are filed on your calendar from the start. The move is made once, against the clock in force at the time; changing the **Default timezone** afterwards does not re-file anything.
 
 ## Stories on Their Own Calendar
 

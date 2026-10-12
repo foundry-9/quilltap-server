@@ -27,6 +27,10 @@ regenerate's catch-up and the hard-rebuild fold all go through this path, so a r
 150-message chat now reads three slices and its fold-grain observations cover the whole history.
 The watermark stays a `chats` column; moving it to `memory_extraction_cursors` remains Phase D work.
 Tests: `__tests__/unit/lib/memory/fold-other-pass.test.ts` ("wide windows are read in slices").
+Review follow-up: the pass now reads from its watermark through the end of the window it is handed
+(`foldPassRange`), so a slice lost to a timeout is read before a later fold's newer window instead
+of being jumped; one run reads at most `FOLD_OTHER_MAX_SLICES_PER_JOB` (4) slices, and the catch-up
+handler enqueues a follow-up job (`continue:<watermark>`) for the rest of a longer backlog.
 
 ## Symptom
 

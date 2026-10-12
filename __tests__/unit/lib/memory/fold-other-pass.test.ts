@@ -273,3 +273,83 @@ describe('runFoldOtherCatchup — routing and project (bugs 213, 222)', () => {
     expect(mockWrite.mock.calls[0][0].ctx.projectId).toBe('proj-1')
   })
 })
+
+describe('runFoldOtherPass — review findings 4, 7, 13', () => {
+  const history = (n: number) =>
+    Array.from({ length: n }, (_, i) => msg(`h${i + 1}`, i % 2 === 0 ? 's-amy' : 's-bea'))
+  let getMessages: jest.Mock
+
+  function liveRepos() {
+    setupRepos()
+    chatUpdate.mockImplementation(async (_id: string, patch: Record<string, unknown>) => {
+      Object.assign(chat, patch)
+      return chat
+    })
+    getMessages = jest.fn(async () => allMessages)
+    const repos = mockRepos()
+    mockRepos.mockReturnValue({
+      ...repos,
+      chats: { ...repos.chats, getMessages },
+      chatSettings: { findByUserId: jest.fn(async () => ({})) },
+      projects: { findById: jest.fn(async () => null) },
+    })
+  }
+  const firstIdOf = (call: unknown[]) => ((call[0] as Array<{ content: string }>)[0].content).replace('c ', '')
+
+  it('#4: a slice lost to a timeout is read by the next fold even when that fold only covers newer turns', async () => {
+    allMessages = history(250)
+    liveRepos()
+    let call = 0
+    mockExtract.mockImplementation(async (_w: unknown, _o: unknown, subjects: Array<{ id: string }>) => {
+      call++
+      if (call === 3) return { success: false, timedOut: true, error: 'timeout' }
+      return { success: true, result: new Map(subjects.map(s => [s.id, []])) }
+    })
+    await runFoldOtherPass({ ...baseInput(), windowMessages: (allMessages as never[]).slice(0, 240) })
+    expect(chat.otherExtractionWatermarkMessageId).toBe('h60')
+
+    mockExtract.mockClear()
+    mockExtract.mockImplementation(async (_w: unknown, _o: unknown, subjects: Array<{ id: string }>) => ({
+      success: true, result: new Map(subjects.map(s => [s.id, []])),
+    }))
+    const r = await runFoldOtherPass({ ...baseInput(), windowMessages: (allMessages as never[]).slice(240) })
+
+    expect(firstIdOf(mockExtract.mock.calls[0])).toBe('h61')
+    expect(r.watermarkAdvancedTo).toBe('h250')
+  })
+
+  it('#7: a long catch-up backlog takes several jobs and the watermark advances monotonically', async () => {
+    allMessages = history(600)
+    liveRepos()
+    mockExtract.mockImplementation(async (_w: unknown, _o: unknown, subjects: Array<{ id: string }>) => ({
+      success: true, result: new Map(subjects.map(s => [s.id, []])),
+    }))
+    const marks: string[] = []
+    for (let job = 0; job < 4; job++) {
+      mockExtract.mockClear()
+      const r = await runFoldOtherCatchup({
+        chatId: 'chat-1', userId: 'u1', connectionProfile: { id: 'prof-1' } as never,
+        cheapLLMSettings: { strategy: 'PROVIDER_CHEAPEST', fallbackToLocal: true } as never,
+        availableProfiles: [], ignoreIdle: true,
+      })
+      // At most four slices (two observers each) per job.
+      expect(mockExtract.mock.calls.length).toBeLessThanOrEqual(8)
+      if (r.watermarkAdvancedTo) marks.push(r.watermarkAdvancedTo)
+      if (chat.otherExtractionWatermarkMessageId === 'h600') break
+    }
+    expect(marks).toEqual(['h240', 'h480', 'h600'])
+  })
+
+  it('#13: uses the transcript it is handed instead of reading it again', async () => {
+    allMessages = history(10)
+    liveRepos()
+    chat.otherExtractionWatermarkMessageId = 'h4'
+    await runFoldOtherPass({
+      ...baseInput(),
+      windowMessages: (allMessages as never[]).slice(6),
+      chatMessages: allMessages as never,
+    })
+    expect(getMessages).not.toHaveBeenCalled()
+    expect(firstIdOf(mockExtract.mock.calls[0])).toBe('h5')
+  })
+})

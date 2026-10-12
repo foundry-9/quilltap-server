@@ -429,6 +429,9 @@ import { addChatScenarioSourceMigration } from './add-chat-scenario-source-v1';
 import { addEpisodeExtractionWatermarkMigration } from './add-episode-extraction-watermark-v1';
 // Memory: recompute reinforcedImportance with the count-1-equals-importance formula (bug 216)
 import { recomputeReinforcedImportanceMigration } from './recompute-reinforced-importance-v1';
+import { rezoneLegacyMemoryOccurredAtMigration } from './rezone-legacy-memory-occurred-at-v1';
+// Memory: partial supersededById index for the delete chokepoint's digest scrub
+import { addMemoriesSupersededByIndexMigration } from './add-memories-superseded-by-index-v1';
 
 /**
  * All available migrations.
@@ -873,6 +876,10 @@ export const migrations: Migration[] = [
   addEpisodeExtractionWatermarkMigration,
   // Memory: recompute reinforcedImportance (count 1 equals importance, bug 216)
   recomputeReinforcedImportanceMigration,
+  // Memory: re-stamp legacy UTC-midnight occurredAt at local midnight (PR 90 review)
+  rezoneLegacyMemoryOccurredAtMigration,
+  // Memory: partial supersededById index (delete chokepoint digest scrub)
+  addMemoriesSupersededByIndexMigration,
 ];
 
 export {
@@ -1295,5 +1302,9 @@ export {
   addEpisodeExtractionWatermarkMigration,
   // Memory: recompute reinforcedImportance (count 1 equals importance, bug 216)
   recomputeReinforcedImportanceMigration,
+  // Memory: re-stamp legacy UTC-midnight occurredAt at local midnight (PR 90 review)
+  rezoneLegacyMemoryOccurredAtMigration,
+  // Memory: partial supersededById index (delete chokepoint digest scrub)
+  addMemoriesSupersededByIndexMigration,
 };
 

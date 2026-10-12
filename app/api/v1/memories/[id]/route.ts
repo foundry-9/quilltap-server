@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, notFound, serverError } from '@/lib/api/responses';
+import { badRequest, errorResponse, notFound, serverError } from '@/lib/api/responses';
 import { scheduleRefit, handleEntityDeletion } from '@/lib/embedding/embedding-job-scheduler';
 import { deleteMemoryWithUnlink } from '@/lib/memory/memory-gate';
 import { editMemory } from '@/lib/memory/memory-edit';
@@ -101,6 +101,18 @@ export const PUT = createContextParamsHandler<{ id: string }>(
     });
 
     if (!result.ok) {
+      if (result.reason === 'embedding-failed') {
+        // The provider could not embed the new text; nothing was saved.
+        logger.warn('[Memories API v1] Memory edit refused: embedding failed', {
+          memoryId,
+          characterId: existingMemory.characterId,
+          error: result.message,
+        });
+        return errorResponse(
+          `The memory was not saved because its new text could not be embedded. ${result.message}`,
+          502
+        );
+      }
       if (result.reason === 'invalid-related') {
         return badRequest(
           `relatedMemoryIds must name existing memories of the same character: ${result.invalidIds.join(', ')}`

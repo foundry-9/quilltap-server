@@ -20,6 +20,7 @@ import {
   runMemoryGate,
   reinforceMemory,
   absorbNearDuplicate,
+  promoteMatchedMemory,
   linkRelatedMemories,
   calculateReinforcedImportance,
   deleteMemoryWithUnlink,
@@ -34,6 +35,7 @@ import {
 import { boostGateThreshold, combineRecallMultipliers, recallTuningOf, RELATED_EXPANSION, type RecallContext } from './recall-tags'
 import { selectSpecificAnchors } from './recall-tuning'
 import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } from './episodic'
+import { refreshMemoryTimeZone } from './memory-calendar-refresh'
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
@@ -194,7 +196,7 @@ const FALLBACK_ANCHOR_MAX_ENTITIES = 6
  * caller-supplied anchor always wins — and MANUAL memories pass through
  * untouched (they carry the user's deliberate choices).
  */
-function applyEpisodicFallbackAnchors(data: CreateMemoryOptions): CreateMemoryOptions {
+function applyEpisodicFallbackAnchors(data: CreateMemoryOptions, timeZone: string): CreateMemoryOptions {
   if (data.source && data.source !== 'AUTO') return data
   const needEntities = !data.entities || data.entities.length === 0
   const needOccurredAt = !data.occurredAt
@@ -207,7 +209,7 @@ function applyEpisodicFallbackAnchors(data: CreateMemoryOptions): CreateMemoryOp
     if (needOccurredAt) {
       const anchorIso = data.sourceMessageTimestamp ?? new Date().toISOString()
       for (const detail of details) {
-        const resolved = resolveWhenPhrase(detail, anchorIso)
+        const resolved = resolveWhenPhrase(detail, anchorIso, timeZone)
         if (resolved) {
           next.occurredAt = resolved
           break
@@ -297,6 +299,13 @@ export interface MemoryServiceOptions {
   skipEmbedding?: boolean
   /** Skip the Memory Gate check (force-insert without similarity check) */
   skipGate?: boolean
+  /**
+   * The candidate is a deliberate (hand-written) memory: when the gate folds
+   * it into an existing row (REINFORCE / SKIP_NEAR_DUPLICATE), promote that
+   * row — AUTO becomes MANUAL, importance becomes the higher of the two — so
+   * the operator's intent is not lost to an extracted, demotable survivor.
+   */
+  promoteOnMatch?: boolean
 }
 
 /**
@@ -388,7 +397,7 @@ export async function createMemoryWithGate(
   // FIRST WRITE (not just reinforce) so entities/occurredAt get populated even
   // when the extractor model omits them. Only fills gaps — never overrides a
   // caller-supplied anchor.
-  data = applyEpisodicFallbackAnchors(data)
+  data = applyEpisodicFallbackAnchors(data, await refreshMemoryTimeZone())
 
   const anchors: EpisodicAnchorView = {
     occurredAt: data.occurredAt ?? null,
@@ -433,7 +442,8 @@ export async function createMemoryWithGate(
       // reinforcement (count, lastReinforcedAt, reinforcedImportance). The
       // action stays SKIP_NEAR_DUPLICATE so callers can tell "absorbed" from
       // "reinforced with novel detail".
-      const absorbed = await absorbNearDuplicate(decision.existingMemory)
+      let absorbed = await absorbNearDuplicate(decision.existingMemory)
+      if (options.promoteOnMatch) absorbed = await promoteMatchedMemory(absorbed, data.importance)
       return {
         memory: absorbed,
         action: 'SKIP_NEAR_DUPLICATE',
@@ -455,7 +465,7 @@ export async function createMemoryWithGate(
       // Boost the existing memory instead of creating a new row. The
       // candidate's anchors ride along so a retelling that supplies better
       // when/where anchors than the original capture can upgrade the row.
-      const { memory: reinforced, novelDetails } = await reinforceMemory(
+      const { memory: reinforcedRow, novelDetails } = await reinforceMemory(
         decision.existingMemory,
         data.content,
         data.summary,
@@ -463,6 +473,9 @@ export async function createMemoryWithGate(
         options.embeddingProfileId,
         anchors
       )
+      const reinforced = options.promoteOnMatch
+        ? await promoteMatchedMemory(reinforcedRow, data.importance)
+        : reinforcedRow
       return {
         memory: reinforced,
         action: 'REINFORCE',
@@ -562,19 +575,13 @@ async function createMemoryDirect(
   data: CreateMemoryOptions,
   options: MemoryServiceOptions
 ): Promise<Memory | null> {
-  const repos = getRepositories()
-  const importance = data.importance ?? 0.5
-
   if (options.skipEmbedding) {
     logger.debug('[Memory] Direct create without embedding (skipEmbedding)', { characterId: data.characterId })
-    return repos.memories.create(
-      memoryRowFromOptions(data, importance),
-      memoryCreateOptions(data)
-    )
+    return createMemoryDirectWithEmbedding(data, options, null)
   }
 
   // Generate embedding (anchor line included so the vector carries when/where)
-  const embeddingText = buildMemoryEmbeddingText(data.summary, data.content, data)
+  const embeddingText = buildMemoryEmbeddingText(data.summary, data.content, data, await refreshMemoryTimeZone())
   let embedding: Float32Array
   try {
     embedding = (await generateEmbeddingForUser(
@@ -606,25 +613,18 @@ async function createMemoryDirect(
     }
   }
 
-  const memory = await repos.memories.create(
-    { ...memoryRowFromOptions(data, importance), embedding },
-    memoryCreateOptions(data)
-  )
-
-  const vectorStore = await getCharacterVectorStore(data.characterId)
-  await vectorStore.addVector(memory.id, embedding, {
-    memoryId: memory.id,
-    characterId: data.characterId,
-  })
-  await vectorStore.save()
-  logger.debug('[Memory] Direct memory created with embedding', { characterId: data.characterId, memoryId: memory.id })
-
-  return memory
+  return createMemoryDirectWithEmbedding(data, options, embedding)
 }
 
 /**
- * Create a memory and store a pre-computed embedding (from gate).
- * Avoids regenerating the embedding when the gate already computed it.
+ * Persist a new memory row together with its embedding, then index the vector.
+ *
+ * The one persist tail for new rows: the gate feeds it the embedding it
+ * already computed, and the direct path embeds first and delegates here. The
+ * embedding rides in the `create` call itself, so no row ever exists without
+ * its vector — and in the job child the single buffered create carries it
+ * (the proxy down-converts the Float32Array for IPC and the read-your-writes
+ * overlay holds the whole row).
  */
 async function createMemoryDirectWithEmbedding(
   data: CreateMemoryOptions,
@@ -635,33 +635,54 @@ async function createMemoryDirectWithEmbedding(
   const importance = data.importance ?? 0.5
 
   const memory = await repos.memories.create(
-    memoryRowFromOptions(data, importance),
+    embedding
+      ? { ...memoryRowFromOptions(data, importance), embedding }
+      : memoryRowFromOptions(data, importance),
     memoryCreateOptions(data)
   )
 
   if (embedding) {
-    // Use the pre-computed embedding from the gate
-    const updatedMemory = await repos.memories.updateForCharacter(
-      data.characterId,
-      memory.id,
-      { embedding }
-    )
-
+    // A new row is always hot; stamp it so the index never has to guess.
     const vectorStore = await getCharacterVectorStore(data.characterId)
     await vectorStore.addVector(memory.id, embedding, {
       memoryId: memory.id,
       characterId: data.characterId,
+      tier: 'hot',
     })
     await vectorStore.save()
-
-    return updatedMemory || memory
   }
+  logger.debug('[Memory] New memory persisted', {
+    characterId: data.characterId,
+    memoryId: memory.id,
+    embedded: !!embedding,
+    userId: options.userId,
+  })
 
   return memory
 }
 
 /**
- * Update a memory and regenerate its embedding if content changed
+ * The edited text of a memory could not be embedded, so the edit was not
+ * written. Carries the provider's message for the caller to report.
+ */
+export class MemoryReembedError extends Error {
+  constructor(
+    public readonly memoryId: string,
+    public readonly originalError?: unknown,
+  ) {
+    super(
+      `Could not embed the edited memory: ${originalError instanceof Error ? originalError.message : String(originalError)}`
+    )
+    this.name = 'MemoryReembedError'
+  }
+}
+
+/**
+ * Update a memory and regenerate its embedding if content changed.
+ *
+ * The embedding is generated from the edited text BEFORE anything is written
+ * and lands in the same update; if it cannot be generated this throws
+ * {@link MemoryReembedError} and the row is untouched.
  */
 export async function updateMemoryWithEmbedding(
   characterId: string,
@@ -687,44 +708,58 @@ export async function updateMemoryWithEmbedding(
     (data.entities !== undefined &&
       JSON.stringify(data.entities) !== JSON.stringify(existingMemory.entities ?? []))
 
-  // Update the memory
-  const updatedMemory = await repos.memories.updateForCharacter(characterId, memoryId, data)
+  // Embed first, write second: a failed embed must leave the row as it was,
+  // never new text over the old vector. The embedding rides in the same
+  // update as the text, so there is no window where they disagree.
+  let embedding: Memory['embedding'] | undefined
+  if (contentChanged && !options.skipEmbedding) {
+    const merged = { ...existingMemory, ...data } as Memory
+    try {
+      const embeddingResult = await generateEmbeddingForUser(
+        buildMemoryEmbeddingText(merged.summary, merged.content, merged, await refreshMemoryTimeZone()),
+        options.userId,
+        options.embeddingProfileId
+      )
+      embedding = embeddingResult.embedding
+    } catch (error) {
+      logger.warn(`[Memory] Failed to embed edited memory ${memoryId}; row left unchanged`, {
+        characterId,
+        memoryId,
+        userId: options.userId,
+        error: String(error),
+      })
+      throw new MemoryReembedError(memoryId, error)
+    }
+  }
+
+  const patch: Partial<Memory> = embedding ? { ...data, embedding } : data
+  const updatedMemory = await repos.memories.updateForCharacter(characterId, memoryId, patch)
   if (!updatedMemory) {
     return null
   }
 
-  // Regenerate embedding if content changed
-  if (contentChanged && !options.skipEmbedding) {
+  if (embedding) {
     try {
-      const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(updatedMemory.summary, updatedMemory.content, updatedMemory),
-        options.userId,
-        options.embeddingProfileId
-      )
-
-      // Update memory with new embedding
-      const memoryWithEmbedding = await repos.memories.updateForCharacter(
-        characterId,
-        memoryId,
-        { embedding: embeddingResult.embedding }
-      )
-
-      // Update vector store
       const vectorStore = await getCharacterVectorStore(characterId)
       if (vectorStore.hasVector(memoryId)) {
-        await vectorStore.updateVector(memoryId, embeddingResult.embedding)
+        await vectorStore.updateVector(memoryId, embedding)
       } else {
-        await vectorStore.addVector(memoryId, embeddingResult.embedding, {
+        await vectorStore.addVector(memoryId, embedding, {
           memoryId,
           characterId,
           tier: updatedMemory.tier === 'cold' ? 'cold' : 'hot',
         })
       }
       await vectorStore.save()
-
-      return memoryWithEmbedding || updatedMemory
+      logger.debug('[Memory] Updated memory re-embedded', { characterId, memoryId })
     } catch (error) {
-      logger.warn(`[Memory] Failed to regenerate embedding for memory ${memoryId}`, { characterId, memoryId, userId: options.userId, error: String(error) })
+      // The row already carries the new embedding; the vector index is
+      // rebuilt from rows on the next reindex.
+      logger.warn(`[Memory] Vector store update failed for memory ${memoryId} (row embedding is current)`, {
+        characterId,
+        memoryId,
+        error: String(error),
+      })
     }
   }
 
@@ -1643,13 +1678,15 @@ export async function generateMissingEmbeddings(
   let skipped = 0
 
   const vectorStore = await getCharacterVectorStore(characterId)
+  // Anchor dates render on the instance's memory calendar.
+  const memoryTimeZone = await refreshMemoryTimeZone()
 
   for (const memory of memoriesWithoutEmbeddings) {
     try {
       options.onProgress?.(processed + failed + skipped, memoriesWithoutEmbeddings.length, memory)
 
       const embeddingResult = await generateEmbeddingForUser(
-        buildMemoryEmbeddingText(memory.summary, memory.content, memory),
+        buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone),
         options.userId,
         options.embeddingProfileId,
         { priority: 'background' }

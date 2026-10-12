@@ -14,6 +14,7 @@ import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { buildHelpDocChunks, helpChunkEmbeddingText } from '@/lib/help/help-doc-chunking';
 import { logger } from '@/lib/logger';
 import { buildMemoryEmbeddingText } from '@/lib/memory/episodic';
+import { refreshMemoryTimeZone } from '@/lib/memory/memory-calendar-refresh';
 import type { EmbeddingGeneratePayload } from '../queue-service';
 
 type EmbeddingEntityType = 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK';
@@ -147,7 +148,10 @@ export async function handleEmbeddingGenerate(job: BackgroundJob): Promise<void>
     // the one builder the gate and create paths use, anchor line included —
     // an inline `summary\n\ncontent` here stripped date/place from every row
     // on each reindex (bug 204).
-    const textToEmbed = buildMemoryEmbeddingText(memory.summary, memory.content, memory);
+    // The anchor date renders on the instance's memory calendar; the job
+    // child's zone cache starts cold, so resolve it before building the text.
+    const memoryTimeZone = await refreshMemoryTimeZone();
+    const textToEmbed = buildMemoryEmbeddingText(memory.summary, memory.content, memory, memoryTimeZone);
     logger.debug('[EmbeddingGenerate] Built memory embedding text', {
       context: 'handleEmbeddingGenerate',
       memoryId: memory.id,
