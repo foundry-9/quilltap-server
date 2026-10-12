@@ -65,6 +65,7 @@ For detailed instructions, see [Import & Export Data](system-import-export.md).
 - Extracts unique details from duplicates and preserves them as footnotes in surviving memories
 - Removes duplicate memories and cleans up the vector store
 - Provides a preview before making any changes
+- Leaves alone your hand-written (**MANUAL**) memories, consolidated digests, and anything already in the archive (the cold tier) — it folds only the hot, automatically extracted entries, so a digest is never pulled from under the members that point to it
 
 **How to use it:**
 

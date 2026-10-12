@@ -39,7 +39,7 @@ export function useMemoryActions({ chatId, chatMemoryCount, setChatMemoryCount, 
     }
 
     const confirmed = await showConfirmation(
-      `Delete all ${count} memories created from this chat? This action cannot be undone.`
+      `Delete the memories extracted from this chat (${count} on record)? Hand-written entries, archived entries and consolidated digests stay on the shelf. This action cannot be undone.`
     )
 
     if (!confirmed) {
@@ -51,8 +51,12 @@ export function useMemoryActions({ chatId, chatMemoryCount, setChatMemoryCount, 
 
       if (res.ok) {
         const data = await res.json()
-        setChatMemoryCount(0)
-        showSuccessToast(`Deleted ${data.deletedCount} memories`)
+        // Manual, cold and digest rows are spared by the wipe (bug 201).
+        const spared = typeof data.sparedCount === 'number' ? data.sparedCount : 0
+        setChatMemoryCount(spared)
+        showSuccessToast(spared > 0
+          ? `Deleted ${data.deletedCount} memories; kept ${spared} hand-written, archived or digest entries`
+          : `Deleted ${data.deletedCount} memories`)
       } else {
         const errorData = await res.json()
         showErrorToast(`Failed to delete memories: ${errorData.error}`)

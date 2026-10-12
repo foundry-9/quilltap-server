@@ -307,18 +307,30 @@ async function runMemoryGateInner(
   debugInfo.push(`[Gate] Generated embedding (${embedding.length} dimensions)`)
 
   const vectorStore = await getCharacterVectorStore(characterId)
-  const results = vectorStore.search(embedding, GATE_TOP_K)
+  const vectorResults = vectorStore.search(embedding, GATE_TOP_K)
+
+  // Get full memory data for matched IDs (only the top-K, not the entire corpus)
+  const repos = getRepositories()
+  const matchedIds = vectorResults.map(r => r.id)
+  const matchedMemories = matchedIds.length > 0 ? await repos.memories.findByIds(matchedIds) : []
+  const memoryMap = new Map(matchedMemories.map(m => [m.id, m]))
+
+  // A vector whose row is gone (an orphan) must not stand at rank 1: with no
+  // row behind it the near-duplicate and reinforce branches were skipped and a
+  // live second match was never considered (bug 200). Decide on live rows only.
+  const results = vectorResults.filter(r => memoryMap.has(r.id))
+  if (results.length < vectorResults.length) {
+    logger.warn('[MemoryGate] Vector index holds entries with no memory row; ignoring them', {
+      characterId,
+      orphanIds: vectorResults.filter(r => !memoryMap.has(r.id)).map(r => r.id),
+    })
+    debugInfo.push(`[Gate] Ignored ${vectorResults.length - results.length} orphan vector(s)`)
+  }
 
   if (results.length === 0) {
     debugInfo.push('[Gate] No existing memories in vector store → INSERT')
     return { decision: { action: 'INSERT' }, embedding, debugInfo }
   }
-
-  // Get full memory data for matched IDs (only the top-K, not the entire corpus)
-  const repos = getRepositories()
-  const matchedIds = results.map(r => r.id)
-  const matchedMemories = await repos.memories.findByIds(matchedIds)
-  const memoryMap = new Map(matchedMemories.map(m => [m.id, m]))
 
   // Find best match
   const bestResult = results[0]

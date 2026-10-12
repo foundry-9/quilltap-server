@@ -14,6 +14,7 @@ import { cosineSimilarity } from '@/lib/embedding/embedding-service'
 import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate'
 import { planMemoryMerge, applyMemoryMerge } from '@/lib/memory/memory-merge'
 import { invalidateFrozenArchive } from '@/lib/memory/frozen-archive-cache'
+import { partitionByPolicyProtection } from '@/lib/memory/policy-protection'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getUserRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
@@ -164,11 +165,21 @@ export async function deduplicateCharacterMemories(
   const repos = getRepositories()
 
 
-  // Fetch all memories
-  const allMemories = await repos.memories.findByCharacterId(characterId)
-  const originalCount = allMemories.length
+  // Fetch all memories. Only hot AUTO rows are folded (bug 201): MANUAL rows,
+  // digests and cold rows are never touched — deleting a digest strands its
+  // members' `supersededById`, and a MANUAL row is the operator's own words.
+  const everyMemory = await repos.memories.findByCharacterId(characterId)
+  const originalCount = everyMemory.length
+  const { actionable: allMemories, sparedBy } = partitionByPolicyProtection(everyMemory)
+  logger.debug('[MemoryDedup] Candidate rows for folding', {
+    context: 'memory-dedup.deduplicateCharacterMemories',
+    characterId,
+    total: originalCount,
+    candidates: allMemories.length,
+    sparedBy,
+  })
 
-  if (originalCount < 2) {
+  if (allMemories.length < 2) {
     return {
       characterId,
       characterName,

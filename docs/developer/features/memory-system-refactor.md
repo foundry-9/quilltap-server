@@ -1,6 +1,6 @@
 # Memory system refactor — one Commonplace Book, not nine
 
-**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. Design only; nothing built yet.
+**Status:** Approved 2026-10-12 — every decision in §7 locked with Charlie the same day. **Phase 0 done 2026-10-12** (bugs 199–226 filed; 199, 200, 201 fixed; 202 closed as not a defect, see §7 amendment). Phases A–G not started.
 **Owner:** Charlie
 **Implementer:** Claude Code (Opus), phase by phase, in the order of §4.
 **Scope:** `lib/memory/` (about 11k lines), `lib/chat/context/memory-injector.ts` and the recall
@@ -643,6 +643,8 @@ after a backup.
 
 ### Phase 0 — file the bugs; fix 199, 200, 201, 202 as they stand
 
+**Done 2026-10-12.** 199–201 fixed as written. 200's character-archive half did not reproduce (archive drops the whole index). 202 was not changed: see the §7 amendment.
+
 Small, local fixes on the current code (they would otherwise be carried through every phase):
 deliver recall on continue turns; remove the vector on item delete and character archive; make
 the chat wipe and the dedup tool skip MANUAL rows, digests and cold rows; apply the literal boost
@@ -819,6 +821,12 @@ dated note here, not an implementer's call.
 | 13 | **`skipGate` leaves the API.** Import, restore and consolidation keep their explicit direct inserts; nothing else inserts around admission. | G |
 | 14 | **Recall tuning constants do not move in this refactor.** The probe fixture enforces `cap14`. | A, E |
 | 15 | **Bugs 199, 200, 201 and 202 are fixed on the current code first** (Phase 0), before any structural work. | 0 |
+
+**Amendment (2026-10-12, Phase 0).** Decision 15 is met for 199–201. Bug 202 is closed as *not a
+defect*. R5 of the recall retuning (2026-10-08) deliberately keeps entity-anchor hits under the cosine
+floor, with related expansion as the only exemption, and a test pins it. Boosting or exempting anchor
+hits would also move `cap14` against decision 14. Charlie chose to keep R5; only the misleading
+comments were corrected. Any change to the floor's exemptions is a tuning change under §5.1.
 
 ## 8. Risks
 

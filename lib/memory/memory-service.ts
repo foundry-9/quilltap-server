@@ -37,6 +37,7 @@ import { buildMemoryEmbeddingText, resolveWhenPhrase, type EpisodicAnchorView } 
 import { shouldSkipWatermarkSweep } from './housekeeping-outcome-cache'
 import type { MemoryGateOutcome } from './memory-gate'
 import { resolveAboutCharacterId } from './about-character-resolution'
+import { partitionByPolicyProtection } from './policy-protection'
 export type { MemoryGateOutcome } from './memory-gate'
 
 /** Fraction of the per-character cap at which auto-housekeeping engages. */
@@ -814,8 +815,11 @@ export async function searchMemoriesSemantic(
     /**
      * Entity strings (place/person/thing names) unioned into the candidate
      * pool via the literal `searchByContent` path, so a verbatim place name
-     * cannot be sliced off by the cosine floor. Injector-path companion to
-     * `applyLiteralPhraseBoost` (which stays tool-only).
+     * buried below the vector store's top-K cap still reaches ranking.
+     * Injector-path companion to `applyLiteralPhraseBoost` (which stays
+     * tool-only). Anchor hits get no boost and still face the cosine floor:
+     * R5 of the recall retuning made related expansion the only exemption
+     * (see bug 202).
      */
     entityAnchors?: readonly string[]
     /**
@@ -1014,7 +1018,9 @@ export async function searchMemoriesSemantic(
     // buried because the vector store's candidate cap excluded it. Two
     // sources of literal phrases: the whole query (tool path,
     // `applyLiteralPhraseBoost`) and the turn's entity anchors (injector
-    // path) — a verbatim place name must not be sliced off by the cosine floor.
+    // path) — a verbatim place name must not be lost to the top-K cap. The
+    // union widens the pool only: anchor hits are scored at their raw cosine
+    // and face the floor like any other row (R5; bug 202).
     const literalPhrase = options.applyLiteralPhraseBoost
       ? getLiteralPhrase(query)
       : null
@@ -1759,21 +1765,53 @@ export async function deleteMemoriesBySourceMessagesWithVectors(
 }
 
 /**
- * Delete every memory tied to the given chat (across all characters) and
- * remove their entries from each character's vector store.
+ * Delete the chat's extracted memories (across all characters) and remove
+ * their entries from each character's vector store.
  *
  * Used by the DELETE /api/v1/memories?chatId= route and by the
  * MEMORY_REGENERATE_CHAT job when wiping a chat's auto-extracted memories
  * before re-running extraction from scratch.
+ *
+ * Only what extraction would write back is wiped (bug 201): MANUAL rows and
+ * cold rows are spared, and so is a digest while any of its members survives —
+ * removing it would leave those members' `supersededById` dangling. The
+ * per-row delete remains the way to purge any of them.
  */
 export async function deleteMemoriesByChatIdWithVectors(
   chatId: string,
-): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number }> {
+): Promise<{ deleted: number; vectorsRemoved: number; characterCount: number; spared: number }> {
   const repos = getRepositories()
 
-  const memories = await repos.memories.findByChatId(chatId)
+  const chatMemories = await repos.memories.findByChatId(chatId)
+  const { actionable, spared } = partitionByPolicyProtection(chatMemories)
+
+  // A digest with no surviving member describes nothing; it may go.
+  const memories = [...actionable]
+  const keptDigests: Memory[] = []
+  for (const memory of spared) {
+    if (memory.source !== 'CONSOLIDATED') continue
+    const members = memory.consolidatedFrom?.length
+      ? await repos.memories.findByIds(memory.consolidatedFrom)
+      : []
+    if (members.length === 0) {
+      memories.push(memory)
+    } else {
+      keptDigests.push(memory)
+    }
+  }
+  const sparedCount = chatMemories.length - memories.length
+  if (sparedCount > 0) {
+    logger.info('[Memory] Chat wipe spared manual, cold and digest rows', {
+      chatId,
+      spared: sparedCount,
+      manual: spared.filter(m => m.source === 'MANUAL').length,
+      cold: spared.filter(m => m.source === 'AUTO' && m.tier === 'cold').length,
+      digests: keptDigests.length,
+    })
+  }
+
   if (memories.length === 0) {
-    return { deleted: 0, vectorsRemoved: 0, characterCount: 0 }
+    return { deleted: 0, vectorsRemoved: 0, characterCount: 0, spared: sparedCount }
   }
 
   const memoryIdsByCharacter = new Map<string, string[]>()
@@ -1810,8 +1848,9 @@ export async function deleteMemoriesByChatIdWithVectors(
     chatId,
     deleted,
     vectorsRemoved,
+    spared: sparedCount,
     characterCount: memoryIdsByCharacter.size,
   })
 
-  return { deleted, vectorsRemoved, characterCount: memoryIdsByCharacter.size }
+  return { deleted, vectorsRemoved, characterCount: memoryIdsByCharacter.size, spared: sparedCount }
 }
