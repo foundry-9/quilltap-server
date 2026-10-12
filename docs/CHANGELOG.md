@@ -43,6 +43,36 @@
   rests on (creation, gate/merge, scoring/recall, maintenance) are appended in full. Linked from
   `ROADMAP.md`. Design only; nothing built yet.
 
+#### Wardrobe folders (spec `features/complete/wardrobe-folders.md`)
+
+- Items and outfits can be filed into folders under each tier's `Wardrobe/` (up to 8 deep; `images` reserved;
+  names case-insensitive). The folder is the file's path: `WardrobeItem.folder` is derived on read and written
+  back as the path; it is never stored in frontmatter. Folders do not affect the wearable pool.
+- The wardrobe reader is now recursive, and `isWardrobeItemDocumentPath` matches `.md` at any depth except under
+  `Wardrobe/images/` and `instructions.md` at any depth. This fixes the wear-ledger export, restore id remap and
+  ledger import for items in subfolders, and stops slug-referenced components in subfolders being dropped.
+- `projectArrayIntoVaultFolder` gains a `recursive` mode (per-folder collision suffixes, sweep at any depth,
+  `images/` never touched). Its sweep now compares paths case-insensitively, matching the store's
+  case-insensitive upsert (a casing-only change could delete the file just written).
+- `WardrobeLocation` gains `updateMany` (one projection per batch), `listFolders`, `createFolder`,
+  `renameFolder`, `deleteFolder`; new `moveItemsToFolder` and `lib/wardrobe/folder-mutations.ts`.
+- New collection actions on every tier's wardrobe route: `GET ?action=folders`, `POST ?action=create-folder`,
+  `rename-folder`, `delete-folder` (contents move up a level), `move-items`. Create/update bodies accept
+  `folder`. Transfers keep an item's folder at the destination.
+- Wardrobe browser (dialog and Prospero card): breadcrumb, folder rows, a tier row per borrowed wardrobe in a
+  character's view, search across all folders with a folder crumb per hit, New folder, Select mode with bulk
+  Move to folder…, folder Rename/Delete, and a Folder field in the item editor. Row menu: *Move to folder…*;
+  *Move* / *Copy* renamed *Move to another wardrobe…* / *Copy to another wardrobe…*.
+- `wardrobe_list` / `wardrobe_read` results carry `folder` (read-only) and render `[folder: …]`.
+- `qtap-export.schema.json` documents `folder` on wardrobe items; imported items keep their folder
+  (normalised, or the top level when it cannot be).
+- Review fixes: the wardrobe projection sweeps only files that parse as items (notes under `Wardrobe/` are
+  never deleted); a requested folder resolves against the tier's existing folders (hand-made spellings kept,
+  only new parts normalised) and an edit that keeps its folder moves nothing; folder rename stamps ids into
+  id-less files first; delete-folder pre-checks non-item files and same-name subfolders (409, nothing moved);
+  `GET ?action=folders` no longer provisions stores; projection ensures only missing folders; folder moves no
+  longer re-read the wardrobe for casing; the delete confirmation mentions archived pieces.
+
 #### Specs: scenarios from anywhere; wardrobe folders
 
 - `docs/developer/features/scenarios-from-anywhere.md`: a "Browse all scenarios" dialog over every

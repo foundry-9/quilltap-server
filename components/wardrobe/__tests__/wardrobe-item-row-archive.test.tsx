@@ -134,7 +134,7 @@ describe('WardrobeItemRow — archive affordance', () => {
     const menu = openMenu()
     expect(within(menu).queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument()
     // The unconditional actions are still there.
-    expect(within(menu).getByRole('menuitem', { name: 'Move' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Move to another wardrobe…' })).toBeInTheDocument()
   })
 
   it('withholds it from a garment borrowed from another tier, as Edit is withheld', () => {
@@ -145,6 +145,6 @@ describe('WardrobeItemRow — archive affordance', () => {
     const menu = openMenu()
     expect(within(menu).queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument()
     expect(within(menu).queryByRole('menuitem', { name: 'Edit' })).not.toBeInTheDocument()
-    expect(within(menu).getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Copy to another wardrobe…' })).toBeInTheDocument()
   })
 })

@@ -29,6 +29,8 @@ describe('item drafts', () => {
       componentItemIds: [],
       // A leaf always replaces its slots; the flag is composite-only.
       replace: false,
+      // An item read without a folder sits at the top level.
+      folder: '',
     })
   })
 
@@ -46,5 +48,18 @@ describe('item drafts', () => {
     expect(validateDraft(emptyDraft({ title: 'Hat' })).ok).toBe(false)
     const ok = validateDraft(emptyDraft({ title: 'Hat', types: ['accessories'] }))
     expect(ok.ok).toBe(true)
+  })
+})
+
+describe('payloadForEdit', () => {
+  const { payloadForEdit } = jest.requireActual('@/lib/wardrobe/item-draft') as typeof import('@/lib/wardrobe/item-draft')
+  const base = draftToPayload(emptyDraft({ title: 'Boater', types: ['accessories'], folder: 'Hats: Summer' }))
+
+  it('drops an unchanged folder (any casing) so a hand-made one is never re-resolved', () => {
+    expect(payloadForEdit(base, 'hats: summer')).not.toHaveProperty('folder')
+  })
+
+  it('keeps a folder that changed', () => {
+    expect(payloadForEdit(base, '').folder).toBe('Hats: Summer')
   })
 })

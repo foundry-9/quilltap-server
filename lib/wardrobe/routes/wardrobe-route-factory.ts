@@ -8,13 +8,17 @@
  *   - `/api/v1/wardrobe`                 (+ `/[itemId]`) — Quilltap General
  *
  * Every tier is a location (`resolveWardrobeLocation`), so the handler bodies
- * are written once: list / create (each with `?action=instructions`), and
- * get (with `?action=wear-history`) / update / delete. Each route file is a
- * config. Rules that hold everywhere:
+ * are written once: list / create (each with `?action=instructions`), the
+ * folder actions (`GET ?action=folders`; `POST ?action=create-folder`,
+ * `rename-folder`, `delete-folder`, `move-items`), and get (with
+ * `?action=wear-history`) / update / delete. Each route file is a config.
+ * Rules that hold everywhere:
  *
  *   - an item read or written is serialized the same way — `origin` and
  *     `wear` attached — on GET, POST and PUT (`serializeWardrobeItems`);
- *   - a component cycle is a 400;
+ *   - a component cycle is a 400, and so is a folder path that breaks the
+ *     rules or a move naming an item filed elsewhere; a missing folder is a
+ *     404 and a folder collision a 409;
  *   - a PUT checks the item exists before it checks the picture choice;
  *   - a character must be the requesting user's (the location checks);
  *   - a write to an archived character's vault is a 409.
@@ -41,9 +45,32 @@ import { readIncludeArchived } from '@/lib/api/query-params';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import { WardrobeComponentCycleError } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { resolveGroupMountsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
-import { createWardrobeSchema, updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
+import {
+  createWardrobeFolderSchema,
+  createWardrobeSchema,
+  deleteWardrobeFolderSchema,
+  moveWardrobeItemsSchema,
+  renameWardrobeFolderSchema,
+  updateWardrobeSchema,
+} from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { componentLookupFor, createItem, updateItem } from '@/lib/wardrobe/item-mutations';
+import {
+  componentLookupFor,
+  createItem,
+  moveItemsToFolder,
+  updateItem,
+  WardrobeItemNotInLocationError,
+} from '@/lib/wardrobe/item-mutations';
+import {
+  createWardrobeFolder,
+  deleteWardrobeFolder,
+  renameWardrobeFolder,
+} from '@/lib/wardrobe/folder-mutations';
+import {
+  WardrobeFolderConflictError,
+  WardrobeFolderNotFoundError,
+  WardrobeFolderPathError,
+} from '@/lib/wardrobe/folders';
 import { cleanupEquippedRefs, cleanupItemImages, imageChoiceError } from '@/lib/wardrobe/item-route-steps';
 import {
   resolveWardrobeLocation,
@@ -96,6 +123,10 @@ async function serializeOne(item: WardrobeItem, origin: WardrobeOrigin, repos: R
 /** Map the write-side refusals every tier shares; rethrow anything else. */
 function writeErrorResponse(error: unknown): NextResponse {
   if (error instanceof WardrobeComponentCycleError) return badRequest(error.message);
+  if (error instanceof WardrobeFolderPathError) return badRequest(error.message);
+  if (error instanceof WardrobeItemNotInLocationError) return badRequest(error.message);
+  if (error instanceof WardrobeFolderNotFoundError) return notFound('Wardrobe folder');
+  if (error instanceof WardrobeFolderConflictError) return conflict(error.message);
   if (error instanceof CharacterArchivedError) {
     return conflict("An archived character's wardrobe cannot be changed");
   }
@@ -181,6 +212,117 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
     });
   }
 
+  // --------------------------------------------------------------------------
+  // Folders — the operator's filing under this tier's `Wardrobe/`
+  // --------------------------------------------------------------------------
+
+  async function handleGetFolders(_req: NextRequest, ctx: RequestContext, params: P) {
+    // A read probe never provisions a store: a project or group with no store
+    // yet (or an unprovisioned General) simply has no folders.
+    const id = config.paramsToId(params);
+    const location = await resolveWardrobeLocation(scope, id, ctx.repos, ctx.user.id, { ensure: false });
+    if (!location) {
+      if (scope === 'general') return successResponse({ folders: [] });
+      if (scope !== 'character' && id) {
+        const owner = scope === 'project' ? await ctx.repos.projects.findById(id) : await ctx.repos.groups.findById(id);
+        if (owner) {
+          logger.debug(`${logTag} No store yet; no wardrobe folders`, { [logIdKey]: id, context: 'wardrobe' });
+          return successResponse({ folders: [] });
+        }
+      }
+      return notFound(LABELS[scope].owner);
+    }
+    const folders = await location.listFolders();
+    logger.debug(`${logTag} Listed wardrobe folders`, {
+      [logIdKey]: location.id,
+      mountPointId: location.mountPointId,
+      count: folders.length,
+      context: 'wardrobe',
+    });
+    return successResponse({ folders });
+  }
+
+  async function handleCreateFolder(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = createWardrobeFolderSchema.parse(await req.json());
+    const resolved = await resolveLocation(ctx, params, true);
+    if (!resolved.ok) return resolved.response;
+    try {
+      const folder = await createWardrobeFolder(resolved.location, body.path);
+      logger.info(`${logTag} Created wardrobe folder`, {
+        [logIdKey]: resolved.location.id,
+        userId: ctx.user.id,
+        mountPointId: resolved.location.mountPointId,
+        folder: folder.path,
+        context: 'wardrobe',
+      });
+      return successResponse({ folder });
+    } catch (error) {
+      return writeErrorResponse(error);
+    }
+  }
+
+  async function handleRenameFolder(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = renameWardrobeFolderSchema.parse(await req.json());
+    const resolved = await resolveLocation(ctx, params, false);
+    if (!resolved.ok) return resolved.response;
+    try {
+      const folder = await renameWardrobeFolder(resolved.location, body.path, body.name);
+      logger.info(`${logTag} Renamed wardrobe folder`, {
+        [logIdKey]: resolved.location.id,
+        userId: ctx.user.id,
+        mountPointId: resolved.location.mountPointId,
+        from: body.path,
+        to: folder.path,
+        context: 'wardrobe',
+      });
+      return successResponse({ folder });
+    } catch (error) {
+      return writeErrorResponse(error);
+    }
+  }
+
+  async function handleDeleteFolder(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = deleteWardrobeFolderSchema.parse(await req.json());
+    const resolved = await resolveLocation(ctx, params, false);
+    if (!resolved.ok) return resolved.response;
+    try {
+      const result = await deleteWardrobeFolder(resolved.location, body.path);
+      logger.info(`${logTag} Deleted wardrobe folder`, {
+        [logIdKey]: resolved.location.id,
+        userId: ctx.user.id,
+        mountPointId: resolved.location.mountPointId,
+        folder: body.path,
+        ...result,
+        context: 'wardrobe',
+      });
+      return successResponse(result);
+    } catch (error) {
+      return writeErrorResponse(error);
+    }
+  }
+
+  async function handleMoveItems(req: NextRequest, ctx: RequestContext, params: P) {
+    const body = moveWardrobeItemsSchema.parse(await req.json());
+    const resolved = await resolveLocation(ctx, params, false);
+    if (!resolved.ok) return resolved.response;
+    const { location } = resolved;
+    let moved: WardrobeItem[];
+    try {
+      moved = await moveItemsToFolder(location, body.itemIds, body.folder);
+    } catch (error) {
+      return writeErrorResponse(error);
+    }
+    logger.info(`${logTag} Moved wardrobe items to folder`, {
+      [logIdKey]: location.id,
+      userId: ctx.user.id,
+      mountPointId: location.mountPointId,
+      folder: body.folder,
+      count: moved.length,
+      context: 'wardrobe',
+    });
+    return successResponse({ items: await serializeWardrobeItems(moved, location.origin, ctx.repos) });
+  }
+
   /** The character tier's `?scope=group`: the group tier, each item tagged with its group. */
   async function listGroupTier(req: NextRequest, ctx: RequestContext, location: WardrobeLocation) {
     const characterId = location.characterId as string;
@@ -206,7 +348,7 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   }
 
   const GET = createContextParamsHandler<P>(
-    withActionDispatch<P>({ instructions: handleGetInstructions }, async (req, ctx, params) => {
+    withActionDispatch<P>({ instructions: handleGetInstructions, folders: handleGetFolders }, async (req, ctx, params) => {
       const location = await resolveWardrobeLocation(scope, config.paramsToId(params), ctx.repos, ctx.user.id, {
         ensure: scope !== 'character',
       });
@@ -234,7 +376,13 @@ export function createWardrobeCollectionHandlers<P extends Params>(config: Wardr
   );
 
   const POST = createContextParamsHandler<P>(
-    withActionDispatch<P>({ instructions: handlePostInstructions }, async (req, ctx, params) => {
+    withActionDispatch<P>({
+      instructions: handlePostInstructions,
+      'create-folder': handleCreateFolder,
+      'rename-folder': handleRenameFolder,
+      'delete-folder': handleDeleteFolder,
+      'move-items': handleMoveItems,
+    }, async (req, ctx, params) => {
       // Parse before resolving: an invalid body must never provision a store.
       const body = createWardrobeSchema.parse(await req.json());
       const resolved = await resolveLocation(ctx, params, true);

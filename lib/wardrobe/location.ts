@@ -5,7 +5,9 @@
  * A location is one wardrobe tier's `Wardrobe/` folder: a character's vault,
  * Quilltap General, a project's official store or a group's official store.
  * It always carries the backing mount, the origin a collection read tags its
- * items with, and the five operations every caller needs. Routes, transfers,
+ * items with, the item operations every caller needs, and the folder
+ * operations the browser files with (an item's folder is its path under
+ * `Wardrobe/` and nothing else). Routes, transfers,
  * item pictures and the tools all address a tier through this; nobody
  * switches on scope to pick a writer, and nobody passes an owner-id hint.
  *
@@ -28,17 +30,23 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
+  createFolderInMount,
   createInMount,
+  deleteFolderInMount,
   deleteInMount,
+  listFolderPathsInMount,
+  listFoldersInMount,
   readMountItems,
+  renameFolderInMount,
   resolveWardrobeMount,
-  updateInMount,
+  updateManyInMount,
   type WardrobeMount,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { ensureOwnerOfficialStore } from '@/lib/mount-index/ensure-owner-store';
 import { ensureSharedWardrobeFolder } from '@/lib/mount-index/shared-wardrobe';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import { resolveWardrobeFolder, type WardrobeFolder } from '@/lib/wardrobe/folders';
 import {
   GENERAL_WARDROBE_ORIGIN,
   type WardrobeOrigin,
@@ -64,7 +72,30 @@ export interface WardrobeLocation {
   findItem(id: string): Promise<WardrobeItem | null>;
   create(item: WardrobeItem): Promise<WardrobeItem>;
   update(id: string, patch: Partial<WardrobeItem>): Promise<WardrobeItem | null>;
+  /**
+   * Patch several items with one read and one projection; the updated items
+   * in patch order (an id not in the folder is skipped). `update` is this
+   * with one patch.
+   */
+  updateMany(
+    patches: Array<{ id: string; patch: Partial<WardrobeItem> }>,
+    opts?: { requireAll?: boolean },
+  ): Promise<WardrobeItem[]>;
   delete(id: string): Promise<boolean>;
+  /** Every folder under `Wardrobe/` (empty ones included), with direct item counts. */
+  listFolders(): Promise<WardrobeFolder[]>;
+  /**
+   * Resolve an operator's requested folder against this wardrobe's folders
+   * (`resolveWardrobeFolder`): an existing folder as stored, else the new
+   * part normalised. Throws `WardrobeFolderPathError`.
+   */
+  resolveFolder(requested: string): Promise<string>;
+  /** Create a folder (normalised path); an existing one in any casing is answered. */
+  createFolder(path: string): Promise<WardrobeFolder>;
+  /** Rename a folder in place to `newName` (one normalised segment). */
+  renameFolder(path: string, newName: string): Promise<WardrobeFolder>;
+  /** Delete a folder, sending its items and subfolders up to its parent. */
+  deleteFolder(path: string): Promise<{ movedItems: number; movedFolders: number; parent: string }>;
   /**
    * The mount, checked for writing: throws `CharacterArchivedError` for an
    * archived character. For writers that reach the folder without going
@@ -99,6 +130,18 @@ export function locationForMount(
     return current;
   };
 
+  // Identity and timestamps are the writer's, never a patch's.
+  const updateMany: WardrobeLocation['updateMany'] = async (patches, opts) => {
+    const cleaned = patches.map(({ id: itemId, patch }) => {
+      const rest = { ...patch };
+      delete rest.id;
+      delete rest.createdAt;
+      delete rest.updatedAt;
+      return { id: itemId, patch: rest };
+    });
+    return updateManyInMount(await writableMount(), cleaned, opts);
+  };
+
   return {
     scope: mount.scope,
     id,
@@ -116,14 +159,28 @@ export function locationForMount(
       return createInMount(await writableMount(), item);
     },
     async update(itemId, patch) {
-      const rest = { ...patch };
-      delete rest.id;
-      delete rest.createdAt;
-      delete rest.updatedAt;
-      return updateInMount(await writableMount(), itemId, rest);
+      const [updated] = await updateMany([{ id: itemId, patch }]);
+      return updated ?? null;
     },
+    updateMany,
     async delete(itemId) {
       return deleteInMount(await writableMount(), itemId);
+    },
+    async listFolders() {
+      return listFoldersInMount(mount);
+    },
+    async resolveFolder(requested) {
+      if (!requested || !requested.trim()) return '';
+      return resolveWardrobeFolder(await listFolderPathsInMount(mount), requested);
+    },
+    async createFolder(path) {
+      return createFolderInMount(await writableMount(), path);
+    },
+    async renameFolder(path, newName) {
+      return renameFolderInMount(await writableMount(), path, newName);
+    },
+    async deleteFolder(path) {
+      return deleteFolderInMount(await writableMount(), path);
     },
     async writableMountPointId() {
       return (await writableMount()).mountPointId;

@@ -24,6 +24,7 @@ import {
   type WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
 import { detectComponentCycles } from '@/lib/wardrobe/expand-composites';
+import { folderOfWardrobePath, WARDROBE_RESERVED_FOLDER_SEGMENTS } from '@/lib/wardrobe/folders';
 import { parseFrontmatter } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
 
@@ -246,18 +247,46 @@ export function resolveWardrobeItemId(
 }
 
 /**
- * True for a document path that holds a wardrobe item: a `.md` file directly
- * inside a mount's `Wardrobe/` folder (not nested deeper), other than the
- * dressing-guidance `instructions.md`. Mirrors the non-recursive folder read
- * `readCharacterVaultWardrobe` performs.
+ * True for a document path that holds a wardrobe item: a `.md` file anywhere
+ * under a mount's `Wardrobe/` folder — the operator's subfolders are folders
+ * of items too — except under `Wardrobe/images/` (item pictures) and except
+ * the dressing-guidance `instructions.md` at any depth. The one predicate:
+ * `readCharacterVaultWardrobe`, the `.qtap` wear-ledger export and import and
+ * the restore id remap all agree through it about which files are items.
  */
 export function isWardrobeItemDocumentPath(relativePath: string): boolean {
   const prefix = `${CHARACTER_WARDROBE_FOLDER}/`.toLowerCase();
   const pathLower = relativePath.toLowerCase();
   if (!pathLower.startsWith(prefix)) return false;
   const rest = pathLower.slice(prefix.length);
-  if (rest.length === 0 || rest.includes('/') || !rest.endsWith('.md')) return false;
-  return !isWardrobeInstructionsFileName(rest);
+  if (rest.length === 0 || !rest.endsWith('.md')) return false;
+  const segments = rest.split('/');
+  if (segments.some((segment) => segment.length === 0)) return false;
+  if (segments.length > 1 && WARDROBE_RESERVED_FOLDER_SEGMENTS.includes(segments[0])) return false;
+  return !isWardrobeInstructionsFileName(segments[segments.length - 1]);
+}
+
+/**
+ * True for a document the wardrobe owns: an item path
+ * ({@link isWardrobeItemDocumentPath}) whose frontmatter carries a valid
+ * `types` list — exactly the files `parseWardrobeItemFile` turns into items.
+ * The projection sweeps only these, so a note or a half-written file kept
+ * under `Wardrobe/` is never deleted by a wardrobe write. Quiet: no logging.
+ */
+export function isWardrobeItemDocument(doc: { relativePath: string; content?: string | null }): boolean {
+  if (!isWardrobeItemDocumentPath(doc.relativePath)) return false;
+  return parseWardrobeTypesField(parseFrontmatter(doc.content ?? '').data?.types) !== null;
+}
+
+/**
+ * True when a wardrobe file carries its own UUID `id` in frontmatter. A file
+ * without one takes a path-derived id ({@link resolveWardrobeItemId}), which
+ * changes if the file moves — so anything that moves files without
+ * re-projecting them must stamp ids first.
+ */
+export function hasStableWardrobeItemId(content: string | null | undefined): boolean {
+  const id = parseFrontmatter(content ?? '').data?.id;
+  return typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id);
 }
 
 /**
@@ -394,6 +423,19 @@ export function parseWardrobeItemFile(
       ? (parsed.data.updatedAt as string)
       : doc.updatedAt;
 
+  // The folder is the file's path and nothing else. A hand-edited file that
+  // carries a `folder:` key is ignored — the path wins.
+  const folder = folderOfWardrobePath(doc.relativePath);
+  if (parsed.data && Object.prototype.hasOwnProperty.call(parsed.data, 'folder')) {
+    logger.debug('Wardrobe/*.md frontmatter carries a `folder` key; the file path wins', {
+      characterId,
+      mountPointId: doc.mountPointId,
+      relativePath: doc.relativePath,
+      frontmatterFolder: parsed.data.folder,
+      folder,
+    });
+  }
+
   const bodyText = (titleLineIndex >= 0
     ? lines.slice(titleLineIndex + 1).join('\n')
     : afterFrontmatter
@@ -414,6 +456,7 @@ export function parseWardrobeItemFile(
     migratedFromClothingRecordId,
     imageFileId,
     archivedAt,
+    folder,
     createdAt,
     updatedAt,
   };

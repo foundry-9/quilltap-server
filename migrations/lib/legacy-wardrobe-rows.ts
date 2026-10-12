@@ -61,6 +61,7 @@ export function readLegacyWardrobeRows(characterId: string): WardrobeItem[] {
     replace: false,
     migratedFromClothingRecordId: row.migratedFromClothingRecordId ?? null,
     archivedAt: row.archivedAt ?? null,
+    folder: '',
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }));

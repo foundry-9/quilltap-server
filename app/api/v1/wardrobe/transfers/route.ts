@@ -16,6 +16,9 @@
  * `cleanupEquippedRefs`, so it does not drop the rows); a copy mints a fresh
  * id and is a new garment whose ledger starts empty.
  *
+ * Every transferred item keeps its folder: it lands at the same path under the
+ * destination's `Wardrobe/`, and the folder is created there as needed.
+ *
  * Pictures (`Wardrobe/images/<itemId>/` in the source mount) travel with every
  * transferred item: a move re-links them into the destination mount at the
  * same path and re-points their `files` rows, dropping the source links once
@@ -31,6 +34,7 @@ import { CharacterArchivedError } from '@/lib/database/repositories/characters.r
 import { logger } from '@/lib/logger'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { normalizeWardrobeFolderPathOrRoot } from '@/lib/wardrobe/folders'
 import { createItem } from '@/lib/wardrobe/item-mutations'
 import {
   WardrobeScopeSchema,
@@ -294,6 +298,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       id: idMap.get(component.id) as string,
       characterId: destinationCharacterId,
       componentItemIds: remapComponentIds(component.componentItemIds),
+      folder: normalizeWardrobeFolderPathOrRoot(component.folder),
       createdAt: componentMode === 'copy' ? now : component.createdAt,
       updatedAt: componentMode === 'copy' ? now : component.updatedAt,
     }))
@@ -303,6 +308,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       id: action === 'copy' ? randomUUID() : source.item.id,
       characterId: destinationCharacterId,
       componentItemIds: remapComponentIds(source.item.componentItemIds),
+      folder: normalizeWardrobeFolderPathOrRoot(source.item.folder),
       createdAt: action === 'copy' ? now : source.item.createdAt,
       updatedAt: action === 'copy' ? now : source.item.updatedAt,
     }
@@ -418,6 +424,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       componentMode,
       itemId: source.item.id,
       resultItemId: stored.id,
+      folder: stored.folder ?? '',
       componentsTransferred: plannedComponents.length,
       sourceScope: source.location.scope,
       destinationScope: destination.scope,

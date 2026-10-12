@@ -6,7 +6,8 @@
  * transfer route's "land a copy here" write, all via `createItem` in
  * `item-mutations.ts` — builds its item through this, so the defaults
  * (`componentItemIds: []`, `isDefault: false`, `replace: false`, null for a
- * missing *or blank* prose field, no clothing-record provenance, no picture)
+ * missing *or blank* prose field, the root folder, no clothing-record
+ * provenance, no picture)
  * can't drift between tiers. A fresh item never carries an
  * `imageFileId`: a picture hangs off an item that already has an id, through
  * the images route.
@@ -25,16 +26,18 @@ export type WardrobeCreateBody = z.infer<typeof createWardrobeSchema>;
 /** What the repository's `create` takes: an item minus its id and timestamps. */
 export type WardrobeCreateData = Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>;
 
-/**
- * Map a validated create body onto the stored item fields for `characterId`
- * (`null` for a shared item). Optional body fields resolve to their storage
- * defaults; `migratedFromClothingRecordId` is always `null` for a fresh item.
- */
 /** A prose field as stored: trimmed-empty reads as absent. */
 function prose(value: string | null | undefined): string | null {
   return value && value.trim().length > 0 ? value : null;
 }
 
+/**
+ * Map a validated create body onto the stored item fields for `characterId`
+ * (`null` for a shared item). Optional body fields resolve to their storage
+ * defaults; `migratedFromClothingRecordId` is always `null` for a fresh item.
+ * The folder is carried as requested (a missing one is the root);
+ * `createItem` resolves it against the destination's folders before writing.
+ */
 export function wardrobeItemFromCreateBody(
   body: WardrobeCreateBody,
   characterId: string | null,
@@ -51,5 +54,6 @@ export function wardrobeItemFromCreateBody(
     replace: body.replace ?? false,
     migratedFromClothingRecordId: null,
     imageFileId: null,
+    folder: body.folder ?? '',
   };
 }

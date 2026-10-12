@@ -62,6 +62,11 @@ export interface WardrobeReadToolOutput {
   archived: boolean;
   /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
   is_own: boolean;
+  /**
+   * The operator's folder for the item under its wardrobe (e.g. `Formal/Evening`),
+   * null at the root. Filing only — it says nothing about when to wear it.
+   */
+  folder: string | null;
   /** True when the item is currently equipped in any slot. */
   is_equipped: boolean;
   /** Every slot the item currently occupies. */
@@ -109,7 +114,8 @@ export const wardrobeReadToolDefinition = {
       'Read the full detail of ONE wardrobe item by id (preferred) or title. ' +
       'Returns everything wardrobe_list omits: the Portrait Cue (image_prompt), ' +
       'default-outfit membership, composite/replace behaviour, the full ' +
-      'component list, archived status, whether you own it, the slots it is ' +
+      'component list, archived status, whether you own it, the folder the operator ' +
+      'filed it in (their browsing aid, not a hint about when to wear it), the slots it is ' +
       'currently equipped in, its wear history (how often you have worn it, ' +
       'then how often the whole household has and by whom), and its picture\'s image_file_id when it has one ' +
       '(pass that to describe_image to see what it looks like). Items from your own wardrobe, the project, and ' +

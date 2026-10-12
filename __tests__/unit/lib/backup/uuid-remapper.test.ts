@@ -965,3 +965,73 @@ describe('remapBackupData() - consolidation references', () => {
     expect(chat.otherExtractionWatermarkMessageId).toBe(chat.messages[0].id)
   })
 })
+
+describe('remapBackupData() - wardrobe items filed in subfolders', () => {
+  beforeEach(() => {
+    randomUUIDMock.mockReset()
+    let counter = 0
+    randomUUIDMock.mockImplementation(() => `remapped-${counter++}` as ReturnType<typeof randomUUID>)
+  })
+
+  // A hand-written item with no frontmatter id: its id is derived from its
+  // mount and path, so a new-account restore must recompute it against the
+  // remapped mount — at any depth under `Wardrobe/`.
+  const NESTED_CONTENT = '---\ntitle: Coat\ntypes: [top]\nimageFileId: file-old\n---\n'
+  const nestedBackup = (): BackupData => ({
+    manifest: {} as BackupData['manifest'],
+    characters: [],
+    chats: [],
+    tags: [],
+    connectionProfiles: [],
+    imageProfiles: [],
+    embeddingProfiles: [],
+    memories: [],
+    files: [{ id: 'file-old' }] as unknown as BackupData['files'],
+    promptTemplates: [],
+    roleplayTemplates: [],
+    providerModels: [],
+    projects: [],
+    llmLogs: [],
+    docMountPoints: [{ id: 'mount-old' }] as unknown as BackupData['docMountPoints'],
+    docMountDocuments: [{ fileId: 'blob-1', content: NESTED_CONTENT }] as unknown as BackupData['docMountDocuments'],
+    docMountFileLinks: [
+      { mountPointId: 'mount-old', relativePath: 'Wardrobe/Formal/Evening/Coat.md', fileId: 'blob-1' },
+    ] as unknown as BackupData['docMountFileLinks'],
+  })
+
+  it('remaps the wear ledger of an item at Wardrobe/Formal/Evening/', () => {
+    const { wardrobeItemIdForDocument } = jest.requireActual(
+      '@/lib/database/repositories/vault-overlay/parsers'
+    ) as typeof import('@/lib/database/repositories/vault-overlay/parsers')
+    const oldItemId = wardrobeItemIdForDocument({
+      mountPointId: 'mount-old',
+      relativePath: 'Wardrobe/Formal/Evening/Coat.md',
+      content: NESTED_CONTENT,
+    })
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...nestedBackup(),
+      wardrobeWear: [{ id: 'wear-old', itemId: oldItemId, characterId: null, chatId: null }] as unknown as BackupData['wardrobeWear'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+    const newMount = remapper.getMapping()['mount-old']
+    const newItemId = wardrobeItemIdForDocument({
+      mountPointId: newMount,
+      relativePath: 'Wardrobe/Formal/Evening/Coat.md',
+      content: NESTED_CONTENT,
+    })
+
+    expect(newItemId).not.toBe(oldItemId)
+    expect(result.wardrobeWear?.[0].itemId).toBe(newItemId)
+  })
+
+  it("plans the picture-pointer fix for a nested item", () => {
+    const remapper = new UuidRemapper()
+    const fixes = planWardrobeImagePointerFixes(nestedBackup(), remapper)
+
+    expect(fixes).toHaveLength(1)
+    expect(fixes[0].sourceMountPointId).toBe('mount-old')
+    expect(fixes[0].imageFileId).toBe(remapper.getMapping()['file-old'])
+  })
+})

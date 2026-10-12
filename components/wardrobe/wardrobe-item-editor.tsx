@@ -12,7 +12,7 @@ import { isComposite } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { buildCompositeTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
-import { draftFromItem, emptyDraft, validateDraft } from '@/lib/wardrobe/item-draft'
+import { draftFromItem, emptyDraft, payloadForEdit, validateDraft } from '@/lib/wardrobe/item-draft'
 import {
   GENERAL_CONTAINER,
   containerForListedItem,
@@ -28,6 +28,7 @@ import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponen
 import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
 import { WardrobeWearHistorySection } from './wardrobe-item-editor/WardrobeWearHistorySection'
 import { WardrobeItemImageSection } from './wardrobe-item-editor/WardrobeItemImageSection'
+import { WardrobeFolderField } from './wardrobe-item-editor/WardrobeFolderField'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
 import { GROUP_ORDER, getCandidateGroup } from './wardrobe-item-editor/constants'
 
@@ -61,6 +62,8 @@ interface WardrobeItemEditorProps {
   initialMode?: EditorMode
   /** Focus the title field on mount (used by Save-as-outfit). */
   autoFocusTitle?: boolean
+  /** Create only: the folder the browser is showing, where the new item is filed by default. */
+  initialFolder?: string
   onClose: () => void
   onSave: () => void
   /**
@@ -80,6 +83,7 @@ export function WardrobeItemEditor({
   initialComponentItemIds,
   initialMode,
   autoFocusTitle = false,
+  initialFolder = '',
   onClose,
   onSave,
   onImageChanged,
@@ -128,6 +132,7 @@ export function WardrobeItemEditor({
   })
 
   const [selectedTypes, setSelectedTypes] = useState<WardrobeItemType[]>(initialDraft.types)
+  const [folder, setFolder] = useState<string>(item ? initialDraft.folder : initialFolder)
   const [componentItemIds, setComponentItemIds] = useState<string[]>(
     initialComponentItemIds ?? initialDraft.componentItemIds,
   )
@@ -356,6 +361,19 @@ export function WardrobeItemEditor({
     : null
   const editItemUrl = item && itemHomeContainer ? wardrobeItemUrl(itemHomeContainer, item.id) : null
 
+  // The wardrobe whose folders the Folder field offers: the item's home on
+  // edit, the chosen destination on create.
+  const folderContainer: WardrobeContainer | null = isEditing
+    ? itemHomeContainer
+    : sharedContainer ??
+      (createScope === 'project' && projectId
+        ? { scope: 'project', id: projectId }
+        : createScope === 'global'
+          ? GENERAL_CONTAINER
+          : characterId
+            ? { scope: 'character', id: characterId }
+            : null)
+
   const handleSave = async (): Promise<void> => {
     setSubmitAttempted(true)
     if (isBundle && componentItemIds.length === 0) {
@@ -368,12 +386,14 @@ export function WardrobeItemEditor({
       types: isBundle ? effectiveTypes : selectedTypes,
       componentItemIds: isBundle ? componentItemIds : [],
       replace,
+      folder,
     })
     if (!validation.ok) {
       showErrorToast(validation.error)
       return
     }
-    const payload = validation.payload
+    // An edit that leaves the folder alone doesn't send it.
+    const payload = isEditing ? payloadForEdit(validation.payload, initialDraft.folder) : validation.payload
 
     clearError()
 
@@ -597,6 +617,9 @@ export function WardrobeItemEditor({
                 <p className="mt-1 text-xs qt-text-destructive">Enter a title</p>
               )}
             </div>
+
+            {/* Folder — the operator's filing, in both modes. */}
+            <WardrobeFolderField container={folderContainer} value={folder} onChange={setFolder} />
 
             {/* Picture — directly under Title, the most visible thing in the
                 form. Inert in create mode: a fresh item has no id yet. */}

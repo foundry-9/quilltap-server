@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import { isValidWardrobeFolderPath, WARDROBE_FOLDER_MAX_DEPTH } from '@/lib/wardrobe/folders';
 import {
   UUIDSchema,
   TimestampSchema,
@@ -117,6 +118,31 @@ export const UNREPORTED_IF_BLANK_SLOT_TYPES: readonly WardrobeItemType[] =
   WARDROBE_SLOT_TYPES.filter((s) => !WARDROBE_SLOT_META[s].reportWhenEmpty);
 
 // ============================================================================
+// WARDROBE FOLDERS
+// ============================================================================
+
+/**
+ * A folder path relative to `Wardrobe/` in normal form: `''` for the root,
+ * otherwise sanitised segments joined by `/`, at most
+ * {@link WARDROBE_FOLDER_MAX_DEPTH} deep, never `images`. Rules and helpers
+ * live in `lib/wardrobe/folders.ts`. Request bodies take any string and
+ * normalise it there (`normalizeWardrobeFolderPath`); this schema states the
+ * shape an item carries.
+ */
+export const WardrobeFolderPathSchema = z
+  .string()
+  .max(900)
+  .refine(isValidWardrobeFolderPath, {
+    message: `Wardrobe folder must be a clean path of at most ${WARDROBE_FOLDER_MAX_DEPTH} segments, none named "images"`,
+  });
+
+/**
+ * A folder as a request body carries it: any string up to the path cap,
+ * normalised (and refused when it can't be) by `normalizeWardrobeFolderPath`.
+ */
+const WardrobeFolderInputSchema = z.string().max(900);
+
+// ============================================================================
 // WARDROBE ITEM API SCHEMAS (single source for create + update routes)
 // ============================================================================
 
@@ -138,6 +164,11 @@ export const wardrobeItemFieldsSchema = z.object({
   componentItemIds: z.array(z.string()).optional(),
   /** Clear the designated slots on wear instead of layering (composites and leaves alike). */
   replace: z.boolean().optional(),
+  /**
+   * Folder under `Wardrobe/` to file the item in. Create defaults to the root;
+   * update leaves the folder unchanged when omitted.
+   */
+  folder: WardrobeFolderInputSchema.optional(),
 });
 
 /** Body schema for creating a project wardrobe item (required fields). */
@@ -156,6 +187,28 @@ export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
    * not linked to the item (`assertItemImageChoice`, `lib/wardrobe/item-images.ts`).
    */
   imageFileId: UUIDSchema.nullable().optional(),
+});
+
+/** `POST …/wardrobe?action=create-folder` body. */
+export const createWardrobeFolderSchema = z.object({
+  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
+});
+
+/** `POST …/wardrobe?action=rename-folder` body: the folder, and its new last segment. */
+export const renameWardrobeFolderSchema = z.object({
+  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
+  name: z.string().min(1, 'A folder name is required').max(200),
+});
+
+/** `POST …/wardrobe?action=delete-folder` body. */
+export const deleteWardrobeFolderSchema = z.object({
+  path: WardrobeFolderInputSchema.min(1, 'A folder path is required'),
+});
+
+/** `POST …/wardrobe?action=move-items` body: file every item into `folder` (`''` = root). */
+export const moveWardrobeItemsSchema = z.object({
+  itemIds: z.array(z.string().min(1)).min(1, 'At least one item is required').max(500),
+  folder: WardrobeFolderInputSchema,
 });
 
 // ============================================================================
@@ -210,6 +263,13 @@ export const WardrobeItemSchema = z.object({
   imageFileId: UUIDSchema.nullable().optional(),
   /** When the item was archived (null = active) */
   archivedAt: TimestampSchema.nullable().optional(),
+  /**
+   * Folder path relative to `Wardrobe/`; `''` = root. Derived from the file's
+   * path on read and written back as the path on projection — never stored
+   * in frontmatter. The operator's filing only: it carries no meaning for
+   * what a character can wear.
+   */
+  folder: WardrobeFolderPathSchema.default(''),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

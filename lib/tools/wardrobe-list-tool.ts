@@ -58,6 +58,11 @@ export interface WardrobeListItemResult {
   appropriateness: string | null;
   /** Whether the item belongs to THIS character (true) or is a shared archetype (false). */
   is_own: boolean;
+  /**
+   * The operator's folder for the item under its wardrobe (e.g. `Formal/Evening`),
+   * null at the root. Filing only — it says nothing about when to wear it.
+   */
+  folder: string | null;
   is_equipped: boolean;
   /**
    * Which slot the item is currently equipped in (the first if multi-slot
@@ -130,6 +135,8 @@ export const wardrobeListToolDefinition = {
       'image_file_id — pass that to describe_image to see what the item looks like. ' +
       'Use wardrobe_wear to put on / layer items, wardrobe_take_off to remove them, ' +
       'and wardrobe_read for the full detail (including the Portrait Cue) of one item. ' +
+      'An item\'s folder is how the operator has filed it for their own browsing; it ' +
+      'carries no meaning for when or how to wear it. ' +
       'Archived items are excluded from results.',
     parameters: zodToOpenAISchema(wardrobeListToolInputSchema),
   },

@@ -31,6 +31,8 @@ export interface WardrobeItemDraft {
   componentItemIds: string[]
   /** Composite-only: clear the designated slots on equip instead of layering. */
   replace: boolean
+  /** Folder under `Wardrobe/` (`''` = root). Filing only. */
+  folder: string
 }
 
 /** The create/update body the wardrobe item routes accept. */
@@ -43,6 +45,8 @@ export interface WardrobeItemPayload {
   isDefault: boolean
   componentItemIds: string[]
   replace: boolean
+  /** Omitted on an edit that leaves the folder alone (see `payloadForEdit`). */
+  folder?: string
 }
 
 /** A blank draft, optionally pre-filled. */
@@ -56,6 +60,7 @@ export function emptyDraft(overrides?: Partial<WardrobeItemDraft>): WardrobeItem
     types: [],
     componentItemIds: [],
     replace: false,
+    folder: '',
     ...overrides,
   }
 }
@@ -71,6 +76,7 @@ export function draftFromItem(item: WardrobeItem): WardrobeItemDraft {
     types: [...item.types],
     componentItemIds: [...(item.componentItemIds ?? [])],
     replace: item.replace ?? false,
+    folder: item.folder ?? '',
   }
 }
 
@@ -89,7 +95,20 @@ export function draftToPayload(draft: WardrobeItemDraft): WardrobeItemPayload {
     isDefault: draft.isDefault,
     componentItemIds: [...draft.componentItemIds],
     replace: isComposite(draft) ? draft.replace : false,
+    folder: draft.folder,
   }
+}
+
+/**
+ * The body for an edit: `payload` without `folder` when the item stays where
+ * it is. A hand-made Scriptorium folder (`Hats: Summer`) is kept exactly as
+ * stored only if an unchanged folder is never re-sent for resolving.
+ */
+export function payloadForEdit(payload: WardrobeItemPayload, originalFolder: string): WardrobeItemPayload {
+  if ((payload.folder ?? '').toLowerCase() !== originalFolder.toLowerCase()) return payload
+  const rest = { ...payload }
+  delete rest.folder
+  return rest
 }
 
 export type DraftValidation =
