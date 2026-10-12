@@ -4,6 +4,26 @@
 
 ### 4.10-dev
 
+#### Memory refactor, Phase 0: bugs filed, three fixed, one closed
+
+- Filed bugs 199–226 from the memory refactor audit, one file each, with index rows. 203–226 stay open
+  and name the refactor phase that closes them.
+- Bug 199: continue, chained and autonomous turns (no new user message) now send recalled memories,
+  new Suparṇā mail and the Core whisper to the model. Before, they were posted (recall stamped
+  accessed, letters marked alerted) but left out of the trailing-only message.
+- Bug 200: the delete chokepoint (`deleteMemoryWithUnlink` / `deleteMemoriesWithUnlinkBatch`) now
+  removes the deleted rows' vectors, so the item delete, restore and every cascade stop leaving orphan
+  vectors; per-caller removal in the cascades, housekeeping and dedup is gone. The gate ignores vector
+  hits with no row and searches past them (up to 4 × K), so orphans no longer hide a live
+  near-duplicate. Character archive already dropped the whole index, so that half did not reproduce.
+- Bug 201: the chat wipe (`DELETE /memories?chatId=`, Re-extract, Regenerate) deletes only hot AUTO
+  rows, plus digests with no surviving member. MANUAL rows, cold rows and live digests are kept, and
+  the response reports `sparedCount`. A digest counts as having a member only if that member is not
+  being wiped and still points at it. The dedup tool folds only hot AUTO rows and reports the rest as
+  `sparedCount` ("Kept aside" in the preview). A shared predicate lives in
+  `lib/memory/policy-protection.ts`.
+- Bug 202 closed as not a defect: R5 of the recall retuning keeps entity-anchor hits under the cosine
+  floor. Corrected the comments in `searchMemoriesSemantic` that claimed the opposite.
 #### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)
 
 - One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.

@@ -42,6 +42,25 @@ import { INFORM_BLOCK_HEADER } from '@/lib/chat/context/inform-block'
 import type { ChatParticipantBase, Character, Memory } from '@/lib/schemas/types'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { getRepositories } from '@/lib/repositories/factory'
+import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
+import { collectUnalertedMail, markAlerted } from '@/lib/post-office/mailbox'
+import { postSuparnaMailWhisper, buildSuparnaMailLLMContext } from '@/lib/services/suparna-notifications/writer'
+
+// Pass-through by default; the bug-199 tests stand in a fixed recall text.
+jest.mock('@/lib/services/commonplace-notifications/writer', () => {
+  const actual = jest.requireActual('@/lib/services/commonplace-notifications/writer')
+  return { ...actual, buildCommonplaceLLMContext: jest.fn(actual.buildCommonplaceLLMContext) }
+})
+
+// Pass-through by default; the mail test below stands in a delivered letter.
+jest.mock('@/lib/post-office/mailbox', () => {
+  const actual = jest.requireActual('@/lib/post-office/mailbox')
+  return { ...actual, collectUnalertedMail: jest.fn(actual.collectUnalertedMail), markAlerted: jest.fn(actual.markAlerted) }
+})
+jest.mock('@/lib/services/suparna-notifications/writer', () => {
+  const actual = jest.requireActual('@/lib/services/suparna-notifications/writer')
+  return { ...actual, postSuparnaMailWhisper: jest.fn(actual.postSuparnaMailWhisper) }
+})
 
 jest.mock('@/lib/memory/memory-service', () => ({
   searchMemoriesSemantic: jest.fn().mockResolvedValue([]),
@@ -1278,7 +1297,7 @@ describe('Context Manager', () => {
     // The inform block — the one sanctioned turn-variable system block.
     // ------------------------------------------------------------------
 
-    const buildWithInforms = async (pendingRows: unknown[], newUserMessage: string | null = 'Ready for the next task?') => {
+    const buildWithInforms = async (pendingRows: unknown[], newUserMessage: string | null = 'Ready for the next task?', character: Character = characterA) => {
       mockedGetRepositories.mockReturnValue({
         memories: { findByCharacterAboutCharacters: jest.fn().mockResolvedValue([]) },
         chatInforms: {
@@ -1292,7 +1311,7 @@ describe('Context Manager', () => {
         provider: 'OPENAI',
         modelName: 'gpt-4o',
         userId: 'user',
-        character: characterA,
+        character,
         userCharacter: { name: 'Alex', description: 'Curious' },
         chat: {
           id: 'chat-1',
@@ -1382,6 +1401,61 @@ describe('Context Manager', () => {
       expect(last.role).toBe('user')
       expect(last.content).toBe(`${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`)
       expect(result.informRowIds).toEqual(['row-1'])
+    })
+
+    // Bug 199: a continue / chained turn computed recall, posted the whisper and
+    // stamped the rows accessed, but the trailing-only message left the recall
+    // text out — the model was shown nothing.
+    describe('recall on a turn with no new user message (bug 199)', () => {
+      const mockedRecall = buildCommonplaceLLMContext as jest.MockedFunction<typeof buildCommonplaceLLMContext>
+      afterEach(() => {
+        mockedRecall.mockImplementation(jest.requireActual('@/lib/services/commonplace-notifications/writer').buildCommonplaceLLMContext)
+      })
+
+      it('carries the recall text in the trailing user message', async () => {
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+        const result = await buildWithInforms([], null)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe('You remember the lighthouse.')
+      })
+
+      it('puts recall before the inform block, as on an ordinary turn', async () => {
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+        const result = await buildWithInforms([informRow('row-1', 'The lamp gutters.')], null)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.content).toBe(
+          `You remember the lighthouse.\n\n---\n\n${INFORM_BLOCK_HEADER}\n\nThe lamp gutters.`,
+        )
+      })
+
+      it('carries new mail too, since the letters are marked alerted this turn', async () => {
+        const letter = { path: 'Mail/from-the-lighthouse.md', from: 'The Keeper', sentAt: timestamp, body: 'The lamp is lit.', alerted: false, inReplyTo: null }
+        ;(collectUnalertedMail as jest.Mock).mockResolvedValueOnce([letter])
+        ;(markAlerted as jest.Mock).mockResolvedValue(undefined)
+        ;(postSuparnaMailWhisper as jest.Mock).mockResolvedValueOnce(null)
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+
+        const result = await buildWithInforms([], null, { ...characterA, characterDocumentMountPointId: 'vault-a' } as Character)
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.role).toBe('user')
+        expect(last.content).toBe(
+          `You remember the lighthouse.\n\n---\n\n${buildSuparnaMailLLMContext([letter])}`,
+        )
+        expect(markAlerted).toHaveBeenCalledWith('vault-a', letter.path)
+      })
+
+      it('rides the new user message, not a second one, when there is one', async () => {
+        mockedRecall.mockReturnValue('You remember the lighthouse.')
+        const result = await buildWithInforms([])
+
+        const last = result.messages[result.messages.length - 1]
+        expect(last.content).toBe('Ready for the next task?\n\n---\n\nYou remember the lighthouse.')
+        expect(result.messages.filter(m => m.role === 'user' && m.content === 'You remember the lighthouse.')).toHaveLength(0)
+      })
     })
 
     it('stacks several pending passages in posting order, rule-separated', async () => {

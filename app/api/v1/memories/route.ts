@@ -1231,7 +1231,8 @@ async function handleDeleteByChatId(
     return notFound('Chat');
   }
 
-  const { deleted } = await deleteMemoriesByChatIdWithVectors(chatId);
+  // Manual rows, cold rows and digests with surviving members are spared (bug 201).
+  const { deleted, spared } = await deleteMemoriesByChatIdWithVectors(chatId);
 
   // No publish here. This path runs through `deleteMemoriesWithUnlinkBatch`,
   // and the memory-gate chokepoint already announces `memories` collection-wide
@@ -1240,12 +1241,13 @@ async function handleDeleteByChatId(
   // hint would cost every subscriber a duplicate refetch, and would fire on the
   // one case where the gate correctly stays silent: a chat with no memories,
   // where nothing was deleted and nothing changed.
-  logger.debug('[Memories API] Deleted every memory for a chat', { chatId, deleted });
+  logger.debug('[Memories API] Wiped a chat\'s extracted memories', { chatId, deleted, spared });
 
   return NextResponse.json({
     success: true,
     chatId,
     deletedCount: deleted,
+    sparedCount: spared,
   });
 }
 

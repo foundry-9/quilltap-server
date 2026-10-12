@@ -129,7 +129,12 @@ export const DELETE = createContextParamsHandler<{ id: string }>(
         return notFound('Memory');
       }
 
-      await deleteMemoryWithUnlink(memoryId);
+      // The chokepoint removes the row, scrubs neighbours' links and removes
+      // the vector (bug 200: an orphan vector blinded the gate).
+      const deleted = await deleteMemoryWithUnlink(memoryId);
+      if (!deleted) {
+        return notFound('Memory');
+      }
 
       // Clean up embedding status (non-blocking)
       handleEntityDeletion('MEMORY', memoryId).catch((err: Error) =>
