@@ -94,6 +94,7 @@ const GET_ACTIONS = [
   'accessible-stores',
   'get-background',
   'gallery',
+  'scenario-source',
   'cost',
 ]
 

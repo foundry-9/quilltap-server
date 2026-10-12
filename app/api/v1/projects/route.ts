@@ -57,7 +57,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
 // POST Handler
 // ============================================================================
 
-export const POST = createContextHandler(async (req: NextRequest, { repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const body = await req.json();
   const validatedData = createProjectSchema.parse(body);
 
@@ -89,8 +89,8 @@ export const POST = createContextHandler(async (req: NextRequest, { repos }) => 
   // endpoint and the startup hook also ensure it.
   try {
     if (project.officialMountPointId) {
-      const { ensureProjectScenariosFolder } = await import('@/lib/mount-index/project-scenarios');
-      await ensureProjectScenariosFolder(project.officialMountPointId);
+      const { resolveScenarioLocation } = await import('@/lib/scenarios/location');
+      await resolveScenarioLocation('project', project.id, repos, user.id, { ensure: true });
     }
   } catch (ensureError) {
     logger.warn('[Projects v1] Failed to ensure project Scenarios folder on create', {

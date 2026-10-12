@@ -4,7 +4,7 @@
 
 ### 4.10-dev
 
-#### Memory refactor, Phase 0: bugs filed, four fixed
+#### Memory refactor, Phase 0: bugs filed, three fixed, one closed
 
 - Filed bugs 199–226 from the memory refactor audit, one file each, with index rows. 203–226 stay open
   and name the refactor phase that closes them.
@@ -21,6 +21,26 @@
   in `lib/memory/policy-protection.ts`.
 - Bug 202 closed as not a defect: R5 of the recall retuning keeps entity-anchor hits under the cosine
   floor. Corrected the comments in `searchMemoriesSemantic` that claimed the opposite.
+#### Scenarios from anywhere (spec `features/complete/scenarios-from-anywhere.md`)
+
+- One scenario location: `lib/scenarios/location.ts` (`resolveScenarioLocation`, `lookupScenarioRef`, `classifyScenarioMount`) addresses a character vault, a project's or group's official store, or Quilltap General. Deleted `general-scenarios.ts`, `project-scenarios.ts`, `group-scenarios.ts` and `resolveStoreScenarioTier`; the group Knowledge-folder helper moved to `group-knowledge.ts`. All six scenario routes, the group-union route, the startup heals and the project/group create hooks go through the location.
+- Scenario route factory now covers General too and builds the collection list/create bodies.
+- New raw finders: `characters.findByDocumentMountPointIdRaw`, `findByOfficialMountPointIdRaw` on store-backed repositories (projects, groups). `addScenario` / `updateScenario` accept `description`.
+- `GET /api/v1/scenarios?action=everywhere` lists every scenario in the instance by owner with a 240-char excerpt (one document query); `?action=read&mountPointId=&path=` reads one by ref.
+- `scenarioRef: { mountPointId, path }` accepted on chat create and `?action=scenario`; resolved first; a ref to anything but the four kinds of owner, or a path outside `Scenarios/`, is a 400.
+- `resolveScenarioSelection` returns `{ scenarioText, scenarioSource, scenarioNotes }`; both callers write all three. Migration `add-chat-scenario-source-v1` adds `chats.scenarioSource` (JSON) and `chats.scenarioNotes`. Export schema updated; import remaps the source's mount in reconcile (dropped to null when the store did not come across); new-account restore remaps it with the store.
+- `GET /api/v1/chats/[id]?action=scenario-source` reports owner, existence and whether the file's body hash changed; `queryKeys.chats.scenarioSource` rides the `chats` realtime topic.
+- `?action=scenario` no-op check compares text, source and notes; a provenance-only change is written without a recompile or Host announcement.
+- New `ScenarioBrowserDialog` ("Browse all scenarios…" in both pickers): owners by section, search across shelves, Markdown preview, keyboard navigation. A pick inside the chat's hierarchy snaps to its native kind; anything else is a `store` selection shown under "Elsewhere".
+- In-chat Scenario control: provenance line, "Reload from source" when the file changed, "the shelf copy is gone" when it was removed, a notes box under presets; current selection comes from the source when there is one, body matching otherwise.
+- New Chat keeps one `scenarioSelection` (plus `scenarioTouched`) instead of five pointer fields, so the form shows what it submits. Seed order is character default > project default > general default, matching the server; a hand pick is not re-seeded. Fixes the form showing the project default while submitting the character's.
+- Scenario label on the New Chat form now points at the select (`htmlFor` was `new-chat-scenario`, which matched nothing).
+- Scenario item routes heal `Scenarios/` (and a group's `Knowledge/`) on PUT/rename/DELETE; GET stays a read probe. Startup heals report `provisioned` / `healed` / `failed` separately and count a folder failure as failed.
+- A character scenario ref lookup reads the character row once instead of three times.
+- `?action=scenario` takes `reload`; an ordinary save that resolves to the chat's own revised source file keeps the stored scene (verified by hash) with the new notes. Only "Reload from source" (`reload: true`) takes the revised copy.
+- Character scenario location is read-only (`StoreScenarioLocation` carries writes for General/project/group). Removed the unused character write methods, `resolveBody`, `resolveScenarioRef`, and the test-only `listScenariosInFolder` / `readScenarioByPath` / `resolveScenarioBody`.
+- Help: new `help/scenario-browser.md`; updated `general-scenarios.md`, `project-scenarios.md`, `groups.md`, `chats.md`.
+- Review fixes: the in-chat control no longer selects a source whose file is gone (saving it replaced the scene with the notes alone); leaving Custom for a preset clears the box instead of appending the old scene as notes; the character location's `update` keeps `defaultScenarioId` on a retitle and refuses a retitle onto an existing file. The scenario-by-ref query is one hook, `useScenarioRefBody`; `components/scenario/types.ts` reuses `ScenarioRef` from `chat.types`.
 
 #### Spec: memory system refactor
 

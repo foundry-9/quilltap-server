@@ -2,7 +2,7 @@
 
 **Status:** Approved 2026-10-12; built 2026-10-12 (see [As built](#7-as-built)).
 **Owner subsystems:** Aurora (the wardrobe), The Scriptorium (the `Wardrobe/` folders the files live in), Prospero (the project Wardrobe card).
-**Companion spec:** [scenarios-from-anywhere.md](../scenarios-from-anywhere.md) was written the same day and shares nothing but the author; build them in either order.
+**Companion spec:** [scenarios-from-anywhere.md](scenarios-from-anywhere.md) was written the same day and shares nothing but the author; build them in either order.
 **Implementation note:** This spec is written to be executed by Claude Code. Follow the CLAUDE.md standing rules throughout, and the wardrobe chokepoints in particular: one location (`resolveWardrobeLocation`), one pool (`loadWearablePool`), writes only through `item-mutations.ts`, routes only through the route factory, never an `ownerCharacterId` hint, never a scope switch to pick a writer. Changelog entry, help docs with `url` + In-Chat Navigation, debug logging on every touched backend path, `qt-*` classes not raw Tailwind, `npx tsc` not `npm run build`, the tool snapshot test re-recorded with `npx jest -u`. The decisions in §2 were settled with the operator before this spec was written. **Do not reopen them.**
 
 ---

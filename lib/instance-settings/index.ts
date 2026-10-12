@@ -398,7 +398,7 @@ export async function getUserUploadsMountPointId(): Promise<string | null> {
 
 /**
  * Read the Quilltap General mount-point id. The provisioning migration writes
- * this on first boot; runtime callers (`lib/mount-index/general-scenarios.ts`)
+ * this on first boot; runtime callers (`lib/scenarios/location.ts`)
  * read it to find the instance-wide store that houses general chat-starter
  * scenarios offered alongside project and character scenarios.
  */

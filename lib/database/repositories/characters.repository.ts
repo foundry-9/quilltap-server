@@ -136,6 +136,17 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
+   * Find the character whose vault is `mountPointId`, **without the vault
+   * overlay**. Used by the scenario location to classify a mount as a
+   * character's (it needs only `id`, `userId`, `archivedAt`) — hydrating the
+   * vault to answer "whose mount is this?" would be wasted work, and a broken
+   * vault must cost a classification rather than a throw.
+   */
+  async findByDocumentMountPointIdRaw(mountPointId: string): Promise<Character | null> {
+    return this.findOneByFilter({ characterDocumentMountPointId: mountPointId } as TypedQueryFilter<Character>);
+  }
+
+  /**
    * Find characters by user ID
    * @param userId The user ID
    * @returns Promise<Character[]> Array of characters belonging to the user

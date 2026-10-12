@@ -77,7 +77,7 @@ export const GET = createContextHandler(async (req: NextRequest, { user, repos }
 // POST Handler
 // ============================================================================
 
-export const POST = createContextHandler(async (req: NextRequest, { repos }) => {
+export const POST = createContextHandler(async (req: NextRequest, { user, repos }) => {
   const body = await req.json();
   const validatedData = createGroupSchema.parse(body);
 
@@ -102,8 +102,9 @@ export const POST = createContextHandler(async (req: NextRequest, { repos }) => 
   // endpoint and the startup hook also ensure them.
   try {
     if (group.officialMountPointId) {
-      const { ensureGroupScenariosFolder, ensureGroupKnowledgeFolder } = await import('@/lib/mount-index/group-scenarios');
-      await ensureGroupScenariosFolder(group.officialMountPointId);
+      const { resolveScenarioLocation } = await import('@/lib/scenarios/location');
+      const { ensureGroupKnowledgeFolder } = await import('@/lib/mount-index/group-knowledge');
+      await resolveScenarioLocation('group', group.id, repos, user.id, { ensure: true });
       await ensureGroupKnowledgeFolder(group.officialMountPointId);
     }
   } catch (ensureError) {

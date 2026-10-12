@@ -787,6 +787,33 @@ export type ChatParticipantBaseInput = z.input<typeof ChatParticipantBaseSchema>
 // CHAT METADATA
 // ============================================================================
 
+/**
+ * A chat's scenario source: the file a preset was read from and the SHA-256
+ * of its body at pick time, so the in-chat control can say where the scene
+ * came from and notice when the shelf copy has since been revised.
+ */
+export const ScenarioSourceSchema = z.object({
+  mountPointId: UUIDSchema,
+  /** `Scenarios/<file>.md` inside that mount. */
+  path: z.string().min(1).max(500),
+  /** Hex SHA-256 of the body as resolved (frontmatter stripped, before notes are layered on). */
+  bodySha256: z.string().length(64),
+});
+
+export type ScenarioSource = z.infer<typeof ScenarioSourceSchema>;
+
+/**
+ * The universal pointer to one scenario file, wherever it lives — a
+ * `scenarioRef` in a create or `?action=scenario` payload. `path` is
+ * `Scenarios/<file>.md`; the server validates it and the mount before reading.
+ */
+export const ScenarioRefSchema = z.object({
+  mountPointId: UUIDSchema,
+  path: z.string().min(1).max(500),
+});
+
+export type ScenarioRef = z.infer<typeof ScenarioRefSchema>;
+
 export const ChatMetadataSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,
@@ -890,6 +917,16 @@ export const ChatMetadataSchema = z.object({
 
   /** Resolved scenario text selected at chat creation (preset or custom) */
   scenarioText: z.string().nullable().optional(),
+
+  /**
+   * Where the preset under `scenarioText` came from — the recipe, not the
+   * text. Written only beside `scenarioText` by `resolveScenarioSelection`'s
+   * two callers. Null for a custom scene and for chats from before it existed.
+   */
+  scenarioSource: ScenarioSourceSchema.nullable().optional(),
+
+  /** The free-text notes layered beneath the preset in `scenarioText`. */
+  scenarioNotes: z.string().nullable().optional(),
 
   // Token usage tracking (aggregate totals for this chat)
   /** Total prompt/input tokens used in this chat */
@@ -1280,6 +1317,16 @@ export const ChatMetadataBaseSchema = z.object({
 
   /** Resolved scenario text selected at chat creation (preset or custom) */
   scenarioText: z.string().nullable().optional(),
+
+  /**
+   * Where the preset under `scenarioText` came from — the recipe, not the
+   * text. Written only beside `scenarioText` by `resolveScenarioSelection`'s
+   * two callers. Null for a custom scene and for chats from before it existed.
+   */
+  scenarioSource: ScenarioSourceSchema.nullable().optional(),
+
+  /** The free-text notes layered beneath the preset in `scenarioText`. */
+  scenarioNotes: z.string().nullable().optional(),
 
   // Token usage tracking (aggregate totals for this chat)
   /** Total prompt/input tokens used in this chat */

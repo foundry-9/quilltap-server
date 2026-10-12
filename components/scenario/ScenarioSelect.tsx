@@ -3,7 +3,10 @@
 /**
  * The scenario dropdown, shared by the New Chat dialog and the Salon sidebar's
  * in-chat picker. Renders the four tiers as optgroups — project, general,
- * group, character — above a standing "Custom…" entry.
+ * group, character — beneath a standing "Custom…" entry and, when the surface
+ * hands it `onBrowse`, a "Browse all scenarios…" entry that opens the scenario
+ * browser instead of selecting anything. A pick from outside the hierarchy
+ * shows in an "Elsewhere" optgroup holding exactly that one pick.
  *
  * The component is presentational: it takes already-fetched options and a
  * selection, and reports a new selection. What the surrounding surface does
@@ -18,6 +21,7 @@
 
 import { useMemo } from 'react'
 import {
+  BROWSE_SCENARIO_VALUE,
   CUSTOM_SCENARIO_VALUE,
   GENERAL_SCENARIO_PREFIX,
   GROUP_SCENARIO_PREFIX,
@@ -46,24 +50,11 @@ export interface ScenarioSelectProps {
   characterScenarios?: CharacterScenario[] | null
   /** Marks the character scenario the character itself calls default. */
   characterDefaultScenarioId?: string | null
+  /** Offer "Browse all scenarios…"; called instead of `onChange` when it is chosen. */
+  onBrowse?: () => void
   disabled?: boolean
   className?: string
   'aria-label'?: string
-}
-
-/** True when at least one tier has something to offer. */
-export function hasAnyScenarioOptions(props: {
-  projectScenarios?: ProjectScenarioOption[]
-  generalScenarios?: GeneralScenarioOption[]
-  groupScenarios?: GroupScenarioOption[]
-  characterScenarios?: CharacterScenario[] | null
-}): boolean {
-  return (
-    (props.projectScenarios?.length ?? 0) > 0 ||
-    (props.generalScenarios?.length ?? 0) > 0 ||
-    (props.groupScenarios?.length ?? 0) > 0 ||
-    (props.characterScenarios?.length ?? 0) > 0
-  )
 }
 
 export function ScenarioSelect({
@@ -75,6 +66,7 @@ export function ScenarioSelect({
   groupScenarios = [],
   characterScenarios = null,
   characterDefaultScenarioId = null,
+  onBrowse,
   disabled = false,
   className = 'qt-select mb-2',
   'aria-label': ariaLabel,
@@ -95,12 +87,26 @@ export function ScenarioSelect({
     <select
       id={id}
       value={scenarioSelectionToValue(selection)}
-      onChange={(e) => onChange(scenarioValueToSelection(e.target.value))}
+      onChange={(e) => {
+        // The browse entry is an action, not a selection: the controlled value
+        // snaps back to the current selection on the next render.
+        if (e.target.value === BROWSE_SCENARIO_VALUE) {
+          onBrowse?.()
+          return
+        }
+        onChange(scenarioValueToSelection(e.target.value, selection))
+      }}
       disabled={disabled}
       className={className}
       aria-label={ariaLabel}
     >
       <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
+      {onBrowse && <option value={BROWSE_SCENARIO_VALUE}>Browse all scenarios…</option>}
+      {selection.kind === 'store' && (
+        <optgroup label="Elsewhere">
+          <option value={scenarioSelectionToValue(selection)}>{selection.label}</option>
+        </optgroup>
+      )}
       {projectScenarios.length > 0 && (
         <optgroup label="Project Scenarios">
           {projectScenarios.map((s) => (

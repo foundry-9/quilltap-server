@@ -73,7 +73,9 @@ When you begin a new chat within a project, the **Starting Scenario** drop-down 
 - **Character Scenarios** — the personal scenarios of the single character you've chosen, if exactly one LLM-controlled character is selected.
 - **Custom...** — the blank-slate option, for a one-off scenario typed on the spot.
 
-The **project default** takes precedence when seeding the form's initial selection. If the chosen character also has a default scenario of her own, you'll see an inline note naming her default and offering a single click to switch to it — the override is never silent. You remain in charge of which scenario opens the curtain.
+When seeding the form's initial selection, a single chosen character's own default comes first, then the **project default**, then the general default — the same order the chat itself has always obeyed, so what the drop-down shows is what the chat receives. If the project default is showing and the character also has a default of her own, you'll see an inline note naming hers and offering a single click to switch to it. Once you pick a scenario by hand, changing the cast or the project no longer re-seeds it. You remain in charge of which scenario opens the curtain.
+
+**Browse all scenarios…**, just beneath **Custom...**, opens the [Scenario Browser](scenario-browser.md), from which a scene on *any* project's shelf — or any character's, or any Group's — may be plucked into this chat.
 
 The free-text desk beneath the drop-down stays open even once a scenario is chosen: anything written there is **layered beneath** the selected scenario rather than supplanting it, so a project scenario can be embellished with tonight's particulars without disturbing the original. (See [General Scenarios](general-scenarios.md) for the fuller account.)
 
@@ -85,7 +87,7 @@ Should you, in some moment of housekeeping zeal, delete the `Scenarios/` folder 
 
 ## Changing a Chat's Scenario Later
 
-A scenario chosen at the outset is not binding for the evening. In an open chat, the **Chat Sidebar**'s **Chat** drawer holds a **Scenario** control offering these same tiers; picking a new one rewrites the chat's scene, recompiles every character's standing instructions, and has the Host announce the revision to the room. The particulars are set out in [Chats Overview](chats.md). Note that the frontmatter key the default is read from is `isDefault` — a file marked `default: true` instead is simply a scenario with no claim to the title, and the drop-down will open on **Custom...** with no pre-selection at all.
+A scenario chosen at the outset is not binding for the evening. In an open chat, the **Chat Sidebar**'s **Chat** drawer holds a **Scenario** control offering these same tiers; picking a new one rewrites the chat's scene, recompiles every character's standing instructions, and has the Host announce the revision to the room. The control also remembers which file the scene came from — **From: *Project* › *Scenario*** — and, should that file be revised on this shelf afterwards, offers **Reload from source**, keeping your notes beneath it. The particulars are set out in [Chats Overview](chats.md). Note that the frontmatter key the default is read from is `isDefault` — a file marked `default: true` instead is simply a scenario with no claim to the title, and the drop-down will open on **Custom...** with no pre-selection at all.
 
 ## In-Chat Navigation
 
@@ -101,3 +103,4 @@ Characters with help tools enabled can navigate directly to this page:
 - [Project Settings](project-settings.md) — Other project configuration
 - [The Scriptorium](scriptorium.md) — Browsing and editing document stores directly
 - [The Scenario Builder](scenario-builder.md) — Having the Host research and draft a scene
+- [The Scenario Browser](scenario-browser.md) — Plucking a scene from any shelf in the house

@@ -97,6 +97,11 @@ Group's secrets among its own.
 > *Group Scenarios: {the Group's name}*. A starting scenario is a menu laid out at
 > the door, not a key pressed into anyone's hand — so here, and only here, a
 > Group's Scenarios are shown to the whole table when a member is present.
+>
+> (The [Scenario Browser](scenario-browser.md) — **Browse all scenarios…** in
+> that same menu — goes further still and lists every Group's shelf, member or
+> no, for you to pluck a scene from by hand. A scene so plucked is copied into
+> the chat; no Group's Knowledge comes with it.)
 
 ## Tending Your Groups
 

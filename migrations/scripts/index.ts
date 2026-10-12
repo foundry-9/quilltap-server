@@ -421,6 +421,8 @@ import { seedWardrobeWearStatsMigration } from './seed-wardrobe-wear-stats-v1';
 import { addWardrobeImageSettingsFieldMigration } from './add-wardrobe-image-settings-field-v1';
 // Memory consolidation and tiers: hot/cold tier + digest bookkeeping on memories, fold-grain OTHER watermark on chats
 import { addMemoryTiersMigration } from './add-memory-tiers-v1';
+// Scenarios from anywhere: chats.scenarioSource / scenarioNotes (where each chat's scene was found)
+import { addChatScenarioSourceMigration } from './add-chat-scenario-source-v1';
 
 /**
  * All available migrations.
@@ -857,6 +859,8 @@ export const migrations: Migration[] = [
   addWardrobeImageSettingsFieldMigration,
   // Memory consolidation and tiers: hot/cold tier + digest bookkeeping
   addMemoryTiersMigration,
+  // Scenarios from anywhere: chats.scenarioSource / scenarioNotes
+  addChatScenarioSourceMigration,
 ];
 
 export {
@@ -1271,5 +1275,7 @@ export {
   addWardrobeImageSettingsFieldMigration,
   // Memory consolidation and tiers: hot/cold tier + digest bookkeeping
   addMemoryTiersMigration,
+  // Scenarios from anywhere: chats.scenarioSource / scenarioNotes
+  addChatScenarioSourceMigration,
 };
 
