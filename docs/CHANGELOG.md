@@ -4,6 +4,19 @@
 
 ### 4.10-dev
 
+#### Specs: scenarios from anywhere; wardrobe folders
+
+- `docs/developer/features/scenarios-from-anywhere.md`: a "Browse all scenarios" dialog over every
+  character, project, group and General scenario; a `resolveScenarioLocation` chokepoint replacing the
+  four tier modules; `chats.scenarioSource` / `scenarioNotes` so a chat remembers where its scene came
+  from and can reload it; New Chat keeps one scenario selection instead of four pointer fields (fixes the
+  form showing a project default while submitting the character default).
+- `docs/developer/features/wardrobe-folders.md`: user folders under each tier's `Wardrobe/`, with the
+  file path as the only source of truth; recursive read, predicate and projection (also fixes the flat
+  wear-ledger export/restore/import side-channels); five folder actions on the route factory; a
+  breadcrumb browser with bulk move; tools see `folder` read-only.
+- Both linked from `ROADMAP.md`. Design only; nothing built yet.
+
 #### Fix bug 198: wardrobe dialog showed a stale outfit after a tool-driven change
 
 - `useChatOutfit` refetches on every mount and `slotsFor` returns undefined until that fetch lands, so
