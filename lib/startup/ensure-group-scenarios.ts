@@ -32,11 +32,16 @@ import { ensureGroupKnowledgeFolder } from '@/lib/mount-index/group-knowledge';
 
 export async function ensureGroupScenariosForAllGroups(): Promise<{
   total: number;
+  /** A store was found, adopted or created for an owner that recorded none. */
+  provisioned: number;
+  /** The recorded store pointer was stale and has been replaced. */
   healed: number;
+  /** No store could be resolved, or a folder could not be created. */
   failed: number;
 }> {
   const repos = getRepositories();
   let total = 0;
+  let provisioned = 0;
   let healed = 0;
   let failed = 0;
 
@@ -49,7 +54,7 @@ export async function ensureGroupScenariosForAllGroups(): Promise<{
     logger.error('ensure-group-scenarios: failed to list groups', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { total: 0, healed: 0, failed: 1 };
+    return { total: 0, provisioned: 0, healed: 0, failed: 1 };
   }
 
   total = groups.length;
@@ -57,13 +62,16 @@ export async function ensureGroupScenariosForAllGroups(): Promise<{
   for (const group of groups) {
     try {
       // `ensure: true` finds, adopts or creates the official store and heals
-      // the `Scenarios/` folder inside it.
+      // the `Scenarios/` folder inside it; a folder failure throws, and is
+      // counted as a failure below rather than reported as healthy.
       const location = await resolveScenarioLocation('group', group.id, repos, SINGLE_USER_ID, { ensure: true });
       if (!location) {
         failed++;
         continue;
       }
-      if (group.officialMountPointId !== location.mountPointId) {
+      if (!group.officialMountPointId) {
+        provisioned++;
+      } else if (group.officialMountPointId !== location.mountPointId) {
         healed++;
       }
       await ensureGroupKnowledgeFolder(location.mountPointId);
@@ -77,6 +85,6 @@ export async function ensureGroupScenariosForAllGroups(): Promise<{
     }
   }
 
-  logger.info('ensure-group-scenarios: complete', { total, healed, failed });
-  return { total, healed, failed };
+  logger.info('ensure-group-scenarios: complete', { total, provisioned, healed, failed });
+  return { total, provisioned, healed, failed };
 }

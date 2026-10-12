@@ -181,6 +181,27 @@ describe('lookupScenarioRef', () => {
 })
 
 describe('the character tier', () => {
+  it('reads the character row once for a ref lookup', async () => {
+    stores.put(VAULT, 'Scenarios/Rooftop.md', '# Rooftop\n\nRain.')
+    const lookup = await lookupScenarioRef({ mountPointId: VAULT, path: 'Scenarios/Rooftop.md' }, stores.repos, USER)
+    expect(lookup.status).toBe('ok')
+    expect(stores.repos.characters.findByDocumentMountPointIdRaw).toHaveBeenCalledTimes(1)
+    expect(stores.repos.characters.findByIdRaw).not.toHaveBeenCalled()
+  })
+
+  it('re-reads the default after a write through the location', async () => {
+    const path = 'Scenarios/Rooftop.md'
+    stores.put(VAULT, path, '# Rooftop\n\nRain.')
+    const location = await resolveScenarioLocation('character', 'char-1', stores.repos, USER)
+    stores.calls.characterUpdate.mockImplementation(async (_id: string, patch: { defaultScenarioId: string }) => {
+      stores.characters[0].defaultScenarioId = patch.defaultScenarioId
+      return {}
+    })
+    await location!.setDefault(path)
+    const { scenarios } = await location!.list()
+    expect(scenarios[0].isDefault).toBe(true)
+  })
+
   it("derives a scenario's id from its path the way the vault overlay does", async () => {
     const path = characterScenarioPathForTitle('A Tavern: at Dusk')
     expect(path).toBe('Scenarios/A Tavern_ at Dusk.md')

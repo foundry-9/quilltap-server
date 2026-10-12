@@ -22,10 +22,15 @@
  */
 
 import { createScenarioItemHandlers } from '@/lib/mount-index/scenario-item-route-factory';
+import { ensureGroupKnowledgeFolder } from '@/lib/mount-index/group-knowledge';
 
 export const { GET, PUT, POST, DELETE } = createScenarioItemHandlers<{ id: string; scenarioPath: string }>({
   scope: 'group',
   ownerLabel: 'Group',
   logTag: '[Groups v1]',
   logIdKey: 'groupId',
+  // Writes heal the group's Knowledge/ folder alongside Scenarios/.
+  afterEnsure: async (mountPointId) => {
+    await ensureGroupKnowledgeFolder(mountPointId);
+  },
 });

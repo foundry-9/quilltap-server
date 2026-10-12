@@ -18,6 +18,8 @@
 - In-chat Scenario control: provenance line, "Reload from source" when the file changed, "the shelf copy is gone" when it was removed, a notes box under presets; current selection comes from the source when there is one, body matching otherwise.
 - New Chat keeps one `scenarioSelection` (plus `scenarioTouched`) instead of five pointer fields, so the form shows what it submits. Seed order is character default > project default > general default, matching the server; a hand pick is not re-seeded. Fixes the form showing the project default while submitting the character's.
 - Scenario label on the New Chat form now points at the select (`htmlFor` was `new-chat-scenario`, which matched nothing).
+- Scenario item routes heal `Scenarios/` (and a group's `Knowledge/`) on PUT/rename/DELETE; GET stays a read probe. Startup heals report `provisioned` / `healed` / `failed` separately and count a folder failure as failed.
+- A character scenario ref lookup reads the character row once instead of three times.
 - Help: new `help/scenario-browser.md`; updated `general-scenarios.md`, `project-scenarios.md`, `groups.md`, `chats.md`.
 - Review fixes: the in-chat control no longer selects a source whose file is gone (saving it replaced the scene with the notes alone); leaving Custom for a preset clears the box instead of appending the old scene as notes; the character location's `update` keeps `defaultScenarioId` on a retitle and refuses a retitle onto an existing file. The scenario-by-ref query is one hook, `useScenarioRefBody`; `components/scenario/types.ts` reuses `ScenarioRef` from `chat.types`.
 

@@ -193,6 +193,44 @@ describe('owner and store lookup', () => {
   });
 });
 
+describe('folder repair', () => {
+  it('heals the Scenarios/ folder on a write, but never on a read', async () => {
+    const { GET, PUT } = handlers();
+
+    await GET(req('https://x.test/'), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    expect(mockEnsureFolderPath).not.toHaveBeenCalled();
+
+    await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-1', scenarioPath: 'tea' });
+    expect(mockEnsureFolderPath).toHaveBeenCalledWith(MOUNT, 'Scenarios');
+  });
+
+  it("runs the tier's extra heal (the group's Knowledge/) on a write", async () => {
+    const afterEnsure = jest.fn();
+    stores.put('group-mount', 'Scenarios/tea.md', 'Tea.');
+    mockEnsureOwnerOfficialStore.mockResolvedValue({ mountPointId: 'group-mount', created: false });
+    const { DELETE } = createScenarioItemHandlers<{ id: string; scenarioPath: string }>({
+      scope: 'group',
+      ownerLabel: 'Group',
+      logTag: '[Groups v1]',
+      logIdKey: 'groupId',
+      afterEnsure,
+    });
+
+    await DELETE(req('https://x.test/'), ctx(), { id: 'group-1', scenarioPath: 'tea' });
+
+    expect(afterEnsure).toHaveBeenCalledWith('group-mount');
+  });
+
+  it('does not mint a store for a write to an owner that has none', async () => {
+    const { PUT } = handlers();
+
+    const res = await PUT(req('https://x.test/', { body: 'b' }), ctx(), { id: 'proj-bare', scenarioPath: 'tea' });
+
+    expect(res.status).toBe(404);
+    expect(mockEnsureOwnerOfficialStore).not.toHaveBeenCalled();
+  });
+});
+
 describe('PUT', () => {
   it('preserves an archived flag the body never mentions', async () => {
     stores.put(MOUNT, 'Scenarios/tea.md', '---\nname: Tea\narchived: true\n---\n\nold body');

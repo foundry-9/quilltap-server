@@ -30,11 +30,16 @@ import { resolveScenarioLocation } from '@/lib/scenarios/location';
 
 export async function ensureProjectScenariosForAllProjects(): Promise<{
   total: number;
+  /** A store was found, adopted or created for an owner that recorded none. */
+  provisioned: number;
+  /** The recorded store pointer was stale and has been replaced. */
   healed: number;
+  /** No store could be resolved, or a folder could not be created. */
   failed: number;
 }> {
   const repos = getRepositories();
   let total = 0;
+  let provisioned = 0;
   let healed = 0;
   let failed = 0;
 
@@ -47,7 +52,7 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
     logger.error('ensure-project-scenarios: failed to list projects', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return { total: 0, healed: 0, failed: 1 };
+    return { total: 0, provisioned: 0, healed: 0, failed: 1 };
   }
 
   total = projects.length;
@@ -55,13 +60,16 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
   for (const project of projects) {
     try {
       // `ensure: true` finds, adopts or creates the official store and heals
-      // the `Scenarios/` folder inside it.
+      // the `Scenarios/` folder inside it; a folder failure throws, and is
+      // counted as a failure below rather than reported as healthy.
       const location = await resolveScenarioLocation('project', project.id, repos, SINGLE_USER_ID, { ensure: true });
       if (!location) {
         failed++;
         continue;
       }
-      if (project.officialMountPointId !== location.mountPointId) {
+      if (!project.officialMountPointId) {
+        provisioned++;
+      } else if (project.officialMountPointId !== location.mountPointId) {
         healed++;
       }
     } catch (error) {
@@ -74,6 +82,6 @@ export async function ensureProjectScenariosForAllProjects(): Promise<{
     }
   }
 
-  logger.info('ensure-project-scenarios: complete', { total, healed, failed });
-  return { total, healed, failed };
+  logger.info('ensure-project-scenarios: complete', { total, provisioned, healed, failed });
+  return { total, provisioned, healed, failed };
 }

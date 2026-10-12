@@ -52,6 +52,8 @@ export interface ScenarioItemRouteConfig {
   logTag: string;
   /** Metadata key naming the owner id in log lines — `'groupId'` / `'projectId'` / `'ownerId'`. */
   logIdKey: string;
+  /** Extra idempotent folder heals once the store is known for a write (the group tier's `Knowledge/`). */
+  afterEnsure?: (mountPointId: string) => Promise<void>;
 }
 
 /** `{ scenarioPath }`, plus `{ id }` for the project and group endpoints. */
@@ -75,14 +77,27 @@ export function scenarioErrorResponse(error: unknown): NextResponse | null {
  * Build the four route handlers for one scope's single-scenario endpoint.
  */
 export function createScenarioItemHandlers<P extends ItemParams>(config: ScenarioItemRouteConfig) {
-  const { scope, ownerLabel, logTag, logIdKey } = config;
+  const { scope, ownerLabel, logTag, logIdKey, afterEnsure } = config;
   const owner = ownerLabel.toLowerCase();
 
+  /**
+   * GET is a read probe and never provisions. PUT, rename and DELETE are
+   * writes, so they heal what they write into — the store's `Scenarios/`
+   * folder (and the group's `Knowledge/`) — rather than leave a deleted
+   * folder missing until the next collection call or restart. An owner with
+   * no store at all still answers 404 with the remedy; a write to a scenario
+   * that cannot exist is no reason to mint a store.
+   */
   async function loadLocation(
     ownerId: string | undefined,
     { user, repos }: RequestContext,
+    forWrite = false,
   ): Promise<{ ok: true; location: ScenarioLocation } | { ok: false; response: NextResponse }> {
-    const location = await resolveScenarioLocation(scope, ownerId, repos, user.id);
+    let location = await resolveScenarioLocation(scope, ownerId, repos, user.id);
+    if (location && forWrite) {
+      location = await resolveScenarioLocation(scope, ownerId, repos, user.id, { ensure: true });
+      if (location && afterEnsure) await afterEnsure(location.mountPointId);
+    }
     if (location) return { ok: true, location };
 
     if (scope === 'general') {
@@ -142,7 +157,7 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
         const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
         if (!resolved.ok) return badRequest(resolved.error);
 
-        const lookup = await loadLocation(id, ctx);
+        const lookup = await loadLocation(id, ctx, true);
         if (!lookup.ok) return lookup.response;
         const { location } = lookup;
 
@@ -191,7 +206,7 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
             const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
             if (!resolved.ok) return badRequest(resolved.error);
 
-            const lookup = await loadLocation(id, ctx);
+            const lookup = await loadLocation(id, ctx, true);
             if (!lookup.ok) return lookup.response;
             const { location } = lookup;
 
@@ -237,7 +252,7 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
         const resolved = resolveScenarioPath(scenarioPath, SCENARIOS_FOLDER);
         if (!resolved.ok) return badRequest(resolved.error);
 
-        const lookup = await loadLocation(id, ctx);
+        const lookup = await loadLocation(id, ctx, true);
         if (!lookup.ok) return lookup.response;
         const { location } = lookup;
 
@@ -273,10 +288,7 @@ export function createScenarioItemHandlers<P extends ItemParams>(config: Scenari
 // Collection endpoints — list + create
 // ============================================================================
 
-export interface ScenarioCollectionRouteConfig extends ScenarioItemRouteConfig {
-  /** Extra idempotent folder heals once the store is known (the group tier's `Knowledge/`). */
-  afterEnsure?: (mountPointId: string) => Promise<void>;
-}
+export type ScenarioCollectionRouteConfig = ScenarioItemRouteConfig;
 
 /**
  * Build the list (GET) and create (POST) bodies for one scope's collection
